@@ -24,7 +24,8 @@ pub use crate::bits::{
 pub use crate::page::{
     _mi_page_unfull, _mi_theap_page_reclaim, MI_LARGE_MAX_OBJ_SIZE, MI_MAX_ALLOC_SIZE,
     MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE, mi_page_flags_set,
-    mi_page_is_huge, mi_page_is_in_full, mi_page_set_in_full,
+    mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full, mi_page_set_in_full,
+    mi_page_set_theap, mi_page_theap,
 };
 pub use crate::stats::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
@@ -834,6 +835,17 @@ pub unsafe fn mi_page_flags(page: *const mi_page_t) -> mi_page_flags_t {
 #[inline]
 pub unsafe fn mi_page_has_interior_pointers(page: *const mi_page_t) -> bool {
     (mi_page_flags(page) & MI_PAGE_HAS_INTERIOR_POINTERS) != 0
+}
+
+#[inline]
+pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
+    mi_page_thread_id(page) == MI_THREADID_ABANDONED_MAPPED
+}
+
+#[inline]
+pub unsafe fn mi_page_clear_abandoned_mapped(page: *mut mi_page_t) {
+    crate::mi_assert_internal!(mi_page_is_abandoned_mapped(page));
+    crate::atomic::mi_atomic_and_relaxed(&mut (*page).xthread_id, MI_PAGE_FLAG_MASK);
 }
 
 #[inline]

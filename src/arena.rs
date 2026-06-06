@@ -9,10 +9,13 @@ use crate::atomic::mi_atomic_load_ptr_acquire;
 use crate::bitmap::{MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT};
 use crate::bits::MI_INTPTR_BITS;
 use crate::internal::{
-    _mi_align_up, _mi_os_commit, _mi_os_commit_ex, mi_memid_t, mi_memkind_t, mi_size_of_slices,
+    _mi_align_up, _mi_memid_create, _mi_os_commit, _mi_os_commit_ex, mi_memid_t, mi_memkind_t,
+    mi_size_of_slices,
 };
 use crate::options::{mi_option_get_size, mi_option_t};
-use crate::types::{mi_arena_id_t, mi_arena_t, mi_commit_fun_t, mi_heap_t, mi_subproc_t};
+use crate::types::{
+    mi_arena_id_t, mi_arena_t, mi_commit_fun_t, mi_heap_t, mi_page_t, mi_subproc_t,
+};
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
 pub const MI_ARENA_SLICE_ALIGN: usize = MI_ARENA_SLICE_SIZE;
@@ -64,6 +67,11 @@ struct MiArenaPrefix {
     commit_fun_arg: *mut c_void,
     total_size: usize,
     parent: *mut mi_arena_t,
+    slices_free: *mut crate::bitmap::mi_bbitmap_t,
+    slices_committed: *mut crate::bitmap::mi_bitmap_t,
+    slices_dirty: *mut crate::bitmap::mi_bitmap_t,
+    slices_purge: *mut crate::bitmap::mi_bitmap_t,
+    pages_meta: *mut mi_page_t,
 }
 
 pub extern "C" fn mi_arena_min_alignment() -> usize {
@@ -194,6 +202,88 @@ unsafe fn mi_arena_commit(
 #[allow(dead_code)]
 unsafe fn mi_arena_size(arena: *mut mi_arena_t) -> usize {
     mi_size_of_slices(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count })
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_start(arena: *mut mi_arena_t) -> *mut u8 {
+    arena.cast::<u8>()
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_slice_start(arena: *mut mi_arena_t, slice_index: usize) -> *mut u8 {
+    crate::mi_assert_internal!(
+        slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
+    );
+    unsafe { mi_arena_start(arena).add(mi_size_of_slices(slice_index)) }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_page_at_slice(arena: *mut mi_arena_t, slice_index: usize) -> *mut mi_page_t {
+    crate::mi_assert_internal!(
+        slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
+    );
+    let pages_meta = unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta };
+    if !pages_meta.is_null() {
+        return unsafe { pages_meta.add(slice_index) };
+    }
+    unsafe { mi_arena_slice_start(arena, slice_index).cast::<mi_page_t>() }
+}
+
+/// # Safety
+/// `arena_id` must be null or a valid top-level arena id; `size` may be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_arena_area(arena_id: mi_arena_id_t, size: *mut usize) -> *mut c_void {
+    if !size.is_null() {
+        unsafe { *size = 0 };
+    }
+    let arena = unsafe { _mi_arena_from_id(arena_id) };
+    if arena.is_null() {
+        return ptr::null_mut();
+    }
+    if !size.is_null() {
+        crate::mi_assert_internal!(
+            mi_size_of_slices(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count })
+                <= unsafe { (*arena.cast::<MiArenaPrefix>()).total_size }
+        );
+        unsafe { *size = (*arena.cast::<MiArenaPrefix>()).total_size };
+    }
+    unsafe { mi_arena_start(arena).cast::<c_void>() }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_memid_create_arena(
+    arena: *mut mi_arena_t,
+    slice_index: usize,
+    slice_count: usize,
+) -> mi_memid_t {
+    crate::mi_assert_internal!(u32::try_from(slice_index).is_ok());
+    crate::mi_assert_internal!(u32::try_from(slice_count).is_ok());
+    crate::mi_assert_internal!(slice_count > 0);
+    crate::mi_assert_internal!(
+        slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
+    );
+    let mut memid = unsafe { _mi_memid_create(mi_memkind_t::MI_MEM_ARENA) };
+    memid.mem.arena.arena = arena;
+    memid.mem.arena.slice_index = slice_index as u32;
+    memid.mem.arena.slice_count = slice_count as u32;
+    memid
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_from_memid(
+    memid: mi_memid_t,
+    slice_index: *mut usize,
+    slice_count: *mut usize,
+) -> *mut mi_arena_t {
+    crate::mi_assert_internal!(memid.memkind == mi_memkind_t::MI_MEM_ARENA);
+    let arena = unsafe { memid.mem.arena.arena };
+    if !slice_index.is_null() {
+        unsafe { *slice_index = memid.mem.arena.slice_index as usize };
+    }
+    if !slice_count.is_null() {
+        unsafe { *slice_count = memid.mem.arena.slice_count as usize };
+    }
+    arena
 }
 
 /// # Safety

@@ -748,6 +748,24 @@ pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
 }
 
 #[inline]
+pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
+    crate::mi_assert_internal!(!page.is_null());
+    !(*page).free.is_null()
+}
+
+#[inline]
+pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
+    crate::mi_assert_internal!(!page.is_null());
+    crate::mi_assert_internal!((*page).capacity <= (*page).reserved);
+    (*page).capacity < (*page).reserved
+}
+
+#[inline]
+pub unsafe fn mi_page_set_has_interior_pointers(page: *mut mi_page_t, has_aligned: bool) {
+    crate::page::mi_page_flags_set(page, has_aligned, MI_PAGE_HAS_INTERIOR_POINTERS);
+}
+
+#[inline]
 pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
     crate::atomic::mi_atomic_load_explicit(
         &(*page).xthread_id,

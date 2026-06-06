@@ -37,8 +37,18 @@ pub const MI_TRACK_ENABLED_FULL: usize = 0;
 pub const MI_GUARDED: usize = 0;
 pub const MI_PAGE_META_IS_SEPARATED: usize = 0;
 pub const MI_BIG_ENDIAN: usize = if cfg!(target_endian = "big") { 1 } else { 0 };
+pub const __wasi__: usize = if cfg!(target_os = "wasi") { 1 } else { 0 };
 
 pub const mi_decl_cache_align: usize = 64;
+pub const mi_decl_forceinline: () = ();
+pub const mi_decl_thread: () = ();
+pub const mi_decl_weak: () = ();
+pub const mi_decl_cold: () = ();
+pub const mi_decl_noinline: () = ();
+pub const mi_decl_noreturn: () = ();
+pub const mi_decl_hidden: () = ();
+pub const mi_decl_externc: () = ();
+pub const mi_decl_maybe_unused: () = ();
 pub const MI_INIT4: usize = 4;
 pub const MI_INIT8: usize = 8;
 pub const MI_INIT16: usize = 16;
@@ -59,6 +69,146 @@ pub const MI_BLOCK_TAG_ALIGNED: usize = 0;
 pub const MI_BLOCK_TAG_GUARDED: usize = !MI_BLOCK_TAG_ALIGNED;
 
 pub type mi_submap_t = *mut *mut mi_page_t;
+
+macro_rules! __has_builtin {
+    ($x:expr) => {
+        false
+    };
+}
+
+#[macro_export]
+macro_rules! mi_trace_message {
+    ($($arg:tt)*) => {{
+        if $crate::internal::MI_DEBUG > 0 {
+            unsafe { $crate::internal::_mi_trace_message($($arg)*) }
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_assert {
+    ($expr:expr $(,)?) => {{
+        if $crate::internal::MI_DEBUG > 0 {
+            debug_assert!($expr);
+        }
+    }};
+    ($expr:expr, $($arg:tt)+) => {{
+        if $crate::internal::MI_DEBUG > 0 {
+            debug_assert!($expr, $($arg)+);
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_assert_internal {
+    ($($arg:tt)*) => {{
+        if $crate::internal::MI_DEBUG > 1 {
+            $crate::mi_assert!($($arg)*);
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_assert_expensive {
+    ($($arg:tt)*) => {{
+        if $crate::internal::MI_DEBUG > 2 {
+            $crate::mi_assert!($($arg)*);
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! MI_UNUSED {
+    ($x:expr) => {{
+        let _ = &$x;
+    }};
+}
+
+#[macro_export]
+macro_rules! MI_UNUSED_RELEASE {
+    ($x:expr) => {{
+        if $crate::internal::MI_DEBUG <= 1 {
+            $crate::MI_UNUSED!($x);
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! MI_INIT4 {
+    ($x:expr) => {
+        $x, $x, $x, $x
+    };
+}
+
+#[macro_export]
+macro_rules! MI_INIT8 {
+    ($x:expr) => {
+        $crate::MI_INIT4!($x), $crate::MI_INIT4!($x)
+    };
+}
+
+#[macro_export]
+macro_rules! MI_INIT16 {
+    ($x:expr) => {
+        $crate::MI_INIT8!($x), $crate::MI_INIT8!($x)
+    };
+}
+
+#[macro_export]
+macro_rules! MI_INIT32 {
+    ($x:expr) => {
+        $crate::MI_INIT16!($x), $crate::MI_INIT16!($x)
+    };
+}
+
+#[macro_export]
+macro_rules! MI_INIT64 {
+    ($x:expr) => {
+        $crate::MI_INIT32!($x), $crate::MI_INIT32!($x)
+    };
+}
+
+#[macro_export]
+macro_rules! MI_INIT128 {
+    ($x:expr) => {
+        $crate::MI_INIT64!($x), $crate::MI_INIT64!($x)
+    };
+}
+
+#[macro_export]
+macro_rules! MI_INIT256 {
+    ($x:expr) => {
+        $crate::MI_INIT128!($x), $crate::MI_INIT128!($x)
+    };
+}
+
+#[macro_export]
+macro_rules! MI_INIT74 {
+    ($x:expr) => {
+        $crate::MI_INIT64!($x), $crate::MI_INIT8!($x), $x, $x
+    };
+}
+
+#[macro_export]
+macro_rules! MI_INIT5 {
+    ($x:expr) => {
+        $crate::MI_INIT4!($x), $x
+    };
+}
+
+#[macro_export]
+macro_rules! MI_INIT6 {
+    ($x:expr) => {
+        $crate::MI_INIT4!($x), $x, $x
+    };
+}
+
+#[macro_export]
+macro_rules! _mi_memzero_var {
+    ($x:expr) => {{
+        unsafe { core::ptr::write_bytes(core::ptr::addr_of_mut!($x), 0, 1) };
+    }};
+}
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

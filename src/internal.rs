@@ -915,6 +915,11 @@ pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
 }
 
 #[inline]
+pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
+    ptr::write_bytes(dst.cast::<u8>(), val, n);
+}
+
+#[inline]
 pub const fn mi_slice_count_of_size(size: usize) -> usize {
     _mi_divide_up(size, MI_ARENA_SLICE_SIZE)
 }

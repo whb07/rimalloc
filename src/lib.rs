@@ -2,6 +2,7 @@
 
 pub mod abi;
 pub mod alloc;
+pub mod alloc_aligned;
 pub mod alloc_override;
 pub mod arena;
 pub mod atomic;

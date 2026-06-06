@@ -12,6 +12,8 @@
     unsafe_op_in_unsafe_fn
 )]
 
+pub mod osx;
+
 use core::cell::Cell;
 use core::ffi::{c_char, c_void};
 use core::ptr;

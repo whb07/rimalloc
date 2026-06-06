@@ -59,7 +59,8 @@ pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> b
     }
     let bsize = mi_good_size(size);
     let ok = (bsize <= MI_PAGE_MAX_START_BLOCK_ALIGN2 && _mi_is_power_of_two(bsize))
-        || (alignment == MI_PAGE_OSPAGE_BLOCK_ALIGN2 && (bsize % MI_PAGE_OSPAGE_BLOCK_ALIGN2) == 0);
+        || (alignment == MI_PAGE_OSPAGE_BLOCK_ALIGN2
+            && bsize.is_multiple_of(MI_PAGE_OSPAGE_BLOCK_ALIGN2));
     if ok {
         crate::mi_assert_internal!((bsize & (alignment - 1)) == 0);
     }
@@ -175,7 +176,7 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
     }
 
     crate::mi_assert_internal!(mi_page_usable_block_size(page) >= adjust + size);
-    crate::mi_assert_internal!(((aligned_p as usize) + offset) % alignment == 0);
+    crate::mi_assert_internal!(((aligned_p as usize) + offset).is_multiple_of(alignment));
     crate::mi_assert_internal!(crate::mimalloc::mi_usable_size(aligned_p) >= size);
     crate::mi_assert_internal!(
         crate::mimalloc::mi_usable_size(p) == crate::mimalloc::mi_usable_size(aligned_p) + adjust
@@ -213,7 +214,7 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_generic(
 
     if offset == 0 && mi_malloc_is_naturally_aligned(size, alignment) {
         let p = mi_theap_malloc_zero_no_guarded(theap, size, zero, usable);
-        crate::mi_assert_internal!(p.is_null() || (p as usize % alignment) == 0);
+        crate::mi_assert_internal!(p.is_null() || (p as usize).is_multiple_of(alignment));
         if mi_likely(((p as usize) & (alignment - 1)) == 0) {
             return p;
         }
@@ -268,7 +269,7 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at(
                 }
                 let p = _mi_page_malloc_zero(theap, page, padsize, zero);
                 crate::mi_assert_internal!(!p.is_null());
-                crate::mi_assert_internal!(((p as usize) + offset) % alignment == 0);
+                crate::mi_assert_internal!(((p as usize) + offset).is_multiple_of(alignment));
                 mi_track_malloc(p, size, zero);
                 return p;
             }

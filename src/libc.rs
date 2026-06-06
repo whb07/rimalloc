@@ -8,13 +8,18 @@
     unsafe_op_in_unsafe_fn
 )]
 
-use core::ffi::c_char;
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::cmp::min;
 use std::ffi::CStr;
 use std::fmt;
 
 use crate::bits::MI_SIZE_BITS;
+
+#[cfg(unix)]
+unsafe extern "C" {
+    fn vsnprintf(buf: *mut c_char, bufsize: usize, fmt: *const c_char, args: *mut c_void) -> c_int;
+}
 
 pub const MI_NEXTC: &str = "c = *in; if (c==0) break; in++;";
 pub const mi_mask_even_bits32: u32 = 0x5555_5555;
@@ -257,6 +262,46 @@ unsafe fn mi_out_alignright(
 }
 
 #[inline]
+unsafe fn mi_out_num(
+    mut x: u128,
+    base: usize,
+    prefix: c_char,
+    out: &mut *mut c_char,
+    end: *mut c_char,
+) {
+    if x == 0 || base == 0 || base > 16 {
+        if prefix != 0 {
+            mi_outc(prefix, out, end);
+        }
+        mi_outc(b'0' as c_char, out, end);
+        return;
+    }
+
+    let start = *out;
+    while x > 0 {
+        let digit = (x % base as u128) as u8;
+        let c = if digit <= 9 {
+            b'0' + digit
+        } else {
+            b'A' + digit - 10
+        };
+        mi_outc(c as c_char, out, end);
+        x /= base as u128;
+    }
+    if prefix != 0 {
+        mi_outc(prefix, out, end);
+    }
+    let len = unsafe { (*out).offset_from(start) as usize };
+    for i in 0..(len / 2) {
+        unsafe {
+            let c = *start.add(len - i - 1);
+            *start.add(len - i - 1) = *start.add(i);
+            *start.add(i) = c;
+        }
+    }
+}
+
+#[inline]
 fn mi_byte_sum32(mut x: u32) -> usize {
     x += x << 8;
     x += x << 16;
@@ -376,7 +421,7 @@ pub extern "C" fn _mi_popcount_generic(x: usize) -> usize {
 }
 
 #[allow(dead_code)]
-pub(crate) fn _mi_vsnprintf(buf: *mut c_char, bufsize: usize, args: fmt::Arguments<'_>) -> i32 {
+pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arguments<'_>) -> i32 {
     if buf.is_null() || bufsize == 0 {
         return 0;
     }
@@ -396,7 +441,36 @@ pub(crate) fn _mi_vsnprintf(buf: *mut c_char, bufsize: usize, args: fmt::Argumen
     n as i32
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_vsnprintf(
+    buf: *mut c_char,
+    bufsize: usize,
+    fmt: *const c_char,
+    args: *mut c_void,
+) -> c_int {
+    if buf.is_null() || bufsize == 0 || fmt.is_null() {
+        return 0;
+    }
+    unsafe {
+        *as_bytes_mut_ptr(buf).add(bufsize - 1) = 0;
+    }
+    #[cfg(unix)]
+    {
+        let written = unsafe { vsnprintf(buf, bufsize, fmt, args) };
+        unsafe {
+            *as_bytes_mut_ptr(buf).add(bufsize - 1) = 0;
+        }
+        written
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = args;
+        let fmt_str = unsafe { CStr::from_ptr(fmt) }.to_string_lossy();
+        mi_vsnprintf_args(buf, bufsize, format_args!("{}", fmt_str))
+    }
+}
+
 #[allow(dead_code)]
 pub(crate) fn _mi_snprintf(buf: *mut c_char, buflen: usize, args: fmt::Arguments<'_>) -> i32 {
-    _mi_vsnprintf(buf, buflen, args)
+    mi_vsnprintf_args(buf, buflen, args)
 }

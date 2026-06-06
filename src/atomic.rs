@@ -14,6 +14,15 @@ use core::sync::atomic::{AtomicI64, AtomicIsize, AtomicUsize, Ordering, fence};
 use crate::init::_mi_thread_id;
 
 pub const MI_ATOMIC_H: () = ();
+pub const WIN32_LEAN_AND_MEAN: () = ();
+pub const MI_USE_PTHREADS: () = ();
+pub const _Atomic: () = ();
+pub const mi_atomic: () = ();
+pub const mi_memory_order: () = ();
+pub const MI_ATOMIC_VAR_INIT: () = ();
+pub const MI_MSC_64: () = ();
+pub const mi_lock: () = ();
+pub const EFAULT: i32 = 14;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

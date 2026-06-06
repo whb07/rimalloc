@@ -6,6 +6,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::types::mi_threadid_t;
 
+#[unsafe(no_mangle)]
+pub static mut _mi_cpu_movsb_max: usize = 0;
+
+#[unsafe(no_mangle)]
+pub static mut _mi_cpu_stosb_max: usize = 0;
+
 static MAIN_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(4);
 

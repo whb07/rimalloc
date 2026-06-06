@@ -12,18 +12,20 @@ use core::ffi::c_void;
 use core::mem::size_of;
 use core::ptr;
 
-use crate::arena::MI_ARENA_SLICE_SIZE;
+use crate::arena::{MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE};
 use crate::atomic::{mi_atomic_and_relaxed, mi_atomic_cas_weak_release, mi_atomic_or_relaxed};
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::internal::{
-    _mi_page_empty, _mi_wsize_from_size, mi_memkind_t, mi_page_block_size, mi_page_flags,
-    mi_page_is_singleton,
+    _mi_page_empty, _mi_ptr_page, _mi_wsize_from_size, MI_DEBUG, mi_block_next, mi_mem_is_zero,
+    mi_memkind_t, mi_page_area, mi_page_block_size, mi_page_contains_address, mi_page_flags,
+    mi_page_is_singleton, mi_page_slice_start, mi_page_thread_free, mi_page_usable_block_size,
 };
 use crate::stats::{MI_BIN_HUGE, MI_LARGE_MAX_OBJ_WSIZE, bin_block_size};
+use crate::track::MI_TRACK_ENABLED;
 use crate::types::{
     MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_PAGE_FLAG_MASK, MI_PAGE_IN_FULL_QUEUE,
-    MI_SMALL_SIZE_MAX, MI_THREADID_ABANDONED, MI_THREADID_ABANDONED_MAPPED, mi_page_flags_t,
-    mi_page_queue_t, mi_page_t, mi_theap_t,
+    MI_SMALL_SIZE_MAX, MI_THREADID_ABANDONED, MI_THREADID_ABANDONED_MAPPED, mi_block_t,
+    mi_page_flags_t, mi_page_queue_t, mi_page_t, mi_theap_t,
 };
 
 pub const MI_PADDING_SIZE: usize = 0;
@@ -43,6 +45,7 @@ pub const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 
 const MI_ALIGN4W: bool = cfg!(target_pointer_width = "32");
 const MI_ALIGN2W: bool = cfg!(target_pointer_width = "64");
+const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
 
 fn align_up(size: usize, alignment: usize) -> usize {
     debug_assert!(alignment.is_power_of_two());
@@ -119,6 +122,98 @@ pub unsafe extern "C" fn mi_page_queue_is_special(pq: *const mi_page_queue_t) ->
 /// `pq` must point to a valid `mi_page_queue_t`.
 pub unsafe extern "C" fn mi_page_queue_count(pq: *const mi_page_queue_t) -> usize {
     unsafe { (*pq).count }
+}
+
+#[inline]
+pub unsafe fn mi_page_list_count(page: *mut mi_page_t, mut head: *mut mi_block_t) -> usize {
+    crate::mi_assert_internal!(_mi_ptr_page((*page).page_start.cast()) == page);
+    let slice_start = mi_page_slice_start(page);
+    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        slice_start.cast(),
+        MI_PAGE_ALIGN
+    ));
+    let mut count = 0usize;
+    while !head.is_null() {
+        crate::mi_assert_internal!(
+            (head as usize).wrapping_sub(slice_start as usize) > MI_LARGE_PAGE_SIZE
+                || page == _mi_ptr_page(head.cast())
+        );
+        count += 1;
+        head = mi_block_next(page, head);
+    }
+    count
+}
+
+#[inline]
+pub unsafe fn mi_page_list_is_valid(page: *mut mi_page_t, mut p: *mut mi_block_t) -> bool {
+    let mut psize = 0usize;
+    let page_area = mi_page_area(page, &mut psize).cast::<mi_block_t>();
+    let end = unsafe { page_area.cast::<u8>().add(psize).cast::<mi_block_t>() };
+    while !p.is_null() {
+        if p < page_area || p >= end {
+            return false;
+        }
+        p = mi_block_next(page, p);
+    }
+    if MI_DEBUG > 3 && (*page).free_is_zero {
+        let ubsize = mi_page_usable_block_size(page);
+        let mut block = (*page).free;
+        while !block.is_null() {
+            crate::mi_assert_expensive!(mi_mem_is_zero(
+                block.add(1).cast(),
+                ubsize - size_of::<mi_block_t>()
+            ));
+            block = mi_block_next(page, block);
+        }
+    }
+    true
+}
+
+#[inline]
+pub unsafe fn mi_page_is_valid_init(page: *mut mi_page_t) -> bool {
+    crate::mi_assert_internal!(mi_page_block_size(page) > 0);
+    crate::mi_assert_internal!((*page).used <= (*page).capacity);
+    crate::mi_assert_internal!((*page).capacity <= (*page).reserved);
+    crate::mi_assert_internal!(mi_page_list_is_valid(page, (*page).free));
+    crate::mi_assert_internal!(mi_page_list_is_valid(page, (*page).local_free));
+
+    if MI_DEBUG > 3 && (*page).free_is_zero {
+        let ubsize = mi_page_usable_block_size(page);
+        let mut block = (*page).free;
+        while !block.is_null() {
+            crate::mi_assert_expensive!(mi_mem_is_zero(
+                block.add(1).cast(),
+                ubsize - size_of::<mi_block_t>()
+            ));
+            block = mi_block_next(page, block);
+        }
+    }
+
+    if MI_TRACK_ENABLED == 0 {
+        let tfree = mi_page_thread_free(page);
+        crate::mi_assert_internal!(mi_page_list_is_valid(page, tfree));
+    }
+
+    let free_count =
+        mi_page_list_count(page, (*page).free) + mi_page_list_count(page, (*page).local_free);
+    crate::mi_assert_internal!((*page).used as usize + free_count == (*page).capacity as usize);
+    true
+}
+
+#[inline]
+pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
+    crate::mi_assert_internal!(mi_page_is_valid_init(page));
+    if !mi_page_is_abandoned(page) {
+        let pq = mi_page_queue_of(page);
+        crate::mi_assert_internal!(mi_page_queue_contains(pq, page));
+        crate::mi_assert_internal!(
+            (*pq).block_size == mi_page_block_size(page)
+                || mi_page_is_huge(page)
+                || mi_page_is_in_full(page)
+        );
+        crate::mi_assert_internal!(mi_page_contains_address(page, page.cast()));
+    }
+    true
 }
 
 #[inline]

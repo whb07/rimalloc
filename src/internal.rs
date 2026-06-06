@@ -27,6 +27,8 @@ pub use crate::page::{
 };
 pub use crate::types::*;
 
+pub const MI_INTERNAL_H: () = ();
+
 pub const MI_DEBUG: usize = if cfg!(debug_assertions) { 1 } else { 0 };
 pub const MI_SECURE: usize = 0;
 pub const MI_TRACK_ASAN: usize = 0;

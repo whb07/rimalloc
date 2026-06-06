@@ -3,6 +3,9 @@
 #![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::{mem::size_of, ptr};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::Instant;
 
 use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed,
@@ -126,6 +129,9 @@ pub const MI_CBIN_NONE: mi_chunkbin_t = mi_chunkbin_e::MI_CBIN_NONE;
 pub const MI_CBIN_COUNT: mi_chunkbin_t = mi_chunkbin_e::MI_CBIN_COUNT;
 
 const MI_CHUNKBIN_COUNT: usize = mi_chunkbin_e::MI_CBIN_COUNT as usize;
+static CLOCK_ORIGIN: OnceLock<Instant> = OnceLock::new();
+static CLOCK_DIFF: AtomicI64 = AtomicI64::new(0);
+static PROCESS_START: AtomicI64 = AtomicI64::new(0);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -401,5 +407,72 @@ fn mi_stats_add(stats: &mut mi_stats_t, src: &mi_stats_t) {
     }
     for (dst, add) in stats.chunk_bins.iter_mut().zip(src.chunk_bins.iter()) {
         mi_stat_count_add_mt(dst, add);
+    }
+}
+
+fn mi_stats_add_into(to: &mut mi_stats_t, from: &mi_stats_t) {
+    if ptr::eq(to, from) {
+        return;
+    }
+    mi_stats_add(to, from);
+}
+
+fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bool {
+    // SAFETY: callers must pass valid pointers when non-null; header checks gate the copy.
+    unsafe {
+        if stats_to.is_null()
+            || (*stats_to).size != size_of::<mi_stats_t>()
+            || (*stats_to).version != MI_STAT_VERSION
+        {
+            return false;
+        }
+        if stats_from.is_null() || (*stats_from).size != (*stats_to).size {
+            return false;
+        }
+        *stats_to = *stats_from;
+        true
+    }
+}
+
+fn clock_now_msecs() -> i64 {
+    let start = CLOCK_ORIGIN.get_or_init(Instant::now);
+    start.elapsed().as_millis() as i64
+}
+
+pub extern "C" fn _mi_clock_now() -> i64 {
+    clock_now_msecs()
+}
+
+pub extern "C" fn _mi_clock_start() -> i64 {
+    let current = CLOCK_DIFF.load(Ordering::Relaxed);
+    if current == 0 {
+        let t0 = _mi_clock_now();
+        let diff = _mi_clock_now() - t0;
+        let _ = CLOCK_DIFF.compare_exchange(0, diff, Ordering::Relaxed, Ordering::Relaxed);
+    }
+    _mi_clock_now()
+}
+
+pub extern "C" fn _mi_clock_end(start: i64) -> i64 {
+    _mi_clock_now() - start - CLOCK_DIFF.load(Ordering::Relaxed)
+}
+
+pub extern "C" fn _mi_stats_init() {
+    if PROCESS_START.load(Ordering::Relaxed) == 0 {
+        let start = _mi_clock_start();
+        let _ = PROCESS_START.compare_exchange(0, start, Ordering::Relaxed, Ordering::Relaxed);
+    }
+}
+
+/// # Safety
+/// `to` and `from` must point to valid writable `mi_stats_t` values.
+pub unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi_stats_t) {
+    if to.is_null() || from.is_null() || core::ptr::eq(to, from) {
+        return;
+    }
+    // SAFETY: caller guarantees valid pointers to `mi_stats_t` values.
+    unsafe {
+        mi_stats_add_into(&mut *to, &*from);
+        ptr::write_bytes(from, 0, 1);
     }
 }

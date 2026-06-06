@@ -23,7 +23,8 @@ pub use crate::bits::{
 };
 pub use crate::page::{
     _mi_page_unfull, _mi_theap_page_reclaim, MI_LARGE_MAX_OBJ_SIZE, MI_MAX_ALLOC_SIZE,
-    MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
+    MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE, mi_page_flags_set,
+    mi_page_is_huge, mi_page_is_in_full, mi_page_set_in_full,
 };
 pub use crate::stats::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
@@ -778,6 +779,34 @@ pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
 }
 
 #[inline]
+pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
+    if page.is_null() {
+        return true;
+    }
+    let frac = (*page).reserved / 8u16;
+    (*page).reserved - (*page).used <= frac
+}
+
+#[inline]
+pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
+    if page.is_null() {
+        return true;
+    }
+    let frac = (*page).reserved / n;
+    (*page).reserved - (*page).used <= frac
+}
+
+#[inline]
+pub unsafe fn mi_page_queue(theap: *const mi_theap_t, size: usize) -> *mut mi_page_queue_t {
+    let pq =
+        ptr::addr_of!((*(theap as *mut mi_theap_t)).pages[crate::page::_mi_bin(size)]).cast_mut();
+    if size <= MI_LARGE_MAX_OBJ_SIZE {
+        crate::mi_assert_internal!((*pq).block_size <= MI_LARGE_MAX_OBJ_SIZE);
+    }
+    pq
+}
+
+#[inline]
 pub unsafe fn mi_page_set_has_interior_pointers(page: *mut mi_page_t, has_aligned: bool) {
     crate::page::mi_page_flags_set(page, has_aligned, MI_PAGE_HAS_INTERIOR_POINTERS);
 }
@@ -800,6 +829,11 @@ pub unsafe fn mi_page_thread_id(page: *const mi_page_t) -> mi_threadid_t {
 pub unsafe fn mi_page_flags(page: *const mi_page_t) -> mi_page_flags_t {
     let xthread_id = unsafe { mi_page_xthread_id(page) };
     xthread_id & MI_PAGE_FLAG_MASK
+}
+
+#[inline]
+pub unsafe fn mi_page_has_interior_pointers(page: *const mi_page_t) -> bool {
+    (mi_page_flags(page) & MI_PAGE_HAS_INTERIOR_POINTERS) != 0
 }
 
 #[inline]

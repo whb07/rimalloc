@@ -30,8 +30,63 @@ use crate::stats::{
 };
 use crate::types::{MI_ENABLE_LARGE_PAGES, mi_arena_t, mi_claim_fun_t, mi_forall_set_fun_t};
 
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx2"
+))]
+#[cfg(target_arch = "x86")]
+use core::arch::x86::{
+    __m256i, _mm256_cmpeq_epi32, _mm256_set1_epi64x, _mm256_setzero_si256, _mm256_testc_si256,
+    _mm256_testz_si256,
+};
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx2"
+))]
+#[cfg(target_arch = "x86_64")]
+use core::arch::x86_64::{
+    __m256i, _mm256_cmpeq_epi32, _mm256_set1_epi64x, _mm256_setzero_si256, _mm256_testc_si256,
+    _mm256_testz_si256,
+};
+
 pub const MI_BITMAP_H: usize = 1;
 pub const MI_OPT_SIMD: usize = 0;
+
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx2"
+))]
+#[inline]
+fn mi_mm256_zero() -> __m256i {
+    unsafe { _mm256_setzero_si256() }
+}
+
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx2"
+))]
+#[inline]
+fn mi_mm256_ones() -> __m256i {
+    unsafe { _mm256_set1_epi64x(!0) }
+}
+
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx2"
+))]
+#[inline]
+fn mi_mm256_is_ones(vec: __m256i) -> bool {
+    unsafe { _mm256_testc_si256(vec, _mm256_cmpeq_epi32(vec, vec)) != 0 }
+}
+
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx2"
+))]
+#[inline]
+fn mi_mm256_is_zero(vec: __m256i) -> bool {
+    unsafe { _mm256_testz_si256(vec, vec) != 0 }
+}
 
 pub const MI_BFIELD_BITS_SHIFT: usize = MI_SIZE_SHIFT + 3;
 pub const MI_BFIELD_BITS: usize = 1 << MI_BFIELD_BITS_SHIFT;

@@ -18,6 +18,8 @@ pub mod os;
 pub mod page;
 pub mod prim;
 pub mod random;
+#[path = "static.rs"]
+pub mod static_c;
 pub mod stats;
 pub mod threadlocal;
 pub mod track;

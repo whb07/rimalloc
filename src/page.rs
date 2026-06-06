@@ -360,6 +360,24 @@ pub unsafe fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_b
 }
 
 #[inline]
+pub unsafe fn _mi_page_unfull(page: *mut mi_page_t) {
+    crate::mi_assert_internal!(!page.is_null());
+    crate::mi_assert_expensive!(_mi_page_is_valid(page));
+    crate::mi_assert_internal!(mi_page_is_in_full(page));
+    crate::mi_assert_internal!(!(*mi_page_theap(page)).allow_page_abandon);
+    if !mi_page_is_in_full(page) {
+        return;
+    }
+
+    let theap = mi_page_theap(page);
+    let pqfull = ptr::addr_of_mut!((*theap).pages[MI_BIN_FULL]);
+    mi_page_set_in_full(page, false);
+    let pq = mi_theap_page_queue_of(theap, page);
+    mi_page_set_in_full(page, true);
+    mi_page_queue_enqueue_from_full(pq, pqfull, page);
+}
+
+#[inline]
 pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {
     mi_page_is_singleton(page)
         && (mi_page_block_size(page) > MI_LARGE_MAX_OBJ_SIZE

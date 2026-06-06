@@ -16,6 +16,7 @@ pub mod emscripten;
 pub mod osx;
 pub mod unix;
 pub mod wasi;
+pub mod windows;
 
 use core::cell::Cell;
 use core::ffi::{c_char, c_void};

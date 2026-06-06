@@ -1,14 +1,16 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Mechanical Rust translation foundation for mimalloc 3.3.2
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub mod abi;
+pub mod alloc;
+pub mod arena;
+pub mod atomic;
+pub mod bitmap;
+pub mod heap;
+pub mod init;
+pub mod memory;
+pub mod options;
+pub mod os;
+pub mod page;
+pub mod random;
+pub mod stats;
+pub mod types;

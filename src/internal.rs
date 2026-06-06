@@ -1,0 +1,518 @@
+//! Mechanical translation of `include/mimalloc/internal.h`.
+
+#![allow(
+    non_camel_case_types,
+    non_snake_case,
+    non_upper_case_globals,
+    dead_code,
+    uninhabited_static,
+    unused_imports,
+    clippy::missing_safety_doc,
+    unsafe_op_in_unsafe_fn
+)]
+
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::{size_of, zeroed};
+use core::ptr;
+use std::os::raw::c_long;
+
+pub use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE};
+pub use crate::bits::{
+    MI_ARCH_X64, MI_ARCH_X86, MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB,
+    MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
+};
+pub use crate::page::{
+    MI_LARGE_MAX_OBJ_SIZE, MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE,
+    MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
+};
+pub use crate::types::*;
+
+pub const MI_DEBUG: usize = if cfg!(debug_assertions) { 1 } else { 0 };
+pub const MI_SECURE: usize = 0;
+pub const MI_TRACK_ASAN: usize = 0;
+pub const MI_TRACK_ENABLED: usize = 0;
+pub const MI_TRACK_ENABLED_FULL: usize = 0;
+pub const MI_GUARDED: usize = 0;
+pub const MI_PAGE_META_IS_SEPARATED: usize = 0;
+pub const MI_BIG_ENDIAN: usize = if cfg!(target_endian = "big") { 1 } else { 0 };
+
+pub const mi_decl_cache_align: usize = 64;
+pub const MI_INIT4: usize = 4;
+pub const MI_INIT8: usize = 8;
+pub const MI_INIT16: usize = 16;
+pub const MI_INIT32: usize = 32;
+pub const MI_INIT64: usize = 64;
+pub const MI_INIT128: usize = 128;
+pub const MI_INIT256: usize = 256;
+pub const MI_INIT74: usize = 74;
+pub const MI_INIT5: usize = 5;
+pub const MI_INIT6: usize = 6;
+
+pub const MI_PAGE_MAP_SUB_SHIFT: usize = 13;
+pub const MI_PAGE_MAP_SUB_COUNT: usize = 1usize << MI_PAGE_MAP_SUB_SHIFT;
+pub const MI_PAGE_MAP_SHIFT: usize = MI_MAX_VABITS - MI_PAGE_MAP_SUB_SHIFT - MI_ARENA_SLICE_SHIFT;
+pub const MI_PAGE_MAP_COUNT: usize = 1usize << MI_PAGE_MAP_SHIFT;
+
+pub const MI_BLOCK_TAG_ALIGNED: usize = 0;
+pub const MI_BLOCK_TAG_GUARDED: usize = !MI_BLOCK_TAG_ALIGNED;
+
+pub type mi_submap_t = *mut *mut mi_page_t;
+
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum mi_memkind_t {
+    #[default]
+    MI_MEM_NONE = 0,
+    MI_MEM_EXTERNAL = 1,
+    MI_MEM_STATIC = 2,
+    MI_MEM_META = 3,
+    MI_MEM_OS = 4,
+    MI_MEM_OS_HUGE = 5,
+    MI_MEM_OS_REMAP = 6,
+    MI_MEM_ARENA = 7,
+    MI_MEM_HEAP_MAIN = 8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_memid_os_info_t {
+    pub base: *mut c_void,
+    pub size: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_memid_arena_info_t {
+    pub arena: *mut mi_arena_t,
+    pub slice_index: u32,
+    pub slice_count: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_memid_meta_info_t {
+    pub meta_page: *mut c_void,
+    pub block_index: u32,
+    pub block_count: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union mi_memid_mem_t {
+    pub os: mi_memid_os_info_t,
+    pub arena: mi_memid_arena_info_t,
+    pub meta: mi_memid_meta_info_t,
+}
+
+impl Default for mi_memid_mem_t {
+    fn default() -> Self {
+        Self {
+            os: mi_memid_os_info_t::default(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct mi_memid_t {
+    pub mem: mi_memid_mem_t,
+    pub memkind: mi_memkind_t,
+    pub is_pinned: bool,
+    pub initially_committed: bool,
+    pub initially_zero: bool,
+}
+
+pub const MI_ARENA_SLICE_SHIFT: usize = MI_ARENA_SLICE_SIZE.trailing_zeros() as usize;
+
+#[inline]
+pub const fn mi_unlikely(x: bool) -> bool {
+    x
+}
+
+#[inline]
+pub const fn mi_likely(x: bool) -> bool {
+    x
+}
+
+#[inline]
+pub const fn MI_UNUSED<T>(_x: &T) {}
+
+#[inline]
+pub const fn MI_UNUSED_RELEASE<T>(_x: &T) {}
+
+#[inline]
+pub unsafe fn _mi_memzero_var<T>(x: *mut T) {
+    ptr::write_bytes(x, 0, 1);
+}
+
+unsafe extern "C" {
+    pub static _mi_page_empty: mi_page_t;
+    pub static _mi_theap_empty: mi_theap_t;
+    pub static _mi_theap_empty_wrong: mi_theap_t;
+    pub static mut _mi_page_map: *mut u8;
+    pub static mut _mi_cpu_movsb_max: usize;
+    pub static mut _mi_cpu_stosb_max: usize;
+
+    pub fn _mi_vsnprintf(
+        buf: *mut c_char,
+        bufsize: usize,
+        fmt: *const c_char,
+        args: *mut c_void,
+    ) -> c_int;
+    pub fn _mi_snprintf(buf: *mut c_char, buflen: usize, fmt: *const c_char, ...) -> c_int;
+    pub fn _mi_toupper(c: c_char) -> c_char;
+    pub fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> c_int;
+    pub fn _mi_strlcpy(dest: *mut c_char, src: *const c_char, dest_size: usize);
+    pub fn _mi_strlcat(dest: *mut c_char, src: *const c_char, dest_size: usize);
+    pub fn _mi_strlen(s: *const c_char) -> usize;
+    pub fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize;
+    pub fn _mi_strnstr(s: *mut c_char, max_len: usize, pat: *const c_char) -> *mut c_char;
+    pub fn _mi_streq(s: *const c_char, t: *const c_char) -> bool;
+    pub fn _mi_getenv(name: *const c_char, result: *mut c_char, result_size: usize) -> bool;
+
+    pub fn _mi_fputs(
+        out: Option<mi_output_fun>,
+        arg: *mut c_void,
+        prefix: *const c_char,
+        message: *const c_char,
+    );
+    pub fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, fmt: *const c_char, ...);
+    pub fn _mi_raw_message(fmt: *const c_char, ...);
+    pub fn _mi_message(fmt: *const c_char, ...);
+    pub fn _mi_warning_message(fmt: *const c_char, ...);
+    pub fn _mi_verbose_message(fmt: *const c_char, ...);
+    pub fn _mi_trace_message(fmt: *const c_char, ...);
+    pub fn _mi_options_init();
+    pub fn _mi_options_post_init();
+    pub fn _mi_option_get_fast(option: crate::options::mi_option_t) -> c_long;
+    pub fn _mi_error_message(err: c_int, fmt: *const c_char, ...);
+
+    pub fn _mi_random_init(ctx: *mut mi_random_ctx_t);
+    pub fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t);
+    pub fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ctx_t);
+    pub fn _mi_random_split(ctx: *mut mi_random_ctx_t, new_ctx: *mut mi_random_ctx_t);
+    pub fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize;
+    pub fn _mi_theap_random_next(theap: *mut mi_theap_t) -> usize;
+    pub fn _mi_os_random_weak(extra_seed: usize) -> usize;
+
+    pub fn _mi_auto_process_init();
+    pub fn _mi_auto_process_done();
+    pub fn _mi_is_redirected() -> bool;
+    pub fn _mi_allocator_init(message: *mut *const c_char) -> bool;
+    pub fn _mi_allocator_done();
+    pub fn _mi_is_main_thread() -> bool;
+    pub fn _mi_preloading() -> bool;
+    pub fn _mi_thread_done(theap: *mut mi_theap_t);
+    pub fn _mi_subproc() -> *mut mi_subproc_t;
+    pub fn _mi_subproc_main() -> *mut mi_subproc_t;
+    pub fn _mi_subproc_heap_main(subproc: *mut mi_subproc_t) -> *mut mi_heap_t;
+    pub fn _mi_subproc_from_id(subproc_id: mi_subproc_id_t) -> *mut mi_subproc_t;
+    pub fn _mi_thread_id() -> mi_threadid_t;
+    pub fn _mi_thread_seq_id() -> usize;
+    pub fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool;
+    pub fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool;
+    pub fn _mi_theap_guarded_init(theap: *mut mi_theap_t);
+    pub fn _mi_theap_options_init(theap: *mut mi_theap_t);
+    pub fn _mi_theap_default_safe() -> *mut mi_theap_t;
+    pub fn _mi_theap_main_safe() -> *mut mi_theap_t;
+
+    pub fn _mi_os_init();
+    pub fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;
+    pub fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;
+    pub fn _mi_os_free(p: *mut c_void, size: usize, memid: mi_memid_t);
+    pub fn _mi_os_free_ex(
+        p: *mut c_void,
+        size: usize,
+        still_committed: bool,
+        memid: mi_memid_t,
+        subproc: *mut mi_subproc_t,
+    );
+    pub fn _mi_os_page_size() -> usize;
+    pub fn _mi_os_guard_page_size() -> usize;
+    pub fn _mi_os_good_alloc_size(size: usize) -> usize;
+    pub fn _mi_os_has_overcommit() -> bool;
+    pub fn _mi_os_has_virtual_reserve() -> bool;
+    pub fn _mi_os_virtual_address_bits() -> usize;
+    pub fn _mi_os_minimal_purge_size() -> usize;
+    pub fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool;
+    pub fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool;
+    pub fn _mi_os_reuse(p: *mut c_void, size: usize);
+    pub fn _mi_os_commit(p: *mut c_void, size: usize, is_zero: *mut bool) -> bool;
+    pub fn _mi_os_commit_ex(
+        addr: *mut c_void,
+        size: usize,
+        is_zero: *mut bool,
+        stat_size: usize,
+    ) -> bool;
+    pub fn _mi_os_protect(addr: *mut c_void, size: usize) -> bool;
+    pub fn _mi_os_unprotect(addr: *mut c_void, size: usize) -> bool;
+    pub fn _mi_os_purge(p: *mut c_void, size: usize) -> bool;
+    pub fn _mi_os_purge_ex(
+        p: *mut c_void,
+        size: usize,
+        allow_reset: bool,
+        stats_size: usize,
+        commit_fun: *mut mi_commit_fun_t,
+        commit_fun_arg: *mut c_void,
+    ) -> bool;
+}
+
+#[inline]
+pub const fn _mi_is_power_of_two(x: usize) -> bool {
+    (x & x.wrapping_sub(1)) == 0
+}
+
+#[inline]
+pub fn _mi_is_aligned(p: *const c_void, alignment: usize) -> bool {
+    alignment == 0 || (p as usize).is_multiple_of(alignment)
+}
+
+#[inline]
+pub const fn _mi_align_up(sz: usize, alignment: usize) -> usize {
+    let mask = alignment.wrapping_sub(1);
+    if alignment != 0 && (alignment & mask) == 0 {
+        (sz + mask) & !mask
+    } else if alignment == 0 {
+        sz
+    } else {
+        ((sz + mask) / alignment) * alignment
+    }
+}
+
+#[inline]
+pub const fn _mi_align_down(sz: usize, alignment: usize) -> usize {
+    let mask = alignment.wrapping_sub(1);
+    if alignment != 0 && (alignment & mask) == 0 {
+        sz & !mask
+    } else if alignment == 0 {
+        sz
+    } else {
+        (sz / alignment) * alignment
+    }
+}
+
+#[inline]
+pub fn _mi_align_up_ptr(p: *const c_void, alignment: usize) -> *mut c_void {
+    _mi_align_up(p as usize, alignment) as *mut c_void
+}
+
+#[inline]
+pub fn _mi_align_down_ptr(p: *const c_void, alignment: usize) -> *mut c_void {
+    _mi_align_down(p as usize, alignment) as *mut c_void
+}
+
+#[inline]
+pub const fn _mi_divide_up(size: usize, divider: usize) -> usize {
+    if divider == 0 {
+        size
+    } else {
+        size.div_ceil(divider)
+    }
+}
+
+#[inline]
+pub const fn _mi_clamp(sz: usize, min: usize, max: usize) -> usize {
+    if sz < min {
+        min
+    } else if sz > max {
+        max
+    } else {
+        sz
+    }
+}
+
+#[inline]
+pub unsafe fn mi_mem_is_zero(p: *const c_void, size: usize) -> bool {
+    let bytes = p.cast::<u8>();
+    let mut i = 0;
+    while i < size {
+        if *bytes.add(i) != 0 {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+#[inline]
+pub const fn _mi_wsize_from_size(size: usize) -> usize {
+    size.div_ceil(size_of::<usize>())
+}
+
+#[inline]
+pub fn mi_mul_overflow(count: usize, size: usize, total: &mut usize) -> bool {
+    match count.checked_mul(size) {
+        Some(product) => {
+            *total = product;
+            false
+        }
+        None => {
+            *total = usize::MAX;
+            true
+        }
+    }
+}
+
+#[inline]
+pub unsafe fn mi_count_size_overflow(count: usize, size: usize, total: &mut usize) -> bool {
+    if count == 1 {
+        *total = size;
+        false
+    } else if !mi_mul_overflow(count, size, total) {
+        false
+    } else {
+        _mi_error_message(
+            75,
+            c"allocation request is too large (%zu * %zu bytes)\n".as_ptr(),
+            count,
+            size,
+        );
+        *total = usize::MAX;
+        true
+    }
+}
+
+#[inline]
+pub const fn mi_slice_count_of_size(size: usize) -> usize {
+    _mi_divide_up(size, MI_ARENA_SLICE_SIZE)
+}
+
+#[inline]
+pub const fn mi_size_of_slices(bcount: usize) -> usize {
+    bcount * MI_ARENA_SLICE_SIZE
+}
+
+#[inline]
+pub unsafe fn _mi_memid_create(memkind: mi_memkind_t) -> mi_memid_t {
+    let mut memid: mi_memid_t = zeroed();
+    memid.memkind = memkind;
+    memid
+}
+
+#[inline]
+pub unsafe fn _mi_memid_none() -> mi_memid_t {
+    _mi_memid_create(mi_memkind_t::MI_MEM_NONE)
+}
+
+#[inline]
+pub unsafe fn _mi_memid_create_os(
+    base: *mut c_void,
+    size: usize,
+    committed: bool,
+    is_zero: bool,
+    is_large: bool,
+) -> mi_memid_t {
+    let mut memid = _mi_memid_create(mi_memkind_t::MI_MEM_OS);
+    memid.mem.os.base = base;
+    memid.mem.os.size = size;
+    memid.initially_committed = committed;
+    memid.initially_zero = is_zero;
+    memid.is_pinned = is_large;
+    memid
+}
+
+#[inline]
+pub unsafe fn _mi_memid_create_meta(
+    mpage: *mut c_void,
+    block_idx: usize,
+    block_count: usize,
+) -> mi_memid_t {
+    let mut memid = _mi_memid_create(mi_memkind_t::MI_MEM_META);
+    memid.mem.meta.meta_page = mpage;
+    memid.mem.meta.block_index = block_idx as u32;
+    memid.mem.meta.block_count = block_count as u32;
+    memid.initially_committed = true;
+    memid.initially_zero = true;
+    memid.is_pinned = true;
+    memid
+}
+
+#[inline]
+pub const fn _mi_random_shuffle(mut x: usize) -> usize {
+    if x == 0 {
+        x = 17;
+    }
+    #[cfg(target_pointer_width = "64")]
+    {
+        x ^= x >> 30;
+        x = x.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        x ^= x >> 27;
+        x = x.wrapping_mul(0x94d0_49bb_1331_11eb);
+        x ^= x >> 31;
+    }
+    #[cfg(target_pointer_width = "32")]
+    {
+        x ^= x >> 16;
+        x = x.wrapping_mul(0x7feb_352d);
+        x ^= x >> 15;
+        x = x.wrapping_mul(0x846c_a68b);
+        x ^= x >> 16;
+    }
+    x
+}
+
+#[inline]
+pub fn mi_is_in_same_page(p: *const c_void, q: *const c_void) -> bool {
+    _mi_align_down(p as usize, MI_ARENA_SLICE_SIZE)
+        == _mi_align_down(q as usize, MI_ARENA_SLICE_SIZE)
+}
+
+#[inline]
+pub fn mi_ptr_decode(null: *const c_void, x: usize, keys: &[usize; 2]) -> *mut c_void {
+    let p = (mi_rotr(x.wrapping_sub(keys[0]), keys[0]) ^ keys[1]) as *mut c_void;
+    if ptr::eq(p.cast_const(), null) {
+        ptr::null_mut()
+    } else {
+        p
+    }
+}
+
+#[inline]
+pub fn mi_ptr_encode(null: *const c_void, p: *const c_void, keys: &[usize; 2]) -> usize {
+    let x = if p.is_null() {
+        null as usize
+    } else {
+        p as usize
+    };
+    mi_rotl(x ^ keys[1], keys[0]).wrapping_add(keys[0])
+}
+
+#[inline]
+pub fn mi_ptr_encode_canary(null: *const c_void, p: *const c_void, keys: &[usize; 2]) -> u32 {
+    let x = mi_ptr_encode(null, p, keys) as u32;
+    if MI_BIG_ENDIAN != 0 {
+        x & 0x00FF_FFFF
+    } else {
+        x & 0xFFFF_FF00
+    }
+}
+
+#[inline]
+pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
+    ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
+}
+
+#[inline]
+pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
+    ptr::write_bytes(dst, val as u8, n);
+}
+
+#[inline]
+pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize) {
+    _mi_memcpy(dst, src, n);
+}
+
+#[inline]
+pub unsafe fn _mi_memset_aligned(dst: *mut c_void, val: i32, n: usize) {
+    _mi_memset(dst, val, n);
+}
+
+#[inline]
+pub unsafe fn _mi_memzero(dst: *mut c_void, n: usize) {
+    _mi_memset(dst, 0, n);
+}
+
+#[inline]
+pub unsafe fn _mi_memzero_aligned(dst: *mut c_void, n: usize) {
+    _mi_memset_aligned(dst, 0, n);
+}

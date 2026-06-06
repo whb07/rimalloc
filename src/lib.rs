@@ -15,4 +15,5 @@ pub mod os;
 pub mod page;
 pub mod random;
 pub mod stats;
+pub mod threadlocal;
 pub mod types;

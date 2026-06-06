@@ -13,6 +13,7 @@ pub const MI_SMALL_SIZE_MAX: usize = MI_SMALL_WSIZE_MAX * core::mem::size_of::<*
 pub type mi_arena_id_t = *mut c_void;
 pub type mi_threadid_t = usize;
 pub type mi_msecs_t = i64;
+pub type mi_thread_local_t = usize;
 
 pub enum mi_arena_s {}
 pub type mi_arena_t = mi_arena_s;
@@ -99,6 +100,26 @@ pub type mi_forall_set_fun_t = unsafe extern "C" fn(
     arena: *mut mi_arena_t,
     arg2: *mut c_void,
 ) -> bool;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_tls_slot_t {
+    pub version: usize,
+    pub value: *mut c_void,
+}
+
+unsafe impl Send for mi_tls_slot_t {}
+unsafe impl Sync for mi_tls_slot_t {}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_thread_locals_t {
+    pub count: usize,
+    pub slots: [mi_tls_slot_t; 1],
+}
+
+unsafe impl Send for mi_thread_locals_t {}
+unsafe impl Sync for mi_thread_locals_t {}
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

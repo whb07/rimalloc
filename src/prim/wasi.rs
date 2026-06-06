@@ -34,11 +34,7 @@ pub unsafe fn mi_memory_grow(size: usize) -> *mut c_void {
             Err(_) => return null_mut(),
         };
         let p = sbrk(increment);
-        if p as isize == -1 {
-            null_mut()
-        } else {
-            p
-        }
+        if p as isize == -1 { null_mut() } else { p }
     }
     #[cfg(not(target_os = "wasi"))]
     {

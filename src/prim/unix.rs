@@ -95,11 +95,11 @@ pub unsafe extern "C" fn mi_prim_open(fpath: *const c_char, open_flags: c_int) -
 }
 
 #[inline]
-pub fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
+pub unsafe fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
     if tv.is_null() {
         return 0;
     }
-    unsafe { ((*tv).tv_sec as mi_msecs_t * 1000) + ((*tv).tv_usec as mi_msecs_t / 1000) }
+    ((*tv).tv_sec as mi_msecs_t * 1000) + ((*tv).tv_usec as mi_msecs_t / 1000)
 }
 
 #[inline]

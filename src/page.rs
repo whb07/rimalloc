@@ -13,12 +13,16 @@ use core::mem::size_of;
 use core::ptr;
 
 use crate::arena::{MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE};
-use crate::atomic::{mi_atomic_and_relaxed, mi_atomic_cas_weak_release, mi_atomic_or_relaxed};
+use crate::atomic::{
+    EFAULT, mi_atomic_and_relaxed, mi_atomic_cas_weak_acq_rel, mi_atomic_cas_weak_release,
+    mi_atomic_load_explicit, mi_atomic_or_relaxed, mi_memory_order_e,
+};
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::internal::{
-    _mi_page_empty, _mi_ptr_page, _mi_wsize_from_size, MI_DEBUG, mi_block_next, mi_mem_is_zero,
-    mi_memkind_t, mi_page_area, mi_page_block_size, mi_page_contains_address, mi_page_flags,
-    mi_page_is_singleton, mi_page_slice_start, mi_page_thread_free, mi_page_usable_block_size,
+    _mi_error_message, _mi_page_empty, _mi_ptr_page, _mi_wsize_from_size, MI_DEBUG, mi_block_next,
+    mi_block_set_next, mi_mem_is_zero, mi_memkind_t, mi_page_area, mi_page_block_size,
+    mi_page_contains_address, mi_page_flags, mi_page_is_singleton, mi_page_slice_start,
+    mi_page_thread_free, mi_page_usable_block_size,
 };
 use crate::stats::{MI_BIN_HUGE, MI_LARGE_MAX_OBJ_WSIZE, bin_block_size};
 use crate::track::MI_TRACK_ENABLED;
@@ -214,6 +218,140 @@ pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
         crate::mi_assert_internal!(mi_page_contains_address(page, page.cast()));
     }
     true
+}
+
+#[inline]
+pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut mi_block_t) {
+    if head.is_null() {
+        return;
+    }
+
+    let max_count = (*page).capacity as usize;
+    let mut count = 1usize;
+    let mut last = head;
+    loop {
+        let next = mi_block_next(page, last);
+        if next.is_null() || count > max_count {
+            break;
+        }
+        count += 1;
+        last = next;
+    }
+
+    if count > max_count {
+        _mi_error_message(EFAULT, c"corrupted thread-free list\n".as_ptr());
+        return;
+    } else if count > (*page).used as usize {
+        _mi_error_message(
+            EFAULT,
+            c"corrupted meta-data in thread-free list\n".as_ptr(),
+        );
+        return;
+    }
+
+    mi_block_set_next(page, last, (*page).local_free);
+    (*page).local_free = head;
+
+    crate::mi_assert_internal!(u16::try_from(count).is_ok());
+    crate::mi_assert_internal!((*page).used >= count as u16);
+    (*page).used -= count as u16;
+}
+
+#[inline]
+pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
+    let mut tfree = mi_atomic_load_explicit(
+        ptr::addr_of!((*page).xthread_free).cast(),
+        mi_memory_order_e::mi_memory_order_relaxed,
+    );
+    let mut head;
+    loop {
+        head = crate::internal::mi_tf_block(tfree);
+        if head.is_null() {
+            return;
+        }
+        let tfreex =
+            crate::internal::mi_tf_create(ptr::null_mut(), crate::internal::mi_tf_is_owned(tfree));
+        if mi_atomic_cas_weak_acq_rel(
+            ptr::addr_of_mut!((*page).xthread_free).cast(),
+            &mut tfree,
+            tfreex,
+        ) {
+            break;
+        }
+    }
+    crate::mi_assert_internal!(!head.is_null());
+    mi_page_thread_collect_to_local(page, head);
+}
+
+#[inline]
+pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
+    if !(*page).free.is_null() {
+        return true;
+    }
+    if (*page).local_free.is_null() {
+        return false;
+    }
+    (*page).free = (*page).local_free;
+    (*page).local_free = ptr::null_mut();
+    (*page).free_is_zero = false;
+    true
+}
+
+#[inline]
+pub unsafe fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
+    crate::mi_assert_internal!(!page.is_null());
+
+    mi_page_thread_free_collect(page);
+
+    if !(*page).local_free.is_null() {
+        if (*page).free.is_null() {
+            (*page).free = (*page).local_free;
+            (*page).local_free = ptr::null_mut();
+            (*page).free_is_zero = false;
+        } else if force {
+            let mut tail = (*page).local_free;
+            loop {
+                let next = mi_block_next(page, tail);
+                if next.is_null() {
+                    break;
+                }
+                tail = next;
+            }
+            mi_block_set_next(page, tail, (*page).free);
+            (*page).free = (*page).local_free;
+            (*page).local_free = ptr::null_mut();
+            (*page).free_is_zero = false;
+        }
+    }
+
+    crate::mi_assert_internal!(!force || (*page).local_free.is_null());
+}
+
+#[inline]
+pub unsafe fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
+    if head.is_null() {
+        return;
+    }
+    let next = mi_block_next(page, head);
+    if !next.is_null() {
+        mi_block_set_next(page, head, ptr::null());
+        mi_page_thread_collect_to_local(page, next);
+        if !(*page).local_free.is_null() && (*page).free.is_null() {
+            (*page).free = (*page).local_free;
+            (*page).local_free = ptr::null_mut();
+            (*page).free_is_zero = false;
+        }
+    }
+    if (*page).used == 1 {
+        crate::mi_assert_internal!(
+            crate::internal::mi_tf_block(mi_atomic_load_explicit(
+                ptr::addr_of!((*page).xthread_free).cast(),
+                mi_memory_order_e::mi_memory_order_relaxed,
+            )) == head
+        );
+        crate::mi_assert_internal!(mi_block_next(page, head).is_null());
+        _mi_page_free_collect(page, false);
+    }
 }
 
 #[inline]

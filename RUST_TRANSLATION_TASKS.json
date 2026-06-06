@@ -36892,7 +36892,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -36919,7 +36919,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000475",
@@ -36936,7 +36936,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -36978,7 +36978,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000476",
@@ -36995,7 +36995,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -37022,7 +37022,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000477",
@@ -37039,7 +37039,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -37076,7 +37076,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000478",
@@ -77444,7 +77444,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Translate as #[repr(C)] struct or opaque Rust type; preserve ABI layout for public types.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -77486,7 +77486,7 @@
       "thread_safety": "uses atomics",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000928",
@@ -78247,7 +78247,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Translate as #[repr(C)] struct or opaque Rust type; preserve ABI layout for public types.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -78409,7 +78409,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000935",
@@ -78564,7 +78564,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Translate as const/associated const/cfg, preserving compile-time condition.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -78666,7 +78666,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000938",
@@ -78907,7 +78907,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Represent with Rust struct/enum name or opaque marker as needed",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -78969,7 +78969,7 @@
       "thread_safety": "n/a",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000940",
@@ -78986,7 +78986,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -79063,7 +79063,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000941",
@@ -79080,7 +79080,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -79117,7 +79117,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000942",
@@ -122355,7 +122355,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Translate as #[repr(C)] struct or opaque Rust type; preserve ABI layout for public types.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -122447,7 +122447,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001645",
@@ -122893,7 +122893,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -122940,7 +122940,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001653",
@@ -149978,7 +149978,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -150055,7 +150055,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002017",
@@ -153219,7 +153219,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -153301,7 +153301,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002041",
@@ -157455,7 +157455,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -157587,7 +157587,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002092",
@@ -157604,7 +157604,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -157696,7 +157696,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002093",
@@ -157713,7 +157713,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -157775,7 +157775,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002094",
@@ -159881,7 +159881,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -159943,7 +159943,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002112",
@@ -161089,7 +161089,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -161291,7 +161291,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002129",
@@ -161308,7 +161308,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -161385,7 +161385,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002130",
@@ -161402,7 +161402,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -161474,7 +161474,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002131",
@@ -161491,7 +161491,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -161563,7 +161563,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002132",
@@ -161580,7 +161580,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -161652,7 +161652,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002133",
@@ -161669,7 +161669,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -161741,7 +161741,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002134",
@@ -161758,7 +161758,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -161825,7 +161825,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002135",
@@ -161842,7 +161842,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -161914,7 +161914,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002136",
@@ -161931,7 +161931,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -162003,7 +162003,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002137",
@@ -162020,7 +162020,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -162092,7 +162092,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002138",
@@ -162109,7 +162109,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -162176,7 +162176,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002139",
@@ -309328,7 +309328,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/atomic.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/atomic.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000025",
@@ -309434,7 +309434,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003234",

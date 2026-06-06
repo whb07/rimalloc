@@ -5,10 +5,14 @@
 use core::ffi::{c_char, c_void};
 
 pub const MI_MALLOC_VERSION: i32 = 30302;
+pub const MI_ENABLE_LARGE_PAGES: usize = 1;
 pub const MI_SMALL_WSIZE_MAX: usize = 128;
 pub const MI_SMALL_SIZE_MAX: usize = MI_SMALL_WSIZE_MAX * core::mem::size_of::<*const c_void>();
 
 pub type mi_arena_id_t = *mut c_void;
+
+pub enum mi_arena_s {}
+pub type mi_arena_t = mi_arena_s;
 
 pub enum mi_heap_s {}
 pub type mi_heap_t = mi_heap_s;
@@ -18,6 +22,12 @@ pub type mi_theap_t = mi_theap_s;
 
 pub enum mi_page_s {}
 pub type mi_page_t = mi_page_s;
+
+pub enum mi_subproc_s {}
+pub type mi_subproc_t = mi_subproc_s;
+
+pub type mi_bitmap_t = crate::bitmap::mi_bitmap_t;
+pub type mi_bbitmap_t = crate::bitmap::mi_bbitmap_t;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -68,6 +78,14 @@ pub type mi_commit_fun_t = unsafe extern "C" fn(
     size: usize,
     is_zero: *mut bool,
     user_arg: *mut c_void,
+) -> bool;
+pub type mi_claim_fun_t =
+    unsafe extern "C" fn(slice_index: usize, arena: *mut mi_arena_t, keep_set: *mut bool) -> bool;
+pub type mi_forall_set_fun_t = unsafe extern "C" fn(
+    slice_index: usize,
+    slice_count: usize,
+    arena: *mut mi_arena_t,
+    arg2: *mut c_void,
 ) -> bool;
 
 #[repr(C)]

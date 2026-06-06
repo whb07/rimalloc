@@ -407,6 +407,15 @@ unsafe extern "C" {
         commit_fun: *mut mi_commit_fun_t,
         commit_fun_arg: *mut c_void,
     ) -> bool;
+    pub fn _mi_os_get_aligned_hint(try_alignment: usize, size: usize) -> *mut c_void;
+    pub fn _mi_os_canuse_large_page(size: usize, alignment: usize) -> bool;
+    pub fn _mi_os_large_page_size() -> usize;
+
+    pub fn _mi_arena_id_none() -> mi_arena_id_t;
+    pub fn _mi_arenas_contain(p: *const c_void) -> bool;
+    pub fn _mi_meta_is_meta_page(p: *mut c_void) -> bool;
+    pub fn _mi_page_map_init() -> bool;
+    pub fn _mi_page_map_unregister_range(start: *mut c_void, size: usize);
 }
 
 #[inline]

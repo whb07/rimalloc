@@ -2,10 +2,88 @@
 
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
-use core::ptr;
+use core::{mem::size_of, ptr};
 
 pub const MI_STAT_VERSION: usize = 5;
 pub const MI_BIN_HUGE: usize = 73;
+pub const MI_LARGE_MAX_OBJ_WSIZE: usize = 8192 * size_of::<usize>();
+
+const MI_BIN_WORD_SIZES: [usize; MI_BIN_HUGE + 1] = [
+    1,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    10,
+    12,
+    14,
+    16,
+    20,
+    24,
+    28,
+    32,
+    40,
+    48,
+    56,
+    64,
+    80,
+    96,
+    112,
+    128,
+    160,
+    192,
+    224,
+    256,
+    320,
+    384,
+    448,
+    512,
+    640,
+    768,
+    896,
+    1024,
+    1280,
+    1536,
+    1792,
+    2048,
+    2560,
+    3072,
+    3584,
+    4096,
+    5120,
+    6144,
+    7168,
+    8192,
+    10240,
+    12288,
+    14336,
+    16384,
+    20480,
+    24576,
+    28672,
+    32768,
+    40960,
+    49152,
+    57344,
+    65536,
+    81920,
+    98304,
+    114688,
+    131072,
+    163840,
+    196608,
+    229376,
+    262144,
+    327680,
+    393216,
+    458752,
+    524288,
+    MI_LARGE_MAX_OBJ_WSIZE + 1,
+];
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -117,4 +195,11 @@ pub unsafe fn mi_stats_init(stats: *mut mi_stats_t) {
         ptr::write_bytes(stats, 0, 1);
         mi_stats_header_init(stats);
     }
+}
+
+pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
+    if bin > MI_BIN_HUGE {
+        return 0;
+    }
+    MI_BIN_WORD_SIZES[bin] * size_of::<usize>()
 }

@@ -2,6 +2,8 @@
 
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
+use crate::types::MI_MALLOC_VERSION;
+
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum mi_option_e {
@@ -62,3 +64,7 @@ pub const mi_option_eager_region_commit: mi_option_t = mi_option_e::mi_option_ar
 pub const mi_option_reset_decommits: mi_option_t = mi_option_e::mi_option_purge_decommits;
 pub const mi_option_reset_delay: mi_option_t = mi_option_e::mi_option_purge_delay;
 pub const mi_option_limit_os_alloc: mi_option_t = mi_option_e::mi_option_disallow_os_alloc;
+
+pub extern "C" fn mi_version() -> i32 {
+    MI_MALLOC_VERSION
+}

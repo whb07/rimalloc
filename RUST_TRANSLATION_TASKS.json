@@ -16932,7 +16932,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/arena.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -16964,7 +16964,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000281",
@@ -17104,7 +17104,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "src/options.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -17156,7 +17156,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000284",
@@ -17306,7 +17306,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/init.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -17338,7 +17338,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000287",
@@ -17900,7 +17900,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -17927,7 +17927,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000297",
@@ -127929,7 +127929,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/options.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "src/options.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000045",
@@ -127991,7 +127991,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001727",
@@ -152390,7 +152390,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/options.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "src/options.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000045",
@@ -152612,7 +152612,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002035",
@@ -243507,7 +243507,7 @@
       "stage": "STAGE-009 page/arena/heap algorithms",
       "rust_destination": "src/arena.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/arena.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000038",
@@ -243599,7 +243599,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002662",
@@ -243616,7 +243616,7 @@
       "stage": "STAGE-009 page/arena/heap algorithms",
       "rust_destination": "src/arena.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/arena.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000038",
@@ -243673,7 +243673,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002663",
@@ -273558,7 +273558,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/init.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/init.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000043",
@@ -273610,7 +273610,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002901",
@@ -301787,7 +301787,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -301874,7 +301874,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003137",

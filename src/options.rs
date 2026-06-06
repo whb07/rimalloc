@@ -15,7 +15,7 @@ use core::ptr::addr_of_mut;
 use std::ffi::{CStr, CString};
 use std::fmt;
 use std::mem::size_of;
-use std::os::raw::{c_long, c_void};
+use std::os::raw::{c_int, c_long, c_void};
 use std::process::abort;
 use std::sync::atomic::{AtomicIsize, AtomicPtr, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -23,7 +23,7 @@ use std::sync::{Mutex, MutexGuard};
 use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
 use crate::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
 use crate::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
-use crate::init::{_mi_preloading, mi_mark_main_thread};
+use crate::init::{_mi_is_main_thread, _mi_preloading, _mi_thread_id, mi_mark_main_thread};
 use crate::internal::MI_GUARDED;
 use crate::os::_mi_prim_out_stderr;
 use crate::page::MI_MAX_ALLOC_SIZE;
@@ -706,6 +706,111 @@ pub(crate) fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, args: fm
     if fmt::write(&mut text, args).is_ok() {
         let ctext = CString::new(text).expect("mimalloc output text contained a NUL byte");
         unsafe { _mi_fputs(out, arg, ptr::null(), ctext.as_ptr()) };
+    }
+}
+
+#[allow(dead_code)]
+fn mi_vfprintf(
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+    prefix: *const c_char,
+    args: fmt::Arguments<'_>,
+) {
+    let mut text = String::new();
+    if !mi_recurse_enter() {
+        return;
+    }
+    let wrote = fmt::write(&mut text, args).is_ok();
+    mi_recurse_exit();
+    if !wrote {
+        return;
+    }
+    let ctext = CString::new(text).expect("mimalloc output text contained a NUL byte");
+    unsafe { _mi_fputs(out, arg, prefix, ctext.as_ptr()) };
+}
+
+#[allow(dead_code)]
+fn mi_vfprintf_thread(
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+    prefix: *const c_char,
+    args: fmt::Arguments<'_>,
+) {
+    if !prefix.is_null() {
+        let prefix_len = unsafe { CStr::from_ptr(prefix).to_bytes().len() };
+        if prefix_len <= 32 && !_mi_is_main_thread() {
+            let prefix_text = unsafe { CStr::from_ptr(prefix).to_string_lossy() };
+            let tprefix = CString::new(format!(
+                "{prefix_text}thread 0x{:x}: ",
+                _mi_thread_id() as usize
+            ))
+            .expect("mimalloc output prefix contained a NUL byte");
+            mi_vfprintf(out, arg, tprefix.as_ptr(), args);
+            return;
+        }
+    }
+    mi_vfprintf(out, arg, prefix, args);
+}
+
+pub(crate) fn _mi_raw_message(args: fmt::Arguments<'_>) {
+    mi_vfprintf(None, ptr::null_mut(), ptr::null(), args);
+}
+
+pub(crate) fn _mi_message(args: fmt::Arguments<'_>) {
+    mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
+}
+
+pub(crate) fn _mi_trace_message(args: fmt::Arguments<'_>) {
+    if mi_option_get(mi_option_t::mi_option_verbose) <= 1 {
+        return;
+    }
+    mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
+}
+
+pub(crate) fn _mi_verbose_message(args: fmt::Arguments<'_>) {
+    if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
+        return;
+    }
+    mi_vfprintf(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
+}
+
+#[allow(dead_code)]
+fn mi_show_error_message(args: fmt::Arguments<'_>) {
+    if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
+        if !mi_option_is_enabled(mi_option_t::mi_option_show_errors) {
+            return;
+        }
+        let max_errors = mi_max_error_count.load(Ordering::Acquire);
+        let count = error_count.fetch_add(1, Ordering::AcqRel) + 1;
+        if max_errors >= 0 && (count as isize) > max_errors {
+            return;
+        }
+    }
+    mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: error: ".as_ptr(), args);
+}
+
+pub(crate) fn _mi_warning_message(args: fmt::Arguments<'_>) {
+    if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
+        if !mi_option_is_enabled(mi_option_t::mi_option_show_errors) {
+            return;
+        }
+        let max_warnings = mi_max_warning_count.load(Ordering::Acquire);
+        let count = warning_count.fetch_add(1, Ordering::AcqRel) + 1;
+        if max_warnings >= 0 && (count as isize) > max_warnings {
+            return;
+        }
+    }
+    mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: warning: ".as_ptr(), args);
+}
+
+pub(crate) fn _mi_error_message(err: c_int, args: fmt::Arguments<'_>) {
+    mi_show_error_message(args);
+    let handler = *lock_unpoisoned(&mi_error_handler);
+    let arg = mi_error_arg.load(Ordering::Acquire);
+    if let Some(handler) = handler {
+        unsafe { handler(err, arg) };
+    } else {
+        mi_error_default(err);
     }
 }
 

@@ -3107,7 +3107,7 @@
       "namespace": "include",
       "signature": "include/mimalloc.h",
       "stage": "STAGE-002 public ABI declarations",
-      "rust_destination": "TBD",
+      "rust_destination": "src/mimalloc.rs",
       "strategy": "planned",
       "status": "src/mimalloc.rs",
       "direct_dependencies": [],
@@ -4025,7 +4025,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000022",
@@ -5046,7 +5046,7 @@
       "namespace": "include::mimalloc",
       "signature": "include/mimalloc/internal.h",
       "stage": "STAGE-003 internal layouts and metadata",
-      "rust_destination": "TBD",
+      "rust_destination": "src/internal.rs",
       "strategy": "planned",
       "status": "src/internal.rs",
       "direct_dependencies": [],
@@ -6954,7 +6954,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000025",
@@ -6969,7 +6969,7 @@
       "namespace": "include::mimalloc",
       "signature": "include/mimalloc/prim.h",
       "stage": "STAGE-005 primitive OS/platform layer",
-      "rust_destination": "TBD",
+      "rust_destination": "src/prim.rs",
       "strategy": "planned",
       "status": "src/prim.rs",
       "direct_dependencies": [],
@@ -7527,7 +7527,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000026",
@@ -8711,7 +8711,7 @@
       "namespace": "src::prim::osx",
       "signature": "src/prim/osx/prim.c",
       "stage": "STAGE-005 primitive OS/platform layer",
-      "rust_destination": "TBD",
+      "rust_destination": "src/prim.rs",
       "strategy": "planned",
       "status": "src/prim.rs",
       "direct_dependencies": [],
@@ -8729,7 +8729,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000032",
@@ -9606,7 +9606,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Document/translate in nearest module.",
-      "status": "build.rs / docs",
+      "status": "translated-stage-001; cargo validation blocked: cargo not found",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9658,7 +9658,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000184",
@@ -9675,7 +9675,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "build.rs / docs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9702,7 +9702,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000185",
@@ -9719,7 +9719,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] struct or opaque Rust type; preserve ABI layout for public types.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9761,7 +9761,7 @@
       "thread_safety": "n/a",
       "ownership": "opaque/incomplete type",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000186",
@@ -9778,7 +9778,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9794,7 +9794,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000187",
@@ -9811,7 +9811,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9827,7 +9827,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000188",
@@ -9844,7 +9844,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9860,7 +9860,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000189",
@@ -9877,7 +9877,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9893,7 +9893,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000190",
@@ -9910,7 +9910,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9926,7 +9926,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000191",
@@ -9943,7 +9943,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9959,7 +9959,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000192",
@@ -10203,7 +10203,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] struct or opaque Rust type; preserve ABI layout for public types.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -10335,7 +10335,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000195",
@@ -10719,7 +10719,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -10776,7 +10776,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000199",
@@ -10793,7 +10793,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -10835,7 +10835,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000200",
@@ -10852,7 +10852,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -10949,7 +10949,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000201",
@@ -10966,7 +10966,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11018,7 +11018,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000202",
@@ -11035,7 +11035,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11087,7 +11087,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000203",
@@ -11104,7 +11104,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11156,7 +11156,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000204",
@@ -11173,7 +11173,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11215,7 +11215,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000205",
@@ -11232,7 +11232,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11289,7 +11289,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000206",
@@ -11306,7 +11306,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11388,7 +11388,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000207",
@@ -11405,7 +11405,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11462,7 +11462,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000208",
@@ -11479,7 +11479,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11551,7 +11551,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000209",
@@ -11568,7 +11568,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11620,7 +11620,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000210",
@@ -11637,7 +11637,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11689,7 +11689,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000211",
@@ -11706,7 +11706,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11748,7 +11748,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000212",
@@ -11765,7 +11765,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11827,7 +11827,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000213",
@@ -11844,7 +11844,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11911,7 +11911,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000214",
@@ -11928,7 +11928,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -11995,7 +11995,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000215",
@@ -12012,7 +12012,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -12069,7 +12069,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000216",
@@ -12086,7 +12086,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -12153,7 +12153,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000217",
@@ -12170,7 +12170,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -12217,7 +12217,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000218",
@@ -12322,7 +12322,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -12374,7 +12374,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000221",
@@ -12435,7 +12435,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -12512,7 +12512,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000223",
@@ -12529,7 +12529,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -12571,7 +12571,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000224",
@@ -12588,7 +12588,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -12650,7 +12650,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000225",
@@ -12711,7 +12711,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -12768,7 +12768,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000227",
@@ -12785,7 +12785,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -12837,7 +12837,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000228",
@@ -12942,7 +12942,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13004,7 +13004,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000231",
@@ -13149,7 +13149,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13216,7 +13216,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000234",
@@ -13233,7 +13233,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13285,7 +13285,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000235",
@@ -13302,7 +13302,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13354,7 +13354,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000236",
@@ -13371,7 +13371,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13428,7 +13428,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000237",
@@ -13445,7 +13445,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13502,7 +13502,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000238",
@@ -13519,7 +13519,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13571,7 +13571,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000239",
@@ -13588,7 +13588,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13635,7 +13635,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000240",
@@ -13652,7 +13652,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13699,7 +13699,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000241",
@@ -13716,7 +13716,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13778,7 +13778,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000242",
@@ -13795,7 +13795,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -13857,7 +13857,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000243",
@@ -17645,7 +17645,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "build.rs / docs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -17677,7 +17677,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000293",
@@ -17694,7 +17694,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "build.rs / docs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -17746,7 +17746,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000294",
@@ -48598,7 +48598,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "src/internal.rs / src/types.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -48630,7 +48630,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000596",
@@ -51866,7 +51866,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -51888,7 +51888,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000642",
@@ -51905,7 +51905,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -51932,7 +51932,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000643",
@@ -51949,7 +51949,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -51981,7 +51981,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000644",
@@ -58050,7 +58050,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -58066,7 +58066,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000688",
@@ -58083,7 +58083,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -58099,7 +58099,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000689",
@@ -58116,7 +58116,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -58132,7 +58132,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000690",
@@ -58149,7 +58149,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -58165,7 +58165,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000691",
@@ -58182,7 +58182,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -58198,7 +58198,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000692",
@@ -116293,7 +116293,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "build.rs / docs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -116345,7 +116345,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-001585",
@@ -138120,7 +138120,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -138152,7 +138152,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001867",
@@ -138169,7 +138169,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -138196,7 +138196,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001868",
@@ -138213,7 +138213,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -138250,7 +138250,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001869",
@@ -138267,7 +138267,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -138309,7 +138309,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001870",
@@ -138561,7 +138561,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Translate as #[repr(C)] struct or opaque Rust type; preserve ABI layout for public types.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -138638,7 +138638,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-001875",
@@ -138655,7 +138655,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Represent with Rust struct/enum name or opaque marker as needed",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -138687,7 +138687,7 @@
       "thread_safety": "n/a",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-001876",
@@ -138704,7 +138704,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -138725,7 +138725,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-001877",
@@ -138742,7 +138742,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -138763,7 +138763,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-001878",
@@ -138780,7 +138780,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -138801,7 +138801,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-001879",
@@ -139369,7 +139369,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "src/stats.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -139406,7 +139406,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-001890",
@@ -150239,7 +150239,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/headers.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "src/headers.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000028",
@@ -150286,7 +150286,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-002021",
@@ -170177,7 +170177,7 @@
       "stage": "STAGE-002 public ABI declarations",
       "rust_destination": "src/api.rs / src/types.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "src/api.rs / src/types.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000023",
@@ -170219,7 +170219,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-002237",
@@ -209082,7 +209082,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Represent with Rust struct/enum name or opaque marker as needed",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -209144,7 +209144,7 @@
       "thread_safety": "n/a",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002427",
@@ -220425,7 +220425,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Represent with Rust struct/enum name or opaque marker as needed",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -220487,7 +220487,7 @@
       "thread_safety": "n/a",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002509",
@@ -274908,7 +274908,7 @@
       "stage": "STAGE-010 allocation/free/libc/override/static APIs",
       "rust_destination": "src/libc.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "src/libc.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000044",
@@ -274995,7 +274995,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-002911",
@@ -299829,7 +299829,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "src/stats.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299951,7 +299951,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-003120",
@@ -301598,7 +301598,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "src/stats.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -301770,7 +301770,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-003136",
@@ -306910,7 +306910,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "build.rs / docs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -306936,7 +306936,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-003188",
@@ -333237,7 +333237,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "src/stats.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -333429,7 +333429,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-003519",
@@ -336008,7 +336008,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "src/stats.rs",
+      "status": "planned",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -336079,7 +336079,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-003544",

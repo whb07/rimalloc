@@ -12,6 +12,7 @@
     unsafe_op_in_unsafe_fn
 )]
 
+pub mod emscripten;
 pub mod osx;
 
 use core::cell::Cell;

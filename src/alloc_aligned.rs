@@ -13,14 +13,15 @@ use core::mem::size_of;
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
 use crate::internal::{
-    _mi_align_up_ptr, _mi_error_message, _mi_is_power_of_two, _mi_ptr_page, MI_BLOCK_TAG_ALIGNED,
-    MI_GUARDED, mi_count_size_overflow, mi_likely, mi_page_set_has_interior_pointers,
-    mi_page_usable_block_size, mi_theap_malloc_use_guarded, mi_unlikely,
+    _mi_align_up_ptr, _mi_error_message, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero,
+    _mi_ptr_page, MI_BLOCK_TAG_ALIGNED, MI_GUARDED, mi_count_size_overflow, mi_likely,
+    mi_page_set_has_interior_pointers, mi_page_usable_block_size, mi_theap_malloc_use_guarded,
+    mi_unlikely,
 };
 use crate::page::{MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size};
-use crate::prim::{_mi_theap_default, _mi_theap_empty_get, MI_THEAP_INITASNULL};
+use crate::prim::{_mi_heap_theap, _mi_theap_default, _mi_theap_empty_get, MI_THEAP_INITASNULL};
 use crate::track::{mi_track_align, mi_track_malloc};
-use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_page_t, mi_theap_t};
+use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_page_t, mi_theap_t};
 
 const MI_MAX_ALIGN_SIZE: usize = 16;
 const MI_PAGE_MAX_START_BLOCK_ALIGN2: usize = 4 * MI_KiB;
@@ -41,6 +42,14 @@ unsafe extern "C" {
         zero: bool,
         huge_alignment: usize,
         usable: *mut usize,
+    ) -> *mut c_void;
+    fn _mi_theap_realloc_zero(
+        theap: *mut mi_theap_t,
+        p: *mut c_void,
+        newsize: usize,
+        zero: bool,
+        usable_pre: *mut usize,
+        usable_post: *mut usize,
     ) -> *mut c_void;
     fn _mi_page_malloc_zero(
         theap: *mut mi_theap_t,
@@ -397,4 +406,317 @@ pub unsafe extern "C" fn mi_calloc_aligned(
     alignment: usize,
 ) -> *mut c_void {
     mi_theap_calloc_aligned(_mi_theap_default(), count, size, alignment)
+}
+
+pub unsafe extern "C" fn mi_heap_malloc_aligned_at(
+    heap: *mut mi_heap_t,
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_malloc_aligned_at(_mi_heap_theap(heap), size, alignment, offset)
+}
+
+pub unsafe extern "C" fn mi_heap_malloc_aligned(
+    heap: *mut mi_heap_t,
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_malloc_aligned(_mi_heap_theap(heap), size, alignment)
+}
+
+pub unsafe extern "C" fn mi_heap_zalloc_aligned_at(
+    heap: *mut mi_heap_t,
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_zalloc_aligned_at(_mi_heap_theap(heap), size, alignment, offset)
+}
+
+pub unsafe extern "C" fn mi_heap_zalloc_aligned(
+    heap: *mut mi_heap_t,
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_zalloc_aligned(_mi_heap_theap(heap), size, alignment)
+}
+
+pub unsafe extern "C" fn mi_heap_calloc_aligned_at(
+    heap: *mut mi_heap_t,
+    count: usize,
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_calloc_aligned_at(_mi_heap_theap(heap), count, size, alignment, offset)
+}
+
+pub unsafe extern "C" fn mi_heap_calloc_aligned(
+    heap: *mut mi_heap_t,
+    count: usize,
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_calloc_aligned(_mi_heap_theap(heap), count, size, alignment)
+}
+
+pub unsafe fn mi_theap_realloc_zero_aligned_at(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+    offset: usize,
+    zero: bool,
+) -> *mut c_void {
+    crate::mi_assert!(alignment > 0);
+    if alignment <= size_of::<usize>() && offset == 0 {
+        return _mi_theap_realloc_zero(
+            theap,
+            p,
+            newsize,
+            zero,
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+        );
+    }
+    if p.is_null() {
+        return mi_theap_malloc_zero_aligned_at(
+            theap,
+            newsize,
+            alignment,
+            offset,
+            zero,
+            core::ptr::null_mut(),
+        );
+    }
+    let size = crate::mimalloc::mi_usable_size(p);
+    if newsize <= size
+        && newsize >= (size - (size / 2))
+        && (p as usize + offset).is_multiple_of(alignment)
+    {
+        return p;
+    }
+
+    let newp = mi_theap_malloc_aligned_at(theap, newsize, alignment, offset);
+    if !newp.is_null() {
+        if zero && newsize > size {
+            let start = if size >= size_of::<isize>() {
+                size - size_of::<isize>()
+            } else {
+                0
+            };
+            _mi_memzero((newp as *mut u8).add(start).cast(), newsize - start);
+        }
+        _mi_memcpy_aligned(newp, p, usize::min(newsize, size));
+        crate::mimalloc::mi_free(p);
+    }
+    newp
+}
+
+#[inline]
+pub unsafe fn mi_theap_realloc_zero_aligned(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+    zero: bool,
+) -> *mut c_void {
+    crate::mi_assert!(alignment > 0);
+    if alignment <= size_of::<usize>() {
+        return _mi_theap_realloc_zero(
+            theap,
+            p,
+            newsize,
+            zero,
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+        );
+    }
+    mi_theap_realloc_zero_aligned_at(theap, p, newsize, alignment, 0, zero)
+}
+
+#[inline]
+pub unsafe fn mi_theap_realloc_aligned_at(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_realloc_zero_aligned_at(theap, p, newsize, alignment, offset, false)
+}
+
+#[inline]
+pub unsafe fn mi_theap_realloc_aligned(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_realloc_zero_aligned(theap, p, newsize, alignment, false)
+}
+
+#[inline]
+pub unsafe fn mi_theap_rezalloc_aligned_at(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_realloc_zero_aligned_at(theap, p, newsize, alignment, offset, true)
+}
+
+#[inline]
+pub unsafe fn mi_theap_rezalloc_aligned(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_realloc_zero_aligned(theap, p, newsize, alignment, true)
+}
+
+#[inline]
+pub unsafe fn mi_theap_recalloc_aligned_at(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    newcount: usize,
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    let mut total = 0usize;
+    if mi_count_size_overflow(newcount, size, &mut total) {
+        return core::ptr::null_mut();
+    }
+    mi_theap_rezalloc_aligned_at(theap, p, total, alignment, offset)
+}
+
+#[inline]
+pub unsafe fn mi_theap_recalloc_aligned(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    newcount: usize,
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    let mut total = 0usize;
+    if mi_count_size_overflow(newcount, size, &mut total) {
+        return core::ptr::null_mut();
+    }
+    mi_theap_rezalloc_aligned(theap, p, total, alignment)
+}
+
+pub unsafe extern "C" fn mi_realloc_aligned_at(
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_realloc_aligned_at(_mi_theap_default(), p, newsize, alignment, offset)
+}
+
+pub unsafe extern "C" fn mi_realloc_aligned(
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_realloc_aligned(_mi_theap_default(), p, newsize, alignment)
+}
+
+pub unsafe extern "C" fn mi_rezalloc_aligned_at(
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_rezalloc_aligned_at(_mi_theap_default(), p, newsize, alignment, offset)
+}
+
+pub unsafe extern "C" fn mi_rezalloc_aligned(
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_rezalloc_aligned(_mi_theap_default(), p, newsize, alignment)
+}
+
+pub unsafe extern "C" fn mi_recalloc_aligned_at(
+    p: *mut c_void,
+    newcount: usize,
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_recalloc_aligned_at(_mi_theap_default(), p, newcount, size, alignment, offset)
+}
+
+pub unsafe extern "C" fn mi_recalloc_aligned(
+    p: *mut c_void,
+    newcount: usize,
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_recalloc_aligned(_mi_theap_default(), p, newcount, size, alignment)
+}
+
+pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
+    heap: *mut mi_heap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_realloc_aligned_at(_mi_heap_theap(heap), p, newsize, alignment, offset)
+}
+
+pub unsafe extern "C" fn mi_heap_realloc_aligned(
+    heap: *mut mi_heap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_realloc_aligned(_mi_heap_theap(heap), p, newsize, alignment)
+}
+
+pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
+    heap: *mut mi_heap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_rezalloc_aligned_at(_mi_heap_theap(heap), p, newsize, alignment, offset)
+}
+
+pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
+    heap: *mut mi_heap_t,
+    p: *mut c_void,
+    newsize: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_rezalloc_aligned(_mi_heap_theap(heap), p, newsize, alignment)
+}
+
+pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
+    heap: *mut mi_heap_t,
+    p: *mut c_void,
+    newcount: usize,
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    mi_theap_recalloc_aligned_at(_mi_heap_theap(heap), p, newcount, size, alignment, offset)
+}
+
+pub unsafe extern "C" fn mi_heap_recalloc_aligned(
+    heap: *mut mi_heap_t,
+    p: *mut c_void,
+    newcount: usize,
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    mi_theap_recalloc_aligned(_mi_heap_theap(heap), p, newcount, size, alignment)
 }

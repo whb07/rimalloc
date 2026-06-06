@@ -850,6 +850,20 @@ pub unsafe fn mi_page_claim_ownership(page: *mut mi_page_t) -> bool {
 }
 
 #[inline]
+pub unsafe fn mi_block_ptr_is_guarded(block: *const mi_block_t, p: *const c_void) -> bool {
+    MI_UNUSED(&block);
+    MI_UNUSED(&p);
+    false
+}
+
+#[inline]
+pub unsafe fn mi_theap_malloc_use_guarded(theap: *mut mi_theap_t, size: usize) -> bool {
+    MI_UNUSED(&theap);
+    MI_UNUSED(&size);
+    false
+}
+
+#[inline]
 pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
     ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
 }

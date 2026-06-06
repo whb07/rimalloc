@@ -35,6 +35,7 @@ pub const mi_cdecl: () = ();
 pub const mi_attr_alloc_size: () = ();
 pub const mi_attr_alloc_size2: () = ();
 pub const mi_attr_alloc_align: () = ();
+pub const MI_HAS_HEAP_STL_ALLOCATOR: usize = 1;
 
 unsafe extern "C" {
     pub fn mi_malloc(size: usize) -> *mut c_void;

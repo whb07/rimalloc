@@ -1,8 +1,12 @@
 //! Statistics
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::{mem::size_of, ptr};
+
+use crate::atomic::{
+    mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed,
+};
 
 pub const MI_STAT_VERSION: usize = 5;
 pub const MI_BIN_HUGE: usize = 73;
@@ -214,4 +218,188 @@ pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
         return 0;
     }
     bin_block_size(bin)
+}
+
+fn mi_stat_update_mt(stat: &mut mi_stat_count_t, amount: i64) {
+    if amount == 0 {
+        return;
+    }
+    // SAFETY: `stat` points to valid `i64` fields and these helpers operate atomically on them.
+    unsafe {
+        let current = mi_atomic_addi64_relaxed(&mut stat.current, amount);
+        mi_atomic_maxi64_relaxed(&mut stat.peak, current + amount);
+        if amount > 0 {
+            mi_atomic_addi64_relaxed(&mut stat.total, amount);
+        }
+    }
+}
+
+fn mi_stat_update(stat: &mut mi_stat_count_t, amount: i64) {
+    if amount == 0 {
+        return;
+    }
+    stat.current += amount;
+    if stat.current > stat.peak {
+        stat.peak = stat.current;
+    }
+    if amount > 0 {
+        stat.total += amount;
+    }
+}
+
+fn __mi_stat_counter_increase_mt(stat: &mut mi_stat_counter_t, amount: usize) {
+    // SAFETY: `stat.total` is a valid atomic-compatible `i64` storage location.
+    unsafe {
+        mi_atomic_addi64_relaxed(&mut stat.total, amount as i64);
+    }
+}
+
+fn __mi_stat_counter_increase(stat: &mut mi_stat_counter_t, amount: usize) {
+    stat.total += amount as i64;
+}
+
+fn __mi_stat_increase_mt(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_update_mt(stat, amount as i64);
+}
+
+fn __mi_stat_increase(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_update(stat, amount as i64);
+}
+
+fn __mi_stat_decrease_mt(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_update_mt(stat, -(amount as i64));
+}
+
+fn __mi_stat_decrease(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_update(stat, -(amount as i64));
+}
+
+fn mi_stat_adjust_mt(stat: &mut mi_stat_count_t, amount: i64) {
+    if amount == 0 {
+        return;
+    }
+    // SAFETY: `stat` points to valid `i64` fields and these helpers operate atomically on them.
+    unsafe {
+        mi_atomic_addi64_relaxed(&mut stat.current, amount);
+        mi_atomic_addi64_relaxed(&mut stat.total, amount);
+    }
+}
+
+fn mi_stat_adjust(stat: &mut mi_stat_count_t, amount: i64) {
+    if amount == 0 {
+        return;
+    }
+    stat.current += amount;
+    stat.total += amount;
+}
+
+fn __mi_stat_adjust_increase_mt(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_adjust_mt(stat, amount as i64);
+}
+
+fn __mi_stat_adjust_increase(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_adjust(stat, amount as i64);
+}
+
+fn __mi_stat_adjust_decrease_mt(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_adjust_mt(stat, -(amount as i64));
+}
+
+fn __mi_stat_adjust_decrease(stat: &mut mi_stat_count_t, amount: usize) {
+    mi_stat_adjust(stat, -(amount as i64));
+}
+
+fn mi_stat_count_add_mt(stat: &mut mi_stat_count_t, src: &mi_stat_count_t) {
+    if ptr::eq(stat, src) {
+        return;
+    }
+    // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
+    unsafe {
+        mi_atomic_void_addi64_relaxed(&mut stat.total, &src.total);
+        let prev_current = mi_atomic_addi64_relaxed(&mut stat.current, src.current);
+        mi_atomic_maxi64_relaxed(&mut stat.peak, prev_current + src.peak);
+    }
+}
+
+fn mi_stat_counter_add_mt(stat: &mut mi_stat_counter_t, src: &mi_stat_counter_t) {
+    if ptr::eq(stat, src) {
+        return;
+    }
+    // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
+    unsafe {
+        mi_atomic_void_addi64_relaxed(&mut stat.total, &src.total);
+    }
+}
+
+fn mi_stats_add(stats: &mut mi_stats_t, src: &mi_stats_t) {
+    if ptr::eq(stats, src) {
+        return;
+    }
+
+    mi_stat_count_add_mt(&mut stats.pages, &src.pages);
+    mi_stat_count_add_mt(&mut stats.reserved, &src.reserved);
+    mi_stat_count_add_mt(&mut stats.committed, &src.committed);
+    mi_stat_counter_add_mt(&mut stats.reset, &src.reset);
+    mi_stat_counter_add_mt(&mut stats.purged, &src.purged);
+    mi_stat_count_add_mt(&mut stats.page_committed, &src.page_committed);
+    mi_stat_count_add_mt(&mut stats.pages_abandoned, &src.pages_abandoned);
+    mi_stat_count_add_mt(&mut stats.threads, &src.threads);
+    mi_stat_count_add_mt(&mut stats.malloc_normal, &src.malloc_normal);
+    mi_stat_count_add_mt(&mut stats.malloc_huge, &src.malloc_huge);
+    mi_stat_count_add_mt(&mut stats.malloc_requested, &src.malloc_requested);
+    mi_stat_counter_add_mt(&mut stats.mmap_calls, &src.mmap_calls);
+    mi_stat_counter_add_mt(&mut stats.commit_calls, &src.commit_calls);
+    mi_stat_counter_add_mt(&mut stats.reset_calls, &src.reset_calls);
+    mi_stat_counter_add_mt(&mut stats.purge_calls, &src.purge_calls);
+    mi_stat_counter_add_mt(&mut stats.arena_count, &src.arena_count);
+    mi_stat_counter_add_mt(&mut stats.malloc_normal_count, &src.malloc_normal_count);
+    mi_stat_counter_add_mt(&mut stats.malloc_huge_count, &src.malloc_huge_count);
+    mi_stat_counter_add_mt(&mut stats.malloc_guarded_count, &src.malloc_guarded_count);
+    mi_stat_counter_add_mt(&mut stats.arena_rollback_count, &src.arena_rollback_count);
+    mi_stat_counter_add_mt(&mut stats.arena_purges, &src.arena_purges);
+    mi_stat_counter_add_mt(&mut stats.pages_extended, &src.pages_extended);
+    mi_stat_counter_add_mt(&mut stats.pages_retire, &src.pages_retire);
+    mi_stat_counter_add_mt(&mut stats.page_searches, &src.page_searches);
+    mi_stat_counter_add_mt(&mut stats.page_searches_count, &src.page_searches_count);
+    mi_stat_count_add_mt(&mut stats.segments, &src.segments);
+    mi_stat_count_add_mt(&mut stats.segments_abandoned, &src.segments_abandoned);
+    mi_stat_count_add_mt(&mut stats.segments_cache, &src.segments_cache);
+    mi_stat_count_add_mt(&mut stats._segments_reserved, &src._segments_reserved);
+    mi_stat_count_add_mt(&mut stats.heaps, &src.heaps);
+    mi_stat_count_add_mt(&mut stats.theaps, &src.theaps);
+    mi_stat_counter_add_mt(
+        &mut stats.pages_reclaim_on_alloc,
+        &src.pages_reclaim_on_alloc,
+    );
+    mi_stat_counter_add_mt(&mut stats.pages_reclaim_on_free, &src.pages_reclaim_on_free);
+    mi_stat_counter_add_mt(&mut stats.pages_reabandon_full, &src.pages_reabandon_full);
+    mi_stat_counter_add_mt(
+        &mut stats.pages_unabandon_busy_wait,
+        &src.pages_unabandon_busy_wait,
+    );
+    mi_stat_counter_add_mt(&mut stats.heaps_delete_wait, &src.heaps_delete_wait);
+
+    for (dst, add) in stats
+        ._stat_reserved
+        .iter_mut()
+        .zip(src._stat_reserved.iter())
+    {
+        mi_stat_count_add_mt(dst, add);
+    }
+    for (dst, add) in stats
+        ._stat_counter_reserved
+        .iter_mut()
+        .zip(src._stat_counter_reserved.iter())
+    {
+        mi_stat_counter_add_mt(dst, add);
+    }
+    for (dst, add) in stats.malloc_bins.iter_mut().zip(src.malloc_bins.iter()) {
+        mi_stat_count_add_mt(dst, add);
+    }
+    for (dst, add) in stats.page_bins.iter_mut().zip(src.page_bins.iter()) {
+        mi_stat_count_add_mt(dst, add);
+    }
+    for (dst, add) in stats.chunk_bins.iter_mut().zip(src.chunk_bins.iter()) {
+        mi_stat_count_add_mt(dst, add);
+    }
 }

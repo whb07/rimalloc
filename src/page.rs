@@ -4,11 +4,23 @@
 
 use core::mem::size_of;
 
+use crate::arena::MI_ARENA_SLICE_SIZE;
+use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::stats::{MI_BIN_HUGE, MI_LARGE_MAX_OBJ_WSIZE, bin_block_size};
-use crate::types::mi_page_queue_t;
+use crate::types::{MI_ENABLE_LARGE_PAGES, mi_page_queue_t};
 
 pub const MI_PADDING_SIZE: usize = 0;
 pub const MI_OS_PAGE_SIZE: usize = 4096;
+pub const MI_SMALL_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
+pub const MI_MEDIUM_PAGE_SIZE: usize = 8 * MI_SMALL_PAGE_SIZE;
+pub const MI_LARGE_PAGE_SIZE: usize = MI_SIZE_SIZE * MI_MEDIUM_PAGE_SIZE;
+pub const MI_PAGE_OSPAGE_BLOCK_ALIGN2: usize = 4 * MI_KiB;
+pub const MI_SMALL_MAX_OBJ_SIZE: usize = (MI_SMALL_PAGE_SIZE - MI_PAGE_OSPAGE_BLOCK_ALIGN2) / 6;
+pub const MI_MEDIUM_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {
+    (MI_MEDIUM_PAGE_SIZE - MI_PAGE_OSPAGE_BLOCK_ALIGN2) / 6
+} else {
+    MI_MEDIUM_PAGE_SIZE / 8
+};
 pub const MI_LARGE_MAX_OBJ_SIZE: usize = MI_LARGE_MAX_OBJ_WSIZE * size_of::<usize>();
 pub const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 

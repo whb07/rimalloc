@@ -107898,7 +107898,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -107950,7 +107950,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001429",
@@ -107967,7 +107967,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Translate as const/associated const/cfg, preserving compile-time condition.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -108019,7 +108019,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001430",
@@ -112856,7 +112856,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -112878,7 +112878,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001521",
@@ -112895,7 +112895,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -112922,7 +112922,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001522",
@@ -112939,7 +112939,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -112966,7 +112966,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001523",
@@ -112983,7 +112983,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -113010,7 +113010,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001524",
@@ -115665,7 +115665,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -115692,7 +115692,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001575",
@@ -124710,7 +124710,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Translate as const/associated const/cfg, preserving compile-time condition.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -124772,7 +124772,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001675",
@@ -139477,7 +139477,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -139514,7 +139514,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001892",
@@ -149118,7 +149118,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -149175,7 +149175,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002005",
@@ -156087,7 +156087,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Translate as const/associated const/cfg, preserving compile-time condition.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -156154,7 +156154,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002074",
@@ -159960,7 +159960,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -160017,7 +160017,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002113",
@@ -160034,7 +160034,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -160076,7 +160076,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002114",
@@ -162193,7 +162193,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -162230,7 +162230,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002140",
@@ -162247,7 +162247,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -162284,7 +162284,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002141",
@@ -164011,7 +164011,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -164073,7 +164073,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002154",
@@ -167324,7 +167324,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -167361,7 +167361,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002197",
@@ -167378,7 +167378,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -167420,7 +167420,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002198",
@@ -168253,7 +168253,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -168290,7 +168290,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002211",
@@ -168307,7 +168307,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -168389,7 +168389,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002212",
@@ -298702,7 +298702,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -298824,7 +298824,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003107",
@@ -316548,7 +316548,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -316860,7 +316860,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003341",
@@ -316877,7 +316877,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as private helper/test helper in owning module.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -316919,7 +316919,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003342",

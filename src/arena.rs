@@ -6,7 +6,12 @@ use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 use crate::atomic::mi_atomic_load_ptr_acquire;
+use crate::bitmap::{MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT};
 use crate::bits::MI_INTPTR_BITS;
+use crate::internal::{
+    _mi_align_up, _mi_os_commit, _mi_os_commit_ex, mi_memid_t, mi_memkind_t, mi_size_of_slices,
+};
+use crate::options::{mi_option_get_size, mi_option_t};
 use crate::types::{mi_arena_id_t, mi_arena_t, mi_commit_fun_t, mi_heap_t, mi_subproc_t};
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
@@ -18,6 +23,8 @@ pub const MI_PAGE_BLOCK_START_MAX_OFFSET: usize = 8 * MI_INTPTR_BITS;
 pub const mi_forall_arenas_end: () = ();
 
 const MI_MAX_ARENAS: usize = 160;
+const MI_ARENA_MIN_OBJ_SIZE: usize = MI_ARENA_SLICE_SIZE;
+const MI_ARENA_MAX_SIZE: usize = MI_BITMAP_MAX_BIT_COUNT * MI_ARENA_SLICE_SIZE;
 
 #[repr(C)]
 struct MiHeapPrefix {
@@ -99,6 +106,35 @@ pub unsafe extern "C" fn mi_arena_id_from_arena(arena: *mut mi_arena_t) -> mi_ar
     }
 }
 
+#[allow(dead_code)]
+unsafe fn mi_arena_is_suitable(arena: *mut mi_arena_t, req_arena: *mut mi_arena_t) -> bool {
+    if arena == req_arena {
+        return true;
+    }
+    if arena.is_null() {
+        return false;
+    }
+    if req_arena.is_null() && !unsafe { (*arena.cast::<MiArenaPrefix>()).is_exclusive } {
+        return true;
+    }
+    !unsafe { (*arena.cast::<MiArenaPrefix>()).parent.is_null() }
+        && unsafe { (*arena.cast::<MiArenaPrefix>()).parent == req_arena }
+}
+
+/// # Safety
+/// `memid` and `request_arena` must follow the internal arena allocation invariants.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_arena_memid_is_suitable(
+    memid: mi_memid_t,
+    request_arena: *mut mi_arena_t,
+) -> bool {
+    if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
+        unsafe { mi_arena_is_suitable(memid.mem.arena.arena, request_arena) }
+    } else {
+        unsafe { mi_arena_is_suitable(ptr::null_mut(), request_arena) }
+    }
+}
+
 /// # Safety
 /// `subproc` must point to a valid `mi_subproc_t`.
 #[unsafe(no_mangle)]
@@ -108,6 +144,56 @@ pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usiz
             .arena_count
             .load(Ordering::Relaxed)
     }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_info_slices(arena: *mut mi_arena_t) -> usize {
+    unsafe { (*arena.cast::<MiArenaPrefix>()).info_slices }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_max_object_size() -> usize {
+    let max_size = _mi_align_up(
+        mi_option_get_size(mi_option_t::mi_option_arena_max_object_size),
+        MI_ARENA_SLICE_SIZE,
+    );
+    if max_size <= MI_ARENA_MIN_OBJ_SIZE {
+        MI_ARENA_MIN_OBJ_SIZE
+    } else if max_size >= MI_ARENA_MAX_SIZE - MI_BCHUNK_SIZE {
+        MI_ARENA_MAX_SIZE - MI_BCHUNK_SIZE
+    } else {
+        max_size
+    }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_commit(
+    arena: *mut mi_arena_t,
+    start: *mut c_void,
+    size: usize,
+    is_zero: *mut bool,
+    already_committed: usize,
+) -> bool {
+    if !arena.is_null() && unsafe { ((*arena.cast::<MiArenaPrefix>()).commit_fun as usize) != 0 } {
+        unsafe {
+            ((*arena.cast::<MiArenaPrefix>()).commit_fun)(
+                true,
+                start,
+                size,
+                is_zero,
+                (*arena.cast::<MiArenaPrefix>()).commit_fun_arg,
+            )
+        }
+    } else if already_committed > 0 {
+        unsafe { _mi_os_commit_ex(start, size, is_zero, already_committed) }
+    } else {
+        unsafe { _mi_os_commit(start, size, is_zero) }
+    }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_size(arena: *mut mi_arena_t) -> usize {
+    mi_size_of_slices(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count })
 }
 
 /// # Safety

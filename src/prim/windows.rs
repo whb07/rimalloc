@@ -3,7 +3,13 @@
 //! Bounded mechanical translation of the requested macro/type slice from:
 //! - `src/prim/windows/etw.h`
 
-#![allow(non_camel_case_types, non_upper_case_globals, dead_code, unused_macros)]
+#![allow(
+    non_camel_case_types,
+    non_snake_case,
+    non_upper_case_globals,
+    dead_code,
+    unused_macros
+)]
 
 use core::ffi::c_void;
 

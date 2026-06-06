@@ -1,6 +1,7 @@
 //! Small libc-like string and environment helpers.
 
 #![allow(
+    dead_code,
     non_camel_case_types,
     non_upper_case_globals,
     clippy::missing_safety_doc,
@@ -12,6 +13,16 @@ use core::ptr;
 use std::cmp::min;
 use std::ffi::CStr;
 use std::fmt;
+
+use crate::bits::MI_SIZE_BITS;
+
+pub const MI_NEXTC: &str = "c = *in; if (c==0) break; in++;";
+pub const mi_mask_even_bits32: u32 = 0x5555_5555;
+pub const mi_mask_even_nibbles32: u32 = 0x0F0F_0F0F;
+pub const mi_mask_even_bits64: u64 = 0x5555_5555_5555_5555;
+pub const mi_mask_even_nibbles64: u64 = 0x0F0F_0F0F_0F0F_0F0F;
+const MI_MASK_EVEN_PAIRS32: u32 = 0x3333_3333;
+const MI_MASK_EVEN_PAIRS64: u64 = 0x3333_3333_3333_3333;
 
 #[inline]
 fn as_bytes_ptr(p: *const c_char) -> *const u8 {
@@ -179,6 +190,189 @@ pub unsafe extern "C" fn _mi_getenv(
     ptr::copy_nonoverlapping(bytes.as_ptr(), as_bytes_mut_ptr(result), bytes.len());
     *as_bytes_mut_ptr(result).add(bytes.len()) = 0;
     true
+}
+
+#[inline]
+fn mi_outc(c: c_char, out: &mut *mut c_char, end: *mut c_char) {
+    let p = *out;
+    if (p as usize) >= (end as usize) {
+        return;
+    }
+    unsafe {
+        *p = c;
+    }
+    *out = unsafe { p.add(1) };
+}
+
+#[inline]
+unsafe fn mi_outs(s: *const c_char, out: &mut *mut c_char, end: *mut c_char) {
+    if s.is_null() {
+        return;
+    }
+    let mut p = *out;
+    let mut cur = s;
+    while *cur != 0 && (p as usize) < (end as usize) {
+        *p = *cur;
+        p = p.add(1);
+        cur = cur.add(1);
+    }
+    *out = p;
+}
+
+#[inline]
+fn mi_out_fill(fill: c_char, len: usize, out: &mut *mut c_char, end: *mut c_char) {
+    let mut p = *out;
+    for _ in 0..len {
+        if (p as usize) >= (end as usize) {
+            break;
+        }
+        unsafe {
+            *p = fill;
+            p = p.add(1);
+        }
+    }
+    *out = p;
+}
+
+#[inline]
+unsafe fn mi_out_alignright(
+    fill: c_char,
+    start: *mut c_char,
+    len: usize,
+    extra: usize,
+    end: *mut c_char,
+) {
+    if len == 0 || extra == 0 {
+        return;
+    }
+    if (start as usize) + len + extra >= (end as usize) {
+        return;
+    }
+    for i in 1..=len {
+        *start.add(len + extra - i) = *start.add(len - i);
+    }
+    for i in 0..extra {
+        *start.add(i) = fill;
+    }
+}
+
+#[inline]
+fn mi_byte_sum32(mut x: u32) -> usize {
+    x += x << 8;
+    x += x << 16;
+    (x >> 24) as usize
+}
+
+#[inline]
+fn mi_byte_sum64(mut x: u64) -> usize {
+    x += x << 8;
+    x += x << 16;
+    x += x << 32;
+    (x >> 56) as usize
+}
+
+#[inline]
+fn mi_ctz_generic32(x: u32) -> usize {
+    const DEBRUIJN: [u8; 32] = [
+        0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16, 7,
+        26, 12, 18, 6, 11, 5, 10, 9,
+    ];
+    if x == 0 {
+        32
+    } else {
+        DEBRUIJN[((x & x.wrapping_neg()).wrapping_mul(0x077C_B531)) as usize >> 27] as usize
+    }
+}
+
+#[inline]
+fn mi_clz_generic32(mut x: u32) -> usize {
+    const DEBRUIJN: [u8; 32] = [
+        31, 22, 30, 21, 18, 10, 29, 2, 20, 17, 15, 13, 9, 6, 28, 1, 23, 19, 11, 3, 16, 14, 7, 24,
+        12, 4, 8, 25, 5, 26, 27, 0,
+    ];
+    if x == 0 {
+        return 32;
+    }
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+    DEBRUIJN[(x.wrapping_mul(0x07C4_ACDD)) as usize >> 27] as usize
+}
+
+#[inline]
+fn mi_popcount_generic32(mut x: u32) -> usize {
+    x = x - ((x >> 1) & mi_mask_even_bits32);
+    x = (x & MI_MASK_EVEN_PAIRS32) + ((x >> 2) & MI_MASK_EVEN_PAIRS32);
+    x = (x + (x >> 4)) & mi_mask_even_nibbles32;
+    mi_byte_sum32(x)
+}
+
+#[inline]
+fn mi_popcount_generic64(mut x: u64) -> usize {
+    x = x - ((x >> 1) & mi_mask_even_bits64);
+    x = (x & MI_MASK_EVEN_PAIRS64) + ((x >> 2) & MI_MASK_EVEN_PAIRS64);
+    x = (x + (x >> 4)) & mi_mask_even_nibbles64;
+    mi_byte_sum64(x)
+}
+
+#[inline]
+pub extern "C" fn _mi_ctz_generic(x: usize) -> usize {
+    if x == 0 {
+        return MI_SIZE_BITS;
+    }
+    #[cfg(target_pointer_width = "32")]
+    {
+        mi_ctz_generic32(x as u32)
+    }
+    #[cfg(target_pointer_width = "64")]
+    {
+        let lo = x as u32;
+        if lo != 0 {
+            mi_ctz_generic32(lo)
+        } else {
+            32 + mi_ctz_generic32((x >> 32) as u32)
+        }
+    }
+}
+
+#[inline]
+pub extern "C" fn _mi_clz_generic(x: usize) -> usize {
+    if x == 0 {
+        return MI_SIZE_BITS;
+    }
+    #[cfg(target_pointer_width = "32")]
+    {
+        mi_clz_generic32(x as u32)
+    }
+    #[cfg(target_pointer_width = "64")]
+    {
+        let hi = (x >> 32) as u32;
+        if hi != 0 {
+            mi_clz_generic32(hi)
+        } else {
+            32 + mi_clz_generic32(x as u32)
+        }
+    }
+}
+
+#[inline]
+pub extern "C" fn _mi_popcount_generic(x: usize) -> usize {
+    if x <= 1 {
+        return x;
+    }
+    if !x == 0 {
+        return MI_SIZE_BITS;
+    }
+    #[cfg(target_pointer_width = "32")]
+    {
+        mi_popcount_generic32(x as u32)
+    }
+    #[cfg(target_pointer_width = "64")]
+    {
+        mi_popcount_generic64(x as u64)
+    }
 }
 
 #[allow(dead_code)]

@@ -6,12 +6,35 @@ use core::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::atomic::mi_lock_t;
+use crate::bits::MI_SIZE_SIZE;
+use crate::stats::mi_stat_count_t;
 use crate::types::{mi_theap_t, mi_threadid_t, mi_tld_t};
 
 pub const MI_TLS_DIRECT_SLOTS: usize = 64;
+pub const MI_TLS_EXPANSION_SLOTS: usize = 1024;
+pub const MI_TLS_DIRECT_FIRST: usize = if MI_SIZE_SIZE == 4 {
+    0x0E10 / MI_SIZE_SIZE
+} else {
+    0x1480 / MI_SIZE_SIZE
+};
 pub const MI_TLS_INITIAL_SLOT: usize = 5;
 #[allow(clippy::manual_dangling_ptr)]
 pub const MI_TLD_INVALID: *mut mi_tld_t = 1usize as *mut mi_tld_t;
+pub const TLS_OUT_OF_INDEXES: u32 = u32::MAX;
+
+#[allow(non_snake_case)]
+pub const fn MI_STAT_COUNT_NULL() -> mi_stat_count_t {
+    mi_stat_count_t {
+        total: 0,
+        peak: 0,
+        current: 0,
+    }
+}
+
+#[allow(non_snake_case)]
+pub const fn MI_STAT_COUNT<T: Copy>(_stat: T) -> mi_stat_count_t {
+    MI_STAT_COUNT_NULL()
+}
 
 #[allow(dead_code)]
 static mut subprocs_lock: mi_lock_t = mi_lock_t::new();
@@ -30,6 +53,12 @@ pub static mut _mi_theap_cached_slot: usize = MI_TLS_INITIAL_SLOT;
 
 #[unsafe(no_mangle)]
 pub static mut _mi_theap_cached_expansion_slot: usize = 0;
+
+#[unsafe(no_mangle)]
+pub static mut mi_tls_raw_index_default: u32 = TLS_OUT_OF_INDEXES;
+
+#[unsafe(no_mangle)]
+pub static mut mi_tls_raw_index_cached: u32 = TLS_OUT_OF_INDEXES;
 
 #[unsafe(no_mangle)]
 pub static mut __mi_theap_main: *mut mi_theap_t = ptr::null_mut();

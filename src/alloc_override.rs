@@ -142,3 +142,163 @@ pub unsafe fn mi_malloc_size_forward(p: *const c_void) -> usize {
 pub unsafe fn mi_aligned_alloc_forward(alignment: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_aligned_alloc(alignment, size) }
 }
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _expand(block: *mut c_void, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_expand(block, size) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _msize_base(block: *mut c_void) -> usize {
+    unsafe { crate::mimalloc::mi_malloc_size(block) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _msize(block: *mut c_void) -> usize {
+    unsafe { crate::mimalloc::mi_malloc_size(block) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _free_base(block: *mut c_void) {
+    unsafe { crate::mimalloc::mi_free(block) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free(block: *mut c_void) {
+    unsafe { crate::mimalloc::mi_free(block) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc(size) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _malloc_base(size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc(size) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _realloc_base(block: *mut c_void, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_realloc(block, size) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn realloc(block: *mut c_void, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_realloc(block, size) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _calloc_base(count: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_calloc(count, size) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_calloc(count, size) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _recalloc_base(
+    block: *mut c_void,
+    count: usize,
+    size: usize,
+) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_recalloc(block, count, size) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _recalloc(block: *mut c_void, count: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_recalloc(block, count, size) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _aligned_free(block: *mut c_void) {
+    unsafe { crate::mimalloc::mi_free(block) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _aligned_malloc(size: usize, alignment: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc_aligned(size, alignment) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _aligned_offset_malloc(
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc_aligned_at(size, alignment, offset) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _aligned_msize(
+    block: *mut c_void,
+    alignment: usize,
+    offset: usize,
+) -> usize {
+    crate::MI_UNUSED!(alignment);
+    crate::MI_UNUSED!(offset);
+    unsafe { crate::mimalloc::mi_malloc_size(block) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _aligned_offset_realloc(
+    block: *mut c_void,
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_realloc_aligned_at(block, size, alignment, offset) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _aligned_offset_recalloc(
+    block: *mut c_void,
+    count: usize,
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_recalloc_aligned_at(block, count, size, alignment, offset) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _aligned_realloc(
+    block: *mut c_void,
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_realloc_aligned(block, size, alignment) }
+}
+
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _aligned_recalloc(
+    block: *mut c_void,
+    count: usize,
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_recalloc_aligned(block, count, size, alignment) }
+}

@@ -9606,7 +9606,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Document/translate in nearest module.",
-      "status": "translated-stage-001; cargo validation blocked: cargo not found",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9658,7 +9658,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000184",
@@ -9675,7 +9675,7 @@
       "stage": "STAGE-002A documentation API cross-checks",
       "rust_destination": "build.rs / docs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "build.rs / docs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000019",
@@ -9702,7 +9702,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000185",
@@ -48598,7 +48598,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -48630,7 +48630,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000596",
@@ -170177,7 +170177,7 @@
       "stage": "STAGE-002 public ABI declarations",
       "rust_destination": "src/api.rs / src/types.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/api.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000023",
@@ -170219,7 +170219,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002237",
@@ -274908,7 +274908,7 @@
       "stage": "STAGE-010 allocation/free/libc/override/static APIs",
       "rust_destination": "src/libc.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/libc.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000044",
@@ -274995,7 +274995,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002911",

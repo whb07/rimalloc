@@ -224,6 +224,17 @@ pub unsafe fn mi_stats_init(stats: *mut mi_stats_t) {
     }
 }
 
+#[macro_export]
+macro_rules! mi_stats_t_decl {
+    ($name:ident) => {
+        let mut $name = $crate::stats::mi_stats_t::default();
+        // SAFETY: the macro creates a fresh local `mi_stats_t`.
+        unsafe {
+            $crate::stats::mi_stats_init(&mut $name);
+        }
+    };
+}
+
 pub(crate) fn bin_block_size(bin: usize) -> usize {
     MI_BIN_WORD_SIZES[bin] * size_of::<usize>()
 }

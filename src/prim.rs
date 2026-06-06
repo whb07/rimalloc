@@ -103,6 +103,8 @@ thread_local! {
 }
 
 unsafe extern "C" {
+    pub static _mi_theap_empty: mi_theap_t;
+
     pub fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t);
     pub fn _mi_prim_free(addr: *mut c_void, size: usize) -> i32;
     pub fn _mi_prim_alloc(
@@ -195,11 +197,28 @@ pub fn _mi_prim_thread_id() -> mi_threadid_t {
 }
 
 #[inline]
+pub unsafe fn __mi_theap_empty() -> *mut mi_theap_t {
+    core::ptr::addr_of!(_mi_theap_empty).cast_mut()
+}
+
+#[inline]
+unsafe fn mi_prim_tls_slot_theap(slot: usize, expansion_slot: usize) -> *mut mi_theap_t {
+    let theap = mi_prim_tls_slot(slot) as *mut mi_theap_t;
+    if cfg!(windows) && slot == MI_TLS_EXPANSION_SLOT && !theap.is_null() {
+        (theap as *mut *mut mi_theap_t).add(expansion_slot).read()
+    } else {
+        theap
+    }
+}
+
+#[inline]
 pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
     if MI_TLS_MODEL_THREAD_LOCAL {
         __mi_theap_default
     } else if MI_TLS_MODEL_FIXED_SLOT {
         mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_DEFAULT) as *mut mi_theap_t
+    } else if MI_TLS_MODEL_DYNAMIC_WIN32 {
+        mi_prim_tls_slot_theap(_mi_theap_default_slot, _mi_theap_default_expansion_slot)
     } else if MI_TLS_MODEL_DYNAMIC_PTHREADS {
         if _mi_theap_default_key == 0 {
             ptr::null_mut()
@@ -217,6 +236,8 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         __mi_theap_cached
     } else if MI_TLS_MODEL_FIXED_SLOT {
         mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_CACHED) as *mut mi_theap_t
+    } else if MI_TLS_MODEL_DYNAMIC_WIN32 {
+        mi_prim_tls_slot_theap(_mi_theap_cached_slot, _mi_theap_cached_expansion_slot)
     } else if MI_TLS_MODEL_DYNAMIC_PTHREADS {
         if _mi_theap_cached_key == 0 {
             ptr::null_mut()

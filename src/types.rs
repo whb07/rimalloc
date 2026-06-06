@@ -10,6 +10,8 @@ pub const MI_SMALL_WSIZE_MAX: usize = 128;
 pub const MI_SMALL_SIZE_MAX: usize = MI_SMALL_WSIZE_MAX * core::mem::size_of::<*const c_void>();
 
 pub type mi_arena_id_t = *mut c_void;
+pub type mi_threadid_t = usize;
+pub type mi_msecs_t = i64;
 
 pub enum mi_arena_s {}
 pub type mi_arena_t = mi_arena_s;
@@ -28,6 +30,15 @@ pub type mi_subproc_t = mi_subproc_s;
 
 pub type mi_bitmap_t = crate::bitmap::mi_bitmap_t;
 pub type mi_bbitmap_t = crate::bitmap::mi_bbitmap_t;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_random_ctx_t {
+    pub input: [u32; 16],
+    pub output: [u32; 16],
+    pub output_available: i32,
+    pub weak: bool,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

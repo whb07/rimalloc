@@ -25,6 +25,11 @@ pub use crate::page::{
     MI_LARGE_MAX_OBJ_SIZE, MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE,
     MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
 };
+pub use crate::stats::{
+    __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
+    __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
+    __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
+};
 pub use crate::types::*;
 
 pub const MI_INTERNAL_H: () = ();

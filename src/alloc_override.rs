@@ -17,6 +17,8 @@ use core::ffi::c_void;
 pub type mi_nothrow_t = *mut c_void;
 
 pub const MI_OSX_IS_INTERPOSED: usize = 0;
+#[cfg(target_os = "macos")]
+pub const MI_OSX_ZONE: usize = 0;
 
 #[macro_export]
 macro_rules! MI_FORWARD1 {
@@ -57,6 +59,43 @@ macro_rules! MI_INTERPOSE_FUN {
     };
 }
 
+#[macro_export]
+macro_rules! MI_INTERPOSE_MI {
+    (malloc) => {
+        $crate::MI_INTERPOSE_FUN!(malloc, $crate::mimalloc::mi_malloc)
+    };
+    (calloc) => {
+        $crate::MI_INTERPOSE_FUN!(calloc, $crate::mimalloc::mi_calloc)
+    };
+    (realloc) => {
+        $crate::MI_INTERPOSE_FUN!(realloc, $crate::mimalloc::mi_realloc)
+    };
+    (strdup) => {
+        $crate::MI_INTERPOSE_FUN!(strdup, $crate::mimalloc::mi_strdup)
+    };
+    (realpath) => {
+        $crate::MI_INTERPOSE_FUN!(realpath, $crate::mimalloc::mi_realpath)
+    };
+    (posix_memalign) => {
+        $crate::MI_INTERPOSE_FUN!(posix_memalign, $crate::mimalloc::mi_posix_memalign)
+    };
+    (reallocf) => {
+        $crate::MI_INTERPOSE_FUN!(reallocf, $crate::mimalloc::mi_reallocf)
+    };
+    (valloc) => {
+        $crate::MI_INTERPOSE_FUN!(valloc, $crate::mimalloc::mi_valloc)
+    };
+    (malloc_good_size) => {
+        $crate::MI_INTERPOSE_FUN!(malloc_good_size, $crate::mimalloc::mi_malloc_good_size)
+    };
+    (strndup) => {
+        $crate::MI_INTERPOSE_FUN!(strndup, $crate::mimalloc::mi_strndup)
+    };
+    (aligned_alloc) => {
+        $crate::MI_INTERPOSE_FUN!(aligned_alloc, $crate::mimalloc::mi_aligned_alloc)
+    };
+}
+
 unsafe extern "C" {
     pub fn vfree(p: *mut c_void);
     pub fn malloc_size(p: *const c_void) -> usize;
@@ -67,7 +106,42 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn strndup(s: *const c_char, n: usize) -> *mut c_char;
     fn aligned_alloc(alignment: usize, size: usize) -> *mut c_void;
+    fn malloc(size: usize) -> *mut c_void;
+    fn calloc(count: usize, size: usize) -> *mut c_void;
+    fn realloc(p: *mut c_void, newsize: usize) -> *mut c_void;
+    fn strdup(s: *const c_char) -> *mut c_char;
+    fn realpath(fname: *const c_char, resolved_name: *mut c_char) -> *mut c_char;
+    fn posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> i32;
+    fn reallocf(p: *mut c_void, newsize: usize) -> *mut c_void;
+    fn valloc(size: usize) -> *mut c_void;
+    fn free(p: *mut c_void);
+    fn _ZdlPv(p: *mut c_void);
+    fn _ZdaPv(p: *mut c_void);
+    fn _ZdlPvm(p: *mut c_void, n: usize);
+    fn _ZdaPvm(p: *mut c_void, n: usize);
+    fn _Znwm(n: usize) -> *mut c_void;
+    fn _Znam(n: usize) -> *mut c_void;
+    fn _ZnwmRKSt9nothrow_t(n: usize, tag: mi_nothrow_t) -> *mut c_void;
+    fn _ZnamRKSt9nothrow_t(n: usize, tag: mi_nothrow_t) -> *mut c_void;
 }
+
+#[cfg(target_os = "macos")]
+#[used]
+#[unsafe(link_section = "__DATA,__interpose")]
+pub static _mi_interposes: [mi_interpose_s; 12] = [
+    MI_INTERPOSE_FUN!(malloc, crate::mimalloc::mi_malloc),
+    MI_INTERPOSE_FUN!(calloc, crate::mimalloc::mi_calloc),
+    MI_INTERPOSE_FUN!(realloc, crate::mimalloc::mi_realloc),
+    MI_INTERPOSE_FUN!(strdup, crate::mimalloc::mi_strdup),
+    MI_INTERPOSE_FUN!(realpath, crate::mimalloc::mi_realpath),
+    MI_INTERPOSE_FUN!(posix_memalign, crate::mimalloc::mi_posix_memalign),
+    MI_INTERPOSE_FUN!(reallocf, crate::mimalloc::mi_reallocf),
+    MI_INTERPOSE_FUN!(valloc, crate::mimalloc::mi_valloc),
+    MI_INTERPOSE_FUN!(malloc_size, crate::alloc_override::mi_malloc_size_checked),
+    MI_INTERPOSE_FUN!(malloc_good_size, crate::mimalloc::mi_malloc_good_size),
+    MI_INTERPOSE_FUN!(free, crate::mimalloc::mi_cfree),
+    MI_INTERPOSE_FUN!(vfree, crate::mimalloc::mi_cfree),
+];
 
 #[cfg(target_os = "macos")]
 pub static _mi_interposes_10_7: [mi_interpose_s; 1] =
@@ -78,6 +152,20 @@ pub static _mi_interposes_10_15: [mi_interpose_s; 1] = [MI_INTERPOSE_FUN!(
     aligned_alloc,
     crate::mimalloc::mi_aligned_alloc
 )];
+
+#[cfg(target_os = "macos")]
+#[used]
+#[unsafe(link_section = "__DATA,__interpose")]
+pub static _mi_cxx_interposes: [mi_interpose_s; 8] = [
+    MI_INTERPOSE_FUN!(_ZdlPv, crate::mimalloc::mi_free),
+    MI_INTERPOSE_FUN!(_ZdaPv, crate::mimalloc::mi_free),
+    MI_INTERPOSE_FUN!(_ZdlPvm, crate::mimalloc::mi_free_size),
+    MI_INTERPOSE_FUN!(_ZdaPvm, crate::mimalloc::mi_free_size),
+    MI_INTERPOSE_FUN!(_Znwm, crate::mimalloc::mi_new),
+    MI_INTERPOSE_FUN!(_Znam, crate::mimalloc::mi_new),
+    MI_INTERPOSE_FUN!(_ZnwmRKSt9nothrow_t, crate::mimalloc::mi_new_nothrow),
+    MI_INTERPOSE_FUN!(_ZnamRKSt9nothrow_t, crate::mimalloc::mi_new_nothrow),
+];
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_size_checked(p: *mut c_void) -> usize {

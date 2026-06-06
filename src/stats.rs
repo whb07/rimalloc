@@ -197,9 +197,13 @@ pub unsafe fn mi_stats_init(stats: *mut mi_stats_t) {
     }
 }
 
+pub(crate) fn bin_block_size(bin: usize) -> usize {
+    MI_BIN_WORD_SIZES[bin] * size_of::<usize>()
+}
+
 pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
     if bin > MI_BIN_HUGE {
         return 0;
     }
-    MI_BIN_WORD_SIZES[bin] * size_of::<usize>()
+    bin_block_size(bin)
 }

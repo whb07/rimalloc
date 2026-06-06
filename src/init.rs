@@ -2,15 +2,43 @@
 
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
+use core::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::types::mi_threadid_t;
+use crate::atomic::mi_lock_t;
+use crate::types::{mi_theap_t, mi_threadid_t, mi_tld_t};
+
+pub const MI_TLS_DIRECT_SLOTS: usize = 64;
+pub const MI_TLS_INITIAL_SLOT: usize = 5;
+#[allow(clippy::manual_dangling_ptr)]
+pub const MI_TLD_INVALID: *mut mi_tld_t = 1usize as *mut mi_tld_t;
+
+#[allow(dead_code)]
+static mut subprocs_lock: mi_lock_t = mi_lock_t::new();
 
 #[unsafe(no_mangle)]
 pub static mut _mi_cpu_movsb_max: usize = 0;
 
 #[unsafe(no_mangle)]
 pub static mut _mi_cpu_stosb_max: usize = 0;
+
+#[unsafe(no_mangle)]
+pub static mut _mi_theap_default_expansion_slot: usize = 0;
+
+#[unsafe(no_mangle)]
+pub static mut _mi_theap_cached_slot: usize = MI_TLS_INITIAL_SLOT;
+
+#[unsafe(no_mangle)]
+pub static mut _mi_theap_cached_expansion_slot: usize = 0;
+
+#[unsafe(no_mangle)]
+pub static mut __mi_theap_main: *mut mi_theap_t = ptr::null_mut();
+
+#[unsafe(no_mangle)]
+pub static mut _mi_process_is_initialized: bool = false;
+
+#[unsafe(no_mangle)]
+pub static mut _mi_cpu_has_popcnt: bool = false;
 
 static MAIN_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(4);

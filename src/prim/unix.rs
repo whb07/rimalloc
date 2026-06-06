@@ -142,6 +142,7 @@ unsafe extern "C" {
         key: *mut pthread_key_t,
         dtor: Option<unsafe extern "C" fn(*mut c_void)>,
     ) -> c_int;
+    fn pthread_key_delete(key: pthread_key_t) -> c_int;
     fn pthread_setspecific(key: pthread_key_t, value: *const c_void) -> c_int;
 }
 
@@ -273,6 +274,13 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
 pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     crate::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
     let _ = pthread_key_create(&raw mut _mi_heap_default_key, Some(mi_pthread_done));
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
+    if _mi_heap_default_key != PTHREAD_KEY_INVALID {
+        let _ = pthread_key_delete(_mi_heap_default_key);
+    }
 }
 
 #[inline]

@@ -35,6 +35,19 @@ pub type mi_bbitmap_t = crate::bitmap::mi_bbitmap_t;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_process_info_t {
+    pub elapsed: mi_msecs_t,
+    pub utime: mi_msecs_t,
+    pub stime: mi_msecs_t,
+    pub current_rss: usize,
+    pub peak_rss: usize,
+    pub current_commit: usize,
+    pub peak_commit: usize,
+    pub page_faults: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_random_ctx_t {
     pub input: [u32; 16],
     pub output: [u32; 16],

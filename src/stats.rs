@@ -4,6 +4,7 @@
 
 use core::ffi::{c_char, c_void};
 use core::{mem::size_of, ptr};
+use std::ffi::CString;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
@@ -12,10 +13,12 @@ use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed,
 };
 use crate::options::{_mi_fprintf, _mi_fputs};
+use crate::os::_mi_prim_process_info;
 use crate::page::{
-    _mi_bin_size, MI_LARGE_MAX_OBJ_SIZE, MI_MEDIUM_MAX_OBJ_SIZE, MI_SMALL_MAX_OBJ_SIZE,
+    _mi_bin_size, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE,
+    MI_MEDIUM_PAGE_SIZE, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE,
 };
-use crate::types::mi_output_fun;
+use crate::types::{MI_MALLOC_VERSION, mi_output_fun, mi_process_info_t};
 
 pub const MI_STAT_VERSION: usize = 5;
 pub const MI_BIN_HUGE: usize = 73;
@@ -748,4 +751,388 @@ unsafe extern "C" fn mi_buffered_out(msg: *const c_char, arg: *mut c_void) {
             src = src.add(1);
         }
     }
+}
+
+fn clamp_msecs_to_size(value: i64) -> usize {
+    if value <= 0 {
+        0
+    } else {
+        value.min(isize::MAX as i64) as usize
+    }
+}
+
+/// # Safety
+/// Output callbacks and argument pointers must follow the C ABI contract when non-null.
+pub unsafe extern "C" fn mi_process_info_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
+    let mut elapsed = 0usize;
+    let mut user_time = 0usize;
+    let mut sys_time = 0usize;
+    let mut current_rss = 0usize;
+    let mut peak_rss = 0usize;
+    let mut current_commit = 0usize;
+    let mut peak_commit = 0usize;
+    let mut page_faults = 0usize;
+    // SAFETY: local pointers below are valid writable outputs.
+    unsafe {
+        mi_process_info(
+            &mut elapsed,
+            &mut user_time,
+            &mut sys_time,
+            &mut current_rss,
+            &mut peak_rss,
+            &mut current_commit,
+            &mut peak_commit,
+            &mut page_faults,
+        );
+    }
+    _mi_fprintf(
+        out,
+        arg,
+        format_args!(
+            "  {:<10}: {:>5}.{:03} s\n",
+            "elapsed",
+            elapsed / 1000,
+            elapsed % 1000
+        ),
+    );
+    _mi_fprintf(
+        out,
+        arg,
+        format_args!(
+            "  {:<10}: user: {}.{:03} s, system: {}.{:03} s, faults: {}, peak rss: ",
+            "process",
+            user_time / 1000,
+            user_time % 1000,
+            sys_time / 1000,
+            sys_time % 1000,
+            page_faults
+        ),
+    );
+    mi_printf_amount(peak_rss as i64, 1, out, arg, c"%s".as_ptr());
+    if peak_commit > 0 {
+        _mi_fprintf(out, arg, format_args!(", peak commit: "));
+        mi_printf_amount(peak_commit as i64, 1, out, arg, c"%s".as_ptr());
+    }
+    _mi_fprintf(out, arg, format_args!("\n"));
+}
+
+/// # Safety
+/// Any non-null output pointers must be valid for writing one `usize`.
+pub unsafe extern "C" fn mi_process_info(
+    elapsed_msecs: *mut usize,
+    user_msecs: *mut usize,
+    system_msecs: *mut usize,
+    current_rss: *mut usize,
+    peak_rss: *mut usize,
+    current_commit: *mut usize,
+    peak_commit: *mut usize,
+    page_faults: *mut usize,
+) {
+    let mut pinfo = mi_process_info_t {
+        elapsed: _mi_clock_end(PROCESS_START.load(Ordering::Relaxed)),
+        ..Default::default()
+    };
+    pinfo.current_rss = pinfo.current_commit;
+    pinfo.peak_rss = pinfo.peak_commit;
+    // SAFETY: `pinfo` is a valid mutable primitive info struct.
+    unsafe {
+        _mi_prim_process_info(&mut pinfo);
+        if !elapsed_msecs.is_null() {
+            *elapsed_msecs = clamp_msecs_to_size(pinfo.elapsed);
+        }
+        if !user_msecs.is_null() {
+            *user_msecs = clamp_msecs_to_size(pinfo.utime);
+        }
+        if !system_msecs.is_null() {
+            *system_msecs = clamp_msecs_to_size(pinfo.stime);
+        }
+        if !current_rss.is_null() {
+            *current_rss = pinfo.current_rss;
+        }
+        if !peak_rss.is_null() {
+            *peak_rss = pinfo.peak_rss;
+        }
+        if !current_commit.is_null() {
+            *current_commit = pinfo.current_commit;
+        }
+        if !peak_commit.is_null() {
+            *peak_commit = pinfo.peak_commit;
+        }
+        if !page_faults.is_null() {
+            *page_faults = pinfo.page_faults;
+        }
+    }
+}
+
+pub extern "C" fn mi_process_info_print() {
+    // SAFETY: null output selects the default output sink.
+    unsafe { mi_process_info_print_out(None, ptr::null_mut()) }
+}
+
+#[repr(C)]
+#[derive(Default)]
+struct mi_json_buf_s {
+    buf: String,
+}
+
+type mi_json_buf_t = mi_json_buf_s;
+
+fn mi_json_buf_print(hbuf: &mut mi_json_buf_t, msg: &str) {
+    hbuf.buf.push_str(msg);
+}
+
+fn mi_json_buf_print_count_bin(
+    hbuf: &mut mi_json_buf_t,
+    prefix: &str,
+    stat: &mi_stat_count_t,
+    bin: usize,
+    add_comma: bool,
+) {
+    let binsize = mi_stats_get_bin_size(bin);
+    let pagesize = if binsize <= MI_SMALL_MAX_OBJ_SIZE {
+        MI_SMALL_PAGE_SIZE
+    } else if binsize <= MI_MEDIUM_MAX_OBJ_SIZE {
+        MI_MEDIUM_PAGE_SIZE
+    } else if binsize <= MI_LARGE_MAX_OBJ_SIZE {
+        MI_LARGE_PAGE_SIZE
+    } else {
+        0
+    };
+    mi_json_buf_print(
+        hbuf,
+        &format!(
+            "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"block_size\": {binsize}, \"page_size\": {pagesize} }}{}\n",
+            stat.total,
+            stat.peak,
+            stat.current,
+            if add_comma { "," } else { "" }
+        ),
+    );
+}
+
+fn mi_json_buf_print_count_cbin(
+    hbuf: &mut mi_json_buf_t,
+    prefix: &str,
+    stat: &mi_stat_count_t,
+    bin: mi_chunkbin_t,
+    add_comma: bool,
+) {
+    let cbin = match bin {
+        mi_chunkbin_e::MI_CBIN_SMALL => "S",
+        mi_chunkbin_e::MI_CBIN_MEDIUM => "M",
+        mi_chunkbin_e::MI_CBIN_LARGE => "L",
+        mi_chunkbin_e::MI_CBIN_HUGE => "H",
+        mi_chunkbin_e::MI_CBIN_OTHER => "X",
+        _ => " ",
+    };
+    mi_json_buf_print(
+        hbuf,
+        &format!(
+            "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"bin\": \"{cbin}\" }}{}\n",
+            stat.total,
+            stat.peak,
+            stat.current,
+            if add_comma { "," } else { "" }
+        ),
+    );
+}
+
+fn mi_json_buf_print_count(
+    hbuf: &mut mi_json_buf_t,
+    prefix: &str,
+    stat: &mi_stat_count_t,
+    add_comma: bool,
+) {
+    mi_json_buf_print(
+        hbuf,
+        &format!(
+            "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {} }}{}\n",
+            stat.total,
+            stat.peak,
+            stat.current,
+            if add_comma { "," } else { "" }
+        ),
+    );
+}
+
+fn mi_json_buf_print_count_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi_stat_count_t) {
+    mi_json_buf_print(hbuf, &format!("  \"{name}\": "));
+    mi_json_buf_print_count(hbuf, "", stat, true);
+}
+
+fn mi_json_buf_print_value(hbuf: &mut mi_json_buf_t, name: &str, val: i64) {
+    mi_json_buf_print(hbuf, &format!("  \"{name}\": {val},\n"));
+}
+
+fn mi_json_buf_print_size(hbuf: &mut mi_json_buf_t, name: &str, val: usize, add_comma: bool) {
+    mi_json_buf_print(
+        hbuf,
+        &format!(
+            "    \"{name}\": {val}{}\n",
+            if add_comma { "," } else { "" }
+        ),
+    );
+}
+
+fn mi_json_buf_print_counter_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi_stat_counter_t) {
+    mi_json_buf_print_value(hbuf, name, stat.total);
+}
+
+fn append_stats_json(hbuf: &mut mi_json_buf_t, stats: &mi_stats_t) {
+    mi_json_buf_print_count_value(hbuf, "pages", &stats.pages);
+    mi_json_buf_print_count_value(hbuf, "reserved", &stats.reserved);
+    mi_json_buf_print_count_value(hbuf, "committed", &stats.committed);
+    mi_json_buf_print_counter_value(hbuf, "reset", &stats.reset);
+    mi_json_buf_print_counter_value(hbuf, "purged", &stats.purged);
+    mi_json_buf_print_count_value(hbuf, "page_committed", &stats.page_committed);
+    mi_json_buf_print_count_value(hbuf, "pages_abandoned", &stats.pages_abandoned);
+    mi_json_buf_print_count_value(hbuf, "threads", &stats.threads);
+    mi_json_buf_print_count_value(hbuf, "malloc_normal", &stats.malloc_normal);
+    mi_json_buf_print_count_value(hbuf, "malloc_huge", &stats.malloc_huge);
+    mi_json_buf_print_count_value(hbuf, "malloc_requested", &stats.malloc_requested);
+    mi_json_buf_print_counter_value(hbuf, "mmap_calls", &stats.mmap_calls);
+    mi_json_buf_print_counter_value(hbuf, "commit_calls", &stats.commit_calls);
+    mi_json_buf_print_counter_value(hbuf, "reset_calls", &stats.reset_calls);
+    mi_json_buf_print_counter_value(hbuf, "purge_calls", &stats.purge_calls);
+    mi_json_buf_print_counter_value(hbuf, "arena_count", &stats.arena_count);
+    mi_json_buf_print_counter_value(hbuf, "malloc_normal_count", &stats.malloc_normal_count);
+    mi_json_buf_print_counter_value(hbuf, "malloc_huge_count", &stats.malloc_huge_count);
+    mi_json_buf_print_counter_value(hbuf, "malloc_guarded_count", &stats.malloc_guarded_count);
+    mi_json_buf_print_counter_value(hbuf, "arena_rollback_count", &stats.arena_rollback_count);
+    mi_json_buf_print_counter_value(hbuf, "arena_purges", &stats.arena_purges);
+    mi_json_buf_print_counter_value(hbuf, "pages_extended", &stats.pages_extended);
+    mi_json_buf_print_counter_value(hbuf, "pages_retire", &stats.pages_retire);
+    mi_json_buf_print_counter_value(hbuf, "page_searches", &stats.page_searches);
+    mi_json_buf_print_counter_value(hbuf, "page_searches_count", &stats.page_searches_count);
+    mi_json_buf_print_count_value(hbuf, "segments", &stats.segments);
+    mi_json_buf_print_count_value(hbuf, "segments_abandoned", &stats.segments_abandoned);
+    mi_json_buf_print_count_value(hbuf, "segments_cache", &stats.segments_cache);
+    mi_json_buf_print_count_value(hbuf, "_segments_reserved", &stats._segments_reserved);
+    mi_json_buf_print_count_value(hbuf, "heaps", &stats.heaps);
+    mi_json_buf_print_count_value(hbuf, "theaps", &stats.theaps);
+    mi_json_buf_print_counter_value(
+        hbuf,
+        "pages_reclaim_on_alloc",
+        &stats.pages_reclaim_on_alloc,
+    );
+    mi_json_buf_print_counter_value(hbuf, "pages_reclaim_on_free", &stats.pages_reclaim_on_free);
+    mi_json_buf_print_counter_value(hbuf, "pages_reabandon_full", &stats.pages_reabandon_full);
+    mi_json_buf_print_counter_value(
+        hbuf,
+        "pages_unabandon_busy_wait",
+        &stats.pages_unabandon_busy_wait,
+    );
+    mi_json_buf_print_counter_value(hbuf, "heaps_delete_wait", &stats.heaps_delete_wait);
+}
+
+/// # Safety
+/// `stats` must point to a valid `mi_stats_t` when non-null. If `output_buf` is non-null it
+/// must be writable for `output_size` bytes.
+pub unsafe extern "C" fn mi_stats_get_json_from(
+    stats: *const mi_stats_t,
+    output_size: usize,
+    output_buf: *mut c_char,
+) -> *mut c_char {
+    // SAFETY: caller provides a valid stats pointer when non-null.
+    let Some(stats) = (unsafe { stats.as_ref() }) else {
+        return ptr::null_mut();
+    };
+    if stats.size != size_of::<mi_stats_t>() || stats.version != MI_STAT_VERSION {
+        return ptr::null_mut();
+    }
+
+    let mut hbuf = mi_json_buf_t::default();
+    mi_json_buf_print(&mut hbuf, "{\n");
+    mi_json_buf_print_value(&mut hbuf, "stat_version", MI_STAT_VERSION as i64);
+    mi_json_buf_print_value(&mut hbuf, "mimalloc_version", MI_MALLOC_VERSION as i64);
+
+    mi_json_buf_print(&mut hbuf, "  \"process\": {\n");
+    let mut elapsed = 0usize;
+    let mut user_time = 0usize;
+    let mut sys_time = 0usize;
+    let mut current_rss = 0usize;
+    let mut peak_rss = 0usize;
+    let mut current_commit = 0usize;
+    let mut peak_commit = 0usize;
+    let mut page_faults = 0usize;
+    // SAFETY: local pointers below are valid writable outputs.
+    unsafe {
+        mi_process_info(
+            &mut elapsed,
+            &mut user_time,
+            &mut sys_time,
+            &mut current_rss,
+            &mut peak_rss,
+            &mut current_commit,
+            &mut peak_commit,
+            &mut page_faults,
+        );
+    }
+    mi_json_buf_print_size(&mut hbuf, "elapsed_msecs", elapsed, true);
+    mi_json_buf_print_size(&mut hbuf, "user_msecs", user_time, true);
+    mi_json_buf_print_size(&mut hbuf, "system_msecs", sys_time, true);
+    mi_json_buf_print_size(&mut hbuf, "page_faults", page_faults, true);
+    mi_json_buf_print_size(&mut hbuf, "rss_current", current_rss, true);
+    mi_json_buf_print_size(&mut hbuf, "rss_peak", peak_rss, true);
+    mi_json_buf_print_size(&mut hbuf, "commit_current", current_commit, true);
+    mi_json_buf_print_size(&mut hbuf, "commit_peak", peak_commit, false);
+    mi_json_buf_print(&mut hbuf, "  },\n");
+
+    append_stats_json(&mut hbuf, stats);
+
+    mi_json_buf_print(&mut hbuf, "  \"malloc_bins\": [\n");
+    for i in 0..=MI_BIN_HUGE {
+        mi_json_buf_print_count_bin(
+            &mut hbuf,
+            "    ",
+            &stats.malloc_bins[i],
+            i,
+            i != MI_BIN_HUGE,
+        );
+    }
+    mi_json_buf_print(&mut hbuf, "  ],\n");
+    mi_json_buf_print(&mut hbuf, "  \"page_bins\": [\n");
+    for i in 0..=MI_BIN_HUGE {
+        mi_json_buf_print_count_bin(&mut hbuf, "    ", &stats.page_bins[i], i, i != MI_BIN_HUGE);
+    }
+    mi_json_buf_print(&mut hbuf, "  ],\n");
+    mi_json_buf_print(&mut hbuf, "  \"chunk_bins\": [\n");
+    for i in 0..MI_CHUNKBIN_COUNT {
+        mi_json_buf_print_count_cbin(
+            &mut hbuf,
+            "    ",
+            &stats.chunk_bins[i],
+            unsafe { core::mem::transmute::<i32, mi_chunkbin_t>(i as i32) },
+            i + 1 != MI_CHUNKBIN_COUNT,
+        );
+    }
+    mi_json_buf_print(&mut hbuf, "  ]\n");
+    mi_json_buf_print(&mut hbuf, "}\n");
+
+    if !output_buf.is_null() && output_size > 0 {
+        if hbuf.buf.len() + 1 > output_size {
+            return ptr::null_mut();
+        }
+        unsafe {
+            ptr::copy_nonoverlapping(hbuf.buf.as_ptr(), output_buf as *mut u8, hbuf.buf.len());
+            *output_buf.add(hbuf.buf.len()) = 0;
+        }
+        output_buf
+    } else {
+        match CString::new(hbuf.buf) {
+            Ok(s) => s.into_raw(),
+            Err(_) => ptr::null_mut(),
+        }
+    }
+}
+
+/// # Safety
+/// `stats` must point to a valid `mi_stats_t` when non-null. If `buf` is non-null it must be
+/// writable for `buf_size` bytes.
+pub unsafe extern "C" fn mi_stats_as_json(
+    stats: *mut mi_stats_t,
+    buf_size: usize,
+    buf: *mut c_char,
+) -> *mut c_char {
+    unsafe { mi_stats_get_json_from(stats.cast_const(), buf_size, buf) }
 }

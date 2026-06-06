@@ -63,6 +63,20 @@ pub static MI_LOCK_INITIALIZER: mi_lock_t = mi_lock_s::new();
 
 pub type mi_atomic_guard_t = AtomicUsize;
 
+pub struct mi_atomic_guard_scope_t {
+    guard: *mut mi_atomic_guard_t,
+}
+
+impl Drop for mi_atomic_guard_scope_t {
+    fn drop(&mut self) {
+        // SAFETY: the scope is created only after successfully acquiring the guard and
+        // releases that same guard exactly once on scope exit.
+        unsafe {
+            mi_atomic_store_release(self.guard.cast::<usize>(), 0);
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct mi_atomic_once_s {
@@ -85,6 +99,72 @@ impl Default for mi_atomic_once_s {
     fn default() -> Self {
         Self::new()
     }
+}
+
+pub struct mi_atomic_once_scope_t {
+    once: *mut mi_atomic_once_t,
+}
+
+impl Drop for mi_atomic_once_scope_t {
+    fn drop(&mut self) {
+        // SAFETY: the scope is created only after `_mi_atomic_once_enter` succeeds and
+        // must release the same once-state exactly once on scope exit.
+        unsafe {
+            _mi_atomic_once_release(self.once);
+        }
+    }
+}
+
+/// # Safety
+/// `guard` must point to a valid atomic guard value.
+pub unsafe fn mi_atomic_guard_enter(
+    guard: *mut mi_atomic_guard_t,
+) -> Option<mi_atomic_guard_scope_t> {
+    let mut expected = 0usize;
+    if unsafe { mi_atomic_cas_strong_acq_rel(guard.cast::<usize>(), &mut expected, 1) } {
+        Some(mi_atomic_guard_scope_t { guard })
+    } else {
+        None
+    }
+}
+
+/// # Safety
+/// `once` must point to a valid once-state.
+pub unsafe fn mi_atomic_do_once_enter(
+    once: *mut mi_atomic_once_t,
+) -> Option<mi_atomic_once_scope_t> {
+    if unsafe { _mi_atomic_once_enter(once) } {
+        Some(mi_atomic_once_scope_t { once })
+    } else {
+        None
+    }
+}
+
+#[macro_export]
+macro_rules! mi_atomic_guard {
+    ($guard:expr, $body:block) => {{
+        let _mi_guard_ptr: *mut $crate::atomic::mi_atomic_guard_t = $guard;
+        if let Some(_mi_guard_scope) =
+            unsafe { $crate::atomic::mi_atomic_guard_enter(_mi_guard_ptr) }
+        {
+            let _mi_guard_scope = _mi_guard_scope;
+            $body
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_atomic_do_once {
+    ($body:block) => {{
+        static _MI_ONCE: $crate::atomic::mi_atomic_once_t = $crate::atomic::mi_atomic_once_s::new();
+        let _mi_once_ptr = core::ptr::addr_of!(_MI_ONCE).cast_mut();
+        if let Some(_mi_once_scope) =
+            unsafe { $crate::atomic::mi_atomic_do_once_enter(_mi_once_ptr) }
+        {
+            let _mi_once_scope = _mi_once_scope;
+            $body
+        }
+    }};
 }
 
 #[inline]

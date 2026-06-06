@@ -19,10 +19,10 @@ use crate::atomic::{
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::internal::{
-    _mi_error_message, _mi_page_empty, _mi_ptr_page, _mi_wsize_from_size, MI_DEBUG, mi_block_next,
-    mi_block_set_next, mi_mem_is_zero, mi_memkind_t, mi_page_area, mi_page_block_size,
-    mi_page_contains_address, mi_page_flags, mi_page_is_singleton, mi_page_slice_start,
-    mi_page_thread_free, mi_page_usable_block_size,
+    _mi_error_message, _mi_page_empty, _mi_ptr_page, _mi_wsize_from_size, MI_DEBUG, MI_SECURE,
+    mi_block_next, mi_block_set_next, mi_mem_is_zero, mi_memkind_t, mi_page_area,
+    mi_page_block_size, mi_page_contains_address, mi_page_flags, mi_page_is_singleton,
+    mi_page_slice_start, mi_page_thread_free, mi_page_usable_block_size,
 };
 use crate::stats::{MI_BIN_HUGE, MI_LARGE_MAX_OBJ_WSIZE, bin_block_size};
 use crate::track::MI_TRACK_ENABLED;
@@ -37,6 +37,11 @@ pub const MI_OS_PAGE_SIZE: usize = 4096;
 pub const MI_SMALL_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
 pub const MI_MEDIUM_PAGE_SIZE: usize = 8 * MI_SMALL_PAGE_SIZE;
 pub const MI_LARGE_PAGE_SIZE: usize = MI_SIZE_SIZE * MI_MEDIUM_PAGE_SIZE;
+pub const MI_IN_PAGE_C: () = ();
+pub const MI_MAX_SLICE_SHIFT: usize = 6;
+pub const MI_MIN_SLICES: usize = 2;
+pub const MI_MAX_EXTEND_SIZE: usize = 4 * 1024;
+pub const MI_MIN_EXTEND: usize = if MI_SECURE != 0 { 8 * MI_SECURE } else { 1 };
 pub const MI_PAGE_OSPAGE_BLOCK_ALIGN2: usize = 4 * MI_KiB;
 pub const MI_SMALL_MAX_OBJ_SIZE: usize = (MI_SMALL_PAGE_SIZE - MI_PAGE_OSPAGE_BLOCK_ALIGN2) / 6;
 pub const MI_MEDIUM_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {

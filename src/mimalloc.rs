@@ -9,6 +9,7 @@ pub type c_wchar = u16;
 #[cfg(not(windows))]
 pub type c_wchar = i32;
 
+pub use crate::mi_stats_t_decl;
 pub use crate::options::{
     mi_option_abandoned_page_purge, mi_option_abandoned_reclaim_on_free,
     mi_option_decommit_extend_delay, mi_option_eager_commit, mi_option_eager_commit_delay,
@@ -16,6 +17,7 @@ pub use crate::options::{
     mi_option_max_segment_reclaim, mi_option_purge_extend_delay, mi_option_reset_decommits,
     mi_option_reset_delay, mi_option_t,
 };
+pub use crate::stats::MI_STAT_VERSION;
 pub use crate::types::{
     MI_MALLOC_VERSION, MI_SMALL_SIZE_MAX, MI_SMALL_WSIZE_MAX, mi_arena_id_t, mi_block_visit_fun,
     mi_commit_fun_t, mi_deferred_free_fun, mi_error_fun, mi_heap_area_t, mi_heap_t,
@@ -397,6 +399,7 @@ unsafe extern "C" {
     pub fn mi_stats_merge();
     pub fn mi_stats_print(out: *mut c_void);
     pub fn mi_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void);
+    pub fn mi_stats_get_json(buf_size: usize, buf: *mut c_char) -> *mut c_char;
 
     pub fn mi_option_is_enabled(option: mi_option_t) -> bool;
     pub fn mi_option_enable(option: mi_option_t);
@@ -417,6 +420,7 @@ unsafe extern "C" {
     pub fn mi_malloc_usable_size(p: *const c_void) -> usize;
 
     pub fn mi_posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> c_int;
+    pub fn mi__posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> c_int;
     pub fn mi_memalign(alignment: usize, size: usize) -> *mut c_void;
     pub fn mi_valloc(size: usize) -> *mut c_void;
     pub fn mi_pvalloc(size: usize) -> *mut c_void;

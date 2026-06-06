@@ -16,6 +16,7 @@ use std::ffi::{CStr, CString};
 use std::fmt;
 use std::mem::size_of;
 use std::os::raw::{c_long, c_void};
+use std::process::abort;
 use std::sync::atomic::{AtomicIsize, AtomicPtr, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
@@ -471,12 +472,14 @@ static out_buf: DelayedOutputBuffer =
     DelayedOutputBuffer(UnsafeCell::new([0; MI_MAX_DELAY_OUTPUT + 1]));
 static out_len: AtomicUsize = AtomicUsize::new(0);
 static mut out_buf_lock: mi_lock_t = mi_lock_s::new();
-static mi_out_default: Mutex<Option<mi_output_fun>> = Mutex::new(None);
+static mi_out_default: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 static mi_out_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 #[allow(dead_code)]
 static mi_max_error_count: AtomicIsize = AtomicIsize::new(16);
 #[allow(dead_code)]
 static mi_max_warning_count: AtomicIsize = AtomicIsize::new(16);
+#[allow(dead_code)]
+static error_count: AtomicUsize = AtomicUsize::new(0);
 #[allow(dead_code)]
 static warning_count: AtomicUsize = AtomicUsize::new(0);
 static mi_error_handler: Mutex<Option<mi_error_fun>> = Mutex::new(None);
@@ -535,6 +538,20 @@ fn option_legacy_name(desc: &mi_option_desc_t) -> Option<String> {
                 .to_string_lossy()
                 .into_owned()
         })
+    }
+}
+
+#[inline]
+fn mi_output_fun_to_ptr(out: mi_output_fun) -> *mut c_void {
+    out as *const () as *mut c_void
+}
+
+#[inline]
+fn ptr_to_mi_output_fun(p: *mut c_void) -> Option<mi_output_fun> {
+    if p.is_null() {
+        None
+    } else {
+        Some(unsafe { core::mem::transmute::<*mut c_void, mi_output_fun>(p) })
     }
 }
 
@@ -608,27 +625,19 @@ fn mi_out_get_default(parg: Option<&mut *mut c_void>) -> mi_output_fun {
     if let Some(arg) = parg {
         *arg = mi_out_arg.load(Ordering::Acquire);
     }
-    lock_unpoisoned(&mi_out_default).unwrap_or(mi_out_buf)
+    ptr_to_mi_output_fun(mi_out_default.load(Ordering::Acquire)).unwrap_or(mi_out_buf)
 }
 
 #[allow(dead_code)]
 fn mi_add_stderr_output() {
-    debug_assert!(lock_unpoisoned(&mi_out_default).is_none());
+    debug_assert!(mi_out_default.load(Ordering::Acquire).is_null());
     mi_out_buf_flush(mi_out_stderr, false, ptr::null_mut());
-    *lock_unpoisoned(&mi_out_default) = Some(mi_out_buf_stderr);
+    mi_out_default.store(mi_output_fun_to_ptr(mi_out_buf_stderr), Ordering::Release);
     mi_out_arg.store(ptr::null_mut(), Ordering::Release);
 }
 
 #[inline]
-fn mi_recurse_exit_prim() {
-    recurse.with(|slot| slot.set(false));
-}
-
-#[inline]
-fn mi_recurse_enter() -> bool {
-    if cfg!(any(target_vendor = "apple", target_os = "android")) && _mi_preloading() {
-        return false;
-    }
+fn mi_recurse_enter_prim() -> bool {
     recurse.with(|slot| {
         if slot.get() {
             false
@@ -637,6 +646,19 @@ fn mi_recurse_enter() -> bool {
             true
         }
     })
+}
+
+#[inline]
+fn mi_recurse_enter() -> bool {
+    if cfg!(any(target_vendor = "apple", target_os = "android")) && _mi_preloading() {
+        return false;
+    }
+    mi_recurse_enter_prim()
+}
+
+#[inline]
+fn mi_recurse_exit_prim() {
+    recurse.with(|slot| slot.set(false));
 }
 
 #[inline]
@@ -797,7 +819,10 @@ pub(crate) fn mi_error_default(err: i32) {
 }
 
 pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
-    *lock_unpoisoned(&mi_out_default) = Some(out.unwrap_or(mi_out_stderr));
+    mi_out_default.store(
+        mi_output_fun_to_ptr(out.unwrap_or(mi_out_stderr)),
+        Ordering::Release,
+    );
     mi_out_arg.store(arg, Ordering::Release);
     if let Some(out) = out {
         mi_out_buf_flush(out, true, arg);
@@ -826,9 +851,13 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
         let legacy_env_name = format!("mimalloc_{}", legacy);
         found = get_env_value(&legacy_env_name);
         if found.is_some() {
-            eprintln!(
-                "environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.",
-                legacy, name
+            _mi_fprintf(
+                None,
+                ptr::null_mut(),
+                format_args!(
+                    "mimalloc: warning: environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
+                    legacy, name
+                ),
             );
         }
     }
@@ -838,9 +867,13 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
             let extra_env_name = format!("mimalloc_{}", legacy);
             found = get_env_value(&extra_env_name);
             if found.is_some() {
-                eprintln!(
-                    "environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.",
-                    legacy, name
+                _mi_fprintf(
+                    None,
+                    ptr::null_mut(),
+                    format_args!(
+                        "mimalloc: warning: environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
+                        legacy, name
+                    ),
                 );
                 break;
             }
@@ -853,7 +886,27 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
             desc.init = mi_option_init_t::MI_OPTION_INITIALIZED;
         } else {
             desc.init = mi_option_init_t::MI_OPTION_DEFAULTED;
-            eprintln!("environment option mimalloc_{} has an invalid value.", name);
+            if desc.option == mi_option_t::mi_option_verbose && desc.value == 0 {
+                desc.value = 1;
+                _mi_fprintf(
+                    None,
+                    ptr::null_mut(),
+                    format_args!(
+                        "mimalloc: warning: environment option mimalloc_{} has an invalid value.\n",
+                        name
+                    ),
+                );
+                desc.value = 0;
+            } else {
+                _mi_fprintf(
+                    None,
+                    ptr::null_mut(),
+                    format_args!(
+                        "mimalloc: warning: environment option mimalloc_{} has an invalid value.\n",
+                        name
+                    ),
+                );
+            }
         }
     } else if !_mi_preloading() {
         desc.init = mi_option_init_t::MI_OPTION_DEFAULTED;
@@ -1048,6 +1101,38 @@ pub extern "C" fn mi_options_print() {
     mi_options_print_out(None, ptr::null_mut());
 }
 
+pub(crate) fn _mi_assert_fail(
+    assertion: *const c_char,
+    fname: *const c_char,
+    line: u32,
+    func: *const c_char,
+) -> ! {
+    let assertion = if assertion.is_null() {
+        ""
+    } else {
+        unsafe { CStr::from_ptr(assertion).to_str().unwrap_or("") }
+    };
+    let fname = if fname.is_null() {
+        ""
+    } else {
+        unsafe { CStr::from_ptr(fname).to_str().unwrap_or("") }
+    };
+    let func = if func.is_null() {
+        ""
+    } else {
+        unsafe { CStr::from_ptr(func).to_str().unwrap_or("") }
+    };
+    _mi_fprintf(
+        None,
+        ptr::null_mut(),
+        format_args!(
+            "mimalloc: assertion failed: at \"{}\":{}, {}\n  assertion: \"{}\"\n",
+            fname, line, func, assertion
+        ),
+    );
+    abort();
+}
+
 pub(crate) fn _mi_options_init() {
     mi_mark_main_thread();
     for i in 0..MI_OPTION_COUNT {
@@ -1058,6 +1143,7 @@ pub(crate) fn _mi_options_init() {
     let max_warnings = mi_option_get(mi_option_t::mi_option_max_warnings);
     mi_max_error_count.store(max_errors as isize, Ordering::Release);
     mi_max_warning_count.store(max_warnings as isize, Ordering::Release);
+    error_count.store(0, Ordering::Release);
     warning_count.store(0, Ordering::Release);
 
     if mi_option_get(mi_option_t::mi_option_guarded_sample_rate) > 0

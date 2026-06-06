@@ -139983,7 +139983,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001898",
@@ -140195,7 +140195,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001901",
@@ -140371,7 +140371,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001904",

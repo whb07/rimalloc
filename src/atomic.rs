@@ -196,6 +196,26 @@ pub unsafe extern "C" fn mi_atomic_fetch_or_explicit(
     atomic_usize(p).fetch_or(x, rmw_order(mo))
 }
 
+#[inline]
+pub unsafe fn mi_atomic_increment_acq_rel(p: *mut usize) -> usize {
+    mi_atomic_fetch_add_explicit(p, 1, mi_memory_order_e::mi_memory_order_acq_rel)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_cas_ptr_weak_release<T>(
+    p: *mut *mut T,
+    expected: *mut *mut T,
+    desired: *mut T,
+) -> bool {
+    mi_atomic_compare_exchange_weak_explicit(
+        p.cast::<usize>(),
+        expected.cast::<usize>(),
+        desired as usize,
+        mi_memory_order_e::mi_memory_order_release,
+        mi_memory_order_e::mi_memory_order_relaxed,
+    )
+}
+
 pub unsafe extern "C" fn mi_atomic_compare_exchange_strong_explicit(
     p: *mut usize,
     expected: *mut usize,

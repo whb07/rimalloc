@@ -2,6 +2,7 @@
 
 #![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
+use core::ffi::{c_char, c_void};
 use core::{mem::size_of, ptr};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -10,6 +11,11 @@ use std::time::Instant;
 use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed,
 };
+use crate::options::{_mi_fprintf, _mi_fputs};
+use crate::page::{
+    _mi_bin_size, MI_LARGE_MAX_OBJ_SIZE, MI_MEDIUM_MAX_OBJ_SIZE, MI_SMALL_MAX_OBJ_SIZE,
+};
+use crate::types::mi_output_fun;
 
 pub const MI_STAT_VERSION: usize = 5;
 pub const MI_BIN_HUGE: usize = 73;
@@ -474,5 +480,272 @@ pub unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi
     unsafe {
         mi_stats_add_into(&mut *to, &*from);
         ptr::write_bytes(from, 0, 1);
+    }
+}
+
+#[repr(C)]
+struct buffered_s {
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+    buf: *mut c_char,
+    used: usize,
+    count: usize,
+}
+
+type buffered_t = buffered_s;
+
+fn format_amount(mut n: i64, unit: i64) -> String {
+    let suffix = if unit <= 0 { " " } else { "B" };
+    let base = if unit == 0 { 1000 } else { 1024 };
+    if unit > 0 {
+        n = n.saturating_mul(unit);
+    }
+
+    let pos = if n < 0 { n.saturating_neg() } else { n };
+    if pos < base {
+        if n != 1 || suffix != "B" {
+            if n == 0 {
+                format!("{n}   ")
+            } else {
+                format!("{n}   {suffix:<3}")
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        let mut divider = base;
+        let mut magnitude = "K";
+        if pos >= divider * base {
+            divider *= base;
+            magnitude = "M";
+        }
+        if pos >= divider * base {
+            divider *= base;
+            magnitude = "G";
+        }
+        let tens = n / (divider / 10);
+        let whole = tens / 10;
+        let frac1 = (tens % 10).abs();
+        let unitdesc = if base == 1024 {
+            format!("{magnitude}i{suffix}")
+        } else {
+            format!("{magnitude}{suffix}")
+        };
+        format!("{whole}.{frac1} {unitdesc:<3}")
+    }
+}
+
+fn mi_printf_amount(
+    n: i64,
+    unit: i64,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+    fmt: *const c_char,
+) {
+    let rendered = format_amount(n, unit);
+    if fmt.is_null() {
+        _mi_fprintf(out, arg, format_args!("{rendered:>12}"));
+        return;
+    }
+    // SAFETY: `fmt` is expected to point to a valid NUL-terminated C string.
+    let fmt_str = unsafe { std::ffi::CStr::from_ptr(fmt) }.to_string_lossy();
+    if fmt_str.as_ref() == "%s" {
+        _mi_fprintf(out, arg, format_args!("{rendered}"));
+    } else {
+        _mi_fprintf(out, arg, format_args!("{rendered:>12}"));
+    }
+}
+
+fn mi_print_amount(n: i64, unit: i64, out: Option<mi_output_fun>, arg: *mut c_void) {
+    mi_printf_amount(n, unit, out, arg, ptr::null());
+}
+
+fn mi_print_count(n: i64, unit: i64, out: Option<mi_output_fun>, arg: *mut c_void) {
+    if unit == 1 {
+        _mi_fprintf(out, arg, format_args!("{:>12}", " "));
+    } else {
+        mi_print_amount(n, 0, out, arg);
+    }
+}
+
+fn mi_stat_print_ex(
+    stat: &mi_stat_count_t,
+    msg: &str,
+    unit: i64,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+    notok: Option<&str>,
+) {
+    _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
+    if unit != 0 {
+        if unit > 0 {
+            mi_print_amount(stat.peak, unit, out, arg);
+            mi_print_amount(stat.total, unit, out, arg);
+            mi_print_amount(stat.current, unit, out, arg);
+            mi_print_amount(unit, 1, out, arg);
+            mi_print_count(stat.total, unit, out, arg);
+        } else {
+            mi_print_amount(stat.peak, -1, out, arg);
+            mi_print_amount(stat.total, -1, out, arg);
+            mi_print_amount(stat.current, -1, out, arg);
+            if unit == -1 {
+                _mi_fprintf(out, arg, format_args!("{:>24}", ""));
+            } else {
+                mi_print_amount(-unit, 1, out, arg);
+                mi_print_count(stat.total / -unit, 0, out, arg);
+            }
+        }
+        if stat.current != 0 {
+            _mi_fprintf(
+                out,
+                arg,
+                format_args!("  {}\n", notok.unwrap_or("not all freed")),
+            );
+        } else {
+            _mi_fprintf(out, arg, format_args!("  ok\n"));
+        }
+    } else {
+        mi_print_amount(stat.peak, 0, out, arg);
+        mi_print_amount(stat.total, 0, out, arg);
+        mi_print_amount(stat.current, 0, out, arg);
+        _mi_fprintf(out, arg, format_args!("\n"));
+    }
+}
+
+fn mi_stat_print(
+    stat: &mi_stat_count_t,
+    msg: &str,
+    unit: i64,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+) {
+    mi_stat_print_ex(stat, msg, unit, out, arg, None);
+}
+
+fn mi_stat_total_print(
+    stat: &mi_stat_count_t,
+    msg: &str,
+    unit: i64,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+) {
+    _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
+    _mi_fprintf(out, arg, format_args!("{:>12}", " "));
+    mi_print_amount(stat.total, unit, out, arg);
+    _mi_fprintf(out, arg, format_args!("\n"));
+}
+
+fn mi_stat_counter_print(
+    stat: &mi_stat_counter_t,
+    msg: &str,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+) {
+    _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
+    mi_print_amount(stat.total, 0, out, arg);
+    _mi_fprintf(out, arg, format_args!("\n"));
+}
+
+fn mi_stat_counter_print_size(
+    stat: &mi_stat_counter_t,
+    msg: &str,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+) {
+    _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
+    mi_print_amount(stat.total, 1, out, arg);
+    _mi_fprintf(out, arg, format_args!("\n"));
+}
+
+fn mi_stat_average_print(
+    count: i64,
+    total: i64,
+    msg: &str,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+) {
+    let avg_tens = if count == 0 { 0 } else { total * 10 / count };
+    let avg_whole = avg_tens / 10;
+    let avg_frac1 = avg_tens % 10;
+    _mi_fprintf(
+        out,
+        arg,
+        format_args!("  {msg:<10}: {avg_whole:>5}.{avg_frac1} avg\n"),
+    );
+}
+
+fn mi_print_header(name: &str, out: Option<mi_output_fun>, arg: *mut c_void) {
+    _mi_fprintf(
+        out,
+        arg,
+        format_args!(
+            " {name:<11} {:>11} {:>11} {:>11} {:>11} {:>11}\n",
+            "peak   ", "total   ", "current   ", "block   ", "total#   "
+        ),
+    );
+}
+
+fn mi_stats_print_bins(
+    bins: &[mi_stat_count_t],
+    max: usize,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+) -> bool {
+    let mut found = false;
+    for (i, stat) in bins.iter().enumerate().take(max + 1) {
+        if stat.total > 0 {
+            found = true;
+            let unit = _mi_bin_size(i);
+            let pagekind = if unit <= MI_SMALL_MAX_OBJ_SIZE {
+                "S"
+            } else if unit <= MI_MEDIUM_MAX_OBJ_SIZE {
+                "M"
+            } else if unit <= MI_LARGE_MAX_OBJ_SIZE {
+                "L"
+            } else {
+                "H"
+            };
+            let label = format!("bin{pagekind:>2}  {i:>3}");
+            mi_stat_print(stat, &label, unit as i64, out, arg);
+        }
+    }
+    if found {
+        _mi_fprintf(out, arg, format_args!("\n"));
+    }
+    found
+}
+
+fn mi_buffered_flush(buf: &mut buffered_t) {
+    if buf.buf.is_null() {
+        return;
+    }
+    // SAFETY: `buf.buf` points to writable storage of at least `count + 1` bytes.
+    unsafe {
+        *buf.buf.add(buf.used) = 0;
+        _mi_fputs(buf.out, buf.arg, ptr::null(), buf.buf);
+    }
+    buf.used = 0;
+}
+
+unsafe extern "C" fn mi_buffered_out(msg: *const c_char, arg: *mut c_void) {
+    if msg.is_null() || arg.is_null() {
+        return;
+    }
+    // SAFETY: caller passes a valid `buffered_t` as `arg` and `msg` is a NUL-terminated string.
+    unsafe {
+        let buf = &mut *(arg as *mut buffered_t);
+        let mut src = msg;
+        while *src != 0 {
+            let c = *src;
+            if buf.used >= buf.count {
+                mi_buffered_flush(buf);
+            }
+            *buf.buf.add(buf.used) = c;
+            buf.used += 1;
+            if c == b'\n' as c_char {
+                mi_buffered_flush(buf);
+            }
+            src = src.add(1);
+        }
     }
 }

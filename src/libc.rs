@@ -11,6 +11,7 @@ use core::ffi::c_char;
 use core::ptr;
 use std::cmp::min;
 use std::ffi::CStr;
+use std::fmt;
 
 #[inline]
 fn as_bytes_ptr(p: *const c_char) -> *const u8 {
@@ -178,4 +179,30 @@ pub unsafe extern "C" fn _mi_getenv(
     ptr::copy_nonoverlapping(bytes.as_ptr(), as_bytes_mut_ptr(result), bytes.len());
     *as_bytes_mut_ptr(result).add(bytes.len()) = 0;
     true
+}
+
+#[allow(dead_code)]
+pub(crate) fn _mi_vsnprintf(buf: *mut c_char, bufsize: usize, args: fmt::Arguments<'_>) -> i32 {
+    if buf.is_null() || bufsize == 0 {
+        return 0;
+    }
+
+    let mut rendered = String::new();
+    if fmt::write(&mut rendered, args).is_err() {
+        rendered.clear();
+    }
+
+    let bytes = rendered.as_bytes();
+    let n = min(bytes.len(), bufsize - 1);
+    // SAFETY: `buf` is valid for `bufsize` bytes by caller contract, and `n < bufsize`.
+    unsafe {
+        ptr::copy_nonoverlapping(bytes.as_ptr(), as_bytes_mut_ptr(buf), n);
+        *as_bytes_mut_ptr(buf).add(n) = 0;
+    }
+    n as i32
+}
+
+#[allow(dead_code)]
+pub(crate) fn _mi_snprintf(buf: *mut c_char, buflen: usize, args: fmt::Arguments<'_>) -> i32 {
+    _mi_vsnprintf(buf, buflen, args)
 }

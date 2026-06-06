@@ -48647,7 +48647,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -48734,7 +48734,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000597",
@@ -112411,7 +112411,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -112427,7 +112427,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001510",
@@ -112444,7 +112444,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -112460,7 +112460,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001511",
@@ -112477,7 +112477,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -112493,7 +112493,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001512",
@@ -112510,7 +112510,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -112526,7 +112526,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001513",
@@ -116613,7 +116613,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -116670,7 +116670,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001590",
@@ -116687,7 +116687,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/internal.rs / src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000027",
@@ -116794,7 +116794,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001591",
@@ -116811,7 +116811,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Translate as #[repr(C)] struct or opaque Rust type; preserve ABI layout for public types.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -116868,7 +116868,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001592",
@@ -116885,7 +116885,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Represent with Rust struct/enum name or opaque marker as needed",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -116932,7 +116932,7 @@
       "thread_safety": "n/a",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001593",
@@ -116949,7 +116949,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -116975,7 +116975,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001594",
@@ -140625,7 +140625,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -140667,7 +140667,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001908",
@@ -205540,7 +205540,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -205822,7 +205822,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002419",
@@ -275012,7 +275012,7 @@
       "stage": "STAGE-010 allocation/free/libc/override/static APIs",
       "rust_destination": "src/libc.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/libc.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000044",
@@ -275124,7 +275124,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002912",
@@ -277025,7 +277025,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/options.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/options.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000045",
@@ -277127,7 +277127,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002929",
@@ -277223,7 +277223,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/options.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/options.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000045",
@@ -277355,7 +277355,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002931",
@@ -298841,7 +298841,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -298908,7 +298908,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003108",
@@ -298925,7 +298925,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -298977,7 +298977,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003109",
@@ -298994,7 +298994,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299031,7 +299031,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003110",
@@ -299048,7 +299048,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299125,7 +299125,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003111",
@@ -299142,7 +299142,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299184,7 +299184,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003112",
@@ -299201,7 +299201,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299273,7 +299273,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003113",
@@ -299290,7 +299290,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299372,7 +299372,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003114",
@@ -299389,7 +299389,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299456,7 +299456,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003115",
@@ -299473,7 +299473,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299545,7 +299545,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003116",
@@ -299562,7 +299562,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299614,7 +299614,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003117",
@@ -299631,7 +299631,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299728,7 +299728,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003118",
@@ -299745,7 +299745,7 @@
       "stage": "STAGE-007 options/stats/random/thread/init helpers",
       "rust_destination": "src/stats.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/stats.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000062",
@@ -299812,7 +299812,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003119",

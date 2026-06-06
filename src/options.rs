@@ -10,6 +10,7 @@
 use core::ffi::c_char;
 use core::ptr;
 use std::ffi::{CStr, CString};
+use std::fmt;
 use std::mem::size_of;
 use std::os::raw::{c_long, c_void};
 use std::sync::{Mutex, MutexGuard};
@@ -526,6 +527,31 @@ fn emit_text(out: Option<mi_output_fun>, arg: *mut c_void, text: &str) {
             Some(out) => out(ctext.as_ptr(), arg),
             None => _mi_prim_out_stderr(ctext.as_ptr()),
         }
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) unsafe fn _mi_fputs(
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+    prefix: *const c_char,
+    message: *const c_char,
+) {
+    if !prefix.is_null() {
+        let text = CStr::from_ptr(prefix).to_string_lossy();
+        emit_text(out, arg, text.as_ref());
+    }
+    if !message.is_null() {
+        let text = CStr::from_ptr(message).to_string_lossy();
+        emit_text(out, arg, text.as_ref());
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, args: fmt::Arguments<'_>) {
+    let mut text = String::new();
+    if fmt::write(&mut text, args).is_ok() {
+        emit_text(out, arg, &text);
     }
 }
 

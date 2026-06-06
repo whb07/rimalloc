@@ -216,6 +216,153 @@ pub unsafe fn mi_atomic_cas_ptr_weak_release<T>(
     )
 }
 
+#[inline]
+pub unsafe fn mi_atomic_cas_weak(
+    p: *mut usize,
+    expected: *mut usize,
+    desired: usize,
+    mem_success: mi_memory_order_e,
+    mem_fail: mi_memory_order_e,
+) -> bool {
+    mi_atomic_compare_exchange_weak_explicit(p, expected, desired, mem_success, mem_fail)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_cas_strong(
+    p: *mut usize,
+    expected: *mut usize,
+    desired: usize,
+    mem_success: mi_memory_order_e,
+    mem_fail: mi_memory_order_e,
+) -> bool {
+    mi_atomic_compare_exchange_strong_explicit(p, expected, desired, mem_success, mem_fail)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_load_acquire(p: *const usize) -> usize {
+    mi_atomic_load_explicit(p, mi_memory_order_e::mi_memory_order_acquire)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_store_release(p: *mut usize, x: usize) {
+    mi_atomic_store_explicit(p, x, mi_memory_order_e::mi_memory_order_release);
+}
+
+#[inline]
+pub unsafe fn mi_atomic_exchange_relaxed(p: *mut usize, x: usize) -> usize {
+    mi_atomic_exchange_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_exchange_acq_rel(p: *mut usize, x: usize) -> usize {
+    mi_atomic_exchange_explicit(p, x, mi_memory_order_e::mi_memory_order_acq_rel)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_cas_weak_relaxed(
+    p: *mut usize,
+    expected: *mut usize,
+    desired: usize,
+) -> bool {
+    mi_atomic_cas_weak(
+        p,
+        expected,
+        desired,
+        mi_memory_order_e::mi_memory_order_relaxed,
+        mi_memory_order_e::mi_memory_order_relaxed,
+    )
+}
+
+#[inline]
+pub unsafe fn mi_atomic_cas_weak_release(
+    p: *mut usize,
+    expected: *mut usize,
+    desired: usize,
+) -> bool {
+    mi_atomic_cas_weak(
+        p,
+        expected,
+        desired,
+        mi_memory_order_e::mi_memory_order_release,
+        mi_memory_order_e::mi_memory_order_relaxed,
+    )
+}
+
+#[inline]
+pub unsafe fn mi_atomic_cas_weak_acq_rel(
+    p: *mut usize,
+    expected: *mut usize,
+    desired: usize,
+) -> bool {
+    mi_atomic_cas_weak(
+        p,
+        expected,
+        desired,
+        mi_memory_order_e::mi_memory_order_acq_rel,
+        mi_memory_order_e::mi_memory_order_acquire,
+    )
+}
+
+#[inline]
+pub unsafe fn mi_atomic_cas_strong_release(
+    p: *mut usize,
+    expected: *mut usize,
+    desired: usize,
+) -> bool {
+    mi_atomic_cas_strong(
+        p,
+        expected,
+        desired,
+        mi_memory_order_e::mi_memory_order_release,
+        mi_memory_order_e::mi_memory_order_relaxed,
+    )
+}
+
+#[inline]
+pub unsafe fn mi_atomic_cas_strong_acq_rel(
+    p: *mut usize,
+    expected: *mut usize,
+    desired: usize,
+) -> bool {
+    mi_atomic_cas_strong(
+        p,
+        expected,
+        desired,
+        mi_memory_order_e::mi_memory_order_acq_rel,
+        mi_memory_order_e::mi_memory_order_acquire,
+    )
+}
+
+#[inline]
+pub unsafe fn mi_atomic_add_relaxed(p: *mut usize, x: usize) -> usize {
+    mi_atomic_fetch_add_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_sub_relaxed(p: *mut usize, x: usize) -> usize {
+    mi_atomic_fetch_sub_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_and_relaxed(p: *mut usize, x: usize) -> usize {
+    mi_atomic_fetch_and_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_or_relaxed(p: *mut usize, x: usize) -> usize {
+    mi_atomic_fetch_or_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_loadi64_acquire(p: *const i64) -> i64 {
+    mi_atomic_loadi64_explicit(p, mi_memory_order_e::mi_memory_order_acquire)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_storei64_release(p: *mut i64, x: i64) {
+    mi_atomic_storei64_explicit(p, x, mi_memory_order_e::mi_memory_order_release);
+}
+
 pub unsafe extern "C" fn mi_atomic_compare_exchange_strong_explicit(
     p: *mut usize,
     expected: *mut usize,

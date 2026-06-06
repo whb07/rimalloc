@@ -79370,7 +79370,7 @@
       "thread_safety": "uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000944",
@@ -122999,7 +122999,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001654",
@@ -123053,7 +123053,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001655",
@@ -123212,7 +123212,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001656",
@@ -123371,7 +123371,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001657",
@@ -123460,7 +123460,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001658",
@@ -123539,7 +123539,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001659",
@@ -123603,7 +123603,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001660",
@@ -123661,7 +123661,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001661",
@@ -123730,7 +123730,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001662",
@@ -123819,7 +123819,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001663",
@@ -123883,7 +123883,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001664",
@@ -123967,7 +123967,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001665",
@@ -124031,7 +124031,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001666",
@@ -124115,7 +124115,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001667",
@@ -124169,7 +124169,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001668",
@@ -142127,7 +142127,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001926",
@@ -142246,7 +142246,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001927",
@@ -142320,7 +142320,7 @@
       "thread_safety": "uses atomics",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001928",

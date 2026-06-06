@@ -93100,7 +93100,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001188",
@@ -93594,7 +93594,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001199",
@@ -93648,7 +93648,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001200",
@@ -93707,7 +93707,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001201",
@@ -93751,7 +93751,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001202",
@@ -93795,7 +93795,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001203",
@@ -93849,7 +93849,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001204",
@@ -93893,7 +93893,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001205",
@@ -93952,7 +93952,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001206",
@@ -94050,7 +94050,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001208",

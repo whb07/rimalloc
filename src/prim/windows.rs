@@ -25,6 +25,69 @@ pub const MCGEN_EVENTSETINFORMATION: &str = MCGEN_EVENTSETINFORMATION_EventSetIn
 pub const MCGEN_EVENTWRITETRANSFER_EtwWriteTransfer: &str = "EtwWriteTransfer";
 pub const MCGEN_EVENTWRITETRANSFER_EventWriteTransfer: &str = "EventWriteTransfer";
 pub const MCGEN_EVENTWRITETRANSFER: &str = MCGEN_EVENTWRITETRANSFER_EventWriteTransfer;
+pub const MI_MEM_EXTENDED_PARAMETER_NONPAGED_HUGE: u32 = 0x0000_0010;
+
+pub type DWORD64 = u64;
+pub type PVOID = *mut c_void;
+pub type SIZE_T = usize;
+pub type HANDLE = *mut c_void;
+pub type DWORD = u32;
+
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MI_MEM_EXTENDED_PARAMETER_TYPE_E {
+    MiMemExtendedParameterInvalidType = 0,
+    MiMemExtendedParameterAddressRequirements = 1,
+    MiMemExtendedParameterNumaNode = 2,
+    MiMemExtendedParameterPartitionHandle = 3,
+    MiMemExtendedParameterUserPhysicalHandle = 4,
+    MiMemExtendedParameterAttributeFlags = 5,
+    MiMemExtendedParameterMax = 6,
+}
+
+pub type MI_MEM_EXTENDED_PARAMETER_TYPE = MI_MEM_EXTENDED_PARAMETER_TYPE_E;
+
+// The original C uses a pair of bitfields packed into one 64-bit word.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MI_MEM_EXTENDED_PARAMETER_TYPE_BITS {
+    pub bits: DWORD64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union MI_MEM_EXTENDED_PARAMETER_ARG {
+    pub ULong64: DWORD64,
+    pub Pointer: PVOID,
+    pub Size: SIZE_T,
+    pub Handle: HANDLE,
+    pub ULong: DWORD,
+}
+
+impl Default for MI_MEM_EXTENDED_PARAMETER_ARG {
+    fn default() -> Self {
+        Self { ULong64: 0 }
+    }
+}
+
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Default)]
+pub struct MI_MEM_EXTENDED_PARAMETER_S {
+    pub Type: MI_MEM_EXTENDED_PARAMETER_TYPE_BITS,
+    pub Arg: MI_MEM_EXTENDED_PARAMETER_ARG,
+}
+
+pub type MI_MEM_EXTENDED_PARAMETER = MI_MEM_EXTENDED_PARAMETER_S;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MI_MEM_ADDRESS_REQUIREMENTS_S {
+    pub LowestStartingAddress: PVOID,
+    pub HighestEndingAddress: PVOID,
+    pub Alignment: SIZE_T,
+}
+
+pub type MI_MEM_ADDRESS_REQUIREMENTS = MI_MEM_ADDRESS_REQUIREMENTS_S;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

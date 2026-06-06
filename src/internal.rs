@@ -657,6 +657,23 @@ pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
 }
 
 #[inline]
+pub unsafe fn mi_page_tld(page: *const mi_page_t) -> *mut mi_tld_t {
+    crate::mi_assert_internal!(!crate::page::mi_page_is_abandoned(page));
+    crate::mi_assert_internal!(!(*page).theap.is_null());
+    (*(*page).theap).tld
+}
+
+#[inline]
+pub unsafe fn mi_page_heap(page: *const mi_page_t) -> *mut mi_heap_t {
+    let mut heap = (*page).heap;
+    if mi_likely(heap.is_null()) {
+        heap = crate::mimalloc::mi_heap_main();
+    }
+    crate::mi_assert_internal!(!heap.is_null());
+    heap
+}
+
+#[inline]
 pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
     (*page).page_start
 }
@@ -809,11 +826,27 @@ pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
 }
 
 #[inline]
+pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
+    crate::mi_assert_internal!(!page.is_null() && (*page).reserved > 0);
+    (*page).used < (*page).reserved || !mi_page_thread_free(page).is_null()
+}
+
+#[inline]
 pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
     mi_tf_is_owned(crate::atomic::mi_atomic_load_explicit(
         &(*(page as *mut mi_page_t)).xthread_free,
         crate::atomic::mi_memory_order_e::mi_memory_order_relaxed,
     ))
+}
+
+#[inline]
+pub unsafe fn mi_page_claim_ownership(page: *mut mi_page_t) -> bool {
+    let old = crate::atomic::mi_atomic_fetch_or_explicit(
+        &mut (*page).xthread_free,
+        1,
+        crate::atomic::mi_memory_order_e::mi_memory_order_acq_rel,
+    );
+    (old & 1) == 0
 }
 
 #[inline]

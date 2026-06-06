@@ -1491,6 +1491,26 @@ pub unsafe fn mi_bitmap_is_xsetN(
 }
 
 #[inline]
+pub unsafe fn mi_bitmap_is_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) -> bool {
+    mi_bitmap_is_xsetN(MI_BIT_SET, bitmap, idx, n)
+}
+
+#[inline]
+pub unsafe fn mi_bitmap_is_clearN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) -> bool {
+    mi_bitmap_is_xsetN(MI_BIT_CLEAR, bitmap, idx, n)
+}
+
+#[inline]
+pub unsafe fn mi_bitmap_is_set(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
+    mi_bitmap_is_setN(bitmap, idx, 1)
+}
+
+#[inline]
+pub unsafe fn mi_bitmap_is_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
+    mi_bitmap_is_clearN(bitmap, idx, 1)
+}
+
+#[inline]
 pub unsafe fn mi_bitmap_is_all_clear(bitmap: *mut mi_bitmap_t) -> bool {
     mi_bitmap_is_xsetN(MI_BIT_CLEAR, bitmap, 0, mi_bitmap_max_bits(bitmap))
 }
@@ -1821,6 +1841,16 @@ pub unsafe fn mi_bbitmap_is_xsetN(
         chunk_idx += 1;
     }
     xset
+}
+
+#[inline]
+pub unsafe fn mi_bbitmap_is_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
+    mi_bbitmap_is_xsetN(MI_BIT_SET, bbitmap, idx, n)
+}
+
+#[inline]
+pub unsafe fn mi_bbitmap_is_clearN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
+    mi_bbitmap_is_xsetN(MI_BIT_CLEAR, bbitmap, idx, n)
 }
 
 type mi_bchunk_try_find_and_clear_fun_t = fn(&mut mi_bchunk_t, usize, &mut usize) -> bool;

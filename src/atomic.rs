@@ -11,6 +11,10 @@ use core::hint::spin_loop;
 use core::ptr::read_volatile;
 use core::sync::atomic::{AtomicI64, AtomicIsize, AtomicUsize, Ordering, fence};
 
+use crate::init::_mi_thread_id;
+
+pub const MI_ATOMIC_H: () = ();
+
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum mi_memory_order_e {
@@ -308,4 +312,35 @@ pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
 
 pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
     let _ = lock;
+}
+
+pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> bool {
+    let once_tid = (*once).tid.load(Ordering::Acquire);
+    if once_tid == 1 {
+        return false;
+    }
+    let current_tid = _mi_thread_id();
+    if once_tid == current_tid {
+        return false;
+    }
+
+    mi_lock_acquire(&mut (*once).lock);
+    let expected = 0usize;
+    if (*once)
+        .tid
+        .compare_exchange(expected, current_tid, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        true
+    } else {
+        mi_lock_release(&mut (*once).lock);
+        false
+    }
+}
+
+pub unsafe extern "C" fn _mi_atomic_once_release(once: *mut mi_atomic_once_t) {
+    if (*once).tid.load(Ordering::Acquire) > 1 {
+        (*once).tid.store(1, Ordering::Release);
+        mi_lock_release(&mut (*once).lock);
+    }
 }

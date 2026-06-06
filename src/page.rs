@@ -5,6 +5,7 @@
 use core::mem::size_of;
 
 use crate::stats::{MI_BIN_HUGE, MI_LARGE_MAX_OBJ_WSIZE, bin_block_size};
+use crate::types::mi_page_queue_t;
 
 pub const MI_PADDING_SIZE: usize = 0;
 pub const MI_OS_PAGE_SIZE: usize = 4096;
@@ -65,4 +66,28 @@ pub extern "C" fn mi_good_size(size: usize) -> usize {
     } else {
         size
     }
+}
+
+/// # Safety
+/// `pq` must point to a valid `mi_page_queue_t`.
+pub unsafe extern "C" fn mi_page_queue_is_huge(pq: *const mi_page_queue_t) -> bool {
+    unsafe { (*pq).block_size == (MI_LARGE_MAX_OBJ_SIZE + size_of::<usize>()) }
+}
+
+/// # Safety
+/// `pq` must point to a valid `mi_page_queue_t`.
+pub unsafe extern "C" fn mi_page_queue_is_full(pq: *const mi_page_queue_t) -> bool {
+    unsafe { (*pq).block_size == (MI_LARGE_MAX_OBJ_SIZE + (2 * size_of::<usize>())) }
+}
+
+/// # Safety
+/// `pq` must point to a valid `mi_page_queue_t`.
+pub unsafe extern "C" fn mi_page_queue_is_special(pq: *const mi_page_queue_t) -> bool {
+    unsafe { (*pq).block_size > MI_LARGE_MAX_OBJ_SIZE }
+}
+
+/// # Safety
+/// `pq` must point to a valid `mi_page_queue_t`.
+pub unsafe extern "C" fn mi_page_queue_count(pq: *const mi_page_queue_t) -> usize {
+    unsafe { (*pq).count }
 }

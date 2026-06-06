@@ -16,6 +16,29 @@ pub type mi_heap_t = mi_heap_s;
 pub enum mi_theap_s {}
 pub type mi_theap_t = mi_theap_s;
 
+pub enum mi_page_s {}
+pub type mi_page_t = mi_page_s;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_page_queue_t {
+    pub first: *mut mi_page_t,
+    pub last: *mut mi_page_t,
+    pub count: usize,
+    pub block_size: usize,
+}
+
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum mi_page_kind_e {
+    MI_PAGE_SMALL = 0,
+    MI_PAGE_MEDIUM = 1,
+    MI_PAGE_LARGE = 2,
+    MI_PAGE_SINGLETON = 3,
+}
+
+pub type mi_page_kind_t = mi_page_kind_e;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_heap_area_t {

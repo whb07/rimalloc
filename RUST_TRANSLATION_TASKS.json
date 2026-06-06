@@ -80765,7 +80765,7 @@
       "stage": "STAGE-008 bitmap/page-map/page-queue/arena metadata",
       "rust_destination": "src/page_queue.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/page.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000048",
@@ -80802,7 +80802,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000961",
@@ -80819,7 +80819,7 @@
       "stage": "STAGE-008 bitmap/page-map/page-queue/arena metadata",
       "rust_destination": "src/page_queue.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/page.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000048",
@@ -80846,7 +80846,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000962",
@@ -80863,7 +80863,7 @@
       "stage": "STAGE-008 bitmap/page-map/page-queue/arena metadata",
       "rust_destination": "src/page_queue.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/page.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000048",
@@ -80885,7 +80885,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000963",
@@ -111192,7 +111192,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -111208,7 +111208,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001486",
@@ -111225,7 +111225,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -111241,7 +111241,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001487",
@@ -125823,7 +125823,7 @@
       "stage": "STAGE-008 bitmap/page-map/page-queue/arena metadata",
       "rust_destination": "src/page_queue.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/page.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000048",
@@ -125875,7 +125875,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001696",
@@ -137361,7 +137361,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Translate as #[repr(C)] enum/constants; preserve discriminants and aliases.",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -137408,7 +137408,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001856",
@@ -137425,7 +137425,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Represent with Rust struct/enum name or opaque marker as needed",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -137472,7 +137472,7 @@
       "thread_safety": "n/a",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001857",
@@ -221160,7 +221160,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Translate as #[repr(C)] struct or opaque Rust type; preserve ABI layout for public types.",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -222312,7 +222312,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses atomics; uses locks or lock macro",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002514",
@@ -222329,7 +222329,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Represent with Rust struct/enum name or opaque marker as needed",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -222431,7 +222431,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses atomics; uses locks or lock macro",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002515",
@@ -222448,7 +222448,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Translate as #[repr(C)] struct or opaque Rust type; preserve ABI layout for public types.",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -222655,7 +222655,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002516",
@@ -222672,7 +222672,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Represent with Rust struct/enum name or opaque marker as needed",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -222704,7 +222704,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002517",
@@ -310220,7 +310220,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -310241,7 +310241,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003248",
@@ -310258,7 +310258,7 @@
       "stage": "STAGE-003 internal layouts and metadata",
       "rust_destination": "src/internal.rs / src/types.rs",
       "strategy": "Preserve field order/type inside #[repr(C)] struct when ABI-visible.",
-      "status": "planned",
+      "status": "src/types.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000030",
@@ -310279,7 +310279,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003249",

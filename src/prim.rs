@@ -22,6 +22,8 @@ use crate::types::{
     mi_heap_t, mi_msecs_t, mi_page_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
 };
 
+pub const MIMALLOC_PRIM_H: () = ();
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_os_mem_config_t {
@@ -64,6 +66,12 @@ pub const MI_TLS_MODEL_FIXED_SLOT: bool = cfg!(all(
 pub const MI_TLS_MODEL_DYNAMIC_WIN32: bool = cfg!(windows);
 pub const MI_TLS_MODEL_DYNAMIC_PTHREADS: bool =
     cfg!(any(target_os = "openbsd", target_os = "android"));
+pub const MI_USE_BUILTIN_THREAD_POINTER: bool = cfg!(all(
+    not(target_os = "macos"),
+    not(target_env = "musl"),
+    not(target_os = "cygwin"),
+    any(target_arch = "aarch64", target_arch = "x86_64")
+));
 
 pub const MI_TLS_MODEL_FIXED_SLOT_DEFAULT: usize = 108;
 pub const MI_TLS_MODEL_FIXED_SLOT_CACHED: usize = 109;
@@ -164,8 +172,13 @@ pub fn mi_prim_tls_slot_set(slot: usize, value: *mut c_void) {
 }
 
 #[inline]
+pub fn __mi_prim_thread_id() -> mi_threadid_t {
+    _mi_thread_id()
+}
+
+#[inline]
 pub fn _mi_prim_thread_id() -> mi_threadid_t {
-    let tid = _mi_thread_id();
+    let tid = __mi_prim_thread_id();
     debug_assert!(tid > 1);
     debug_assert_eq!(tid & 0x03, 0);
     tid

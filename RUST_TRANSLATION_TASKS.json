@@ -56919,7 +56919,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000665",
@@ -56973,7 +56973,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000666",
@@ -57027,7 +57027,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000667",
@@ -57066,7 +57066,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000668",
@@ -57125,7 +57125,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000669",
@@ -57169,7 +57169,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000670",
@@ -57223,7 +57223,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000671",
@@ -57282,7 +57282,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000672",
@@ -57341,7 +57341,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000673",
@@ -57420,7 +57420,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000674",
@@ -57499,7 +57499,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000675",
@@ -57578,7 +57578,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000676",
@@ -57692,7 +57692,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000677",
@@ -57736,7 +57736,7 @@
       "thread_safety": "n/a",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000678",
@@ -57769,7 +57769,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000679",
@@ -57802,7 +57802,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000680",
@@ -57835,7 +57835,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000681",
@@ -57868,7 +57868,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000682",
@@ -57901,7 +57901,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000683",
@@ -57934,7 +57934,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000684",
@@ -57967,7 +57967,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000685",
@@ -58000,7 +58000,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000686",
@@ -58033,7 +58033,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000687",
@@ -58066,7 +58066,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000688",
@@ -58099,7 +58099,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000689",
@@ -58132,7 +58132,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000690",
@@ -58165,7 +58165,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000691",
@@ -58198,7 +58198,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000692",
@@ -58247,7 +58247,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000693",
@@ -58306,7 +58306,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000694",
@@ -58360,7 +58360,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000695",
@@ -58419,7 +58419,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000696",
@@ -58488,7 +58488,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000697",
@@ -58562,7 +58562,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000698",
@@ -58626,7 +58626,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000699",
@@ -58695,7 +58695,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000700",
@@ -58764,7 +58764,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000701",
@@ -58833,7 +58833,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000702",
@@ -58897,7 +58897,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000703",
@@ -58956,7 +58956,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000704",
@@ -59005,7 +59005,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000705",
@@ -59148,7 +59148,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000707",
@@ -59217,7 +59217,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000708",
@@ -59276,7 +59276,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000709",
@@ -59340,7 +59340,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000710",
@@ -81401,7 +81401,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "extern/global declaration",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000972",
@@ -81480,7 +81480,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "extern/global declaration",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000973",
@@ -81559,7 +81559,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "extern/global declaration",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000974",
@@ -81633,7 +81633,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "extern/global declaration",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000975",
@@ -81697,7 +81697,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "extern/global declaration",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000976",
@@ -96537,7 +96537,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001263",
@@ -96611,7 +96611,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001264",
@@ -96785,7 +96785,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001265",
@@ -96834,7 +96834,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001266",
@@ -119526,7 +119526,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001631",
@@ -119605,7 +119605,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001632",
@@ -119709,7 +119709,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001633",
@@ -119783,7 +119783,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "extern/global declaration",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001634",
@@ -124624,7 +124624,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001673",
@@ -124693,7 +124693,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001674",
@@ -138638,7 +138638,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001875",
@@ -138687,7 +138687,7 @@
       "thread_safety": "n/a",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001876",
@@ -138725,7 +138725,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001877",
@@ -138763,7 +138763,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001878",
@@ -138801,7 +138801,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001879",
@@ -143867,7 +143867,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001948",
@@ -143956,7 +143956,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001949",
@@ -150286,7 +150286,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002021",
@@ -153716,7 +153716,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses atomics",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002046",
@@ -153815,7 +153815,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002047",
@@ -153884,7 +153884,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002048",
@@ -153978,7 +153978,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002049",
@@ -154332,7 +154332,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002050",
@@ -154391,7 +154391,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002051",
@@ -158164,7 +158164,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002095",
@@ -158238,7 +158238,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002096",
@@ -177934,7 +177934,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002302",
@@ -218065,7 +218065,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002501",
@@ -218489,7 +218489,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002502",
@@ -218618,7 +218618,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002503",
@@ -218762,7 +218762,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002504",
@@ -218896,7 +218896,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002505",

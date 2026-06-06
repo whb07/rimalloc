@@ -23,6 +23,11 @@ use crate::types::{
 };
 
 pub const MIMALLOC_PRIM_H: () = ();
+pub const MI_USE_SBRK: usize = if cfg!(target_os = "wasi") { 1 } else { 0 };
+pub const mi_attr_constructor: () = ();
+pub const mi_attr_destructor: () = ();
+pub const MI_PRIM_HAS_PROCESS_ATTACH: usize = 0;
+pub const MI_PRIM_HAS_ALLOCATOR_INIT: usize = 0;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -86,6 +91,11 @@ pub const MI_TLS_EXPANSION_SLOT: usize = if MI_INTPTR_SIZE == 4 {
 
 pub const MI_PRIM_HUGE_PAGE_SIZE: usize = MI_GiB;
 pub const MI_PRIM_OSX_IMPL_SOURCE: &str = "../unix/prim.c";
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_init_done_t;
+
+pub static mi_init_done: mi_init_done_t = mi_init_done_t;
 
 thread_local! {
     static TLS_SLOT_DEFAULT: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
@@ -249,3 +259,29 @@ pub unsafe fn _mi_page_associated_theap_peek(_page: *mut mi_page_t) -> *mut mi_t
         ptr::null_mut()
     }
 }
+
+#[inline]
+pub unsafe fn mi_process_attach() {
+    unsafe { crate::internal::_mi_auto_process_init() }
+}
+
+#[inline]
+pub unsafe fn mi_process_detach() {
+    unsafe { crate::internal::_mi_auto_process_done() }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_is_redirected() -> bool {
+    false
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
+    if !message.is_null() {
+        unsafe { *message = ptr::null() };
+    }
+    true
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_allocator_done() {}

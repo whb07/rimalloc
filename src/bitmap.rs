@@ -30,6 +30,9 @@ use crate::stats::{
 };
 use crate::types::{MI_ENABLE_LARGE_PAGES, mi_arena_t, mi_claim_fun_t, mi_forall_set_fun_t};
 
+pub const MI_BITMAP_H: usize = 1;
+pub const MI_OPT_SIMD: usize = 0;
+
 pub const MI_BFIELD_BITS_SHIFT: usize = MI_SIZE_SHIFT + 3;
 pub const MI_BFIELD_BITS: usize = 1 << MI_BFIELD_BITS_SHIFT;
 pub const MI_BFIELD_SIZE: usize = MI_BFIELD_BITS / 8;
@@ -2053,4 +2056,29 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN_(
         chunk_idx += count + 1;
     }
     false
+}
+
+#[inline]
+pub unsafe fn mi_bbitmap_try_find_and_clearN(
+    bbitmap: *mut mi_bbitmap_t,
+    tseq: usize,
+    n: usize,
+    pidx: *mut usize,
+) -> bool {
+    if n == 1 {
+        return mi_bbitmap_try_find_and_clear(bbitmap, tseq, pidx);
+    }
+    if n == 8 {
+        return mi_bbitmap_try_find_and_clear8(bbitmap, tseq, pidx);
+    }
+    if n == 0 {
+        return false;
+    }
+    if n <= MI_BFIELD_BITS {
+        return mi_bbitmap_try_find_and_clearNX(bbitmap, tseq, n, pidx);
+    }
+    if n <= MI_BCHUNK_BITS {
+        return mi_bbitmap_try_find_and_clearNC(bbitmap, tseq, n, pidx);
+    }
+    mi_bbitmap_try_find_and_clearN_(bbitmap, tseq, n, pidx)
 }

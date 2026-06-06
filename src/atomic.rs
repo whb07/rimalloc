@@ -217,6 +217,39 @@ pub unsafe fn mi_atomic_cas_ptr_weak_release<T>(
 }
 
 #[inline]
+pub unsafe fn mi_atomic_load_ptr_acquire<T>(p: *const *mut T) -> *mut T {
+    mi_atomic_load_acquire(p.cast::<usize>()) as *mut T
+}
+
+#[inline]
+pub unsafe fn mi_atomic_store_ptr_release<T>(p: *mut *mut T, x: *mut T) {
+    mi_atomic_store_release(p.cast::<usize>(), x as usize);
+}
+
+#[inline]
+pub unsafe fn mi_atomic_cas_ptr_strong_release<T>(
+    p: *mut *mut T,
+    expected: *mut *mut T,
+    desired: *mut T,
+) -> bool {
+    mi_atomic_cas_strong_release(
+        p.cast::<usize>(),
+        expected.cast::<usize>(),
+        desired as usize,
+    )
+}
+
+#[inline]
+pub unsafe fn mi_atomic_exchange_ptr_relaxed<T>(p: *mut *mut T, x: *mut T) -> *mut T {
+    mi_atomic_exchange_relaxed(p.cast::<usize>(), x as usize) as *mut T
+}
+
+#[inline]
+pub unsafe fn mi_atomic_exchange_ptr_acq_rel<T>(p: *mut *mut T, x: *mut T) -> *mut T {
+    mi_atomic_exchange_acq_rel(p.cast::<usize>(), x as usize) as *mut T
+}
+
+#[inline]
 pub unsafe fn mi_atomic_cas_weak(
     p: *mut usize,
     expected: *mut usize,
@@ -351,6 +384,11 @@ pub unsafe fn mi_atomic_and_relaxed(p: *mut usize, x: usize) -> usize {
 #[inline]
 pub unsafe fn mi_atomic_or_relaxed(p: *mut usize, x: usize) -> usize {
     mi_atomic_fetch_or_explicit(p, x, mi_memory_order_e::mi_memory_order_relaxed)
+}
+
+#[inline]
+pub unsafe fn mi_atomic_increment_relaxed(p: *mut usize) -> usize {
+    mi_atomic_add_relaxed(p, 1)
 }
 
 #[inline]

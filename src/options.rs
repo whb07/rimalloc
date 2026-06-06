@@ -1,8 +1,27 @@
 //! Options, stats, random, thread, init helpers
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+#![allow(
+    non_camel_case_types,
+    non_upper_case_globals,
+    clippy::missing_safety_doc,
+    unsafe_op_in_unsafe_fn
+)]
 
-use crate::types::MI_MALLOC_VERSION;
+use core::ffi::c_char;
+use core::ptr;
+use std::ffi::{CStr, CString};
+use std::mem::size_of;
+use std::os::raw::{c_long, c_void};
+use std::sync::{Mutex, MutexGuard};
+
+use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
+use crate::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
+use crate::init::{_mi_preloading, mi_mark_main_thread};
+use crate::os::_mi_prim_out_stderr;
+use crate::page::MI_MAX_ALLOC_SIZE;
+use crate::types::{
+    MI_MALLOC_VERSION, mi_error_fun, mi_option_desc_t, mi_option_init_t, mi_output_fun,
+};
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,12 +78,837 @@ pub enum mi_option_e {
 
 pub type mi_option_t = mi_option_e;
 
+pub const mi_option_eager_commit: mi_option_t = mi_option_e::mi_option_deprecated_eager_commit;
+pub const mi_option_eager_commit_delay: mi_option_t =
+    mi_option_e::mi_option_deprecated_eager_commit_delay;
+pub const mi_option_abandoned_page_purge: mi_option_t =
+    mi_option_e::mi_option_deprecated_abandoned_page_purge;
+pub const mi_option_abandoned_reclaim_on_free: mi_option_t =
+    mi_option_e::mi_option_page_reclaim_on_free;
+pub const mi_option_max_segment_reclaim: mi_option_t =
+    mi_option_e::mi_option_deprecated_max_segment_reclaim;
+pub const mi_option_purge_extend_delay: mi_option_t =
+    mi_option_e::mi_option_deprecated_purge_extend_delay;
+pub const mi_option_decommit_extend_delay: mi_option_t =
+    mi_option_e::mi_option_deprecated_purge_extend_delay;
 pub const mi_option_large_os_pages: mi_option_t = mi_option_e::mi_option_allow_large_os_pages;
 pub const mi_option_eager_region_commit: mi_option_t = mi_option_e::mi_option_arena_eager_commit;
 pub const mi_option_reset_decommits: mi_option_t = mi_option_e::mi_option_purge_decommits;
 pub const mi_option_reset_delay: mi_option_t = mi_option_e::mi_option_purge_delay;
 pub const mi_option_limit_os_alloc: mi_option_t = mi_option_e::mi_option_disallow_os_alloc;
 
+const MI_OPTION_COUNT: usize = mi_option_e::_mi_option_last as usize;
+
+const MI_DEFAULT_SHOW_ERRORS: c_long = if cfg!(debug_assertions) { 1 } else { 0 };
+const MI_DEFAULT_VERBOSE: c_long = 0;
+const MI_DEFAULT_ARENA_EAGER_COMMIT: c_long = 2;
+const MI_DEFAULT_ARENA_RESERVE: c_long = if cfg!(target_pointer_width = "64") {
+    (1024 * 1024) as c_long
+} else {
+    (128 * 1024) as c_long
+};
+const MI_DEFAULT_ARENA_MAX_OBJECT_SIZE: c_long =
+    ((MI_SIZE_BITS * MI_ARENA_BCHUNK_BITS * MI_ARENA_SLICE_SIZE) / MI_KiB) as c_long;
+const MI_DEFAULT_RESERVE_HUGE_OS_PAGES: c_long = 0;
+const MI_DEFAULT_RESERVE_OS_MEMORY: c_long = 0;
+const MI_DEFAULT_GUARDED_SAMPLE_RATE: c_long = 0;
+const MI_DEFAULT_PAGEMAP_COMMIT: c_long = if cfg!(target_os = "macos") { 1 } else { 0 };
+const MI_DEFAULT_PAGE_MAX_RECLAIM: c_long = -1;
+const MI_DEFAULT_PAGE_CROSS_THREAD_MAX_RECLAIM: c_long = 32;
+const MI_DEFAULT_ALLOW_THP: c_long = if cfg!(target_os = "android") { 0 } else { 1 };
+
+const fn cstr(bytes: &'static [u8]) -> *const c_char {
+    bytes.as_ptr() as *const c_char
+}
+
+macro_rules! desc {
+    ($value:expr, $init:expr, $option:ident, $name:expr) => {
+        mi_option_desc_t {
+            value: $value as c_long,
+            init: $init,
+            option: mi_option_e::$option,
+            name: cstr($name),
+            legacy_name: ptr::null(),
+        }
+    };
+    ($value:expr, $init:expr, $option:ident, $name:expr, $legacy:expr) => {
+        mi_option_desc_t {
+            value: $value as c_long,
+            init: $init,
+            option: mi_option_e::$option,
+            name: cstr($name),
+            legacy_name: cstr($legacy),
+        }
+    };
+}
+
+static OPTIONS: Mutex<[mi_option_desc_t; MI_OPTION_COUNT]> = Mutex::new([
+    desc!(
+        MI_DEFAULT_SHOW_ERRORS,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_show_errors,
+        b"show_errors\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_show_stats,
+        b"show_stats\0"
+    ),
+    desc!(
+        MI_DEFAULT_VERBOSE,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_verbose,
+        b"verbose\0"
+    ),
+    desc!(
+        1,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_deprecated_eager_commit,
+        b"deprecated_eager_commit\0"
+    ),
+    desc!(
+        MI_DEFAULT_ARENA_EAGER_COMMIT,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_arena_eager_commit,
+        b"arena_eager_commit\0",
+        b"eager_region_commit\0"
+    ),
+    desc!(
+        1,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_purge_decommits,
+        b"purge_decommits\0",
+        b"reset_decommits\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_allow_large_os_pages,
+        b"allow_large_os_pages\0",
+        b"large_os_pages\0"
+    ),
+    desc!(
+        MI_DEFAULT_RESERVE_HUGE_OS_PAGES,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_reserve_huge_os_pages,
+        b"reserve_huge_os_pages\0"
+    ),
+    desc!(
+        -1,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_reserve_huge_os_pages_at,
+        b"reserve_huge_os_pages_at\0"
+    ),
+    desc!(
+        MI_DEFAULT_RESERVE_OS_MEMORY,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_reserve_os_memory,
+        b"reserve_os_memory\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_deprecated_segment_cache,
+        b"deprecated_segment_cache\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_deprecated_page_reset,
+        b"deprecated_page_reset\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_deprecated_abandoned_page_purge,
+        b"deprecated_abandoned_page_purge\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_deprecated_segment_reset,
+        b"deprecated_segment_reset\0"
+    ),
+    desc!(
+        1,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_deprecated_eager_commit_delay,
+        b"deprecated_eager_commit_delay\0"
+    ),
+    desc!(
+        1000,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_purge_delay,
+        b"purge_delay\0",
+        b"reset_delay\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_use_numa_nodes,
+        b"use_numa_nodes\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_disallow_os_alloc,
+        b"disallow_os_alloc\0",
+        b"limit_os_alloc\0"
+    ),
+    desc!(
+        100,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_os_tag,
+        b"os_tag\0"
+    ),
+    desc!(
+        32,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_max_errors,
+        b"max_errors\0"
+    ),
+    desc!(
+        32,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_max_warnings,
+        b"max_warnings\0"
+    ),
+    desc!(
+        10,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_deprecated_max_segment_reclaim,
+        b"deprecated_max_segment_reclaim\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_destroy_on_exit,
+        b"destroy_on_exit\0"
+    ),
+    desc!(
+        MI_DEFAULT_ARENA_RESERVE,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_arena_reserve,
+        b"arena_reserve\0"
+    ),
+    desc!(
+        1,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_arena_purge_mult,
+        b"arena_purge_mult\0"
+    ),
+    desc!(
+        1,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_deprecated_purge_extend_delay,
+        b"deprecated_purge_extend_delay\0",
+        b"decommit_extend_delay\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_disallow_arena_alloc,
+        b"disallow_arena_alloc\0"
+    ),
+    desc!(
+        400,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_retry_on_oom,
+        b"retry_on_oom\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_visit_abandoned,
+        b"visit_abandoned\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_guarded_min,
+        b"guarded_min\0"
+    ),
+    desc!(
+        MI_GiB as c_long,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_guarded_max,
+        b"guarded_max\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_guarded_precise,
+        b"guarded_precise\0"
+    ),
+    desc!(
+        MI_DEFAULT_GUARDED_SAMPLE_RATE,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_guarded_sample_rate,
+        b"guarded_sample_rate\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_guarded_sample_seed,
+        b"guarded_sample_seed\0"
+    ),
+    desc!(
+        10000,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_generic_collect,
+        b"generic_collect\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_page_reclaim_on_free,
+        b"page_reclaim_on_free\0",
+        b"abandoned_reclaim_on_free\0"
+    ),
+    desc!(
+        2,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_page_full_retain,
+        b"page_full_retain\0"
+    ),
+    desc!(
+        4,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_page_max_candidates,
+        b"page_max_candidates\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_max_vabits,
+        b"max_vabits\0"
+    ),
+    desc!(
+        MI_DEFAULT_PAGEMAP_COMMIT,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_pagemap_commit,
+        b"pagemap_commit\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_page_commit_on_demand,
+        b"page_commit_on_demand\0"
+    ),
+    desc!(
+        MI_DEFAULT_PAGE_MAX_RECLAIM,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_page_max_reclaim,
+        b"page_max_reclaim\0"
+    ),
+    desc!(
+        MI_DEFAULT_PAGE_CROSS_THREAD_MAX_RECLAIM,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_page_cross_thread_max_reclaim,
+        b"page_cross_thread_max_reclaim\0"
+    ),
+    desc!(
+        MI_DEFAULT_ALLOW_THP,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_allow_thp,
+        b"allow_thp\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_minimal_purge_size,
+        b"minimal_purge_size\0"
+    ),
+    desc!(
+        MI_DEFAULT_ARENA_MAX_OBJECT_SIZE,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_arena_max_object_size,
+        b"arena_max_object_size\0"
+    ),
+    desc!(
+        0,
+        mi_option_init_t::MI_OPTION_UNINIT,
+        mi_option_arena_is_numa_local,
+        b"arena_is_numa_local\0"
+    ),
+]);
+
+#[derive(Copy, Clone)]
+struct OutputState {
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+}
+
+unsafe impl Send for OutputState {}
+unsafe impl Sync for OutputState {}
+
+static OUTPUT_STATE: Mutex<OutputState> = Mutex::new(OutputState {
+    out: None,
+    arg: ptr::null_mut(),
+});
+
+#[derive(Copy, Clone)]
+struct ErrorState {
+    fun: Option<mi_error_fun>,
+    arg: *mut c_void,
+}
+
+unsafe impl Send for ErrorState {}
+unsafe impl Sync for ErrorState {}
+
+static ERROR_STATE: Mutex<ErrorState> = Mutex::new(ErrorState {
+    fun: None,
+    arg: ptr::null_mut(),
+});
+
+#[inline]
+fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|err| err.into_inner())
+}
+
+#[inline]
+fn option_has_size_in_kib(option: mi_option_t) -> bool {
+    matches!(
+        option,
+        mi_option_t::mi_option_reserve_os_memory
+            | mi_option_t::mi_option_arena_reserve
+            | mi_option_t::mi_option_minimal_purge_size
+            | mi_option_t::mi_option_arena_max_object_size
+    )
+}
+
+#[inline]
+fn c_long_bounds() -> (i128, i128) {
+    if size_of::<c_long>() == size_of::<i64>() {
+        (i64::MIN as i128, i64::MAX as i128)
+    } else {
+        (i32::MIN as i128, i32::MAX as i128)
+    }
+}
+
+#[inline]
+fn clamp_c_long(x: i128) -> c_long {
+    let (min, max) = c_long_bounds();
+    let y = if x < min {
+        min
+    } else if x > max {
+        max
+    } else {
+        x
+    };
+    y as c_long
+}
+
+#[inline]
+fn option_name(desc: &mi_option_desc_t) -> String {
+    unsafe { CStr::from_ptr(desc.name).to_string_lossy().into_owned() }
+}
+
+#[inline]
+fn option_legacy_name(desc: &mi_option_desc_t) -> Option<String> {
+    if desc.legacy_name.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            CStr::from_ptr(desc.legacy_name)
+                .to_string_lossy()
+                .into_owned()
+        })
+    }
+}
+
+#[inline]
+fn emit_text(out: Option<mi_output_fun>, arg: *mut c_void, text: &str) {
+    let ctext = CString::new(text).expect("mimalloc output text contained a NUL byte");
+    unsafe {
+        match out {
+            Some(out) => out(ctext.as_ptr(), arg),
+            None => _mi_prim_out_stderr(ctext.as_ptr()),
+        }
+    }
+}
+
+#[inline]
+fn get_env_value(name: &str) -> Option<String> {
+    std::env::var_os(name).and_then(|value| value.into_string().ok())
+}
+
+#[inline]
+fn option_extra_legacy_names(option: mi_option_t) -> &'static [&'static str] {
+    match option {
+        mi_option_t::mi_option_deprecated_eager_commit => &["eager_commit"],
+        mi_option_t::mi_option_deprecated_eager_commit_delay => &["eager_commit_delay"],
+        mi_option_t::mi_option_deprecated_abandoned_page_purge => &["abandoned_page_purge"],
+        mi_option_t::mi_option_deprecated_max_segment_reclaim => &["max_segment_reclaim"],
+        mi_option_t::mi_option_deprecated_purge_extend_delay => &["purge_extend_delay"],
+        _ => &[],
+    }
+}
+
+#[inline]
+fn parse_long_prefix(s: &str) -> Option<(i128, &str)> {
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    let start = i;
+    if i < bytes.len() && (bytes[i] == b'+' || bytes[i] == b'-') {
+        i += 1;
+    }
+    let digits_start = i;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == digits_start {
+        return None;
+    }
+    let value = s[start..i].parse::<i128>().ok()?;
+    Some((value, &s[i..]))
+}
+
+#[inline]
+fn option_from_index(i: usize) -> mi_option_t {
+    debug_assert!(i < MI_OPTION_COUNT);
+    unsafe { core::mem::transmute::<i32, mi_option_t>(i as i32) }
+}
+
+fn parse_option_value(raw: &str, size_in_kib: bool) -> Option<c_long> {
+    let upper = raw.to_ascii_uppercase();
+    if upper.is_empty() || matches!(upper.as_str(), "1" | "TRUE" | "YES" | "ON") {
+        return Some(1);
+    }
+    if matches!(upper.as_str(), "0" | "FALSE" | "NO" | "OFF") {
+        return Some(0);
+    }
+
+    let (mut value, mut rest) = parse_long_prefix(&upper)?;
+    if size_in_kib {
+        let mut size = if value < 0 { 0usize } else { value as usize };
+        let mut overflow = false;
+        if let Some(next) = rest.strip_prefix('K') {
+            rest = next;
+        } else if let Some(next) = rest.strip_prefix('M') {
+            overflow = size.checked_mul(MI_KiB).is_none();
+            if !overflow {
+                size *= MI_KiB;
+            }
+            rest = next;
+        } else if let Some(next) = rest.strip_prefix('G') {
+            overflow = size.checked_mul(MI_MiB).is_none();
+            if !overflow {
+                size *= MI_MiB;
+            }
+            rest = next;
+        } else if let Some(next) = rest.strip_prefix('T') {
+            overflow = size.checked_mul(MI_GiB).is_none();
+            if !overflow {
+                size *= MI_GiB;
+            }
+            rest = next;
+        } else {
+            size = size.div_ceil(MI_KiB);
+        }
+        if let Some(next) = rest.strip_prefix("IB") {
+            rest = next;
+        } else if let Some(next) = rest.strip_prefix('B') {
+            rest = next;
+        }
+        let max_kib = MI_MAX_ALLOC_SIZE / MI_KiB;
+        if overflow || size > max_kib {
+            size = max_kib;
+        }
+        value = size as i128;
+    }
+
+    if rest.is_empty() {
+        Some(clamp_c_long(value))
+    } else {
+        None
+    }
+}
+
 pub extern "C" fn mi_version() -> i32 {
     MI_MALLOC_VERSION
+}
+
+#[allow(dead_code)]
+pub(crate) fn mi_error_default(err: i32) {
+    let _ = err;
+}
+
+pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
+    let mut state = lock_unpoisoned(&OUTPUT_STATE);
+    state.out = out;
+    state.arg = arg;
+}
+
+pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void) {
+    let mut state = lock_unpoisoned(&ERROR_STATE);
+    state.fun = fun;
+    state.arg = arg;
+}
+
+#[allow(dead_code)]
+pub(crate) fn mi_option_has_size_in_kib(option: mi_option_t) -> bool {
+    option_has_size_in_kib(option)
+}
+
+fn mi_option_init(desc: &mut mi_option_desc_t) {
+    let name = option_name(desc);
+    let env_name = format!("mimalloc_{}", name);
+    let legacy_name = option_legacy_name(desc);
+
+    let mut found = get_env_value(&env_name);
+    if found.is_none()
+        && let Some(legacy) = legacy_name.as_deref()
+    {
+        let legacy_env_name = format!("mimalloc_{}", legacy);
+        found = get_env_value(&legacy_env_name);
+        if found.is_some() {
+            eprintln!(
+                "environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.",
+                legacy, name
+            );
+        }
+    }
+
+    if found.is_none() {
+        for legacy in option_extra_legacy_names(desc.option) {
+            let extra_env_name = format!("mimalloc_{}", legacy);
+            found = get_env_value(&extra_env_name);
+            if found.is_some() {
+                eprintln!(
+                    "environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.",
+                    legacy, name
+                );
+                break;
+            }
+        }
+    }
+
+    if let Some(raw) = found {
+        if let Some(value) = parse_option_value(&raw, option_has_size_in_kib(desc.option)) {
+            desc.value = value;
+            desc.init = mi_option_init_t::MI_OPTION_INITIALIZED;
+        } else {
+            desc.init = mi_option_init_t::MI_OPTION_DEFAULTED;
+            eprintln!("environment option mimalloc_{} has an invalid value.", name);
+        }
+    } else if !_mi_preloading() {
+        desc.init = mi_option_init_t::MI_OPTION_DEFAULTED;
+    }
+}
+
+pub(crate) fn _mi_option_get_fast(option: mi_option_t) -> c_long {
+    let idx = option as usize;
+    let table = lock_unpoisoned(&OPTIONS);
+    debug_assert!(idx < MI_OPTION_COUNT);
+    let desc = &table[idx];
+    debug_assert!(desc.option as usize == idx);
+    desc.value
+}
+
+pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
+    let idx = option as usize;
+    if idx >= MI_OPTION_COUNT {
+        return 0;
+    }
+
+    let needs_init = {
+        let table = lock_unpoisoned(&OPTIONS);
+        table[idx].init == mi_option_init_t::MI_OPTION_UNINIT
+    };
+
+    if needs_init {
+        let mut desc = {
+            let table = lock_unpoisoned(&OPTIONS);
+            table[idx]
+        };
+        mi_option_init(&mut desc);
+        if desc.init == mi_option_init_t::MI_OPTION_INITIALIZED {
+            mi_option_set(option, desc.value);
+        } else {
+            let mut table = lock_unpoisoned(&OPTIONS);
+            if table[idx].init == mi_option_init_t::MI_OPTION_UNINIT {
+                table[idx].init = mi_option_init_t::MI_OPTION_DEFAULTED;
+            }
+        }
+    }
+
+    let table = lock_unpoisoned(&OPTIONS);
+    table[idx].value
+}
+
+pub extern "C" fn mi_option_get_clamp(option: mi_option_t, min: c_long, max: c_long) -> c_long {
+    let x = mi_option_get(option);
+    if x < min {
+        min
+    } else if x > max {
+        max
+    } else {
+        x
+    }
+}
+
+pub extern "C" fn mi_option_get_size(option: mi_option_t) -> usize {
+    let x = mi_option_get(option);
+    let mut size = if x < 0 { 0 } else { x as usize };
+    if option_has_size_in_kib(option) {
+        match size.checked_mul(MI_KiB) {
+            Some(bytes) if bytes <= crate::page::MI_MAX_ALLOC_SIZE => {
+                size = bytes;
+            }
+            _ => size = crate::page::MI_MAX_ALLOC_SIZE,
+        }
+    }
+    size
+}
+
+pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
+    let idx = option as usize;
+    if idx >= MI_OPTION_COUNT {
+        return;
+    }
+
+    let recurse = {
+        let mut table = lock_unpoisoned(&OPTIONS);
+        let option_kind = table[idx].option;
+        table[idx].value = value;
+        table[idx].init = mi_option_init_t::MI_OPTION_INITIALIZED;
+
+        let guarded_min_idx = mi_option_t::mi_option_guarded_min as usize;
+        let guarded_max_idx = mi_option_t::mi_option_guarded_max as usize;
+        if option_kind == mi_option_t::mi_option_guarded_min && table[guarded_max_idx].value < value
+        {
+            Some((mi_option_t::mi_option_guarded_max, value))
+        } else if option_kind == mi_option_t::mi_option_guarded_max
+            && table[guarded_min_idx].value > value
+        {
+            Some((mi_option_t::mi_option_guarded_min, value))
+        } else {
+            None
+        }
+    };
+
+    if let Some((option, value)) = recurse {
+        mi_option_set(option, value);
+    }
+}
+
+pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
+    let idx = option as usize;
+    if idx >= MI_OPTION_COUNT {
+        return;
+    }
+    let mut table = lock_unpoisoned(&OPTIONS);
+    let desc = &mut table[idx];
+    if desc.init != mi_option_init_t::MI_OPTION_INITIALIZED {
+        desc.value = value;
+    }
+}
+
+pub extern "C" fn mi_option_is_enabled(option: mi_option_t) -> bool {
+    mi_option_get(option) != 0
+}
+
+pub extern "C" fn mi_option_set_enabled(option: mi_option_t, enable: bool) {
+    mi_option_set(option, if enable { 1 } else { 0 });
+}
+
+pub extern "C" fn mi_option_set_enabled_default(option: mi_option_t, enable: bool) {
+    mi_option_set_default(option, if enable { 1 } else { 0 });
+}
+
+pub extern "C" fn mi_option_enable(option: mi_option_t) {
+    mi_option_set_enabled(option, true);
+}
+
+pub extern "C" fn mi_option_disable(option: mi_option_t) {
+    mi_option_set_enabled(option, false);
+}
+
+pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
+    let (out, arg) = if let Some(out) = out {
+        (Some(out), arg)
+    } else {
+        let state = lock_unpoisoned(&OUTPUT_STATE);
+        (state.out, state.arg)
+    };
+
+    let vermajor = MI_MALLOC_VERSION / 10000;
+    let verminor = (MI_MALLOC_VERSION % 10000) / 100;
+    let verpatch = MI_MALLOC_VERSION % 100;
+    emit_text(
+        out,
+        arg,
+        &format!("v{vermajor}.{verminor}.{verpatch} (Rust translation)\n"),
+    );
+
+    for i in 0..MI_OPTION_COUNT {
+        let option = option_from_index(i);
+        let value = mi_option_get(option);
+        let desc = {
+            let table = lock_unpoisoned(&OPTIONS);
+            table[i]
+        };
+        let name = unsafe { CStr::from_ptr(desc.name).to_string_lossy().into_owned() };
+        emit_text(
+            out,
+            arg,
+            &format!(
+                "option '{name}': {value} {}\n",
+                if option_has_size_in_kib(option) {
+                    "KiB"
+                } else {
+                    ""
+                }
+            ),
+        );
+    }
+
+    emit_text(
+        out,
+        arg,
+        &format!(
+            "debug level : {}\n",
+            if cfg!(debug_assertions) { 2 } else { 0 }
+        ),
+    );
+    emit_text(out, arg, "secure level: 0\n");
+    emit_text(out, arg, "mem tracking: false\n");
+    if mi_option_get(mi_option_t::mi_option_guarded_sample_rate) != 0 {
+        emit_text(out, arg, "guarded build: enabled\n");
+    } else {
+        emit_text(out, arg, "guarded build: disabled\n");
+    }
+}
+
+pub extern "C" fn mi_options_print() {
+    mi_options_print_out(None, ptr::null_mut());
+}
+
+pub(crate) fn _mi_options_init() {
+    mi_mark_main_thread();
+    for i in 0..MI_OPTION_COUNT {
+        let option = option_from_index(i);
+        let _ = mi_option_get(option);
+    }
+    let max_errors = mi_option_get(mi_option_t::mi_option_max_errors);
+    let max_warnings = mi_option_get(mi_option_t::mi_option_max_warnings);
+    let _ = (max_errors, max_warnings);
+
+    if mi_option_get(mi_option_t::mi_option_guarded_sample_rate) > 0
+        && mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)
+    {
+        mi_option_disable(mi_option_t::mi_option_allow_large_os_pages);
+        eprintln!("option 'allow_large_os_pages' is disabled to allow for guarded objects");
+    }
+}
+
+pub(crate) fn _mi_options_post_init() {
+    if mi_option_is_enabled(mi_option_t::mi_option_verbose) {
+        mi_options_print();
+    }
 }

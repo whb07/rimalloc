@@ -8,6 +8,7 @@ pub mod bitmap;
 pub mod bits;
 pub mod heap;
 pub mod init;
+pub mod libc;
 pub mod memory;
 pub mod options;
 pub mod os;

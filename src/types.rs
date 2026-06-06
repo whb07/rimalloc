@@ -3,6 +3,7 @@
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::{c_char, c_void};
+use std::os::raw::c_long;
 
 pub const MI_MALLOC_VERSION: i32 = 30302;
 pub const MI_ENABLE_LARGE_PAGES: usize = 1;
@@ -98,6 +99,30 @@ pub type mi_forall_set_fun_t = unsafe extern "C" fn(
     arena: *mut mi_arena_t,
     arg2: *mut c_void,
 ) -> bool;
+
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum mi_option_init_e {
+    #[default]
+    MI_OPTION_UNINIT = 0,
+    MI_OPTION_DEFAULTED = 1,
+    MI_OPTION_INITIALIZED = 2,
+}
+
+pub type mi_option_init_t = mi_option_init_e;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct mi_option_desc_t {
+    pub value: c_long,
+    pub init: mi_option_init_t,
+    pub option: crate::options::mi_option_t,
+    pub name: *const c_char,
+    pub legacy_name: *const c_char,
+}
+
+unsafe impl Send for mi_option_desc_t {}
+unsafe impl Sync for mi_option_desc_t {}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

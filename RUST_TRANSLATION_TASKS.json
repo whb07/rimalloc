@@ -37245,7 +37245,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate as const/associated const/cfg, preserving compile-time condition.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37261,7 +37261,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000482",
@@ -37278,7 +37278,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37300,7 +37300,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000483",
@@ -37317,7 +37317,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37339,7 +37339,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000484",
@@ -37356,7 +37356,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37378,7 +37378,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000485",
@@ -37395,7 +37395,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37427,7 +37427,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000486",
@@ -37444,7 +37444,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37476,7 +37476,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000487",
@@ -37493,7 +37493,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37530,7 +37530,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000488",
@@ -37547,7 +37547,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37584,7 +37584,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000489",
@@ -37601,7 +37601,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37693,7 +37693,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000490",
@@ -37710,7 +37710,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37802,7 +37802,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000491",
@@ -37819,7 +37819,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -37906,7 +37906,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000492",
@@ -37923,7 +37923,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38000,7 +38000,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000493",
@@ -38017,7 +38017,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38079,7 +38079,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000494",
@@ -38096,7 +38096,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38148,7 +38148,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000495",
@@ -38165,7 +38165,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38181,7 +38181,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000496",
@@ -38198,7 +38198,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38214,7 +38214,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000497",
@@ -38231,7 +38231,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38247,7 +38247,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000498",
@@ -38264,7 +38264,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38280,7 +38280,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000499",
@@ -38297,7 +38297,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38324,7 +38324,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000500",
@@ -38341,7 +38341,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38363,7 +38363,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000501",
@@ -38459,7 +38459,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38521,7 +38521,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000503",
@@ -38538,7 +38538,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38600,7 +38600,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000504",
@@ -38617,7 +38617,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38679,7 +38679,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000505",
@@ -38696,7 +38696,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38718,7 +38718,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000506",
@@ -38735,7 +38735,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38757,7 +38757,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000507",
@@ -38774,7 +38774,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38790,7 +38790,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000508",
@@ -38807,7 +38807,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38854,7 +38854,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000509",
@@ -38871,7 +38871,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38913,7 +38913,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000510",
@@ -38930,7 +38930,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -38972,7 +38972,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000511",
@@ -38989,7 +38989,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -39021,7 +39021,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000512",
@@ -39038,7 +39038,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -39070,7 +39070,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000513",
@@ -39087,7 +39087,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -39119,7 +39119,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000514",
@@ -39136,7 +39136,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -39168,7 +39168,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000515",
@@ -39185,7 +39185,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -39217,7 +39217,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000516",
@@ -39300,7 +39300,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -39332,7 +39332,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000519",
@@ -39349,7 +39349,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -39376,7 +39376,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000520",
@@ -79387,7 +79387,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -79544,7 +79544,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000945",
@@ -79561,7 +79561,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -79658,7 +79658,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000946",
@@ -79718,7 +79718,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -79865,7 +79865,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000948",
@@ -79882,7 +79882,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -79909,7 +79909,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000949",
@@ -79926,7 +79926,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -79953,7 +79953,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000950",
@@ -79970,7 +79970,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -80002,7 +80002,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000951",
@@ -80019,7 +80019,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -80051,7 +80051,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000952",
@@ -80068,7 +80068,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -80185,7 +80185,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000953",
@@ -81163,7 +81163,7 @@
       "stage": "STAGE-005 primitive OS/platform layer",
       "rust_destination": "src/prim/osx.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000051",
@@ -81190,7 +81190,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-000968",
@@ -124941,7 +124941,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Document/translate in nearest module.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -125003,7 +125003,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001679",
@@ -125324,7 +125324,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -125366,7 +125366,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001686",
@@ -125383,7 +125383,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Translate function-like macro as inline fn or cfg macro only if Rust type system cannot express it.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -125425,7 +125425,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001687",
@@ -145078,7 +145078,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -145120,7 +145120,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001968",
@@ -154702,7 +154702,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -154784,7 +154784,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002057",
@@ -154801,7 +154801,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -154923,7 +154923,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002058",
@@ -158502,7 +158502,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -158634,7 +158634,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002100",
@@ -160344,7 +160344,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -160416,7 +160416,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002118",
@@ -162301,7 +162301,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -162363,7 +162363,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002142",
@@ -164090,7 +164090,7 @@
       "stage": "STAGE-004 atomic and bit primitives",
       "rust_destination": "src/bits.rs",
       "strategy": "Mechanically translate to Rust function with C ABI if public, using Result/Option internally only where ABI permits.",
-      "status": "planned",
+      "status": "src/bits.rs",
       "direct_dependencies": [
         {
           "symbol_id": "SYM-000026",
@@ -164142,7 +164142,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002155",

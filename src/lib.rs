@@ -5,6 +5,7 @@ pub mod alloc;
 pub mod arena;
 pub mod atomic;
 pub mod bitmap;
+pub mod bits;
 pub mod heap;
 pub mod init;
 pub mod memory;

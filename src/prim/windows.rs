@@ -8,7 +8,7 @@
 use core::ffi::c_void;
 
 pub const ETW_INLINE: () = ();
-pub const MCGEN_USE_KERNEL_MODE_APIS: usize = 1;
+pub const MCGEN_USE_KERNEL_MODE_APIS: usize = 0;
 pub const MCGEN_HAVE_EVENTSETINFORMATION: usize = 2;
 
 #[repr(C)]

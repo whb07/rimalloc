@@ -25,6 +25,16 @@ pub use crate::types::{
 };
 
 pub const _mi_option_last: mi_option_t = crate::options::mi_option_e::_mi_option_last;
+pub const MIMALLOC_H: () = ();
+pub const mi_attr_noexcept: () = ();
+pub const mi_decl_nodiscard: () = ();
+pub const mi_decl_export: () = ();
+pub const mi_decl_restrict: () = ();
+pub const mi_attr_malloc: () = ();
+pub const mi_cdecl: () = ();
+pub const mi_attr_alloc_size: () = ();
+pub const mi_attr_alloc_size2: () = ();
+pub const mi_attr_alloc_align: () = ();
 
 unsafe extern "C" {
     pub fn mi_malloc(size: usize) -> *mut c_void;

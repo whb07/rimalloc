@@ -98,11 +98,31 @@ macro_rules! MI_INTERPOSE_ZONE {
 
 #[repr(C)]
 pub struct malloc_zone_t {
+    pub size: Option<unsafe extern "C" fn(*mut malloc_zone_t, *const c_void) -> usize>,
+    pub malloc: Option<unsafe extern "C" fn(*mut malloc_zone_t, usize) -> *mut c_void>,
+    pub calloc: Option<unsafe extern "C" fn(*mut malloc_zone_t, usize, usize) -> *mut c_void>,
+    pub valloc: Option<unsafe extern "C" fn(*mut malloc_zone_t, usize) -> *mut c_void>,
+    pub free: Option<unsafe extern "C" fn(*mut malloc_zone_t, *mut c_void)>,
+    pub realloc:
+        Option<unsafe extern "C" fn(*mut malloc_zone_t, *mut c_void, usize) -> *mut c_void>,
+    pub destroy: Option<unsafe extern "C" fn(*mut malloc_zone_t)>,
     pub zone_name: *const c_char,
+    pub batch_malloc:
+        Option<unsafe extern "C" fn(*mut malloc_zone_t, usize, *mut *mut c_void, u32) -> u32>,
+    pub batch_free: Option<unsafe extern "C" fn(*mut malloc_zone_t, *mut *mut c_void, u32)>,
 }
 
 pub static mut mi_malloc_zone: malloc_zone_t = malloc_zone_t {
+    size: Some(zone_size),
+    malloc: Some(zone_malloc),
+    calloc: Some(zone_calloc),
+    valloc: Some(zone_valloc),
+    free: Some(zone_free),
+    realloc: Some(zone_realloc),
+    destroy: Some(zone_destroy),
     zone_name: MI_MALLOC_ZONE_NAME.as_ptr().cast(),
+    batch_malloc: Some(zone_batch_malloc),
+    batch_free: Some(zone_batch_free),
 };
 
 #[cfg(target_os = "macos")]
@@ -153,52 +173,34 @@ pub unsafe fn is_mimalloc_zone(zone: *mut malloc_zone_t) -> bool {
 
 #[inline]
 pub unsafe fn mi_get_default_zone() -> *mut malloc_zone_t {
-    #[cfg(all(target_os = "macos", target_feature = "crt-static"))]
-    {
-        crate::mi_atomic_do_once!({
-            unsafe { malloc_zone_register(addr_of_mut!(mi_malloc_zone)) };
-        });
-        addr_of_mut!(mi_malloc_zone)
-    }
-    #[cfg(all(target_os = "macos", not(target_feature = "crt-static")))]
-    {
-        let mut zones: *mut *mut malloc_zone_t = null_mut();
-        let mut count: u32 = 0;
-        let ret = unsafe { malloc_get_all_zones(0, null_mut(), &mut zones, &mut count) };
-        if ret == KERN_SUCCESS && count > 0 && !zones.is_null() {
-            unsafe { *zones }
-        } else {
-            unsafe { malloc_default_zone() }
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        addr_of_mut!(mi_malloc_zone)
-    }
+    addr_of_mut!(mi_malloc_zone)
 }
 
 #[inline]
-pub unsafe fn mi_malloc_create_zone(_size: vm_size_t, _flags: u32) -> *mut malloc_zone_t {
+pub unsafe extern "C" fn mi_malloc_create_zone(
+    _size: vm_size_t,
+    _flags: u32,
+) -> *mut malloc_zone_t {
     mi_get_default_zone()
 }
 
 #[inline]
-pub unsafe fn mi_malloc_default_zone() -> *mut malloc_zone_t {
+pub unsafe extern "C" fn mi_malloc_default_zone() -> *mut malloc_zone_t {
     mi_get_default_zone()
 }
 
 #[inline]
-pub unsafe fn mi_malloc_default_purgeable_zone() -> *mut malloc_zone_t {
+pub unsafe extern "C" fn mi_malloc_default_purgeable_zone() -> *mut malloc_zone_t {
     mi_get_default_zone()
 }
 
 #[inline]
-pub unsafe fn mi_malloc_destroy_zone(_zone: *mut malloc_zone_t) {
+pub unsafe extern "C" fn mi_malloc_destroy_zone(_zone: *mut malloc_zone_t) {
     // nothing
 }
 
 #[inline]
-pub unsafe fn mi_malloc_get_all_zones(
+pub unsafe extern "C" fn mi_malloc_get_all_zones(
     _task: task_t,
     _mr: *mut c_void,
     addresses: *mut *mut vm_address_t,
@@ -214,7 +216,7 @@ pub unsafe fn mi_malloc_get_all_zones(
 }
 
 #[inline]
-pub unsafe fn mi_malloc_get_zone_name(zone: *mut malloc_zone_t) -> *const c_char {
+pub unsafe extern "C" fn mi_malloc_get_zone_name(zone: *mut malloc_zone_t) -> *const c_char {
     let zone = if zone.is_null() {
         mi_get_default_zone()
     } else {
@@ -224,13 +226,127 @@ pub unsafe fn mi_malloc_get_zone_name(zone: *mut malloc_zone_t) -> *const c_char
 }
 
 #[inline]
-pub unsafe fn mi_malloc_set_zone_name(_zone: *mut malloc_zone_t, _name: *const c_char) {
+pub unsafe extern "C" fn mi_malloc_set_zone_name(_zone: *mut malloc_zone_t, _name: *const c_char) {
     // nothing
 }
 
 #[inline]
-pub unsafe fn mi_malloc_jumpstart(_cookie: uintptr_t) -> c_int {
+pub unsafe extern "C" fn mi_malloc_jumpstart(_cookie: uintptr_t) -> c_int {
     1
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_size(zone: *mut malloc_zone_t, p: *const c_void) -> usize {
+    if mi_any_heap_contains(p) {
+        unsafe { crate::mimalloc::mi_usable_size(p) }
+    } else if !unsafe { is_mimalloc_zone(zone) } {
+        match unsafe { (*zone).size } {
+            Some(size_fn) => unsafe { size_fn(zone, p) },
+            None => 0,
+        }
+    } else {
+        0
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_malloc(_zone: *mut malloc_zone_t, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc(size) }
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_calloc(
+    _zone: *mut malloc_zone_t,
+    count: usize,
+    size: usize,
+) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_calloc(count, size) }
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_valloc(_zone: *mut malloc_zone_t, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc_aligned(size, crate::os::_mi_os_page_size()) }
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_free(zone: *mut malloc_zone_t, p: *mut c_void) {
+    if mi_any_heap_contains(p.cast_const()) {
+        unsafe { crate::mimalloc::mi_free(p) };
+    } else if !unsafe { is_mimalloc_zone(zone) }
+        && let Some(free_fn) = unsafe { (*zone).free }
+    {
+        unsafe { free_fn(zone, p) };
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_realloc(
+    zone: *mut malloc_zone_t,
+    p: *mut c_void,
+    newsize: usize,
+) -> *mut c_void {
+    if p.is_null() || mi_any_heap_contains(p.cast_const()) {
+        unsafe { crate::mimalloc::mi_realloc(p, newsize) }
+    } else if !unsafe { is_mimalloc_zone(zone) } {
+        match unsafe { (*zone).realloc } {
+            Some(realloc_fn) => unsafe { realloc_fn(zone, p, newsize) },
+            None => null_mut(),
+        }
+    } else {
+        null_mut()
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_memalign(
+    _zone: *mut malloc_zone_t,
+    alignment: usize,
+    size: usize,
+) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc_aligned(size, alignment) }
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_destroy(zone: *mut malloc_zone_t) {
+    if !unsafe { is_mimalloc_zone(zone) }
+        && let Some(destroy_fn) = unsafe { (*zone).destroy }
+    {
+        unsafe { destroy_fn(zone) };
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_batch_malloc(
+    zone: *mut malloc_zone_t,
+    size: usize,
+    ps: *mut *mut c_void,
+    count: u32,
+) -> u32 {
+    let mut i: u32 = 0;
+    while i < count {
+        let p = unsafe { zone_malloc(zone, size) };
+        unsafe { *ps.add(i as usize) = p };
+        if p.is_null() {
+            break;
+        }
+        i += 1;
+    }
+    i
+}
+
+#[inline]
+pub unsafe extern "C" fn zone_batch_free(
+    zone: *mut malloc_zone_t,
+    ps: *mut *mut c_void,
+    count: u32,
+) {
+    let mut i: u32 = 0;
+    while i < count {
+        let p = unsafe { *ps.add(i as usize) };
+        unsafe { zone_free(zone, p) };
+        unsafe { *ps.add(i as usize) = null_mut() };
+        i += 1;
+    }
 }
 
 #[inline]
@@ -269,12 +385,12 @@ pub unsafe fn mi_malloc_printf(_fmt: *const c_char) {
 }
 
 #[inline]
-pub unsafe fn zone_check(_zone: *mut malloc_zone_t) -> bool {
-    true
+pub unsafe extern "C" fn zone_check(_zone: *mut malloc_zone_t) -> boolean_t {
+    1
 }
 
 #[inline]
-pub unsafe fn zone_from_ptr(p: *const c_void) -> *mut malloc_zone_t {
+pub unsafe extern "C" fn zone_from_ptr(p: *const c_void) -> *mut malloc_zone_t {
     if mi_any_heap_contains(p) {
         mi_get_default_zone()
     } else {
@@ -283,27 +399,27 @@ pub unsafe fn zone_from_ptr(p: *const c_void) -> *mut malloc_zone_t {
 }
 
 #[inline]
-pub unsafe fn zone_log(_zone: *mut malloc_zone_t, _p: *mut c_void) {
+pub unsafe extern "C" fn zone_log(_zone: *mut malloc_zone_t, _p: *mut c_void) {
     // nothing
 }
 
 #[inline]
-pub unsafe fn zone_print(_zone: *mut malloc_zone_t, _verbose: bool) {
+pub unsafe extern "C" fn zone_print(_zone: *mut malloc_zone_t, _verbose: boolean_t) {
     // nothing
 }
 
 #[inline]
-pub unsafe fn zone_print_ptr_info(_p: *const c_void) {
+pub unsafe extern "C" fn zone_print_ptr_info(_p: *mut c_void) {
     // nothing
 }
 
 #[inline]
-pub unsafe fn zone_register(_zone: *mut malloc_zone_t) {
+pub unsafe extern "C" fn zone_register(_zone: *mut malloc_zone_t) {
     // nothing
 }
 
 #[inline]
-pub unsafe fn zone_unregister(_zone: *mut malloc_zone_t) {
+pub unsafe extern "C" fn zone_unregister(_zone: *mut malloc_zone_t) {
     // nothing
 }
 
@@ -360,13 +476,17 @@ pub static _mi_zone_interposes: [mi_interpose_s; 27] = [
 
 #[cfg(target_os = "macos")]
 pub unsafe extern "C" fn _mi_macos_override_malloc() {
-    let mut purgeable_zone: *mut malloc_zone_t = null_mut();
-    if unsafe { malloc_default_purgeable_zone as usize } != 0 {
-        purgeable_zone = unsafe { malloc_default_purgeable_zone() };
-    }
+    let purgeable_zone = unsafe { malloc_default_purgeable_zone() };
 
     unsafe { malloc_zone_register(addr_of_mut!(mi_malloc_zone)) };
-    let default_zone = unsafe { mi_get_default_zone() };
+    let mut zones: *mut *mut malloc_zone_t = null_mut();
+    let mut count: u32 = 0;
+    let ret = unsafe { malloc_get_all_zones(0, null_mut(), &mut zones, &mut count) };
+    let default_zone = if ret == KERN_SUCCESS && count > 0 && !zones.is_null() {
+        unsafe { *zones }
+    } else {
+        unsafe { malloc_default_zone() }
+    };
     if !core::ptr::eq(
         default_zone.cast_const(),
         addr_of_mut!(mi_malloc_zone).cast_const(),

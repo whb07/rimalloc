@@ -7,17 +7,23 @@
     unsafe_op_in_unsafe_fn
 )]
 
+use core::cell::Cell;
+use core::cell::UnsafeCell;
 use core::ffi::c_char;
 use core::ptr;
+use core::ptr::addr_of_mut;
 use std::ffi::{CStr, CString};
 use std::fmt;
 use std::mem::size_of;
 use std::os::raw::{c_long, c_void};
+use std::sync::atomic::{AtomicIsize, AtomicPtr, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
+use crate::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
 use crate::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
 use crate::init::{_mi_preloading, mi_mark_main_thread};
+use crate::internal::MI_GUARDED;
 use crate::os::_mi_prim_out_stderr;
 use crate::page::MI_MAX_ALLOC_SIZE;
 use crate::types::{
@@ -110,358 +116,371 @@ const MI_DEFAULT_ARENA_RESERVE: c_long = if cfg!(target_pointer_width = "64") {
 };
 const MI_DEFAULT_ARENA_MAX_OBJECT_SIZE: c_long =
     ((MI_SIZE_BITS * MI_ARENA_BCHUNK_BITS * MI_ARENA_SLICE_SIZE) / MI_KiB) as c_long;
+const MI_DEFAULT_DISALLOW_ARENA_ALLOC: c_long = 0;
+const MI_DEFAULT_ALLOW_LARGE_OS_PAGES: c_long = 0;
 const MI_DEFAULT_RESERVE_HUGE_OS_PAGES: c_long = 0;
 const MI_DEFAULT_RESERVE_OS_MEMORY: c_long = 0;
-const MI_DEFAULT_GUARDED_SAMPLE_RATE: c_long = 0;
+const MI_DEFAULT_GUARDED_SAMPLE_RATE: c_long = if MI_GUARDED != 0 && !cfg!(debug_assertions) {
+    4000
+} else {
+    0
+};
 const MI_DEFAULT_PAGEMAP_COMMIT: c_long = if cfg!(target_os = "macos") { 1 } else { 0 };
 const MI_DEFAULT_PAGE_MAX_RECLAIM: c_long = -1;
 const MI_DEFAULT_PAGE_CROSS_THREAD_MAX_RECLAIM: c_long = 32;
 const MI_DEFAULT_ALLOW_THP: c_long = if cfg!(target_os = "android") { 0 } else { 1 };
+const MI_MAX_DELAY_OUTPUT: usize = 16 * 1024;
 
 const fn cstr(bytes: &'static [u8]) -> *const c_char {
     bytes.as_ptr() as *const c_char
 }
 
-macro_rules! desc {
-    ($value:expr, $init:expr, $option:ident, $name:expr) => {
+macro_rules! MI_OPTION {
+    ($value:expr, $init:expr, $option:ident, $name:literal) => {
         mi_option_desc_t {
             value: $value as c_long,
             init: $init,
             option: mi_option_e::$option,
-            name: cstr($name),
+            name: cstr(concat!($name, "\0").as_bytes()),
             legacy_name: ptr::null(),
         }
     };
-    ($value:expr, $init:expr, $option:ident, $name:expr, $legacy:expr) => {
+}
+
+macro_rules! MI_OPTION_LEGACY {
+    ($value:expr, $init:expr, $option:ident, $name:literal, $legacy:literal) => {
         mi_option_desc_t {
             value: $value as c_long,
             init: $init,
             option: mi_option_e::$option,
-            name: cstr($name),
-            legacy_name: cstr($legacy),
+            name: cstr(concat!($name, "\0").as_bytes()),
+            legacy_name: cstr(concat!($legacy, "\0").as_bytes()),
         }
     };
 }
 
+macro_rules! mi_stringifyx {
+    ($str:tt) => {
+        stringify!($str)
+    };
+}
+
+const _MI_STRINGIFYX_SENTINEL: &str = mi_stringifyx!(MI_MALLOC_VERSION);
+
 static OPTIONS: Mutex<[mi_option_desc_t; MI_OPTION_COUNT]> = Mutex::new([
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_SHOW_ERRORS,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_show_errors,
-        b"show_errors\0"
+        "show_errors"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_show_stats,
-        b"show_stats\0"
+        "show_stats"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_VERBOSE,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_verbose,
-        b"verbose\0"
+        "verbose"
     ),
-    desc!(
+    MI_OPTION!(
         1,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_deprecated_eager_commit,
-        b"deprecated_eager_commit\0"
+        "deprecated_eager_commit"
     ),
-    desc!(
+    MI_OPTION_LEGACY!(
         MI_DEFAULT_ARENA_EAGER_COMMIT,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_arena_eager_commit,
-        b"arena_eager_commit\0",
-        b"eager_region_commit\0"
+        "arena_eager_commit",
+        "eager_region_commit"
     ),
-    desc!(
+    MI_OPTION_LEGACY!(
         1,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_purge_decommits,
-        b"purge_decommits\0",
-        b"reset_decommits\0"
+        "purge_decommits",
+        "reset_decommits"
     ),
-    desc!(
-        0,
+    MI_OPTION_LEGACY!(
+        MI_DEFAULT_ALLOW_LARGE_OS_PAGES,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_allow_large_os_pages,
-        b"allow_large_os_pages\0",
-        b"large_os_pages\0"
+        "allow_large_os_pages",
+        "large_os_pages"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_RESERVE_HUGE_OS_PAGES,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_reserve_huge_os_pages,
-        b"reserve_huge_os_pages\0"
+        "reserve_huge_os_pages"
     ),
-    desc!(
+    MI_OPTION!(
         -1,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_reserve_huge_os_pages_at,
-        b"reserve_huge_os_pages_at\0"
+        "reserve_huge_os_pages_at"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_RESERVE_OS_MEMORY,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_reserve_os_memory,
-        b"reserve_os_memory\0"
+        "reserve_os_memory"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_deprecated_segment_cache,
-        b"deprecated_segment_cache\0"
+        "deprecated_segment_cache"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_deprecated_page_reset,
-        b"deprecated_page_reset\0"
+        "deprecated_page_reset"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_deprecated_abandoned_page_purge,
-        b"deprecated_abandoned_page_purge\0"
+        "deprecated_abandoned_page_purge"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_deprecated_segment_reset,
-        b"deprecated_segment_reset\0"
+        "deprecated_segment_reset"
     ),
-    desc!(
+    MI_OPTION!(
         1,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_deprecated_eager_commit_delay,
-        b"deprecated_eager_commit_delay\0"
+        "deprecated_eager_commit_delay"
     ),
-    desc!(
+    MI_OPTION_LEGACY!(
         1000,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_purge_delay,
-        b"purge_delay\0",
-        b"reset_delay\0"
+        "purge_delay",
+        "reset_delay"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_use_numa_nodes,
-        b"use_numa_nodes\0"
+        "use_numa_nodes"
     ),
-    desc!(
+    MI_OPTION_LEGACY!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_disallow_os_alloc,
-        b"disallow_os_alloc\0",
-        b"limit_os_alloc\0"
+        "disallow_os_alloc",
+        "limit_os_alloc"
     ),
-    desc!(
+    MI_OPTION!(
         100,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_os_tag,
-        b"os_tag\0"
+        "os_tag"
     ),
-    desc!(
+    MI_OPTION!(
         32,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_max_errors,
-        b"max_errors\0"
+        "max_errors"
     ),
-    desc!(
+    MI_OPTION!(
         32,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_max_warnings,
-        b"max_warnings\0"
+        "max_warnings"
     ),
-    desc!(
+    MI_OPTION!(
         10,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_deprecated_max_segment_reclaim,
-        b"deprecated_max_segment_reclaim\0"
+        "deprecated_max_segment_reclaim"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_destroy_on_exit,
-        b"destroy_on_exit\0"
+        "destroy_on_exit"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_ARENA_RESERVE,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_arena_reserve,
-        b"arena_reserve\0"
+        "arena_reserve"
     ),
-    desc!(
+    MI_OPTION!(
         1,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_arena_purge_mult,
-        b"arena_purge_mult\0"
+        "arena_purge_mult"
     ),
-    desc!(
+    MI_OPTION_LEGACY!(
         1,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_deprecated_purge_extend_delay,
-        b"deprecated_purge_extend_delay\0",
-        b"decommit_extend_delay\0"
+        "deprecated_purge_extend_delay",
+        "decommit_extend_delay"
     ),
-    desc!(
-        0,
+    MI_OPTION!(
+        MI_DEFAULT_DISALLOW_ARENA_ALLOC,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_disallow_arena_alloc,
-        b"disallow_arena_alloc\0"
+        "disallow_arena_alloc"
     ),
-    desc!(
+    MI_OPTION!(
         400,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_retry_on_oom,
-        b"retry_on_oom\0"
+        "retry_on_oom"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_visit_abandoned,
-        b"visit_abandoned\0"
+        "visit_abandoned"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_guarded_min,
-        b"guarded_min\0"
+        "guarded_min"
     ),
-    desc!(
+    MI_OPTION!(
         MI_GiB as c_long,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_guarded_max,
-        b"guarded_max\0"
+        "guarded_max"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_guarded_precise,
-        b"guarded_precise\0"
+        "guarded_precise"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_GUARDED_SAMPLE_RATE,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_guarded_sample_rate,
-        b"guarded_sample_rate\0"
+        "guarded_sample_rate"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_guarded_sample_seed,
-        b"guarded_sample_seed\0"
+        "guarded_sample_seed"
     ),
-    desc!(
+    MI_OPTION!(
         10000,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_generic_collect,
-        b"generic_collect\0"
+        "generic_collect"
     ),
-    desc!(
+    MI_OPTION_LEGACY!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_page_reclaim_on_free,
-        b"page_reclaim_on_free\0",
-        b"abandoned_reclaim_on_free\0"
+        "page_reclaim_on_free",
+        "abandoned_reclaim_on_free"
     ),
-    desc!(
+    MI_OPTION!(
         2,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_page_full_retain,
-        b"page_full_retain\0"
+        "page_full_retain"
     ),
-    desc!(
+    MI_OPTION!(
         4,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_page_max_candidates,
-        b"page_max_candidates\0"
+        "page_max_candidates"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_max_vabits,
-        b"max_vabits\0"
+        "max_vabits"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_PAGEMAP_COMMIT,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_pagemap_commit,
-        b"pagemap_commit\0"
+        "pagemap_commit"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_page_commit_on_demand,
-        b"page_commit_on_demand\0"
+        "page_commit_on_demand"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_PAGE_MAX_RECLAIM,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_page_max_reclaim,
-        b"page_max_reclaim\0"
+        "page_max_reclaim"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_PAGE_CROSS_THREAD_MAX_RECLAIM,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_page_cross_thread_max_reclaim,
-        b"page_cross_thread_max_reclaim\0"
+        "page_cross_thread_max_reclaim"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_ALLOW_THP,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_allow_thp,
-        b"allow_thp\0"
+        "allow_thp"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_minimal_purge_size,
-        b"minimal_purge_size\0"
+        "minimal_purge_size"
     ),
-    desc!(
+    MI_OPTION!(
         MI_DEFAULT_ARENA_MAX_OBJECT_SIZE,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_arena_max_object_size,
-        b"arena_max_object_size\0"
+        "arena_max_object_size"
     ),
-    desc!(
+    MI_OPTION!(
         0,
         mi_option_init_t::MI_OPTION_UNINIT,
         mi_option_arena_is_numa_local,
-        b"arena_is_numa_local\0"
+        "arena_is_numa_local"
     ),
 ]);
 
-#[derive(Copy, Clone)]
-struct OutputState {
-    out: Option<mi_output_fun>,
-    arg: *mut c_void,
+thread_local! {
+    static recurse: Cell<bool> = const { Cell::new(false) };
 }
 
-unsafe impl Send for OutputState {}
-unsafe impl Sync for OutputState {}
+struct DelayedOutputBuffer(UnsafeCell<[u8; MI_MAX_DELAY_OUTPUT + 1]>);
 
-static OUTPUT_STATE: Mutex<OutputState> = Mutex::new(OutputState {
-    out: None,
-    arg: ptr::null_mut(),
-});
+unsafe impl Sync for DelayedOutputBuffer {}
 
-#[derive(Copy, Clone)]
-struct ErrorState {
-    fun: Option<mi_error_fun>,
-    arg: *mut c_void,
-}
-
-unsafe impl Send for ErrorState {}
-unsafe impl Sync for ErrorState {}
-
-static ERROR_STATE: Mutex<ErrorState> = Mutex::new(ErrorState {
-    fun: None,
-    arg: ptr::null_mut(),
-});
+static out_buf: DelayedOutputBuffer =
+    DelayedOutputBuffer(UnsafeCell::new([0; MI_MAX_DELAY_OUTPUT + 1]));
+static out_len: AtomicUsize = AtomicUsize::new(0);
+static mut out_buf_lock: mi_lock_t = mi_lock_s::new();
+static mi_out_default: Mutex<Option<mi_output_fun>> = Mutex::new(None);
+static mi_out_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
+#[allow(dead_code)]
+static mi_max_error_count: AtomicIsize = AtomicIsize::new(16);
+#[allow(dead_code)]
+static mi_max_warning_count: AtomicIsize = AtomicIsize::new(16);
+#[allow(dead_code)]
+static warning_count: AtomicUsize = AtomicUsize::new(0);
+static mi_error_handler: Mutex<Option<mi_error_fun>> = Mutex::new(None);
+static mi_error_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 
 #[inline]
 fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -530,6 +549,104 @@ fn emit_text(out: Option<mi_output_fun>, arg: *mut c_void, text: &str) {
     }
 }
 
+unsafe extern "C" fn mi_out_stderr(msg: *const c_char, arg: *mut c_void) {
+    let _ = arg;
+    if !msg.is_null() && unsafe { *msg } != 0 {
+        unsafe { _mi_prim_out_stderr(msg) };
+    }
+}
+
+unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
+    let _ = arg;
+    if msg.is_null() || out_len.load(Ordering::Acquire) >= MI_MAX_DELAY_OUTPUT {
+        return;
+    }
+
+    let msg_bytes = unsafe { CStr::from_ptr(msg).to_bytes() };
+    let mut n = msg_bytes.len();
+    if n == 0 || n >= MI_MAX_DELAY_OUTPUT {
+        return;
+    }
+
+    unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
+    let start = out_len.fetch_add(n, Ordering::AcqRel);
+    if start < MI_MAX_DELAY_OUTPUT {
+        if start + n >= MI_MAX_DELAY_OUTPUT {
+            n = MI_MAX_DELAY_OUTPUT - start - 1;
+        }
+        let buf = unsafe { &mut *out_buf.0.get() };
+        buf[start..start + n].copy_from_slice(&msg_bytes[..n]);
+    }
+    unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
+}
+
+fn mi_out_buf_flush(out: mi_output_fun, no_more_buf: bool, arg: *mut c_void) {
+    unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
+    let mut count = out_len.fetch_add(
+        if no_more_buf { MI_MAX_DELAY_OUTPUT } else { 1 },
+        Ordering::AcqRel,
+    );
+    if count > MI_MAX_DELAY_OUTPUT {
+        count = MI_MAX_DELAY_OUTPUT;
+    }
+    let buf = unsafe { &mut *out_buf.0.get() };
+    buf[count] = 0;
+    unsafe { out(buf.as_ptr().cast::<c_char>(), arg) };
+    if !no_more_buf {
+        buf[count] = b'\n';
+    }
+    unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
+}
+
+#[allow(dead_code)]
+unsafe extern "C" fn mi_out_buf_stderr(msg: *const c_char, arg: *mut c_void) {
+    unsafe { mi_out_stderr(msg, arg) };
+    unsafe { mi_out_buf(msg, arg) };
+}
+
+fn mi_out_get_default(parg: Option<&mut *mut c_void>) -> mi_output_fun {
+    if let Some(arg) = parg {
+        *arg = mi_out_arg.load(Ordering::Acquire);
+    }
+    lock_unpoisoned(&mi_out_default).unwrap_or(mi_out_buf)
+}
+
+#[allow(dead_code)]
+fn mi_add_stderr_output() {
+    debug_assert!(lock_unpoisoned(&mi_out_default).is_none());
+    mi_out_buf_flush(mi_out_stderr, false, ptr::null_mut());
+    *lock_unpoisoned(&mi_out_default) = Some(mi_out_buf_stderr);
+    mi_out_arg.store(ptr::null_mut(), Ordering::Release);
+}
+
+#[inline]
+fn mi_recurse_exit_prim() {
+    recurse.with(|slot| slot.set(false));
+}
+
+#[inline]
+fn mi_recurse_enter() -> bool {
+    if cfg!(any(target_vendor = "apple", target_os = "android")) && _mi_preloading() {
+        return false;
+    }
+    recurse.with(|slot| {
+        if slot.get() {
+            false
+        } else {
+            slot.set(true);
+            true
+        }
+    })
+}
+
+#[inline]
+fn mi_recurse_exit() {
+    if cfg!(any(target_vendor = "apple", target_os = "android")) && _mi_preloading() {
+        return;
+    }
+    mi_recurse_exit_prim();
+}
+
 #[allow(dead_code)]
 pub(crate) unsafe fn _mi_fputs(
     out: Option<mi_output_fun>,
@@ -537,21 +654,36 @@ pub(crate) unsafe fn _mi_fputs(
     prefix: *const c_char,
     message: *const c_char,
 ) {
+    if let Some(out) = out {
+        if !prefix.is_null() {
+            unsafe { out(prefix, arg) };
+        }
+        if !message.is_null() {
+            unsafe { out(message, arg) };
+        }
+        return;
+    }
+
+    if !mi_recurse_enter() {
+        return;
+    }
+    let mut default_arg = ptr::null_mut();
+    let default_out = mi_out_get_default(Some(&mut default_arg));
     if !prefix.is_null() {
-        let text = CStr::from_ptr(prefix).to_string_lossy();
-        emit_text(out, arg, text.as_ref());
+        unsafe { default_out(prefix, default_arg) };
     }
     if !message.is_null() {
-        let text = CStr::from_ptr(message).to_string_lossy();
-        emit_text(out, arg, text.as_ref());
+        unsafe { default_out(message, default_arg) };
     }
+    mi_recurse_exit();
 }
 
 #[allow(dead_code)]
 pub(crate) fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, args: fmt::Arguments<'_>) {
     let mut text = String::new();
     if fmt::write(&mut text, args).is_ok() {
-        emit_text(out, arg, &text);
+        let ctext = CString::new(text).expect("mimalloc output text contained a NUL byte");
+        unsafe { _mi_fputs(out, arg, ptr::null(), ctext.as_ptr()) };
     }
 }
 
@@ -665,15 +797,16 @@ pub(crate) fn mi_error_default(err: i32) {
 }
 
 pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
-    let mut state = lock_unpoisoned(&OUTPUT_STATE);
-    state.out = out;
-    state.arg = arg;
+    *lock_unpoisoned(&mi_out_default) = Some(out.unwrap_or(mi_out_stderr));
+    mi_out_arg.store(arg, Ordering::Release);
+    if let Some(out) = out {
+        mi_out_buf_flush(out, true, arg);
+    }
 }
 
 pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void) {
-    let mut state = lock_unpoisoned(&ERROR_STATE);
-    state.fun = fun;
-    state.arg = arg;
+    *lock_unpoisoned(&mi_error_handler) = fun;
+    mi_error_arg.store(arg, Ordering::Release);
 }
 
 #[allow(dead_code)]
@@ -798,7 +931,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
         return;
     }
 
-    let recurse = {
+    let recurse_adjust = {
         let mut table = lock_unpoisoned(&OPTIONS);
         let option_kind = table[idx].option;
         table[idx].value = value;
@@ -818,7 +951,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
         }
     };
 
-    if let Some((option, value)) = recurse {
+    if let Some((option, value)) = recurse_adjust {
         mi_option_set(option, value);
     }
 }
@@ -857,17 +990,17 @@ pub extern "C" fn mi_option_disable(option: mi_option_t) {
 
 pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     let (out, arg) = if let Some(out) = out {
-        (Some(out), arg)
+        (out, arg)
     } else {
-        let state = lock_unpoisoned(&OUTPUT_STATE);
-        (state.out, state.arg)
+        let mut default_arg = ptr::null_mut();
+        (mi_out_get_default(Some(&mut default_arg)), default_arg)
     };
 
     let vermajor = MI_MALLOC_VERSION / 10000;
     let verminor = (MI_MALLOC_VERSION % 10000) / 100;
     let verpatch = MI_MALLOC_VERSION % 100;
     emit_text(
-        out,
+        Some(out),
         arg,
         &format!("v{vermajor}.{verminor}.{verpatch} (Rust translation)\n"),
     );
@@ -881,7 +1014,7 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
         };
         let name = unsafe { CStr::from_ptr(desc.name).to_string_lossy().into_owned() };
         emit_text(
-            out,
+            Some(out),
             arg,
             &format!(
                 "option '{name}': {value} {}\n",
@@ -895,19 +1028,19 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
     }
 
     emit_text(
-        out,
+        Some(out),
         arg,
         &format!(
             "debug level : {}\n",
             if cfg!(debug_assertions) { 2 } else { 0 }
         ),
     );
-    emit_text(out, arg, "secure level: 0\n");
-    emit_text(out, arg, "mem tracking: false\n");
+    emit_text(Some(out), arg, "secure level: 0\n");
+    emit_text(Some(out), arg, "mem tracking: false\n");
     if mi_option_get(mi_option_t::mi_option_guarded_sample_rate) != 0 {
-        emit_text(out, arg, "guarded build: enabled\n");
+        emit_text(Some(out), arg, "guarded build: enabled\n");
     } else {
-        emit_text(out, arg, "guarded build: disabled\n");
+        emit_text(Some(out), arg, "guarded build: disabled\n");
     }
 }
 
@@ -923,7 +1056,9 @@ pub(crate) fn _mi_options_init() {
     }
     let max_errors = mi_option_get(mi_option_t::mi_option_max_errors);
     let max_warnings = mi_option_get(mi_option_t::mi_option_max_warnings);
-    let _ = (max_errors, max_warnings);
+    mi_max_error_count.store(max_errors as isize, Ordering::Release);
+    mi_max_warning_count.store(max_warnings as isize, Ordering::Release);
+    warning_count.store(0, Ordering::Release);
 
     if mi_option_get(mi_option_t::mi_option_guarded_sample_rate) > 0
         && mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)
@@ -934,6 +1069,7 @@ pub(crate) fn _mi_options_init() {
 }
 
 pub(crate) fn _mi_options_post_init() {
+    mi_add_stderr_output();
     if mi_option_is_enabled(mi_option_t::mi_option_verbose) {
         mi_options_print();
     }

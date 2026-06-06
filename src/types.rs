@@ -5,10 +5,21 @@
 use core::ffi::{c_char, c_void};
 use std::os::raw::c_long;
 
+use crate::atomic::mi_lock_t;
+use crate::stats::mi_stats_t;
+
 pub const MI_MALLOC_VERSION: i32 = 30302;
 pub const MI_ENABLE_LARGE_PAGES: usize = 1;
 pub const MI_SMALL_WSIZE_MAX: usize = 128;
 pub const MI_SMALL_SIZE_MAX: usize = MI_SMALL_WSIZE_MAX * core::mem::size_of::<*const c_void>();
+pub const MI_BIN_FULL: usize = crate::stats::MI_BIN_HUGE + 1;
+pub const MI_BIN_COUNT: usize = MI_BIN_FULL + 1;
+pub const MI_PAGE_IN_FULL_QUEUE: usize = 0x01;
+pub const MI_PAGE_HAS_INTERIOR_POINTERS: usize = 0x02;
+pub const MI_PAGE_FLAG_MASK: usize = 0x03;
+pub const MI_THREADID_ABANDONED: usize = 0;
+pub const MI_THREADID_ABANDONED_MAPPED: usize = MI_PAGE_FLAG_MASK + 1;
+pub const MI_PAGES_DIRECT: usize = MI_SMALL_WSIZE_MAX + 1;
 
 pub type mi_arena_id_t = *mut c_void;
 pub type mi_threadid_t = usize;
@@ -21,14 +32,13 @@ pub type mi_arena_t = mi_arena_s;
 pub enum mi_heap_s {}
 pub type mi_heap_t = mi_heap_s;
 
-pub enum mi_theap_s {}
 pub type mi_theap_t = mi_theap_s;
-
-pub enum mi_page_s {}
 pub type mi_page_t = mi_page_s;
 
 pub enum mi_subproc_s {}
 pub type mi_subproc_t = mi_subproc_s;
+pub type mi_page_flags_t = usize;
+pub type mi_thread_free_t = usize;
 
 pub type mi_bitmap_t = crate::bitmap::mi_bitmap_t;
 pub type mi_bbitmap_t = crate::bitmap::mi_bbitmap_t;
@@ -77,6 +87,23 @@ pub type mi_page_kind_t = mi_page_kind_e;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_block_s {
+    pub next: usize,
+}
+
+pub type mi_block_t = mi_block_s;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct mi_padding_s {
+    pub canary: u32,
+    pub delta: u32,
+}
+
+pub type mi_padding_t = mi_padding_s;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_heap_area_t {
     pub blocks: *mut c_void,
     pub reserved: usize,
@@ -113,6 +140,70 @@ pub type mi_forall_set_fun_t = unsafe extern "C" fn(
     arena: *mut mi_arena_t,
     arg2: *mut c_void,
 ) -> bool;
+
+#[repr(C)]
+pub struct mi_tld_s {
+    pub thread_id: mi_threadid_t,
+    pub thread_seq: usize,
+    pub numa_node: i32,
+    pub subproc: *mut mi_subproc_t,
+    pub theaps: *mut mi_theap_t,
+    pub theaps_lock: mi_lock_t,
+    pub recurse: bool,
+    pub is_in_threadpool: bool,
+    pub memid: crate::internal::mi_memid_t,
+}
+
+pub type mi_tld_t = mi_tld_s;
+
+#[repr(C)]
+pub struct mi_page_s {
+    pub xthread_id: mi_threadid_t,
+    pub free: *mut mi_block_t,
+    pub used: u16,
+    pub capacity: u16,
+    pub reserved: u16,
+    pub retire_expire: u8,
+    pub free_is_zero: bool,
+    pub local_free: *mut mi_block_t,
+    pub xthread_free: mi_thread_free_t,
+    pub block_size: usize,
+    pub page_start: *mut u8,
+    pub keys: [usize; 2],
+    pub theap: *mut mi_theap_t,
+    pub heap: *mut mi_heap_t,
+    pub next: *mut mi_page_t,
+    pub prev: *mut mi_page_t,
+    pub slice_committed: usize,
+    pub memid: crate::internal::mi_memid_t,
+}
+
+#[repr(C)]
+pub struct mi_theap_s {
+    pub tld: *mut mi_tld_t,
+    pub heap: *mut mi_heap_t,
+    pub refcount: usize,
+    pub heartbeat: u64,
+    pub cookie: usize,
+    pub random: mi_random_ctx_t,
+    pub page_count: usize,
+    pub page_retired_min: usize,
+    pub page_retired_max: usize,
+    pub pages_full_size: usize,
+    pub generic_count: c_long,
+    pub generic_collect_count: c_long,
+    pub tnext: *mut mi_theap_t,
+    pub tprev: *mut mi_theap_t,
+    pub hnext: *mut mi_theap_t,
+    pub hprev: *mut mi_theap_t,
+    pub page_full_retain: c_long,
+    pub allow_page_reclaim: bool,
+    pub allow_page_abandon: bool,
+    pub pages_free_direct: [*mut mi_page_t; MI_PAGES_DIRECT],
+    pub pages: [mi_page_queue_t; MI_BIN_COUNT],
+    pub memid: crate::internal::mi_memid_t,
+    pub stats: mi_stats_t,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

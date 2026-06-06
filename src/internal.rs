@@ -35,7 +35,7 @@ pub const MI_TRACK_ASAN: usize = 0;
 pub const MI_TRACK_ENABLED: usize = 0;
 pub const MI_TRACK_ENABLED_FULL: usize = 0;
 pub const MI_GUARDED: usize = 0;
-pub const MI_PAGE_META_IS_SEPARATED: usize = 0;
+pub const MI_PAGE_META_IS_SEPARATED: usize = if MI_PAGE_MAP_FLAT != 0 { 0 } else { 1 };
 pub const MI_BIG_ENDIAN: usize = if cfg!(target_endian = "big") { 1 } else { 0 };
 pub const __wasi__: usize = if cfg!(target_os = "wasi") { 1 } else { 0 };
 
@@ -301,7 +301,10 @@ unsafe extern "C" {
     pub static _mi_page_empty: mi_page_t;
     pub static _mi_theap_empty: mi_theap_t;
     pub static _mi_theap_empty_wrong: mi_theap_t;
+    #[cfg(target_pointer_width = "32")]
     pub static mut _mi_page_map: *mut u8;
+    #[cfg(not(target_pointer_width = "32"))]
+    pub static mut _mi_page_map: *mut mi_submap_t;
     pub static mut _mi_cpu_movsb_max: usize;
     pub static mut _mi_cpu_stosb_max: usize;
 
@@ -531,6 +534,245 @@ pub unsafe fn mi_count_size_overflow(count: usize, size: usize, total: &mut usiz
         *total = usize::MAX;
         true
     }
+}
+
+#[inline]
+pub unsafe fn _mi_theap_heap(theap: *const mi_theap_t) -> *mut mi_heap_t {
+    crate::atomic::mi_atomic_load_ptr_acquire(&(*theap).heap)
+}
+
+#[inline]
+pub unsafe fn mi_theap_is_initialized(theap: *const mi_theap_t) -> bool {
+    !theap.is_null() && !unsafe { _mi_theap_heap(theap) }.is_null()
+}
+
+#[inline]
+pub unsafe fn _mi_theap_get_free_small_page(theap: *mut mi_theap_t, size: usize) -> *mut mi_page_t {
+    let idx = _mi_wsize_from_size(size);
+    (*theap).pages_free_direct[idx]
+}
+
+#[cfg(target_pointer_width = "32")]
+#[inline]
+pub fn _mi_page_map_index(p: *const c_void) -> usize {
+    (p as usize) >> MI_ARENA_SLICE_SHIFT
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[inline]
+pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize {
+    let u = (p as usize) / MI_ARENA_SLICE_SIZE;
+    if !sub_idx.is_null() {
+        unsafe { *sub_idx = u % MI_PAGE_MAP_SUB_COUNT };
+    }
+    u / MI_PAGE_MAP_SUB_COUNT
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[inline]
+pub unsafe fn _mi_page_map_at(idx: usize) -> mi_submap_t {
+    crate::atomic::mi_atomic_load_ptr_acquire(_mi_page_map.add(idx))
+}
+
+#[cfg(target_pointer_width = "32")]
+#[inline]
+pub unsafe fn _mi_ptr_page_ex(p: *const c_void, valid: *mut bool) -> *mut mi_page_t {
+    let idx = _mi_page_map_index(p);
+    let ofs = *_mi_page_map.add(idx) as usize;
+    if !valid.is_null() {
+        *valid = ofs != 0;
+    }
+    ((((p as usize) >> MI_ARENA_SLICE_SHIFT) + 1 - ofs) << MI_ARENA_SLICE_SHIFT) as *mut mi_page_t
+}
+
+#[cfg(target_pointer_width = "32")]
+#[inline]
+pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
+    let mut valid = false;
+    let page = _mi_ptr_page_ex(p, &mut valid);
+    if valid { page } else { ptr::null_mut() }
+}
+
+#[cfg(target_pointer_width = "32")]
+#[inline]
+pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
+    _mi_ptr_page_ex(p, ptr::null_mut())
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[inline]
+pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
+    let mut sub_idx = 0usize;
+    let idx = _mi_page_map_index(p, &mut sub_idx);
+    _mi_page_map_at(idx).add(sub_idx).read()
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[inline]
+pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
+    let mut sub_idx = 0usize;
+    let idx = _mi_page_map_index(p, &mut sub_idx);
+    let sub = _mi_page_map_at(idx);
+    if sub.is_null() {
+        ptr::null_mut()
+    } else {
+        *sub.add(sub_idx)
+    }
+}
+
+#[inline]
+pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
+    crate::mi_assert_internal!(p.is_null() || crate::mimalloc::mi_is_in_heap_region(p));
+    if MI_DEBUG != 0 || MI_SECURE != 0 || cfg!(target_vendor = "apple") {
+        unsafe { _mi_checked_ptr_page(p) }
+    } else {
+        unsafe { _mi_unchecked_ptr_page(p) }
+    }
+}
+
+#[inline]
+pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
+    crate::mi_assert_internal!((*page).block_size > 0);
+    (*page).block_size
+}
+
+#[inline]
+pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
+    (*page).page_start
+}
+
+#[inline]
+pub unsafe fn mi_page_size(page: *const mi_page_t) -> usize {
+    let block_size = unsafe { mi_page_block_size(page) };
+    block_size * ((*page).reserved as usize)
+}
+
+#[inline]
+pub unsafe fn mi_page_area(page: *const mi_page_t, size: *mut usize) -> *mut u8 {
+    if !size.is_null() {
+        *size = unsafe { mi_page_size(page) };
+    }
+    unsafe { mi_page_start(page) }
+}
+
+#[inline]
+pub const fn mi_page_info_size() -> usize {
+    _mi_align_up(size_of::<mi_page_t>(), 16)
+}
+
+#[inline]
+pub unsafe fn mi_page_contains_address(page: *const mi_page_t, p: *const c_void) -> bool {
+    let mut psize = 0usize;
+    let start = unsafe { mi_page_area(page, &mut psize) };
+    start <= p.cast_mut().cast::<u8>() && p.cast::<u8>() < start.add(psize)
+}
+
+#[inline]
+pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
+    (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA
+}
+
+#[inline]
+pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
+    (*page).reserved == 1
+}
+
+#[inline]
+pub unsafe fn mi_page_usable_block_size(page: *const mi_page_t) -> usize {
+    let block_size = unsafe { mi_page_block_size(page) };
+    block_size - MI_PADDING_SIZE
+}
+
+#[inline]
+pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
+    if MI_PAGE_META_IS_SEPARATED != 0 {
+        (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA
+            && page.cast_mut().cast::<c_void>()
+                != _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN)
+    } else {
+        false
+    }
+}
+
+#[inline]
+pub unsafe fn mi_page_slice_start(page: *const mi_page_t) -> *mut u8 {
+    if mi_page_meta_is_separated(page) {
+        _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN).cast::<u8>()
+    } else {
+        page.cast_mut().cast::<u8>()
+    }
+}
+
+#[inline]
+pub unsafe fn mi_page_slice_offset_of(
+    page: *const mi_page_t,
+    offset_relative_to_page_start: usize,
+) -> usize {
+    ((*page).page_start as usize - unsafe { mi_page_slice_start(page) } as usize)
+        + offset_relative_to_page_start
+}
+
+#[inline]
+pub unsafe fn mi_page_committed(page: *const mi_page_t) -> usize {
+    if (*page).slice_committed == 0 {
+        unsafe { mi_page_size(page) }
+    } else {
+        (*page).slice_committed - unsafe { mi_page_slice_offset_of(page, 0) }
+    }
+}
+
+#[inline]
+pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
+    crate::mi_assert_internal!(!page.is_null());
+    (*page).used == 0
+}
+
+#[inline]
+pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
+    crate::atomic::mi_atomic_load_explicit(
+        &(*page).xthread_id,
+        crate::atomic::mi_memory_order_e::mi_memory_order_relaxed,
+    )
+}
+
+#[inline]
+pub unsafe fn mi_page_thread_id(page: *const mi_page_t) -> mi_threadid_t {
+    let xthread_id = unsafe { mi_page_xthread_id(page) };
+    xthread_id & !MI_PAGE_FLAG_MASK
+}
+
+#[inline]
+pub unsafe fn mi_page_flags(page: *const mi_page_t) -> mi_page_flags_t {
+    let xthread_id = unsafe { mi_page_xthread_id(page) };
+    xthread_id & MI_PAGE_FLAG_MASK
+}
+
+#[inline]
+pub fn mi_tf_block(tf: mi_thread_free_t) -> *mut mi_block_t {
+    (tf & !1usize) as *mut mi_block_t
+}
+
+#[inline]
+pub const fn mi_tf_is_owned(tf: mi_thread_free_t) -> bool {
+    (tf & 1) == 1
+}
+
+#[inline]
+pub fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_free_t {
+    block as usize | if owned { 1 } else { 0 }
+}
+
+#[inline]
+pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
+    mi_tf_block(crate::atomic::mi_atomic_load_explicit(
+        &(*page).xthread_free,
+        crate::atomic::mi_memory_order_e::mi_memory_order_relaxed,
+    ))
+}
+
+#[inline]
+pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
+    ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
 }
 
 #[inline]

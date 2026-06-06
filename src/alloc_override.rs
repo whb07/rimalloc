@@ -10,15 +10,17 @@
     unsafe_op_in_unsafe_fn
 )]
 
-#[cfg(target_os = "macos")]
-use core::ffi::c_char;
-use core::ffi::c_void;
+use core::ffi::{c_char, c_int, c_void};
 
 pub type mi_nothrow_t = *mut c_void;
 
 pub const MI_OSX_IS_INTERPOSED: usize = 0;
 #[cfg(target_os = "macos")]
 pub const MI_OSX_ZONE: usize = 0;
+pub const MI_FORWARD: () = ();
+pub const MI_FORWARD1: () = ();
+pub const MI_FORWARD02: () = ();
+pub const MI_FORWARD3: () = ();
 
 #[macro_export]
 macro_rules! MI_FORWARD1 {
@@ -694,4 +696,169 @@ pub unsafe fn mi_operator_new_array_aligned_nothrow(
 ) -> *mut c_void {
     crate::MI_UNUSED!(tag);
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_malloc(size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc(size) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_calloc(count: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_calloc(count, size) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_realloc(p, newsize) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_free(p: *mut c_void) {
+    unsafe { crate::mimalloc::mi_free(p) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_strdup(s: *const c_char) -> *mut c_char {
+    unsafe { crate::mimalloc::mi_strdup(s) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_strndup(s: *const c_char, n: usize) -> *mut c_char {
+    unsafe { crate::mimalloc::mi_strndup(s, n) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_reallocf(p: *mut c_void, newsize: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_reallocf(p, newsize) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_malloc_size(p: *const c_void) -> usize {
+    unsafe { crate::mimalloc::mi_usable_size(p) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_malloc_usable_size(p: *const c_void) -> usize {
+    unsafe { crate::mimalloc::mi_usable_size(p) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_valloc(size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_valloc(size) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_vfree(p: *mut c_void) {
+    unsafe { crate::mimalloc::mi_free(p) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> c_int {
+    unsafe { crate::mimalloc::mi_posix_memalign(p, alignment, size) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_aligned_alloc(alignment: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_aligned_alloc(alignment, size) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_cfree(p: *mut c_void) {
+    unsafe { crate::mimalloc::mi_free(p) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_pvalloc(size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_pvalloc(size) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_memalign(alignment: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_memalign(alignment, size) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_aligned_malloc(size: usize, alignment: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc_aligned(size, alignment) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_reallocarray(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_reallocarray(p, count, size) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_reallocarr(ptrp: *mut *mut c_void, count: usize, size: usize) -> c_int {
+    unsafe { crate::mimalloc::mi_reallocarr(ptrp, count, size) }
+}
+
+#[inline]
+pub unsafe fn mi_wasi_libc_malloc(size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc(size) }
+}
+
+#[inline]
+pub unsafe fn mi_wasi_libc_calloc(count: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_calloc(count, size) }
+}
+
+#[inline]
+pub unsafe fn mi_wasi_libc_realloc(p: *mut c_void, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_realloc(p, size) }
+}
+
+#[inline]
+pub unsafe fn mi_wasi_libc_free(p: *mut c_void) {
+    unsafe { crate::mimalloc::mi_free(p) }
+}
+
+#[inline]
+pub unsafe fn mi_wasi_libc_memalign(alignment: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_memalign(alignment, size) }
+}
+
+#[inline]
+pub unsafe fn mi_linux_libc_malloc(size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_malloc(size) }
+}
+
+#[inline]
+pub unsafe fn mi_linux_libc_calloc(count: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_calloc(count, size) }
+}
+
+#[inline]
+pub unsafe fn mi_linux_libc_realloc(p: *mut c_void, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_realloc(p, size) }
+}
+
+#[inline]
+pub unsafe fn mi_linux_libc_free(p: *mut c_void) {
+    unsafe { crate::mimalloc::mi_free(p) }
+}
+
+#[inline]
+pub unsafe fn mi_linux_libc_cfree(p: *mut c_void) {
+    unsafe { crate::mimalloc::mi_free(p) }
+}
+
+#[inline]
+pub unsafe fn mi_linux_libc_valloc(size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_valloc(size) }
+}
+
+#[inline]
+pub unsafe fn mi_linux_libc_pvalloc(size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_pvalloc(size) }
+}
+
+#[inline]
+pub unsafe fn mi_linux_libc_memalign(alignment: usize, size: usize) -> *mut c_void {
+    unsafe { crate::mimalloc::mi_memalign(alignment, size) }
+}
+
+#[inline]
+pub unsafe fn mi_linux_posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> c_int {
+    unsafe { crate::mimalloc::mi_posix_memalign(p, alignment, size) }
 }

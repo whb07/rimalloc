@@ -22,8 +22,8 @@ pub use crate::bits::{
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
 pub use crate::page::{
-    _mi_page_unfull, MI_LARGE_MAX_OBJ_SIZE, MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE,
-    MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
+    _mi_page_unfull, _mi_theap_page_reclaim, MI_LARGE_MAX_OBJ_SIZE, MI_MAX_ALLOC_SIZE,
+    MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
 };
 pub use crate::stats::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
@@ -804,6 +804,14 @@ pub fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_free_t {
 pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
     mi_tf_block(crate::atomic::mi_atomic_load_explicit(
         &(*page).xthread_free,
+        crate::atomic::mi_memory_order_e::mi_memory_order_relaxed,
+    ))
+}
+
+#[inline]
+pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
+    mi_tf_is_owned(crate::atomic::mi_atomic_load_explicit(
+        &(*(page as *mut mi_page_t)).xthread_free,
         crate::atomic::mi_memory_order_e::mi_memory_order_relaxed,
     ))
 }

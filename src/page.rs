@@ -22,7 +22,7 @@ use crate::internal::{
     _mi_error_message, _mi_page_empty, _mi_ptr_page, _mi_wsize_from_size, MI_DEBUG, MI_SECURE,
     mi_block_next, mi_block_set_next, mi_mem_is_zero, mi_memkind_t, mi_page_area,
     mi_page_block_size, mi_page_contains_address, mi_page_flags, mi_page_is_singleton,
-    mi_page_slice_start, mi_page_thread_free, mi_page_usable_block_size,
+    mi_page_slice_start, mi_page_start, mi_page_thread_free, mi_page_usable_block_size,
 };
 use crate::stats::{MI_BIN_HUGE, MI_LARGE_MAX_OBJ_WSIZE, bin_block_size};
 use crate::track::MI_TRACK_ENABLED;
@@ -375,6 +375,23 @@ pub unsafe fn _mi_page_unfull(page: *mut mi_page_t) {
     let pq = mi_theap_page_queue_of(theap, page);
     mi_page_set_in_full(page, true);
     mi_page_queue_enqueue_from_full(pq, pqfull, page);
+}
+
+#[inline]
+pub unsafe fn _mi_theap_page_reclaim(theap: *mut mi_theap_t, page: *mut mi_page_t) {
+    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        mi_page_slice_start(page).cast(),
+        MI_PAGE_ALIGN,
+    ));
+    crate::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
+    crate::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
+    crate::mi_assert_internal!(mi_page_is_abandoned(page));
+
+    mi_page_set_theap(page, theap);
+    _mi_page_free_collect(page, false);
+    let pq = mi_theap_page_queue_of(theap, page);
+    mi_page_queue_push_at_end(theap, pq, page);
+    crate::mi_assert_expensive!(_mi_page_is_valid(page));
 }
 
 #[inline]

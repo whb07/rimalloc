@@ -891,6 +891,59 @@ pub fn mi_ptr_encode_canary(null: *const c_void, p: *const c_void, keys: &[usize
 }
 
 #[inline]
+pub unsafe fn mi_block_nextx(
+    null: *const c_void,
+    block: *const mi_block_t,
+    keys: &[usize; 2],
+) -> *mut mi_block_t {
+    unsafe { crate::track::mi_track_mem_defined(block.cast_mut().cast(), size_of::<mi_block_t>()) };
+    let next = mi_ptr_decode(null, (*block).next, keys).cast::<mi_block_t>();
+    unsafe {
+        crate::track::mi_track_mem_noaccess(block.cast_mut().cast(), size_of::<mi_block_t>())
+    };
+    next
+}
+
+#[inline]
+pub unsafe fn mi_block_set_nextx(
+    null: *const c_void,
+    block: *mut mi_block_t,
+    next: *const mi_block_t,
+    keys: &[usize; 2],
+) {
+    unsafe { crate::track::mi_track_mem_undefined(block.cast(), size_of::<mi_block_t>()) };
+    (*block).next = mi_ptr_encode(null, next.cast(), keys);
+    unsafe { crate::track::mi_track_mem_noaccess(block.cast(), size_of::<mi_block_t>()) };
+}
+
+#[inline]
+pub unsafe fn mi_block_next(page: *const mi_page_t, block: *const mi_block_t) -> *mut mi_block_t {
+    let mut next = unsafe { mi_block_nextx(page.cast(), block, &(*page).keys) };
+    if !next.is_null() && !mi_is_in_same_page(block.cast(), next.cast()) {
+        unsafe {
+            _mi_error_message(
+                14,
+                c"corrupted free list entry of size %zub at %p: value 0x%zx\n".as_ptr(),
+                mi_page_block_size(page),
+                block,
+                next as usize,
+            );
+        }
+        next = ptr::null_mut();
+    }
+    next
+}
+
+#[inline]
+pub unsafe fn mi_block_set_next(
+    page: *const mi_page_t,
+    block: *mut mi_block_t,
+    next: *const mi_block_t,
+) {
+    unsafe { mi_block_set_nextx(page.cast(), block, next, &(*page).keys) };
+}
+
+#[inline]
 pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
     ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
 }

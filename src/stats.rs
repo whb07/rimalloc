@@ -29,6 +29,7 @@ use crate::types::{
 pub const MI_STAT_VERSION: usize = 5;
 pub const MI_BIN_HUGE: usize = 73;
 pub const MI_LARGE_MAX_OBJ_WSIZE: usize = 8192 * size_of::<usize>();
+pub const MIMALLOC_STATS_H: () = ();
 
 const MI_BIN_WORD_SIZES: [usize; MI_BIN_HUGE + 1] = [
     1,
@@ -114,12 +115,14 @@ pub struct mi_stat_count_t {
     pub peak: i64,
     pub current: i64,
 }
+pub type mi_stat_count_s = mi_stat_count_t;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_stat_counter_t {
     pub total: i64,
 }
+pub type mi_stat_counter_s = mi_stat_counter_t;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -24,15 +24,16 @@ use crate::internal::{
     mi_page_block_size, mi_page_contains_address, mi_page_flags, mi_page_is_singleton,
     mi_page_slice_start, mi_page_start, mi_page_thread_free, mi_page_usable_block_size,
 };
-use crate::stats::{MI_BIN_HUGE, MI_LARGE_MAX_OBJ_WSIZE, bin_block_size};
+use crate::stats::{MI_BIN_HUGE, bin_block_size};
 use crate::track::MI_TRACK_ENABLED;
 use crate::types::{
-    MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_PAGE_FLAG_MASK, MI_PAGE_IN_FULL_QUEUE,
-    MI_SMALL_SIZE_MAX, MI_THREADID_ABANDONED, MI_THREADID_ABANDONED_MAPPED, mi_block_t,
-    mi_page_flags_t, mi_page_queue_t, mi_page_t, mi_theap_t,
+    MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_LARGE_MAX_OBJ_WSIZE, MI_PAGE_FLAG_MASK,
+    MI_PAGE_IN_FULL_QUEUE, MI_SMALL_SIZE_MAX, MI_THREADID_ABANDONED, MI_THREADID_ABANDONED_MAPPED,
+    mi_block_t, mi_page_flags_t, mi_page_queue_t, mi_page_t, mi_theap_t,
 };
 
-pub const MI_PADDING_SIZE: usize = 0;
+pub use crate::types::MI_PADDING_SIZE;
+
 pub const MI_OS_PAGE_SIZE: usize = 4096;
 pub const MI_SMALL_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
 pub const MI_MEDIUM_PAGE_SIZE: usize = 8 * MI_SMALL_PAGE_SIZE;

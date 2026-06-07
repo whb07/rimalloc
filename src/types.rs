@@ -47,6 +47,7 @@ const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 pub const MI_PAGE_MIN_COMMIT_SIZE: usize = crate::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = crate::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
+pub const MI_PAGE_MAX_START_BLOCK_ALIGN2: usize = 4 * crate::bits::MI_KiB;
 pub const MI_MAX_ARENAS: usize = 160;
 pub const MI_ARENA_MAX_SIZE: usize =
     crate::bitmap::MI_BITMAP_MAX_BIT_COUNT * crate::arena::MI_ARENA_SLICE_SIZE;
@@ -81,6 +82,15 @@ pub const MI_PAGE_FLAG_MASK: usize = 0x03;
 pub const MI_THREADID_ABANDONED: usize = 0;
 pub const MI_THREADID_ABANDONED_MAPPED: usize = MI_PAGE_FLAG_MASK + 1;
 pub const MI_PAGES_DIRECT: usize = MI_SMALL_WSIZE_MAX + 1;
+pub const MI_SMALL_PAGE_SIZE: usize = crate::arena::MI_ARENA_SLICE_SIZE;
+pub const MI_MEDIUM_PAGE_SIZE: usize = 8 * MI_SMALL_PAGE_SIZE;
+pub const MI_LARGE_PAGE_SIZE: usize = core::mem::size_of::<usize>() * MI_MEDIUM_PAGE_SIZE;
+pub const MI_LARGE_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {
+    MI_LARGE_PAGE_SIZE / 8
+} else {
+    MI_MEDIUM_PAGE_SIZE / 8
+};
+pub const MI_LARGE_MAX_OBJ_WSIZE: usize = MI_LARGE_MAX_OBJ_SIZE / core::mem::size_of::<usize>();
 
 pub type mi_arena_id_t = *mut c_void;
 pub use crate::internal::mi_memkind_t;
@@ -105,6 +115,20 @@ pub const fn mi_memkind_needs_no_free(memkind: mi_memkind_t) -> bool {
         mi_memkind_t::MI_MEM_NONE | mi_memkind_t::MI_MEM_EXTERNAL | mi_memkind_t::MI_MEM_STATIC
     )
 }
+
+#[inline]
+pub const fn mi_memkind_is_os(memkind: mi_memkind_t) -> bool {
+    matches!(
+        memkind,
+        mi_memkind_t::MI_MEM_OS | mi_memkind_t::MI_MEM_OS_HUGE | mi_memkind_t::MI_MEM_OS_REMAP
+    )
+}
+
+pub const MI_PADDING_SIZE: usize = if MI_PADDING != 0 {
+    core::mem::size_of::<mi_padding_t>()
+} else {
+    0
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

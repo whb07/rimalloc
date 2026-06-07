@@ -45,6 +45,7 @@ pub const MCGEN_EVENTWRITETRANSFER_EventWriteTransfer: &str = "EventWriteTransfe
 pub const MCGEN_EVENTWRITETRANSFER: &str = MCGEN_EVENTWRITETRANSFER_EventWriteTransfer;
 pub const MI_HAS_CONSOLE_IO: usize = 1;
 pub const MI_WIN_INIT_USE_CRT_TLS: usize = 1;
+pub const MI_WIN_INIT_USE_FLS: usize = 0;
 pub const MI_WIN_INIT_USE_TLS_DLLMAIN: usize = 0;
 pub const MI_PRIM_HAS_PROCESS_ATTACH: usize = 1;
 pub const MI_PRIM_HAS_ALLOCATOR_INIT: usize = 1;
@@ -847,17 +848,33 @@ pub unsafe extern "system" fn mi_fls_done(value: PVOID) {
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {}
+pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
+    if MI_WIN_INIT_USE_FLS != 0 {
+        unsafe {
+            mi_fls_key = FlsAlloc(Some(mi_fls_done));
+        }
+    }
+}
 
 #[inline]
-pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {}
+pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
+    if MI_WIN_INIT_USE_FLS != 0 && unsafe { mi_fls_key } != FLS_OUT_OF_INDEXES {
+        unsafe {
+            FlsFree(mi_fls_key);
+            mi_fls_key = FLS_OUT_OF_INDEXES;
+        }
+    }
+}
 
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
-    if unsafe { mi_fls_key } != FLS_OUT_OF_INDEXES {
+    if MI_WIN_INIT_USE_FLS != 0 {
+        crate::mi_assert_internal!(unsafe { mi_fls_key } != FLS_OUT_OF_INDEXES);
         unsafe {
             FlsSetValue(mi_fls_key, theap.cast::<c_void>());
         }
+    } else {
+        let _ = theap;
     }
 }
 
@@ -876,6 +893,23 @@ pub unsafe extern "system" fn mi_dll_main_raw(
 ) -> BOOL {
     unsafe { mi_win_main(module, reason, reserved) };
     TRUE as BOOL
+}
+
+#[allow(dead_code)]
+#[inline]
+unsafe extern "system" fn DllMain(inst: HINSTANCE, reason: DWORD, reserved: LPVOID) -> BOOL {
+    unsafe { mi_win_main(inst.cast::<c_void>(), reason, reserved) };
+    TRUE as BOOL
+}
+
+#[allow(dead_code)]
+#[inline]
+unsafe extern "C" fn mi_process_attach() -> c_int {
+    unsafe {
+        mi_win_main(null_mut(), DLL_PROCESS_ATTACH, null_mut());
+        atexit(Some(crate::init::_mi_auto_process_done));
+    }
+    0
 }
 
 #[inline]
@@ -1214,6 +1248,50 @@ unsafe fn win_virtual_alloc_prim_once(
 }
 
 #[inline]
+unsafe fn win_virtual_alloc_prim(
+    addr: *mut c_void,
+    size: usize,
+    try_alignment: usize,
+    flags: DWORD,
+) -> *mut c_void {
+    let mut max_retry_msecs = mi_option_get_clamp(mi_option_t::mi_option_retry_on_oom, 0, 2000);
+    if max_retry_msecs == 1 {
+        max_retry_msecs = 100;
+    }
+    let mut tries = 1u32;
+    loop {
+        let p = unsafe { win_virtual_alloc_prim_once(addr, size, try_alignment, flags) };
+        if !p.is_null() {
+            return p;
+        }
+        let err = unsafe { GetLastError() };
+        if max_retry_msecs > 0
+            && try_alignment <= 8 * MI_MiB
+            && (flags & MEM_COMMIT) != 0
+            && (flags & MEM_LARGE_PAGES) == 0
+            && win_is_out_of_memory_error(err)
+            && tries <= 10
+        {
+            _mi_warning_message(format_args!(
+                "out-of-memory on OS allocation, try again... (attempt {}, 0x{:x} bytes, error code: 0x{:x}, address: {:p}, alignment: 0x{:x}, flags: 0x{:x})\n",
+                tries, size, err, addr, try_alignment, flags
+            ));
+            let mut sleep_msecs = (tries as i64) * 40;
+            if sleep_msecs > max_retry_msecs {
+                sleep_msecs = max_retry_msecs;
+            }
+            max_retry_msecs -= sleep_msecs;
+            unsafe {
+                Sleep(sleep_msecs as DWORD);
+            }
+            tries += 1;
+            continue;
+        }
+        return null_mut();
+    }
+}
+
+#[inline]
 unsafe fn win_virtual_alloc(
     addr: *mut c_void,
     size: usize,
@@ -1266,42 +1344,7 @@ unsafe fn win_virtual_alloc(
                 *is_large = (flags & MEM_LARGE_PAGES) != 0;
             }
         }
-        let mut max_retry_msecs = mi_option_get_clamp(mi_option_t::mi_option_retry_on_oom, 0, 2000);
-        if max_retry_msecs == 1 {
-            max_retry_msecs = 100;
-        }
-        let mut tries = 1u32;
-        loop {
-            p = unsafe { win_virtual_alloc_prim_once(addr, size, try_alignment, flags) };
-            if !p.is_null() {
-                break;
-            }
-            let err = unsafe { GetLastError() };
-            if max_retry_msecs > 0
-                && try_alignment <= 8 * MI_MiB
-                && (flags & MEM_COMMIT) != 0
-                && (flags & MEM_LARGE_PAGES) == 0
-                && win_is_out_of_memory_error(err)
-            {
-                _mi_warning_message(format_args!(
-                    "out-of-memory on OS allocation, try again... (attempt {}, 0x{:x} bytes, error code: 0x{:x}, address: {:p}, alignment: 0x{:x}, flags: 0x{:x})\n",
-                    tries, size, err, addr, try_alignment, flags
-                ));
-                let mut sleep_msecs = (tries as i64) * 40;
-                if sleep_msecs > max_retry_msecs {
-                    sleep_msecs = max_retry_msecs;
-                }
-                max_retry_msecs -= sleep_msecs;
-                unsafe {
-                    Sleep(sleep_msecs as DWORD);
-                }
-                tries += 1;
-                if tries <= 10 {
-                    continue;
-                }
-            }
-            break;
-        }
+        p = unsafe { win_virtual_alloc_prim(addr, size, try_alignment, flags) };
     }
 
     p

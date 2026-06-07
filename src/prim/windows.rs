@@ -539,6 +539,31 @@ macro_rules! _mcgen_PASTE3 {
     };
 }
 
+#[repr(C)]
+pub struct MCGEN_EVENTREGISTER_definition_must_be_an_unqualified_identifier_EventRegister {
+    _private: [u8; 0],
+}
+
+pub type MCGEN_EVENTREGISTER_must_not_be_redefined_between_headers =
+    MCGEN_EVENTREGISTER_definition_must_be_an_unqualified_identifier_EventRegister;
+
+#[repr(C)]
+pub struct MCGEN_EVENTUNREGISTER_definition_must_be_an_unqualified_identifier_EventUnregister {
+    _private: [u8; 0],
+}
+
+pub type MCGEN_EVENTUNREGISTER_must_not_be_redefined_between_headers =
+    MCGEN_EVENTUNREGISTER_definition_must_be_an_unqualified_identifier_EventUnregister;
+
+#[repr(C)]
+pub struct MCGEN_EVENTSETINFORMATION_definition_must_be_an_unqualified_identifier_EventSetInformation
+{
+    _private: [u8; 0],
+}
+
+pub type MCGEN_EVENTSETINFORMATION_must_not_be_redefined_between_headers =
+    MCGEN_EVENTSETINFORMATION_definition_must_be_an_unqualified_identifier_EventSetInformation;
+
 pub type MCGEN_EVENTREGISTER_must_not_be_a_functionLike_macro_MCGEN_EVENTREGISTER = c_void;
 pub type MCGEN_EVENTUNREGISTER_must_not_be_a_functionLike_macro_MCGEN_EVENTUNREGISTER = c_void;
 pub type MCGEN_EVENTSETINFORMATION_must_not_be_a_functionLike_macro_MCGEN_EVENTSETINFORMATION =
@@ -797,6 +822,7 @@ pub static mut microsoft_windows_mimallocEnableBits: [ULONG; 1] = [0; 1];
 pub static microsoft_windows_mimallocKeywords: [ULONGLONG; 1] = [0x0];
 pub static microsoft_windows_mimallocLevels: [UCHAR; 1] = [0x4];
 
+// Rust counterpart of the header's `__declspec(selectany)` provider context.
 pub static mut ETW_MI_Provider_Context: MCGEN_TRACE_CONTEXT = MCGEN_TRACE_CONTEXT {
     RegistrationHandle: 0,
     Logger: 0,

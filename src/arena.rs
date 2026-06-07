@@ -1,6 +1,6 @@
 //! Arena management
 
-use core::ffi::c_void;
+use core::ffi::{c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
@@ -13,8 +13,10 @@ use crate::internal::{
     mi_block_next, mi_memid_t, mi_memkind_t, mi_page_area, mi_page_block_size, mi_page_heap,
     mi_page_start, mi_page_usable_block_size, mi_size_of_slices,
 };
+use crate::mimalloc::mi_manage_os_memory_ex;
 use crate::options::{mi_option_get_size, mi_option_t};
 use crate::page::{_mi_page_free_collect, MI_SMALL_PAGE_SIZE};
+use crate::prim::_mi_prim_free;
 use crate::types::{
     mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t, mi_heap_area_t, mi_heap_t,
     mi_msecs_t, mi_page_t, mi_subproc_t,
@@ -33,6 +35,7 @@ const MI_MAX_ARENAS: usize = 160;
 const MI_ARENA_MIN_OBJ_SIZE: usize = MI_ARENA_SLICE_SIZE;
 const MI_ARENA_MAX_SIZE: usize = MI_BITMAP_MAX_BIT_COUNT * MI_ARENA_SLICE_SIZE;
 const MI_MAX_BLOCKS: usize = MI_SMALL_PAGE_SIZE / size_of::<usize>();
+const ENOMEM: c_int = 12;
 
 #[repr(C)]
 struct MiHeapPrefix {
@@ -614,4 +617,130 @@ unsafe fn mi_arena_is_suitable_ex(
         }
     }
     true
+}
+
+unsafe fn mi_reserve_os_memory_ex2(
+    subproc: *mut mi_subproc_t,
+    size: usize,
+    commit: bool,
+    allow_large: bool,
+    exclusive: bool,
+    arena_id: *mut mi_arena_id_t,
+) -> c_int {
+    let _ = allow_large;
+    if !arena_id.is_null() {
+        unsafe { *arena_id = _mi_arena_id_none() };
+    }
+
+    let size = _mi_align_up(size, MI_ARENA_SLICE_SIZE);
+    let mut base = ptr::null_mut();
+    let mut full_size = 0usize;
+    let start = unsafe {
+        crate::os::mi_os_alloc_aligned(
+            size,
+            MI_ARENA_SLICE_ALIGN,
+            commit,
+            ptr::addr_of_mut!(base),
+            ptr::addr_of_mut!(full_size),
+        )
+    };
+    if start.is_null() {
+        return ENOMEM;
+    }
+
+    if unsafe { mi_manage_os_memory_ex(start, size, commit, false, false, -1, exclusive, arena_id) }
+    {
+        let _ = subproc;
+        crate::options::_mi_verbose_message(format_args!(
+            "reserved {} KiB memory\n",
+            _mi_divide_up(size, 1024)
+        ));
+        0
+    } else {
+        let _ = unsafe { _mi_prim_free(base, full_size) };
+        crate::options::_mi_verbose_message(format_args!(
+            "failed to reserve {} KiB memory\n",
+            _mi_divide_up(size, 1024)
+        ));
+        ENOMEM
+    }
+}
+
+/// # Safety
+/// Matches the C API and may mutate global arena state through the active sub-process.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_reserve_os_memory_ex(
+    size: usize,
+    commit: bool,
+    allow_large: bool,
+    exclusive: bool,
+    arena_id: *mut mi_arena_id_t,
+) -> c_int {
+    unsafe {
+        mi_reserve_os_memory_ex2(
+            _mi_subproc(),
+            size,
+            commit,
+            allow_large,
+            exclusive,
+            arena_id,
+        )
+    }
+}
+
+/// # Safety
+/// Matches the C API and may mutate global arena state through the active sub-process.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_reserve_os_memory(
+    size: usize,
+    commit: bool,
+    allow_large: bool,
+) -> c_int {
+    unsafe { mi_reserve_os_memory_ex(size, commit, allow_large, false, ptr::null_mut()) }
+}
+
+/// # Safety
+/// Matches the C API and reads the current sub-process arena registry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_debug_show_arenas() {
+    let subproc = unsafe { _mi_subproc() };
+    if subproc.is_null() {
+        return;
+    }
+
+    let max_arenas = unsafe { mi_arenas_get_count(subproc) };
+    let mut shown = 0usize;
+    for i in 0..max_arenas {
+        let arena = unsafe { mi_arena_from_index(subproc, i) };
+        if arena.is_null() {
+            break;
+        }
+        let arena = arena.cast::<MiArenaPrefix>();
+        crate::options::_mi_raw_message(format_args!(
+            "{}arena {} at {:p}: {} slices ({} MiB){}{}, subproc: {:p}, numa: {}\n",
+            if unsafe { (*arena).parent.is_null() } {
+                ""
+            } else {
+                "(sub)"
+            },
+            i,
+            arena,
+            unsafe { (*arena).slice_count },
+            mi_size_of_slices(unsafe { (*arena).slice_count }) / (1024 * 1024),
+            if unsafe { (*arena).memid.is_pinned } {
+                ", pinned"
+            } else {
+                ""
+            },
+            if unsafe { (*arena).is_exclusive } {
+                ", exclusive"
+            } else {
+                ""
+            },
+            unsafe { (*arena).subproc },
+            unsafe { (*arena).numa_node },
+        ));
+        shown += 1;
+    }
+    crate::options::_mi_raw_message(format_args!("total arenas: {}\n", shown));
 }

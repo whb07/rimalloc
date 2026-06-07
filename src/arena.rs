@@ -7,41 +7,43 @@ use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{
     EFAULT, mi_atomic_cas_ptr_strong_release, mi_atomic_cas_strong_acq_rel,
-    mi_atomic_cas_weak_acq_rel, mi_atomic_casi64_strong_acq_rel, mi_atomic_load_explicit,
-    mi_atomic_load_ptr_acquire, mi_atomic_store_ptr_release, mi_lock_acquire, mi_lock_release,
-    mi_memory_order_e,
+    mi_atomic_cas_weak_acq_rel, mi_atomic_casi64_strong_acq_rel, mi_atomic_guard_t,
+    mi_atomic_load_explicit, mi_atomic_load_ptr_acquire, mi_atomic_loadi64_acquire,
+    mi_atomic_loadi64_explicit, mi_atomic_store_ptr_release, mi_atomic_storei64_release,
+    mi_lock_acquire, mi_lock_release, mi_memory_order_e,
 };
 use crate::bitmap::{
-    MI_BCHUNK_BITS, MI_BCHUNK_FIELDS, MI_BCHUNK_SIZE, MI_BFIELD_BITS, MI_BITMAP_MAX_BIT_COUNT,
-    mi_bbitmap_bsr_inv, mi_bbitmap_chunk_count, mi_bbitmap_debug_get_bin, mi_bbitmap_init,
-    mi_bbitmap_is_clearN, mi_bbitmap_is_setN, mi_bbitmap_setN, mi_bbitmap_size, mi_bbitmap_t,
-    mi_bbitmap_try_clearNC, mi_bbitmap_try_find_and_clearN, mi_bbitmap_unsafe_setN, mi_bchunk_t,
-    mi_bchunkmap_t, mi_bfield_t, mi_bitmap_clear, mi_bitmap_clear_once_set, mi_bitmap_clearN,
-    mi_bitmap_init, mi_bitmap_is_clearN, mi_bitmap_is_set, mi_bitmap_is_setN, mi_bitmap_popcountN,
-    mi_bitmap_set, mi_bitmap_setN, mi_bitmap_size, mi_bitmap_t, mi_bitmap_try_find_and_claim,
-    mi_bitmap_unsafe_setN,
+    _mi_bitmap_forall_set, _mi_bitmap_forall_setc_rangesn, MI_BCHUNK_BITS, MI_BCHUNK_FIELDS,
+    MI_BCHUNK_SIZE, MI_BFIELD_BITS, MI_BITMAP_MAX_BIT_COUNT, mi_bbitmap_bsr_inv,
+    mi_bbitmap_chunk_count, mi_bbitmap_debug_get_bin, mi_bbitmap_init, mi_bbitmap_is_clearN,
+    mi_bbitmap_is_setN, mi_bbitmap_setN, mi_bbitmap_size, mi_bbitmap_t, mi_bbitmap_try_clearNC,
+    mi_bbitmap_try_find_and_clearN, mi_bbitmap_unsafe_setN, mi_bchunk_t, mi_bchunkmap_t,
+    mi_bfield_t, mi_bitmap_clear, mi_bitmap_clear_once_set, mi_bitmap_clearN, mi_bitmap_init,
+    mi_bitmap_is_all_clear, mi_bitmap_is_clearN, mi_bitmap_is_set, mi_bitmap_is_setN,
+    mi_bitmap_popcountN, mi_bitmap_set, mi_bitmap_setN, mi_bitmap_size, mi_bitmap_t,
+    mi_bitmap_try_find_and_claim, mi_bitmap_unsafe_setN,
 };
 use crate::bits::{MI_INTPTR_BITS, MI_MiB};
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt,
-    __mi_stat_counter_increase, __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase,
-    __mi_stat_increase_mt, _mi_align_up, _mi_clamp, _mi_divide_up, _mi_is_heap_main,
-    _mi_memid_create, _mi_memid_none, _mi_meta_free, _mi_meta_is_meta_page, _mi_os_commit,
-    _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex, _mi_os_has_overcommit,
-    _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc, _mi_theap_heap,
-    _mi_theap_random_next, _mi_thread_id, _mi_toupper, MI_DEBUG, mi_block_next, mi_block_set_next,
-    mi_mem_is_zero, mi_memid_t, mi_memkind_t, mi_mul_overflow, mi_page_all_free, mi_page_area,
-    mi_page_block_size, mi_page_claim_ownership, mi_page_clear_abandoned_mapped, mi_page_committed,
-    mi_page_heap, mi_page_immediate_available, mi_page_is_abandoned, mi_page_is_abandoned_mapped,
-    mi_page_is_full, mi_page_is_owned, mi_page_is_singleton, mi_page_meta_is_separated,
-    mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_size_of_slices,
-    mi_slice_count_of_size, mi_tf_block, mi_tf_create, mi_tf_is_owned,
+    __mi_stat_counter_increase, __mi_stat_counter_increase_mt, __mi_stat_decrease,
+    __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt, _mi_align_up, _mi_clamp,
+    _mi_divide_up, _mi_is_heap_main, _mi_memid_create, _mi_memid_none, _mi_meta_free,
+    _mi_meta_is_meta_page, _mi_os_commit, _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex,
+    _mi_os_has_overcommit, _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc,
+    _mi_theap_heap, _mi_theap_random_next, _mi_thread_id, _mi_toupper, MI_DEBUG, mi_block_next,
+    mi_block_set_next, mi_mem_is_zero, mi_memid_t, mi_memkind_t, mi_mul_overflow, mi_page_all_free,
+    mi_page_area, mi_page_block_size, mi_page_claim_ownership, mi_page_clear_abandoned_mapped,
+    mi_page_committed, mi_page_heap, mi_page_immediate_available, mi_page_is_abandoned,
+    mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned, mi_page_is_singleton,
+    mi_page_meta_is_separated, mi_page_slice_start, mi_page_start, mi_page_usable_block_size,
+    mi_size_of_slices, mi_slice_count_of_size, mi_tf_block, mi_tf_create, mi_tf_is_owned,
 };
-use crate::mimalloc::{mi_heap_main, mi_heap_zalloc_aligned};
+use crate::mimalloc::{mi_heap_main, mi_heap_theap, mi_heap_zalloc_aligned};
 use crate::options::{mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t};
 use crate::os::{
     _mi_os_alloc_aligned, _mi_os_alloc_aligned_at_offset, _mi_os_alloc_huge_os_pages,
-    _mi_os_numa_node_count,
+    _mi_os_minimal_purge_size, _mi_os_numa_node_count,
 };
 use crate::page::{
     _mi_bin, _mi_page_free_collect, _mi_page_stats_bin, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE,
@@ -91,8 +93,6 @@ unsafe extern "C" {
         numa_node: c_int,
         memid: *mut mi_memid_t,
     ) -> *mut c_void;
-    #[allow(dead_code)]
-    fn mi_arenas_try_purge(force: bool, visit_all: bool, subproc: *mut mi_subproc_t, tseq: usize);
 }
 
 #[allow(non_camel_case_types)]
@@ -364,7 +364,7 @@ unsafe fn mi_heap_visit_page(page: *mut mi_page_t, vinfo: *mut mi_heap_visit_inf
 }
 
 #[allow(dead_code)]
-unsafe fn mi_heap_visit_page_at(
+unsafe extern "C" fn mi_heap_visit_page_at(
     slice_index: usize,
     _slice_count: usize,
     arena: *mut mi_arena_t,
@@ -373,6 +373,261 @@ unsafe fn mi_heap_visit_page_at(
     let vinfo = arg.cast::<mi_heap_visit_info_t>();
     let page = unsafe { mi_arena_page_at_slice(arena, slice_index) };
     unsafe { mi_heap_visit_page(page, vinfo) }
+}
+
+/// # Safety
+/// Visits pages and optionally blocks for a heap using the C ABI callback contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_heap_visit_blocks(
+    mut heap: *mut mi_heap_t,
+    abandoned_only: bool,
+    visit_blocks: bool,
+    visitor: mi_block_visit_fun,
+    arg: *mut c_void,
+) -> bool {
+    if heap.is_null() {
+        heap = unsafe { mi_heap_main() };
+    }
+
+    let mut visit_info = mi_heap_visit_info_t {
+        heap,
+        visitor,
+        arg,
+        visit_blocks,
+    };
+    let mut ok = true;
+    unsafe {
+        mi_forall_arenas(heap, ptr::null_mut(), 0, |arena| {
+            let arena_pages = mi_heap_ensure_arena_pages(heap, arena);
+            if ok && !arena_pages.is_null() {
+                if abandoned_only {
+                    for bin in 0..MI_BIN_COUNT {
+                        if !ok {
+                            break;
+                        }
+                        if (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin]
+                            .load(Ordering::Relaxed)
+                            > 0
+                        {
+                            ok = _mi_bitmap_forall_set(
+                                (*arena_pages).pages_abandoned[bin],
+                                mi_heap_visit_page_at,
+                                arena,
+                                ptr::addr_of_mut!(visit_info).cast(),
+                            );
+                        }
+                    }
+                } else {
+                    ok = _mi_bitmap_forall_set(
+                        (*arena_pages).pages,
+                        mi_heap_visit_page_at,
+                        arena,
+                        ptr::addr_of_mut!(visit_info).cast(),
+                    );
+                }
+            }
+            ok
+        });
+    }
+    if !ok {
+        return false;
+    }
+
+    let page = unsafe {
+        mi_lock_acquire(ptr::addr_of_mut!(
+            (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
+        ));
+        let page = (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages;
+        mi_lock_release(ptr::addr_of_mut!(
+            (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
+        ));
+        page
+    };
+    let mut page = page;
+    while ok && !page.is_null() {
+        let next = unsafe { (*page).next };
+        ok = unsafe { mi_heap_visit_page(page, ptr::addr_of_mut!(visit_info)) };
+        page = next;
+    }
+
+    ok
+}
+
+/// # Safety
+/// Public C API wrapper over `_mi_heap_visit_blocks`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_visit_blocks(
+    heap: *mut mi_heap_t,
+    visit_blocks: bool,
+    visitor: mi_block_visit_fun,
+    arg: *mut c_void,
+) -> bool {
+    unsafe { _mi_heap_visit_blocks(heap, false, visit_blocks, visitor, arg) }
+}
+
+/// # Safety
+/// Public C API wrapper over `_mi_heap_visit_blocks` for abandoned pages only.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_visit_abandoned_blocks(
+    heap: *mut mi_heap_t,
+    visit_blocks: bool,
+    visitor: mi_block_visit_fun,
+    arg: *mut c_void,
+) -> bool {
+    unsafe { _mi_heap_visit_blocks(heap, true, visit_blocks, visitor, arg) }
+}
+
+#[allow(dead_code)]
+unsafe extern "C" fn mi_heap_delete_page(
+    heap: *const mi_heap_t,
+    area: *const mi_heap_area_t,
+    _block: *mut c_void,
+    _block_size: usize,
+    arg: *mut c_void,
+) -> bool {
+    let info = arg.cast::<mi_heap_delete_visit_info_t>();
+    let mut heap_target = unsafe { (*info).heap_target };
+    let theap = ptr::null_mut::<mi_theap_t>();
+    let page = unsafe { (*area).reserved1.cast::<mi_page_t>() };
+
+    unsafe { mi_page_claim_ownership(page) };
+    if unsafe { mi_page_is_abandoned(page) } {
+        unsafe { _mi_arenas_page_unabandon(page, theap) };
+    } else {
+        unsafe {
+            (*page).next = ptr::null_mut();
+            (*page).prev = ptr::null_mut();
+            mi_page_set_theap(page, ptr::null_mut());
+        }
+    }
+    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+
+    if unsafe { (*page).used == 0 } {
+        unsafe { _mi_arenas_page_free(page, theap) };
+    } else if heap_target.is_null() {
+        unsafe { (*page).used = 0 };
+        unsafe { _mi_arenas_page_free(page, theap) };
+    } else {
+        let sbin = unsafe { _mi_page_stats_bin(page) };
+        let mut slice_index = 0usize;
+        let mut slice_count = 0usize;
+        let mut arena_pages = ptr::null_mut();
+        let arena = unsafe {
+            mi_page_arena_pages(page, &mut slice_index, &mut slice_count, &mut arena_pages)
+        };
+        crate::mi_assert_internal!(unsafe { mi_bitmap_is_set((*arena_pages).pages, slice_index) });
+        unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
+        if !theap.is_null() {
+            unsafe {
+                __mi_stat_decrease(&mut (*theap).stats.page_bins[sbin], 1);
+                __mi_stat_decrease(&mut (*theap).stats.pages, 1);
+            }
+        } else {
+            let heap = heap as *mut mi_heap_t;
+            unsafe {
+                __mi_stat_decrease_mt(&mut (*heap).stats.page_bins[sbin], 1);
+                __mi_stat_decrease_mt(&mut (*heap).stats.pages, 1);
+            }
+        }
+        let mut theap_target = unsafe { (*info).theap_target };
+
+        let mut arena_pages_target = unsafe { mi_heap_ensure_arena_pages(heap_target, arena) };
+        if arena_pages_target.is_null() {
+            heap_target = unsafe { mi_heap_main() };
+            theap_target = unsafe { mi_heap_theap(heap_target) };
+            arena_pages_target = unsafe { mi_heap_ensure_arena_pages(heap_target, arena) };
+            crate::mi_assert_internal!(!arena_pages_target.is_null());
+        }
+        crate::mi_assert_internal!(unsafe {
+            !mi_bitmap_is_set((*arena_pages_target).pages, slice_index)
+        });
+        unsafe { mi_bitmap_set((*arena_pages_target).pages, slice_index) };
+        unsafe { (*page).heap = heap_target };
+        unsafe {
+            __mi_stat_increase(&mut (*theap_target).stats.page_bins[sbin], 1);
+            __mi_stat_increase(&mut (*theap_target).stats.pages, 1);
+        }
+        unsafe { _mi_arenas_page_abandon(page, theap_target) };
+    }
+    true
+}
+
+#[allow(dead_code)]
+unsafe fn mi_heap_delete_pages(heap: *mut mi_heap_t, heap_target: *mut mi_heap_t) {
+    let theap_target = if heap_target.is_null() {
+        ptr::null_mut()
+    } else {
+        unsafe { mi_heap_theap(heap_target) }
+    };
+    let mut info = mi_heap_delete_visit_info_t {
+        heap_target,
+        theap_target,
+        theap: ptr::null_mut(),
+    };
+    let _ = unsafe {
+        _mi_heap_visit_blocks(
+            heap,
+            false,
+            false,
+            mi_heap_delete_page,
+            ptr::addr_of_mut!(info).cast(),
+        )
+    };
+    if MI_DEBUG > 1 {
+        for i in 0..MI_ARENA_BIN_COUNT {
+            let arena_pages =
+                unsafe { (*heap.cast::<MiHeapPrefix>()).arena_pages[i].load(Ordering::Acquire) }
+                    .cast::<mi_arena_pages_t>();
+            if !arena_pages.is_null() {
+                crate::mi_assert_internal!(unsafe { mi_bitmap_is_all_clear((*arena_pages).pages) });
+            }
+        }
+        unsafe {
+            mi_lock_acquire(ptr::addr_of_mut!(
+                (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
+            ))
+        };
+        crate::mi_assert_internal!(unsafe {
+            (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages.is_null()
+        });
+        unsafe {
+            mi_lock_release(ptr::addr_of_mut!(
+                (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
+            ))
+        };
+        for i in 0..MI_BIN_COUNT {
+            crate::mi_assert_internal!(unsafe {
+                (*heap.cast::<MiHeapPrefix>()).abandoned_count[i].load(Ordering::Relaxed) == 0
+            });
+        }
+    }
+}
+
+/// # Safety
+/// Moves all pages from one heap to another following the original internal ABI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_heap_move_pages(
+    heap_from: *mut mi_heap_t,
+    mut heap_to: *mut mi_heap_t,
+) {
+    if unsafe { _mi_is_heap_main(heap_from) } {
+        return;
+    }
+    if heap_to.is_null() {
+        heap_to = unsafe { mi_heap_main() };
+    }
+    unsafe { mi_heap_delete_pages(heap_from, heap_to) };
+}
+
+/// # Safety
+/// Destroys all pages owned by a non-main heap following the original internal ABI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t) {
+    if unsafe { _mi_is_heap_main(heap_from) } {
+        return;
+    }
+    unsafe { mi_heap_delete_pages(heap_from, ptr::null_mut()) };
 }
 
 pub extern "C" fn mi_arena_min_alignment() -> usize {
@@ -2943,6 +3198,163 @@ unsafe fn mi_arena_try_purge_range(
     } else {
         false
     }
+}
+
+#[allow(dead_code)]
+unsafe extern "C" fn mi_arena_try_purge_visitor(
+    slice_index: usize,
+    slice_count: usize,
+    arena: *mut mi_arena_t,
+    arg: *mut c_void,
+) -> bool {
+    let vinfo = arg.cast::<mi_purge_visit_info_t>();
+    if unsafe { mi_arena_try_purge_range(arena, slice_index, slice_count) } {
+        unsafe {
+            (*vinfo).any_purged = true;
+            (*vinfo).all_purged = true;
+        }
+    } else if slice_count > 1 {
+        for i in 0..slice_count {
+            let purged = unsafe { mi_arena_try_purge_range(arena, slice_index + i, 1) };
+            unsafe {
+                (*vinfo).any_purged = (*vinfo).any_purged || purged;
+                (*vinfo).all_purged = (*vinfo).all_purged && purged;
+            }
+        }
+    }
+    true
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_try_purge(arena: *mut mi_arena_t, now: mi_msecs_t, force: bool) -> c_int {
+    if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
+        return -1;
+    }
+
+    let expire = unsafe {
+        mi_atomic_loadi64_explicit(
+            ptr::addr_of!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast(),
+            mi_memory_order_e::mi_memory_order_relaxed,
+        )
+    };
+    if !force {
+        if expire == 0 {
+            return -1;
+        }
+        if expire > now {
+            return 0;
+        }
+    }
+
+    unsafe {
+        mi_atomic_storei64_release(
+            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast(),
+            0,
+        )
+    };
+    unsafe {
+        __mi_stat_counter_increase_mt(
+            &mut (*(*arena.cast::<MiArenaPrefix>()).subproc)
+                .stats
+                .arena_purges,
+            1,
+        )
+    };
+
+    let mut vinfo = mi_purge_visit_info_t {
+        now,
+        delay: unsafe { mi_arena_purge_delay() },
+        all_purged: true,
+        any_purged: false,
+    };
+    let minslices = mi_slice_count_of_size(unsafe { _mi_os_minimal_purge_size() });
+    unsafe {
+        _mi_bitmap_forall_setc_rangesn(
+            (*arena.cast::<MiArenaPrefix>()).slices_purge,
+            minslices,
+            mi_arena_try_purge_visitor,
+            arena,
+            ptr::addr_of_mut!(vinfo).cast(),
+        )
+    };
+
+    if vinfo.any_purged { 1 } else { -1 }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arenas_try_purge(
+    force: bool,
+    visit_all: bool,
+    subproc: *mut mi_subproc_t,
+    tseq: usize,
+) {
+    let delay = unsafe { mi_arena_purge_delay() };
+    if unsafe { _mi_preloading() } || delay <= 0 {
+        return;
+    }
+
+    let now = crate::stats::_mi_clock_now();
+    let arenas_expire = unsafe {
+        mi_atomic_loadi64_acquire(
+            ptr::addr_of!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast(),
+        )
+    };
+    if !visit_all && !force && (arenas_expire == 0 || arenas_expire > now) {
+        return;
+    }
+
+    let max_arena = unsafe { mi_arenas_get_count(subproc) };
+    if max_arena == 0 {
+        return;
+    }
+
+    static PURGE_GUARD: mi_atomic_guard_t = AtomicUsize::new(0);
+    crate::mi_atomic_guard!(ptr::addr_of!(PURGE_GUARD).cast_mut(), {
+        if arenas_expire > now {
+            unsafe {
+                mi_atomic_storei64_release(
+                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast(),
+                    now + ((delay as mi_msecs_t) / 10),
+                )
+            };
+        }
+        let arena_start = tseq % max_arena;
+        let mut max_purge_count = if visit_all {
+            max_arena
+        } else {
+            (max_arena / 4) + 1
+        };
+        let mut all_visited = true;
+        let mut any_purged = false;
+        for arena_offset in 0..max_arena {
+            let mut i = arena_offset + arena_start;
+            if i >= max_arena {
+                i -= max_arena;
+            }
+            let arena = unsafe { mi_arena_from_index(subproc, i) };
+            if !arena.is_null() {
+                let purged = unsafe { mi_arena_try_purge(arena, now, force) };
+                if purged >= 0 {
+                    any_purged = true;
+                    if purged >= 1 {
+                        if max_purge_count <= 1 {
+                            all_visited = false;
+                            break;
+                        }
+                        max_purge_count -= 1;
+                    }
+                }
+            }
+        }
+        if all_visited && !any_purged {
+            unsafe {
+                mi_atomic_storei64_release(
+                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast(),
+                    0,
+                )
+            };
+        }
+    });
 }
 
 /// # Safety

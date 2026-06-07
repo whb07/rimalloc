@@ -1206,7 +1206,9 @@ pub extern "C" fn mi_options_print() {
     mi_options_print_out(None, ptr::null_mut());
 }
 
-pub(crate) fn _mi_assert_fail(
+#[cold]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_assert_fail(
     assertion: *const c_char,
     fname: *const c_char,
     line: u32,

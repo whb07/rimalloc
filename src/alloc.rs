@@ -16,7 +16,7 @@ use crate::internal::{
     mi_count_size_overflow, mi_page_slice_start, mi_page_start, mi_page_usable_block_size,
     mi_ptr_encode_canary, mi_theap_malloc_use_guarded, mi_unlikely,
 };
-use crate::mimalloc::{mi_free, mi_theap_malloc, mi_theap_realloc, mi_zalloc};
+use crate::mimalloc::{mi_free, mi_theap_malloc, mi_theap_realloc};
 use crate::page::{_mi_bin, MI_MAX_ALLOC_SIZE, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{
@@ -309,6 +309,69 @@ pub unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     } else {
         mi_theap_malloc_generic(theap, size, zero, huge_alignment, usable)
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_theap_malloc_zero(
+    theap: *mut mi_theap_t,
+    size: usize,
+    zero: bool,
+    usable: *mut usize,
+) -> *mut c_void {
+    _mi_theap_malloc_zero_ex(theap, size, zero, 0, usable)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
+    mi_theap_malloc(_mi_theap_default(), size)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
+    mi_theap_malloc_zero_nonnull(_mi_heap_theap(heap), size, false, 0, ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
+    mi_theap_malloc_small_zero(_mi_theap_default(), size, true, ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
+    mi_theap_malloc_small_zero(theap, size, true, ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_zalloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
+    mi_theap_malloc_small_zero_nonnull(_mi_heap_theap(heap), size, true, ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_theap_zalloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
+    _mi_theap_malloc_zero(theap, size, true, ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_zalloc(size: usize) -> *mut c_void {
+    _mi_theap_malloc_zero(_mi_theap_default(), size, true, ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_zalloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
+    mi_theap_malloc_zero_nonnull(_mi_heap_theap(heap), size, true, 0, ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_theap_calloc(
+    theap: *mut mi_theap_t,
+    count: usize,
+    size: usize,
+) -> *mut c_void {
+    let mut total = 0usize;
+    if mi_count_size_overflow(count, size, &mut total) {
+        return ptr::null_mut();
+    }
+    mi_theap_zalloc(theap, total)
 }
 
 pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {

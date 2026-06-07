@@ -19,7 +19,7 @@ use crate::internal::{
     mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_ptr_encode_canary,
     mi_theap_malloc_use_guarded, mi_unlikely,
 };
-use crate::mimalloc::{mi_free, mi_malloc_aligned, mi_theap_realloc};
+use crate::mimalloc::{mi_free, mi_malloc_aligned};
 use crate::options::{mi_option_is_enabled, mi_option_t};
 use crate::page::{_mi_bin, MI_MAX_ALLOC_SIZE, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
@@ -570,6 +570,15 @@ pub unsafe extern "C" fn _mi_theap_realloc_zero(
         }
     }
     newp
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_theap_realloc(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    newsize: usize,
+) -> *mut c_void {
+    _mi_theap_realloc_zero(theap, p, newsize, false, ptr::null_mut(), ptr::null_mut())
 }
 
 unsafe fn mi_theap_reallocn(

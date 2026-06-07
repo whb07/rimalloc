@@ -1571,6 +1571,18 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
 
 #[unsafe(no_mangle)]
 /// # Safety
+/// Performs one-time process-global mimalloc initialization for the bounded init/runtime scaffold.
+pub unsafe extern "C" fn _mi_auto_process_init() {
+    if unsafe { _mi_process_is_initialized } {
+        return;
+    }
+    mi_mark_main_thread();
+    mi_subproc_main_init();
+    mi_tls_slots_init();
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
 /// Performs process-global teardown for the bounded init/subproc surface and must not race with concurrent mutation of it.
 pub unsafe extern "C" fn _mi_auto_process_done() {
     mi_subproc_main_init();

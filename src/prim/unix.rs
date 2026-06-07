@@ -22,7 +22,9 @@ use std::io::{self, Write};
 
 use crate::arena::MI_ARENA_SLICE_ALIGN;
 use crate::bits::{MI_GiB, MI_MiB};
-use crate::internal::MI_DEBUG;
+use crate::internal::{
+    _mi_preloading, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen, _mi_toupper, MI_DEBUG,
+};
 use crate::options::{_mi_warning_message, mi_option_is_enabled, mi_option_t};
 use crate::os::{
     _mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_has_overcommit, _mi_os_page_size,
@@ -31,6 +33,7 @@ use crate::prim::{mi_os_mem_config_t, mi_process_info_t};
 use crate::types::{mi_msecs_t, mi_theap_t};
 
 pub const MI_UNIX_PRIM_C: () = ();
+pub const _DEFAULT_SOURCE: () = ();
 pub const MAC_OS_X_VERSION_10_7: c_int = 1070;
 pub const MI_HAS_SYSCALL_H: bool = cfg!(any(target_os = "linux", target_os = "freebsd"));
 pub const MI_UNIX_LARGE_PAGE_SIZE: usize = 2 * MI_MiB;
@@ -113,9 +116,15 @@ pub const PROT_NONE: c_int = 0x00;
 pub const PROT_READ: c_int = 0x01;
 pub const PROT_WRITE: c_int = 0x02;
 pub const O_RDONLY: c_int = 0;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub const O_CLOEXEC: c_int = 0x80000;
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+pub const O_CLOEXEC: c_int = 0;
 pub const EAGAIN: c_int = 11;
+pub const EINTR: c_int = 4;
 pub const ENOMEM: c_int = 12;
 pub const EINVAL: c_int = 22;
+pub const ENOSYS: c_int = 38;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub const MADV_HUGEPAGE: c_int = 14;
@@ -173,9 +182,11 @@ pub struct rusage {
 
 #[cfg(unix)]
 unsafe extern "C" {
+    fn getenv(name: *const c_char) -> *const c_char;
     fn open(path: *const c_char, oflag: c_int, ...) -> c_int;
     fn read(fd: c_int, buf: *mut c_void, count: usize) -> ssize_t;
     fn close(fd: c_int) -> c_int;
+    fn sleep(seconds: c_uint) -> c_uint;
     fn munmap(addr: *mut c_void, len: usize) -> c_int;
     fn access(path: *const c_char, amode: c_int) -> c_int;
     fn sysconf(name: c_int) -> c_long;
@@ -212,6 +223,7 @@ unsafe extern "C" {
 
 static mut _mi_heap_default_key: pthread_key_t = PTHREAD_KEY_INVALID;
 static large_page_try_ok: AtomicUsize = AtomicUsize::new(0);
+static no_getrandom: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(all(
     any(target_os = "linux", target_os = "android"),
@@ -225,6 +237,11 @@ const SYS_MBind: c_long = 237;
 const SYS_Getcpu: c_long = 309;
 #[cfg(all(
     any(target_os = "linux", target_os = "android"),
+    target_arch = "x86_64"
+))]
+const SYS_Getrandom: c_long = 318;
+#[cfg(all(
+    any(target_os = "linux", target_os = "android"),
     target_arch = "aarch64"
 ))]
 const SYS_MBind: c_long = 235;
@@ -233,6 +250,16 @@ const SYS_MBind: c_long = 235;
     target_arch = "aarch64"
 ))]
 const SYS_Getcpu: c_long = 168;
+#[cfg(all(
+    any(target_os = "linux", target_os = "android"),
+    target_arch = "aarch64"
+))]
+const SYS_Getrandom: c_long = 278;
+#[cfg(not(all(
+    any(target_os = "linux", target_os = "android"),
+    any(target_arch = "x86_64", target_arch = "aarch64")
+)))]
+const SYS_Getrandom: c_long = -1;
 
 #[inline]
 fn mi_last_errno() -> c_int {
@@ -804,6 +831,142 @@ pub unsafe extern "C" fn mi_get_environ() -> *mut *mut c_char {
 }
 
 #[inline]
+pub unsafe extern "C" fn _mi_prim_getenv(
+    name: *const c_char,
+    result: *mut c_char,
+    result_size: usize,
+) -> bool {
+    if name.is_null() {
+        return false;
+    }
+
+    if cfg!(not(any(
+        target_os = "android",
+        target_os = "openbsd",
+        target_os = "wasi"
+    ))) {
+        let len = _mi_strlen(name);
+        if len == 0 {
+            return false;
+        }
+        let env = mi_get_environ();
+        if env.is_null() {
+            return false;
+        }
+        for i in 0..10000usize {
+            let s = *env.add(i);
+            if s.is_null() {
+                break;
+            }
+            if _mi_strnicmp(name, s, len) == 0 && *s.add(len) == b'=' as c_char {
+                _mi_strlcpy(result, s.add(len + 1), result_size);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if _mi_preloading() {
+        return false;
+    }
+    let mut s = getenv(name);
+    if s.is_null() {
+        let mut buf = [0 as c_char; 65];
+        let len = _mi_strnlen(name, buf.len() - 1);
+        for (i, slot) in buf.iter_mut().take(len).enumerate() {
+            *slot = _mi_toupper(*name.add(i));
+        }
+        buf[len] = 0;
+        s = getenv(buf.as_ptr());
+    }
+    if s.is_null() || _mi_strnlen(s, result_size) >= result_size {
+        return false;
+    }
+    _mi_strlcpy(result, s, result_size);
+    true
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: usize) -> bool {
+    if buf_len == 0 {
+        return true;
+    }
+
+    #[cfg(any(
+        target_os = "android",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "solaris",
+        target_os = "macos"
+    ))]
+    {
+        unsafe extern "C" {
+            fn arc4random_buf(buf: *mut c_void, nbytes: usize);
+        }
+        arc4random_buf(buf, buf_len);
+        return true;
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "haiku"))]
+    {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            if SYS_Getrandom >= 0 && no_getrandom.load(Ordering::Acquire) == 0 {
+                let ret = syscall(SYS_Getrandom, buf, buf_len, GRND_NONBLOCK);
+                if ret >= 0 {
+                    return ret as usize == buf_len;
+                }
+                if mi_last_errno() != ENOSYS {
+                    return false;
+                }
+                no_getrandom.store(1, Ordering::Release);
+            }
+        }
+
+        let fd = mi_prim_open(c"/dev/urandom".as_ptr(), O_RDONLY | O_CLOEXEC);
+        if fd < 0 {
+            return false;
+        }
+        let mut count = 0usize;
+        while count < buf_len {
+            let ret = mi_prim_read(
+                fd,
+                (buf as *mut u8).add(count).cast::<c_void>(),
+                buf_len - count,
+            );
+            if ret <= 0 {
+                let err = mi_last_errno();
+                if err != EAGAIN && err != EINTR {
+                    break;
+                }
+            } else {
+                count += ret as usize;
+            }
+        }
+        let _ = mi_prim_close(fd);
+        count == buf_len
+    }
+
+    #[cfg(not(any(
+        target_os = "android",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "solaris",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "haiku"
+    )))]
+    {
+        let _ = buf;
+        false
+    }
+}
+
+#[inline]
 pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
     if !value.is_null() {
         crate::internal::_mi_thread_done(value.cast::<mi_theap_t>());
@@ -828,4 +991,14 @@ pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_
     if _mi_heap_default_key != PTHREAD_KEY_INVALID {
         let _ = pthread_setspecific(_mi_heap_default_key, theap.cast::<c_void>());
     }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
+    false
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_thread_yield() {
+    let _ = sleep(0);
 }

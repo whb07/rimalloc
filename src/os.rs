@@ -17,7 +17,7 @@ use crate::atomic::mi_lock_t;
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB};
 use crate::internal::{
     __mi_stat_decrease, _mi_align_down_ptr, _mi_align_up, _mi_align_up_ptr, _mi_memid_create_os,
-    _mi_memid_none, MI_SECURE, mi_commit_fun_t, mi_memid_t,
+    _mi_memid_none, _mi_memzero_aligned, _mi_os_alloc, MI_SECURE, mi_commit_fun_t, mi_memid_t,
 };
 use crate::options::{_mi_warning_message, mi_option_get, mi_option_get_size, mi_option_t};
 use crate::prim::mi_os_mem_config_t;
@@ -671,6 +671,41 @@ unsafe fn mi_os_alloc_aligned_memid(
 
     memid = unsafe { _mi_memid_create_os(os_base, os_size, commit, os_is_zero, os_is_large) };
     (p, memid)
+}
+
+#[inline]
+unsafe fn mi_os_ensure_zero(p: *mut c_void, size: usize, memid: *mut mi_memid_t) -> *mut c_void {
+    if p.is_null() || size == 0 {
+        return p;
+    }
+    if !unsafe { (*memid).initially_committed } {
+        let mut is_zero = false;
+        if !unsafe { _mi_os_commit(p, size, &mut is_zero) } {
+            unsafe { _mi_os_free(p, size, *memid) };
+            return core::ptr::null_mut();
+        }
+        unsafe { (*memid).initially_committed = true };
+    }
+    if unsafe { (*memid).initially_zero } {
+        return p;
+    }
+    unsafe { _mi_memzero_aligned(p, size) };
+    unsafe { (*memid).initially_zero = true };
+    p
+}
+
+pub unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
+    let p = unsafe { _mi_os_alloc(size, memid) };
+    unsafe { mi_os_ensure_zero(p, size, memid) }
+}
+
+#[inline]
+unsafe fn mi_os_claim_huge_pages(pages: usize, total_size: *mut usize) -> *mut u8 {
+    let _ = pages;
+    if !total_size.is_null() {
+        unsafe { *total_size = 0 };
+    }
+    core::ptr::null_mut()
 }
 
 /// # Safety

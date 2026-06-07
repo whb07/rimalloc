@@ -21,7 +21,7 @@ use std::ffi::CString;
 use std::io::{self, Write};
 
 use crate::bits::MI_MiB;
-use crate::internal::{MI_DEBUG, MI_SECURE};
+use crate::internal::MI_DEBUG;
 use crate::options::{mi_option_is_enabled, mi_option_t};
 use crate::os::{
     _mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_has_overcommit, _mi_os_page_size,
@@ -485,7 +485,7 @@ pub unsafe extern "C" fn _mi_prim_decommit(
 ) -> c_int {
     let err = unix_madvise(start, size, MADV_DONTNEED);
     if !needs_recommit.is_null() {
-        if MI_DEBUG == 0 && MI_SECURE == 0 {
+        if MI_DEBUG == 0 {
             *needs_recommit = false;
         } else {
             *needs_recommit = true;

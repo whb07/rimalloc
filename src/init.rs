@@ -7,7 +7,7 @@
 )]
 
 use core::ffi::{c_char, c_void};
-use core::mem::MaybeUninit;
+use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use std::sync::Once;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -17,8 +17,8 @@ use crate::bits::MI_SIZE_SIZE;
 use crate::internal::{_mi_allocator_done, mi_memid_t, mi_memkind_t};
 use crate::stats::{mi_stat_count_t, mi_stats_get_json_from, mi_stats_header_init, mi_stats_t};
 use crate::types::{
-    mi_heap_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
-    mi_tld_t,
+    MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_page_queue_t, mi_page_t, mi_subproc_id_t,
+    mi_subproc_t, mi_theap_t, mi_thread_local_t, mi_threadid_t, mi_tld_t,
 };
 
 pub const MI_TLS_DIRECT_SLOTS: usize = 64;
@@ -47,12 +47,141 @@ pub const fn MI_STAT_COUNT<T: Copy>(_stat: T) -> mi_stat_count_t {
     MI_STAT_COUNT_NULL()
 }
 
+#[allow(non_snake_case)]
+pub const fn MI_MEMID_INIT(kind: mi_memkind_t) -> mi_memid_t {
+    mi_memid_t {
+        mem: crate::internal::mi_memid_mem_t {
+            os: crate::internal::mi_memid_os_info_t {
+                base: ptr::null_mut(),
+                size: 0,
+            },
+        },
+        memkind: kind,
+        is_pinned: true,
+        initially_committed: true,
+        initially_zero: false,
+    }
+}
+
+#[allow(non_snake_case)]
+pub const fn QNULL(sz: usize) -> mi_page_queue_t {
+    mi_page_queue_t {
+        first: ptr::null_mut(),
+        last: ptr::null_mut(),
+        count: 0,
+        block_size: sz * size_of::<usize>(),
+    }
+}
+
+#[allow(non_snake_case)]
+pub const fn MI_STATS_NULL() -> mi_stats_t {
+    const ZERO_COUNT: mi_stat_count_t = mi_stat_count_t {
+        total: 0,
+        peak: 0,
+        current: 0,
+    };
+    const ZERO_COUNTER: crate::stats::mi_stat_counter_t =
+        crate::stats::mi_stat_counter_t { total: 0 };
+    mi_stats_t {
+        size: size_of::<mi_stats_t>(),
+        version: crate::stats::MI_STAT_VERSION,
+        pages: ZERO_COUNT,
+        reserved: ZERO_COUNT,
+        committed: ZERO_COUNT,
+        reset: ZERO_COUNTER,
+        purged: ZERO_COUNTER,
+        page_committed: ZERO_COUNT,
+        pages_abandoned: ZERO_COUNT,
+        threads: ZERO_COUNT,
+        malloc_normal: ZERO_COUNT,
+        malloc_huge: ZERO_COUNT,
+        malloc_requested: ZERO_COUNT,
+        mmap_calls: ZERO_COUNTER,
+        commit_calls: ZERO_COUNTER,
+        reset_calls: ZERO_COUNTER,
+        purge_calls: ZERO_COUNTER,
+        arena_count: ZERO_COUNTER,
+        malloc_normal_count: ZERO_COUNTER,
+        malloc_huge_count: ZERO_COUNTER,
+        malloc_guarded_count: ZERO_COUNTER,
+        arena_rollback_count: ZERO_COUNTER,
+        arena_purges: ZERO_COUNTER,
+        pages_extended: ZERO_COUNTER,
+        pages_retire: ZERO_COUNTER,
+        page_searches: ZERO_COUNTER,
+        page_searches_count: ZERO_COUNTER,
+        segments: ZERO_COUNT,
+        segments_abandoned: ZERO_COUNT,
+        segments_cache: ZERO_COUNT,
+        _segments_reserved: ZERO_COUNT,
+        heaps: ZERO_COUNT,
+        theaps: ZERO_COUNT,
+        pages_reclaim_on_alloc: ZERO_COUNTER,
+        pages_reclaim_on_free: ZERO_COUNTER,
+        pages_reabandon_full: ZERO_COUNTER,
+        pages_unabandon_busy_wait: ZERO_COUNTER,
+        heaps_delete_wait: ZERO_COUNTER,
+        _stat_reserved: [ZERO_COUNT; 4],
+        _stat_counter_reserved: [ZERO_COUNTER; 4],
+        malloc_bins: [ZERO_COUNT; MI_BIN_HUGE + 1],
+        page_bins: [ZERO_COUNT; MI_BIN_HUGE + 1],
+        chunk_bins: [ZERO_COUNT; 6],
+    }
+}
+
 #[allow(dead_code)]
 static mut subprocs_lock: mi_lock_t = mi_lock_t::new();
 static SUBPROC_MAIN_INIT: Once = Once::new();
 static SUBPROC_TOTAL_COUNT: AtomicUsize = AtomicUsize::new(0);
-static mut SUBPROC_MAIN: MaybeUninit<MiSubprocPrefix> = MaybeUninit::uninit();
-static mut SUBPROCS_HEAD: *mut mi_subproc_t = ptr::null_mut();
+static mut subproc_main: MaybeUninit<MiSubprocPrefix> = MaybeUninit::uninit();
+static mut subprocs: *mut mi_subproc_t = ptr::null_mut();
+
+#[allow(dead_code)]
+static mut tld_empty: mi_tld_t = mi_tld_t {
+    thread_id: 0,
+    thread_seq: 0,
+    numa_node: 0,
+    subproc: ptr::addr_of_mut!(subproc_main)
+        .cast::<MiSubprocPrefix>()
+        .cast::<mi_subproc_t>(),
+    theaps: ptr::null_mut(),
+    theaps_lock: mi_lock_t::new(),
+    recurse: false,
+    is_in_threadpool: false,
+    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+};
+
+#[unsafe(no_mangle)]
+pub static _mi_page_empty: mi_page_t = mi_page_t {
+    xthread_id: 0,
+    free: ptr::null_mut(),
+    used: 0,
+    capacity: 0,
+    reserved: 0,
+    retire_expire: 0,
+    free_is_zero: false,
+    local_free: ptr::null_mut(),
+    xthread_free: 0,
+    block_size: 0,
+    page_start: ptr::null_mut(),
+    keys: [0, 0],
+    theap: ptr::null_mut(),
+    heap: ptr::null_mut(),
+    next: ptr::null_mut(),
+    prev: ptr::null_mut(),
+    slice_committed: crate::arena::MI_ARENA_SLICE_SIZE,
+    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+};
+
+#[allow(non_snake_case)]
+pub fn MI_PAGE_EMPTY() -> *mut mi_page_t {
+    ptr::addr_of!(_mi_page_empty).cast_mut()
+}
+
+#[allow(non_snake_case)]
+pub fn MI_SMALL_PAGES_EMPTY() -> [*mut mi_page_t; MI_PAGES_DIRECT] {
+    [MI_PAGE_EMPTY(); MI_PAGES_DIRECT]
+}
 
 #[unsafe(no_mangle)]
 pub static mut _mi_cpu_movsb_max: usize = 0;
@@ -188,11 +317,11 @@ fn mi_subproc_main_init() {
         // SAFETY: one-time process initialization for local subproc scaffolding.
         unsafe {
             mi_lock_init(ptr::addr_of_mut!(subprocs_lock));
-            ptr::addr_of_mut!(SUBPROC_MAIN).write(MaybeUninit::new(MiSubprocPrefix::new_main()));
-            let main = ptr::addr_of_mut!(SUBPROC_MAIN)
+            ptr::addr_of_mut!(subproc_main).write(MaybeUninit::new(MiSubprocPrefix::new_main()));
+            let main = ptr::addr_of_mut!(subproc_main)
                 .cast::<MiSubprocPrefix>()
                 .cast::<mi_subproc_t>();
-            SUBPROCS_HEAD = main;
+            subprocs = main;
             _mi_process_is_initialized = true;
         }
     });
@@ -200,7 +329,7 @@ fn mi_subproc_main_init() {
 
 unsafe fn mi_subproc_main_ptr() -> *mut mi_subproc_t {
     mi_subproc_main_init();
-    ptr::addr_of_mut!(SUBPROC_MAIN)
+    ptr::addr_of_mut!(subproc_main)
         .cast::<MiSubprocPrefix>()
         .cast::<mi_subproc_t>()
 }
@@ -213,7 +342,7 @@ unsafe fn mi_subproc_unlink_locked(subproc: *mut MiSubprocPrefix) {
         if !(*subproc).prev.is_null() {
             (*mi_subproc_prefix((*subproc).prev)).next = (*subproc).next;
         } else {
-            SUBPROCS_HEAD = (*subproc).next;
+            subprocs = (*subproc).next;
         }
         (*subproc).next = ptr::null_mut();
         (*subproc).prev = ptr::null_mut();
@@ -390,11 +519,11 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     // SAFETY: local subproc list mutation is serialized by `subprocs_lock`.
     unsafe {
         mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock));
-        (*subproc_ptr).next = SUBPROCS_HEAD;
-        if !SUBPROCS_HEAD.is_null() {
-            (*mi_subproc_prefix(SUBPROCS_HEAD)).prev = subproc_ptr.cast::<mi_subproc_t>();
+        (*subproc_ptr).next = subprocs;
+        if !subprocs.is_null() {
+            (*mi_subproc_prefix(subprocs)).prev = subproc_ptr.cast::<mi_subproc_t>();
         }
-        SUBPROCS_HEAD = subproc_ptr.cast::<mi_subproc_t>();
+        subprocs = subproc_ptr.cast::<mi_subproc_t>();
         mi_lock_release(ptr::addr_of_mut!(subprocs_lock));
         mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>())
     }
@@ -458,8 +587,8 @@ pub unsafe extern "C" fn _mi_auto_process_done() {
     // SAFETY: process-local teardown is serialized by `subprocs_lock`.
     unsafe {
         mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock));
-        let mut subproc = SUBPROCS_HEAD;
-        SUBPROCS_HEAD = main;
+        let mut subproc = subprocs;
+        subprocs = main;
         let main_prefix = mi_subproc_prefix(main);
         (*main_prefix).next = ptr::null_mut();
         (*main_prefix).prev = ptr::null_mut();

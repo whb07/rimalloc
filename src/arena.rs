@@ -11,28 +11,30 @@ use crate::atomic::{
     mi_atomic_store_ptr_release, mi_lock_acquire, mi_lock_release, mi_memory_order_e,
 };
 use crate::bitmap::{
-    MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT, mi_bbitmap_init, mi_bbitmap_is_clearN,
-    mi_bbitmap_setN, mi_bbitmap_size, mi_bbitmap_t, mi_bbitmap_try_find_and_clearN,
-    mi_bbitmap_unsafe_setN, mi_bitmap_clear, mi_bitmap_clear_once_set, mi_bitmap_clearN,
-    mi_bitmap_init, mi_bitmap_is_setN, mi_bitmap_popcountN, mi_bitmap_set, mi_bitmap_setN,
+    MI_BCHUNK_BITS, MI_BCHUNK_FIELDS, MI_BCHUNK_SIZE, MI_BFIELD_BITS, MI_BITMAP_MAX_BIT_COUNT,
+    mi_bbitmap_bsr_inv, mi_bbitmap_chunk_count, mi_bbitmap_debug_get_bin, mi_bbitmap_init,
+    mi_bbitmap_is_clearN, mi_bbitmap_is_setN, mi_bbitmap_setN, mi_bbitmap_size, mi_bbitmap_t,
+    mi_bbitmap_try_find_and_clearN, mi_bbitmap_unsafe_setN, mi_bchunk_t, mi_bchunkmap_t,
+    mi_bfield_t, mi_bitmap_clear, mi_bitmap_clear_once_set, mi_bitmap_clearN, mi_bitmap_init,
+    mi_bitmap_is_set, mi_bitmap_is_setN, mi_bitmap_popcountN, mi_bitmap_set, mi_bitmap_setN,
     mi_bitmap_size, mi_bitmap_t, mi_bitmap_try_find_and_claim, mi_bitmap_unsafe_setN,
 };
-use crate::bits::MI_INTPTR_BITS;
+use crate::bits::{MI_INTPTR_BITS, MI_MiB};
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt,
     __mi_stat_counter_increase, __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase,
     __mi_stat_increase_mt, _mi_align_up, _mi_clamp, _mi_divide_up, _mi_is_heap_main,
-    _mi_memid_create, _mi_memid_none, _mi_meta_free, _mi_os_commit, _mi_os_commit_ex, _mi_os_free,
-    _mi_os_has_overcommit, _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc,
-    _mi_theap_heap, _mi_theap_random_next, _mi_thread_id, MI_DEBUG, mi_block_next,
-    mi_block_set_next, mi_mem_is_zero, mi_memid_t, mi_memkind_t, mi_mul_overflow, mi_page_all_free,
-    mi_page_area, mi_page_block_size, mi_page_claim_ownership, mi_page_clear_abandoned_mapped,
+    _mi_memid_create, _mi_memid_none, _mi_meta_free, _mi_meta_is_meta_page, _mi_os_commit,
+    _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex, _mi_os_has_overcommit,
+    _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc, _mi_theap_heap,
+    _mi_theap_random_next, _mi_thread_id, _mi_toupper, MI_DEBUG, mi_block_next, mi_block_set_next,
+    mi_mem_is_zero, mi_memid_t, mi_memkind_t, mi_mul_overflow, mi_page_all_free, mi_page_area,
+    mi_page_block_size, mi_page_claim_ownership, mi_page_clear_abandoned_mapped, mi_page_committed,
     mi_page_heap, mi_page_immediate_available, mi_page_is_abandoned, mi_page_is_abandoned_mapped,
-    mi_page_is_owned, mi_page_is_singleton, mi_page_meta_is_separated, mi_page_slice_start,
-    mi_page_start, mi_page_usable_block_size, mi_size_of_slices, mi_slice_count_of_size,
-    mi_tf_block, mi_tf_create, mi_tf_is_owned,
+    mi_page_is_full, mi_page_is_owned, mi_page_is_singleton, mi_page_meta_is_separated,
+    mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_size_of_slices,
+    mi_slice_count_of_size, mi_tf_block, mi_tf_create, mi_tf_is_owned,
 };
-use crate::mimalloc::mi_manage_os_memory_ex;
 use crate::mimalloc::{mi_heap_main, mi_heap_zalloc_aligned};
 use crate::options::{mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t};
 use crate::os::{_mi_os_alloc_aligned, _mi_os_alloc_aligned_at_offset};
@@ -41,8 +43,9 @@ use crate::page::{
     MI_MEDIUM_MAX_OBJ_SIZE, MI_MEDIUM_PAGE_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2,
     MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE, mi_page_set_theap,
 };
-use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister};
-use crate::prim::{_mi_page_associated_theap_peek, _mi_prim_free};
+use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page};
+use crate::prim::_mi_page_associated_theap_peek;
+use crate::stats::{MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_OTHER, MI_CBIN_SMALL};
 use crate::track::{mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined};
 use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
@@ -2856,37 +2859,44 @@ unsafe fn mi_reserve_os_memory_ex2(
     exclusive: bool,
     arena_id: *mut mi_arena_id_t,
 ) -> c_int {
-    let _ = allow_large;
     if !arena_id.is_null() {
         unsafe { *arena_id = _mi_arena_id_none() };
     }
 
     let size = _mi_align_up(size, MI_ARENA_SLICE_SIZE);
-    let mut base = ptr::null_mut();
-    let mut full_size = 0usize;
+    let mut memid = unsafe { _mi_memid_none() };
     let start = unsafe {
-        crate::os::mi_os_alloc_aligned(
-            size,
-            MI_ARENA_SLICE_ALIGN,
-            commit,
-            ptr::addr_of_mut!(base),
-            ptr::addr_of_mut!(full_size),
-        )
+        _mi_os_alloc_aligned(size, MI_ARENA_SLICE_ALIGN, commit, allow_large, &mut memid)
     };
     if start.is_null() {
         return ENOMEM;
     }
 
-    if unsafe { mi_manage_os_memory_ex(start, size, commit, false, false, -1, exclusive, arena_id) }
-    {
-        let _ = subproc;
+    if unsafe {
+        mi_manage_os_memory_ex2(
+            subproc,
+            start,
+            size,
+            -1,
+            exclusive,
+            memid,
+            mi_commit_null,
+            ptr::null_mut(),
+            arena_id,
+        )
+    } {
         crate::options::_mi_verbose_message(format_args!(
-            "reserved {} KiB memory\n",
-            _mi_divide_up(size, 1024)
+            "reserved {} KiB memory{}\n",
+            _mi_divide_up(size, 1024),
+            if memid.is_pinned {
+                " (in large os pages)"
+            } else {
+                ""
+            }
         ));
         0
     } else {
-        let _ = unsafe { _mi_prim_free(base, full_size) };
+        unsafe { _mi_os_free_ex(start, size, commit, memid, ptr::null_mut()) };
         crate::options::_mi_verbose_message(format_args!(
             "failed to reserve {} KiB memory\n",
             _mi_divide_up(size, 1024)
@@ -2953,50 +2963,488 @@ pub unsafe extern "C" fn mi_manage_os_memory(
     }
 }
 
-/// # Safety
-/// Matches the C API and reads the current sub-process arena registry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_debug_show_arenas() {
-    let subproc = unsafe { _mi_subproc() };
-    if subproc.is_null() {
-        return;
+#[allow(clippy::too_many_arguments)]
+unsafe fn mi_manage_os_memory_ex2(
+    subproc: *mut mi_subproc_t,
+    mut start: *mut c_void,
+    mut size: usize,
+    numa_node: c_int,
+    exclusive: bool,
+    mut memid: mi_memid_t,
+    commit_fun: mi_commit_fun_t,
+    commit_fun_arg: *mut c_void,
+    arena_id: *mut mi_arena_id_t,
+) -> bool {
+    if !arena_id.is_null() {
+        unsafe { *arena_id = _mi_arena_id_none() };
+    }
+    if start.is_null() {
+        return false;
+    }
+    if !(start as usize).is_multiple_of(MI_ARENA_SLICE_SIZE) {
+        let aligned_start = _mi_align_up(start as usize, MI_ARENA_SLICE_SIZE) as *mut c_void;
+        let diff = aligned_start as usize - start as usize;
+        if diff >= size || (size - diff) < MI_ARENA_SLICE_SIZE {
+            crate::options::_mi_warning_message(format_args!(
+                "after alignment, the size of the arena becomes too small (memory at {:p} with size {})\n",
+                start, size
+            ));
+            return false;
+        }
+        start = aligned_start;
+        size -= diff;
     }
 
+    let mut total_slice_count = (size / MI_ARENA_SLICE_SIZE / MI_BCHUNK_BITS) * MI_BCHUNK_BITS;
+    let total_size = mi_size_of_slices(total_slice_count);
+    if total_size < MI_ARENA_MIN_SIZE {
+        crate::options::_mi_warning_message(format_args!(
+            "cannot use OS memory since it is not large enough (size {} KiB, minimum required is {} KiB)",
+            size / crate::bits::MI_KiB,
+            MI_ARENA_MIN_SIZE / crate::bits::MI_KiB
+        ));
+        return false;
+    }
+
+    let mut parent: *mut mi_arena_t = ptr::null_mut();
+    while total_slice_count > 0 {
+        let mut slice_count = total_slice_count;
+        if slice_count > MI_BITMAP_MAX_BIT_COUNT {
+            slice_count = MI_BITMAP_MAX_BIT_COUNT;
+        }
+
+        let arena = unsafe {
+            mi_arena_initialize(
+                subproc,
+                start,
+                slice_count,
+                parent,
+                if parent.is_null() { total_size } else { 0 },
+                numa_node,
+                exclusive,
+                memid,
+                commit_fun,
+                commit_fun_arg,
+                if parent.is_null() {
+                    arena_id
+                } else {
+                    ptr::null_mut()
+                },
+            )
+        };
+        if arena.is_null() {
+            if parent.is_null() {
+                return false;
+            }
+            crate::mi_assert!(
+                mi_size_of_slices(total_slice_count)
+                    <= unsafe { (*parent.cast::<MiArenaPrefix>()).total_size }
+            );
+            unsafe {
+                (*parent.cast::<MiArenaPrefix>()).total_size -=
+                    mi_size_of_slices(total_slice_count);
+            }
+            return true;
+        }
+
+        if parent.is_null() {
+            parent = arena;
+            memid.memkind = mi_memkind_t::MI_MEM_NONE;
+        }
+        crate::mi_assert!(slice_count <= total_slice_count);
+        total_slice_count -= slice_count;
+        start = unsafe {
+            start
+                .cast::<u8>()
+                .add(mi_size_of_slices(slice_count))
+                .cast()
+        };
+    }
+
+    true
+}
+
+/// # Safety
+/// Matches the C API and may mutate arena state for externally managed memory.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_manage_os_memory_ex(
+    start: *mut c_void,
+    size: usize,
+    is_committed: bool,
+    is_pinned: bool,
+    is_zero: bool,
+    numa_node: c_int,
+    exclusive: bool,
+    arena_id: *mut mi_arena_id_t,
+) -> bool {
+    let mut memid = unsafe { _mi_memid_create(mi_memkind_t::MI_MEM_EXTERNAL) };
+    memid.mem.os.base = start;
+    memid.mem.os.size = size;
+    memid.initially_committed = is_committed;
+    memid.initially_zero = is_zero;
+    memid.is_pinned = is_pinned;
+    unsafe {
+        mi_manage_os_memory_ex2(
+            _mi_subproc(),
+            start,
+            size,
+            numa_node,
+            exclusive,
+            memid,
+            mi_commit_null,
+            ptr::null_mut(),
+            arena_id,
+        )
+    }
+}
+
+unsafe fn mi_arena_used_slices(arena: *mut mi_arena_t) -> usize {
+    let mut idx = 0usize;
+    if unsafe { mi_bbitmap_bsr_inv((*arena.cast::<MiArenaPrefix>()).slices_free, &mut idx) } {
+        idx + 1
+    } else {
+        unsafe { mi_arena_info_slices(arena) }
+    }
+}
+
+unsafe fn mi_debug_show_bfield(field: mi_bfield_t, buf: *mut u8, k: *mut usize) -> usize {
+    let mut bit_set_count = 0usize;
+    for bit in 0..MI_BFIELD_BITS {
+        let is_set = ((1usize << bit) & field) != 0;
+        if is_set {
+            bit_set_count += 1;
+        }
+        unsafe {
+            *buf.add(*k) = if is_set { b'x' } else { b'.' };
+            *k += 1;
+        }
+    }
+    bit_set_count
+}
+
+unsafe fn mi_debug_color(buf: *mut u8, k: *mut usize, color: mi_ansi_color_t) {
+    let code = color as i32;
+    let tens = ((code / 10) as u8) + b'0';
+    let ones = ((code % 10) as u8) + b'0';
+    unsafe {
+        *buf.add(*k) = 0x1B;
+        *buf.add(*k + 1) = b'[';
+        *buf.add(*k + 2) = tens;
+        *buf.add(*k + 3) = ones;
+        *buf.add(*k + 4) = b'm';
+        *k += 5;
+    }
+}
+
+unsafe fn mi_page_commit_usage(page: *mut mi_page_t) -> c_int {
+    let committed_size = unsafe { mi_page_committed(page) };
+    let used_size = unsafe { (*page).used as usize * mi_page_block_size(page) };
+    (used_size * 100 / committed_size) as c_int
+}
+
+unsafe fn mi_debug_show_page_bfield(
+    buf: *mut u8,
+    k: *mut usize,
+    arena: *mut mi_arena_t,
+    slice_index: usize,
+    pbit_of_page: *mut isize,
+    pcolor_of_page: *mut mi_ansi_color_t,
+) -> usize {
+    let mut bit_set_count = 0usize;
+    let mut bit_of_page = unsafe { *pbit_of_page };
+    let mut color = unsafe { *pcolor_of_page };
+    let mut prev_color = MI_GRAY;
+    for bit in 0..MI_BFIELD_BITS {
+        let start = unsafe { mi_arena_slice_start(arena, slice_index + bit).cast::<c_void>() };
+        let page = unsafe { _mi_safe_ptr_page(start) };
+        if !page.is_null() && start == unsafe { mi_page_slice_start(page) }.cast::<c_void>() {
+            crate::mi_assert_internal!(bit_of_page <= 0);
+            bit_set_count += 1;
+            let mut c = b'p';
+            if unsafe { mi_page_is_singleton(page) } {
+                c = b's';
+            } else if unsafe { mi_page_is_full(page) } {
+                c = b'f';
+            }
+            if !unsafe { mi_page_is_abandoned(page) } {
+                c = unsafe { _mi_toupper(c as i8) as u8 };
+            }
+            let commit_usage = unsafe { mi_page_commit_usage(page) };
+            if commit_usage < 25 {
+                color = MI_MAROON;
+            } else if commit_usage < 50 {
+                color = MI_ORANGE;
+            } else if commit_usage < 75 {
+                color = MI_TEAL;
+            } else {
+                color = MI_DARKGREEN;
+            }
+            bit_of_page = unsafe { (*page).memid.mem.arena.slice_count as isize };
+            if color != prev_color {
+                unsafe { mi_debug_color(buf, k, color) };
+                prev_color = color;
+            }
+            unsafe {
+                *buf.add(*k) = c;
+                *k += 1;
+            }
+        } else {
+            let mut c = b'?';
+            if bit_of_page > 0 {
+                c = b'-';
+            } else if unsafe { _mi_meta_is_meta_page(start) } {
+                c = b'm';
+                color = MI_GRAY;
+            } else if slice_index + bit < unsafe { (*arena.cast::<MiArenaPrefix>()).info_slices } {
+                c = b'i';
+                color = MI_GRAY;
+            } else if unsafe {
+                mi_bbitmap_is_setN(
+                    (*arena.cast::<MiArenaPrefix>()).slices_free,
+                    slice_index + bit,
+                    1,
+                )
+            } {
+                if unsafe {
+                    mi_bitmap_is_set(
+                        (*arena.cast::<MiArenaPrefix>()).slices_purge,
+                        slice_index + bit,
+                    )
+                } {
+                    c = b'~';
+                    color = MI_ORANGE;
+                } else if unsafe {
+                    mi_bitmap_is_set(
+                        (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                        slice_index + bit,
+                    )
+                } {
+                    c = b'_';
+                    color = MI_GRAY;
+                } else {
+                    c = b'.';
+                    color = MI_GRAY;
+                }
+            }
+            if bit == MI_BFIELD_BITS - 1 && bit_of_page > 1 {
+                c = b'>';
+            }
+            if color != prev_color {
+                unsafe { mi_debug_color(buf, k, color) };
+                prev_color = color;
+            }
+            unsafe {
+                *buf.add(*k) = c;
+                *k += 1;
+            }
+        }
+        bit_of_page -= 1;
+    }
+    unsafe { mi_debug_color(buf, k, MI_GRAY) };
+    unsafe {
+        *pbit_of_page = bit_of_page;
+        *pcolor_of_page = color;
+    }
+    bit_set_count
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe fn mi_debug_show_chunks(
+    header1: &str,
+    header2: &str,
+    header3: &str,
+    slice_count: usize,
+    chunk_count: usize,
+    chunks: *mut mi_bchunk_t,
+    chunk_bins: *mut mi_bchunkmap_t,
+    invert: bool,
+    arena: *mut mi_arena_t,
+    narrow: bool,
+) -> usize {
+    crate::options::_mi_raw_message(format_args!(
+        "\x1B[37m{}{}{} (use/commit: \x1B[31m0 - 25%\x1B[33m - 50%\x1B[36m - 75%\x1B[32m - 100%\x1B[0m)\n",
+        header1, header2, header3
+    ));
+    let fields_per_line = if narrow { 2 } else { 4 };
+    let used_slice_count = unsafe { mi_arena_used_slices(arena) };
+    let mut bit_count = 0usize;
+    let mut bit_set_count = 0usize;
+    let mut bit_of_page = 0isize;
+    let mut color_of_page = MI_GRAY;
+    let mut i = 0usize;
+    while i < chunk_count {
+        if bit_count >= slice_count {
+            break;
+        }
+        let mut buf = [0u8; 5 * MI_BCHUNK_BITS + 64];
+        if bit_count > used_slice_count && i + 2 < chunk_count {
+            let diff = chunk_count - 1 - i;
+            bit_count += diff * MI_BCHUNK_BITS;
+            crate::options::_mi_raw_message(format_args!("  |\n"));
+            i = chunk_count - 1;
+        }
+
+        let mut k = 0usize;
+        if i < 10 {
+            buf[k] = b'0' + i as u8;
+            buf[k + 1] = b' ';
+            buf[k + 2] = b' ';
+            k += 3;
+        } else if i < 100 {
+            buf[k] = b'0' + (i / 10) as u8;
+            buf[k + 1] = b'0' + (i % 10) as u8;
+            buf[k + 2] = b' ';
+            k += 3;
+        } else if i < 1000 {
+            buf[k] = b'0' + (i / 100) as u8;
+            buf[k + 1] = b'0' + ((i % 100) / 10) as u8;
+            buf[k + 2] = b'0' + (i % 10) as u8;
+            k += 3;
+        }
+
+        let mut chunk_kind = b' ';
+        if !chunk_bins.is_null() {
+            chunk_kind = match unsafe { mi_bbitmap_debug_get_bin(chunk_bins, i) } {
+                MI_CBIN_SMALL => b'S',
+                MI_CBIN_MEDIUM => b'M',
+                MI_CBIN_LARGE => b'L',
+                MI_CBIN_HUGE => b'H',
+                MI_CBIN_OTHER => b'X',
+                _ => b' ',
+            };
+        }
+        buf[k] = chunk_kind;
+        buf[k + 1] = b' ';
+        k += 2;
+
+        for j in 0..MI_BCHUNK_FIELDS {
+            if j > 0 && (j % fields_per_line) == 0 {
+                let line = unsafe { core::str::from_utf8_unchecked(&buf[..k]) };
+                crate::options::_mi_raw_message(format_args!("  {}\n\x1B[37m", line));
+                buf.fill(0);
+                buf[..5].fill(b' ');
+                k = 5;
+            }
+            if bit_count < slice_count {
+                let mut bfield = 0usize;
+                if !chunks.is_null() {
+                    bfield = unsafe { (*chunks.add(i)).bfields[j].load(Ordering::Relaxed) };
+                }
+                if invert {
+                    bfield = !bfield;
+                }
+                let mut line_k = k;
+                let xcount = if chunks.is_null() {
+                    unsafe {
+                        mi_debug_show_page_bfield(
+                            buf.as_mut_ptr(),
+                            &mut line_k,
+                            arena,
+                            bit_count,
+                            &mut bit_of_page,
+                            &mut color_of_page,
+                        )
+                    }
+                } else {
+                    unsafe { mi_debug_show_bfield(bfield, buf.as_mut_ptr(), &mut line_k) }
+                };
+                k = line_k;
+                bit_set_count += if invert {
+                    MI_BFIELD_BITS - xcount
+                } else {
+                    xcount
+                };
+                buf[k] = b' ';
+                k += 1;
+            } else {
+                buf[k..k + MI_BFIELD_BITS].fill(b'o');
+                k += MI_BFIELD_BITS;
+            }
+            bit_count += MI_BFIELD_BITS;
+        }
+        let line = unsafe { core::str::from_utf8_unchecked(&buf[..k]) };
+        crate::options::_mi_raw_message(format_args!("  {}\n\x1B[37m", line));
+        i += 1;
+    }
+    crate::options::_mi_raw_message(format_args!("\x1B[0m  total pages: {}\n", bit_set_count));
+    bit_set_count
+}
+
+unsafe extern "C" fn mi_commit_null(
+    _commit: bool,
+    start: *mut c_void,
+    size: usize,
+    is_zero: *mut bool,
+    _user_arg: *mut c_void,
+) -> bool {
+    unsafe { _mi_os_commit(start, size, is_zero) }
+}
+
+unsafe fn mi_debug_show_arenas_ex(heap: *mut mi_heap_t, show_pages: bool, narrow: bool) {
+    let subproc = unsafe { (*heap.cast::<MiHeapPrefix>()).subproc };
     let max_arenas = unsafe { mi_arenas_get_count(subproc) };
-    let mut shown = 0usize;
+    let mut page_total = 0usize;
     for i in 0..max_arenas {
         let arena = unsafe { mi_arena_from_index(subproc, i) };
         if arena.is_null() {
             break;
         }
-        let arena = arena.cast::<MiArenaPrefix>();
+        crate::mi_assert!(unsafe { (*arena.cast::<MiArenaPrefix>()).subproc == subproc });
         crate::options::_mi_raw_message(format_args!(
             "{}arena {} at {:p}: {} slices ({} MiB){}{}, subproc: {:p}, numa: {}\n",
-            if unsafe { (*arena).parent.is_null() } {
+            if unsafe { (*arena.cast::<MiArenaPrefix>()).parent.is_null() } {
                 ""
             } else {
                 "(sub)"
             },
             i,
             arena,
-            unsafe { (*arena).slice_count },
-            mi_size_of_slices(unsafe { (*arena).slice_count }) / (1024 * 1024),
-            if unsafe { (*arena).memid.is_pinned } {
+            unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count },
+            mi_size_of_slices(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }) / MI_MiB,
+            if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
                 ", pinned"
             } else {
                 ""
             },
-            if unsafe { (*arena).is_exclusive } {
+            if unsafe { (*arena.cast::<MiArenaPrefix>()).is_exclusive } {
                 ", exclusive"
             } else {
                 ""
             },
-            unsafe { (*arena).subproc },
-            unsafe { (*arena).numa_node },
+            unsafe { (*arena.cast::<MiArenaPrefix>()).subproc },
+            unsafe { (*arena.cast::<MiArenaPrefix>()).numa_node },
         ));
-        shown += 1;
+        if show_pages {
+            let header1 = "chunks (p:page, f:full, s:singleton, P,F,S:not abandoned, i:arena-info, m:meta-data, ~:free-purgable, _:free-committed, .:free-reserved)";
+            let header2 = if narrow { "\n       " } else { " " };
+            let header3 = "(chunk bin: S:small, M : medium, L : large, X : other)";
+            let slices_free = unsafe { (*arena.cast::<MiArenaPrefix>()).slices_free };
+            page_total += unsafe {
+                mi_debug_show_chunks(
+                    header1,
+                    header2,
+                    header3,
+                    (*arena.cast::<MiArenaPrefix>()).slice_count,
+                    mi_bbitmap_chunk_count(slices_free),
+                    ptr::null_mut(),
+                    (*slices_free).chunkmap_bins.as_mut_ptr(),
+                    false,
+                    arena,
+                    narrow,
+                )
+            };
+        }
     }
-    crate::options::_mi_raw_message(format_args!("total arenas: {}\n", shown));
+    if show_pages {
+        crate::options::_mi_raw_message(format_args!("total pages in arenas: {}\n", page_total));
+    }
+}
+
+/// # Safety
+/// Matches the C API and reads the current sub-process arena registry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_debug_show_arenas() {
+    unsafe { mi_debug_show_arenas_ex(mi_heap_main(), true, true) }
 }
 
 /// # Safety

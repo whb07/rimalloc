@@ -37,6 +37,99 @@ pub const mi_attr_alloc_size2: () = ();
 pub const mi_attr_alloc_align: () = ();
 pub const MI_HAS_HEAP_STL_ALLOCATOR: usize = 1;
 
+#[macro_export]
+macro_rules! mi_malloc_tp {
+    ($tp:ty) => {{ unsafe { $crate::mimalloc::mi_malloc(core::mem::size_of::<$tp>()) as *mut $tp } }};
+}
+
+#[macro_export]
+macro_rules! mi_zalloc_tp {
+    ($tp:ty) => {{ unsafe { $crate::mimalloc::mi_zalloc(core::mem::size_of::<$tp>()) as *mut $tp } }};
+}
+
+#[macro_export]
+macro_rules! mi_calloc_tp {
+    ($tp:ty, $count:expr) => {{ unsafe { $crate::mimalloc::mi_calloc($count, core::mem::size_of::<$tp>()) as *mut $tp } }};
+}
+
+#[macro_export]
+macro_rules! mi_mallocn_tp {
+    ($tp:ty, $count:expr) => {{ unsafe { $crate::mimalloc::mi_mallocn($count, core::mem::size_of::<$tp>()) as *mut $tp } }};
+}
+
+#[macro_export]
+macro_rules! mi_reallocn_tp {
+    ($tp:ty, $p:expr, $count:expr) => {{
+        unsafe {
+            $crate::mimalloc::mi_reallocn($p as *mut _, $count, core::mem::size_of::<$tp>())
+                as *mut $tp
+        }
+    }};
+    ($p:expr, $tp:ty, $count:expr) => {{
+        unsafe {
+            $crate::mimalloc::mi_reallocn($p as *mut _, $count, core::mem::size_of::<$tp>())
+                as *mut $tp
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_heap_malloc_tp {
+    ($tp:ty, $heap:expr) => {{ unsafe { $crate::mimalloc::mi_heap_malloc($heap, core::mem::size_of::<$tp>()) as *mut $tp } }};
+}
+
+#[macro_export]
+macro_rules! mi_heap_zalloc_tp {
+    ($tp:ty, $heap:expr) => {{ unsafe { $crate::mimalloc::mi_heap_zalloc($heap, core::mem::size_of::<$tp>()) as *mut $tp } }};
+}
+
+#[macro_export]
+macro_rules! mi_heap_calloc_tp {
+    ($tp:ty, $heap:expr, $count:expr) => {{
+        unsafe {
+            $crate::mimalloc::mi_heap_calloc($heap, $count, core::mem::size_of::<$tp>()) as *mut $tp
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_heap_mallocn_tp {
+    ($tp:ty, $heap:expr, $count:expr) => {{
+        unsafe {
+            $crate::mimalloc::mi_heap_mallocn($heap, $count, core::mem::size_of::<$tp>())
+                as *mut $tp
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_heap_reallocn_tp {
+    ($tp:ty, $heap:expr, $p:expr, $count:expr) => {{
+        unsafe {
+            $crate::mimalloc::mi_heap_reallocn(
+                $heap,
+                $p as *mut _,
+                $count,
+                core::mem::size_of::<$tp>(),
+            ) as *mut $tp
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_heap_recalloc_tp {
+    ($tp:ty, $heap:expr, $p:expr, $count:expr) => {{
+        unsafe {
+            $crate::mimalloc::mi_heap_recalloc(
+                $heap,
+                $p as *mut _,
+                $count,
+                core::mem::size_of::<$tp>(),
+            ) as *mut $tp
+        }
+    }};
+}
+
 unsafe extern "C" {
     pub fn mi_malloc(size: usize) -> *mut c_void;
     pub fn mi_calloc(count: usize, size: usize) -> *mut c_void;

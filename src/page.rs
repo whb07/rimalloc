@@ -8,7 +8,7 @@
     clippy::nonminimal_bool
 )]
 
-use core::ffi::c_void;
+use core::ffi::{c_long, c_void};
 use core::mem::size_of;
 use core::ptr;
 
@@ -18,31 +18,38 @@ use crate::arena::{
 };
 use crate::atomic::{
     EFAULT, mi_atomic_and_relaxed, mi_atomic_cas_weak_acq_rel, mi_atomic_cas_weak_release,
-    mi_atomic_load_explicit, mi_atomic_or_relaxed, mi_memory_order_e,
+    mi_atomic_load_explicit, mi_atomic_load_ptr_acquire, mi_atomic_or_relaxed,
+    mi_atomic_store_ptr_release, mi_memory_order_e,
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up, _mi_error_message,
-    _mi_is_heap_main, _mi_os_commit, _mi_os_page_size, _mi_page_empty, _mi_ptr_page,
-    _mi_theap_heap, _mi_theap_random_next, _mi_wsize_from_size, MI_DEBUG, MI_SECURE, mi_block_next,
+    _mi_is_heap_main, _mi_os_commit, _mi_os_good_alloc_size, _mi_os_page_size, _mi_page_empty,
+    _mi_page_malloc_zero, _mi_ptr_page, _mi_theap_empty_wrong, _mi_theap_heap,
+    _mi_theap_random_next, _mi_wsize_from_size, MI_DEBUG, MI_SECURE, mi_block_next,
     mi_block_set_next, mi_mem_is_zero, mi_memkind_t, mi_page_all_free, mi_page_area,
     mi_page_block_size, mi_page_committed, mi_page_contains_address, mi_page_flags,
     mi_page_has_interior_pointers, mi_page_immediate_available, mi_page_is_expandable,
-    mi_page_is_singleton, mi_page_set_has_interior_pointers, mi_page_slice_offset_of,
-    mi_page_slice_start, mi_page_start, mi_page_thread_free, mi_page_usable_block_size,
+    mi_page_is_mostly_used, mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers,
+    mi_page_slice_offset_of, mi_page_slice_start, mi_page_start, mi_page_thread_free,
+    mi_page_usable_block_size, mi_theap_is_initialized,
 };
+use crate::options::{_mi_option_get_fast, mi_option_get_clamp, mi_option_t};
 use crate::stats::{MI_BIN_HUGE, bin_block_size};
 use crate::track::{
     MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
 };
 use crate::types::{
-    MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_LARGE_MAX_OBJ_WSIZE, MI_PAGE_FLAG_MASK,
-    MI_PAGE_IN_FULL_QUEUE, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_THREADID_ABANDONED,
-    MI_THREADID_ABANDONED_MAPPED, mi_block_t, mi_page_flags_t, mi_page_queue_t, mi_page_t,
-    mi_theap_t,
+    ENOMEM, EOVERFLOW, MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_LARGE_MAX_OBJ_WSIZE,
+    MI_PAGE_FLAG_MASK, MI_PAGE_IN_FULL_QUEUE, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX,
+    MI_THREADID_ABANDONED, MI_THREADID_ABANDONED_MAPPED, mi_block_t, mi_deferred_free_fun,
+    mi_page_flags_t, mi_page_queue_t, mi_page_t, mi_theap_t,
 };
 
 pub use crate::types::MI_PADDING_SIZE;
+
+static mut deferred_free: *mut c_void = ptr::null_mut();
+static mut deferred_arg: *mut c_void = ptr::null_mut();
 
 pub const MI_OS_PAGE_SIZE: usize = 4096;
 pub const MI_SMALL_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
@@ -826,6 +833,11 @@ pub unsafe fn mi_page_is_in_full(page: *const mi_page_t) -> bool {
 }
 
 #[inline]
+pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
+    !mi_page_immediate_available(page) && !mi_page_is_expandable(page)
+}
+
+#[inline]
 pub unsafe fn mi_page_set_in_full(page: *mut mi_page_t, in_full: bool) {
     let was_in_full = mi_page_flags_set(page, in_full, MI_PAGE_IN_FULL_QUEUE);
     if was_in_full != in_full {
@@ -1256,4 +1268,265 @@ pub unsafe fn _mi_page_queue_append(
     (*pq).count += (*append).count;
 
     count
+}
+
+#[inline]
+unsafe fn mi_page_queue_find_free_ex(
+    theap: *mut mi_theap_t,
+    pq: *mut mi_page_queue_t,
+    first_try: bool,
+) -> *mut mi_page_t {
+    let mut count = 0usize;
+    let mut candidate_limit: c_long = 0;
+    let mut page_full_retain = if (*pq).block_size > MI_SMALL_SIZE_MAX {
+        0
+    } else {
+        (*theap).page_full_retain
+    };
+    let mut page_candidate = ptr::null_mut::<mi_page_t>();
+    let mut page = (*pq).first;
+
+    while !page.is_null() {
+        let next = (*page).next;
+        count += 1;
+        candidate_limit -= 1;
+
+        let mut immediate_available = mi_page_immediate_available(page);
+        if !immediate_available {
+            _mi_page_free_collect(page, false);
+            immediate_available = mi_page_immediate_available(page);
+        }
+
+        if !immediate_available && !mi_page_is_expandable(page) {
+            page_full_retain -= 1;
+            if page_full_retain < 0 {
+                crate::mi_assert_internal!(
+                    !mi_page_is_in_full(page) && !mi_page_immediate_available(page)
+                );
+                mi_page_to_full(page, pq);
+            }
+        } else {
+            if page_candidate.is_null() {
+                page_candidate = page;
+                candidate_limit = _mi_option_get_fast(mi_option_t::mi_option_page_max_candidates);
+            } else if mi_page_all_free(page_candidate) {
+                _mi_page_free(page_candidate, pq);
+                page_candidate = page;
+            } else if (*page).used >= (*page_candidate).used && !mi_page_is_mostly_used(page) {
+                page_candidate = page;
+            }
+            if immediate_available || candidate_limit <= 0 {
+                crate::mi_assert_internal!(!page_candidate.is_null());
+                break;
+            }
+        }
+
+        page = next;
+    }
+
+    __mi_stat_counter_increase(&mut (*theap).stats.page_searches, count);
+    __mi_stat_counter_increase(&mut (*theap).stats.page_searches_count, 1);
+
+    if !page_candidate.is_null() {
+        page = page_candidate;
+    }
+    if !page.is_null() {
+        if !mi_page_immediate_available(page) {
+            crate::mi_assert_internal!(mi_page_is_expandable(page));
+            if !mi_page_extend_free(theap, page) {
+                page = ptr::null_mut();
+            }
+        }
+        crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
+    }
+
+    if page.is_null() {
+        _mi_theap_collect_retired(theap, false);
+        page = mi_page_fresh(theap, pq);
+        crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
+        if page.is_null() && first_try {
+            page = mi_page_queue_find_free_ex(theap, pq, false);
+            crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
+        }
+    } else {
+        crate::mi_assert_internal!(mi_page_immediate_available(page));
+        mi_page_queue_move_to_front(theap, pq, page);
+        (*page).retire_expire = 0;
+    }
+    crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
+
+    page
+}
+
+#[inline]
+#[allow(clippy::absurd_extreme_comparisons)]
+unsafe fn mi_find_free_page(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
+    crate::mi_assert_internal!(!mi_page_queue_is_huge(pq));
+
+    let page = (*pq).first;
+    if !page.is_null() && mi_page_free_quick_collect(page) {
+        if MI_SECURE >= 2
+            && (*page).capacity < (*page).reserved
+            && ((_mi_theap_random_next(theap) & 1) == 1)
+        {
+            let _ = mi_page_extend_free(theap, page);
+            crate::mi_assert_internal!(mi_page_immediate_available(page));
+        }
+        (*page).retire_expire = 0;
+        page
+    } else {
+        mi_page_queue_find_free_ex(theap, pq, true)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool) {
+    (*theap).heartbeat = (*theap).heartbeat.wrapping_add(1);
+    let fun_ptr = mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free));
+    if !fun_ptr.is_null() && !(*(*theap).tld).recurse {
+        (*(*theap).tld).recurse = true;
+        let arg = mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_arg));
+        let fun: mi_deferred_free_fun = core::mem::transmute(fun_ptr);
+        fun(force, (*theap).heartbeat, arg);
+        (*(*theap).tld).recurse = false;
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_register_deferred_free(
+    fn_: Option<mi_deferred_free_fun>,
+    arg: *mut c_void,
+) {
+    mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_arg), arg);
+    let f = fn_.map_or(ptr::null_mut(), |fun| fun as *const () as *mut c_void);
+    mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_free), f);
+}
+
+#[inline]
+unsafe fn mi_huge_page_alloc(
+    theap: *mut mi_theap_t,
+    size: usize,
+    page_alignment: usize,
+    pq: *mut mi_page_queue_t,
+) -> *mut mi_page_t {
+    let block_size = _mi_os_good_alloc_size(size);
+    crate::mi_assert_internal!(mi_page_queue_is_huge(pq));
+    let page = mi_page_fresh_alloc(theap, pq, block_size, page_alignment);
+    if !page.is_null() {
+        crate::mi_assert_internal!(mi_page_block_size(page) >= size);
+        crate::mi_assert_internal!(mi_page_immediate_available(page));
+        crate::mi_assert_internal!(mi_page_is_huge(page));
+        crate::mi_assert_internal!(mi_page_is_singleton(page));
+        __mi_stat_increase(&mut (*theap).stats.malloc_huge, mi_page_block_size(page));
+        __mi_stat_counter_increase(&mut (*theap).stats.malloc_huge_count, 1);
+    }
+    page
+}
+
+#[inline]
+unsafe fn mi_find_page(
+    theap: *mut mi_theap_t,
+    size: usize,
+    huge_alignment: usize,
+) -> *mut mi_page_t {
+    let req_size = size.wrapping_sub(MI_PADDING_SIZE);
+    if req_size > MI_MAX_ALLOC_SIZE {
+        _mi_error_message(
+            EOVERFLOW,
+            c"allocation request is too large (%zu bytes)\n".as_ptr(),
+            req_size,
+        );
+        return ptr::null_mut();
+    }
+
+    let pq = mi_page_queue(
+        theap,
+        if huge_alignment > 0 {
+            MI_LARGE_MAX_OBJ_SIZE + 1
+        } else {
+            size
+        },
+    );
+    if mi_page_queue_is_huge(pq) || req_size > MI_MAX_ALLOC_SIZE {
+        mi_huge_page_alloc(theap, size, huge_alignment, pq)
+    } else {
+        mi_find_free_page(theap, pq)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_malloc_generic(
+    mut theap: *mut mi_theap_t,
+    size: usize,
+    zero_huge_alignment: usize,
+    usable: *mut usize,
+) -> *mut c_void {
+    let zero = (zero_huge_alignment & 1) != 0;
+    let huge_alignment = zero_huge_alignment & !1;
+
+    if !mi_theap_is_initialized(theap) {
+        if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
+            return ptr::null_mut();
+        }
+        crate::mimalloc::mi_thread_init();
+        theap = crate::prim::_mi_theap_default();
+        if !mi_theap_is_initialized(theap) {
+            return ptr::null_mut();
+        }
+        crate::mi_assert_internal!(crate::prim::_mi_theap_default() == theap);
+    }
+    crate::mi_assert_internal!(mi_theap_is_initialized(theap));
+
+    (*theap).generic_count += 1;
+    if (*theap).generic_count >= 1000 {
+        (*theap).generic_collect_count += (*theap).generic_count;
+        (*theap).generic_count = 0;
+        _mi_deferred_free(theap, false);
+        _mi_theap_collect_retired(theap, false);
+
+        let generic_collect =
+            mi_option_get_clamp(mi_option_t::mi_option_generic_collect, 1, 1_000_000);
+        if (*theap).generic_collect_count >= generic_collect {
+            (*theap).generic_collect_count = 0;
+            crate::mimalloc::mi_theap_collect(theap, false);
+        }
+    }
+
+    let mut page = mi_find_page(theap, size, huge_alignment);
+    if page.is_null() {
+        crate::mimalloc::mi_theap_collect(theap, true);
+        page = mi_find_page(theap, size, huge_alignment);
+    }
+
+    if page.is_null() {
+        let req_size = size.wrapping_sub(MI_PADDING_SIZE);
+        _mi_error_message(
+            ENOMEM,
+            c"unable to allocate memory (%zu bytes)\n".as_ptr(),
+            req_size,
+        );
+        return ptr::null_mut();
+    }
+
+    crate::mi_assert_internal!(mi_page_immediate_available(page));
+    crate::mi_assert_internal!(mi_page_block_size(page) >= size);
+    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        mi_page_slice_start(page).cast(),
+        MI_PAGE_ALIGN
+    ));
+    crate::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
+
+    if !usable.is_null() {
+        *usable = mi_page_usable_block_size(page);
+    }
+    let p = _mi_page_malloc_zero(theap, page, size, zero);
+    crate::mi_assert_internal!(!p.is_null());
+
+    if mi_page_block_size(page) > MI_SMALL_MAX_OBJ_SIZE
+        && !mi_page_immediate_available(page)
+        && !mi_page_is_expandable(page)
+    {
+        mi_page_to_full(page, mi_page_queue_of(page));
+    }
+    p
 }

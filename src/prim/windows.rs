@@ -20,12 +20,13 @@ use core::{
 use std::sync::Once;
 
 use crate::bits::{MI_KiB, MI_MiB, MI_SIZE_BITS, mi_clz};
+use crate::init::_mi_preloading;
 use crate::internal::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_page_size};
 use crate::options::{
     _mi_verbose_message, _mi_warning_message, mi_option_get_clamp, mi_option_is_enabled,
     mi_option_t,
 };
-use crate::prim::mi_os_mem_config_t;
+use crate::prim::{mi_os_mem_config_t, mi_process_info_t};
 use crate::types::{mi_msecs_t, mi_theap_t};
 
 pub const ETW_INLINE: () = ();
@@ -76,8 +77,6 @@ pub type PULONG = *mut ULONG;
 pub type PULONGLONG = *mut u64;
 pub type PUSHORT = *mut USHORT;
 pub type PGROUP_AFFINITY = *mut GROUP_AFFINITY;
-pub type PROCESS_MEMORY_COUNTERS = c_void;
-pub type PPROCESS_MEMORY_COUNTERS = *mut PROCESS_MEMORY_COUNTERS;
 pub type REGHANDLE = TRACEHANDLE;
 pub type PREGHANDLE = *mut REGHANDLE;
 pub type LPCGUID = *const GUID;
@@ -185,6 +184,49 @@ pub struct MEMORY_BASIC_INFORMATION {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PROCESS_MEMORY_COUNTERS {
+    pub cb: DWORD,
+    pub PageFaultCount: DWORD,
+    pub PeakWorkingSetSize: SIZE_T,
+    pub WorkingSetSize: SIZE_T,
+    pub QuotaPeakPagedPoolUsage: SIZE_T,
+    pub QuotaPagedPoolUsage: SIZE_T,
+    pub QuotaPeakNonPagedPoolUsage: SIZE_T,
+    pub QuotaNonPagedPoolUsage: SIZE_T,
+    pub PagefileUsage: SIZE_T,
+    pub PeakPagefileUsage: SIZE_T,
+}
+
+pub type PPROCESS_MEMORY_COUNTERS = *mut PROCESS_MEMORY_COUNTERS;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct COORD {
+    pub X: i16,
+    pub Y: i16,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SMALL_RECT {
+    pub Left: i16,
+    pub Top: i16,
+    pub Right: i16,
+    pub Bottom: i16,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CONSOLE_SCREEN_BUFFER_INFO {
+    pub dwSize: COORD,
+    pub dwCursorPosition: COORD,
+    pub wAttributes: WORD,
+    pub srWindow: SMALL_RECT,
+    pub dwMaximumWindowSize: COORD,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IMAGE_DOS_HEADER {
     pub _padding: [u8; 60],
@@ -231,6 +273,7 @@ pub const ERROR_PAGEFILE_QUOTA: DWORD = 1454;
 pub const ERROR_NOT_ENOUGH_MEMORY: DWORD = 8;
 pub const ERROR_INVALID_ADDRESS: DWORD = 487;
 pub const ERROR_SUCCESS: DWORD = 0;
+pub const STD_ERROR_HANDLE: DWORD = (-12i32) as DWORD;
 pub const MEM_COMMIT: DWORD = 0x0000_1000;
 pub const MEM_DECOMMIT: DWORD = 0x0000_4000;
 pub const MEM_RELEASE: DWORD = 0x0000_8000;
@@ -248,6 +291,7 @@ pub const SE_PRIVILEGE_ENABLED: DWORD = 0x0000_0002;
 pub const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS: DWORD = 0x0000_0004;
 pub const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT: DWORD = 0x0000_0002;
 pub const IMAGE_FILE_DLL: WORD = 0x2000;
+pub const INVALID_HANDLE_VALUE: HANDLE = usize::MAX as HANDLE;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -412,6 +456,13 @@ unsafe extern "system" {
         dwLength: SIZE_T,
     ) -> SIZE_T;
     pub fn GetCurrentProcess() -> HANDLE;
+    pub fn GetProcessTimes(
+        hProcess: HANDLE,
+        lpCreationTime: *mut FILETIME,
+        lpExitTime: *mut FILETIME,
+        lpKernelTime: *mut FILETIME,
+        lpUserTime: *mut FILETIME,
+    ) -> BOOL;
     pub fn OpenProcessToken(
         ProcessHandle: HANDLE,
         DesiredAccess: DWORD,
@@ -432,6 +483,25 @@ unsafe extern "system" {
     pub fn GetCurrentProcessorNumber() -> DWORD;
     pub fn SwitchToThread() -> BOOL;
     pub fn GetSystemInfo(lpSystemInfo: *mut SYSTEM_INFO);
+    pub fn GetStdHandle(nStdHandle: DWORD) -> HANDLE;
+    pub fn GetConsoleScreenBufferInfo(
+        hConsoleOutput: HANDLE,
+        lpConsoleScreenBufferInfo: *mut CONSOLE_SCREEN_BUFFER_INFO,
+    ) -> BOOL;
+    pub fn WriteConsoleA(
+        hConsoleOutput: HANDLE,
+        lpBuffer: *const c_void,
+        nNumberOfCharsToWrite: DWORD,
+        lpNumberOfCharsWritten: *mut DWORD,
+        lpReserved: LPVOID,
+    ) -> BOOL;
+    pub fn WriteFile(
+        hFile: HANDLE,
+        lpBuffer: *const c_void,
+        nNumberOfBytesToWrite: DWORD,
+        lpNumberOfBytesWritten: *mut DWORD,
+        lpOverlapped: LPVOID,
+    ) -> BOOL;
     pub fn LoadLibraryA(lpLibFileName: LPCSTR) -> HINSTANCE;
     pub fn GetProcAddress(hModule: HMODULE, lpProcName: LPCSTR) -> FARPROC;
     pub fn FreeLibrary(hLibModule: HMODULE) -> BOOL;
@@ -462,9 +532,13 @@ pub struct FILETIME {
 static MI_MSECS_FREQ: AtomicI64 = AtomicI64::new(0);
 static MI_HUGE_PAGES_AVAILABLE: AtomicUsize = AtomicUsize::new(1);
 static WIN_LARGE_OS_PAGES_INIT: Once = Once::new();
+static PROCESS_INFO_INIT: Once = Once::new();
+static STDERR_HANDLE_INIT: Once = Once::new();
 static mut mi_fls_key: DWORD = FLS_OUT_OF_INDEXES;
 static mut win_large_os_pages_enabled: bool = false;
 static mut win_large_os_page_size: usize = 0;
+static mut mi_stderr_handle: HANDLE = INVALID_HANDLE_VALUE;
+static mut mi_stderr_is_console: bool = false;
 
 #[inline]
 fn mi_getenv_value(name: &str) -> Option<String> {
@@ -808,6 +882,21 @@ pub unsafe extern "system" fn mi_dll_main_raw(
 pub unsafe extern "C" fn _mi_allocator_done() {}
 
 #[inline]
+pub unsafe extern "C" fn _mi_is_redirected() -> bool {
+    false
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
+    if !message.is_null() {
+        unsafe {
+            *message = null();
+        }
+    }
+    true
+}
+
+#[inline]
 pub unsafe extern "C" fn _mi_prim_commit(
     addr: *mut c_void,
     size: usize,
@@ -886,6 +975,95 @@ pub unsafe extern "C" fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> i32 {
     let _ = addr;
     let _ = size;
     0
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
+    if pinfo.is_null() {
+        return;
+    }
+
+    let mut ct = FILETIME::default();
+    let mut ut = FILETIME::default();
+    let mut st = FILETIME::default();
+    let mut et = FILETIME::default();
+    unsafe {
+        GetProcessTimes(GetCurrentProcess(), &mut ct, &mut et, &mut st, &mut ut);
+    }
+    unsafe {
+        (*pinfo).utime = filetime_msecs(&ut);
+        (*pinfo).stime = filetime_msecs(&st);
+    }
+
+    PROCESS_INFO_INIT.call_once(|| unsafe {
+        let h_dll = LoadLibraryA(c"psapi.dll".as_ptr());
+        if !h_dll.is_null() {
+            pGetProcessMemoryInfo = mi_get_proc(h_dll, c"GetProcessMemoryInfo".as_ptr());
+        }
+    });
+
+    let mut info = PROCESS_MEMORY_COUNTERS {
+        cb: core::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as DWORD,
+        ..PROCESS_MEMORY_COUNTERS::default()
+    };
+    if let Some(get_process_memory_info) = unsafe { pGetProcessMemoryInfo } {
+        unsafe {
+            get_process_memory_info(GetCurrentProcess(), &mut info, info.cb);
+        }
+    }
+    unsafe {
+        (*pinfo).current_rss = info.WorkingSetSize;
+        (*pinfo).peak_rss = info.PeakWorkingSetSize;
+        (*pinfo).current_commit = info.PagefileUsage;
+        (*pinfo).peak_commit = info.PeakPagefileUsage;
+        (*pinfo).page_faults = info.PageFaultCount as usize;
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
+    if msg.is_null() || _mi_preloading() {
+        return;
+    }
+    let bytes = unsafe { CStr::from_ptr(msg) }.to_bytes();
+    let Ok(len) = DWORD::try_from(bytes.len()) else {
+        return;
+    };
+    if len == 0 {
+        return;
+    }
+
+    STDERR_HANDLE_INIT.call_once(|| unsafe {
+        mi_stderr_handle = GetStdHandle(STD_ERROR_HANDLE);
+        if mi_stderr_handle != INVALID_HANDLE_VALUE {
+            let mut sbi = CONSOLE_SCREEN_BUFFER_INFO::default();
+            mi_stderr_is_console =
+                GetConsoleScreenBufferInfo(mi_stderr_handle, &mut sbi) != FALSE as BOOL;
+        }
+    });
+
+    let mut written: DWORD = 0;
+    unsafe {
+        if mi_stderr_is_console {
+            let _ = WriteConsoleA(
+                mi_stderr_handle,
+                bytes.as_ptr().cast::<c_void>(),
+                len,
+                &mut written,
+                null_mut(),
+            );
+        } else if mi_stderr_handle != INVALID_HANDLE_VALUE {
+            let _ = WriteFile(
+                mi_stderr_handle,
+                bytes.as_ptr().cast::<c_void>(),
+                len,
+                &mut written,
+                null_mut(),
+            );
+        } else {
+            let _ = std::io::Write::write_all(&mut std::io::stderr().lock(), bytes);
+        }
+    }
 }
 
 #[inline]

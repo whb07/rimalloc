@@ -11,7 +11,7 @@ use crate::bits::MI_INTPTR_BITS;
 use crate::internal::{
     _mi_align_up, _mi_divide_up, _mi_memid_create, _mi_os_commit, _mi_os_commit_ex, _mi_subproc,
     mi_block_next, mi_memid_t, mi_memkind_t, mi_page_area, mi_page_block_size, mi_page_heap,
-    mi_page_start, mi_page_usable_block_size, mi_size_of_slices,
+    mi_page_is_owned, mi_page_start, mi_page_usable_block_size, mi_size_of_slices,
 };
 use crate::mimalloc::mi_manage_os_memory_ex;
 use crate::options::{mi_option_get_size, mi_option_t};
@@ -140,6 +140,9 @@ struct MiArenaPrefix {
 struct MiArenaPagesPrefix {
     pages: *mut crate::bitmap::mi_bitmap_t,
 }
+
+#[allow(non_camel_case_types)]
+type mi_arena_pages_t = MiArenaPagesPrefix;
 
 #[allow(dead_code, non_camel_case_types)]
 #[repr(C)]
@@ -394,6 +397,41 @@ pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usiz
 #[allow(dead_code)]
 unsafe fn mi_arena_info_slices(arena: *mut mi_arena_t) -> usize {
     unsafe { (*arena.cast::<MiArenaPrefix>()).info_slices }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_heap_arena_pages(
+    heap: *mut mi_heap_t,
+    arena: *mut mi_arena_t,
+) -> *mut mi_arena_pages_t {
+    crate::mi_assert_internal!(!arena.is_null());
+    crate::mi_assert_internal!(!heap.is_null());
+    let arena_idx = unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx };
+    crate::mi_assert!(arena_idx < MI_MAX_ARENAS);
+    unsafe { (*heap.cast::<MiHeapPrefix>()).arena_pages[arena_idx].load(Ordering::Acquire) }
+        .cast::<mi_arena_pages_t>()
+}
+
+#[allow(dead_code)]
+unsafe fn mi_page_arena_pages(
+    page: *mut mi_page_t,
+    slice_index: *mut usize,
+    slice_count: *mut usize,
+    parena_pages: *mut *mut mi_arena_pages_t,
+) -> *mut mi_arena_t {
+    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    let arena = unsafe { mi_arena_from_memid((*page).memid, slice_index, slice_count) };
+    crate::mi_assert_internal!(!arena.is_null());
+    if !parena_pages.is_null() {
+        let arena_pages = unsafe { mi_heap_arena_pages(mi_page_heap(page), arena) };
+        crate::mi_assert_internal!(!arena_pages.is_null());
+        crate::mi_assert_internal!(
+            slice_index.is_null()
+                || unsafe { mi_bitmap_is_setN((*arena_pages).pages, *slice_index, 1) }
+        );
+        unsafe { *parena_pages = arena_pages };
+    }
+    arena
 }
 
 #[allow(dead_code)]

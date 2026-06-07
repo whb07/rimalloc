@@ -67,6 +67,8 @@ unsafe extern "C" {
         allow_large: bool,
         arena_id: *mut mi_arena_id_t,
     ) -> bool;
+    #[allow(dead_code)]
+    fn mi_arenas_try_purge(force: bool, visit_all: bool, subproc: *mut mi_subproc_t, tseq: usize);
     fn _mi_arenas_page_unabandon(page: *mut mi_page_t, current_theap: *mut mi_theap_t);
     fn _mi_arenas_page_free(page: *mut mi_page_t, current_theap: *mut mi_theap_t);
 }
@@ -804,6 +806,63 @@ unsafe fn mi_arena_is_suitable_ex(
 }
 
 #[allow(dead_code)]
+unsafe fn mi_forall_arenas<F>(
+    heap: *mut mi_heap_t,
+    req_arena: *mut mi_arena_t,
+    tseq: usize,
+    mut visit: F,
+) where
+    F: FnMut(*mut mi_arena_t) -> bool,
+{
+    let subproc = unsafe { (*heap.cast::<MiHeapPrefix>()).subproc };
+    let arena_count = unsafe { mi_arenas_get_count(subproc) };
+    let arena_cycle = arena_count.saturating_sub(1);
+    let start = unsafe { mi_arena_start_idx(heap, tseq, arena_cycle) };
+    for i in 0..arena_count {
+        let arena = if !req_arena.is_null() {
+            if i > 0 {
+                break;
+            }
+            req_arena
+        } else {
+            let idx = if i < arena_cycle {
+                let mut idx = i + start;
+                if idx >= arena_cycle {
+                    idx -= arena_cycle;
+                }
+                idx
+            } else {
+                i
+            };
+            unsafe { mi_arena_from_index(subproc, idx) }
+        };
+        if !arena.is_null() && !visit(arena) {
+            break;
+        }
+    }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_forall_suitable_arenas<F>(
+    heap: *mut mi_heap_t,
+    req_arena: *mut mi_arena_t,
+    tseq: usize,
+    match_numa: bool,
+    numa_node: i32,
+    allow_large: bool,
+    mut visit: F,
+) where
+    F: FnMut(*mut mi_arena_t) -> bool,
+{
+    unsafe {
+        mi_forall_arenas(heap, req_arena, tseq, |arena| {
+            !mi_arena_is_suitable_ex(arena, req_arena, match_numa, numa_node, allow_large)
+                || visit(arena)
+        })
+    };
+}
+
+#[allow(dead_code)]
 unsafe fn mi_arena_pages_size(slice_count: usize, bitmap_base: *mut usize) -> usize {
     let slice_count = if slice_count == 0 {
         MI_ARENA_BCHUNK_BITS
@@ -1229,6 +1288,31 @@ pub unsafe extern "C" fn mi_reserve_os_memory(
 }
 
 /// # Safety
+/// Matches the C API and forwards to the current arena-management entrypoint.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_manage_os_memory(
+    start: *mut c_void,
+    size: usize,
+    is_committed: bool,
+    is_large: bool,
+    is_zero: bool,
+    numa_node: c_int,
+) -> bool {
+    unsafe {
+        mi_manage_os_memory_ex(
+            start,
+            size,
+            is_committed,
+            is_large,
+            is_zero,
+            numa_node,
+            false,
+            ptr::null_mut(),
+        )
+    }
+}
+
+/// # Safety
 /// Matches the C API and reads the current sub-process arena registry.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_debug_show_arenas() {
@@ -1272,4 +1356,11 @@ pub unsafe extern "C" fn mi_debug_show_arenas() {
         shown += 1;
     }
     crate::options::_mi_raw_message(format_args!("total arenas: {}\n", shown));
+}
+
+/// # Safety
+/// Matches the C API and forwards to the current arena debug printer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_arenas_print() {
+    unsafe { mi_debug_show_arenas() }
 }

@@ -29,8 +29,10 @@ pub const MI_MEM_EXTENDED_PARAMETER_NONPAGED_HUGE: u32 = 0x0000_0010;
 pub const DECLSPEC_ALIGN: usize = 8;
 
 pub type BYTE = u8;
+pub type BOOLEAN = u8;
 pub type BOOL = i32;
 pub type DWORD64 = u64;
+pub type HINSTANCE = *mut c_void;
 pub type LONG = i32;
 pub type UCHAR = u8;
 pub type ULONG = u32;
@@ -46,6 +48,8 @@ pub type PULONG = *mut ULONG;
 pub type PULONGLONG = *mut u64;
 pub type PUSHORT = *mut USHORT;
 pub type PGROUP_AFFINITY = *mut c_void;
+pub type PROCESS_MEMORY_COUNTERS = c_void;
+pub type PPROCESS_MEMORY_COUNTERS = *mut PROCESS_MEMORY_COUNTERS;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -162,6 +166,30 @@ pub static mut pGetNumaHighestNodeNumber: PGetNumaHighestNodeNumber = None;
 pub type PGetLargePageMinimum = Option<unsafe extern "system" fn() -> SIZE_T>;
 
 pub static mut pGetLargePageMinimum: PGetLargePageMinimum = None;
+
+pub const RtlGenRandom_SystemFunction036: &str = "SystemFunction036";
+pub const RtlGenRandom: &str = RtlGenRandom_SystemFunction036;
+pub const BCRYPT_USE_SYSTEM_PREFERRED_RNG: ULONG = 0x0000_0002;
+
+unsafe extern "system" {
+    pub fn SystemFunction036(RandomBuffer: PVOID, RandomBufferLength: ULONG) -> BOOLEAN;
+}
+
+pub type PGetProcessMemoryInfo =
+    Option<unsafe extern "system" fn(HANDLE, PPROCESS_MEMORY_COUNTERS, DWORD) -> BOOL>;
+pub type PBCryptGenRandom = Option<unsafe extern "system" fn(HANDLE, PUCHAR, ULONG, ULONG) -> LONG>;
+
+pub static mut pGetProcessMemoryInfo: PGetProcessMemoryInfo = None;
+pub static mut pBCryptGenRandom: PBCryptGenRandom = None;
+
+pub type PFLS_CALLBACK_FUNCTION = Option<unsafe extern "system" fn(PVOID)>;
+
+unsafe extern "system" {
+    pub fn FlsAlloc(lpCallback: PFLS_CALLBACK_FUNCTION) -> DWORD;
+    pub fn FlsGetValue(dwFlsIndex: DWORD) -> PVOID;
+    pub fn FlsSetValue(dwFlsIndex: DWORD, lpFlsData: PVOID) -> BOOL;
+    pub fn FlsFree(dwFlsIndex: DWORD) -> BOOL;
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

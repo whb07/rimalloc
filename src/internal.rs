@@ -563,10 +563,12 @@ unsafe extern "C" {
         block_size: usize,
         page_alignment: usize,
     ) -> *mut mi_page_t;
+    pub fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t);
     pub fn _mi_arenas_page_free(page: *mut mi_page_t, current_theapx: *mut mi_theap_t);
     pub fn _mi_arenas_page_abandon(page: *mut mi_page_t, current_theap: *mut mi_theap_t);
     pub fn _mi_arenas_page_unabandon(page: *mut mi_page_t, current_theapx: *mut mi_theap_t);
     pub fn _mi_arenas_page_try_reabandon_to_mapped(page: *mut mi_page_t) -> bool;
+    pub fn _mi_arenas_collect(force_purge: bool, visit_all: bool, tld: *mut mi_tld_t);
     pub fn _mi_arenas_contain(p: *const c_void) -> bool;
     pub fn _mi_meta_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;
     pub fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t);
@@ -950,6 +952,13 @@ pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
 }
 
 #[inline]
+pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
+    let full = (*page).reserved == (*page).used;
+    crate::mi_assert_internal!(!full || (*page).free.is_null());
+    full
+}
+
+#[inline]
 pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
     if page.is_null() {
         return true;
@@ -1010,6 +1019,12 @@ pub unsafe fn mi_page_has_interior_pointers(page: *const mi_page_t) -> bool {
 #[inline]
 pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
     mi_page_thread_id(page) == MI_THREADID_ABANDONED_MAPPED
+}
+
+#[inline]
+pub unsafe fn mi_page_set_abandoned_mapped(page: *mut mi_page_t) {
+    crate::mi_assert_internal!(crate::page::mi_page_is_abandoned(page));
+    crate::atomic::mi_atomic_or_relaxed(&mut (*page).xthread_id, MI_THREADID_ABANDONED_MAPPED);
 }
 
 #[inline]

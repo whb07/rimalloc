@@ -15,12 +15,14 @@ use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bits::MI_SIZE_SIZE;
 use crate::internal::{_mi_allocator_done, _mi_error_message, mi_memid_t, mi_memkind_t};
-use crate::options::{mi_option_get, mi_option_get_clamp, mi_option_t};
-use crate::stats::{mi_stat_count_t, mi_stats_get_json_from, mi_stats_header_init, mi_stats_t};
+use crate::options::{_mi_warning_message, mi_option_get, mi_option_get_clamp, mi_option_t};
+use crate::stats::{
+    _mi_stats_merge_into, mi_stat_count_t, mi_stats_get_json_from, mi_stats_header_init, mi_stats_t,
+};
 use crate::types::{
-    MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_page_queue_t, mi_page_t,
-    mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
-    mi_tld_t,
+    MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_heap_visit_fun,
+    mi_page_queue_t, mi_page_t, mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
+    mi_thread_local_t, mi_threadid_t, mi_tld_t,
 };
 #[cfg(windows)]
 use crate::{prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
@@ -596,6 +598,60 @@ unsafe fn mi_subproc_unlink_locked(subproc: *mut MiSubprocPrefix) {
         }
         (*subproc).next = ptr::null_mut();
         (*subproc).prev = ptr::null_mut();
+    }
+}
+
+unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs_lock: bool) {
+    if subproc.is_null() {
+        return;
+    }
+    let is_main = ptr::eq(subproc, unsafe { _mi_subproc_main() });
+    let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
+    if acquire_subprocs_lock {
+        unsafe { mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock)) };
+    }
+    unsafe { mi_subproc_unlink_locked(subproc_prefix) };
+    if acquire_subprocs_lock {
+        unsafe { mi_lock_release(ptr::addr_of_mut!(subprocs_lock)) };
+    }
+
+    unsafe {
+        (*subproc_prefix).heaps = ptr::null_mut();
+        (*subproc_prefix).heap_main = ptr::null_mut();
+        (*subproc_prefix).thread_count.store(0, Ordering::Relaxed);
+        (*subproc_prefix).heap_count.store(0, Ordering::Relaxed);
+        (*subproc_prefix).arena_count.store(0, Ordering::Relaxed);
+    }
+
+    if is_main {
+        unsafe { crate::page_map::_mi_page_map_unsafe_destroy(subproc) };
+    } else {
+        let main_subproc = unsafe { mi_subproc_prefix(_mi_subproc_main()) };
+        unsafe {
+            _mi_stats_merge_into(
+                ptr::addr_of_mut!((*main_subproc).stats),
+                ptr::addr_of_mut!((*subproc_prefix).stats),
+            );
+            mi_subproc_destroy_boxed(subproc);
+        }
+    }
+}
+
+unsafe fn mi_subprocs_unsafe_destroy_all() {
+    mi_subproc_main_init();
+    let main_subproc = unsafe { _mi_subproc_main() };
+    unsafe {
+        mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock));
+        let mut subproc = subprocs;
+        while !subproc.is_null() {
+            let next = (*mi_subproc_prefix(subproc)).next;
+            if !ptr::eq(subproc, main_subproc) {
+                mi_subproc_unsafe_destroy(subproc, false);
+            }
+            subproc = next;
+        }
+        mi_lock_release(ptr::addr_of_mut!(subprocs_lock));
+        mi_subproc_unsafe_destroy(main_subproc, true);
     }
 }
 
@@ -1301,13 +1357,7 @@ pub unsafe extern "C" fn mi_subproc_destroy(subproc_id: mi_subproc_id_t) {
     if !unsafe { mi_subproc_is_reclaimable(subproc_prefix) } {
         return;
     }
-    // SAFETY: list mutation is serialized by `subprocs_lock`.
-    unsafe {
-        mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock));
-        mi_subproc_unlink_locked(subproc_prefix);
-        mi_lock_release(ptr::addr_of_mut!(subprocs_lock));
-        mi_subproc_destroy_boxed(subproc);
-    }
+    unsafe { mi_subproc_unsafe_destroy(subproc, true) };
 }
 
 #[unsafe(no_mangle)]
@@ -1315,6 +1365,74 @@ pub unsafe extern "C" fn mi_subproc_destroy(subproc_id: mi_subproc_id_t) {
 /// Same requirements as `mi_subproc_destroy`.
 pub unsafe extern "C" fn mi_subproc_delete(subproc_id: mi_subproc_id_t) {
     unsafe { mi_subproc_destroy(subproc_id) };
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// `subproc_id` must identify a local subproc created by this crate.
+pub unsafe extern "C" fn mi_subproc_add_current_thread(subproc_id: mi_subproc_id_t) {
+    let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
+    if subproc.is_null() {
+        return;
+    }
+    let theap = unsafe { _mi_theap_default_safe() };
+    if theap.is_null() {
+        return;
+    }
+    let tld = unsafe { (*theap).tld };
+    if tld.is_null() {
+        return;
+    }
+    let main_subproc = unsafe { _mi_subproc_main() };
+    if !ptr::eq(unsafe { (*tld).subproc }, main_subproc) {
+        _mi_warning_message(format_args!(
+            "unable to add thread to the subprocess as it was already in another subprocess (id: {:?})\n",
+            subproc
+        ));
+        return;
+    }
+    let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
+    let main_prefix = unsafe { mi_subproc_prefix(main_subproc) };
+    unsafe {
+        (*tld).subproc = subproc;
+        (*tld).thread_seq = (*subproc_prefix)
+            .thread_total_count
+            .fetch_add(1, Ordering::Relaxed);
+        (*main_prefix).thread_count.fetch_sub(1, Ordering::Relaxed);
+        (*subproc_prefix)
+            .thread_count
+            .fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// `subproc_id` must identify a local subproc created by this crate.
+pub unsafe extern "C" fn mi_subproc_visit_heaps(
+    subproc_id: mi_subproc_id_t,
+    visitor: Option<mi_heap_visit_fun>,
+    arg: *mut c_void,
+) -> bool {
+    let Some(visitor) = visitor else {
+        return false;
+    };
+    let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
+    if subproc.is_null() {
+        return false;
+    }
+    let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
+    unsafe {
+        mi_lock_acquire(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
+        let mut heap = (*subproc_prefix).heaps;
+        let mut ok = true;
+        while !heap.is_null() && ok {
+            let next = (*(heap.cast::<MiHeapMainPrefix>())).next;
+            ok = visitor(heap, arg);
+            heap = next;
+        }
+        mi_lock_release(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
+        ok
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1341,27 +1459,8 @@ pub unsafe extern "C" fn mi_subproc_stats_get_json(
 /// Performs process-global teardown for the bounded init/subproc surface and must not race with concurrent mutation of it.
 pub unsafe extern "C" fn _mi_auto_process_done() {
     mi_subproc_main_init();
-    let main = unsafe { _mi_subproc_main() };
-    // SAFETY: process-local teardown is serialized by `subprocs_lock`.
     unsafe {
-        mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock));
-        let mut subproc = subprocs;
-        subprocs = main;
-        let main_prefix = mi_subproc_prefix(main);
-        (*main_prefix).next = ptr::null_mut();
-        (*main_prefix).prev = ptr::null_mut();
-        mi_lock_release(ptr::addr_of_mut!(subprocs_lock));
-
-        while !subproc.is_null() {
-            let next = (*mi_subproc_prefix(subproc)).next;
-            if !core::ptr::eq(subproc, main) {
-                let subproc_prefix = mi_subproc_prefix(subproc);
-                if mi_subproc_is_reclaimable(subproc_prefix) {
-                    mi_subproc_destroy_boxed(subproc);
-                }
-            }
-            subproc = next;
-        }
+        mi_subprocs_unsafe_destroy_all();
         _mi_process_is_initialized = false;
         _mi_allocator_done();
     }

@@ -6,19 +6,25 @@ use core::ffi::{c_char, c_void};
 use core::{mem::size_of, ptr};
 use std::ffi::CString;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 use std::time::Instant;
 
 use crate::atomic::{
-    mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed,
+    mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed, mi_lock_t,
 };
+use crate::internal::{_mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
+use crate::mimalloc::mi_heap_main;
 use crate::options::{_mi_fprintf, _mi_fputs};
 use crate::os::_mi_prim_process_info;
 use crate::page::{
     _mi_bin_size, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE,
     MI_MEDIUM_PAGE_SIZE, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE,
 };
-use crate::types::{MI_MALLOC_VERSION, mi_output_fun, mi_process_info_t};
+use crate::prim::{_mi_heap_theap_peek, _mi_theap_default};
+use crate::types::{
+    MI_BIN_COUNT, MI_MALLOC_VERSION, mi_heap_t, mi_output_fun, mi_page_t, mi_process_info_t,
+    mi_subproc_t, mi_theap_t,
+};
 
 pub const MI_STAT_VERSION: usize = 5;
 pub const MI_BIN_HUGE: usize = 73;
@@ -508,6 +514,57 @@ struct buffered_s {
 
 type buffered_t = buffered_s;
 
+const MI_MAX_ARENAS: usize = 160;
+
+#[repr(C)]
+struct MiHeapStatsPrefix {
+    subproc: *mut mi_subproc_t,
+    heap_seq: usize,
+    next: *mut mi_heap_t,
+    prev: *mut mi_heap_t,
+    theap: usize,
+    exclusive_arena: *mut c_void,
+    numa_node: i32,
+    _padding: u32,
+    theaps: *mut mi_theap_t,
+    theaps_lock: mi_lock_t,
+    abandoned_count: [AtomicUsize; MI_BIN_COUNT],
+    os_abandoned_pages: *mut mi_page_t,
+    os_abandoned_pages_lock: mi_lock_t,
+    arena_pages: [AtomicPtr<c_void>; MI_MAX_ARENAS],
+    arena_pages_lock: mi_lock_t,
+    stats: mi_stats_t,
+}
+
+#[repr(C)]
+struct MiSubprocStatsPrefix {
+    subproc_seq: usize,
+    next: *mut mi_subproc_t,
+    prev: *mut mi_subproc_t,
+    arena_count: AtomicUsize,
+    arenas: [*mut c_void; MI_MAX_ARENAS],
+    arena_reserve_lock: mi_lock_t,
+    purge_expire: AtomicI64,
+    heap_main: *mut mi_heap_t,
+    heaps: *mut mi_heap_t,
+    heaps_lock: mi_lock_t,
+    thread_count: AtomicUsize,
+    thread_total_count: AtomicUsize,
+    heap_count: AtomicUsize,
+    heap_total_count: AtomicUsize,
+    memid: mi_memid_t,
+    stats: mi_stats_t,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct mi_heap_print_visit_info_s {
+    pub out: Option<mi_output_fun>,
+    pub out_arg: *mut c_void,
+}
+
+pub type mi_heap_print_visit_info_t = mi_heap_print_visit_info_s;
+
 fn format_amount(mut n: i64, unit: i64) -> String {
     let suffix = if unit <= 0 { " " } else { "B" };
     let base = if unit == 0 { 1000 } else { 1024 };
@@ -762,6 +819,186 @@ unsafe extern "C" fn mi_buffered_out(msg: *const c_char, arg: *mut c_void) {
             src = src.add(1);
         }
     }
+}
+
+unsafe fn _mi_stats_print(
+    name: &str,
+    id: usize,
+    stats: *const mi_stats_t,
+    out0: Option<mi_output_fun>,
+    arg0: *mut c_void,
+) {
+    let Some(stats) = (unsafe { stats.as_ref() }) else {
+        return;
+    };
+
+    let mut buf = [0 as c_char; 256];
+    let mut buffer = buffered_t {
+        out: out0,
+        arg: arg0,
+        buf: ptr::null_mut(),
+        used: 0,
+        count: 255,
+    };
+    buffer.buf = buf.as_mut_ptr();
+    let out: Option<mi_output_fun> = Some(mi_buffered_out as mi_output_fun);
+    let arg = (&mut buffer as *mut buffered_t).cast::<c_void>();
+
+    _mi_fprintf(out, arg, format_args!("{name} {id}\n"));
+
+    if stats.malloc_normal.total + stats.malloc_huge.total != 0 {
+        mi_print_header("blocks", out, arg);
+        mi_stats_print_bins(&stats.malloc_bins, MI_BIN_HUGE, out, arg);
+        mi_stat_print(
+            &stats.malloc_normal,
+            "binned",
+            if stats.malloc_normal_count.total == 0 {
+                -1
+            } else {
+                1
+            },
+            out,
+            arg,
+        );
+        mi_stat_print(
+            &stats.malloc_huge,
+            "huge",
+            if stats.malloc_huge_count.total == 0 {
+                -1
+            } else {
+                1
+            },
+            out,
+            arg,
+        );
+        let mut total = mi_stat_count_t::default();
+        mi_stat_count_add_mt(&mut total, &stats.malloc_normal);
+        mi_stat_count_add_mt(&mut total, &stats.malloc_huge);
+        mi_stat_print_ex(&total, "total", 1, out, arg, Some(""));
+        mi_stat_total_print(&stats.malloc_requested, "malloc req", 1, out, arg);
+        _mi_fprintf(out, arg, format_args!("\n"));
+    }
+
+    if stats.pages.total != 0 {
+        mi_print_header("pages", out, arg);
+        mi_stat_print_ex(&stats.page_committed, "touched", 1, out, arg, Some(""));
+        mi_stat_print(&stats.pages, "pages", 0, out, arg);
+        mi_stat_print(&stats.pages_abandoned, "abandoned", 0, out, arg);
+        mi_stat_counter_print(&stats.pages_reclaim_on_alloc, "reclaima", out, arg);
+        mi_stat_counter_print(&stats.pages_reclaim_on_free, "reclaimf", out, arg);
+        mi_stat_counter_print(&stats.pages_reabandon_full, "reabandon", out, arg);
+        mi_stat_counter_print(&stats.pages_unabandon_busy_wait, "waits", out, arg);
+        mi_stat_counter_print(&stats.pages_extended, "extended", out, arg);
+        mi_stat_counter_print(&stats.pages_retire, "retire", out, arg);
+        mi_stat_average_print(
+            stats.page_searches_count.total,
+            stats.page_searches.total,
+            "searches",
+            out,
+            arg,
+        );
+        _mi_fprintf(out, arg, format_args!("\n"));
+    }
+
+    if stats.arena_count.total > 0 {
+        mi_print_header("arenas", out, arg);
+        mi_stat_print_ex(&stats.reserved, "reserved", 1, out, arg, Some(""));
+        mi_stat_print_ex(&stats.committed, "committed", 1, out, arg, Some(""));
+        mi_stat_counter_print_size(&stats.reset, "reset", out, arg);
+        mi_stat_counter_print_size(&stats.purged, "purged", out, arg);
+        mi_stat_counter_print(&stats.arena_count, "arenas", out, arg);
+        mi_stat_counter_print(&stats.arena_rollback_count, "rollback", out, arg);
+        mi_stat_counter_print(&stats.mmap_calls, "mmaps", out, arg);
+        mi_stat_counter_print(&stats.commit_calls, "commits", out, arg);
+        mi_stat_counter_print(&stats.reset_calls, "resets", out, arg);
+        mi_stat_counter_print(&stats.purge_calls, "purges", out, arg);
+        mi_stat_counter_print(&stats.malloc_guarded_count, "guarded", out, arg);
+        mi_stat_print_ex(&stats.theaps, "theaps", 0, out, arg, Some(""));
+        mi_stat_print_ex(&stats.heaps, "heaps", 0, out, arg, Some(""));
+        mi_stat_counter_print(&stats.heaps_delete_wait, "heap waits", out, arg);
+        _mi_fprintf(out, arg, format_args!("\n"));
+
+        mi_print_header("process", out, arg);
+        mi_stat_print_ex(&stats.threads, "threads", 0, out, arg, Some(""));
+        _mi_fprintf(
+            out,
+            arg,
+            format_args!("  {:<10}: {:>5}\n", "numa nodes", unsafe {
+                crate::prim::_mi_prim_numa_node_count()
+            }),
+        );
+        unsafe { mi_process_info_print_out(out, arg) };
+    }
+    _mi_fprintf(out, arg, format_args!("\n"));
+}
+
+unsafe fn mi_stats_merge_theap_to_heap(theap: *mut mi_theap_t) -> *const mi_stats_t {
+    let stats = unsafe { &mut (*theap).stats };
+    let heap = unsafe { _mi_theap_heap(theap) }.cast::<MiHeapStatsPrefix>();
+    let heap_stats = unsafe { &mut (*heap).stats };
+    unsafe { _mi_stats_merge_into(heap_stats, stats) };
+    heap_stats as *const mi_stats_t
+}
+
+unsafe fn mi_heap_get_stats(mut heap: *mut mi_heap_t) -> *const mi_stats_t {
+    if heap.is_null() {
+        heap = unsafe { mi_heap_main() };
+    }
+    let theap = unsafe { _mi_heap_theap_peek(heap) };
+    if theap.is_null() {
+        unsafe { &(*heap.cast::<MiHeapStatsPrefix>()).stats }
+    } else {
+        unsafe { mi_stats_merge_theap_to_heap(theap) }
+    }
+}
+
+unsafe fn mi_heap_stats_merge_to_subproc(mut heap: *mut mi_heap_t) {
+    if heap.is_null() {
+        heap = unsafe { mi_heap_main() };
+    }
+    let heap = heap.cast::<MiHeapStatsPrefix>();
+    let subproc = unsafe { (*heap).subproc.cast::<MiSubprocStatsPrefix>() };
+    unsafe { _mi_stats_merge_into(&mut (*subproc).stats, &mut (*heap).stats) };
+}
+
+/// # Safety
+/// Uses the process-default heap/theap state and follows the legacy C ABI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_stats_reset() {
+    if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
+        return;
+    }
+    let heap = unsafe { mi_heap_main() };
+    let _ = unsafe { mi_heap_get_stats(heap) };
+    unsafe { mi_heap_stats_merge_to_subproc(heap) };
+}
+
+/// # Safety
+/// `heap` must be null or a valid `mi_heap_t*`; any output callback must obey the C ABI.
+pub unsafe extern "C" fn mi_heap_stats_print_out(
+    mut heap: *mut mi_heap_t,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+) {
+    if heap.is_null() {
+        heap = unsafe { mi_heap_main() };
+    }
+    let heap_prefix = heap.cast::<MiHeapStatsPrefix>();
+    unsafe {
+        _mi_stats_print(
+            "heap",
+            (*heap_prefix).heap_seq,
+            mi_heap_get_stats(heap),
+            out,
+            arg,
+        )
+    };
+}
+
+unsafe extern "C" fn mi_heap_print_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
+    let vinfo = unsafe { &*(arg.cast::<mi_heap_print_visit_info_t>()) };
+    unsafe { mi_heap_stats_print_out(heap, vinfo.out, vinfo.out_arg) };
+    true
 }
 
 fn clamp_msecs_to_size(value: i64) -> usize {

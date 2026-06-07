@@ -22,12 +22,13 @@ use crate::internal::{
     mi_commit_fun_t, mi_memid_t,
 };
 use crate::options::{
-    _mi_warning_message, mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t,
+    _mi_verbose_message, _mi_warning_message, mi_option_get, mi_option_get_size,
+    mi_option_is_enabled, mi_option_t,
 };
 use crate::prim::mi_os_mem_config_t;
 use crate::prim::{
     _mi_prim_alloc, _mi_prim_commit, _mi_prim_decommit, _mi_prim_free, _mi_prim_mem_init,
-    _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
+    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse, _mi_theap_default,
 };
 use crate::stats::mi_stats_t;
 use crate::types::{mi_arena_t, mi_heap_t, mi_page_t, mi_process_info_t, mi_subproc_t};
@@ -49,6 +50,8 @@ pub const MI_HUGE_OS_PAGE_SIZE: usize = MI_GiB;
 const MI_MAX_ARENAS: usize = 160;
 
 static ALIGNED_BASE: AtomicUsize = AtomicUsize::new(0);
+static MI_HUGE_START: AtomicUsize = AtomicUsize::new(0);
+static MI_NUMA_NODE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 static mut mi_os_mem_config: mi_os_mem_config_t = mi_os_mem_config_t {
     page_size: 4096,
@@ -1037,11 +1040,98 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
 #[allow(dead_code)]
 #[inline]
 unsafe fn mi_os_claim_huge_pages(pages: usize, total_size: *mut usize) -> *mut u8 {
+    #[cfg(target_pointer_width = "32")]
     let _ = pages;
     if !total_size.is_null() {
         unsafe { *total_size = 0 };
     }
-    core::ptr::null_mut()
+    #[cfg(target_pointer_width = "32")]
+    {
+        return core::ptr::null_mut();
+    }
+
+    #[cfg(not(target_pointer_width = "32"))]
+    {
+        let size = pages * MI_HUGE_OS_PAGE_SIZE;
+        let mut huge_start = MI_HUGE_START.load(Ordering::Relaxed);
+        loop {
+            let mut start = huge_start;
+            if start == 0 {
+                start = 8usize << 40;
+                if MI_SECURE != 0 || MI_DEBUG == 0 {
+                    let theap = unsafe { _mi_theap_default() };
+                    if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
+                        let r = unsafe { crate::internal::_mi_theap_random_next(theap) };
+                        start += MI_HUGE_OS_PAGE_SIZE * ((r >> 17) & 0x0FFF);
+                    } else {
+                        _mi_warning_message(format_args!(
+                            "failed to randomize the start address of huge pages allocation ({} bytes at {:p})",
+                            size, start as *mut c_void
+                        ));
+                    }
+                }
+            }
+            let end = start + size;
+            match MI_HUGE_START.compare_exchange_weak(
+                huge_start,
+                end,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => {
+                    if !total_size.is_null() {
+                        unsafe { *total_size = size };
+                    }
+                    return start as *mut u8;
+                }
+                Err(current) => huge_start = current,
+            }
+        }
+    }
+}
+
+#[inline]
+#[allow(dead_code)]
+unsafe fn mi_os_free_huge_os_pages(p: *mut c_void, mut size: usize, subproc: *mut mi_subproc_t) {
+    if p.is_null() || size == 0 {
+        return;
+    }
+    let mut base = p.cast::<u8>();
+    while size >= MI_HUGE_OS_PAGE_SIZE {
+        unsafe {
+            mi_os_prim_free(
+                base.cast::<c_void>(),
+                MI_HUGE_OS_PAGE_SIZE,
+                MI_HUGE_OS_PAGE_SIZE,
+                subproc,
+            )
+        };
+        size -= MI_HUGE_OS_PAGE_SIZE;
+        base = unsafe { base.add(MI_HUGE_OS_PAGE_SIZE) };
+    }
+}
+
+pub unsafe extern "C" fn _mi_os_numa_node_count() -> i32 {
+    let mut count = MI_NUMA_NODE_COUNT.load(Ordering::Acquire);
+    if count == 0 {
+        let ncount = mi_option_get(mi_option_t::mi_option_use_numa_nodes);
+        count = if ncount > 0 && ncount < i32::MAX as _ {
+            ncount as usize
+        } else {
+            let n = unsafe { _mi_prim_numa_node_count() };
+            if n == 0 || n > i32::MAX as usize {
+                1
+            } else {
+                n
+            }
+        };
+        MI_NUMA_NODE_COUNT.store(count, Ordering::Release);
+        if count > 1 {
+            _mi_verbose_message(format_args!("using {} numa regions\n", count));
+        }
+    }
+    crate::mi_assert_internal!(count > 0 && count <= i32::MAX as usize);
+    count as i32
 }
 
 /// # Safety
@@ -1070,6 +1160,59 @@ pub unsafe extern "C" fn mi_os_alloc_aligned(
     }
     if !full_size.is_null() {
         unsafe { *full_size = memid.mem.os.size };
+    }
+    p
+}
+
+/// # Safety
+/// Preserves the exported C ABI wrapper from `src/os.c`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_os_alloc(
+    size: usize,
+    commit: bool,
+    full_size: *mut usize,
+) -> *mut c_void {
+    unsafe {
+        mi_os_alloc_aligned(
+            size,
+            (*mi_os_mem_config_ptr()).alloc_granularity,
+            commit,
+            core::ptr::null_mut(),
+            full_size,
+        )
+    }
+}
+
+/// # Safety
+/// Preserves the exported C ABI wrapper from `src/os.c`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_os_alloc_aligned_allow_large(
+    size: usize,
+    alignment: usize,
+    commit: bool,
+    is_committed: *mut bool,
+    is_pinned: *mut bool,
+    base: *mut *mut c_void,
+    full_size: *mut usize,
+) -> *mut c_void {
+    let (p, memid) = unsafe { mi_os_alloc_aligned_memid(size, alignment, commit, true) };
+    if p.is_null() {
+        return p;
+    }
+    if !is_committed.is_null() {
+        unsafe { *is_committed = memid.initially_committed };
+    }
+    if !is_pinned.is_null() {
+        unsafe { *is_pinned = memid.is_pinned };
+    }
+    if !base.is_null() {
+        unsafe { *base = memid.mem.os.base };
+    }
+    if !full_size.is_null() {
+        unsafe { *full_size = memid.mem.os.size };
+    }
+    if memid.initially_committed && !memid.initially_zero {
+        unsafe { _mi_memzero_aligned(memid.mem.os.base, memid.mem.os.size) };
     }
     p
 }

@@ -24,6 +24,7 @@ pub mod random;
 #[path = "static.rs"]
 pub mod static_c;
 pub mod stats;
+pub mod theap;
 pub mod threadlocal;
 pub mod track;
 pub mod types;

@@ -676,6 +676,56 @@ pub unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
     }
 }
 
+#[allow(dead_code)]
+fn mi_tld_main_init() {
+    // SAFETY: mutates the statically allocated main-thread tld during one-time lazy init.
+    unsafe {
+        if tld_main.thread_id == 0 {
+            tld_main.thread_id = crate::prim::_mi_prim_thread_id();
+            mi_lock_init(ptr::addr_of_mut!(tld_main.theaps_lock));
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn mi_theap_main_init() {
+    // SAFETY: mutates the statically allocated main theap during one-time lazy init.
+    unsafe {
+        if theap_main.memid.memkind != mi_memkind_t::MI_MEM_STATIC {
+            theap_main.memid = crate::internal::_mi_memid_create(mi_memkind_t::MI_MEM_STATIC);
+            #[cfg(any(target_os = "macos", windows))]
+            crate::internal::_mi_random_init_weak(ptr::addr_of_mut!(theap_main.random));
+            #[cfg(not(any(target_os = "macos", windows)))]
+            crate::internal::_mi_random_init(ptr::addr_of_mut!(theap_main.random));
+            theap_main.cookie =
+                crate::internal::_mi_theap_random_next(ptr::addr_of_mut!(theap_main));
+            _mi_theap_options_init(ptr::addr_of_mut!(theap_main));
+            _mi_theap_guarded_init(ptr::addr_of_mut!(theap_main));
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn mi_heap_main_init() {
+    // SAFETY: mutates the statically allocated main heap during one-time lazy init.
+    unsafe {
+        if heap_main.subproc.is_null() {
+            heap_main.subproc = ptr::addr_of_mut!(subproc_main)
+                .cast::<MiSubprocPrefix>()
+                .cast::<mi_subproc_t>();
+            heap_main.theaps = ptr::addr_of_mut!(theap_main);
+
+            mi_theap_main_init();
+            mi_subproc_main_init();
+            mi_tld_main_init();
+
+            mi_lock_init(ptr::addr_of_mut!(heap_main.theaps_lock));
+            mi_lock_init(ptr::addr_of_mut!(heap_main.os_abandoned_pages_lock));
+            mi_lock_init(ptr::addr_of_mut!(heap_main.arena_pages_lock));
+        }
+    }
+}
+
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
 unsafe extern "C" {
     fn pthread_key_delete(key: mi_thread_local_t) -> i32;

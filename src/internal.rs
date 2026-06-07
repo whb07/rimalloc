@@ -17,6 +17,7 @@ use core::ptr;
 use std::os::raw::c_long;
 
 pub use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE};
+use crate::bits::MI_SIZE_SHIFT;
 pub use crate::bits::{
     MI_ARCH_X64, MI_ARCH_X86, MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB,
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
@@ -36,7 +37,7 @@ pub use crate::types::*;
 
 pub const MI_INTERNAL_H: () = ();
 
-pub const MI_DEBUG: usize = if cfg!(debug_assertions) { 1 } else { 0 };
+pub const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
 pub const MI_SECURE: usize = 0;
 pub const MI_TRACK_ASAN: usize = 0;
 pub const MI_TRACK_ENABLED: usize = 0;
@@ -253,6 +254,7 @@ pub struct mi_memid_os_info_t {
     pub base: *mut c_void,
     pub size: usize,
 }
+pub type mi_memid_os_info = mi_memid_os_info_t;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -269,6 +271,7 @@ pub struct mi_memid_meta_info_t {
     pub block_index: u32,
     pub block_count: u32,
 }
+pub type mi_memid_meta_info = mi_memid_meta_info_t;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -296,7 +299,8 @@ pub struct mi_memid_t {
     pub initially_zero: bool,
 }
 
-pub const MI_ARENA_SLICE_SHIFT: usize = MI_ARENA_SLICE_SIZE.trailing_zeros() as usize;
+pub const MI_ARENA_SLICE_SHIFT: usize = 13 + MI_SIZE_SHIFT;
+pub const MI_BCHUNK_BITS_SHIFT: usize = 6 + MI_SIZE_SHIFT;
 
 #[inline]
 pub const fn mi_unlikely(x: bool) -> bool {

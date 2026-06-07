@@ -2,7 +2,7 @@
 
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
-use core::ffi::{c_char, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use std::os::raw::c_long;
 
 use crate::atomic::mi_lock_t;
@@ -12,7 +12,7 @@ pub const MI_TYPES_H: () = ();
 pub const MI_MAX_ALIGN_SIZE: usize = 16;
 
 const MI_SECURE: usize = 0;
-const MI_DEBUG: usize = if cfg!(debug_assertions) { 1 } else { 0 };
+const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
 pub const MI_STAT: usize = if MI_DEBUG > 0 { 2 } else { 0 };
 const MI_GUARDED: usize = 0;
 pub const MI_PADDING: usize = if MI_DEBUG >= 1
@@ -40,6 +40,16 @@ const MI_ARENA_SLICE_ALIGN: usize = crate::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_ARENA_MIN_OBJ_SLICES: usize = 1;
 const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 pub const MI_PAGE_MIN_COMMIT_SIZE: usize = crate::arena::MI_ARENA_SLICE_SIZE;
+pub const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = crate::arena::MI_ARENA_SLICE_SIZE;
+pub const MI_ARENA_BIN_COUNT: usize = MI_BIN_COUNT;
+pub const EAGAIN: c_int = 11;
+pub const ENOMEM: c_int = 12;
+pub const EFAULT: c_int = 14;
+pub const EINVAL: c_int = 22;
+pub const EOVERFLOW: c_int = 75;
+pub const MI_DEBUG_UNINIT: u8 = 0xD0;
+pub const MI_DEBUG_FREED: u8 = 0xDF;
+pub const MI_DEBUG_PADDING: u8 = 0xDE;
 
 const _: (usize, usize, usize, usize, usize) = (
     MI_SECURE,
@@ -53,6 +63,7 @@ pub const MI_MALLOC_VERSION: i32 = 30302;
 pub const MI_ENABLE_LARGE_PAGES: usize = 1;
 pub const MI_SMALL_WSIZE_MAX: usize = 128;
 pub const MI_SMALL_SIZE_MAX: usize = MI_SMALL_WSIZE_MAX * core::mem::size_of::<*const c_void>();
+pub const MI_BIN_HUGE: usize = crate::stats::MI_BIN_HUGE;
 pub const MI_BIN_FULL: usize = crate::stats::MI_BIN_HUGE + 1;
 pub const MI_BIN_COUNT: usize = MI_BIN_FULL + 1;
 pub const MI_PAGE_IN_FULL_QUEUE: usize = 0x01;
@@ -83,6 +94,7 @@ pub type mi_thread_free_t = usize;
 
 pub type mi_bitmap_t = crate::bitmap::mi_bitmap_t;
 pub type mi_bbitmap_t = crate::bitmap::mi_bbitmap_t;
+pub type mi_encoded_t = usize;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -129,7 +141,7 @@ pub type mi_page_kind_t = mi_page_kind_e;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_block_s {
-    pub next: usize,
+    pub next: mi_encoded_t,
 }
 
 pub type mi_block_t = mi_block_s;
@@ -196,6 +208,8 @@ pub struct mi_tld_s {
 }
 
 pub type mi_tld_t = mi_tld_s;
+unsafe impl Send for mi_tld_s {}
+unsafe impl Sync for mi_tld_s {}
 
 #[repr(C)]
 pub struct mi_page_s {
@@ -218,6 +232,8 @@ pub struct mi_page_s {
     pub slice_committed: usize,
     pub memid: crate::internal::mi_memid_t,
 }
+unsafe impl Send for mi_page_s {}
+unsafe impl Sync for mi_page_s {}
 
 #[repr(C)]
 pub struct mi_theap_s {
@@ -245,6 +261,8 @@ pub struct mi_theap_s {
     pub memid: crate::internal::mi_memid_t,
     pub stats: mi_stats_t,
 }
+unsafe impl Send for mi_theap_s {}
+unsafe impl Sync for mi_theap_s {}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

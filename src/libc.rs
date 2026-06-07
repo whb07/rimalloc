@@ -132,7 +132,7 @@ pub unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize 
     len
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
     _mi_strnlen(s, usize::MAX)
 }

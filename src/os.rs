@@ -200,7 +200,7 @@ pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize)
         && alignment.is_multiple_of(large_page_size)
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
     let align_size = if size < 512 * MI_KiB {
         unsafe { _mi_os_page_size() }
@@ -521,6 +521,7 @@ pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
     let mut csize = 0;
     let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
@@ -937,6 +938,7 @@ unsafe fn mi_os_ensure_zero(p: *mut c_void, size: usize, memid: *mut mi_memid_t)
     p
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
     if !memid.is_null() {
         unsafe {
@@ -961,6 +963,7 @@ pub unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *m
     p
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
     let p = unsafe { _mi_os_alloc(size, memid) };
     unsafe { mi_os_ensure_zero(p, size, memid) }

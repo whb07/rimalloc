@@ -4025,7 +4025,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000022",
@@ -4703,7 +4703,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000023",
@@ -5031,7 +5031,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000024",
@@ -6954,7 +6954,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000025",
@@ -7527,7 +7527,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000026",
@@ -7715,7 +7715,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000029",
@@ -9314,7 +9314,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000037",
@@ -9347,7 +9347,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000038",
@@ -9380,7 +9380,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000039",
@@ -9475,7 +9475,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000182",
@@ -9589,7 +9589,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000183",
@@ -9658,7 +9658,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000184",
@@ -10335,7 +10335,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000195",
@@ -11911,7 +11911,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000214",
@@ -20118,7 +20118,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000330",
@@ -20262,7 +20262,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000331",
@@ -20511,7 +20511,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000332",
@@ -20550,7 +20550,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000333",
@@ -27101,7 +27101,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000351",
@@ -27230,7 +27230,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "n/a",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000352",
@@ -34368,7 +34368,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000442",
@@ -45067,7 +45067,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000558",
@@ -45870,7 +45870,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000560",
@@ -45934,7 +45934,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000561",
@@ -45983,7 +45983,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000562",
@@ -46016,7 +46016,7 @@
       "thread_safety": "n/a",
       "ownership": "compile-time textual substitution; no ownership unless body uses pointers",
       "mutability": "immutable compile-time",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000563",
@@ -53680,7 +53680,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000655",
@@ -53899,7 +53899,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000656",
@@ -55845,7 +55845,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true,
+      "implemented": false,
       "file": "src/arena.rs"
     },
     {
@@ -56480,7 +56480,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000662",
@@ -56604,7 +56604,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000663",
@@ -56888,7 +56888,7 @@
       "thread_safety": "[]",
       "ownership": "module-level includes/configuration",
       "mutability": "immutable file contents",
-      "implemented": true
+      "implemented": false
     },
     {
       "task_id": "TASK-000664",
@@ -125323,7 +125323,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001685",
@@ -139266,7 +139266,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001887",
@@ -147285,7 +147285,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001978",
@@ -158822,7 +158822,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002102",
@@ -297305,7 +297305,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003090",
@@ -297394,7 +297394,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003091",
@@ -297458,7 +297458,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003092",
@@ -297552,7 +297552,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003093",
@@ -297651,7 +297651,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003094",
@@ -315449,7 +315449,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003328",

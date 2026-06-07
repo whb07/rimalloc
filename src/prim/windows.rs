@@ -19,8 +19,13 @@ use core::{
 };
 use std::sync::Once;
 
-use crate::bits::{MI_MiB, MI_SIZE_BITS};
-use crate::options::_mi_warning_message;
+use crate::bits::{MI_KiB, MI_MiB, MI_SIZE_BITS, mi_clz};
+use crate::internal::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_page_size};
+use crate::options::{
+    _mi_verbose_message, _mi_warning_message, mi_option_get_clamp, mi_option_is_enabled,
+    mi_option_t,
+};
+use crate::prim::mi_os_mem_config_t;
 use crate::types::{mi_msecs_t, mi_theap_t};
 
 pub const ETW_INLINE: () = ();
@@ -77,6 +82,7 @@ pub type REGHANDLE = TRACEHANDLE;
 pub type PREGHANDLE = *mut REGHANDLE;
 pub type LPCGUID = *const GUID;
 pub type PEVENT_FILTER_DESCRIPTOR = *const EVENT_FILTER_DESCRIPTOR;
+pub type FARPROC = *mut c_void;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -84,6 +90,65 @@ pub struct GROUP_AFFINITY {
     pub Mask: ULONG_PTR,
     pub Group: WORD,
     pub Reserved: [WORD; 3],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SYSTEM_INFO_u_s {
+    pub wProcessorArchitecture: WORD,
+    pub wReserved: WORD,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union SYSTEM_INFO_u {
+    pub dwOemId: DWORD,
+    pub s: SYSTEM_INFO_u_s,
+}
+
+impl Default for SYSTEM_INFO_u {
+    fn default() -> Self {
+        Self { dwOemId: 0 }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SYSTEM_INFO {
+    pub u: SYSTEM_INFO_u,
+    pub dwPageSize: DWORD,
+    pub lpMinimumApplicationAddress: LPVOID,
+    pub lpMaximumApplicationAddress: LPVOID,
+    pub dwActiveProcessorMask: ULONG_PTR,
+    pub dwNumberOfProcessors: DWORD,
+    pub dwProcessorType: DWORD,
+    pub dwAllocationGranularity: DWORD,
+    pub wProcessorLevel: WORD,
+    pub wProcessorRevision: WORD,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OSVERSIONINFOW {
+    pub dwOSVersionInfoSize: DWORD,
+    pub dwMajorVersion: DWORD,
+    pub dwMinorVersion: DWORD,
+    pub dwBuildNumber: DWORD,
+    pub dwPlatformId: DWORD,
+    pub szCSDVersion: [u16; 128],
+}
+
+impl Default for OSVERSIONINFOW {
+    fn default() -> Self {
+        Self {
+            dwOSVersionInfoSize: 0,
+            dwMajorVersion: 0,
+            dwMinorVersion: 0,
+            dwBuildNumber: 0,
+            dwPlatformId: 0,
+            szCSDVersion: [0; 128],
+        }
+    }
 }
 
 #[repr(C)]
@@ -252,6 +317,7 @@ pub type MI_PROCESSOR_NUMBER = MI_PROCESSOR_NUMBER_S;
 
 pub static mut win_major_version: DWORD = 6;
 pub static mut win_minor_version: DWORD = 0;
+static mut win_allocation_granularity: usize = 64 * MI_KiB;
 
 pub type PVirtualAlloc2 = Option<
     unsafe extern "system" fn(
@@ -297,6 +363,9 @@ pub static mut pGetNumaNodeProcessorMask: PGetNumaNodeProcessorMask = None;
 pub static mut pGetNumaHighestNodeNumber: PGetNumaHighestNodeNumber = None;
 
 pub type PGetLargePageMinimum = Option<unsafe extern "system" fn() -> SIZE_T>;
+pub type PGetPhysicallyInstalledSystemMemory =
+    Option<unsafe extern "system" fn(*mut ULONGLONG) -> BOOL>;
+pub type PGetVersionExW = Option<unsafe extern "system" fn(*mut OSVERSIONINFOW) -> BOOL>;
 
 pub static mut pGetLargePageMinimum: PGetLargePageMinimum = None;
 
@@ -362,6 +431,11 @@ unsafe extern "system" {
     -> BOOL;
     pub fn GetCurrentProcessorNumber() -> DWORD;
     pub fn SwitchToThread() -> BOOL;
+    pub fn GetSystemInfo(lpSystemInfo: *mut SYSTEM_INFO);
+    pub fn LoadLibraryA(lpLibFileName: LPCSTR) -> HINSTANCE;
+    pub fn GetProcAddress(hModule: HMODULE, lpProcName: LPCSTR) -> FARPROC;
+    pub fn FreeLibrary(hLibModule: HMODULE) -> BOOL;
+    pub fn Sleep(dwMilliseconds: DWORD);
 }
 
 unsafe extern "C" {
@@ -484,6 +558,19 @@ unsafe fn win_enable_large_os_pages(large_page_size: *mut usize) -> bool {
 }
 
 #[inline]
+unsafe fn mi_get_proc<T>(module: HMODULE, name: LPCSTR) -> Option<T>
+where
+    T: Copy,
+{
+    let proc = unsafe { GetProcAddress(module, name) };
+    if proc.is_null() {
+        None
+    } else {
+        Some(unsafe { core::mem::transmute_copy::<FARPROC, T>(&proc) })
+    }
+}
+
+#[inline]
 unsafe extern "C" fn mi_current_module_is_dll() -> bool {
     let mut module: HMODULE = null_mut();
     let ok = unsafe {
@@ -539,6 +626,103 @@ pub unsafe extern "C" fn _mi_prim_getenv(
         *result.add(bytes.len()) = 0;
     }
     true
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
+    if config.is_null() {
+        return;
+    }
+
+    (*config).has_overcommit = false;
+    (*config).has_partial_free = false;
+    (*config).has_virtual_reserve = true;
+
+    let mut si = SYSTEM_INFO::default();
+    unsafe {
+        GetSystemInfo(&mut si);
+    }
+    if si.dwPageSize > 0 {
+        (*config).page_size = si.dwPageSize as usize;
+    }
+    if si.dwAllocationGranularity > 0 {
+        (*config).alloc_granularity = si.dwAllocationGranularity as usize;
+        unsafe {
+            win_allocation_granularity = si.dwAllocationGranularity as usize;
+        }
+    }
+    if (si.lpMaximumApplicationAddress as usize) > 0 {
+        let vbits = MI_SIZE_BITS - mi_clz(si.lpMaximumApplicationAddress as usize);
+        (*config).virtual_address_bits = vbits;
+    }
+
+    let mut h_dll = unsafe { LoadLibraryA(c"kernelbase.dll".as_ptr()) };
+    if !h_dll.is_null() {
+        unsafe {
+            pVirtualAlloc2 = mi_get_proc(h_dll, c"VirtualAlloc2FromApp".as_ptr());
+            let virtual_alloc2 = pVirtualAlloc2;
+            if virtual_alloc2.is_none() {
+                pVirtualAlloc2 = mi_get_proc(h_dll, c"VirtualAlloc2".as_ptr());
+            }
+            FreeLibrary(h_dll);
+        }
+    }
+
+    h_dll = unsafe { LoadLibraryA(c"ntdll.dll".as_ptr()) };
+    if !h_dll.is_null() {
+        unsafe {
+            pNtAllocateVirtualMemoryEx = mi_get_proc(h_dll, c"NtAllocateVirtualMemoryEx".as_ptr());
+            FreeLibrary(h_dll);
+        }
+    }
+
+    h_dll = unsafe { LoadLibraryA(c"kernel32.dll".as_ptr()) };
+    if !h_dll.is_null() {
+        unsafe {
+            pGetCurrentProcessorNumberEx =
+                mi_get_proc(h_dll, c"GetCurrentProcessorNumberEx".as_ptr());
+            pGetNumaProcessorNodeEx = mi_get_proc(h_dll, c"GetNumaProcessorNodeEx".as_ptr());
+            pGetNumaNodeProcessorMaskEx =
+                mi_get_proc(h_dll, c"GetNumaNodeProcessorMaskEx".as_ptr());
+            pGetNumaProcessorNode = mi_get_proc(h_dll, c"GetNumaProcessorNode".as_ptr());
+            pGetNumaNodeProcessorMask = mi_get_proc(h_dll, c"GetNumaNodeProcessorMask".as_ptr());
+            pGetNumaHighestNodeNumber = mi_get_proc(h_dll, c"GetNumaHighestNodeNumber".as_ptr());
+            pGetLargePageMinimum = mi_get_proc(h_dll, c"GetLargePageMinimum".as_ptr());
+
+            let p_get_physically_installed_system_memory: PGetPhysicallyInstalledSystemMemory =
+                mi_get_proc(h_dll, c"GetPhysicallyInstalledSystemMemory".as_ptr());
+            if let Some(get_physical_memory) = p_get_physically_installed_system_memory {
+                let mut mem_in_kib: ULONGLONG = 0;
+                if get_physical_memory(&mut mem_in_kib) != FALSE as BOOL
+                    && mem_in_kib > 0
+                    && let Ok(mem) = usize::try_from(mem_in_kib)
+                {
+                    (*config).physical_memory_in_kib = mem;
+                }
+            }
+
+            let p_get_version_ex_w: PGetVersionExW = mi_get_proc(h_dll, c"GetVersionExW".as_ptr());
+            if let Some(get_version_ex_w) = p_get_version_ex_w {
+                let mut version = OSVERSIONINFOW {
+                    dwOSVersionInfoSize: core::mem::size_of::<OSVERSIONINFOW>() as DWORD,
+                    ..OSVERSIONINFOW::default()
+                };
+                if get_version_ex_w(&mut version) != FALSE as BOOL {
+                    win_major_version = version.dwMajorVersion;
+                    win_minor_version = version.dwMinorVersion;
+                }
+            }
+            FreeLibrary(h_dll);
+        }
+    }
+
+    if mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)
+        || mi_option_is_enabled(mi_option_t::mi_option_reserve_huge_os_pages)
+    {
+        unsafe {
+            win_enable_large_os_pages(&mut (*config).large_page_size);
+        }
+    }
 }
 
 #[inline]
@@ -787,6 +971,165 @@ unsafe fn win_enable_large_os_pages_once(large_page_size: *mut usize) -> bool {
 }
 
 #[inline]
+unsafe fn win_virtual_alloc_prim_once(
+    addr: *mut c_void,
+    size: usize,
+    try_alignment: usize,
+    flags: DWORD,
+) -> *mut c_void {
+    if MI_SIZE_BITS >= 64 && addr.is_null() {
+        let hint = unsafe { _mi_os_get_aligned_hint(try_alignment, size) };
+        if !hint.is_null() {
+            let p = unsafe { VirtualAlloc(hint, size, flags, PAGE_READWRITE) };
+            if !p.is_null() {
+                return p;
+            }
+            _mi_verbose_message(format_args!(
+                "warning: unable to allocate hinted aligned OS memory ({} bytes, error code: 0x{:x}, address: {:p}, alignment: {}, flags: 0x{:x})\n",
+                size,
+                unsafe { GetLastError() },
+                hint,
+                try_alignment,
+                flags
+            ));
+        }
+    }
+
+    if addr.is_null()
+        && try_alignment > unsafe { win_allocation_granularity }
+        && try_alignment.is_multiple_of(unsafe { _mi_os_page_size() })
+        && let Some(virtual_alloc2) = unsafe { pVirtualAlloc2 }
+    {
+        let mut reqs = MI_MEM_ADDRESS_REQUIREMENTS {
+            Alignment: try_alignment,
+            ..MI_MEM_ADDRESS_REQUIREMENTS::default()
+        };
+        let mut param = MI_MEM_EXTENDED_PARAMETER::default();
+        param.Type.bits =
+            MI_MEM_EXTENDED_PARAMETER_TYPE_E::MiMemExtendedParameterAddressRequirements as DWORD64;
+        param.Arg.Pointer = (&mut reqs as *mut MI_MEM_ADDRESS_REQUIREMENTS).cast::<c_void>();
+        let p = unsafe {
+            virtual_alloc2(
+                GetCurrentProcess(),
+                addr,
+                size,
+                flags,
+                PAGE_READWRITE,
+                &mut param,
+                1,
+            )
+        };
+        if !p.is_null() {
+            return p;
+        }
+        _mi_warning_message(format_args!(
+            "unable to allocate aligned OS memory (0x{:x} bytes, error code: 0x{:x}, address: {:p}, alignment: 0x{:x}, flags: 0x{:x})\n",
+            size,
+            unsafe { GetLastError() },
+            addr,
+            try_alignment,
+            flags
+        ));
+    }
+
+    unsafe { VirtualAlloc(addr, size, flags, PAGE_READWRITE) }
+}
+
+#[inline]
+unsafe fn win_virtual_alloc(
+    addr: *mut c_void,
+    size: usize,
+    try_alignment: usize,
+    flags: DWORD,
+    large_only: bool,
+    allow_large: bool,
+    is_large: *mut bool,
+) -> *mut c_void {
+    crate::mi_assert_internal!(!large_only || allow_large);
+    static LARGE_PAGE_TRY_OK: AtomicUsize = AtomicUsize::new(0);
+
+    let mut p = null_mut();
+    if (large_only
+        || (unsafe { _mi_os_canuse_large_page(size, try_alignment) }
+            && mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)))
+        && allow_large
+        && (flags & MEM_COMMIT) != 0
+        && (flags & MEM_RESERVE) != 0
+    {
+        let try_ok = LARGE_PAGE_TRY_OK.load(Ordering::Acquire);
+        if !large_only && try_ok > 0 {
+            let _ = LARGE_PAGE_TRY_OK.compare_exchange(
+                try_ok,
+                try_ok - 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            );
+        } else {
+            if !is_large.is_null() {
+                unsafe {
+                    *is_large = true;
+                }
+            }
+            p = unsafe {
+                win_virtual_alloc_prim_once(addr, size, try_alignment, flags | MEM_LARGE_PAGES)
+            };
+            if large_only {
+                return p;
+            }
+            if p.is_null() {
+                LARGE_PAGE_TRY_OK.store(10, Ordering::Release);
+            }
+        }
+    }
+
+    if p.is_null() {
+        if !is_large.is_null() {
+            unsafe {
+                *is_large = (flags & MEM_LARGE_PAGES) != 0;
+            }
+        }
+        let mut max_retry_msecs = mi_option_get_clamp(mi_option_t::mi_option_retry_on_oom, 0, 2000);
+        if max_retry_msecs == 1 {
+            max_retry_msecs = 100;
+        }
+        let mut tries = 1u32;
+        loop {
+            p = unsafe { win_virtual_alloc_prim_once(addr, size, try_alignment, flags) };
+            if !p.is_null() {
+                break;
+            }
+            let err = unsafe { GetLastError() };
+            if max_retry_msecs > 0
+                && try_alignment <= 8 * MI_MiB
+                && (flags & MEM_COMMIT) != 0
+                && (flags & MEM_LARGE_PAGES) == 0
+                && win_is_out_of_memory_error(err)
+            {
+                _mi_warning_message(format_args!(
+                    "out-of-memory on OS allocation, try again... (attempt {}, 0x{:x} bytes, error code: 0x{:x}, address: {:p}, alignment: 0x{:x}, flags: 0x{:x})\n",
+                    tries, size, err, addr, try_alignment, flags
+                ));
+                let mut sleep_msecs = (tries as i64) * 40;
+                if sleep_msecs > max_retry_msecs {
+                    sleep_msecs = max_retry_msecs;
+                }
+                max_retry_msecs -= sleep_msecs;
+                unsafe {
+                    Sleep(sleep_msecs as DWORD);
+                }
+                tries += 1;
+                if tries <= 10 {
+                    continue;
+                }
+            }
+            break;
+        }
+    }
+
+    p
+}
+
+#[inline]
 unsafe fn _mi_prim_alloc_huge_os_pagesx(
     hint_addr: *mut c_void,
     size: usize,
@@ -878,6 +1221,78 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
             GetLastError() as i32
         }
     }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_alloc(
+    hint_addr: *mut c_void,
+    size: usize,
+    try_alignment: usize,
+    commit: bool,
+    allow_large: bool,
+    is_large: *mut bool,
+    is_zero: *mut bool,
+    addr: *mut *mut c_void,
+) -> i32 {
+    crate::mi_assert_internal!(size > 0 && size.is_multiple_of(unsafe { _mi_os_page_size() }));
+    crate::mi_assert_internal!(commit || !allow_large);
+    crate::mi_assert_internal!(try_alignment > 0);
+    if !is_zero.is_null() {
+        unsafe {
+            *is_zero = true;
+        }
+    }
+    let mut flags = MEM_RESERVE;
+    if commit {
+        flags |= MEM_COMMIT;
+    }
+    let p = unsafe {
+        win_virtual_alloc(
+            hint_addr,
+            size,
+            try_alignment,
+            flags,
+            false,
+            allow_large,
+            is_large,
+        )
+    };
+    if !addr.is_null() {
+        unsafe {
+            *addr = p;
+        }
+    }
+    if !p.is_null() {
+        0
+    } else {
+        unsafe { GetLastError() as i32 }
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
+    let mut numa_node: USHORT = 0;
+    if let (Some(get_current_processor_number_ex), Some(get_numa_processor_node_ex)) =
+        (unsafe { pGetCurrentProcessorNumberEx }, unsafe {
+            pGetNumaProcessorNodeEx
+        })
+    {
+        let mut pnum = MI_PROCESSOR_NUMBER::default();
+        unsafe {
+            get_current_processor_number_ex(&mut pnum);
+        }
+        let mut nnode: USHORT = 0;
+        if unsafe { get_numa_processor_node_ex(&mut pnum, &mut nnode) } != FALSE as BOOL {
+            numa_node = nnode;
+        }
+    } else if let Some(get_numa_processor_node) = unsafe { pGetNumaProcessorNode } {
+        let pnum = unsafe { GetCurrentProcessorNumber() };
+        let mut nnode: UCHAR = 0;
+        if unsafe { get_numa_processor_node(pnum as UCHAR, &mut nnode) } != FALSE as BOOL {
+            numa_node = nnode as USHORT;
+        }
+    }
+    numa_node as usize
 }
 
 #[inline]

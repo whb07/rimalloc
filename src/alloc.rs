@@ -9,6 +9,7 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use crate::free::_mi_usable_size;
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_is_aligned, _mi_memcpy,
     _mi_memzero_aligned, _mi_ptr_page, _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page,
@@ -374,17 +375,106 @@ pub unsafe extern "C" fn mi_theap_calloc(
     mi_theap_zalloc(theap, total)
 }
 
-pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
-    mi_good_size(size)
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
+    mi_theap_calloc(_mi_theap_default(), count, size)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
+pub unsafe extern "C" fn mi_heap_calloc(
+    heap: *mut mi_heap_t,
+    count: usize,
+    size: usize,
+) -> *mut c_void {
     let mut total = 0usize;
     if mi_count_size_overflow(count, size, &mut total) {
         return ptr::null_mut();
     }
-    mi_theap_malloc(_mi_theap_default(), total)
+    mi_heap_zalloc(heap, total)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_umalloc_small(size: usize, usable: *mut usize) -> *mut c_void {
+    mi_theap_malloc_small_zero(_mi_theap_default(), size, false, usable)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_theap_umalloc(
+    theap: *mut mi_theap_t,
+    size: usize,
+    usable: *mut usize,
+) -> *mut c_void {
+    _mi_theap_malloc_zero_ex(theap, size, false, 0, usable)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_umalloc(size: usize, usable: *mut usize) -> *mut c_void {
+    mi_theap_umalloc(_mi_theap_default(), size, usable)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_void {
+    _mi_theap_malloc_zero_ex(_mi_theap_default(), size, true, 0, usable)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_ucalloc(count: usize, size: usize, usable: *mut usize) -> *mut c_void {
+    let mut total = 0usize;
+    if mi_count_size_overflow(count, size, &mut total) {
+        return ptr::null_mut();
+    }
+    mi_uzalloc(total, usable)
+}
+
+pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
+    mi_good_size(size)
+}
+
+unsafe fn mi_theap_mallocn(theap: *mut mi_theap_t, count: usize, size: usize) -> *mut c_void {
+    let mut total = 0usize;
+    if mi_count_size_overflow(count, size, &mut total) {
+        return ptr::null_mut();
+    }
+    mi_theap_malloc(theap, total)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
+    mi_theap_mallocn(_mi_theap_default(), count, size)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_mallocn(
+    heap: *mut mi_heap_t,
+    count: usize,
+    size: usize,
+) -> *mut c_void {
+    let mut total = 0usize;
+    if mi_count_size_overflow(count, size, &mut total) {
+        return ptr::null_mut();
+    }
+    mi_heap_malloc(heap, total)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_void {
+    if MI_PADDING != 0 {
+        let _ = p;
+        let _ = newsize;
+        return ptr::null_mut();
+    }
+    if p.is_null() {
+        return ptr::null_mut();
+    }
+    let page = _mi_ptr_page(p);
+    if page.is_null() {
+        return ptr::null_mut();
+    }
+    let size = _mi_usable_size(p, page);
+    if newsize > size {
+        return ptr::null_mut();
+    }
+    p
 }
 
 unsafe fn mi_theap_reallocf(theap: *mut mi_theap_t, p: *mut c_void, newsize: usize) -> *mut c_void {

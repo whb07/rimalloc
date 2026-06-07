@@ -10,7 +10,7 @@ use core::ffi::{c_char, c_long, c_void};
 use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use std::sync::Once;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bits::MI_SIZE_SIZE;
@@ -33,6 +33,7 @@ pub const MI_TLS_DIRECT_FIRST: usize = if MI_SIZE_SIZE == 4 {
     0x1480 / MI_SIZE_SIZE
 };
 pub const MI_TLS_INITIAL_SLOT: usize = 5;
+const MI_MAX_ARENAS: usize = 160;
 #[allow(clippy::manual_dangling_ptr)]
 pub const MI_TLD_INVALID: *mut mi_tld_t = 1usize as *mut mi_tld_t;
 pub const TLS_OUT_OF_INDEXES: u32 = u32::MAX;
@@ -149,6 +150,39 @@ static mut tld_empty: mi_tld_t = mi_tld_t {
         .cast::<MiSubprocPrefix>()
         .cast::<mi_subproc_t>(),
     theaps: ptr::null_mut(),
+    theaps_lock: mi_lock_t::new(),
+    recurse: false,
+    is_in_threadpool: false,
+    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+};
+
+#[repr(C)]
+pub struct MiHeapMainPrefix {
+    subproc: *mut mi_subproc_t,
+    heap_seq: usize,
+    next: *mut mi_heap_t,
+    prev: *mut mi_heap_t,
+    theap: mi_thread_local_t,
+    exclusive_arena: *mut c_void,
+    numa_node: i32,
+    _padding: u32,
+    theaps: *mut mi_theap_t,
+    theaps_lock: mi_lock_t,
+    abandoned_count: [AtomicUsize; MI_BIN_COUNT],
+    os_abandoned_pages: *mut mi_page_t,
+    os_abandoned_pages_lock: mi_lock_t,
+    arena_pages: [AtomicPtr<c_void>; MI_MAX_ARENAS],
+    arena_pages_lock: mi_lock_t,
+    stats: mi_stats_t,
+}
+
+#[allow(dead_code)]
+static mut tld_main: mi_tld_t = mi_tld_t {
+    thread_id: 0,
+    thread_seq: 0,
+    numa_node: 0,
+    subproc: ptr::addr_of_mut!(subproc_main).cast::<mi_subproc_t>(),
+    theaps: ptr::addr_of_mut!(theap_main),
     theaps_lock: mi_lock_t::new(),
     recurse: false,
     is_in_threadpool: false,
@@ -338,6 +372,58 @@ pub static _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
 };
 
 #[unsafe(no_mangle)]
+pub static mut theap_main: mi_theap_t = mi_theap_t {
+    tld: ptr::addr_of_mut!(tld_main),
+    heap: ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>(),
+    refcount: 1,
+    heartbeat: 0,
+    cookie: 0,
+    random: mi_random_ctx_t {
+        input: [0x846ca68b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        output: [0; 16],
+        output_available: 0,
+        weak: true,
+    },
+    page_count: 0,
+    page_retired_min: MI_BIN_FULL,
+    page_retired_max: 0,
+    pages_full_size: 0,
+    generic_count: 0,
+    generic_collect_count: 0,
+    tnext: ptr::null_mut(),
+    tprev: ptr::null_mut(),
+    hnext: ptr::null_mut(),
+    hprev: ptr::null_mut(),
+    page_full_retain: 2,
+    allow_page_reclaim: true,
+    allow_page_abandon: true,
+    pages_free_direct: MI_SMALL_PAGES_EMPTY(),
+    pages: MI_PAGE_QUEUES_EMPTY(),
+    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+    stats: MI_STATS_NULL(),
+};
+
+#[unsafe(no_mangle)]
+pub static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
+    subproc: ptr::null_mut(),
+    heap_seq: 0,
+    next: ptr::null_mut(),
+    prev: ptr::null_mut(),
+    theap: 0,
+    exclusive_arena: ptr::null_mut(),
+    numa_node: 0,
+    _padding: 0,
+    theaps: ptr::null_mut(),
+    theaps_lock: mi_lock_t::new(),
+    abandoned_count: [const { AtomicUsize::new(0) }; MI_BIN_COUNT],
+    os_abandoned_pages: ptr::null_mut(),
+    os_abandoned_pages_lock: mi_lock_t::new(),
+    arena_pages: [const { AtomicPtr::new(ptr::null_mut()) }; MI_MAX_ARENAS],
+    arena_pages_lock: mi_lock_t::new(),
+    stats: MI_STATS_NULL(),
+};
+
+#[unsafe(no_mangle)]
 pub static mut _mi_cpu_movsb_max: usize = 0;
 
 #[unsafe(no_mangle)]
@@ -375,8 +461,6 @@ pub static mut _mi_process_is_initialized: bool = false;
 
 #[unsafe(no_mangle)]
 pub static mut _mi_cpu_has_popcnt: bool = false;
-
-const MI_MAX_ARENAS: usize = 160;
 
 #[repr(C)]
 struct MiSubprocPrefix {

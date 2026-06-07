@@ -37,7 +37,7 @@ pub const MI_HAS_CONSOLE_IO: usize = 1;
 pub const MI_WIN_INIT_USE_CRT_TLS: usize = 1;
 pub const MI_WIN_INIT_USE_TLS_DLLMAIN: usize = 0;
 pub const MI_PRIM_HAS_PROCESS_ATTACH: usize = 1;
-pub const MI_PRIM_HAS_ALLOCATOR_INIT: usize = 0;
+pub const MI_PRIM_HAS_ALLOCATOR_INIT: usize = 1;
 pub const MI_MEM_EXTENDED_PARAMETER_NONPAGED_HUGE: u32 = 0x0000_0010;
 pub const DECLSPEC_ALIGN: usize = 8;
 
@@ -251,6 +251,13 @@ pub struct LARGE_INTEGER {
     pub QuadPart: i64,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FILETIME {
+    pub dwLowDateTime: DWORD,
+    pub dwHighDateTime: DWORD,
+}
+
 static MI_MSECS_FREQ: AtomicI64 = AtomicI64::new(0);
 static mut mi_fls_key: DWORD = FLS_OUT_OF_INDEXES;
 
@@ -293,6 +300,13 @@ pub fn mi_to_msecs(t: LARGE_INTEGER) -> mi_msecs_t {
         MI_MSECS_FREQ.store(freq, Ordering::Release);
     }
     t.QuadPart / freq
+}
+
+#[inline]
+pub unsafe fn filetime_msecs(ftime: *const FILETIME) -> mi_msecs_t {
+    crate::mi_assert_internal!(!ftime.is_null());
+    let ftime = unsafe { &*ftime };
+    ((((ftime.dwHighDateTime as u64) << 32) | (ftime.dwLowDateTime as u64)) / 10_000) as mi_msecs_t
 }
 
 #[inline]

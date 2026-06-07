@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::atomic::mi_lock_t;
 use crate::bits::MI_SIZE_SIZE;
 use crate::stats::mi_stat_count_t;
-use crate::types::{mi_theap_t, mi_threadid_t, mi_tld_t};
+use crate::types::{mi_theap_t, mi_thread_local_t, mi_threadid_t, mi_tld_t};
 
 pub const MI_TLS_DIRECT_SLOTS: usize = 64;
 pub const MI_TLS_EXPANSION_SLOTS: usize = 1024;
@@ -61,6 +61,12 @@ pub static mut mi_tls_raw_index_default: u32 = TLS_OUT_OF_INDEXES;
 pub static mut mi_tls_raw_index_cached: u32 = TLS_OUT_OF_INDEXES;
 
 #[unsafe(no_mangle)]
+pub static mut _mi_theap_default_key: mi_thread_local_t = 0;
+
+#[unsafe(no_mangle)]
+pub static mut _mi_theap_cached_key: mi_thread_local_t = 0;
+
+#[unsafe(no_mangle)]
 pub static mut __mi_theap_main: *mut mi_theap_t = ptr::null_mut();
 
 #[unsafe(no_mangle)]
@@ -110,5 +116,80 @@ pub extern "C" fn _mi_preloading() -> bool {
 }
 
 pub extern "C" fn mi_is_redirected() -> bool {
+    false
+}
+
+#[cfg(any(target_os = "openbsd", target_os = "android"))]
+unsafe extern "C" {
+    fn pthread_key_delete(key: mi_thread_local_t) -> i32;
+}
+
+#[allow(dead_code)]
+fn mi_tls_slots_done() {
+    #[cfg(any(target_os = "openbsd", target_os = "android"))]
+    unsafe {
+        if _mi_theap_default_key != 0 {
+            let _ = pthread_key_delete(_mi_theap_default_key);
+            _mi_theap_default_key = 0;
+        }
+        if _mi_theap_cached_key != 0 {
+            let _ = pthread_key_delete(_mi_theap_cached_key);
+            _mi_theap_cached_key = 0;
+        }
+    }
+}
+
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    not(target_env = "msvc")
+))]
+#[allow(dead_code)]
+fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
+    let regs = {
+        #[cfg(target_arch = "x86")]
+        {
+            // Mirrors the GNU C path while preserving the sublevel input.
+            unsafe { core::arch::x86::__cpuid_count(level, sublevel) }
+        }
+        #[cfg(target_arch = "x86_64")]
+        {
+            // Mirrors the GNU C path while preserving the sublevel input.
+            unsafe { core::arch::x86_64::__cpuid_count(level, sublevel) }
+        }
+    };
+    unsafe {
+        regs4.add(0).write(regs.eax);
+        regs4.add(1).write(regs.ebx);
+        regs4.add(2).write(regs.ecx);
+        regs4.add(3).write(regs.edx);
+    }
+    true
+}
+
+#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_env = "msvc"))]
+#[allow(dead_code)]
+fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
+    let regs = {
+        #[cfg(target_arch = "x86")]
+        {
+            unsafe { core::arch::x86::__cpuid_count(level, sublevel) }
+        }
+        #[cfg(target_arch = "x86_64")]
+        {
+            unsafe { core::arch::x86_64::__cpuid_count(level, sublevel) }
+        }
+    };
+    unsafe {
+        regs4.add(0).write(regs.eax);
+        regs4.add(1).write(regs.ebx);
+        regs4.add(2).write(regs.ecx);
+        regs4.add(3).write(regs.edx);
+    }
+    true
+}
+
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+#[allow(dead_code)]
+fn mi_cpuid(_regs4: *mut u32, _level: u32, _sublevel: u32) -> bool {
     false
 }

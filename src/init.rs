@@ -635,6 +635,13 @@ pub extern "C" fn _mi_is_main_thread() -> bool {
     main_tid == 0 || main_tid == current_thread_id()
 }
 
+#[unsafe(no_mangle)]
+/// # Safety
+/// Delegates to the internal thread teardown routine for the current thread.
+pub unsafe extern "C" fn mi_thread_done() {
+    unsafe { crate::internal::_mi_thread_done(ptr::null_mut()) };
+}
+
 pub extern "C" fn _mi_preloading() -> bool {
     false
 }

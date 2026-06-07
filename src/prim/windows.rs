@@ -733,7 +733,7 @@ macro_rules! MCGEN_EVENT_ENABLED {
         unsafe {
             $crate::prim::windows::McGenEventEnabled(
                 core::ptr::addr_of!($crate::prim::windows::ETW_MI_Provider_Context),
-                core::ptr::addr_of!($crate::prim::windows::$event_name),
+                &$crate::prim::windows::$event_name,
             ) != $crate::prim::windows::FALSE
         }
     };
@@ -827,6 +827,13 @@ pub unsafe fn microsoft_windows_mimallocHandle_ForContext(
 }
 
 #[inline]
+pub unsafe fn _mcgen_CheckContextType_microsoft_windows_mimalloc(
+    pContext: *mut McGenContext_microsoft_windows_mimalloc,
+) -> *mut McGenContext_microsoft_windows_mimalloc {
+    pContext
+}
+
+#[inline]
 pub unsafe fn _mcgen_RegisterForContext_microsoft_windows_mimalloc_EventRegister(
     provider_id: LPCGUID,
     pContext: *mut McGenContext_microsoft_windows_mimalloc,
@@ -851,6 +858,26 @@ pub unsafe fn _mcgen_RegisterForContext_microsoft_windows_mimalloc_EventRegister
         Some(McGenControlCallbackV2),
         (&raw mut context.Context).cast::<c_void>(),
         &raw mut context.Context.RegistrationHandle,
+    )
+}
+
+#[inline]
+pub unsafe fn EventRegistermicrosoft_windows_mimalloc() -> ULONG {
+    McGenEventRegister(
+        &ETW_MI_Provider,
+        Some(McGenControlCallbackV2),
+        (&raw mut ETW_MI_Provider_Context).cast::<c_void>(),
+        microsoft_windows_mimallocHandle(),
+    )
+}
+
+#[inline]
+pub unsafe fn EventRegisterByGuidmicrosoft_windows_mimalloc(Guid: LPCGUID) -> ULONG {
+    McGenEventRegister(
+        Guid,
+        Some(McGenControlCallbackV2),
+        (&raw mut ETW_MI_Provider_Context).cast::<c_void>(),
+        microsoft_windows_mimallocHandle(),
     )
 }
 
@@ -929,9 +956,88 @@ pub unsafe fn EventEnabledETW_MI_ALLOC() -> bool {
 }
 
 #[inline]
+pub unsafe fn EventEnabledETW_MI_ALLOC_ForContext(
+    pContext: *mut McGenContext_microsoft_windows_mimalloc,
+) -> bool {
+    let pContext = _mcgen_CheckContextType_microsoft_windows_mimalloc(pContext);
+    !pContext.is_null()
+        && _mcgen_EVENT_BIT_SET((&raw const (*pContext).EnableBits).cast::<ULONG>(), 0)
+}
+
+#[inline]
 pub unsafe fn EventEnabledETW_MI_FREE() -> bool {
     _mcgen_EVENT_BIT_SET(
         (&raw const microsoft_windows_mimallocEnableBits).cast::<ULONG>(),
         0,
     )
+}
+
+#[inline]
+pub unsafe fn EventEnabledETW_MI_FREE_ForContext(
+    pContext: *mut McGenContext_microsoft_windows_mimalloc,
+) -> bool {
+    let pContext = _mcgen_CheckContextType_microsoft_windows_mimalloc(pContext);
+    !pContext.is_null()
+        && _mcgen_EVENT_BIT_SET((&raw const (*pContext).EnableBits).cast::<ULONG>(), 0)
+}
+
+#[inline]
+pub unsafe fn EventWriteETW_MI_ALLOC(Address: u64, Size: u64) -> ULONG {
+    if MCGEN_EVENT_ENABLED!(ETW_MI_ALLOC) {
+        _mcgen_TEMPLATE_FOR_ETW_MI_ALLOC!(
+            &raw mut ETW_MI_Provider_Context,
+            &ETW_MI_ALLOC,
+            Address,
+            Size
+        )
+    } else {
+        0
+    }
+}
+
+#[inline]
+pub unsafe fn EventWriteETW_MI_ALLOC_ForContext(
+    pContext: *mut McGenContext_microsoft_windows_mimalloc,
+    Address: u64,
+    Size: u64,
+) -> ULONG {
+    let pContext = _mcgen_CheckContextType_microsoft_windows_mimalloc(pContext);
+    if !pContext.is_null() && EventEnabledETW_MI_ALLOC_ForContext(pContext) {
+        _mcgen_TEMPLATE_FOR_ETW_MI_ALLOC!(
+            &raw mut (*pContext).Context,
+            &ETW_MI_ALLOC,
+            Address,
+            Size
+        )
+    } else {
+        0
+    }
+}
+
+#[inline]
+pub unsafe fn EventWriteETW_MI_FREE(Address: u64, Size: u64) -> ULONG {
+    if MCGEN_EVENT_ENABLED!(ETW_MI_FREE) {
+        _mcgen_TEMPLATE_FOR_ETW_MI_FREE!(
+            &raw mut ETW_MI_Provider_Context,
+            &ETW_MI_FREE,
+            Address,
+            Size
+        )
+    } else {
+        0
+    }
+}
+
+#[inline]
+pub unsafe fn EventWriteETW_MI_FREE_ForContext(
+    pContext: *mut McGenContext_microsoft_windows_mimalloc,
+    Address: u64,
+    Size: u64,
+) -> ULONG {
+    let pContext = _mcgen_CheckContextType_microsoft_windows_mimalloc(pContext);
+    if !pContext.is_null() && EventEnabledETW_MI_FREE_ForContext(pContext) {
+        _mcgen_TEMPLATE_FOR_ETW_MI_FREE!(&raw mut (*pContext).Context, &ETW_MI_FREE, Address, Size)
+    } else {
+        0
+    }
 }

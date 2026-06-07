@@ -23,10 +23,11 @@ pub use crate::bits::{
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
 pub use crate::page::{
-    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_is_valid, _mi_page_unfull,
-    _mi_theap_page_reclaim, MI_LARGE_MAX_OBJ_SIZE, MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE,
-    MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE, mi_page_flags_set, mi_page_is_abandoned,
-    mi_page_is_huge, mi_page_is_in_full, mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
+    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_is_valid,
+    _mi_page_stats_bin, _mi_page_unfull, _mi_theap_page_reclaim, MI_LARGE_MAX_OBJ_SIZE,
+    MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
+    mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full,
+    mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
 };
 pub use crate::page_map::{_mi_page_map_unregister, _mi_safe_ptr_page};
 pub use crate::stats::{
@@ -583,6 +584,32 @@ unsafe extern "C" {
     pub fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t);
     pub fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t);
     pub fn _mi_page_init(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool;
+    pub fn _mi_theap_create(heap: *mut mi_heap_t, tld: *mut mi_tld_t) -> *mut mi_theap_t;
+    pub fn _mi_theap_area_visit_blocks(
+        theap: *mut mi_theap_t,
+        area: *mut mi_heap_area_t,
+        visitor: mi_block_visit_fun,
+        arg: *mut c_void,
+    ) -> bool;
+    pub fn _mi_heap_area_init(
+        area: *mut mi_heap_area_t,
+        page: *mut mi_page_t,
+        block_size: usize,
+        reserved: usize,
+        used: usize,
+        blocks: *mut c_void,
+    );
+    pub fn _mi_heap_move_pages(heap_from: *mut mi_heap_t, heap_to: *mut mi_heap_t);
+    pub fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t);
+    pub fn _mi_heap_force_destroy(heap: *mut mi_heap_t);
+    pub fn _mi_page_malloc_zero(
+        theap: *mut mi_theap_t,
+        page: *mut mi_page_t,
+        size: usize,
+        zero: bool,
+    ) -> *mut c_void;
+    pub fn _mi_page_ptr_unalign(page: *const mi_page_t, p: *const c_void) -> *mut mi_block_t;
+    pub fn _mi_padding_shrink(page: *mut mi_page_t, block: *mut mi_block_t, min_size: usize);
     pub fn _mi_page_map_unregister_range(start: *mut c_void, size: usize);
 }
 

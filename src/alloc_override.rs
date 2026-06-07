@@ -703,9 +703,21 @@ pub unsafe fn mi_unix_malloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
 }
 
+#[cfg(not(windows))]
+#[unsafe(export_name = "malloc")]
+pub unsafe extern "C" fn mi_unix_malloc_export(size: usize) -> *mut c_void {
+    unsafe { mi_unix_malloc(size) }
+}
+
 #[inline]
 pub unsafe fn mi_unix_calloc(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
+}
+
+#[cfg(not(windows))]
+#[unsafe(export_name = "calloc")]
+pub unsafe extern "C" fn mi_unix_calloc_export(count: usize, size: usize) -> *mut c_void {
+    unsafe { mi_unix_calloc(count, size) }
 }
 
 #[inline]
@@ -713,9 +725,21 @@ pub unsafe fn mi_unix_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_realloc(p, newsize) }
 }
 
+#[cfg(not(windows))]
+#[unsafe(export_name = "realloc")]
+pub unsafe extern "C" fn mi_unix_realloc_export(p: *mut c_void, newsize: usize) -> *mut c_void {
+    unsafe { mi_unix_realloc(p, newsize) }
+}
+
 #[inline]
 pub unsafe fn mi_unix_free(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
+}
+
+#[cfg(not(windows))]
+#[unsafe(export_name = "free")]
+pub unsafe extern "C" fn mi_unix_free_export(p: *mut c_void) {
+    unsafe { mi_unix_free(p) }
 }
 
 #[inline]

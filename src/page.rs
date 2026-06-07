@@ -802,7 +802,7 @@ pub unsafe fn _mi_theap_page_reclaim(theap: *mut mi_theap_t, page: *mut mi_page_
     crate::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
     crate::mi_assert_internal!(mi_page_is_abandoned(page));
 
-    crate::internal::_mi_arenas_page_unabandon(page, theap);
+    mi_page_set_theap(page, theap);
     _mi_page_free_collect(page, false);
     let pq = mi_theap_page_queue_of(theap, page);
     mi_page_queue_push_at_end(theap, pq, page);

@@ -31,13 +31,13 @@ use crate::internal::{
     _mi_divide_up, _mi_is_heap_main, _mi_memid_create, _mi_memid_none, _mi_meta_free,
     _mi_meta_is_meta_page, _mi_os_commit, _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex,
     _mi_os_has_overcommit, _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc,
-    _mi_theap_heap, _mi_theap_random_next, _mi_thread_id, _mi_toupper, MI_DEBUG, mi_block_next,
-    mi_block_set_next, mi_mem_is_zero, mi_memid_t, mi_memkind_t, mi_mul_overflow, mi_page_all_free,
-    mi_page_area, mi_page_block_size, mi_page_claim_ownership, mi_page_clear_abandoned_mapped,
-    mi_page_committed, mi_page_heap, mi_page_immediate_available, mi_page_is_abandoned,
-    mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned, mi_page_is_singleton,
-    mi_page_meta_is_separated, mi_page_slice_start, mi_page_start, mi_page_usable_block_size,
-    mi_size_of_slices, mi_slice_count_of_size, mi_tf_block, mi_tf_create, mi_tf_is_owned,
+    _mi_theap_heap, _mi_thread_id, _mi_toupper, MI_DEBUG, mi_block_next, mi_mem_is_zero,
+    mi_memid_t, mi_memkind_t, mi_mul_overflow, mi_page_all_free, mi_page_area, mi_page_block_size,
+    mi_page_claim_ownership, mi_page_clear_abandoned_mapped, mi_page_committed, mi_page_heap,
+    mi_page_is_abandoned, mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned,
+    mi_page_is_singleton, mi_page_meta_is_separated, mi_page_slice_start, mi_page_start,
+    mi_page_usable_block_size, mi_size_of_slices, mi_slice_count_of_size, mi_tf_block,
+    mi_tf_create, mi_tf_is_owned,
 };
 use crate::mimalloc::{mi_heap_main, mi_heap_theap, mi_heap_zalloc_aligned};
 use crate::options::{mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t};
@@ -53,13 +53,13 @@ use crate::page::{
 use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page};
 use crate::prim::_mi_page_associated_theap_peek;
 use crate::stats::{MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_OTHER, MI_CBIN_SMALL};
-use crate::track::{mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined};
+use crate::track::{mi_track_mem_defined, mi_track_mem_undefined};
 use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
     MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX,
-    MI_THREADID_ABANDONED_MAPPED, mi_arena_id_t, mi_arena_t, mi_block_t, mi_block_visit_fun,
-    mi_commit_fun_t, mi_heap_area_t, mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t,
-    mi_thread_free_t, mi_thread_local_t, mi_tld_t,
+    MI_THREADID_ABANDONED_MAPPED, mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t,
+    mi_heap_area_t, mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_free_t,
+    mi_thread_local_t, mi_tld_t,
 };
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
@@ -2169,55 +2169,6 @@ unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
     full
 }
 
-unsafe fn mi_page_build_free_list(page: *mut mi_page_t) {
-    let bsize = unsafe { mi_page_block_size(page) };
-    let mut head = ptr::null_mut::<mi_block_t>();
-    for i in (0..unsafe { (*page).capacity as usize }).rev() {
-        let block = unsafe { (*page).page_start.add(i * bsize).cast::<mi_block_t>() };
-        unsafe { mi_block_set_next(page, block, head) };
-        head = block;
-    }
-    unsafe { (*page).free = head };
-}
-
-unsafe fn mi_page_init_for_arena_alloc(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
-    crate::mi_assert_internal!(!theap.is_null());
-    crate::mi_assert_internal!(!page.is_null());
-
-    let heap = unsafe { _mi_theap_heap(theap) };
-    unsafe {
-        (*page).heap = if _mi_is_heap_main(heap) {
-            ptr::null_mut()
-        } else {
-            heap
-        };
-    }
-    unsafe { mi_page_set_theap(page, theap) };
-
-    let mut page_size = 0usize;
-    let page_start = unsafe { mi_page_area(page, &mut page_size) };
-    unsafe { mi_track_mem_noaccess(page_start.cast(), page_size) };
-    crate::mi_assert_internal!(page_size / unsafe { mi_page_block_size(page) } < (1usize << 16));
-    crate::mi_assert_internal!(unsafe { (*page).reserved > 0 });
-
-    unsafe { (*page).keys[0] = _mi_theap_random_next(theap) };
-    unsafe { (*page).keys[1] = _mi_theap_random_next(theap) };
-
-    unsafe { (*page).capacity = (*page).reserved };
-    unsafe { (*page).used = 0 };
-    unsafe { (*page).retire_expire = 0 };
-    unsafe { (*page).local_free = ptr::null_mut() };
-    unsafe { (*page).free = ptr::null_mut() };
-    unsafe { (*page).next = ptr::null_mut() };
-    unsafe { (*page).prev = ptr::null_mut() };
-
-    unsafe { mi_page_build_free_list(page) };
-    unsafe { mi_track_mem_undefined(page_start.cast(), page_size) };
-
-    crate::mi_assert_internal!(unsafe { mi_page_immediate_available(page) });
-    true
-}
-
 unsafe fn mi_arenas_page_try_find_abandoned(
     theap: *mut mi_theap_t,
     slice_count: usize,
@@ -2600,7 +2551,7 @@ unsafe fn mi_arenas_page_regular_alloc(
         unsafe { (*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA }
             || unsafe { (*page).memid.mem.arena.slice_count as usize == slice_count }
     );
-    if !unsafe { mi_page_init_for_arena_alloc(theap, page) } {
+    if !unsafe { crate::page::_mi_page_init(theap, page) } {
         unsafe { _mi_arenas_free(page.cast(), mi_page_full_size(page), (*page).memid) };
         return ptr::null_mut();
     }
@@ -2626,7 +2577,7 @@ unsafe fn mi_arenas_page_singleton_alloc(
         return ptr::null_mut();
     }
     crate::mi_assert_internal!(unsafe { (*page).reserved == 1 });
-    if !unsafe { mi_page_init_for_arena_alloc(theap, page) } {
+    if !unsafe { crate::page::_mi_page_init(theap, page) } {
         unsafe { _mi_arenas_free(page.cast(), mi_page_full_size(page), (*page).memid) };
         return ptr::null_mut();
     }

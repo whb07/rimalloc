@@ -150,7 +150,6 @@ unsafe extern "C" {
     pub fn _mi_prim_thread_is_in_threadpool() -> bool;
     pub fn _mi_prim_thread_yield();
 
-    pub static mut __mi_theap_main: *mut mi_theap_t;
     pub static mut _mi_process_is_initialized: bool;
     pub static mut _mi_theap_default_slot: usize;
     pub static mut _mi_theap_cached_slot: usize;
@@ -298,7 +297,7 @@ pub unsafe fn _mi_thread_is_initialized() -> bool {
 #[inline]
 pub unsafe fn _mi_heap_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let theap = _mi_theap_cached();
-    if !theap.is_null() {
+    if !theap.is_null() && crate::internal::_mi_theap_heap(theap) == heap.cast_mut() {
         return theap;
     }
     _mi_heap_theap_get_or_init(heap)
@@ -307,19 +306,24 @@ pub unsafe fn _mi_heap_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
 #[inline]
 pub unsafe fn _mi_heap_theap_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let theap = _mi_theap_cached();
-    if !theap.is_null() {
+    if !theap.is_null() && crate::internal::_mi_theap_heap(theap) == heap.cast_mut() {
         return theap;
     }
     _mi_heap_theap_get_peek(heap)
 }
 
 #[inline]
-pub unsafe fn _mi_page_associated_theap_peek(_page: *mut mi_page_t) -> *mut mi_theap_t {
-    if !__mi_theap_main.is_null() {
-        __mi_theap_main
+pub unsafe fn _mi_page_associated_theap_peek(page: *mut mi_page_t) -> *mut mi_theap_t {
+    let heap = (*page).heap;
+    let theap = if heap.is_null() {
+        crate::init::mi_theap_main_tls_peek()
     } else {
-        ptr::null_mut()
-    }
+        _mi_heap_theap_peek(heap)
+    };
+    crate::mi_assert_internal!(
+        theap.is_null() || crate::init::_mi_thread_id() == (*(*theap).tld).thread_id
+    );
+    theap
 }
 
 #[inline]

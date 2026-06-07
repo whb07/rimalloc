@@ -323,8 +323,13 @@ pub extern "C" fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut core::ffi
     debug_assert!(key != 0);
     let idx = mi_key_index(key);
     unsafe {
-        if idx < (*tls).count && mi_key_version(key) == (*tls).slots[idx].version {
-            (*tls).slots[idx].value
+        if idx < (*tls).count {
+            let slots = tls_slots(tls);
+            if mi_key_version(key) == (*slots.add(idx)).version {
+                (*slots.add(idx)).value
+            } else {
+                ptr::null_mut()
+            }
         } else {
             ptr::null_mut()
         }

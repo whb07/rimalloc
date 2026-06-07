@@ -524,24 +524,6 @@ fn clamp_c_long(x: i128) -> c_long {
 }
 
 #[inline]
-fn option_name(desc: &mi_option_desc_t) -> String {
-    unsafe { CStr::from_ptr(desc.name).to_string_lossy().into_owned() }
-}
-
-#[inline]
-fn option_legacy_name(desc: &mi_option_desc_t) -> Option<String> {
-    if desc.legacy_name.is_null() {
-        None
-    } else {
-        Some(unsafe {
-            CStr::from_ptr(desc.legacy_name)
-                .to_string_lossy()
-                .into_owned()
-        })
-    }
-}
-
-#[inline]
 fn mi_output_fun_to_ptr(out: mi_output_fun) -> *mut c_void {
     out as *const () as *mut c_void
 }
@@ -827,8 +809,35 @@ pub unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char) {
 }
 
 #[inline]
-fn get_env_value(name: &str) -> Option<String> {
-    std::env::var_os(name).and_then(|value| value.into_string().ok())
+fn build_mimalloc_env_name(buf: &mut [u8; 65], suffix: &[u8]) -> bool {
+    const PREFIX: &[u8] = b"mimalloc_";
+    let total = PREFIX.len() + suffix.len();
+    if total >= buf.len() {
+        return false;
+    }
+    buf[..PREFIX.len()].copy_from_slice(PREFIX);
+    buf[PREFIX.len()..total].copy_from_slice(suffix);
+    buf[total] = 0;
+    true
+}
+
+#[inline]
+fn get_env_value_stack<'a>(suffix: &[u8], value_buf: &'a mut [c_char; 65]) -> Option<&'a str> {
+    let mut env_name = [0u8; 65];
+    if !build_mimalloc_env_name(&mut env_name, suffix) {
+        return None;
+    }
+    if !unsafe {
+        crate::libc::_mi_getenv(
+            env_name.as_ptr().cast(),
+            value_buf.as_mut_ptr(),
+            value_buf.len(),
+        )
+    } {
+        return None;
+    }
+    let value = unsafe { CStr::from_ptr(value_buf.as_ptr()) };
+    value.to_str().ok()
 }
 
 #[inline]
@@ -958,23 +967,22 @@ pub(crate) fn mi_option_has_size_in_kib(option: mi_option_t) -> bool {
 }
 
 fn mi_option_init(desc: &mut mi_option_desc_t) {
-    let name = option_name(desc);
-    let env_name = format!("mimalloc_{}", name);
-    let legacy_name = option_legacy_name(desc);
+    let name = unsafe { CStr::from_ptr(desc.name) };
+    let name_str = name.to_str().unwrap_or("");
+    let mut value_buf = [0 as c_char; 65];
+    let mut found = get_env_value_stack(name.to_bytes(), &mut value_buf);
 
-    let mut found = get_env_value(&env_name);
-    if found.is_none()
-        && let Some(legacy) = legacy_name.as_deref()
-    {
-        let legacy_env_name = format!("mimalloc_{}", legacy);
-        found = get_env_value(&legacy_env_name);
+    if found.is_none() && !desc.legacy_name.is_null() {
+        let legacy = unsafe { CStr::from_ptr(desc.legacy_name) };
+        let legacy_str = legacy.to_str().unwrap_or("");
+        found = get_env_value_stack(legacy.to_bytes(), &mut value_buf);
         if found.is_some() {
             _mi_fprintf(
                 None,
                 ptr::null_mut(),
                 format_args!(
                     "mimalloc: warning: environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
-                    legacy, name
+                    legacy_str, name_str
                 ),
             );
         }
@@ -982,15 +990,14 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
 
     if found.is_none() {
         for legacy in option_extra_legacy_names(desc.option) {
-            let extra_env_name = format!("mimalloc_{}", legacy);
-            found = get_env_value(&extra_env_name);
+            found = get_env_value_stack(legacy.as_bytes(), &mut value_buf);
             if found.is_some() {
                 _mi_fprintf(
                     None,
                     ptr::null_mut(),
                     format_args!(
                         "mimalloc: warning: environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
-                        legacy, name
+                        legacy, name_str
                     ),
                 );
                 break;
@@ -999,7 +1006,7 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
     }
 
     if let Some(raw) = found {
-        if let Some(value) = parse_option_value(&raw, option_has_size_in_kib(desc.option)) {
+        if let Some(value) = parse_option_value(raw, option_has_size_in_kib(desc.option)) {
             desc.value = value;
             desc.init = mi_option_init_t::MI_OPTION_INITIALIZED;
         } else {
@@ -1011,7 +1018,7 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
                     ptr::null_mut(),
                     format_args!(
                         "mimalloc: warning: environment option mimalloc_{} has an invalid value.\n",
-                        name
+                        name_str
                     ),
                 );
                 desc.value = 0;
@@ -1021,7 +1028,7 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
                     ptr::null_mut(),
                     format_args!(
                         "mimalloc: warning: environment option mimalloc_{} has an invalid value.\n",
-                        name
+                        name_str
                     ),
                 );
             }

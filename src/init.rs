@@ -654,10 +654,21 @@ unsafe fn mi_subprocs_unsafe_destroy_all() {
 }
 
 static MAIN_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
-static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(4);
+static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(8);
 
 thread_local! {
     static THREAD_ID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static THEAP_MAIN: std::cell::Cell<*mut mi_theap_t> = const { std::cell::Cell::new(ptr::null_mut()) };
+}
+
+#[inline]
+pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
+    THEAP_MAIN.with(std::cell::Cell::get)
+}
+
+#[inline]
+pub(crate) fn mi_theap_main_tls_set(theap: *mut mi_theap_t) {
+    THEAP_MAIN.with(|slot| slot.set(theap));
 }
 
 #[inline]
@@ -1166,18 +1177,14 @@ pub unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         unsafe { crate::prim::_mi_prim_thread_associate_default_theap(theap) };
         if unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) } {
-            unsafe {
-                __mi_theap_main = theap;
-            }
+            mi_theap_main_tls_set(theap);
         }
     }
 
     if unsafe { crate::internal::mi_theap_is_initialized(theap_old) }
         && unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_old)) }
     {
-        unsafe {
-            __mi_theap_main = theap_old;
-        }
+        mi_theap_main_tls_set(theap_old);
     }
 }
 
@@ -1245,16 +1252,22 @@ pub unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
 /// # Safety
 /// Returns the process main theap, ensuring the default path initialized it first.
 pub unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
-    let mut theap = unsafe { __mi_theap_main };
+    let mut theap = mi_theap_main_tls_peek();
     if theap.is_null() {
         unsafe { crate::mimalloc::mi_thread_init() };
         theap = unsafe { crate::prim::_mi_theap_default() };
         crate::mi_assert_internal!(!theap.is_null());
-        if ptr::eq(theap, ptr::addr_of_mut!(theap_main)) {
-            unsafe { __mi_theap_main = theap };
+        if unsafe { crate::internal::mi_theap_is_initialized(theap) }
+            && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
+        {
+            mi_theap_main_tls_set(theap);
         }
     }
-    crate::mi_assert_internal!(!theap.is_null() && ptr::eq(theap, ptr::addr_of_mut!(theap_main)));
+    crate::mi_assert_internal!(
+        !theap.is_null()
+            && unsafe { crate::internal::mi_theap_is_initialized(theap) }
+            && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
+    );
     theap
 }
 
@@ -1387,7 +1400,7 @@ unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
     unsafe {
         _mi_theap_default_set(empty);
         _mi_theap_cached_set(empty);
-        crate::prim::__mi_theap_main = ptr::null_mut();
+        mi_theap_main_tls_set(ptr::null_mut());
     }
 
     unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };

@@ -81,7 +81,7 @@ pub const MI_PAGE_HAS_INTERIOR_POINTERS: usize = 0x02;
 pub const MI_PAGE_FLAG_MASK: usize = 0x03;
 pub const MI_THREADID_ABANDONED: usize = 0;
 pub const MI_THREADID_ABANDONED_MAPPED: usize = MI_PAGE_FLAG_MASK + 1;
-pub const MI_PAGES_DIRECT: usize = MI_SMALL_WSIZE_MAX + 1;
+pub const MI_PAGES_DIRECT: usize = MI_SMALL_WSIZE_MAX + MI_PADDING_WSIZE + 1;
 pub const MI_SMALL_PAGE_SIZE: usize = crate::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_MEDIUM_PAGE_SIZE: usize = 8 * MI_SMALL_PAGE_SIZE;
 pub const MI_LARGE_PAGE_SIZE: usize = core::mem::size_of::<usize>() * MI_MEDIUM_PAGE_SIZE;
@@ -128,6 +128,11 @@ pub const MI_PADDING_SIZE: usize = if MI_PADDING != 0 {
     core::mem::size_of::<mi_padding_t>()
 } else {
     0
+};
+pub const MI_PADDING_WSIZE: usize = if MI_PADDING_SIZE == 0 {
+    0
+} else {
+    MI_PADDING_SIZE.div_ceil(core::mem::size_of::<*const c_void>())
 };
 
 #[repr(C)]

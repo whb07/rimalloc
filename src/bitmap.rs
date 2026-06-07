@@ -136,7 +136,7 @@ macro_rules! define_bitmap_types {
             pub chunk_count: AtomicUsize,
             pub _padding: [usize; MI_BCHUNK_SIZE / MI_SIZE_SIZE - 1],
             pub chunkmap: mi_bchunkmap_t,
-            pub chunks: [mi_bchunk_t; MI_BITMAP_DEFAULT_CHUNK_COUNT],
+            pub chunks: [mi_bchunk_t; MI_BITMAP_MAX_CHUNK_COUNT],
         }
 
         impl Default for mi_bitmap_s {
@@ -160,7 +160,7 @@ macro_rules! define_bitmap_types {
             pub _padding: [usize; MI_BCHUNK_SIZE / MI_SIZE_SIZE - 2],
             pub chunkmap: mi_bchunkmap_t,
             pub chunkmap_bins: [mi_bchunkmap_t; MI_CBIN_COUNT as usize - 1],
-            pub chunks: [mi_bchunk_t; MI_BITMAP_DEFAULT_CHUNK_COUNT],
+            pub chunks: [mi_bchunk_t; MI_BITMAP_MAX_CHUNK_COUNT],
         }
 
         impl Default for mi_bbitmap_s {
@@ -1933,6 +1933,7 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
     pidx: *mut usize,
     on_find: mi_bchunk_try_find_and_clear_fun_t,
 ) -> bool {
+    let chunk_count = mi_bbitmap_chunk_count(bbitmap);
     let cmap_max_count = mi_bbitmap_chunk_count(bbitmap).div_ceil(MI_BFIELD_BITS);
     let chunk_acc = (*bbitmap).chunk_max_accessed.load(Ordering::Relaxed);
     let cmap_acc = chunk_acc / MI_BFIELD_BITS;
@@ -1941,6 +1942,7 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
     let cmap_cycle = cmap_acc + 1;
     let bbin = mi_chunkbin_of(n);
     let mut cmap_idx = 0usize;
+    let mut found = false;
     let _ = mi_bfield_cycle_iterate(cmap_mask, tseq, cmap_cycle, |cmap_idx_in_cycle| {
         cmap_idx = cmap_idx_in_cycle;
         let cmap_entry = (*bbitmap).chunkmap.bfields[cmap_idx].load(Ordering::Relaxed);
@@ -1969,6 +1971,9 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
             let _ = mi_bfield_cycle_iterate(cmap_bin, tseq, cmap_entry_cycle, |eidx_in_cycle| {
                 eidx = eidx_in_cycle;
                 let chunk_idx = (cmap_idx * MI_BFIELD_BITS) + eidx;
+                if chunk_idx >= chunk_count {
+                    return true;
+                }
                 let chunk = &mut (*bbitmap).chunks[chunk_idx];
                 let mut cidx = 0usize;
                 if on_find(chunk, n, &mut cidx) {
@@ -1977,6 +1982,7 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
                     }
                     *pidx = (chunk_idx * MI_BCHUNK_BITS) + cidx;
                     debug_assert!(*pidx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
+                    found = true;
                     return false;
                 } else {
                     mi_bbitmap_chunkmap_try_clear(&mut *bbitmap, chunk_idx);
@@ -1994,7 +2000,7 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
         }
         true
     });
-    false
+    found
 }
 
 #[inline]

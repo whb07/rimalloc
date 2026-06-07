@@ -578,12 +578,15 @@ unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
         mi_memkind_t::MI_MEM_META => {
             _mi_meta_free(theap.cast(), size_of::<mi_theap_t>(), (*theap).memid);
         }
-        _ => {
+        mi_memkind_t::MI_MEM_ARENA => {
             _mi_arenas_free(
                 theap.cast(),
                 _mi_align_up(size_of::<mi_theap_t>(), MI_ARENA_MIN_OBJ_SIZE),
                 (*theap).memid,
             );
+        }
+        _ => {
+            _mi_arenas_free(theap.cast(), size_of::<mi_theap_t>(), (*theap).memid);
         }
     }
 }

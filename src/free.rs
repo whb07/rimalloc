@@ -284,17 +284,17 @@ pub unsafe fn mi_free_block_local(
     if track_stats {
         mi_stat_free(page, block);
     }
+    if track_stats {
+        mi_track_free_size(
+            block.cast::<c_void>(),
+            mi_page_usable_size_of(page, block, was_guarded),
+        );
+    }
     if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
         _mi_memset_aligned(
             block.cast::<c_void>(),
             MI_DEBUG_FREED as i32,
             mi_page_block_size(page),
-        );
-    }
-    if track_stats {
-        mi_track_free_size(
-            block.cast::<c_void>(),
-            mi_page_usable_size_of(page, block, was_guarded),
         );
     }
 

@@ -6,6 +6,7 @@ use std::ffi::{CStr, CString};
 use std::mem;
 use std::ptr;
 use std::sync::atomic::{AtomicI64, AtomicPtr, Ordering};
+use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
@@ -26,6 +27,7 @@ static XGSUM: AtomicI64 = AtomicI64::new(0);
 static GSUM: AtomicI64 = AtomicI64::new(0);
 static GSUM5: AtomicI64 = AtomicI64::new(0);
 static SUM2: AtomicI64 = AtomicI64::new(0);
+static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 const LEN: [usize; 4] = [1000, 5000, 10_000, 50_000];
 const THREAD_LEAK_ITERS: usize = 256;
@@ -77,6 +79,10 @@ thread_local! {
 
 fn msleep(msecs: u64) {
     thread::sleep(Duration::from_millis(msecs));
+}
+
+fn test_guard() -> MutexGuard<'static, ()> {
+    TEST_MUTEX.lock().expect("test mutex poisoned")
 }
 
 fn lcg_next(state: &mut u64) -> u64 {
@@ -366,7 +372,7 @@ fn t1main() {
 
 fn theap_late_free() {
     let t = thread::spawn(t1main);
-    msleep(25);
+    msleep(2000);
     let p = GLOBAL_P.swap(ptr::null_mut(), Ordering::AcqRel);
     assert!(!p.is_null());
     unsafe { free::mi_free(p) };
@@ -631,110 +637,132 @@ fn original_main_override_cpp_main() -> i32 {
 
 #[test]
 fn original_main_override_c_harness() {
+    let _guard = test_guard();
     assert_eq!(original_main_override_c_main(), 0);
 }
 
 #[test]
 fn original_main_override_cpp_harness() {
+    let _guard = test_guard();
     assert_eq!(original_main_override_cpp_main(), 0);
 }
 
 #[test]
 fn original_main_override_test_stl_allocator3() {
+    let _guard = test_guard();
     assert!(test_stl_allocator3());
 }
 
 #[test]
 fn original_main_override_test_stl_allocator4() {
+    let _guard = test_guard();
     assert!(test_stl_allocator4());
 }
 
 #[test]
 fn original_main_override_test_stl_allocator5() {
+    let _guard = test_guard();
     assert!(test_stl_allocator5());
 }
 
 #[test]
 fn original_main_override_test_stl_allocator6() {
+    let _guard = test_guard();
     assert!(test_stl_allocator6());
 }
 
 #[test]
 fn original_main_override_test_dep() {
+    let _guard = test_guard();
     test_dep();
 }
 
 #[test]
 fn original_main_override_test_large_migrate() {
+    let _guard = test_guard();
     test_large_migrate();
 }
 
 #[test]
 fn original_main_override_strdup_test() {
+    let _guard = test_guard();
     strdup_test();
 }
 
 #[test]
 fn original_main_override_heap_no_delete() {
+    let _guard = test_guard();
     heap_no_delete();
 }
 
 #[test]
 fn original_main_override_theap_late_free() {
+    let _guard = test_guard();
     theap_late_free();
 }
 
 #[test]
 fn original_main_override_padding_shrink() {
+    let _guard = test_guard();
     padding_shrink();
 }
 
 #[test]
 fn original_main_override_theap_thread_free_large() {
+    let _guard = test_guard();
     theap_thread_free_large();
 }
 
 #[test]
 fn original_main_override_theap_thread_free_huge_worker() {
+    let _guard = test_guard();
     theap_thread_free_huge_smoke();
 }
 
 #[test]
 fn original_main_override_thread_fun() {
+    let _guard = test_guard();
     thread_fun(7);
 }
 
 #[test]
 fn original_main_override_test_thread_leak() {
+    let _guard = test_guard();
     test_thread_leak();
 }
 
 #[test]
 fn original_main_override_test_mt_shutdown() {
+    let _guard = test_guard();
     test_mt_shutdown();
 }
 
 #[test]
 fn original_main_override_test_perf_run() {
+    let _guard = test_guard();
     test_perf_run();
 }
 
 #[test]
 fn original_main_override_test_perf2() {
+    let _guard = test_guard();
     test_perf2();
 }
 
 #[test]
 fn original_main_override_test_perf3() {
+    let _guard = test_guard();
     test_perf3();
 }
 
 #[test]
 fn original_main_override_test_perf4() {
+    let _guard = test_guard();
     test_perf4();
 }
 
 #[test]
 fn original_main_override_test_perf5() {
+    let _guard = test_guard();
     test_perf5();
 }

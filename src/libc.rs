@@ -49,7 +49,7 @@ pub extern "C" fn _mi_toupper(c: c_char) -> c_char {
     }
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> i32 {
     if s.is_null() || t.is_null() || n == 0 {
         return 0;
@@ -91,7 +91,7 @@ pub unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) -> bool {
     }
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_strlcpy(dest: *mut c_char, src: *const c_char, dest_size: usize) {
     if dest.is_null() || src.is_null() || dest_size == 0 {
         return;
@@ -102,7 +102,7 @@ pub unsafe extern "C" fn _mi_strlcpy(dest: *mut c_char, src: *const c_char, dest
     *as_bytes_mut_ptr(dest).add(n) = 0;
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_strlcat(dest: *mut c_char, src: *const c_char, dest_size: usize) {
     if dest.is_null() || src.is_null() || dest_size == 0 {
         return;
@@ -180,21 +180,7 @@ pub unsafe extern "C" fn _mi_getenv(
     if name.is_null() || result.is_null() || result_size < 64 {
         return false;
     }
-    let name = match CStr::from_ptr(name).to_str() {
-        Ok(name) => name,
-        Err(_) => return false,
-    };
-    let value = match std::env::var_os(name).and_then(|v| v.into_string().ok()) {
-        Some(value) => value,
-        None => return false,
-    };
-    let bytes = value.as_bytes();
-    if bytes.len() >= result_size {
-        return false;
-    }
-    ptr::copy_nonoverlapping(bytes.as_ptr(), as_bytes_mut_ptr(result), bytes.len());
-    *as_bytes_mut_ptr(result).add(bytes.len()) = 0;
-    true
+    crate::prim::_mi_prim_getenv(name, result, result_size)
 }
 
 #[inline]

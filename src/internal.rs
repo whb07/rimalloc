@@ -452,6 +452,16 @@ unsafe extern "C" {
     pub fn _mi_theap_options_init(theap: *mut mi_theap_t);
     pub fn _mi_theap_default_safe() -> *mut mi_theap_t;
     pub fn _mi_theap_main_safe() -> *mut mi_theap_t;
+    pub fn _mi_theap_delete(theap: *mut mi_theap_t, acquire_tld_theaps_lock: bool);
+    pub fn _mi_theap_default_set(theap: *mut mi_theap_t);
+    pub fn _mi_theap_cached_set(theap: *mut mi_theap_t);
+    pub fn _mi_theap_free(
+        theap: *mut mi_theap_t,
+        acquire_heap_theaps_lock: bool,
+        acquire_tld_theaps_lock: bool,
+    ) -> bool;
+    pub fn _mi_theap_incref(theap: *mut mi_theap_t);
+    pub fn _mi_theap_decref(theap: *mut mi_theap_t);
 
     pub fn _mi_os_init();
     pub fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;

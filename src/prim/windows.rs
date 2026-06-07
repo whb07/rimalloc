@@ -11,7 +11,10 @@
     unused_macros
 )]
 
-use core::ffi::c_void;
+use core::{
+    ffi::c_void,
+    ptr::{null, write_bytes},
+};
 
 pub const ETW_INLINE: () = ();
 pub const MCGEN_USE_KERNEL_MODE_APIS: usize = 0;
@@ -36,7 +39,10 @@ pub type HINSTANCE = *mut c_void;
 pub type LONG = i32;
 pub type UCHAR = u8;
 pub type ULONG = u32;
+pub type ULONGLONG = u64;
+pub type ULONG_PTR = usize;
 pub type USHORT = u16;
+pub type UINT_PTR = usize;
 pub type WORD = u16;
 pub type VOID = c_void;
 pub type PVOID = *mut c_void;
@@ -50,6 +56,15 @@ pub type PUSHORT = *mut USHORT;
 pub type PGROUP_AFFINITY = *mut c_void;
 pub type PROCESS_MEMORY_COUNTERS = c_void;
 pub type PPROCESS_MEMORY_COUNTERS = *mut PROCESS_MEMORY_COUNTERS;
+pub type REGHANDLE = TRACEHANDLE;
+pub type PREGHANDLE = *mut REGHANDLE;
+pub type LPCGUID = *const GUID;
+pub type PEVENT_FILTER_DESCRIPTOR = *const EVENT_FILTER_DESCRIPTOR;
+
+pub const TRUE: BOOLEAN = 1;
+pub const FALSE: BOOLEAN = 0;
+pub const EVENT_CONTROL_CODE_DISABLE_PROVIDER: ULONG = 0;
+pub const EVENT_CONTROL_CODE_ENABLE_PROVIDER: ULONG = 1;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -209,6 +224,31 @@ pub struct EVENT_FILTER_DESCRIPTOR {
 }
 
 pub type TRACEHANDLE = usize;
+pub type PMCGEN_TRACE_CONTEXT = *mut MCGEN_TRACE_CONTEXT;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EVENT_DESCRIPTOR {
+    pub Id: USHORT,
+    pub Version: UCHAR,
+    pub Channel: UCHAR,
+    pub Level: UCHAR,
+    pub Opcode: UCHAR,
+    pub Task: USHORT,
+    pub Keyword: ULONGLONG,
+}
+
+pub type PCEVENT_DESCRIPTOR = *const EVENT_DESCRIPTOR;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EVENT_DATA_DESCRIPTOR {
+    pub Ptr: ULONG_PTR,
+    pub Size: ULONG,
+    pub Reserved: ULONG,
+}
+
+pub type PEVENT_DATA_DESCRIPTOR = *mut EVENT_DATA_DESCRIPTOR;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -240,6 +280,11 @@ pub type PENABLECALLBACK = Option<
 >;
 
 pub type _mcgen_PENABLECALLBACK = PENABLECALLBACK;
+pub const MCGEN_LEVEL_KEYWORD_ENABLED_DEF: () = ();
+pub const MCGEN_EVENT_ENABLED_DEF: () = ();
+pub const MCGEN_CONTROL_CALLBACK: () = ();
+pub const McGenEventWrite_def: () = ();
+pub const McGenEventRegisterUnregister: () = ();
 
 // These C helpers paste identifiers. In Rust, this bounded header-only pass keeps
 // them as compile-time string-building macros until concrete call sites are ported.
@@ -261,6 +306,183 @@ pub type MCGEN_EVENTSETINFORMATION_must_not_be_a_functionLike_macro_MCGEN_EVENTS
     c_void;
 pub type MCGEN_EVENTWRITETRANSFER_must_not_be_a_functionLike_macro_MCGEN_EVENTWRITETRANSFER =
     c_void;
+
+unsafe extern "system" {
+    pub fn EventWriteTransfer(
+        RegHandle: REGHANDLE,
+        EventDescriptor: PCEVENT_DESCRIPTOR,
+        ActivityId: LPCGUID,
+        RelatedActivityId: LPCGUID,
+        UserDataCount: ULONG,
+        UserData: PEVENT_DATA_DESCRIPTOR,
+    ) -> ULONG;
+
+    pub fn EventRegister(
+        ProviderId: LPCGUID,
+        EnableCallback: _mcgen_PENABLECALLBACK,
+        CallbackContext: PVOID,
+        RegHandle: PREGHANDLE,
+    ) -> ULONG;
+
+    pub fn EventUnregister(RegHandle: REGHANDLE) -> ULONG;
+}
+
+#[inline]
+pub unsafe fn McGenLevelKeywordEnabled(
+    enable_info: *const MCGEN_TRACE_CONTEXT,
+    level: UCHAR,
+    keyword: ULONGLONG,
+) -> BOOLEAN {
+    if enable_info.is_null() {
+        return FALSE;
+    }
+    let enable_info = &*enable_info;
+    if (level <= enable_info.Level || enable_info.Level == 0)
+        && (keyword == 0
+            || ((keyword & enable_info.MatchAnyKeyword) != 0
+                && (keyword & enable_info.MatchAllKeyword) == enable_info.MatchAllKeyword))
+    {
+        return TRUE;
+    }
+    FALSE
+}
+
+#[inline]
+pub unsafe fn McGenEventEnabled(
+    enable_info: *const MCGEN_TRACE_CONTEXT,
+    event_descriptor: PCEVENT_DESCRIPTOR,
+) -> BOOLEAN {
+    if event_descriptor.is_null() {
+        return FALSE;
+    }
+    McGenLevelKeywordEnabled(
+        enable_info,
+        (*event_descriptor).Level,
+        (*event_descriptor).Keyword,
+    )
+}
+
+#[inline]
+pub unsafe fn McGenControlCallbackV2(
+    _source_id: LPCGUID,
+    control_code: ULONG,
+    level: UCHAR,
+    match_any_keyword: ULONGLONG,
+    match_all_keyword: ULONGLONG,
+    _filter_data: PEVENT_FILTER_DESCRIPTOR,
+    callback_context: PVOID,
+) {
+    let ctx = callback_context as PMCGEN_TRACE_CONTEXT;
+    if ctx.is_null() {
+        return;
+    }
+    let ctx_ref = &mut *ctx;
+    match control_code {
+        EVENT_CONTROL_CODE_ENABLE_PROVIDER => {
+            ctx_ref.Level = level;
+            ctx_ref.MatchAnyKeyword = match_any_keyword;
+            ctx_ref.MatchAllKeyword = match_all_keyword;
+            ctx_ref.IsEnabled = EVENT_CONTROL_CODE_ENABLE_PROVIDER;
+            if !ctx_ref.EnableBitMask.is_null()
+                && !ctx_ref.EnableKeyWords.is_null()
+                && !ctx_ref.EnableLevel.is_null()
+            {
+                for ix in 0..ctx_ref.EnableBitsCount as usize {
+                    let enabled = McGenLevelKeywordEnabled(
+                        ctx as *const MCGEN_TRACE_CONTEXT,
+                        *ctx_ref.EnableLevel.add(ix),
+                        *ctx_ref.EnableKeyWords.add(ix),
+                    ) != FALSE;
+                    let bit_mask = &mut *ctx_ref.EnableBitMask.add(ix >> 5);
+                    if enabled {
+                        *bit_mask |= 1u32 << (ix % 32);
+                    } else {
+                        *bit_mask &= !(1u32 << (ix % 32));
+                    }
+                }
+            }
+        }
+        EVENT_CONTROL_CODE_DISABLE_PROVIDER => {
+            ctx_ref.IsEnabled = EVENT_CONTROL_CODE_DISABLE_PROVIDER;
+            ctx_ref.Level = 0;
+            ctx_ref.MatchAnyKeyword = 0;
+            ctx_ref.MatchAllKeyword = 0;
+            if ctx_ref.EnableBitsCount > 0 && !ctx_ref.EnableBitMask.is_null() {
+                let word_count = (((ctx_ref.EnableBitsCount as usize) - 1) / 32) + 1;
+                write_bytes(ctx_ref.EnableBitMask, 0, word_count);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[inline]
+pub unsafe fn McGenEventWrite(
+    context: PMCGEN_TRACE_CONTEXT,
+    descriptor: PCEVENT_DESCRIPTOR,
+    activity_id: LPCGUID,
+    event_data_count: ULONG,
+    event_data: PEVENT_DATA_DESCRIPTOR,
+) -> ULONG {
+    if context.is_null() || descriptor.is_null() || event_data.is_null() || event_data_count == 0 {
+        return 0;
+    }
+    let traits = (*context).Logger as UINT_PTR as *const USHORT;
+    let first = &mut *event_data;
+    if traits.is_null() {
+        first.Ptr = 0;
+        first.Size = 0;
+        first.Reserved = 0;
+    } else {
+        first.Ptr = traits as ULONG_PTR;
+        first.Size = *traits as ULONG;
+        first.Reserved = 2;
+    }
+    EventWriteTransfer(
+        (*context).RegistrationHandle,
+        descriptor,
+        activity_id,
+        null(),
+        event_data_count,
+        event_data,
+    )
+}
+
+#[inline]
+pub unsafe fn McGenEventRegister(
+    provider_id: LPCGUID,
+    enable_callback: _mcgen_PENABLECALLBACK,
+    callback_context: PVOID,
+    reg_handle: PREGHANDLE,
+) -> ULONG {
+    if reg_handle.is_null() || *reg_handle != 0 {
+        return 0;
+    }
+    EventRegister(provider_id, enable_callback, callback_context, reg_handle)
+}
+
+#[inline]
+pub unsafe fn McGenEventUnregister(reg_handle: PREGHANDLE) -> ULONG {
+    if reg_handle.is_null() || *reg_handle == 0 {
+        return 0;
+    }
+    let error = EventUnregister(*reg_handle);
+    *reg_handle = 0;
+    error
+}
+
+#[inline]
+pub unsafe fn _mcgen_EVENT_BIT_SET(enable_bits: *const ULONG, bit_position: usize) -> bool {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        let enable_bits = enable_bits as *const u8;
+        ((*enable_bits.add(bit_position >> 3)) & (1u8 << (bit_position & 7))) != 0
+    }
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    {
+        ((*enable_bits.add(bit_position >> 5)) & (1u32 << (bit_position & 31))) != 0
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

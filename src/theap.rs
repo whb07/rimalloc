@@ -14,12 +14,14 @@ use crate::atomic::{
     mi_atomic_exchange_ptr_acq_rel, mi_atomic_fetch_sub_explicit, mi_atomic_increment_acq_rel,
     mi_lock_acquire, mi_lock_release, mi_memory_order_e,
 };
+use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::internal::{
     __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_align_up, _mi_arenas_alloc, _mi_arenas_free,
-    _mi_deferred_free, _mi_error_message, _mi_is_heap_main, _mi_meta_free, _mi_meta_zalloc,
-    _mi_random_init, _mi_random_next, _mi_random_split, _mi_subproc, _mi_theap_guarded_init,
-    _mi_theap_heap, _mi_theap_options_init, mi_memid_t, mi_memkind_t, mi_page_all_free,
-    mi_theap_is_initialized,
+    _mi_deferred_free, _mi_divide_up, _mi_error_message, _mi_is_heap_main, _mi_meta_free,
+    _mi_meta_zalloc, _mi_random_init, _mi_random_next, _mi_random_split, _mi_subproc,
+    _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_memid_t, mi_memkind_t,
+    mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_heap, mi_page_start,
+    mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::mimalloc::mi_free;
 use crate::page::{
@@ -29,8 +31,9 @@ use crate::page::{
 use crate::prim::{__mi_theap_empty, _mi_theap_default};
 use crate::stats::_mi_stats_merge_into;
 use crate::types::{
-    ENOMEM, MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_BIN_FULL, MI_SMALL_PAGE_SIZE, mi_heap_area_t,
-    mi_heap_t, mi_page_queue_t, mi_page_t, mi_theap_t, mi_tld_t,
+    ENOMEM, MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_BIN_FULL, MI_SMALL_PAGE_SIZE,
+    mi_block_visit_fun, mi_heap_area_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_theap_t,
+    mi_tld_t,
 };
 
 #[repr(C)]
@@ -60,11 +63,212 @@ pub struct mi_theap_area_ex_s {
 
 pub type mi_theap_area_ex_t = mi_theap_area_ex_s;
 
+pub type mi_theap_area_visit_fun = unsafe extern "C" fn(
+    theap: *const mi_theap_t,
+    area: *const mi_theap_area_ex_t,
+    arg: *mut c_void,
+) -> bool;
+
+#[repr(C)]
+pub struct mi_visit_blocks_args_s {
+    pub visit_blocks: bool,
+    pub visitor: mi_block_visit_fun,
+    pub arg: *mut c_void,
+}
+
+pub type mi_visit_blocks_args_t = mi_visit_blocks_args_s;
+
+unsafe fn _mi_heap_area_init(area: *mut mi_heap_area_t, page: *mut mi_page_t) {
+    let bsize = mi_page_block_size(page);
+    let ubsize = mi_page_usable_block_size(page);
+    (*area).reserved = (*page).reserved as usize * bsize;
+    (*area).committed = (*page).capacity as usize * bsize;
+    (*area).blocks = mi_page_start(page).cast::<c_void>();
+    (*area).used = (*page).used as usize;
+    (*area).block_size = ubsize;
+    (*area).full_block_size = bsize;
+    (*area).reserved1 = page.cast::<c_void>();
+}
+
+unsafe fn mi_get_fast_divisor(divisor: usize, magic: *mut u64, shift: *mut usize) {
+    crate::mi_assert_internal!(divisor > 0 && u32::try_from(divisor).is_ok());
+    *shift = MI_SIZE_BITS - mi_clz(divisor - 1);
+    *magic = (((1u64 << 32) * ((1u64 << *shift) - divisor as u64)) / divisor as u64) + 1;
+}
+
 #[inline]
 pub unsafe fn mi_fast_divide(n: usize, magic: u64, shift: usize) -> usize {
     crate::mi_assert_internal!(u32::try_from(n).is_ok());
     let hi = ((n as u64) * magic) >> 32;
     ((hi + n as u64) >> shift) as usize
+}
+
+unsafe fn _mi_theap_area_visit_blocks(
+    area: *const mi_heap_area_t,
+    page: *mut mi_page_t,
+    visitor: mi_block_visit_fun,
+    arg: *mut c_void,
+) -> bool {
+    crate::mi_assert_internal!(!area.is_null());
+    if area.is_null() {
+        return true;
+    }
+    crate::mi_assert_internal!(!page.is_null());
+    if page.is_null() {
+        return true;
+    }
+
+    _mi_page_free_collect(page, true);
+    crate::mi_assert_internal!((*page).local_free.is_null());
+    if (*page).used == 0 {
+        return true;
+    }
+
+    let mut psize = 0usize;
+    let pstart = mi_page_area(page, &mut psize);
+    let heap = mi_page_heap(page);
+    let bsize = mi_page_block_size(page);
+    let ubsize = mi_page_usable_block_size(page);
+
+    if (*page).capacity == 1 {
+        crate::mi_assert_internal!((*page).used == 1 && (*page).free.is_null());
+        return visitor(heap, area, pstart.cast::<c_void>(), ubsize, arg);
+    }
+    crate::mi_assert_internal!(u32::try_from(bsize).is_ok());
+
+    if (*page).used == (*page).capacity {
+        let mut block = pstart;
+        for _ in 0..(*page).capacity as usize {
+            if !visitor(heap, area, block.cast::<c_void>(), ubsize, arg) {
+                return false;
+            }
+            block = block.add(bsize);
+        }
+        return true;
+    }
+
+    let mut free_map = [0usize; MI_MAX_BLOCKS / MI_INTPTR_BITS];
+    let bmapsize = _mi_divide_up((*page).capacity as usize, MI_INTPTR_BITS);
+    if !((*page).capacity as usize).is_multiple_of(MI_INTPTR_BITS) {
+        let shift = (*page).capacity as usize % MI_INTPTR_BITS;
+        free_map[bmapsize - 1] = usize::MAX << shift;
+    }
+
+    let mut magic = 0u64;
+    let mut shift = 0usize;
+    mi_get_fast_divisor(bsize, &mut magic, &mut shift);
+
+    let mut free_count = 0usize;
+    let mut free = (*page).free;
+    while !free.is_null() {
+        free_count += 1;
+        let block = free;
+        crate::mi_assert_internal!(
+            block.cast::<u8>() >= pstart && block.cast::<u8>() < pstart.add(psize)
+        );
+        let offset = block.cast::<u8>() as usize - pstart as usize;
+        crate::mi_assert_internal!(offset.is_multiple_of(bsize));
+        crate::mi_assert_internal!(u32::try_from(offset).is_ok());
+        let blockidx = mi_fast_divide(offset, magic, shift);
+        crate::mi_assert_internal!(blockidx == offset / bsize);
+        crate::mi_assert_internal!(blockidx < MI_MAX_BLOCKS);
+        let bitidx = blockidx / MI_INTPTR_BITS;
+        let bit = blockidx - (bitidx * MI_INTPTR_BITS);
+        free_map[bitidx] |= 1usize << bit;
+        free = crate::internal::mi_block_next(page, block);
+    }
+    crate::mi_assert_internal!((*page).capacity as usize == free_count + (*page).used as usize);
+
+    let mut block = pstart;
+    for mask in free_map.iter().take(bmapsize) {
+        if *mask == 0 {
+            for _ in 0..MI_INTPTR_BITS {
+                if !visitor(heap, area, block.cast::<c_void>(), ubsize, arg) {
+                    return false;
+                }
+                block = block.add(bsize);
+            }
+        } else {
+            let mut used_mask = !*mask;
+            while used_mask != 0 {
+                let bitidx = mi_ctz(used_mask);
+                if !visitor(
+                    heap,
+                    area,
+                    block.add(bitidx * bsize).cast::<c_void>(),
+                    ubsize,
+                    arg,
+                ) {
+                    return false;
+                }
+                used_mask &= used_mask - 1;
+            }
+            block = block.add(bsize * MI_INTPTR_BITS);
+        }
+    }
+    true
+}
+
+unsafe extern "C" fn mi_theap_visit_areas_page(
+    theap: *mut mi_theap_t,
+    pq: *mut mi_page_queue_t,
+    page: *mut mi_page_t,
+    vfun: *mut c_void,
+    arg: *mut c_void,
+) -> bool {
+    crate::MI_UNUSED!(pq);
+    let fun = *(vfun.cast::<mi_theap_area_visit_fun>());
+    let mut xarea = mi_theap_area_ex_t {
+        page,
+        ..mi_theap_area_ex_t::default()
+    };
+    _mi_heap_area_init(ptr::addr_of_mut!(xarea.area), page);
+    fun(theap.cast_const(), ptr::addr_of!(xarea), arg)
+}
+
+unsafe fn mi_theap_visit_areas(
+    theap: *const mi_theap_t,
+    visitor: Option<mi_theap_area_visit_fun>,
+    arg: *mut c_void,
+) -> bool {
+    let Some(visitor) = visitor else {
+        return false;
+    };
+    let mut visitor = visitor;
+    mi_theap_visit_pages(
+        theap.cast_mut(),
+        Some(mi_theap_visit_areas_page),
+        true,
+        ptr::addr_of_mut!(visitor).cast(),
+        arg,
+    )
+}
+
+unsafe extern "C" fn mi_theap_area_visitor(
+    theap: *const mi_theap_t,
+    xarea: *const mi_theap_area_ex_t,
+    arg: *mut c_void,
+) -> bool {
+    let args = arg.cast::<mi_visit_blocks_args_t>();
+    if !((*args).visitor)(
+        _mi_theap_heap(theap.cast_mut()),
+        ptr::addr_of!((*xarea).area),
+        ptr::null_mut(),
+        (*xarea).area.block_size,
+        (*args).arg,
+    ) {
+        return false;
+    }
+    if (*args).visit_blocks {
+        _mi_theap_area_visit_blocks(
+            ptr::addr_of!((*xarea).area),
+            (*xarea).page,
+            (*args).visitor,
+            (*args).arg,
+        )
+    } else {
+        true
+    }
 }
 
 pub unsafe fn mi_theap_visit_pages(

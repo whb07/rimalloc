@@ -29,12 +29,23 @@ pub const MI_MEM_EXTENDED_PARAMETER_NONPAGED_HUGE: u32 = 0x0000_0010;
 pub const DECLSPEC_ALIGN: usize = 8;
 
 pub type BYTE = u8;
+pub type BOOL = i32;
 pub type DWORD64 = u64;
+pub type LONG = i32;
+pub type UCHAR = u8;
+pub type ULONG = u32;
+pub type USHORT = u16;
 pub type WORD = u16;
+pub type VOID = c_void;
 pub type PVOID = *mut c_void;
 pub type SIZE_T = usize;
 pub type HANDLE = *mut c_void;
 pub type DWORD = u32;
+pub type PUCHAR = *mut UCHAR;
+pub type PULONG = *mut ULONG;
+pub type PULONGLONG = *mut u64;
+pub type PUSHORT = *mut USHORT;
+pub type PGROUP_AFFINITY = *mut c_void;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,6 +112,56 @@ pub struct MI_PROCESSOR_NUMBER_S {
 }
 
 pub type MI_PROCESSOR_NUMBER = MI_PROCESSOR_NUMBER_S;
+
+pub static mut win_major_version: DWORD = 6;
+pub static mut win_minor_version: DWORD = 0;
+
+pub type PVirtualAlloc2 = Option<
+    unsafe extern "system" fn(
+        HANDLE,
+        PVOID,
+        SIZE_T,
+        ULONG,
+        ULONG,
+        *mut MI_MEM_EXTENDED_PARAMETER,
+        ULONG,
+    ) -> PVOID,
+>;
+
+pub type PNtAllocateVirtualMemoryEx = Option<
+    unsafe extern "system" fn(
+        HANDLE,
+        *mut PVOID,
+        *mut SIZE_T,
+        ULONG,
+        ULONG,
+        *mut MI_MEM_EXTENDED_PARAMETER,
+        ULONG,
+    ) -> LONG,
+>;
+
+pub static mut pVirtualAlloc2: PVirtualAlloc2 = None;
+pub static mut pNtAllocateVirtualMemoryEx: PNtAllocateVirtualMemoryEx = None;
+
+pub type PGetCurrentProcessorNumberEx = Option<unsafe extern "system" fn(*mut MI_PROCESSOR_NUMBER)>;
+pub type PGetNumaProcessorNodeEx =
+    Option<unsafe extern "system" fn(*mut MI_PROCESSOR_NUMBER, PUSHORT) -> BOOL>;
+pub type PGetNumaNodeProcessorMaskEx =
+    Option<unsafe extern "system" fn(USHORT, PGROUP_AFFINITY) -> BOOL>;
+pub type PGetNumaProcessorNode = Option<unsafe extern "system" fn(UCHAR, PUCHAR) -> BOOL>;
+pub type PGetNumaNodeProcessorMask = Option<unsafe extern "system" fn(UCHAR, PULONGLONG) -> BOOL>;
+pub type PGetNumaHighestNodeNumber = Option<unsafe extern "system" fn(PULONG) -> BOOL>;
+
+pub static mut pGetCurrentProcessorNumberEx: PGetCurrentProcessorNumberEx = None;
+pub static mut pGetNumaProcessorNodeEx: PGetNumaProcessorNodeEx = None;
+pub static mut pGetNumaNodeProcessorMaskEx: PGetNumaNodeProcessorMaskEx = None;
+pub static mut pGetNumaProcessorNode: PGetNumaProcessorNode = None;
+pub static mut pGetNumaNodeProcessorMask: PGetNumaNodeProcessorMask = None;
+pub static mut pGetNumaHighestNodeNumber: PGetNumaHighestNodeNumber = None;
+
+pub type PGetLargePageMinimum = Option<unsafe extern "system" fn() -> SIZE_T>;
+
+pub static mut pGetLargePageMinimum: PGetLargePageMinimum = None;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

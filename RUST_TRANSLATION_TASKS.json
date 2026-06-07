@@ -95096,7 +95096,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001233",
@@ -95140,7 +95140,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001234",
@@ -95194,7 +95194,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001235",
@@ -95243,7 +95243,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001236",
@@ -95292,7 +95292,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001237",
@@ -95346,7 +95346,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001238",
@@ -95395,7 +95395,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001239",
@@ -95444,7 +95444,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001240",
@@ -95488,7 +95488,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001241",
@@ -95537,7 +95537,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001242",
@@ -95591,7 +95591,7 @@
       "thread_safety": "n/a",
       "ownership": "global/static lifetime; ownership depends on initializer and users",
       "mutability": "mutable global state",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001243",

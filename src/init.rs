@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bits::MI_SIZE_SIZE;
-use crate::internal::{_mi_allocator_done, mi_memid_t, mi_memkind_t};
+use crate::internal::{_mi_allocator_done, _mi_error_message, mi_memid_t, mi_memkind_t};
 use crate::options::{mi_option_get, mi_option_get_clamp, mi_option_t};
 use crate::stats::{mi_stat_count_t, mi_stats_get_json_from, mi_stats_header_init, mi_stats_t};
 use crate::types::{
@@ -23,7 +23,7 @@ use crate::types::{
     mi_tld_t,
 };
 #[cfg(windows)]
-use crate::{internal::_mi_error_message, prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
+use crate::{prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
 
 pub const MI_TLS_DIRECT_SLOTS: usize = 64;
 pub const MI_TLS_EXPANSION_SLOTS: usize = 1024;
@@ -562,6 +562,12 @@ fn mi_subproc_main_init() {
             let main = ptr::addr_of_mut!(subproc_main)
                 .cast::<MiSubprocPrefix>()
                 .cast::<mi_subproc_t>();
+            let main_prefix = mi_subproc_prefix(main);
+            (*main_prefix).heaps = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
+            (*main_prefix).heap_main = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
+            (*main_prefix).heap_total_count.store(1, Ordering::Relaxed);
+            (*main_prefix).heap_count.store(1, Ordering::Relaxed);
+            mi_lock_init(ptr::addr_of_mut!(tld_empty.theaps_lock));
             subprocs = main;
             _mi_process_is_initialized = true;
         }
@@ -722,6 +728,67 @@ fn mi_heap_main_init() {
             mi_lock_init(ptr::addr_of_mut!(heap_main.theaps_lock));
             mi_lock_init(ptr::addr_of_mut!(heap_main.os_abandoned_pages_lock));
             mi_lock_init(ptr::addr_of_mut!(heap_main.arena_pages_lock));
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn mi_tld_alloc() -> *mut mi_tld_t {
+    mi_subproc_main_init();
+    if _mi_is_main_thread() {
+        mi_tld_main_init();
+        // SAFETY: main-thread bookkeeping mutates only the process-global main subproc counters.
+        unsafe {
+            let subproc = mi_subproc_prefix(mi_subproc_main_ptr());
+            (*subproc).thread_count.fetch_add(1, Ordering::Relaxed);
+            ptr::addr_of_mut!(tld_main)
+        }
+    } else {
+        // SAFETY: allocates a fresh zeroed tld block and initializes its local fields.
+        unsafe {
+            let mut memid = mi_memid_t::default();
+            let tld =
+                crate::internal::_mi_os_zalloc(size_of::<mi_tld_t>(), ptr::addr_of_mut!(memid))
+                    .cast::<mi_tld_t>();
+            if tld.is_null() {
+                _mi_error_message(
+                    crate::types::ENOMEM,
+                    c"unable to allocate memory for thread local data\n".as_ptr(),
+                );
+                return ptr::null_mut();
+            }
+            (*tld).memid = memid;
+            (*tld).theaps = ptr::null_mut();
+            mi_lock_init(ptr::addr_of_mut!((*tld).theaps_lock));
+            (*tld).subproc = mi_subproc_main_ptr();
+            (*tld).numa_node = crate::prim::_mi_prim_numa_node() as i32;
+            (*tld).thread_id = crate::prim::_mi_prim_thread_id();
+            let subproc = mi_subproc_prefix((*tld).subproc);
+            (*tld).thread_seq = (*subproc)
+                .thread_total_count
+                .fetch_add(1, Ordering::Relaxed);
+            (*tld).is_in_threadpool = crate::prim::_mi_prim_thread_is_in_threadpool();
+            (*subproc).thread_count.fetch_add(1, Ordering::Relaxed);
+            tld
+        }
+    }
+}
+
+#[inline(never)]
+#[allow(dead_code)]
+fn mi_tld_free(tld: *mut mi_tld_t) {
+    if tld.is_null() || tld == MI_TLD_INVALID {
+        return;
+    }
+    // SAFETY: `tld` must point to a valid local `mi_tld_t`.
+    unsafe {
+        mi_lock_done(ptr::addr_of_mut!((*tld).theaps_lock));
+        if !(*tld).subproc.is_null() {
+            let subproc = mi_subproc_prefix((*tld).subproc);
+            (*subproc).thread_count.fetch_sub(1, Ordering::Relaxed);
+        }
+        if !ptr::eq(tld, ptr::addr_of_mut!(tld_main)) {
+            crate::internal::_mi_os_free(tld.cast::<c_void>(), size_of::<mi_tld_t>(), (*tld).memid);
         }
     }
 }
@@ -928,6 +995,37 @@ pub unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
 
 #[unsafe(no_mangle)]
 /// # Safety
+/// Returns the current thread default theap, initializing thread state when needed.
+pub unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
+    let theap = unsafe { crate::prim::_mi_theap_default() };
+    if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
+        return theap;
+    }
+    unsafe { crate::mimalloc::mi_thread_init() };
+    let theap = unsafe { crate::prim::_mi_theap_default() };
+    crate::mi_assert_internal!(unsafe { crate::internal::mi_theap_is_initialized(theap) });
+    theap
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// Returns the process main theap, ensuring the default path initialized it first.
+pub unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
+    let mut theap = unsafe { __mi_theap_main };
+    if theap.is_null() {
+        unsafe { crate::mimalloc::mi_thread_init() };
+        theap = unsafe { crate::prim::_mi_theap_default() };
+        crate::mi_assert_internal!(!theap.is_null());
+        if ptr::eq(theap, ptr::addr_of_mut!(theap_main)) {
+            unsafe { __mi_theap_main = theap };
+        }
+    }
+    crate::mi_assert_internal!(!theap.is_null() && ptr::eq(theap, ptr::addr_of_mut!(theap_main)));
+    theap
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
 /// Returns the process-global empty theap sentinel.
 pub unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
     ptr::addr_of!(_mi_theap_empty).cast_mut()
@@ -935,9 +1033,19 @@ pub unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
 
 #[unsafe(no_mangle)]
 /// # Safety
-/// Returns the bounded current subproc pointer for this crate state.
+/// Returns the current subproc without forcing thread-local initialization.
 pub unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
-    unsafe { _mi_subproc_main() }
+    let theap = unsafe { crate::prim::_mi_theap_default() };
+    if theap.is_null() {
+        unsafe { _mi_subproc_main() }
+    } else {
+        let tld = unsafe { (*theap).tld };
+        if tld.is_null() {
+            unsafe { _mi_subproc_main() }
+        } else {
+            unsafe { (*tld).subproc }
+        }
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -959,6 +1067,54 @@ pub unsafe extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
 /// Returns the current subproc identifier for the bounded crate state.
 pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
     unsafe { mi_subproc_to_id(_mi_subproc()) }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// `subproc` must be null or point to a valid local subproc prefix.
+pub unsafe extern "C" fn _mi_subproc_heap_main(subproc: *mut mi_subproc_t) -> *mut mi_heap_t {
+    if subproc.is_null() {
+        return ptr::null_mut();
+    }
+    let prefix = unsafe { mi_subproc_prefix(subproc) };
+    let heap = unsafe { (*prefix).heap_main };
+    if !heap.is_null() {
+        return heap;
+    }
+    if ptr::eq(subproc, unsafe { _mi_subproc_main() }) {
+        mi_heap_main_init();
+        unsafe {
+            (*prefix).heaps = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
+            (*prefix).heap_main = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
+            if (*prefix).heap_total_count.load(Ordering::Relaxed) == 0 {
+                (*prefix).heap_total_count.store(1, Ordering::Relaxed);
+            }
+            if (*prefix).heap_count.load(Ordering::Relaxed) == 0 {
+                (*prefix).heap_count.store(1, Ordering::Relaxed);
+            }
+            (*prefix).heap_main
+        }
+    } else {
+        ptr::null_mut()
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// Returns the current subproc main heap for the bounded init/runtime scaffold.
+pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
+    unsafe { _mi_subproc_heap_main(_mi_subproc()) }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// `heap` must be null or point to a heap prefix compatible with this crate's local scaffold.
+pub unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
+    if heap.is_null() {
+        return false;
+    }
+    let subproc = unsafe { (*(heap.cast::<MiHeapMainPrefix>())).subproc };
+    ptr::eq(unsafe { _mi_subproc_heap_main(subproc) }, heap.cast_mut())
 }
 
 #[unsafe(no_mangle)]

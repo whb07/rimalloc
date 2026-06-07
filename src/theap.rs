@@ -7,21 +7,30 @@
     unsafe_op_in_unsafe_fn
 )]
 
-use core::ffi::c_void;
+use core::{ffi::c_void, mem::size_of, ptr};
 
 use crate::arena::_mi_arenas_collect;
-use crate::internal::{
-    _mi_deferred_free, _mi_theap_heap, mi_page_all_free, mi_theap_is_initialized,
+use crate::atomic::{
+    mi_atomic_exchange_ptr_acq_rel, mi_atomic_fetch_sub_explicit, mi_atomic_increment_acq_rel,
+    mi_lock_acquire, mi_lock_release, mi_memory_order_e,
 };
+use crate::internal::{
+    __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_align_up, _mi_arenas_alloc, _mi_arenas_free,
+    _mi_deferred_free, _mi_error_message, _mi_is_heap_main, _mi_meta_free, _mi_meta_zalloc,
+    _mi_random_init, _mi_random_next, _mi_random_split, _mi_subproc, _mi_theap_guarded_init,
+    _mi_theap_heap, _mi_theap_options_init, mi_memid_t, mi_memkind_t, mi_page_all_free,
+    mi_theap_is_initialized,
+};
+use crate::mimalloc::mi_free;
 use crate::page::{
     _mi_page_abandon, _mi_page_free, _mi_page_free_collect, _mi_page_is_valid,
     _mi_page_queue_is_valid, _mi_theap_collect_retired, mi_page_theap,
 };
-use crate::prim::_mi_theap_default;
+use crate::prim::{__mi_theap_empty, _mi_theap_default};
 use crate::stats::_mi_stats_merge_into;
 use crate::types::{
-    MI_BIN_COUNT, MI_BIN_FULL, MI_SMALL_PAGE_SIZE, mi_heap_area_t, mi_heap_t, mi_page_queue_t,
-    mi_page_t, mi_theap_t,
+    ENOMEM, MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_BIN_FULL, MI_SMALL_PAGE_SIZE, mi_heap_area_t,
+    mi_heap_t, mi_page_queue_t, mi_page_t, mi_theap_t, mi_tld_t,
 };
 
 #[repr(C)]
@@ -231,4 +240,221 @@ pub unsafe extern "C" fn mi_theap_get_default() -> *mut mi_theap_t {
         crate::mi_assert_internal!(mi_theap_is_initialized(theap));
     }
     theap
+}
+
+unsafe fn _mi_theap_init(theap: *mut mi_theap_t, heap: *mut mi_heap_t, tld: *mut mi_tld_t) {
+    crate::mi_assert_internal!(!theap.is_null());
+    crate::mi_assert_internal!(!heap.is_null());
+
+    let memid = (*theap).memid;
+    ptr::copy_nonoverlapping(__mi_theap_empty().cast_const(), theap, 1);
+    (*theap).memid = memid;
+    (*theap).refcount = 1;
+    (*theap).tld = tld;
+    (*theap).heap = heap;
+    crate::mi_assert_internal!((*theap).stats.size == size_of::<crate::stats::mi_stats_t>());
+
+    _mi_theap_options_init(theap);
+    if (*(*theap).tld).is_in_threadpool && (*theap).page_full_retain > 0 {
+        (*theap).page_full_retain /= 4;
+    }
+
+    mi_lock_acquire(ptr::addr_of_mut!((*(*theap).tld).theaps_lock));
+    let head: *mut mi_theap_t = (*(*theap).tld).theaps;
+    (*theap).tprev = ptr::null_mut();
+    (*theap).tnext = head;
+    if !head.is_null() {
+        (*head).tprev = theap;
+    }
+    (*(*theap).tld).theaps = theap;
+    mi_lock_release(ptr::addr_of_mut!((*(*theap).tld).theaps_lock));
+
+    if head.is_null() {
+        #[cfg(any(target_os = "macos", windows))]
+        crate::internal::_mi_random_init_weak(ptr::addr_of_mut!((*theap).random));
+        #[cfg(not(any(target_os = "macos", windows)))]
+        _mi_random_init(ptr::addr_of_mut!((*theap).random));
+    } else {
+        _mi_random_split(
+            ptr::addr_of_mut!((*head).random),
+            ptr::addr_of_mut!((*theap).random),
+        );
+    }
+    (*theap).cookie = _mi_theap_random_next(theap) | 1;
+    _mi_theap_guarded_init(theap);
+    __mi_stat_increase_mt(&mut (*_mi_subproc()).stats.theaps, 1);
+
+    mi_lock_acquire(ptr::addr_of_mut!((*heap).theaps_lock));
+    let head = (*heap).theaps;
+    (*theap).hprev = ptr::null_mut();
+    (*theap).hnext = head;
+    if !head.is_null() {
+        (*head).hprev = theap;
+    }
+    (*heap).theaps = theap;
+    mi_lock_release(ptr::addr_of_mut!((*heap).theaps_lock));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_theap_create(
+    heap: *mut mi_heap_t,
+    tld: *mut mi_tld_t,
+) -> *mut mi_theap_t {
+    crate::mi_assert_internal!(!tld.is_null());
+    crate::mi_assert_internal!(!heap.is_null());
+
+    let mut memid = mi_memid_t::default();
+    let theap = if (*heap).exclusive_arena.is_null() {
+        _mi_meta_zalloc(size_of::<mi_theap_t>(), ptr::addr_of_mut!(memid)).cast::<mi_theap_t>()
+    } else {
+        let size = _mi_align_up(size_of::<mi_theap_t>(), MI_ARENA_MIN_OBJ_SIZE);
+        let theap = _mi_arenas_alloc(
+            heap,
+            size,
+            true,
+            true,
+            (*heap).exclusive_arena,
+            (*tld).thread_seq,
+            (*tld).numa_node,
+            ptr::addr_of_mut!(memid),
+        )
+        .cast::<mi_theap_t>();
+        crate::mi_assert_internal!(memid.mem.os.size >= size);
+        theap
+    };
+
+    if theap.is_null() {
+        _mi_error_message(ENOMEM, c"unable to allocate theap meta-data\n".as_ptr());
+        return ptr::null_mut();
+    }
+
+    (*theap).memid = memid;
+    _mi_theap_init(theap, heap, tld);
+    theap
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) -> usize {
+    _mi_random_next(ptr::addr_of_mut!((*theap).random))
+}
+
+unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
+    if theap.is_null() {
+        return;
+    }
+
+    __mi_stat_decrease_mt(&mut (*_mi_subproc()).stats.theaps, 1);
+    match (*theap).memid.memkind {
+        mi_memkind_t::MI_MEM_HEAP_MAIN => {
+            crate::mi_assert_internal!(_mi_is_heap_main(_mi_theap_heap(theap).cast_const()));
+            mi_free(theap.cast());
+        }
+        mi_memkind_t::MI_MEM_META => {
+            _mi_meta_free(theap.cast(), size_of::<mi_theap_t>(), (*theap).memid);
+        }
+        _ => {
+            _mi_arenas_free(
+                theap.cast(),
+                _mi_align_up(size_of::<mi_theap_t>(), MI_ARENA_MIN_OBJ_SIZE),
+                (*theap).memid,
+            );
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_theap_incref(theap: *mut mi_theap_t) {
+    if !theap.is_null() && ((*theap).memid.memkind as i32) > (mi_memkind_t::MI_MEM_STATIC as i32) {
+        mi_atomic_increment_acq_rel(ptr::addr_of_mut!((*theap).refcount));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
+    if !theap.is_null()
+        && ((*theap).memid.memkind as i32) > (mi_memkind_t::MI_MEM_STATIC as i32)
+        && mi_atomic_fetch_sub_explicit(
+            ptr::addr_of_mut!((*theap).refcount),
+            1,
+            mi_memory_order_e::mi_memory_order_acq_rel,
+        ) == 1
+    {
+        mi_theap_free_mem(theap);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_theap_free(
+    theap: *mut mi_theap_t,
+    acquire_heap_theaps_lock: bool,
+    acquire_tld_theaps_lock: bool,
+) -> bool {
+    crate::mi_assert!(!theap.is_null());
+    if theap.is_null() {
+        return true;
+    }
+
+    let heap = mi_atomic_exchange_ptr_acq_rel(ptr::addr_of_mut!((*theap).heap), ptr::null_mut());
+    if heap.is_null() {
+        return false;
+    }
+
+    _mi_stats_merge_into(
+        ptr::addr_of_mut!((*heap).stats),
+        ptr::addr_of_mut!((*theap).stats),
+    );
+
+    if acquire_heap_theaps_lock {
+        mi_lock_acquire(ptr::addr_of_mut!((*heap).theaps_lock));
+    }
+    if !(*theap).hnext.is_null() {
+        (*(*theap).hnext).hprev = (*theap).hprev;
+    }
+    if !(*theap).hprev.is_null() {
+        (*(*theap).hprev).hnext = (*theap).hnext;
+    } else {
+        crate::mi_assert_internal!((*heap).theaps == theap);
+        (*heap).theaps = (*theap).hnext;
+    }
+    (*theap).hnext = ptr::null_mut();
+    (*theap).hprev = ptr::null_mut();
+    if acquire_heap_theaps_lock {
+        mi_lock_release(ptr::addr_of_mut!((*heap).theaps_lock));
+    }
+
+    if acquire_tld_theaps_lock {
+        mi_lock_acquire(ptr::addr_of_mut!((*(*theap).tld).theaps_lock));
+    }
+    if !(*theap).tnext.is_null() {
+        (*(*theap).tnext).tprev = (*theap).tprev;
+    }
+    if !(*theap).tprev.is_null() {
+        (*(*theap).tprev).tnext = (*theap).tnext;
+    } else {
+        crate::mi_assert_internal!((*(*theap).tld).theaps == theap);
+        (*(*theap).tld).theaps = (*theap).tnext;
+    }
+    (*theap).tnext = ptr::null_mut();
+    (*theap).tprev = ptr::null_mut();
+    if acquire_tld_theaps_lock {
+        mi_lock_release(ptr::addr_of_mut!((*(*theap).tld).theaps_lock));
+    }
+
+    (*theap).tld = ptr::null_mut();
+    _mi_theap_decref(theap);
+    true
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_theap_delete(theap: *mut mi_theap_t, acquire_tld_theaps_lock: bool) {
+    crate::mi_assert!(!theap.is_null());
+    crate::mi_assert!(mi_theap_is_initialized(theap));
+    crate::mi_assert_expensive!(mi_theap_is_valid(theap));
+    if theap.is_null() || !mi_theap_is_initialized(theap) {
+        return;
+    }
+
+    _mi_theap_collect_abandon(theap);
+    crate::mi_assert_internal!((*theap).page_count == 0);
+    _mi_theap_free(theap, true, acquire_tld_theaps_lock);
 }

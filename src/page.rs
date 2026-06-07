@@ -12,24 +12,30 @@ use core::ffi::c_void;
 use core::mem::size_of;
 use core::ptr;
 
-use crate::arena::{MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE};
+use crate::arena::{
+    _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free, MI_ARENA_SLICE_ALIGN,
+    MI_ARENA_SLICE_SIZE,
+};
 use crate::atomic::{
     EFAULT, mi_atomic_and_relaxed, mi_atomic_cas_weak_acq_rel, mi_atomic_cas_weak_release,
     mi_atomic_load_explicit, mi_atomic_or_relaxed, mi_memory_order_e,
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::internal::{
-    _mi_error_message, _mi_page_empty, _mi_ptr_page, _mi_wsize_from_size, MI_DEBUG, MI_SECURE,
-    mi_block_next, mi_block_set_next, mi_mem_is_zero, mi_memkind_t, mi_page_area,
-    mi_page_block_size, mi_page_contains_address, mi_page_flags, mi_page_is_singleton,
-    mi_page_slice_start, mi_page_start, mi_page_thread_free, mi_page_usable_block_size,
+    _mi_align_up, _mi_error_message, _mi_os_commit, _mi_os_page_size, _mi_page_empty, _mi_ptr_page,
+    _mi_wsize_from_size, MI_DEBUG, MI_SECURE, mi_block_next, mi_block_set_next, mi_mem_is_zero,
+    mi_memkind_t, mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_contains_address,
+    mi_page_flags, mi_page_immediate_available, mi_page_is_expandable, mi_page_is_singleton,
+    mi_page_set_has_interior_pointers, mi_page_slice_offset_of, mi_page_slice_start, mi_page_start,
+    mi_page_thread_free, mi_page_usable_block_size,
 };
 use crate::stats::{MI_BIN_HUGE, bin_block_size};
-use crate::track::MI_TRACK_ENABLED;
+use crate::track::{MI_TRACK_ENABLED, mi_track_mem_noaccess, mi_track_mem_undefined};
 use crate::types::{
     MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_LARGE_MAX_OBJ_WSIZE, MI_PAGE_FLAG_MASK,
-    MI_PAGE_IN_FULL_QUEUE, MI_SMALL_SIZE_MAX, MI_THREADID_ABANDONED, MI_THREADID_ABANDONED_MAPPED,
-    mi_block_t, mi_page_flags_t, mi_page_queue_t, mi_page_t, mi_theap_t,
+    MI_PAGE_IN_FULL_QUEUE, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_THREADID_ABANDONED,
+    MI_THREADID_ABANDONED_MAPPED, mi_block_t, mi_page_flags_t, mi_page_queue_t, mi_page_t,
+    mi_theap_t,
 };
 
 pub use crate::types::MI_PADDING_SIZE;
@@ -132,6 +138,24 @@ pub unsafe extern "C" fn mi_page_queue_is_special(pq: *const mi_page_queue_t) ->
 /// `pq` must point to a valid `mi_page_queue_t`.
 pub unsafe extern "C" fn mi_page_queue_count(pq: *const mi_page_queue_t) -> usize {
     unsafe { (*pq).count }
+}
+
+#[inline]
+pub unsafe fn mi_page_block_at(
+    page: *const mi_page_t,
+    page_start: *mut c_void,
+    block_size: usize,
+    i: usize,
+) -> *mut mi_block_t {
+    crate::MI_UNUSED!(page);
+    crate::mi_assert_internal!(!page.is_null());
+    crate::mi_assert_internal!(i <= (*page).reserved as usize);
+    unsafe {
+        page_start
+            .cast::<u8>()
+            .add(i * block_size)
+            .cast::<mi_block_t>()
+    }
 }
 
 #[inline]
@@ -376,6 +400,178 @@ pub unsafe fn _mi_page_unfull(page: *mut mi_page_t) {
     let pq = mi_theap_page_queue_of(theap, page);
     mi_page_set_in_full(page, true);
     mi_page_queue_enqueue_from_full(pq, pqfull, page);
+}
+
+#[inline]
+unsafe fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: usize) {
+    crate::mi_assert_internal!((*page).free.is_null());
+    crate::mi_assert_internal!((*page).local_free.is_null());
+    crate::mi_assert_internal!((*page).capacity as usize + extend <= (*page).reserved as usize);
+    crate::mi_assert_internal!(bsize == mi_page_block_size(page));
+    let page_area = mi_page_start(page).cast::<c_void>();
+    let start = mi_page_block_at(page, page_area, bsize, (*page).capacity as usize);
+    let last = mi_page_block_at(
+        page,
+        page_area,
+        bsize,
+        (*page).capacity as usize + extend - 1,
+    );
+    let mut block = start;
+    while block <= last {
+        let next = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
+        mi_block_set_next(page, block, next);
+        block = next;
+    }
+    mi_block_set_next(page, last, (*page).free);
+    (*page).free = start;
+}
+
+#[inline]
+unsafe fn mi_page_extend_free(page: *mut mi_page_t) -> bool {
+    crate::mi_assert_expensive!(mi_page_is_valid_init(page));
+    crate::mi_assert!((*page).free.is_null());
+    crate::mi_assert!((*page).local_free.is_null());
+    if !(*page).free.is_null() || (*page).capacity >= (*page).reserved {
+        return true;
+    }
+
+    let bsize = mi_page_block_size(page);
+    let mut extend = (*page).reserved as usize - (*page).capacity as usize;
+    crate::mi_assert_internal!(extend > 0);
+
+    let mut max_extend = if bsize >= MI_MAX_EXTEND_SIZE {
+        MI_MIN_EXTEND
+    } else {
+        MI_MAX_EXTEND_SIZE / bsize
+    };
+    if max_extend < MI_MIN_EXTEND {
+        max_extend = MI_MIN_EXTEND;
+    }
+    crate::mi_assert_internal!(max_extend > 0);
+    if extend > max_extend {
+        extend = max_extend;
+    }
+
+    crate::mi_assert_internal!(extend > 0);
+    crate::mi_assert_internal!(extend + (*page).capacity as usize <= (*page).reserved as usize);
+    crate::mi_assert_internal!(u16::try_from(extend).is_ok());
+
+    if (*page).slice_committed > 0 {
+        let needed_size = ((*page).capacity as usize + extend) * bsize;
+        let needed_commit = _mi_align_up(
+            mi_page_slice_offset_of(page, needed_size),
+            MI_PAGE_MIN_COMMIT_SIZE,
+        );
+        if needed_commit > (*page).slice_committed {
+            crate::mi_assert_internal!(
+                (needed_commit - (*page).slice_committed).is_multiple_of(_mi_os_page_size())
+            );
+            if !_mi_os_commit(
+                mi_page_slice_start(page)
+                    .cast::<u8>()
+                    .add((*page).slice_committed)
+                    .cast::<c_void>(),
+                needed_commit - (*page).slice_committed,
+                ptr::null_mut(),
+            ) {
+                return false;
+            }
+            (*page).slice_committed = needed_commit;
+        }
+    }
+
+    mi_page_free_list_extend(page, bsize, extend);
+    (*page).capacity += extend as u16;
+
+    if MI_TRACK_ENABLED != 0 {
+        let mut page_size = 0usize;
+        let page_start = mi_page_area(page, &mut page_size);
+        mi_track_mem_undefined(page_start.cast(), page_size);
+        mi_track_mem_noaccess(page_start.cast(), page_size);
+    }
+    crate::mi_assert_expensive!(mi_page_is_valid_init(page));
+    true
+}
+
+#[inline]
+unsafe fn mi_page_free_local(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
+    crate::mi_assert_internal!(!page.is_null());
+    crate::mi_assert_expensive!(_mi_page_is_valid(page));
+    crate::mi_assert_internal!(pq == mi_page_queue_of(page));
+    crate::mi_assert_internal!(mi_page_all_free(page));
+
+    mi_page_set_has_interior_pointers(page, false);
+    mi_page_queue_remove(pq, page);
+
+    let theap = mi_page_theap(page);
+    crate::mi_assert_internal!(!theap.is_null());
+    mi_page_set_theap(page, ptr::null_mut());
+    _mi_arenas_page_free(page, theap);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
+    _mi_page_free_collect(page, false);
+    if mi_page_all_free(page) {
+        mi_page_free_local(page, pq);
+    } else {
+        mi_page_queue_remove(pq, page);
+        let theap = (*page).theap;
+        mi_page_set_theap(page, ptr::null_mut());
+        // Preserve the original theap pointer so same-theap reclaim-on-free can still work.
+        (*page).theap = theap;
+        _mi_arenas_page_abandon(page, theap);
+    }
+}
+
+#[inline]
+pub unsafe fn mi_page_fresh_alloc(
+    theap: *mut mi_theap_t,
+    pq: *mut mi_page_queue_t,
+    block_size: usize,
+    page_alignment: usize,
+) -> *mut mi_page_t {
+    crate::mi_assert_internal!(pq.is_null() || mi_theap_contains_queue(theap, pq));
+    crate::mi_assert_internal!(
+        page_alignment > 0
+            || block_size > MI_LARGE_MAX_OBJ_SIZE
+            || pq.is_null()
+            || block_size == (*pq).block_size
+    );
+    let page = _mi_arenas_page_alloc(theap, block_size, page_alignment);
+    if page.is_null() {
+        return ptr::null_mut();
+    }
+    if mi_page_is_abandoned(page) {
+        _mi_theap_page_reclaim(theap, page);
+        if !mi_page_immediate_available(page) {
+            if mi_page_is_expandable(page) {
+                if !mi_page_extend_free(page) {
+                    return ptr::null_mut();
+                }
+            } else {
+                crate::mi_assert!(false);
+                return ptr::null_mut();
+            }
+        }
+    } else if !pq.is_null() {
+        mi_page_queue_push(theap, pq, page);
+    }
+    crate::mi_assert_internal!(pq.is_null() || mi_page_block_size(page) >= block_size);
+    crate::mi_assert_expensive!(_mi_page_is_valid(page));
+    page
+}
+
+#[inline]
+pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
+    crate::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
+    let page = mi_page_fresh_alloc(theap, pq, (*pq).block_size, 0);
+    if page.is_null() {
+        return ptr::null_mut();
+    }
+    crate::mi_assert_internal!((*pq).block_size == mi_page_block_size(page));
+    crate::mi_assert_internal!(pq == mi_theap_page_queue_of(theap, page));
+    page
 }
 
 #[inline]

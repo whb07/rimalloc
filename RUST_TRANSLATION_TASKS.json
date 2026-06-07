@@ -144257,7 +144257,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001954",
@@ -202720,7 +202720,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002412",
@@ -202929,7 +202929,7 @@
       "thread_safety": "thread-local/thread lifecycle sensitive; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002413",
@@ -289479,7 +289479,7 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003021",
@@ -289728,7 +289728,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003022",
@@ -289827,7 +289827,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-003023",

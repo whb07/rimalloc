@@ -129,6 +129,55 @@ pub struct mi_stat_counter_t {
 }
 pub type mi_stat_counter_s = mi_stat_counter_t;
 
+#[macro_export]
+macro_rules! MI_STAT_COUNT {
+    ($name:ident) => {
+        pub $name: $crate::stats::mi_stat_count_t,
+    };
+}
+
+#[macro_export]
+macro_rules! MI_STAT_FIELDS {
+    () => {
+        $crate::MI_STAT_COUNT!(pages)
+        $crate::MI_STAT_COUNT!(reserved)
+        $crate::MI_STAT_COUNT!(committed)
+        $crate::MI_STAT_COUNTER!(reset)
+        $crate::MI_STAT_COUNTER!(purged)
+        $crate::MI_STAT_COUNT!(page_committed)
+        $crate::MI_STAT_COUNT!(pages_abandoned)
+        $crate::MI_STAT_COUNT!(threads)
+        $crate::MI_STAT_COUNT!(malloc_normal)
+        $crate::MI_STAT_COUNT!(malloc_huge)
+        $crate::MI_STAT_COUNT!(malloc_requested)
+        $crate::MI_STAT_COUNTER!(mmap_calls)
+        $crate::MI_STAT_COUNTER!(commit_calls)
+        $crate::MI_STAT_COUNTER!(reset_calls)
+        $crate::MI_STAT_COUNTER!(purge_calls)
+        $crate::MI_STAT_COUNTER!(arena_count)
+        $crate::MI_STAT_COUNTER!(malloc_normal_count)
+        $crate::MI_STAT_COUNTER!(malloc_huge_count)
+        $crate::MI_STAT_COUNTER!(malloc_guarded_count)
+        $crate::MI_STAT_COUNTER!(arena_rollback_count)
+        $crate::MI_STAT_COUNTER!(arena_purges)
+        $crate::MI_STAT_COUNTER!(pages_extended)
+        $crate::MI_STAT_COUNTER!(pages_retire)
+        $crate::MI_STAT_COUNTER!(page_searches)
+        $crate::MI_STAT_COUNTER!(page_searches_count)
+        $crate::MI_STAT_COUNT!(segments)
+        $crate::MI_STAT_COUNT!(segments_abandoned)
+        $crate::MI_STAT_COUNT!(segments_cache)
+        $crate::MI_STAT_COUNT!(_segments_reserved)
+        $crate::MI_STAT_COUNT!(heaps)
+        $crate::MI_STAT_COUNT!(theaps)
+        $crate::MI_STAT_COUNTER!(pages_reclaim_on_alloc)
+        $crate::MI_STAT_COUNTER!(pages_reclaim_on_free)
+        $crate::MI_STAT_COUNTER!(pages_reabandon_full)
+        $crate::MI_STAT_COUNTER!(pages_unabandon_busy_wait)
+        $crate::MI_STAT_COUNTER!(heaps_delete_wait)
+    };
+}
+
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum mi_chunkbin_e {
@@ -210,6 +259,7 @@ pub struct mi_stats_t {
     pub page_bins: [mi_stat_count_t; MI_BIN_HUGE + 1],
     pub chunk_bins: [mi_stat_count_t; MI_CHUNKBIN_COUNT],
 }
+pub type mi_stats_s = mi_stats_t;
 
 impl Default for mi_stats_t {
     fn default() -> Self {

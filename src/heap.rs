@@ -112,6 +112,11 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
     heap
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_new() -> *mut mi_heap_t {
+    mi_heap_new_in_arena(ptr::null_mut())
+}
+
 unsafe fn mi_heap_free_theaps(heap: *mut mi_heap_t) {
     loop {
         let mut all_freed = true;
@@ -220,6 +225,56 @@ pub unsafe extern "C" fn mi_heap_of(p: *const c_void) -> *mut mi_heap_t {
         return ptr::null_mut();
     }
     mi_page_heap(page)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_any_heap_contains(p: *const c_void) -> bool {
+    !mi_heap_of(p).is_null()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_void) -> bool {
+    let heap = if heap.is_null() { mi_heap_main() } else { heap };
+    core::ptr::eq(heap, mi_heap_of(p))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_check_owned(p: *const c_void) -> bool {
+    mi_any_heap_contains(p)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
+    heap: *mut mi_heap_t,
+    p: *mut c_void,
+    perc_threshold: usize,
+) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    let page = _mi_safe_ptr_page(p);
+    if page.is_null() || (*page).used == (*page).capacity || (*page).capacity < (*page).reserved {
+        return false;
+    }
+    if (*page).prev.is_null() {
+        return false;
+    }
+
+    let page_heap = mi_page_heap(page);
+    if page_heap.is_null() {
+        return false;
+    }
+    if !heap.is_null() && !core::ptr::eq(page_heap, heap) {
+        return false;
+    }
+
+    if (*page).capacity == 0 {
+        return false;
+    }
+    if perc_threshold >= 100 {
+        return true;
+    }
+    perc_threshold >= ((100usize * (*page).used as usize) / (*page).capacity as usize)
 }
 
 #[allow(dead_code)]

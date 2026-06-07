@@ -1,6 +1,11 @@
 //! Statistics
 
-#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
+#![allow(
+    dead_code,
+    non_camel_case_types,
+    non_upper_case_globals,
+    clippy::missing_safety_doc
+)]
 
 use core::ffi::{c_char, c_void};
 use core::{mem::size_of, ptr};
@@ -12,8 +17,8 @@ use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed, mi_lock_t,
 };
 use crate::internal::{_mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
-use crate::mimalloc::mi_heap_main;
 use crate::mimalloc::{mi_good_size, mi_rezalloc};
+use crate::mimalloc::{mi_heap_main, mi_subproc_current, mi_subproc_visit_heaps};
 use crate::options::{_mi_fprintf, _mi_fputs};
 use crate::os::_mi_prim_process_info;
 use crate::page::{
@@ -22,8 +27,8 @@ use crate::page::{
 };
 use crate::prim::{_mi_heap_theap_peek, _mi_theap_default};
 use crate::types::{
-    MI_BIN_COUNT, MI_MALLOC_VERSION, mi_heap_t, mi_output_fun, mi_page_t, mi_process_info_t,
-    mi_subproc_t, mi_theap_t,
+    MI_BIN_COUNT, MI_MALLOC_VERSION, mi_heap_t, mi_heap_visit_fun, mi_output_fun, mi_page_t,
+    mi_process_info_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
 };
 
 pub const MI_STAT_VERSION: usize = 5;
@@ -978,6 +983,7 @@ pub unsafe extern "C" fn mi_stats_reset() {
 
 /// # Safety
 /// `heap` must be null or a valid `mi_heap_t*`; any output callback must obey the C ABI.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_print_out(
     mut heap: *mut mi_heap_t,
     out: Option<mi_output_fun>,
@@ -1004,6 +1010,134 @@ unsafe extern "C" fn mi_heap_print_visitor(heap: *mut mi_heap_t, arg: *mut c_voi
     true
 }
 
+unsafe extern "C" fn mi_heap_aggregate_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
+    let stats = unsafe { &mut *arg.cast::<mi_stats_t>() };
+    let heap_stats = unsafe { mi_heap_get_stats(heap) };
+    // SAFETY: both pointers refer to valid stats buffers during the heap walk.
+    unsafe { mi_stats_add_into(stats, &*heap_stats) };
+    true
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
+    subproc_id: mi_subproc_id_t,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+) {
+    let subproc = subproc_id._mi_subproc_id.cast::<MiSubprocStatsPrefix>();
+    if subproc.is_null() {
+        return;
+    }
+    let mut vinfo = mi_heap_print_visit_info_t { out, out_arg: arg };
+    unsafe {
+        mi_subproc_visit_heaps(
+            subproc_id,
+            Some(mi_heap_print_visitor as mi_heap_visit_fun),
+            ptr::addr_of_mut!(vinfo).cast(),
+        );
+        _mi_stats_print(
+            "subproc",
+            (*subproc).subproc_seq,
+            ptr::addr_of!((*subproc).stats),
+            out,
+            arg,
+        );
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
+    subproc_id: mi_subproc_id_t,
+    stats: *mut mi_stats_t,
+) -> bool {
+    if stats.is_null() {
+        return false;
+    }
+    let subproc = subproc_id._mi_subproc_id.cast::<MiSubprocStatsPrefix>();
+    if subproc.is_null() {
+        return false;
+    }
+    unsafe { mi_stats_copy(&mut *stats, &(*subproc).stats) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_subproc_stats_get(
+    subproc_id: mi_subproc_id_t,
+    stats: *mut mi_stats_t,
+) -> bool {
+    if stats.is_null() {
+        return false;
+    }
+    let subproc = subproc_id._mi_subproc_id.cast::<MiSubprocStatsPrefix>();
+    if subproc.is_null() {
+        return false;
+    }
+    unsafe {
+        if !mi_stats_copy(&mut *stats, &(*subproc).stats) {
+            return false;
+        }
+        mi_subproc_visit_heaps(
+            subproc_id,
+            Some(mi_heap_aggregate_visitor as mi_heap_visit_fun),
+            stats.cast(),
+        );
+    }
+    true
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_stats_get(stats: *mut mi_stats_t) -> bool {
+    unsafe { mi_subproc_stats_get(mi_subproc_current(), stats) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_subproc_stats_print_out(
+    subproc_id: mi_subproc_id_t,
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+) {
+    let subproc = subproc_id._mi_subproc_id.cast::<MiSubprocStatsPrefix>();
+    if subproc.is_null() {
+        return;
+    }
+    crate::mi_stats_t_decl!(stats);
+    unsafe {
+        if mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
+            _mi_stats_print(
+                "subproc",
+                (*subproc).subproc_seq,
+                ptr::addr_of!(stats),
+                out,
+                arg,
+            );
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
+    unsafe { mi_subproc_stats_print_out(mi_subproc_current(), out, arg) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_stats_print(_out: *mut c_void) {
+    unsafe { mi_stats_print_out(None, ptr::null_mut()) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_thread_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
+    let theap = unsafe { _mi_theap_default() };
+    if theap.is_null() || !unsafe { mi_theap_is_initialized(theap) } {
+        return;
+    }
+    let heap = unsafe { _mi_theap_heap(theap) };
+    let heap_seq = unsafe { (*heap.cast::<MiHeapStatsPrefix>()).heap_seq };
+    unsafe {
+        _mi_stats_print("heap", heap_seq, ptr::addr_of!((*theap).stats), out, arg);
+        mi_stats_merge_theap_to_heap(theap);
+    }
+}
+
 fn clamp_msecs_to_size(value: i64) -> usize {
     if value <= 0 {
         0
@@ -1014,6 +1148,7 @@ fn clamp_msecs_to_size(value: i64) -> usize {
 
 /// # Safety
 /// Output callbacks and argument pointers must follow the C ABI contract when non-null.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_process_info_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     let mut elapsed = 0usize;
     let mut user_time = 0usize;
@@ -1069,6 +1204,7 @@ pub unsafe extern "C" fn mi_process_info_print_out(out: Option<mi_output_fun>, a
 
 /// # Safety
 /// Any non-null output pointers must be valid for writing one `usize`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_process_info(
     elapsed_msecs: *mut usize,
     user_msecs: *mut usize,
@@ -1115,6 +1251,7 @@ pub unsafe extern "C" fn mi_process_info(
     }
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_process_info_print() {
     // SAFETY: null output selects the default output sink.
     unsafe { mi_process_info_print_out(None, ptr::null_mut()) }
@@ -1329,6 +1466,7 @@ fn append_stats_json(hbuf: &mut mi_json_buf_t, stats: &mi_stats_t) {
 /// # Safety
 /// `stats` must point to a valid `mi_stats_t` when non-null. If `output_buf` is non-null it
 /// must be writable for `output_size` bytes.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_get_json_from(
     stats: *const mi_stats_t,
     output_size: usize,
@@ -1433,6 +1571,36 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
 /// # Safety
 /// `stats` must point to a valid `mi_stats_t` when non-null. If `buf` is non-null it must be
 /// writable for `buf_size` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_subproc_stats_get_json(
+    subproc_id: mi_subproc_id_t,
+    buf_size: usize,
+    buf: *mut c_char,
+) -> *mut c_char {
+    crate::mi_stats_t_decl!(stats);
+    unsafe {
+        if !mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
+            return ptr::null_mut();
+        }
+        mi_stats_get_json_from(ptr::addr_of!(stats), buf_size, buf)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_stats_get_json(
+    heap: *mut mi_heap_t,
+    buf_size: usize,
+    buf: *mut c_char,
+) -> *mut c_char {
+    unsafe { mi_stats_get_json_from(mi_heap_get_stats(heap), buf_size, buf) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_stats_get_json(buf_size: usize, buf: *mut c_char) -> *mut c_char {
+    unsafe { mi_subproc_stats_get_json(mi_subproc_current(), buf_size, buf) }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_as_json(
     stats: *mut mi_stats_t,
     buf_size: usize,

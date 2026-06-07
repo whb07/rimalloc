@@ -141,3 +141,157 @@ macro_rules! _aligned_offset_realloc {
         $crate::alloc_aligned::mi_realloc_aligned_at($p, $n, $a, $o)
     };
 }
+
+#[allow(non_upper_case_globals)]
+pub const mi_decl_new: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_decl_new_nothrow: () = ();
+
+#[macro_export]
+macro_rules! operatordelete {
+    ($p:expr) => {
+        $crate::mimalloc::mi_free($p)
+    };
+}
+
+#[macro_export]
+macro_rules! operatordelete_array {
+    ($p:expr) => {
+        $crate::mimalloc::mi_free($p)
+    };
+}
+
+#[macro_export]
+macro_rules! operatordelete_nothrow {
+    ($p:expr, $tag:expr) => {{
+        let _ = &$tag;
+        $crate::mimalloc::mi_free($p)
+    }};
+}
+
+#[macro_export]
+macro_rules! operatordelete_array_nothrow {
+    ($p:expr, $tag:expr) => {{
+        let _ = &$tag;
+        $crate::mimalloc::mi_free($p)
+    }};
+}
+
+#[macro_export]
+macro_rules! operatornew {
+    ($n:expr) => {
+        $crate::mimalloc::mi_new($n)
+    };
+}
+
+#[macro_export]
+macro_rules! operatornew_array {
+    ($n:expr) => {
+        $crate::mimalloc::mi_new($n)
+    };
+}
+
+#[macro_export]
+macro_rules! operatornew_nothrow {
+    ($n:expr, $tag:expr) => {{
+        let _ = &$tag;
+        $crate::mimalloc::mi_new_nothrow($n)
+    }};
+}
+
+#[macro_export]
+macro_rules! operatornew_array_nothrow {
+    ($n:expr, $tag:expr) => {{
+        let _ = &$tag;
+        $crate::mimalloc::mi_new_nothrow($n)
+    }};
+}
+
+#[macro_export]
+macro_rules! operatordelete_sized {
+    ($p:expr, $n:expr) => {
+        $crate::free::mi_free_size($p, $n)
+    };
+}
+
+#[macro_export]
+macro_rules! operatordelete_array_sized {
+    ($p:expr, $n:expr) => {
+        $crate::free::mi_free_size($p, $n)
+    };
+}
+
+#[macro_export]
+macro_rules! operatordelete_aligned {
+    ($p:expr, $al:expr) => {
+        $crate::free::mi_free_aligned($p, $al as usize)
+    };
+}
+
+#[macro_export]
+macro_rules! operatordelete_array_aligned {
+    ($p:expr, $al:expr) => {
+        $crate::free::mi_free_aligned($p, $al as usize)
+    };
+}
+
+#[macro_export]
+macro_rules! operatordelete_sized_aligned {
+    ($p:expr, $n:expr, $al:expr) => {
+        $crate::free::mi_free_size_aligned($p, $n, $al as usize)
+    };
+}
+
+#[macro_export]
+macro_rules! operatordelete_array_sized_aligned {
+    ($p:expr, $n:expr, $al:expr) => {
+        $crate::free::mi_free_size_aligned($p, $n, $al as usize)
+    };
+}
+
+#[macro_export]
+macro_rules! operatordelete_aligned_nothrow {
+    ($p:expr, $al:expr, $tag:expr) => {{
+        let _ = &$tag;
+        $crate::free::mi_free_aligned($p, $al as usize)
+    }};
+}
+
+#[macro_export]
+macro_rules! operatordelete_array_aligned_nothrow {
+    ($p:expr, $al:expr, $tag:expr) => {{
+        let _ = &$tag;
+        $crate::free::mi_free_aligned($p, $al as usize)
+    }};
+}
+
+#[macro_export]
+macro_rules! operatornew_aligned {
+    ($n:expr, $al:expr) => {
+        $crate::mimalloc::mi_new_aligned($n, $al as usize)
+    };
+}
+
+#[macro_export]
+macro_rules! operatornew_array_aligned {
+    ($n:expr, $al:expr) => {
+        $crate::mimalloc::mi_new_aligned($n, $al as usize)
+    };
+}
+
+#[macro_export]
+macro_rules! operatornew_aligned_nothrow {
+    ($n:expr, $al:expr, $tag:expr) => {{
+        let _ = &$tag;
+        $crate::mimalloc::mi_new_aligned_nothrow($n, $al as usize)
+    }};
+}
+
+#[macro_export]
+macro_rules! operatornew_array_aligned_nothrow {
+    ($n:expr, $al:expr, $tag:expr) => {{
+        let _ = &$tag;
+        $crate::mimalloc::mi_new_aligned_nothrow($n, $al as usize)
+    }};
+}

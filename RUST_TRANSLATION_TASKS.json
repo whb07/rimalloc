@@ -98637,7 +98637,8 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true,
+      "file": "src/arena.rs"
     },
     {
       "task_id": "TASK-001299",
@@ -249806,7 +249807,8 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true,
+      "file": "src/arena.rs"
     },
     {
       "task_id": "TASK-002700",
@@ -249920,7 +249922,8 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true,
+      "file": "src/arena.rs"
     },
     {
       "task_id": "TASK-002701",
@@ -249989,7 +249992,8 @@
       "thread_safety": "thread-safety depends on callees/global state",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true,
+      "file": "src/arena.rs"
     },
     {
       "task_id": "TASK-002702",

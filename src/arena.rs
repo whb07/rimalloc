@@ -9,8 +9,8 @@ use crate::atomic::mi_atomic_load_ptr_acquire;
 use crate::bitmap::{MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT};
 use crate::bits::MI_INTPTR_BITS;
 use crate::internal::{
-    _mi_align_up, _mi_memid_create, _mi_os_commit, _mi_os_commit_ex, mi_memid_t, mi_memkind_t,
-    mi_size_of_slices,
+    _mi_align_up, _mi_memid_create, _mi_os_commit, _mi_os_commit_ex, _mi_subproc, mi_memid_t,
+    mi_memkind_t, mi_size_of_slices,
 };
 use crate::options::{mi_option_get_size, mi_option_t};
 use crate::types::{
@@ -248,6 +248,63 @@ pub unsafe extern "C" fn mi_arena_area(arena_id: mi_arena_id_t, size: *mut usize
         unsafe { *size = (*arena.cast::<MiArenaPrefix>()).total_size };
     }
     unsafe { mi_arena_start(arena).cast::<c_void>() }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_strictly_contains(arena: *mut mi_arena_t, p: *const c_void) -> bool {
+    let p = p.cast::<u8>();
+    !arena.is_null() && {
+        let start = unsafe { mi_arena_start(arena).cast_const() };
+        let end = unsafe {
+            start.add(mi_size_of_slices(
+                (*arena.cast::<MiArenaPrefix>()).slice_count,
+            ))
+        };
+        start <= p && end > p
+    }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arenas_contain_ex(p: *const c_void, parent: *mut mi_arena_t) -> bool {
+    let subproc = unsafe { _mi_subproc() };
+    let max_arena = unsafe { mi_arenas_get_count(subproc) };
+    for i in 0..max_arena {
+        let arena = unsafe {
+            mi_atomic_load_ptr_acquire(ptr::addr_of!(
+                (*subproc.cast::<MiSubprocPrefix>()).arenas[i]
+            ))
+        };
+        if !arena.is_null()
+            && (parent.is_null()
+                || arena == parent
+                || unsafe { (*arena.cast::<MiArenaPrefix>()).parent == parent })
+            && unsafe { mi_arena_strictly_contains(arena, p) }
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// # Safety
+/// `p` may be any pointer value.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_arenas_contain(p: *const c_void) -> bool {
+    unsafe { mi_arenas_contain_ex(p, ptr::null_mut()) }
+}
+
+/// # Safety
+/// `arena_id` must be null or a valid top-level arena id; `p` may be any pointer value.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_void) -> bool {
+    let arena = unsafe { _mi_arena_from_id(arena_id) };
+    if arena.is_null() {
+        false
+    } else if unsafe { mi_arena_strictly_contains(arena, p) } {
+        true
+    } else {
+        unsafe { mi_arenas_contain_ex(p, arena) }
+    }
 }
 
 #[allow(dead_code)]

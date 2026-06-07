@@ -543,9 +543,34 @@ unsafe extern "C" {
         numa_node: c_int,
         memid: *mut mi_memid_t,
     ) -> *mut c_void;
+    pub fn _mi_arenas_alloc_aligned(
+        heap: *mut mi_heap_t,
+        size: usize,
+        alignment: usize,
+        align_offset: usize,
+        commit: bool,
+        allow_pinned: bool,
+        req_arena: *mut mi_arena_t,
+        tseq: usize,
+        numa_node: c_int,
+        memid: *mut mi_memid_t,
+    ) -> *mut c_void;
+    pub fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_memid_t);
+    pub fn _mi_arenas_page_alloc(
+        theap: *mut mi_theap_t,
+        block_size: usize,
+        page_alignment: usize,
+    ) -> *mut mi_page_t;
+    pub fn _mi_arenas_page_free(page: *mut mi_page_t, current_theapx: *mut mi_theap_t);
+    pub fn _mi_arenas_page_abandon(page: *mut mi_page_t, current_theap: *mut mi_theap_t);
+    pub fn _mi_arenas_page_unabandon(page: *mut mi_page_t, current_theapx: *mut mi_theap_t);
+    pub fn _mi_arenas_page_try_reabandon_to_mapped(page: *mut mi_page_t) -> bool;
     pub fn _mi_arenas_contain(p: *const c_void) -> bool;
+    pub fn _mi_meta_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;
+    pub fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t);
     pub fn _mi_meta_is_meta_page(p: *mut c_void) -> bool;
     pub fn _mi_page_map_init() -> bool;
+    pub fn _mi_page_map_register(page: *mut mi_page_t) -> bool;
     pub fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t);
     pub fn _mi_page_map_unregister_range(start: *mut c_void, size: usize);
 }

@@ -626,14 +626,14 @@ pub unsafe extern "C" fn _mi_prim_commit(
     err
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) -> c_int {
     let _ = start;
     let _ = size;
     0
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_decommit(
     start: *mut c_void,
     size: usize,
@@ -651,7 +651,7 @@ pub unsafe extern "C" fn _mi_prim_decommit(
     err
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_int {
     static ADVICE: AtomicI32 = AtomicI32::new(MADV_FREE);
     let mut advice = ADVICE.load(Ordering::Relaxed);
@@ -711,7 +711,7 @@ pub unsafe extern "C" fn mi_prim_mbind(
     }
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     hint_addr: *mut c_void,
     size: usize,
@@ -781,7 +781,7 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     }
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
     #[cfg(target_os = "linux")]
     {
@@ -1074,14 +1074,14 @@ pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
     }
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
     if _mi_heap_default_key != PTHREAD_KEY_INVALID {
         let _ = pthread_setspecific(_mi_heap_default_key, theap.cast::<c_void>());
     }
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
     false
 }

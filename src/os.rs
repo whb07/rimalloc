@@ -13,10 +13,13 @@ use std::io::{self, Write};
 
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB};
-use crate::internal::{_mi_align_down_ptr, _mi_align_up, _mi_align_up_ptr, MI_SECURE};
+use crate::internal::{
+    _mi_align_down_ptr, _mi_align_up, _mi_align_up_ptr, _mi_memid_create_os, _mi_memid_none,
+    MI_SECURE, mi_memid_t,
+};
 use crate::options::_mi_warning_message;
 use crate::prim::mi_os_mem_config_t;
-use crate::prim::{_mi_prim_commit, _mi_prim_protect};
+use crate::prim::{_mi_prim_alloc, _mi_prim_commit, _mi_prim_free, _mi_prim_protect};
 use crate::types::mi_process_info_t;
 
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_4_GIB: usize = 4 * MI_MiB;
@@ -258,9 +261,156 @@ pub unsafe extern "C" fn _mi_os_protect(addr: *mut c_void, size: usize) -> bool 
     unsafe { mi_os_protectx(addr, size, true) }
 }
 
+unsafe fn mi_os_alloc_aligned_memid(
+    size: usize,
+    alignment: usize,
+    commit: bool,
+) -> (*mut c_void, mi_memid_t) {
+    let mut memid = unsafe { _mi_memid_none() };
+    if size == 0 {
+        return (core::ptr::null_mut(), memid);
+    }
+
+    let size = unsafe { _mi_os_good_alloc_size(size) };
+    let alignment = unsafe { _mi_align_up(alignment, _mi_os_page_size()) };
+    if alignment < unsafe { _mi_os_page_size() } || (alignment & (alignment - 1)) != 0 {
+        return (core::ptr::null_mut(), memid);
+    }
+
+    let try_direct_alloc = unsafe {
+        alignment <= (*mi_os_mem_config_ptr()).alloc_granularity || alignment <= size / 4
+    };
+
+    let mut os_is_large = false;
+    let mut os_is_zero = false;
+    let os_base: *mut c_void;
+    let mut os_size = size;
+    let mut p: *mut c_void = core::ptr::null_mut();
+
+    if try_direct_alloc {
+        let err = unsafe {
+            _mi_prim_alloc(
+                core::ptr::null_mut(),
+                size,
+                alignment,
+                commit,
+                false,
+                &mut os_is_large,
+                &mut os_is_zero,
+                &mut p,
+            )
+        };
+        if err != 0 {
+            p = core::ptr::null_mut();
+        }
+    }
+
+    if !p.is_null() && (p as usize & (alignment - 1)) == 0 {
+        os_base = p;
+    } else {
+        if !p.is_null() {
+            let _ = unsafe { _mi_prim_free(p, size) };
+        }
+        if size >= usize::MAX - alignment {
+            return (core::ptr::null_mut(), memid);
+        }
+
+        let over_size = size + alignment;
+        if unsafe { !(*mi_os_mem_config_ptr()).has_partial_free } {
+            let err = unsafe {
+                _mi_prim_alloc(
+                    core::ptr::null_mut(),
+                    over_size,
+                    1,
+                    false,
+                    false,
+                    &mut os_is_large,
+                    &mut os_is_zero,
+                    &mut p,
+                )
+            };
+            if err != 0 || p.is_null() {
+                return (core::ptr::null_mut(), memid);
+            }
+
+            os_base = p;
+            os_size = over_size;
+            p = _mi_align_up_ptr(p, alignment);
+
+            if commit && !unsafe { _mi_os_commit(p, size, core::ptr::null_mut()) } {
+                let _ = unsafe { _mi_prim_free(os_base, over_size) };
+                return (core::ptr::null_mut(), memid);
+            }
+        } else {
+            let err = unsafe {
+                _mi_prim_alloc(
+                    core::ptr::null_mut(),
+                    over_size,
+                    1,
+                    commit,
+                    false,
+                    &mut os_is_large,
+                    &mut os_is_zero,
+                    &mut p,
+                )
+            };
+            if err != 0 || p.is_null() {
+                return (core::ptr::null_mut(), memid);
+            }
+
+            let aligned_p = _mi_align_up_ptr(p, alignment);
+            let pre_size = aligned_p as usize - p as usize;
+            let mid_size = unsafe { _mi_align_up(size, _mi_os_page_size()) };
+            let post_size = over_size - pre_size - mid_size;
+
+            if pre_size > 0 {
+                let _ = unsafe { _mi_prim_free(p, pre_size) };
+            }
+            if post_size > 0 {
+                let post = unsafe { aligned_p.cast::<u8>().add(mid_size) }.cast::<c_void>();
+                let _ = unsafe { _mi_prim_free(post, post_size) };
+            }
+
+            p = aligned_p;
+            os_base = aligned_p;
+            os_size = mid_size;
+        }
+    }
+
+    if p.is_null() || os_base.is_null() {
+        return (core::ptr::null_mut(), memid);
+    }
+
+    memid = unsafe { _mi_memid_create_os(os_base, os_size, commit, os_is_zero, os_is_large) };
+    (p, memid)
+}
+
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_os_commit(p: *mut c_void, size: usize) {
     let _ = unsafe { _mi_os_commit(p, size, core::ptr::null_mut()) };
+}
+
+/// # Safety
+/// Preserves the exported C ABI wrapper from `src/os.c`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_os_alloc_aligned(
+    size: usize,
+    alignment: usize,
+    commit: bool,
+    base: *mut *mut c_void,
+    full_size: *mut usize,
+) -> *mut c_void {
+    let (p, memid) = unsafe { mi_os_alloc_aligned_memid(size, alignment, commit) };
+    if p.is_null() {
+        return p;
+    }
+    if !base.is_null() {
+        unsafe { *base = memid.mem.os.base };
+    }
+    if !full_size.is_null() {
+        unsafe { *full_size = memid.mem.os.size };
+    }
+    p
 }

@@ -16,7 +16,16 @@ use crate::atomic::{
     mi_lock_init, mi_lock_release, mi_lock_t,
 };
 use crate::bitmap::MI_BFIELD_BITS;
+#[cfg(target_pointer_width = "32")]
+use crate::bitmap::{
+    mi_bitmap_init, mi_bitmap_is_clear, mi_bitmap_is_set, mi_bitmap_set, mi_bitmap_size,
+    mi_bitmap_t,
+};
+#[cfg(target_pointer_width = "32")]
+use crate::bits::MI_MiB;
 use crate::bits::{MI_KiB, MI_PAGE_MAP_FLAT, MI_SIZE_BITS};
+#[cfg(target_pointer_width = "32")]
+use crate::internal::_mi_memzero;
 use crate::internal::{
     _mi_align_up, _mi_divide_up, _mi_error_message, _mi_is_aligned, _mi_memid_create_os,
     _mi_memid_none, _mi_memzero_aligned, _mi_os_commit, _mi_os_free, _mi_os_free_ex,
@@ -61,6 +70,9 @@ static mut mi_page_map_memid: mi_memid_t = mi_memid_t {
     initially_zero: false,
 };
 static mut mi_page_map_lock: mi_lock_t = mi_lock_t::new();
+#[cfg(target_pointer_width = "32")]
+static mut mi_page_map_commit: *mut mi_bitmap_t = ptr::null_mut();
+#[cfg(not(target_pointer_width = "32"))]
 static mi_page_map_commit: AtomicUsize = AtomicUsize::new(0);
 
 #[inline]
@@ -79,6 +91,233 @@ fn mi_page_map_is_committed(idx: usize, pbit_idx: *mut usize) -> bool {
         unsafe { *pbit_idx = bit_idx };
     }
     (commit & (1usize << bit_idx)) != 0
+}
+
+#[cfg(target_pointer_width = "32")]
+const MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT: usize = MI_ARENA_SLICE_SIZE;
+
+#[cfg(target_pointer_width = "32")]
+unsafe fn mi_page_map_ensure_committed(idx: usize, slice_count: usize) -> bool {
+    if unsafe { !mi_page_map_commit.is_null() } {
+        let commit_idx = idx / MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT;
+        let commit_idx_hi = (idx + slice_count - 1) / MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT;
+        for i in commit_idx..=commit_idx_hi {
+            if unsafe { mi_bitmap_is_clear(mi_page_map_commit, i) } {
+                let start = unsafe { _mi_page_map.add(i * MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT) };
+                let size = MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT;
+                let mut is_zero = false;
+                if !unsafe { _mi_os_commit(start.cast::<c_void>(), size, &mut is_zero) } {
+                    mi_page_map_cannot_commit();
+                    return false;
+                }
+                if !is_zero && !unsafe { mi_page_map_memid.initially_zero } {
+                    unsafe { _mi_memzero(start.cast::<c_void>(), size) };
+                }
+                unsafe { mi_bitmap_set(mi_page_map_commit, i) };
+            }
+        }
+    }
+    if cfg!(debug_assertions) {
+        unsafe {
+            *_mi_page_map.add(idx) = 0;
+            *_mi_page_map.add(idx + slice_count - 1) = 0;
+        }
+    }
+    true
+}
+
+#[cfg(target_pointer_width = "32")]
+unsafe fn mi_page_map_get_idx(
+    page: *mut mi_page_t,
+    page_start: *mut *mut u8,
+    slice_count: *mut usize,
+) -> usize {
+    let mut page_size = 0usize;
+    unsafe { *page_start = mi_page_area(page, &mut page_size) };
+    if page_size > MI_LARGE_PAGE_SIZE {
+        page_size = MI_LARGE_PAGE_SIZE - MI_ARENA_SLICE_SIZE;
+    }
+    unsafe {
+        *slice_count = mi_slice_count_of_size(page_size)
+            + (((*page_start) as usize - mi_page_slice_start(page) as usize) / MI_ARENA_SLICE_SIZE);
+        _mi_page_map_index(page.cast::<c_void>())
+    }
+}
+
+#[cfg(target_pointer_width = "32")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_map_init() -> bool {
+    let mut vbits =
+        mi_option_get_clamp(mi_option_t::mi_option_max_vabits, 0, MI_SIZE_BITS as i64) as usize;
+    if vbits == 0 {
+        vbits = unsafe { _mi_os_virtual_address_bits() };
+        #[cfg(target_arch = "x86_64")]
+        if vbits >= 48 {
+            vbits = 47;
+        }
+    }
+    if vbits < MI_ARENA_SLICE_SHIFT {
+        vbits = MI_ARENA_SLICE_SHIFT;
+    }
+
+    unsafe {
+        mi_page_map_max_address = if vbits >= MI_SIZE_BITS {
+            (usize::MAX - MI_ARENA_SLICE_SIZE + 1) as *mut c_void
+        } else {
+            (1usize << vbits) as *mut c_void
+        };
+    }
+    let page_map_size = 1usize << (vbits - MI_ARENA_SLICE_SHIFT);
+    let commit =
+        page_map_size <= MI_MiB || mi_option_is_enabled(mi_option_t::mi_option_pagemap_commit);
+    let commit_bits = _mi_divide_up(page_map_size, MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT);
+    let bitmap_size = if commit {
+        0
+    } else {
+        unsafe { mi_bitmap_size(commit_bits, ptr::null_mut()) }
+    };
+    let reserve_size = bitmap_size + page_map_size;
+    let base =
+        unsafe { _mi_os_alloc_aligned(reserve_size, 1, commit, true, &raw mut mi_page_map_memid) }
+            .cast::<u8>();
+    if base.is_null() {
+        unsafe {
+            _mi_error_message(
+                ENOMEM,
+                c"unable to reserve virtual memory for the page map (%zu KiB)\n".as_ptr(),
+                page_map_size / MI_KiB,
+            );
+        }
+        return false;
+    }
+    if unsafe { mi_page_map_memid.initially_committed && !mi_page_map_memid.initially_zero } {
+        _mi_warning_message(format_args!(
+            "internal: the page map was committed but not zero initialized!\n"
+        ));
+        unsafe { _mi_memzero_aligned(base.cast::<c_void>(), reserve_size) };
+    }
+    if bitmap_size > 0 {
+        unsafe {
+            mi_page_map_commit = base.cast::<mi_bitmap_t>();
+            if !_mi_os_commit(
+                mi_page_map_commit.cast::<c_void>(),
+                bitmap_size,
+                ptr::null_mut(),
+            ) {
+                mi_page_map_cannot_commit();
+                return false;
+            }
+            mi_bitmap_init(mi_page_map_commit, commit_bits, true);
+        }
+    }
+    unsafe {
+        _mi_page_map = base.add(bitmap_size);
+    }
+    if !commit && !unsafe { mi_page_map_ensure_committed(0, 1) } {
+        mi_page_map_cannot_commit();
+        return false;
+    }
+    unsafe {
+        *_mi_page_map.add(0) = 1;
+    }
+    crate::mi_assert_internal!(unsafe { crate::internal::_mi_ptr_page(ptr::null()) }.is_null());
+    true
+}
+
+#[cfg(target_pointer_width = "32")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t) {
+    crate::mi_assert_internal!(!subproc.is_null());
+    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    if unsafe { _mi_page_map }.is_null() {
+        return;
+    }
+    unsafe {
+        _mi_os_free_ex(
+            mi_page_map_memid.mem.os.base,
+            mi_page_map_memid.mem.os.size,
+            true,
+            mi_page_map_memid,
+            subproc,
+        );
+        _mi_page_map = ptr::null_mut();
+        mi_page_map_commit = ptr::null_mut();
+        mi_page_map_max_address = ptr::null_mut();
+        mi_page_map_memid = _mi_memid_none();
+    }
+}
+
+#[cfg(target_pointer_width = "32")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
+    crate::mi_assert_internal!(!page.is_null());
+    crate::mi_assert_internal!(unsafe {
+        _mi_is_aligned(mi_page_slice_start(page).cast::<c_void>(), MI_PAGE_ALIGN)
+    });
+    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    if unsafe { _mi_page_map }.is_null() && !unsafe { _mi_page_map_init() } {
+        return false;
+    }
+    crate::mi_assert!(!(unsafe { _mi_page_map }).is_null());
+    let mut page_start = ptr::null_mut();
+    let mut slice_count = 0usize;
+    let idx = unsafe { mi_page_map_get_idx(page, &mut page_start, &mut slice_count) };
+    if !unsafe { mi_page_map_ensure_committed(idx, slice_count) } {
+        return false;
+    }
+    for i in 0..slice_count {
+        crate::mi_assert_internal!(i < 128);
+        unsafe { *_mi_page_map.add(idx + i) = (i + 1) as u8 };
+    }
+    true
+}
+
+#[cfg(target_pointer_width = "32")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
+    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    let mut page_start = ptr::null_mut();
+    let mut slice_count = 0usize;
+    let idx = unsafe { mi_page_map_get_idx(page, &mut page_start, &mut slice_count) };
+    unsafe { _mi_memzero(_mi_page_map.add(idx).cast::<c_void>(), slice_count) };
+}
+
+#[cfg(target_pointer_width = "32")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
+    let slice_count = _mi_divide_up(size, MI_ARENA_SLICE_SIZE);
+    let index = _mi_page_map_index(start.cast_const());
+    if !unsafe { mi_page_map_ensure_committed(index, slice_count) } {
+        return;
+    }
+    unsafe { _mi_memzero(_mi_page_map.add(index).cast::<c_void>(), slice_count) };
+}
+
+#[cfg(target_pointer_width = "32")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
+    if p >= unsafe { mi_page_map_max_address } {
+        return ptr::null_mut();
+    }
+    let idx = _mi_page_map_index(p);
+    if unsafe { !mi_page_map_commit.is_null() }
+        && !unsafe {
+            mi_bitmap_is_set(mi_page_map_commit, idx / MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT)
+        }
+    {
+        return ptr::null_mut();
+    }
+    let ofs = unsafe { *_mi_page_map.add(idx) as usize };
+    if ofs == 0 {
+        return ptr::null_mut();
+    }
+    ((((p as usize) >> MI_ARENA_SLICE_SHIFT) - ofs + 1) << MI_ARENA_SLICE_SHIFT) as *mut mi_page_t
+}
+
+#[cfg(target_pointer_width = "32")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_is_in_heap_region(p: *const c_void) -> bool {
+    !unsafe { _mi_safe_ptr_page(p) }.is_null()
 }
 
 #[cfg(not(target_pointer_width = "32"))]

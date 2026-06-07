@@ -6,7 +6,7 @@
     clippy::missing_safety_doc
 )]
 
-use core::ffi::{c_char, c_void};
+use core::ffi::{c_char, c_long, c_void};
 use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use std::sync::Once;
@@ -15,10 +15,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bits::MI_SIZE_SIZE;
 use crate::internal::{_mi_allocator_done, mi_memid_t, mi_memkind_t};
+use crate::options::{mi_option_get, mi_option_get_clamp, mi_option_t};
 use crate::stats::{mi_stat_count_t, mi_stats_get_json_from, mi_stats_header_init, mi_stats_t};
 use crate::types::{
-    MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_page_queue_t, mi_page_t, mi_subproc_id_t,
-    mi_subproc_t, mi_theap_t, mi_thread_local_t, mi_threadid_t, mi_tld_t,
+    MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_page_queue_t, mi_page_t,
+    mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
+    mi_tld_t,
 };
 
 pub const MI_TLS_DIRECT_SLOTS: usize = 64;
@@ -174,14 +176,164 @@ pub static _mi_page_empty: mi_page_t = mi_page_t {
 };
 
 #[allow(non_snake_case)]
-pub fn MI_PAGE_EMPTY() -> *mut mi_page_t {
+pub const fn MI_PAGE_EMPTY() -> *mut mi_page_t {
     ptr::addr_of!(_mi_page_empty).cast_mut()
 }
 
 #[allow(non_snake_case)]
-pub fn MI_SMALL_PAGES_EMPTY() -> [*mut mi_page_t; MI_PAGES_DIRECT] {
+pub const fn MI_SMALL_PAGES_EMPTY() -> [*mut mi_page_t; MI_PAGES_DIRECT] {
     [MI_PAGE_EMPTY(); MI_PAGES_DIRECT]
 }
+
+const MI_PAGE_QUEUE_WORD_SIZES: [usize; MI_BIN_COUNT] = [
+    1,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    10,
+    12,
+    14,
+    16,
+    20,
+    24,
+    28,
+    32,
+    40,
+    48,
+    56,
+    64,
+    80,
+    96,
+    112,
+    128,
+    160,
+    192,
+    224,
+    256,
+    320,
+    384,
+    448,
+    512,
+    640,
+    768,
+    896,
+    1024,
+    1280,
+    1536,
+    1792,
+    2048,
+    2560,
+    3072,
+    3584,
+    4096,
+    5120,
+    6144,
+    7168,
+    8192,
+    10240,
+    12288,
+    14336,
+    16384,
+    20480,
+    24576,
+    28672,
+    32768,
+    40960,
+    49152,
+    57344,
+    65536,
+    81920,
+    98304,
+    114688,
+    131072,
+    163840,
+    196608,
+    229376,
+    262144,
+    327680,
+    393216,
+    458752,
+    524288,
+    crate::stats::MI_LARGE_MAX_OBJ_WSIZE + 1,
+    crate::stats::MI_LARGE_MAX_OBJ_WSIZE + 2,
+];
+
+#[allow(non_snake_case)]
+pub const fn MI_PAGE_QUEUES_EMPTY() -> [mi_page_queue_t; MI_BIN_COUNT] {
+    let mut queues = [QNULL(0); MI_BIN_COUNT];
+    let mut i = 0;
+    while i < MI_BIN_COUNT {
+        queues[i] = QNULL(MI_PAGE_QUEUE_WORD_SIZES[i]);
+        i += 1;
+    }
+    queues
+}
+
+const MI_RANDOM_CTX_EMPTY: mi_random_ctx_t = mi_random_ctx_t {
+    input: [0; 16],
+    output: [0; 16],
+    output_available: 0,
+    weak: true,
+};
+
+#[unsafe(no_mangle)]
+pub static _mi_theap_empty: mi_theap_t = mi_theap_t {
+    tld: ptr::addr_of!(tld_empty).cast_mut(),
+    heap: ptr::null_mut(),
+    refcount: 1,
+    heartbeat: 0,
+    cookie: 0,
+    random: MI_RANDOM_CTX_EMPTY,
+    page_count: 0,
+    page_retired_min: MI_BIN_FULL,
+    page_retired_max: 0,
+    pages_full_size: 0,
+    generic_count: 0,
+    generic_collect_count: 0,
+    tnext: ptr::null_mut(),
+    tprev: ptr::null_mut(),
+    hnext: ptr::null_mut(),
+    hprev: ptr::null_mut(),
+    page_full_retain: 0,
+    allow_page_reclaim: false,
+    allow_page_abandon: true,
+    pages_free_direct: MI_SMALL_PAGES_EMPTY(),
+    pages: MI_PAGE_QUEUES_EMPTY(),
+    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+    stats: MI_STATS_NULL(),
+};
+
+#[unsafe(no_mangle)]
+pub static _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
+    tld: ptr::addr_of!(tld_empty).cast_mut(),
+    heap: ptr::null_mut(),
+    refcount: 1,
+    heartbeat: 0,
+    cookie: 0,
+    random: MI_RANDOM_CTX_EMPTY,
+    page_count: 0,
+    page_retired_min: MI_BIN_FULL,
+    page_retired_max: 0,
+    pages_full_size: 0,
+    generic_count: 0,
+    generic_collect_count: 0,
+    tnext: ptr::null_mut(),
+    tprev: ptr::null_mut(),
+    hnext: ptr::null_mut(),
+    hprev: ptr::null_mut(),
+    page_full_retain: 0,
+    allow_page_reclaim: false,
+    allow_page_abandon: true,
+    pages_free_direct: MI_SMALL_PAGES_EMPTY(),
+    pages: MI_PAGE_QUEUES_EMPTY(),
+    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+    stats: MI_STATS_NULL(),
+};
 
 #[unsafe(no_mangle)]
 pub static mut _mi_cpu_movsb_max: usize = 0;
@@ -393,6 +545,48 @@ pub extern "C" fn mi_is_redirected() -> bool {
     false
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn mi_theap_guarded_set_sample_rate(
+    theap: *mut mi_theap_t,
+    sample_rate: usize,
+    seed: usize,
+) {
+    let _ = theap;
+    let _ = sample_rate;
+    let _ = seed;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn mi_theap_guarded_set_size_bound(theap: *mut mi_theap_t, min: usize, max: usize) {
+    let _ = theap;
+    let _ = min;
+    let _ = max;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
+    let _ = theap;
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// `theap` must be valid when non-null.
+pub unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
+    if theap.is_null() {
+        return;
+    }
+    unsafe {
+        (*theap).allow_page_reclaim =
+            mi_option_get(mi_option_t::mi_option_page_reclaim_on_free) >= 0;
+        (*theap).allow_page_abandon = mi_option_get(mi_option_t::mi_option_page_full_retain) >= 0;
+        (*theap).page_full_retain = mi_option_get_clamp(
+            mi_option_t::mi_option_page_full_retain,
+            -1,
+            c_long::from(32),
+        );
+    }
+}
+
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
 unsafe extern "C" {
     fn pthread_key_delete(key: mi_thread_local_t) -> i32;
@@ -473,6 +667,13 @@ fn mi_cpuid(_regs4: *mut u32, _level: u32, _sublevel: u32) -> bool {
 /// Returns a borrowed process-global opaque subproc pointer.
 pub unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
     unsafe { mi_subproc_main_ptr() }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// Returns the process-global empty theap sentinel.
+pub unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
+    ptr::addr_of!(_mi_theap_empty).cast_mut()
 }
 
 #[unsafe(no_mangle)]

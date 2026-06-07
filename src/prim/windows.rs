@@ -81,6 +81,11 @@ pub const ERROR_COMMITMENT_MINIMUM: DWORD = 635;
 pub const ERROR_COMMITMENT_LIMIT: DWORD = 1455;
 pub const ERROR_PAGEFILE_QUOTA: DWORD = 1454;
 pub const ERROR_NOT_ENOUGH_MEMORY: DWORD = 8;
+pub const MEM_COMMIT: DWORD = 0x0000_1000;
+pub const MEM_DECOMMIT: DWORD = 0x0000_4000;
+pub const MEM_RESET: DWORD = 0x0008_0000;
+pub const PAGE_NOACCESS: DWORD = 0x0000_0001;
+pub const PAGE_READWRITE: DWORD = 0x0000_0004;
 pub const EVENT_CONTROL_CODE_DISABLE_PROVIDER: ULONG = 0;
 pub const EVENT_CONTROL_CODE_ENABLE_PROVIDER: ULONG = 1;
 pub const FLS_OUT_OF_INDEXES: DWORD = u32::MAX;
@@ -223,7 +228,21 @@ unsafe extern "system" {
     pub fn FlsGetValue(dwFlsIndex: DWORD) -> PVOID;
     pub fn FlsSetValue(dwFlsIndex: DWORD, lpFlsData: PVOID) -> BOOL;
     pub fn FlsFree(dwFlsIndex: DWORD) -> BOOL;
+    pub fn GetLastError() -> DWORD;
     pub fn QueryPerformanceFrequency(lpFrequency: *mut LARGE_INTEGER) -> BOOL;
+    pub fn VirtualAlloc(
+        lpAddress: PVOID,
+        dwSize: SIZE_T,
+        flAllocationType: DWORD,
+        flProtect: DWORD,
+    ) -> PVOID;
+    pub fn VirtualFree(lpAddress: PVOID, dwSize: SIZE_T, dwFreeType: DWORD) -> BOOL;
+    pub fn VirtualProtect(
+        lpAddress: PVOID,
+        dwSize: SIZE_T,
+        flNewProtect: DWORD,
+        lpflOldProtect: *mut DWORD,
+    ) -> BOOL;
 }
 
 #[repr(C)]
@@ -351,6 +370,80 @@ pub unsafe extern "system" fn mi_dll_main_raw(
 
 #[inline]
 pub unsafe extern "C" fn _mi_allocator_done() {}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_commit(
+    addr: *mut c_void,
+    size: usize,
+    is_zero: *mut bool,
+) -> i32 {
+    if !is_zero.is_null() {
+        *is_zero = false;
+    }
+    let p = unsafe { VirtualAlloc(addr, size, MEM_COMMIT, PAGE_READWRITE) };
+    if p.is_null() {
+        unsafe { GetLastError() as i32 }
+    } else {
+        0
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_decommit(
+    addr: *mut c_void,
+    size: usize,
+    needs_recommit: *mut bool,
+) -> i32 {
+    let ok = unsafe { VirtualFree(addr, size, MEM_DECOMMIT) };
+    if !needs_recommit.is_null() {
+        *needs_recommit = true;
+    }
+    if ok != FALSE as BOOL {
+        0
+    } else {
+        unsafe { GetLastError() as i32 }
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> i32 {
+    let p = unsafe { VirtualAlloc(addr, size, MEM_RESET, PAGE_READWRITE) };
+    crate::mi_assert_internal!(p == addr);
+    if !p.is_null() {
+        0
+    } else {
+        unsafe { GetLastError() as i32 }
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> i32 {
+    let _ = addr;
+    let _ = size;
+    0
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protect: bool) -> i32 {
+    let mut oldprotect: DWORD = 0;
+    let ok = unsafe {
+        VirtualProtect(
+            addr,
+            size,
+            if protect {
+                PAGE_NOACCESS
+            } else {
+                PAGE_READWRITE
+            },
+            &mut oldprotect,
+        )
+    };
+    if ok != FALSE as BOOL {
+        0
+    } else {
+        unsafe { GetLastError() as i32 }
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

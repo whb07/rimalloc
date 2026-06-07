@@ -37,6 +37,48 @@ const MI_ARENA_MAX_SIZE: usize = MI_BITMAP_MAX_BIT_COUNT * MI_ARENA_SLICE_SIZE;
 const MI_MAX_BLOCKS: usize = MI_SMALL_PAGE_SIZE / size_of::<usize>();
 const ENOMEM: c_int = 12;
 
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum mi_ansi_color_e {
+    MI_BLACK = 30,
+    MI_MAROON = 31,
+    MI_DARKGREEN = 32,
+    MI_ORANGE = 33,
+    MI_NAVY = 34,
+    MI_PURPLE = 35,
+    MI_TEAL = 36,
+    MI_GRAY = 37,
+    MI_DARKGRAY = 90,
+    MI_RED = 91,
+    MI_GREEN = 92,
+    MI_YELLOW = 93,
+    MI_BLUE = 94,
+    MI_MAGENTA = 95,
+    MI_CYAN = 96,
+    MI_WHITE = 97,
+}
+
+#[allow(non_camel_case_types)]
+pub type mi_ansi_color_t = mi_ansi_color_e;
+
+pub const MI_BLACK: mi_ansi_color_t = mi_ansi_color_e::MI_BLACK;
+pub const MI_MAROON: mi_ansi_color_t = mi_ansi_color_e::MI_MAROON;
+pub const MI_DARKGREEN: mi_ansi_color_t = mi_ansi_color_e::MI_DARKGREEN;
+pub const MI_ORANGE: mi_ansi_color_t = mi_ansi_color_e::MI_ORANGE;
+pub const MI_NAVY: mi_ansi_color_t = mi_ansi_color_e::MI_NAVY;
+pub const MI_PURPLE: mi_ansi_color_t = mi_ansi_color_e::MI_PURPLE;
+pub const MI_TEAL: mi_ansi_color_t = mi_ansi_color_e::MI_TEAL;
+pub const MI_GRAY: mi_ansi_color_t = mi_ansi_color_e::MI_GRAY;
+pub const MI_DARKGRAY: mi_ansi_color_t = mi_ansi_color_e::MI_DARKGRAY;
+pub const MI_RED: mi_ansi_color_t = mi_ansi_color_e::MI_RED;
+pub const MI_GREEN: mi_ansi_color_t = mi_ansi_color_e::MI_GREEN;
+pub const MI_YELLOW: mi_ansi_color_t = mi_ansi_color_e::MI_YELLOW;
+pub const MI_BLUE: mi_ansi_color_t = mi_ansi_color_e::MI_BLUE;
+pub const MI_MAGENTA: mi_ansi_color_t = mi_ansi_color_e::MI_MAGENTA;
+pub const MI_CYAN: mi_ansi_color_t = mi_ansi_color_e::MI_CYAN;
+pub const MI_WHITE: mi_ansi_color_t = mi_ansi_color_e::MI_WHITE;
+
 #[repr(C)]
 struct MiHeapPrefix {
     subproc: *mut mi_subproc_t,

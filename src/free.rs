@@ -13,20 +13,25 @@ use core::{cmp, ptr};
 use crate::atomic::{mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_memory_order_e};
 use crate::bits::MI_INTPTR_SIZE;
 use crate::internal::{
-    __mi_stat_decrease, _mi_error_message, _mi_memset_aligned, _mi_os_page_size, EAGAIN, EFAULT,
-    MI_DEBUG, MI_ENCODE_FREELIST, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK,
-    MI_TRACK_ENABLED, mi_block_next, mi_block_nextx, mi_block_set_next, mi_is_in_same_page,
-    mi_page_block_size, mi_page_thread_free, mi_page_usable_block_size, mi_ptr_encode_canary,
-    mi_tf_block, mi_tf_create, mi_tf_is_owned, mi_theap_is_initialized,
+    __mi_stat_decrease, _mi_align_down_ptr, _mi_error_message, _mi_memset_aligned,
+    _mi_os_page_size, _mi_page_ptr_unalign, _mi_ptr_page, _mi_safe_ptr_page, EAGAIN, EFAULT,
+    EINVAL, MI_DEBUG, MI_ENCODE_FREELIST, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING,
+    MI_PADDING_CHECK, MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx,
+    mi_block_ptr_is_guarded, mi_block_set_next, mi_is_in_same_page, mi_page_block_size,
+    mi_page_has_interior_pointers, mi_page_start, mi_page_thread_free, mi_page_usable_block_size,
+    mi_page_xthread_id, mi_ptr_encode_canary, mi_tf_block, mi_tf_create, mi_tf_is_owned,
+    mi_theap_is_initialized,
 };
+use crate::options::{mi_option_is_enabled, mi_option_t};
 use crate::page::{
     _mi_bin, _mi_page_retire, _mi_page_unfull, mi_page_is_abandoned, mi_page_is_huge,
 };
-use crate::prim::_mi_theap_default;
+use crate::prim::{_mi_prim_thread_id, _mi_theap_default};
 use crate::track::{mi_track_free_size, mi_track_mem_defined, mi_track_mem_noaccess};
 use crate::types::{
-    MI_DEBUG_FREED, MI_DEBUG_PADDING, MI_MAX_ALIGN_SIZE, mi_block_t, mi_padding_t, mi_page_t,
-    mi_theap_t,
+    MI_DEBUG_FREED, MI_DEBUG_PADDING, MI_MAX_ALIGN_SIZE, MI_PAGE_FLAG_MASK,
+    MI_PAGE_META_ALIGNED_FREE_SMALL, MI_SMALL_PAGE_SIZE, MI_SMALL_SIZE_MAX, mi_block_t,
+    mi_padding_t, mi_page_t, mi_theap_t,
 };
 
 unsafe extern "C" {
@@ -276,4 +281,132 @@ pub unsafe fn mi_free_block_mt(page: *mut mi_page_t, block: *mut mi_block_t, was
         crate::mi_assert_internal!(mi_page_is_abandoned(page));
         mi_free_try_collect_mt(page, block);
     }
+}
+
+pub unsafe fn mi_block_check_unguard(
+    page: *mut mi_page_t,
+    block: *mut mi_block_t,
+    p: *mut c_void,
+) -> bool {
+    if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block, p) {
+        let _ = page;
+        let _ = block;
+        let _ = p;
+        true
+    } else {
+        let _ = page;
+        let _ = block;
+        let _ = p;
+        false
+    }
+}
+
+#[allow(clippy::absurd_extreme_comparisons)]
+pub unsafe fn mi_validate_block_from_ptr(
+    page: *const mi_page_t,
+    p: *mut c_void,
+) -> *mut mi_block_t {
+    crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());
+    if MI_SECURE > 0 {
+        _mi_page_ptr_unalign(page, p)
+    } else {
+        p.cast()
+    }
+}
+
+pub unsafe fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
+    crate::mi_assert_internal!(!p.is_null() && !page.is_null());
+    let block = if mi_page_has_interior_pointers(page) {
+        _mi_page_ptr_unalign(page, p)
+    } else {
+        mi_validate_block_from_ptr(page, p)
+    };
+    let was_guarded = mi_block_check_unguard(page, block, p);
+    mi_free_block_local(page, block, was_guarded, true, true);
+}
+
+pub unsafe fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
+    crate::mi_assert_internal!(!p.is_null() && !page.is_null());
+    let block = if mi_page_has_interior_pointers(page) {
+        _mi_page_ptr_unalign(page, p)
+    } else {
+        mi_validate_block_from_ptr(page, p)
+    };
+    let was_guarded = mi_block_check_unguard(page, block, p);
+    mi_free_block_mt(page, block, was_guarded);
+}
+
+unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page_t {
+    if MI_DEBUG != 0 {
+        if !p.is_null()
+            && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
+            && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
+        {
+            _mi_error_message(
+                EINVAL,
+                c"%s: invalid (unaligned) pointer: %p\n".as_ptr(),
+                msg,
+                p,
+            );
+            return ptr::null_mut();
+        }
+        let page = _mi_safe_ptr_page(p);
+        if !p.is_null() && page.is_null() {
+            _mi_error_message(EINVAL, c"%s: invalid pointer: %p\n".as_ptr(), msg, p);
+        }
+        page
+    } else {
+        _mi_ptr_page(p)
+    }
+}
+
+pub unsafe fn mi_free_ex(p: *mut c_void, usable: *mut usize, page: *mut mi_page_t) {
+    if page.is_null() {
+        return;
+    }
+    crate::mi_assert_internal!(!p.is_null() && !page.is_null());
+    if !usable.is_null() {
+        *usable = mi_page_usable_block_size(page);
+    }
+
+    let xtid = _mi_prim_thread_id() ^ mi_page_xthread_id(page);
+    if xtid == 0 {
+        let block = mi_validate_block_from_ptr(page, p);
+        mi_free_block_local(page, block, false, true, false);
+    } else if xtid <= MI_PAGE_FLAG_MASK {
+        mi_free_generic_local(page, p);
+    } else if (xtid & MI_PAGE_FLAG_MASK) == 0 {
+        let block = mi_validate_block_from_ptr(page, p);
+        mi_free_block_mt(page, block, false);
+    } else {
+        mi_free_generic_mt(page, p);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_free(p: *mut c_void) {
+    let page = mi_validate_ptr_page(p, c"mi_free".as_ptr());
+    mi_free_ex(p, ptr::null_mut(), page);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_ufree(p: *mut c_void, usable: *mut usize) {
+    let page = mi_validate_ptr_page(p, c"mi_ufree".as_ptr());
+    mi_free_ex(p, usable, page);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_free_small(p: *mut c_void) {
+    if MI_PAGE_META_ALIGNED_FREE_SMALL == 0 || MI_GUARDED != 0 {
+        mi_free(p);
+        return;
+    }
+
+    let page = _mi_align_down_ptr(p, MI_SMALL_PAGE_SIZE).cast::<mi_page_t>();
+    crate::mi_assert!(page == mi_validate_ptr_page(p, c"mi_free_small".as_ptr()));
+    crate::mi_assert!(
+        page.cast::<c_void>() == _mi_align_down_ptr(mi_page_start(page).cast(), MI_SMALL_PAGE_SIZE)
+    );
+    crate::mi_assert!((*page).block_size <= MI_SMALL_SIZE_MAX);
+    mi_free_ex(p, ptr::null_mut(), page);
 }

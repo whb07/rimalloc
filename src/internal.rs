@@ -23,13 +23,14 @@ pub use crate::bits::{
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
 pub use crate::page::{
-    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_is_valid,
-    _mi_page_stats_bin, _mi_page_unfull, _mi_theap_page_reclaim, MI_LARGE_MAX_OBJ_SIZE,
-    MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
-    mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full,
-    mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
+    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
+    _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, _mi_theap_page_reclaim,
+    MI_LARGE_MAX_OBJ_SIZE, MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE,
+    MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE, mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge,
+    mi_page_is_in_full, mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
 };
 pub use crate::page_map::{_mi_page_map_unregister, _mi_safe_ptr_page};
+pub use crate::prim::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
 pub use crate::stats::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
     __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
@@ -38,6 +39,7 @@ pub use crate::stats::{
 pub use crate::types::*;
 
 pub const MI_INTERNAL_H: () = ();
+pub const _Atomic: () = ();
 
 pub const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
 pub const MI_SECURE: usize = 0;

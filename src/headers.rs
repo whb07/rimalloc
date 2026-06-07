@@ -295,3 +295,39 @@ macro_rules! operatornew_array_aligned_nothrow {
         $crate::mimalloc::mi_new_aligned_nothrow($n, $al as usize)
     }};
 }
+
+#[allow(non_upper_case_globals)]
+pub const mi_stl_allocator: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_stl_allocator_operator_eq: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_stl_allocator_operator_ne: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const _mi_heap_stl_allocator_common: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_heap_stl_allocator: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_heap_stl_allocator_operator_eq: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_heap_stl_allocator_operator_eq_decl: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_heap_stl_allocator_operator_ne: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_heap_destroy_stl_allocator: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_heap_destroy_stl_allocator_operator_eq: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_heap_destroy_stl_allocator_operator_eq_decl: () = ();
+
+#[allow(non_upper_case_globals)]
+pub const mi_heap_destroy_stl_allocator_operator_ne: () = ();

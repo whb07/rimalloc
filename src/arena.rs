@@ -3,10 +3,10 @@
 use core::ffi::{c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
-use core::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::mi_atomic_load_ptr_acquire;
-use crate::bitmap::{MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT};
+use crate::bitmap::{MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT, mi_bitmap_is_setN};
 use crate::bits::MI_INTPTR_BITS;
 use crate::internal::{
     _mi_align_up, _mi_divide_up, _mi_memid_create, _mi_os_commit, _mi_os_commit_ex, _mi_subproc,
@@ -18,8 +18,8 @@ use crate::options::{mi_option_get_size, mi_option_t};
 use crate::page::{_mi_page_free_collect, MI_SMALL_PAGE_SIZE};
 use crate::prim::_mi_prim_free;
 use crate::types::{
-    mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t, mi_heap_area_t, mi_heap_t,
-    mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t,
+    MI_BIN_COUNT, mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t, mi_heap_area_t,
+    mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_local_t,
 };
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
@@ -83,6 +83,18 @@ pub const MI_WHITE: mi_ansi_color_t = mi_ansi_color_e::MI_WHITE;
 struct MiHeapPrefix {
     subproc: *mut mi_subproc_t,
     heap_seq: usize,
+    next: *mut mi_heap_t,
+    prev: *mut mi_heap_t,
+    theap: mi_thread_local_t,
+    exclusive_arena: *mut mi_arena_t,
+    numa_node: i32,
+    _padding: u32,
+    theaps: *mut mi_theap_t,
+    theaps_lock: crate::atomic::mi_lock_t,
+    abandoned_count: [AtomicUsize; MI_BIN_COUNT],
+    os_abandoned_pages: *mut mi_page_t,
+    os_abandoned_pages_lock: crate::atomic::mi_lock_t,
+    arena_pages: [AtomicPtr<c_void>; MI_MAX_ARENAS],
 }
 
 #[repr(C)]
@@ -122,6 +134,11 @@ struct MiArenaPrefix {
     slices_dirty: *mut crate::bitmap::mi_bitmap_t,
     slices_purge: *mut crate::bitmap::mi_bitmap_t,
     pages_meta: *mut mi_page_t,
+}
+
+#[repr(C)]
+struct MiArenaPagesPrefix {
+    pages: *mut crate::bitmap::mi_bitmap_t,
 }
 
 #[allow(dead_code, non_camel_case_types)]
@@ -377,6 +394,29 @@ pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usiz
 #[allow(dead_code)]
 unsafe fn mi_arena_info_slices(arena: *mut mi_arena_t) -> usize {
     unsafe { (*arena.cast::<MiArenaPrefix>()).info_slices }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_heap_has_page(
+    heap: *mut mi_heap_t,
+    arena: *mut mi_arena_t,
+    page: *mut mi_page_t,
+) -> bool {
+    let arena_idx = unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx };
+    crate::mi_assert!(arena_idx < MI_MAX_ARENAS);
+    let arena_pages =
+        unsafe { (*heap.cast::<MiHeapPrefix>()).arena_pages[arena_idx].load(Ordering::Acquire) }
+            .cast::<MiArenaPagesPrefix>();
+    (unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA })
+        && (unsafe { (*page).memid.mem.arena.arena == arena })
+        && !arena_pages.is_null()
+        && unsafe {
+            mi_bitmap_is_setN(
+                (*arena_pages).pages,
+                (*page).memid.mem.arena.slice_index as usize,
+                1,
+            )
+        }
 }
 
 #[allow(dead_code)]

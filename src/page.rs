@@ -68,6 +68,7 @@ pub const MI_MEDIUM_MAX_OBJ_SIZE: usize = if MI_ENABLE_LARGE_PAGES != 0 {
     MI_MEDIUM_PAGE_SIZE / 8
 };
 pub const MI_LARGE_MAX_OBJ_SIZE: usize = MI_LARGE_MAX_OBJ_WSIZE * size_of::<usize>();
+pub const MI_MAX_RETIRE_SIZE: usize = MI_LARGE_MAX_OBJ_SIZE;
 pub const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 
 const MI_ALIGN4W: bool = cfg!(target_pointer_width = "32");
@@ -248,6 +249,9 @@ pub unsafe fn mi_page_is_valid_init(page: *mut mi_page_t) -> bool {
 #[inline]
 pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
     crate::mi_assert_internal!(mi_page_is_valid_init(page));
+    if MI_SECURE != 0 {
+        crate::mi_assert_internal!((*page).keys[0] != 0);
+    }
     if !mi_page_is_abandoned(page) {
         let pq = mi_page_queue_of(page);
         crate::mi_assert_internal!(mi_page_queue_contains(pq, page));

@@ -18,13 +18,16 @@ use crate::bits::{MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB};
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_decrease, __mi_stat_increase, _mi_align_down_ptr,
     _mi_align_up, _mi_align_up_ptr, _mi_is_power_of_two, _mi_memid_create_os, _mi_memid_none,
-    _mi_memzero_aligned, _mi_subproc, MI_SECURE, mi_commit_fun_t, mi_memid_t,
+    _mi_memzero_aligned, _mi_preloading, _mi_subproc, MI_DEBUG, MI_SECURE, MI_TRACK_ENABLED,
+    mi_commit_fun_t, mi_memid_t,
 };
-use crate::options::{_mi_warning_message, mi_option_get, mi_option_get_size, mi_option_t};
+use crate::options::{
+    _mi_warning_message, mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t,
+};
 use crate::prim::mi_os_mem_config_t;
 use crate::prim::{
     _mi_prim_alloc, _mi_prim_commit, _mi_prim_decommit, _mi_prim_free, _mi_prim_mem_init,
-    _mi_prim_protect,
+    _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
 };
 use crate::stats::mi_stats_t;
 use crate::types::{mi_arena_t, mi_heap_t, mi_page_t, mi_process_info_t, mi_subproc_t};
@@ -440,6 +443,144 @@ pub unsafe extern "C" fn _mi_os_commit(addr: *mut c_void, size: usize, is_zero: 
 }
 
 #[inline]
+unsafe fn mi_os_decommit_ex(
+    addr: *mut c_void,
+    size: usize,
+    needs_recommit: *mut bool,
+    stat_size: usize,
+) -> bool {
+    crate::mi_assert_internal!(!needs_recommit.is_null());
+
+    let mut csize = 0;
+    let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
+    if csize == 0 {
+        return true;
+    }
+
+    *needs_recommit = true;
+    let err = unsafe { _mi_prim_decommit(start, csize, needs_recommit) };
+    if err != 0 {
+        _mi_warning_message(format_args!(
+            "cannot decommit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
+            err, err, start, csize
+        ));
+    } else if *needs_recommit {
+        let subproc = unsafe { _mi_subproc() };
+        if !subproc.is_null() {
+            let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
+            __mi_stat_decrease(&mut stats.committed, stat_size);
+        }
+    }
+    crate::mi_assert_internal!(err == 0);
+    err == 0
+}
+
+/// # Safety
+/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+pub unsafe extern "C" fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool {
+    let mut needs_recommit = false;
+    unsafe { mi_os_decommit_ex(addr, size, &mut needs_recommit, size) }
+}
+
+/// # Safety
+/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
+    let mut csize = 0;
+    let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
+    if csize == 0 {
+        return true;
+    }
+
+    let subproc = unsafe { _mi_subproc() };
+    if !subproc.is_null() {
+        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
+        __mi_stat_counter_increase(&mut stats.reset, csize);
+        __mi_stat_counter_increase(&mut stats.reset_calls, 1);
+    }
+
+    if MI_DEBUG > 1 && MI_SECURE == 0 && MI_TRACK_ENABLED == 0 {
+        unsafe { core::ptr::write_bytes(start, 0, csize) };
+    }
+
+    let err = unsafe { _mi_prim_reset(start, csize) };
+    if err != 0 {
+        _mi_warning_message(format_args!(
+            "cannot reset OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
+            err, err, start, csize
+        ));
+    }
+    err == 0
+}
+
+/// # Safety
+/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+pub unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
+    let mut csize = 0;
+    let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
+    if csize == 0 {
+        return;
+    }
+    let err = unsafe { _mi_prim_reuse(start, csize) };
+    if err != 0 {
+        _mi_warning_message(format_args!(
+            "cannot reuse OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
+            err, err, start, csize
+        ));
+    }
+}
+
+/// # Safety
+/// `p..p+size` must designate a valid virtual memory range for the active OS primitive layer.
+pub unsafe extern "C" fn _mi_os_purge_ex(
+    p: *mut c_void,
+    size: usize,
+    allow_reset: bool,
+    stat_size: usize,
+    commit_fun: *mut mi_commit_fun_t,
+    commit_fun_arg: *mut c_void,
+) -> bool {
+    if mi_option_get(mi_option_t::mi_option_purge_delay) < 0 {
+        return false;
+    }
+    let subproc = unsafe { _mi_subproc() };
+    if !subproc.is_null() {
+        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
+        __mi_stat_counter_increase(&mut stats.purge_calls, 1);
+        __mi_stat_counter_increase(&mut stats.purged, size);
+    }
+
+    if !commit_fun.is_null() {
+        unsafe { (*commit_fun)(false, p, size, core::ptr::null_mut(), commit_fun_arg) }
+    } else if mi_option_is_enabled(mi_option_t::mi_option_purge_decommits)
+        && !unsafe { _mi_preloading() }
+    {
+        let mut needs_recommit = true;
+        unsafe { mi_os_decommit_ex(p, size, &mut needs_recommit, stat_size) };
+        needs_recommit
+    } else {
+        if allow_reset {
+            unsafe { _mi_os_reset(p, size) };
+        }
+        false
+    }
+}
+
+/// # Safety
+/// `p..p+size` must designate a valid virtual memory range for the active OS primitive layer.
+pub unsafe extern "C" fn _mi_os_purge(p: *mut c_void, size: usize) -> bool {
+    unsafe {
+        _mi_os_purge_ex(
+            p,
+            size,
+            true,
+            size,
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+        )
+    }
+}
+
+#[inline]
 unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool {
     let mut csize = 0;
     let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
@@ -464,6 +605,12 @@ unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool 
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
 pub unsafe extern "C" fn _mi_os_protect(addr: *mut c_void, size: usize) -> bool {
     unsafe { mi_os_protectx(addr, size, true) }
+}
+
+/// # Safety
+/// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+pub unsafe extern "C" fn _mi_os_unprotect(addr: *mut c_void, size: usize) -> bool {
+    unsafe { mi_os_protectx(addr, size, false) }
 }
 
 #[inline]

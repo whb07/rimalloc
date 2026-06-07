@@ -17,7 +17,7 @@ pub use crate::options::{
     mi_option_max_segment_reclaim, mi_option_purge_extend_delay, mi_option_reset_decommits,
     mi_option_reset_delay, mi_option_t,
 };
-pub use crate::stats::MI_STAT_VERSION;
+pub use crate::stats::{MI_STAT_VERSION, mi_stats_t};
 pub use crate::types::{
     MI_MALLOC_VERSION, MI_SMALL_SIZE_MAX, MI_SMALL_WSIZE_MAX, mi_arena_id_t, mi_block_visit_fun,
     mi_commit_fun_t, mi_deferred_free_fun, mi_error_fun, mi_heap_area_t, mi_heap_t,
@@ -222,11 +222,16 @@ unsafe extern "C" {
     pub fn mi_heap_destroy(heap: *mut mi_heap_t);
     pub fn mi_heap_set_numa_affinity(heap: *mut mi_heap_t, numa_node: c_int);
     pub fn mi_heap_collect(heap: *mut mi_heap_t, force: bool);
+    pub fn mi_heap_set_default(heap: *mut mi_heap_t) -> *mut mi_heap_t;
+    pub fn mi_heap_get_default() -> *mut mi_heap_t;
+    pub fn mi_heap_get_backing() -> *mut mi_heap_t;
 
     pub fn mi_heap_main() -> *mut mi_heap_t;
     pub fn mi_heap_of(p: *const c_void) -> *mut mi_heap_t;
     pub fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_void) -> bool;
     pub fn mi_any_heap_contains(p: *const c_void) -> bool;
+    pub fn mi_heap_contains_block(heap: *mut mi_heap_t, p: *const c_void) -> bool;
+    pub fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_void) -> bool;
 
     pub fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void;
     pub fn mi_heap_zalloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void;
@@ -372,6 +377,13 @@ unsafe extern "C" {
         visitor: Option<mi_block_visit_fun>,
         arg: *mut c_void,
     ) -> bool;
+    pub fn mi_abandoned_visit_blocks(
+        subproc_id: mi_subproc_id_t,
+        heap_tag: c_int,
+        visit_blocks: bool,
+        visitor: Option<mi_block_visit_fun>,
+        arg: *mut c_void,
+    ) -> bool;
 
     pub fn mi_is_redirected() -> bool;
     pub fn mi_reserve_huge_os_pages_interleave(
@@ -426,6 +438,11 @@ unsafe extern "C" {
         arena_id: *mut mi_arena_id_t,
     ) -> bool;
     pub fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_void) -> bool;
+    pub fn mi_heap_new_ex(
+        heap_tag: c_int,
+        allow_destroy: bool,
+        arena_id: mi_arena_id_t,
+    ) -> *mut mi_heap_t;
     pub fn mi_heap_new_in_arena(arena_id: mi_arena_id_t) -> *mut mi_heap_t;
 
     pub fn mi_subproc_main() -> mi_subproc_id_t;
@@ -501,8 +518,17 @@ unsafe extern "C" {
 
     pub fn mi_stats_reset();
     pub fn mi_stats_merge();
+    pub fn mi_stats_get(stats: *mut mi_stats_t) -> bool;
     pub fn mi_stats_print(out: *mut c_void);
     pub fn mi_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void);
+    pub fn mi_heap_stats_get(heap: *mut mi_heap_t, stats: *mut mi_stats_t) -> bool;
+    pub fn mi_heap_stats_print_out(
+        heap: *mut mi_heap_t,
+        out: Option<mi_output_fun>,
+        arg: *mut c_void,
+    );
+    pub fn mi_heap_stats_merge_to_subproc(heap: *mut mi_heap_t);
+    pub fn mi_subproc_stats_get(subproc_id: mi_subproc_id_t, stats: *mut mi_stats_t) -> bool;
     pub fn mi_subproc_stats_print_out(
         subproc_id: mi_subproc_id_t,
         out: Option<mi_output_fun>,
@@ -514,6 +540,16 @@ unsafe extern "C" {
         arg: *mut c_void,
     );
     pub fn mi_stats_get_json(buf_size: usize, buf: *mut c_char) -> *mut c_char;
+    pub fn mi_heap_stats_get_json(
+        heap: *mut mi_heap_t,
+        buf_size: usize,
+        buf: *mut c_char,
+    ) -> *mut c_char;
+    pub fn mi_stats_as_json(
+        stats: *mut mi_stats_t,
+        buf_size: usize,
+        buf: *mut c_char,
+    ) -> *mut c_char;
 
     pub fn mi_option_is_enabled(option: mi_option_t) -> bool;
     pub fn mi_option_enable(option: mi_option_t);

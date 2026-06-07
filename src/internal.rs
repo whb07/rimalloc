@@ -357,6 +357,26 @@ pub struct mi_memid_t {
     pub initially_zero: bool,
 }
 
+#[inline]
+pub const fn mi_memid_is_os(memid: mi_memid_t) -> bool {
+    crate::types::mi_memkind_is_os(memid.memkind)
+}
+
+#[inline]
+pub const fn mi_memid_needs_no_free(memid: mi_memid_t) -> bool {
+    crate::types::mi_memkind_needs_no_free(memid.memkind)
+}
+
+#[inline]
+pub fn mi_memid_arena(memid: mi_memid_t) -> *mut mi_arena_t {
+    if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
+        // SAFETY: reading the active union field is valid when `memkind` indicates arena storage.
+        unsafe { memid.mem.arena.arena }
+    } else {
+        ptr::null_mut()
+    }
+}
+
 pub const MI_ARENA_SLICE_SHIFT: usize = 13 + MI_SIZE_SHIFT;
 pub const MI_BCHUNK_BITS_SHIFT: usize = 6 + MI_SIZE_SHIFT;
 

@@ -8,6 +8,7 @@
 )]
 
 use core::ffi::{c_char, c_void};
+use core::ptr;
 use std::ffi::CStr;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
@@ -27,10 +28,11 @@ use crate::options::{
 };
 use crate::prim::mi_os_mem_config_t;
 use crate::prim::{
-    _mi_prim_alloc, _mi_prim_commit, _mi_prim_decommit, _mi_prim_free, _mi_prim_mem_init,
-    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse, _mi_theap_default,
+    _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
+    _mi_prim_free, _mi_prim_mem_init, _mi_prim_numa_node, _mi_prim_numa_node_count,
+    _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse, _mi_theap_default,
 };
-use crate::stats::mi_stats_t;
+use crate::stats::{_mi_clock_end, _mi_clock_start, mi_stats_t};
 use crate::types::{mi_arena_t, mi_heap_t, mi_page_t, mi_process_info_t, mi_subproc_t};
 
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_4_GIB: usize = 4 * MI_MiB;
@@ -1132,6 +1134,147 @@ pub unsafe extern "C" fn _mi_os_numa_node_count() -> i32 {
     }
     crate::mi_assert_internal!(count > 0 && count <= i32::MAX as usize);
     count as i32
+}
+
+#[inline]
+unsafe fn mi_os_numa_node_get() -> i32 {
+    let numa_count = unsafe { _mi_os_numa_node_count() };
+    if numa_count <= 1 {
+        return 0;
+    }
+    let n = unsafe { _mi_prim_numa_node() };
+    let mut numa_node = if n < i32::MAX as usize { n as i32 } else { 0 };
+    if numa_node >= numa_count {
+        numa_node %= numa_count;
+    }
+    numa_node
+}
+
+pub unsafe extern "C" fn _mi_os_numa_node() -> i32 {
+    if MI_NUMA_NODE_COUNT.load(Ordering::Relaxed) == 1 {
+        0
+    } else {
+        unsafe { mi_os_numa_node_get() }
+    }
+}
+
+pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
+    pages: usize,
+    numa_node: i32,
+    max_msecs: i64,
+    pages_reserved: *mut usize,
+    psize: *mut usize,
+    memid: *mut mi_memid_t,
+) -> *mut c_void {
+    if !memid.is_null() {
+        unsafe { *memid = _mi_memid_none() };
+    }
+    if !psize.is_null() {
+        unsafe { *psize = 0 };
+    }
+    if !pages_reserved.is_null() {
+        unsafe { *pages_reserved = 0 };
+    }
+    let mut size = 0usize;
+    let start = unsafe { mi_os_claim_huge_pages(pages, &mut size) };
+    if start.is_null() {
+        return ptr::null_mut();
+    }
+
+    let start_t = _mi_clock_start();
+    let mut page = 0usize;
+    let mut all_zero = true;
+    while page < pages {
+        let addr = unsafe { start.add(page * MI_HUGE_OS_PAGE_SIZE) }.cast::<c_void>();
+        let mut is_zero = false;
+        let mut p: *mut c_void = ptr::null_mut();
+        let err = unsafe {
+            _mi_prim_alloc_huge_os_pages(
+                addr,
+                MI_HUGE_OS_PAGE_SIZE,
+                numa_node,
+                &mut is_zero,
+                &mut p,
+            )
+        };
+        if !is_zero {
+            all_zero = false;
+        }
+        if err != 0 {
+            _mi_warning_message(format_args!(
+                "unable to allocate huge OS page (error: {} (0x{:x}), address: {:p}, size: {:x} bytes)\n",
+                err, err, addr, MI_HUGE_OS_PAGE_SIZE
+            ));
+            break;
+        }
+        if p != addr {
+            if !p.is_null() {
+                _mi_warning_message(format_args!(
+                    "could not allocate contiguous huge OS page {} at {:p}\n",
+                    page, addr
+                ));
+                unsafe {
+                    mi_os_prim_free(
+                        p,
+                        MI_HUGE_OS_PAGE_SIZE,
+                        MI_HUGE_OS_PAGE_SIZE,
+                        ptr::null_mut(),
+                    )
+                };
+            }
+            break;
+        }
+
+        page += 1;
+        let subproc = unsafe { _mi_subproc() };
+        if !subproc.is_null() {
+            let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
+            __mi_stat_increase(&mut stats.committed, MI_HUGE_OS_PAGE_SIZE);
+            __mi_stat_increase(&mut stats.reserved, MI_HUGE_OS_PAGE_SIZE);
+        }
+
+        if max_msecs > 0 {
+            let mut elapsed = _mi_clock_end(start_t);
+            if page >= 1 {
+                let estimate = (elapsed / (page as i64 + 1)) * pages as i64;
+                if estimate > 2 * max_msecs {
+                    elapsed = max_msecs + 1;
+                }
+            }
+            if elapsed > max_msecs {
+                _mi_warning_message(format_args!(
+                    "huge OS page allocation timed out (after allocating {} page(s))\n",
+                    page
+                ));
+                break;
+            }
+        }
+    }
+
+    let allocated = page * MI_HUGE_OS_PAGE_SIZE;
+    crate::mi_assert_internal!(allocated <= size);
+    if !pages_reserved.is_null() {
+        unsafe { *pages_reserved = page };
+    }
+    if !psize.is_null() {
+        unsafe { *psize = allocated };
+    }
+    if page != 0 {
+        crate::mi_assert_internal!(!start.is_null());
+        if !memid.is_null() {
+            unsafe {
+                *memid =
+                    _mi_memid_create_os(start.cast::<c_void>(), allocated, true, all_zero, true);
+                (*memid).memkind = crate::internal::mi_memkind_t::MI_MEM_OS_HUGE;
+            }
+            crate::mi_assert!((unsafe { (*memid).is_pinned }));
+        }
+    }
+    if page == 0 {
+        ptr::null_mut()
+    } else {
+        start.cast::<c_void>()
+    }
 }
 
 /// # Safety

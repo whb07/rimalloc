@@ -13,10 +13,14 @@
 
 use core::{
     ffi::{CStr, c_char, c_void},
+    mem::zeroed,
     ptr::{copy_nonoverlapping, null, null_mut, write_bytes},
-    sync::atomic::{AtomicI64, Ordering},
+    sync::atomic::{AtomicI64, AtomicUsize, Ordering},
 };
+use std::sync::Once;
 
+use crate::bits::{MI_MiB, MI_SIZE_BITS};
+use crate::options::_mi_warning_message;
 use crate::types::{mi_msecs_t, mi_theap_t};
 
 pub const ETW_INLINE: () = ();
@@ -46,6 +50,8 @@ pub type BOOLEAN = u8;
 pub type BOOL = i32;
 pub type DWORD64 = u64;
 pub type HINSTANCE = *mut c_void;
+pub type HMODULE = *mut c_void;
+pub type LPCSTR = *const c_char;
 pub type LONG = i32;
 pub type UCHAR = u8;
 pub type ULONG = u32;
@@ -56,6 +62,7 @@ pub type UINT_PTR = usize;
 pub type WORD = u16;
 pub type VOID = c_void;
 pub type PVOID = *mut c_void;
+pub type LPVOID = PVOID;
 pub type SIZE_T = usize;
 pub type HANDLE = *mut c_void;
 pub type DWORD = u32;
@@ -63,13 +70,89 @@ pub type PUCHAR = *mut UCHAR;
 pub type PULONG = *mut ULONG;
 pub type PULONGLONG = *mut u64;
 pub type PUSHORT = *mut USHORT;
-pub type PGROUP_AFFINITY = *mut c_void;
+pub type PGROUP_AFFINITY = *mut GROUP_AFFINITY;
 pub type PROCESS_MEMORY_COUNTERS = c_void;
 pub type PPROCESS_MEMORY_COUNTERS = *mut PROCESS_MEMORY_COUNTERS;
 pub type REGHANDLE = TRACEHANDLE;
 pub type PREGHANDLE = *mut REGHANDLE;
 pub type LPCGUID = *const GUID;
 pub type PEVENT_FILTER_DESCRIPTOR = *const EVENT_FILTER_DESCRIPTOR;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GROUP_AFFINITY {
+    pub Mask: ULONG_PTR,
+    pub Group: WORD,
+    pub Reserved: [WORD; 3],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LUID {
+    pub LowPart: DWORD,
+    pub HighPart: LONG,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LUID_AND_ATTRIBUTES {
+    pub Luid: LUID,
+    pub Attributes: DWORD,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TOKEN_PRIVILEGES {
+    pub PrivilegeCount: DWORD,
+    pub Privileges: [LUID_AND_ATTRIBUTES; 1],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MEMORY_BASIC_INFORMATION {
+    pub BaseAddress: PVOID,
+    pub AllocationBase: PVOID,
+    pub AllocationProtect: DWORD,
+    pub RegionSize: SIZE_T,
+    pub State: DWORD,
+    pub Protect: DWORD,
+    pub Type: DWORD,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IMAGE_DOS_HEADER {
+    pub _padding: [u8; 60],
+    pub e_lfanew: i32,
+}
+
+impl Default for IMAGE_DOS_HEADER {
+    fn default() -> Self {
+        Self {
+            _padding: [0; 60],
+            e_lfanew: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct IMAGE_FILE_HEADER {
+    pub Machine: WORD,
+    pub NumberOfSections: WORD,
+    pub TimeDateStamp: DWORD,
+    pub PointerToSymbolTable: DWORD,
+    pub NumberOfSymbols: DWORD,
+    pub SizeOfOptionalHeader: WORD,
+    pub Characteristics: WORD,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct IMAGE_NT_HEADERS {
+    pub Signature: DWORD,
+    pub FileHeader: IMAGE_FILE_HEADER,
+}
 
 pub const TRUE: BOOLEAN = 1;
 pub const FALSE: BOOLEAN = 0;
@@ -81,14 +164,25 @@ pub const ERROR_COMMITMENT_MINIMUM: DWORD = 635;
 pub const ERROR_COMMITMENT_LIMIT: DWORD = 1455;
 pub const ERROR_PAGEFILE_QUOTA: DWORD = 1454;
 pub const ERROR_NOT_ENOUGH_MEMORY: DWORD = 8;
+pub const ERROR_INVALID_ADDRESS: DWORD = 487;
+pub const ERROR_SUCCESS: DWORD = 0;
 pub const MEM_COMMIT: DWORD = 0x0000_1000;
 pub const MEM_DECOMMIT: DWORD = 0x0000_4000;
+pub const MEM_RELEASE: DWORD = 0x0000_8000;
+pub const MEM_RESERVE: DWORD = 0x0000_2000;
 pub const MEM_RESET: DWORD = 0x0008_0000;
+pub const MEM_LARGE_PAGES: DWORD = 0x2000_0000;
 pub const PAGE_NOACCESS: DWORD = 0x0000_0001;
 pub const PAGE_READWRITE: DWORD = 0x0000_0004;
 pub const EVENT_CONTROL_CODE_DISABLE_PROVIDER: ULONG = 0;
 pub const EVENT_CONTROL_CODE_ENABLE_PROVIDER: ULONG = 1;
 pub const FLS_OUT_OF_INDEXES: DWORD = u32::MAX;
+pub const TOKEN_ADJUST_PRIVILEGES: DWORD = 0x0020;
+pub const TOKEN_QUERY: DWORD = 0x0008;
+pub const SE_PRIVILEGE_ENABLED: DWORD = 0x0000_0002;
+pub const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS: DWORD = 0x0000_0004;
+pub const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT: DWORD = 0x0000_0002;
+pub const IMAGE_FILE_DLL: WORD = 0x2000;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -243,6 +337,35 @@ unsafe extern "system" {
         flNewProtect: DWORD,
         lpflOldProtect: *mut DWORD,
     ) -> BOOL;
+    pub fn VirtualQuery(
+        lpAddress: *const c_void,
+        lpBuffer: *mut MEMORY_BASIC_INFORMATION,
+        dwLength: SIZE_T,
+    ) -> SIZE_T;
+    pub fn GetCurrentProcess() -> HANDLE;
+    pub fn OpenProcessToken(
+        ProcessHandle: HANDLE,
+        DesiredAccess: DWORD,
+        TokenHandle: *mut HANDLE,
+    ) -> BOOL;
+    pub fn LookupPrivilegeValueA(lpSystemName: LPCSTR, lpName: LPCSTR, lpLuid: *mut LUID) -> BOOL;
+    pub fn AdjustTokenPrivileges(
+        TokenHandle: HANDLE,
+        DisableAllPrivileges: BOOL,
+        NewState: *const TOKEN_PRIVILEGES,
+        BufferLength: DWORD,
+        PreviousState: *mut TOKEN_PRIVILEGES,
+        ReturnLength: *mut DWORD,
+    ) -> BOOL;
+    pub fn CloseHandle(hObject: HANDLE) -> BOOL;
+    pub fn GetModuleHandleExA(dwFlags: DWORD, lpModuleName: LPCSTR, phModule: *mut HMODULE)
+    -> BOOL;
+    pub fn GetCurrentProcessorNumber() -> DWORD;
+    pub fn SwitchToThread() -> BOOL;
+}
+
+unsafe extern "system" {
+    fn NtCurrentTeb() -> *mut c_void;
 }
 
 #[repr(C)]
@@ -259,7 +382,11 @@ pub struct FILETIME {
 }
 
 static MI_MSECS_FREQ: AtomicI64 = AtomicI64::new(0);
+static MI_HUGE_PAGES_AVAILABLE: AtomicUsize = AtomicUsize::new(1);
+static WIN_LARGE_OS_PAGES_INIT: Once = Once::new();
 static mut mi_fls_key: DWORD = FLS_OUT_OF_INDEXES;
+static mut win_large_os_pages_enabled: bool = false;
+static mut win_large_os_page_size: usize = 0;
 
 #[inline]
 fn mi_getenv_value(name: &str) -> Option<String> {
@@ -326,6 +453,26 @@ unsafe fn mi_win_main(module: PVOID, reason: DWORD, reserved: PVOID) {
 }
 
 #[inline]
+unsafe fn win_enable_large_os_pages(large_page_size: *mut usize) -> bool {
+    WIN_LARGE_OS_PAGES_INIT.call_once(|| {
+        let mut size = 0usize;
+        let ok = unsafe { win_enable_large_os_pages_once(&mut size) };
+        unsafe {
+            win_large_os_pages_enabled = ok;
+            if ok {
+                win_large_os_page_size = size;
+            }
+        }
+    });
+    if !large_page_size.is_null() {
+        unsafe {
+            *large_page_size = win_large_os_page_size;
+        }
+    }
+    unsafe { win_large_os_pages_enabled }
+}
+
+#[inline]
 pub unsafe extern "C" fn _mi_prim_getenv(
     name: *const c_char,
     result: *mut c_char,
@@ -354,6 +501,33 @@ pub unsafe extern "C" fn _mi_prim_getenv(
 }
 
 #[inline]
+unsafe fn mi_module_is_dll(mod_: PVOID) -> bool {
+    if mod_.is_null() {
+        return false;
+    }
+    let image_dos_header = mod_.cast::<IMAGE_DOS_HEADER>();
+    let image_nt_headers =
+        mod_.cast::<u8>().add((*image_dos_header).e_lfanew as usize) as *const IMAGE_NT_HEADERS;
+    ((*image_nt_headers).FileHeader.Characteristics & IMAGE_FILE_DLL) == IMAGE_FILE_DLL
+}
+
+#[inline]
+pub unsafe extern "system" fn mi_win_main_detach(module: PVOID, reason: DWORD, reserved: LPVOID) {
+    if reason == DLL_PROCESS_DETACH || reason == DLL_THREAD_DETACH {
+        unsafe { mi_win_main(module, reason, reserved) };
+    }
+}
+
+#[inline]
+pub unsafe extern "system" fn mi_tls_detach(module: PVOID, reason: DWORD, reserved: LPVOID) {
+    if (reason == DLL_THREAD_DETACH || reason == DLL_PROCESS_DETACH)
+        && !unsafe { mi_module_is_dll(module) }
+    {
+        unsafe { mi_win_main(module, reason, reserved) };
+    }
+}
+
+#[inline]
 pub unsafe extern "system" fn mi_fls_done(value: PVOID) {
     let theap = value.cast::<mi_theap_t>();
     if !theap.is_null() {
@@ -371,6 +545,15 @@ pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {}
 
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
+    if unsafe { mi_fls_key } != FLS_OUT_OF_INDEXES {
+        unsafe {
+            FlsSetValue(mi_fls_key, theap.cast::<c_void>());
+        }
+    }
+}
 
 #[inline]
 pub unsafe extern "system" fn mi_dll_main_raw(
@@ -420,6 +603,35 @@ pub unsafe extern "C" fn _mi_prim_decommit(
 }
 
 #[inline]
+pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, _size: usize) -> i32 {
+    let mut errcode: DWORD = 0;
+    let mut err = unsafe { VirtualFree(addr, 0, MEM_RELEASE) == FALSE as BOOL };
+    if err {
+        errcode = unsafe { GetLastError() };
+    }
+    if errcode == ERROR_INVALID_ADDRESS {
+        let mut info: MEMORY_BASIC_INFORMATION = unsafe { zeroed() };
+        unsafe {
+            VirtualQuery(
+                addr.cast::<c_void>(),
+                &mut info,
+                core::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
+            );
+        }
+        if info.AllocationBase < addr
+            && (addr as usize).saturating_sub(info.AllocationBase as usize) < 4 * MI_MiB
+        {
+            errcode = 0;
+            err = unsafe { VirtualFree(info.AllocationBase, 0, MEM_RELEASE) == FALSE as BOOL };
+            if err {
+                errcode = unsafe { GetLastError() };
+            }
+        }
+    }
+    errcode as i32
+}
+
+#[inline]
 pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> i32 {
     let p = unsafe { VirtualAlloc(addr, size, MEM_RESET, PAGE_READWRITE) };
     crate::mi_assert_internal!(p == addr);
@@ -457,6 +669,209 @@ pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protec
     } else {
         unsafe { GetLastError() as i32 }
     }
+}
+
+#[inline]
+unsafe fn win_enable_large_os_pages_once(large_page_size: *mut usize) -> bool {
+    if unsafe { pGetLargePageMinimum }.is_none() {
+        return false;
+    }
+    let mut err: DWORD = 0;
+    let mut token: HANDLE = null_mut();
+    let ok = unsafe {
+        OpenProcessToken(
+            GetCurrentProcess(),
+            TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
+            &mut token,
+        )
+    } != FALSE as BOOL;
+    if ok {
+        let mut tp = TOKEN_PRIVILEGES::default();
+        let looked_up = unsafe {
+            LookupPrivilegeValueA(
+                null(),
+                c"SeLockMemoryPrivilege".as_ptr(),
+                &mut tp.Privileges[0].Luid,
+            )
+        } != FALSE as BOOL;
+        if looked_up {
+            tp.PrivilegeCount = 1;
+            tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+            let adjusted = unsafe {
+                AdjustTokenPrivileges(token, FALSE as BOOL, &tp, 0, null_mut(), null_mut())
+            } != FALSE as BOOL;
+            if adjusted {
+                err = unsafe { GetLastError() };
+                if err == ERROR_SUCCESS {
+                    if !large_page_size.is_null()
+                        && let Some(get_large_page_minimum) = unsafe { pGetLargePageMinimum }
+                    {
+                        unsafe {
+                            *large_page_size = get_large_page_minimum();
+                        }
+                    }
+                    unsafe {
+                        CloseHandle(token);
+                    }
+                    return true;
+                }
+            }
+        }
+        unsafe {
+            CloseHandle(token);
+        }
+    }
+    if err == 0 {
+        err = unsafe { GetLastError() };
+    }
+    _mi_warning_message(format_args!(
+        "cannot enable large OS page support, error {}\n",
+        err
+    ));
+    false
+}
+
+#[inline]
+unsafe fn _mi_prim_alloc_huge_os_pagesx(
+    hint_addr: *mut c_void,
+    size: usize,
+    numa_node: i32,
+) -> *mut c_void {
+    let flags = MEM_LARGE_PAGES | MEM_COMMIT | MEM_RESERVE;
+    unsafe {
+        win_enable_large_os_pages(null_mut());
+    }
+
+    let mut params = [MI_MEM_EXTENDED_PARAMETER::default(); 3];
+    if unsafe { pNtAllocateVirtualMemoryEx }.is_some()
+        && MI_HUGE_PAGES_AVAILABLE.load(Ordering::Acquire) != 0
+    {
+        params[0].Type.bits =
+            MI_MEM_EXTENDED_PARAMETER_TYPE_E::MiMemExtendedParameterAttributeFlags as DWORD64;
+        params[0].Arg.ULong64 = MI_MEM_EXTENDED_PARAMETER_NONPAGED_HUGE as u64;
+        let mut param_count: ULONG = 1;
+        if numa_node >= 0 {
+            param_count += 1;
+            params[1].Type.bits =
+                MI_MEM_EXTENDED_PARAMETER_TYPE_E::MiMemExtendedParameterNumaNode as DWORD64;
+            params[1].Arg.ULong = numa_node as DWORD;
+        }
+        let mut psize = size;
+        let mut base = hint_addr;
+        let err = unsafe {
+            pNtAllocateVirtualMemoryEx.unwrap()(
+                GetCurrentProcess(),
+                &mut base,
+                &mut psize,
+                flags,
+                PAGE_READWRITE,
+                params.as_mut_ptr(),
+                param_count,
+            )
+        };
+        if err == 0 && !base.is_null() {
+            return base;
+        }
+        MI_HUGE_PAGES_AVAILABLE.store(0, Ordering::Release);
+        _mi_warning_message(format_args!(
+            "unable to allocate using huge (1GiB) pages, trying large (2MiB) pages instead (status 0x{:x})\n",
+            err
+        ));
+    }
+    if numa_node >= 0
+        && let Some(virtual_alloc2) = unsafe { pVirtualAlloc2 }
+    {
+        params[0].Type.bits =
+            MI_MEM_EXTENDED_PARAMETER_TYPE_E::MiMemExtendedParameterNumaNode as DWORD64;
+        params[0].Arg.ULong = numa_node as DWORD;
+        return unsafe {
+            virtual_alloc2(
+                GetCurrentProcess(),
+                hint_addr,
+                size,
+                flags,
+                PAGE_READWRITE,
+                params.as_mut_ptr(),
+                1,
+            )
+        };
+    }
+    unsafe { VirtualAlloc(hint_addr, size, flags, PAGE_READWRITE) }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
+    hint_addr: *mut c_void,
+    size: usize,
+    numa_node: i32,
+    is_zero: *mut bool,
+    addr: *mut *mut c_void,
+) -> i32 {
+    if !is_zero.is_null() {
+        unsafe {
+            *is_zero = true;
+        }
+    }
+    if addr.is_null() {
+        return unsafe { GetLastError() as i32 };
+    }
+    unsafe {
+        *addr = _mi_prim_alloc_huge_os_pagesx(hint_addr, size, numa_node);
+        if !(*addr).is_null() {
+            0
+        } else {
+            GetLastError() as i32
+        }
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
+    let mut numa_max: ULONG = 0;
+    if let Some(get_numa_highest_node_number) = unsafe { pGetNumaHighestNodeNumber } {
+        unsafe {
+            get_numa_highest_node_number(&mut numa_max);
+        }
+    }
+    while numa_max > 0 {
+        if let Some(get_numa_node_processor_mask_ex) = unsafe { pGetNumaNodeProcessorMaskEx } {
+            let mut affinity = GROUP_AFFINITY::default();
+            if unsafe { get_numa_node_processor_mask_ex(numa_max as USHORT, &mut affinity) }
+                != FALSE as BOOL
+                && affinity.Mask != 0
+            {
+                break;
+            }
+        } else if let Some(get_numa_node_processor_mask) = unsafe { pGetNumaNodeProcessorMask } {
+            let mut mask: ULONGLONG = 0;
+            if unsafe { get_numa_node_processor_mask(numa_max as UCHAR, &mut mask) }
+                != FALSE as BOOL
+                && mask != 0
+            {
+                break;
+            }
+        }
+        numa_max -= 1;
+    }
+    (numa_max as usize) + 1
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
+    #[cfg(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64"))]
+    {
+        if unsafe { win_major_version } >= 6 {
+            let teb = unsafe { NtCurrentTeb() } as *mut u8;
+            if !teb.is_null() {
+                let pool_data = unsafe {
+                    *(teb.add(if MI_SIZE_BITS == 32 { 0x0F90 } else { 0x1778 })
+                        as *const *mut c_void)
+                };
+                return !pool_data.is_null();
+            }
+        }
+    }
+    false
 }
 
 #[repr(C)]

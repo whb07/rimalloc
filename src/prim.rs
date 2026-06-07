@@ -106,6 +106,8 @@ pub static mi_init_done: mi_init_done_t = mi_init_done_t;
 thread_local! {
     static TLS_SLOT_DEFAULT: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
     static TLS_SLOT_CACHED: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
+    static TLS_THEAP_DEFAULT: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
+    static TLS_THEAP_CACHED: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
 unsafe extern "C" {
@@ -150,8 +152,6 @@ unsafe extern "C" {
 
     pub static mut __mi_theap_main: *mut mi_theap_t;
     pub static mut _mi_process_is_initialized: bool;
-    pub static mut __mi_theap_default: *mut mi_theap_t;
-    pub static mut __mi_theap_cached: *mut mi_theap_t;
     pub static mut _mi_theap_default_slot: usize;
     pub static mut _mi_theap_cached_slot: usize;
     pub static mut _mi_theap_default_expansion_slot: usize;
@@ -164,6 +164,12 @@ unsafe extern "C" {
     pub fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t;
     pub fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut c_void;
 }
+
+#[unsafe(no_mangle)]
+pub static mut __mi_theap_default: *mut mi_theap_t = ptr::null_mut();
+
+#[unsafe(no_mangle)]
+pub static mut __mi_theap_cached: *mut mi_theap_t = ptr::null_mut();
 
 #[inline]
 pub fn mi_prim_tls_slot(slot: usize) -> *mut c_void {
@@ -220,7 +226,14 @@ unsafe fn mi_prim_tls_slot_theap(slot: usize, expansion_slot: usize) -> *mut mi_
 #[inline]
 pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
     if MI_TLS_MODEL_THREAD_LOCAL {
-        __mi_theap_default
+        TLS_THEAP_DEFAULT.with(|cell| {
+            let theap = cell.get();
+            if theap.is_null() {
+                __mi_theap_empty()
+            } else {
+                theap
+            }
+        })
     } else if MI_TLS_MODEL_FIXED_SLOT {
         mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_DEFAULT) as *mut mi_theap_t
     } else if MI_TLS_MODEL_DYNAMIC_WIN32 {
@@ -239,7 +252,14 @@ pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
 #[inline]
 pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
     if MI_TLS_MODEL_THREAD_LOCAL {
-        __mi_theap_cached
+        TLS_THEAP_CACHED.with(|cell| {
+            let theap = cell.get();
+            if theap.is_null() {
+                __mi_theap_empty()
+            } else {
+                theap
+            }
+        })
     } else if MI_TLS_MODEL_FIXED_SLOT {
         mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_CACHED) as *mut mi_theap_t
     } else if MI_TLS_MODEL_DYNAMIC_WIN32 {
@@ -252,6 +272,20 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         }
     } else {
         ptr::null_mut()
+    }
+}
+
+#[inline]
+pub fn mi_prim_thread_local_default_set(theap: *mut mi_theap_t) {
+    if MI_TLS_MODEL_THREAD_LOCAL {
+        TLS_THEAP_DEFAULT.with(|cell| cell.set(theap));
+    }
+}
+
+#[inline]
+pub fn mi_prim_thread_local_cached_set(theap: *mut mi_theap_t) {
+    if MI_TLS_MODEL_THREAD_LOCAL {
+        TLS_THEAP_CACHED.with(|cell| cell.set(theap));
     }
 }
 

@@ -680,6 +680,7 @@ pub(crate) fn mi_mark_main_thread() {
     let _ = MAIN_THREAD_ID.compare_exchange(0, tid, Ordering::AcqRel, Ordering::Acquire);
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn _mi_thread_id() -> mi_threadid_t {
     current_thread_id()
 }
@@ -696,6 +697,7 @@ pub unsafe extern "C" fn mi_thread_done() {
     unsafe { crate::internal::_mi_thread_done(ptr::null_mut()) };
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn _mi_preloading() -> bool {
     false
 }
@@ -858,7 +860,6 @@ fn mi_tld_free(tld: *mut mi_tld_t) {
 }
 
 unsafe extern "C" {
-    fn _mi_theap_cached_set(theap: *mut mi_theap_t);
     fn _mi_theap_collect_abandon(theap: *mut mi_theap_t);
     fn _mi_theap_create(heap: *mut mi_heap_t, tld: *mut mi_tld_t) -> *mut mi_theap_t;
     fn _mi_theap_free(
@@ -1141,9 +1142,7 @@ pub unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
 
     mi_tls_slots_init();
     if crate::prim::MI_TLS_MODEL_THREAD_LOCAL {
-        unsafe {
-            crate::prim::__mi_theap_default = theap;
-        }
+        crate::prim::mi_prim_thread_local_default_set(theap);
     } else if crate::prim::MI_TLS_MODEL_FIXED_SLOT {
         crate::prim::mi_prim_tls_slot_set(
             crate::prim::MI_TLS_MODEL_FIXED_SLOT_DEFAULT,
@@ -1179,6 +1178,42 @@ pub unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
         unsafe {
             __mi_theap_main = theap_old;
         }
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// `theap` must be valid for the current thread or the empty sentinel.
+pub unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
+    let prev = unsafe { crate::prim::_mi_theap_cached() };
+    if ptr::eq(prev, theap) {
+        return;
+    }
+
+    mi_tls_slots_init();
+    if crate::prim::MI_TLS_MODEL_THREAD_LOCAL {
+        crate::prim::mi_prim_thread_local_cached_set(theap);
+    } else if crate::prim::MI_TLS_MODEL_FIXED_SLOT {
+        crate::prim::mi_prim_tls_slot_set(
+            crate::prim::MI_TLS_MODEL_FIXED_SLOT_CACHED,
+            theap.cast(),
+        );
+    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
+        unsafe {
+            mi_win_tls_slot_set(
+                _mi_theap_cached_slot,
+                _mi_theap_cached_expansion_slot,
+                theap.cast(),
+            );
+        }
+    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_cached_key } != 0 {
+        let _ =
+            crate::threadlocal::_mi_thread_local_set(unsafe { _mi_theap_cached_key }, theap.cast());
+    }
+
+    unsafe {
+        crate::internal::_mi_theap_incref(theap);
+        crate::internal::_mi_theap_decref(prev);
     }
 }
 

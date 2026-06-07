@@ -6,31 +6,43 @@ use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{
-    mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_atomic_load_ptr_acquire,
+    EFAULT, mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_atomic_load_ptr_acquire,
     mi_lock_acquire, mi_lock_release, mi_memory_order_e,
 };
 use crate::bitmap::{
-    MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT, mi_bitmap_init, mi_bitmap_is_setN, mi_bitmap_size,
-    mi_bitmap_t,
+    MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT, mi_bbitmap_is_clearN, mi_bitmap_clear, mi_bitmap_init,
+    mi_bitmap_is_setN, mi_bitmap_set, mi_bitmap_setN, mi_bitmap_size, mi_bitmap_t,
+    mi_bitmap_try_find_and_claim,
 };
 use crate::bits::MI_INTPTR_BITS;
 use crate::internal::{
-    _mi_align_up, _mi_divide_up, _mi_is_heap_main, _mi_memid_create, _mi_os_commit,
-    _mi_os_commit_ex, _mi_preloading, _mi_subproc, _mi_thread_id, mi_block_next, mi_memid_t,
-    mi_memkind_t, mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_claim_ownership,
-    mi_page_heap, mi_page_is_abandoned, mi_page_is_owned, mi_page_start, mi_page_usable_block_size,
+    __mi_stat_increase, _mi_align_up, _mi_arenas_free, _mi_divide_up, _mi_is_heap_main,
+    _mi_memid_create, _mi_memid_none, _mi_os_commit, _mi_os_commit_ex, _mi_os_has_overcommit,
+    _mi_preloading, _mi_subproc, _mi_theap_heap, _mi_theap_random_next, _mi_thread_id, MI_DEBUG,
+    mi_block_next, mi_block_set_next, mi_mem_is_zero, mi_memid_t, mi_memkind_t, mi_page_all_free,
+    mi_page_area, mi_page_block_size, mi_page_claim_ownership, mi_page_heap,
+    mi_page_immediate_available, mi_page_is_abandoned, mi_page_is_owned, mi_page_is_singleton,
+    mi_page_meta_is_separated, mi_page_slice_start, mi_page_start, mi_page_usable_block_size,
     mi_size_of_slices, mi_slice_count_of_size, mi_tf_block, mi_tf_create, mi_tf_is_owned,
 };
 use crate::mimalloc::mi_manage_os_memory_ex;
 use crate::mimalloc::{mi_heap_main, mi_heap_zalloc_aligned};
 use crate::options::{mi_option_get_size, mi_option_is_enabled, mi_option_t};
 use crate::os::{_mi_os_alloc_aligned, _mi_os_alloc_aligned_at_offset};
-use crate::page::{_mi_page_free_collect, MI_SMALL_PAGE_SIZE};
+use crate::page::{
+    _mi_bin, _mi_page_free_collect, _mi_page_stats_bin, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE,
+    MI_MEDIUM_MAX_OBJ_SIZE, MI_MEDIUM_PAGE_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2,
+    MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE, mi_page_set_theap,
+};
+use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister};
 use crate::prim::_mi_prim_free;
+use crate::track::{mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined};
 use crate::types::{
-    MI_BIN_COUNT, mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t, mi_heap_area_t,
-    mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_free_t,
-    mi_thread_local_t,
+    MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
+    MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX,
+    MI_THREADID_ABANDONED_MAPPED, mi_arena_id_t, mi_arena_t, mi_block_t, mi_block_visit_fun,
+    mi_commit_fun_t, mi_heap_area_t, mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t,
+    mi_thread_free_t, mi_thread_local_t,
 };
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
@@ -70,7 +82,6 @@ unsafe extern "C" {
     #[allow(dead_code)]
     fn mi_arenas_try_purge(force: bool, visit_all: bool, subproc: *mut mi_subproc_t, tseq: usize);
     fn _mi_arenas_page_unabandon(page: *mut mi_page_t, current_theap: *mut mi_theap_t);
-    fn _mi_arenas_page_free(page: *mut mi_page_t, current_theap: *mut mi_theap_t);
 }
 
 #[allow(non_camel_case_types)]
@@ -1150,7 +1161,7 @@ unsafe fn mi_abandoned_page_unown(page: *mut mi_page_t, current_theap: *mut mi_t
 }
 
 #[allow(dead_code)]
-unsafe fn mi_arena_try_claim_abandoned(
+unsafe extern "C" fn mi_arena_try_claim_abandoned(
     slice_index: usize,
     arena: *mut mi_arena_t,
     keep_abandoned: *mut bool,
@@ -1205,6 +1216,757 @@ unsafe fn mi_heap_ensure_arena_pages(
         crate::mi_assert!(!arena_pages.is_null());
     }
     arena_pages
+}
+
+#[inline]
+unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
+    let full = unsafe { (*page).reserved == (*page).used };
+    crate::mi_assert_internal!(!full || unsafe { (*page).free.is_null() });
+    full
+}
+
+unsafe fn mi_page_build_free_list(page: *mut mi_page_t) {
+    let bsize = unsafe { mi_page_block_size(page) };
+    let mut head = ptr::null_mut::<mi_block_t>();
+    for i in (0..unsafe { (*page).capacity as usize }).rev() {
+        let block = unsafe { (*page).page_start.add(i * bsize).cast::<mi_block_t>() };
+        unsafe { mi_block_set_next(page, block, head) };
+        head = block;
+    }
+    unsafe { (*page).free = head };
+}
+
+unsafe fn mi_page_init_for_arena_alloc(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
+    crate::mi_assert_internal!(!theap.is_null());
+    crate::mi_assert_internal!(!page.is_null());
+
+    let heap = unsafe { _mi_theap_heap(theap) };
+    unsafe {
+        (*page).heap = if _mi_is_heap_main(heap) {
+            ptr::null_mut()
+        } else {
+            heap
+        };
+    }
+    unsafe { mi_page_set_theap(page, theap) };
+
+    let mut page_size = 0usize;
+    let page_start = unsafe { mi_page_area(page, &mut page_size) };
+    unsafe { mi_track_mem_noaccess(page_start.cast(), page_size) };
+    crate::mi_assert_internal!(page_size / unsafe { mi_page_block_size(page) } < (1usize << 16));
+    crate::mi_assert_internal!(unsafe { (*page).reserved > 0 });
+
+    unsafe { (*page).keys[0] = _mi_theap_random_next(theap) };
+    unsafe { (*page).keys[1] = _mi_theap_random_next(theap) };
+
+    unsafe { (*page).capacity = (*page).reserved };
+    unsafe { (*page).used = 0 };
+    unsafe { (*page).retire_expire = 0 };
+    unsafe { (*page).local_free = ptr::null_mut() };
+    unsafe { (*page).free = ptr::null_mut() };
+    unsafe { (*page).next = ptr::null_mut() };
+    unsafe { (*page).prev = ptr::null_mut() };
+
+    unsafe { mi_page_build_free_list(page) };
+    unsafe { mi_track_mem_undefined(page_start.cast(), page_size) };
+
+    crate::mi_assert_internal!(unsafe { mi_page_immediate_available(page) });
+    true
+}
+
+unsafe fn mi_arenas_page_try_find_abandoned(
+    theap: *mut mi_theap_t,
+    slice_count: usize,
+    block_size: usize,
+) -> *mut mi_page_t {
+    let heap = unsafe { _mi_theap_heap(theap) };
+    let tseq = unsafe { (*(*theap).tld).thread_seq };
+    let req_arena = unsafe { (*heap.cast::<MiHeapPrefix>()).exclusive_arena };
+    let _ = slice_count;
+
+    let bin = _mi_bin(block_size);
+    crate::mi_assert_internal!(bin < MI_BIN_COUNT);
+    if unsafe { (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin].load(Ordering::Relaxed) } == 0 {
+        return ptr::null_mut();
+    }
+
+    let any_numa = -1;
+    let mut result = ptr::null_mut();
+    let mut claim_fun: crate::types::mi_claim_fun_t = mi_arena_try_claim_abandoned;
+    unsafe {
+        mi_forall_suitable_arenas(heap, req_arena, tseq, true, any_numa, true, |arena| {
+            let arena_pages = mi_heap_arena_pages(heap, arena);
+            if arena_pages.is_null() {
+                return false;
+            }
+            let mut slice_index = 0usize;
+            let bitmap = (*arena_pages).pages_abandoned[bin];
+            if mi_bitmap_try_find_and_claim(
+                bitmap,
+                tseq,
+                &mut slice_index,
+                &mut claim_fun,
+                arena.cast(),
+            ) {
+                let page = mi_arena_page_at_slice(arena, slice_index);
+                crate::mi_assert_internal!(mi_page_is_owned(page));
+                crate::mi_assert_internal!(mi_page_is_abandoned(page));
+                crate::mi_assert_internal!(mi_heap_has_page(heap, arena, page));
+                (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin].fetch_sub(1, Ordering::Relaxed);
+                (*theap).stats.pages_reclaim_on_alloc.total += 1;
+                crate::internal::__mi_stat_decrease(&mut (*theap).stats.pages_abandoned, 1);
+                _mi_page_free_collect(page, false);
+                crate::mi_assert_internal!(mi_bbitmap_is_clearN(
+                    (*arena.cast::<MiArenaPrefix>()).slices_free,
+                    slice_index,
+                    slice_count,
+                ));
+                crate::mi_assert_internal!(
+                    (*page).slice_committed > 0
+                        || mi_bitmap_is_setN(
+                            (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                            slice_index,
+                            slice_count,
+                        )
+                );
+                crate::mi_assert_internal!(mi_bitmap_is_setN(
+                    (*arena.cast::<MiArenaPrefix>()).slices_dirty,
+                    slice_index,
+                    slice_count,
+                ));
+                crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+                    mi_page_slice_start(page).cast(),
+                    MI_PAGE_ALIGN
+                ));
+                crate::mi_assert_internal!(
+                    crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+                );
+                crate::mi_assert_internal!(mi_page_block_size(page) == block_size);
+                crate::mi_assert_internal!(!mi_page_is_full_local(page));
+                result = page;
+                true
+            } else {
+                false
+            }
+        })
+    };
+    result
+}
+
+unsafe fn mi_arenas_page_alloc_fresh_area(
+    theap: *mut mi_theap_t,
+    slice_count: usize,
+    block_size: usize,
+    block_alignment: usize,
+    os_align: bool,
+    commit: bool,
+    memid: *mut mi_memid_t,
+) -> *mut u8 {
+    let _ = block_size;
+    let allow_large = true;
+    let page_alignment = MI_ARENA_SLICE_ALIGN;
+    let heap = unsafe { _mi_theap_heap(theap) };
+    let tld = unsafe { (*theap).tld };
+    let req_arena = unsafe { (*heap.cast::<MiHeapPrefix>()).exclusive_arena };
+    let numa_node = if unsafe { (*heap.cast::<MiHeapPrefix>()).numa_node } >= 0 {
+        unsafe { (*heap.cast::<MiHeapPrefix>()).numa_node }
+    } else {
+        unsafe { (*tld).numa_node }
+    };
+
+    let mut start = ptr::null_mut::<u8>();
+    unsafe { *memid = _mi_memid_none() };
+    let alloc_size = mi_size_of_slices(slice_count);
+    if !mi_option_is_enabled(mi_option_t::mi_option_disallow_arena_alloc)
+        && !os_align
+        && slice_count <= unsafe { mi_arena_max_object_size() } / MI_ARENA_SLICE_SIZE
+    {
+        start = unsafe {
+            mi_arenas_try_alloc(
+                heap,
+                slice_count,
+                page_alignment,
+                commit,
+                allow_large,
+                req_arena,
+                (*tld).thread_seq,
+                numa_node,
+                memid,
+            )
+            .cast::<u8>()
+        };
+        if !start.is_null() {
+            let arena = unsafe { (*memid).mem.arena.arena };
+            let arena_pages = unsafe { mi_heap_ensure_arena_pages(heap, arena) };
+            if arena_pages.is_null() {
+                unsafe { _mi_arenas_free(start.cast(), mi_size_of_slices(slice_count), *memid) };
+                start = ptr::null_mut();
+            } else {
+                crate::mi_assert_internal!(unsafe {
+                    !mi_bitmap_is_setN(
+                        (*arena_pages).pages,
+                        (*memid).mem.arena.slice_index as usize,
+                        1,
+                    )
+                });
+                unsafe {
+                    mi_bitmap_set(
+                        (*arena_pages).pages,
+                        (*memid).mem.arena.slice_index as usize,
+                    )
+                };
+            }
+        }
+    }
+
+    if start.is_null() {
+        start = if os_align {
+            unsafe {
+                mi_arena_os_alloc_aligned(
+                    alloc_size,
+                    block_alignment,
+                    page_alignment,
+                    commit,
+                    allow_large,
+                    req_arena.cast(),
+                    memid,
+                )
+                .cast::<u8>()
+            }
+        } else {
+            unsafe {
+                mi_arena_os_alloc_aligned(
+                    alloc_size,
+                    page_alignment,
+                    0,
+                    commit,
+                    allow_large,
+                    req_arena.cast(),
+                    memid,
+                )
+                .cast::<u8>()
+            }
+        };
+    }
+
+    if start.is_null() {
+        return ptr::null_mut();
+    }
+    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(start.cast(), MI_PAGE_ALIGN));
+    crate::mi_assert_internal!(
+        !os_align
+            || crate::internal::_mi_is_aligned(
+                unsafe { start.add(page_alignment) }.cast(),
+                block_alignment
+            )
+    );
+    start
+}
+
+unsafe fn mi_page_block_start(block_size: usize, os_align: bool) -> usize {
+    if os_align {
+        MI_PAGE_ALIGN
+    } else if crate::internal::_mi_is_power_of_two(block_size)
+        && block_size <= MI_PAGE_BLOCK_START_MAX_OFFSET
+    {
+        _mi_align_up(crate::internal::mi_page_info_size(), block_size)
+    } else if block_size != 0 && block_size.is_multiple_of(MI_PAGE_OSPAGE_BLOCK_ALIGN2) {
+        _mi_align_up(
+            crate::internal::mi_page_info_size(),
+            MI_PAGE_OSPAGE_BLOCK_ALIGN2,
+        )
+    } else {
+        crate::internal::mi_page_info_size()
+    }
+}
+
+unsafe fn mi_arenas_page_alloc_fresh(
+    theap: *mut mi_theap_t,
+    slice_count: usize,
+    block_size: usize,
+    block_alignment: usize,
+    commit: bool,
+) -> *mut mi_page_t {
+    let os_align = block_alignment > MI_PAGE_MAX_OVERALLOC_ALIGN;
+    let alloc_size = mi_size_of_slices(slice_count);
+    let mut memid = unsafe { _mi_memid_none() };
+    let slice_start = unsafe {
+        mi_arenas_page_alloc_fresh_area(
+            theap,
+            slice_count,
+            block_size,
+            block_alignment,
+            os_align,
+            commit,
+            &mut memid,
+        )
+    };
+    if slice_start.is_null() {
+        return ptr::null_mut();
+    }
+
+    let page_noguard_size = alloc_size;
+    let mut page = ptr::null_mut::<mi_page_t>();
+    let mut page_meta_is_separate = false;
+    let mut block_start = 0usize;
+
+    if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
+        let arena = unsafe { memid.mem.arena.arena };
+        if unsafe { !(*arena.cast::<MiArenaPrefix>()).pages_meta.is_null() } {
+            let page_meta = unsafe {
+                (*arena.cast::<MiArenaPrefix>())
+                    .pages_meta
+                    .add(memid.mem.arena.slice_index as usize)
+            };
+            crate::mi_assert_internal!(unsafe { (*page_meta).block_size == 0 });
+            if block_size > MI_SMALL_SIZE_MAX || MI_PAGE_META_ALIGNED_FREE_SMALL == 0 {
+                page = page_meta;
+                page_meta_is_separate = true;
+                block_start = 0;
+                if block_size >= size_of::<usize>()
+                    && block_size <= MI_PAGE_BLOCK_START_MAX_OFFSET
+                    && crate::internal::_mi_is_power_of_two(block_size)
+                {
+                    block_start += block_size;
+                }
+                unsafe {
+                    crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>())
+                };
+            }
+        }
+    }
+    if page.is_null() {
+        page = slice_start.cast::<mi_page_t>();
+        block_start = unsafe { mi_page_block_start(block_size, os_align) };
+    }
+
+    let mut commit_size = 0usize;
+    if !memid.initially_committed {
+        // The later page-extend path is not translated yet; commit the full slice span now.
+        commit_size = page_noguard_size;
+        let mut is_zero = false;
+        if !unsafe {
+            mi_arena_commit(
+                if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
+                    memid.mem.arena.arena
+                } else {
+                    ptr::null_mut()
+                },
+                slice_start.cast(),
+                commit_size,
+                &mut is_zero,
+                0,
+            )
+        } {
+            unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
+            return ptr::null_mut();
+        }
+        memid.initially_committed = true;
+        memid.initially_zero = is_zero;
+    }
+    if !memid.initially_zero && !page_meta_is_separate {
+        unsafe { crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>()) };
+    }
+
+    if memid.initially_committed {
+        if memid.initially_zero {
+            unsafe { mi_track_mem_defined(slice_start.cast(), slice_count * MI_ARENA_SLICE_SIZE) };
+        } else {
+            unsafe {
+                mi_track_mem_undefined(slice_start.cast(), slice_count * MI_ARENA_SLICE_SIZE)
+            };
+        }
+    }
+    if MI_DEBUG > 1
+        && memid.initially_zero
+        && memid.initially_committed
+        && !unsafe { mi_mem_is_zero(slice_start.cast(), page_noguard_size) }
+    {
+        crate::options::_mi_error_message(
+            EFAULT,
+            format_args!("internal error: page memory was not zero initialized.\n"),
+        );
+        memid.initially_zero = false;
+        if block_start > 0 {
+            unsafe { crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>()) };
+        }
+    }
+    let reserved = if os_align {
+        1
+    } else {
+        (page_noguard_size - block_start) / block_size
+    };
+    crate::mi_assert_internal!(reserved > 0 && u16::try_from(reserved).is_ok());
+
+    unsafe { (*page).reserved = reserved as u16 };
+    unsafe { (*page).page_start = slice_start.add(block_start) };
+    unsafe { (*page).block_size = block_size };
+    unsafe { (*page).slice_committed = commit_size };
+    unsafe { (*page).memid = memid };
+    unsafe { (*page).free_is_zero = memid.initially_zero };
+    crate::mi_assert_internal!(unsafe { (*page).free.is_null() });
+    crate::mi_assert_internal!(page_meta_is_separate == unsafe { mi_page_meta_is_separated(page) });
+    crate::mi_assert_internal!(unsafe { mi_page_slice_start(page) } == slice_start);
+
+    unsafe { (*page).xthread_free = 0 };
+    unsafe { mi_page_claim_ownership(page) };
+    if !unsafe { _mi_page_map_register(page) } {
+        unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
+        return ptr::null_mut();
+    }
+
+    unsafe { __mi_stat_increase(&mut (*theap).stats.pages, 1) };
+    let stats_bin = unsafe { _mi_page_stats_bin(page) };
+    unsafe { __mi_stat_increase(&mut (*theap).stats.page_bins[stats_bin], 1) };
+
+    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        unsafe { mi_page_slice_start(page) }.cast(),
+        MI_PAGE_ALIGN
+    ));
+    crate::mi_assert_internal!(unsafe {
+        crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+    });
+    crate::mi_assert_internal!(unsafe { mi_page_block_size(page) } == block_size);
+    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+
+    page
+}
+
+unsafe fn mi_arenas_page_regular_alloc(
+    theap: *mut mi_theap_t,
+    slice_count: usize,
+    block_size: usize,
+) -> *mut mi_page_t {
+    let mut page = unsafe { mi_arenas_page_try_find_abandoned(theap, slice_count, block_size) };
+    if !page.is_null() {
+        return page;
+    }
+
+    let commit_on_demand =
+        crate::options::mi_option_get(mi_option_t::mi_option_page_commit_on_demand);
+    let commit = slice_count <= mi_slice_count_of_size(MI_PAGE_MIN_COMMIT_SIZE)
+        || (commit_on_demand == 2 && unsafe { _mi_os_has_overcommit() })
+        || commit_on_demand == 0;
+    page = unsafe { mi_arenas_page_alloc_fresh(theap, slice_count, block_size, 1, commit) };
+    if page.is_null() {
+        return ptr::null_mut();
+    }
+    crate::mi_assert_internal!(
+        unsafe { (*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA }
+            || unsafe { (*page).memid.mem.arena.slice_count as usize == slice_count }
+    );
+    if !unsafe { mi_page_init_for_arena_alloc(theap, page) } {
+        unsafe { _mi_arenas_free(page.cast(), mi_page_full_size(page), (*page).memid) };
+        return ptr::null_mut();
+    }
+    page
+}
+
+unsafe fn mi_arenas_page_singleton_alloc(
+    theap: *mut mi_theap_t,
+    block_size: usize,
+    block_alignment: usize,
+) -> *mut mi_page_t {
+    let os_align = block_alignment > MI_PAGE_MAX_OVERALLOC_ALIGN;
+    let info_size = if os_align {
+        MI_PAGE_ALIGN
+    } else {
+        crate::internal::mi_page_info_size()
+    };
+    let slice_count = mi_slice_count_of_size(info_size + block_size);
+    let page = unsafe {
+        mi_arenas_page_alloc_fresh(theap, slice_count, block_size, block_alignment, true)
+    };
+    if page.is_null() {
+        return ptr::null_mut();
+    }
+    crate::mi_assert_internal!(unsafe { (*page).reserved == 1 });
+    if !unsafe { mi_page_init_for_arena_alloc(theap, page) } {
+        unsafe { _mi_arenas_free(page.cast(), mi_page_full_size(page), (*page).memid) };
+        return ptr::null_mut();
+    }
+    page
+}
+
+/// # Safety
+/// Internal arena page allocator matching the C ABI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_arenas_page_alloc(
+    theap: *mut mi_theap_t,
+    block_size: usize,
+    block_alignment: usize,
+) -> *mut mi_page_t {
+    let page = if block_alignment > MI_PAGE_MAX_OVERALLOC_ALIGN {
+        crate::mi_assert_internal!(crate::internal::_mi_is_power_of_two(block_alignment));
+        unsafe { mi_arenas_page_singleton_alloc(theap, block_size, block_alignment) }
+    } else if block_size <= MI_SMALL_MAX_OBJ_SIZE {
+        unsafe {
+            mi_arenas_page_regular_alloc(
+                theap,
+                mi_slice_count_of_size(MI_SMALL_PAGE_SIZE),
+                block_size,
+            )
+        }
+    } else if block_size <= MI_MEDIUM_MAX_OBJ_SIZE {
+        unsafe {
+            mi_arenas_page_regular_alloc(
+                theap,
+                mi_slice_count_of_size(MI_MEDIUM_PAGE_SIZE),
+                block_size,
+            )
+        }
+    } else if MI_ENABLE_LARGE_PAGES != 0 && block_size <= MI_LARGE_MAX_OBJ_SIZE {
+        unsafe {
+            mi_arenas_page_regular_alloc(
+                theap,
+                mi_slice_count_of_size(MI_LARGE_PAGE_SIZE),
+                block_size,
+            )
+        }
+    } else {
+        unsafe { mi_arenas_page_singleton_alloc(theap, block_size, block_alignment) }
+    };
+    if page.is_null() {
+        return ptr::null_mut();
+    }
+    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        unsafe { mi_page_slice_start(page) }.cast(),
+        MI_PAGE_ALIGN
+    ));
+    crate::mi_assert_internal!(unsafe {
+        crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+    });
+    crate::mi_assert_internal!(
+        block_alignment <= MI_PAGE_MAX_OVERALLOC_ALIGN
+            || crate::internal::_mi_is_aligned(
+                unsafe { mi_page_start(page) }.cast(),
+                block_alignment
+            )
+    );
+    page
+}
+
+/// # Safety
+/// Internal arena page free path matching the C ABI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_arenas_page_free(
+    page: *mut mi_page_t,
+    current_theapx: *mut mi_theap_t,
+) {
+    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        unsafe { mi_page_slice_start(page) }.cast(),
+        MI_PAGE_ALIGN
+    ));
+    crate::mi_assert_internal!(unsafe {
+        crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+    });
+    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::mi_assert_internal!(unsafe { mi_page_all_free(page) });
+    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::mi_assert_internal!(unsafe { (*page).next.is_null() && (*page).prev.is_null() });
+
+    let stats_bin = unsafe { _mi_page_stats_bin(page) };
+    if !current_theapx.is_null() {
+        unsafe {
+            crate::internal::__mi_stat_decrease(
+                &mut (*current_theapx).stats.page_bins[stats_bin],
+                1,
+            )
+        };
+        unsafe { crate::internal::__mi_stat_decrease(&mut (*current_theapx).stats.pages, 1) };
+    } else {
+        let heap = unsafe { mi_page_heap(page) };
+        unsafe {
+            crate::internal::__mi_stat_decrease_mt(&mut (*heap).stats.page_bins[stats_bin], 1)
+        };
+        unsafe { crate::internal::__mi_stat_decrease_mt(&mut (*heap).stats.pages, 1) };
+    }
+
+    if MI_DEBUG > 1
+        && unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA }
+        && !unsafe { mi_page_is_full_local(page) }
+    {
+        let bin = _mi_bin(unsafe { mi_page_block_size(page) });
+        let mut slice_index = 0usize;
+        let mut slice_count = 0usize;
+        let mut arena_pages = ptr::null_mut();
+        let arena = unsafe {
+            mi_page_arena_pages(page, &mut slice_index, &mut slice_count, &mut arena_pages)
+        };
+        crate::mi_assert_internal!(unsafe {
+            mi_bbitmap_is_clearN(
+                (*arena.cast::<MiArenaPrefix>()).slices_free,
+                slice_index,
+                slice_count,
+            )
+        });
+        crate::mi_assert_internal!(
+            unsafe { (*page).slice_committed > 0 }
+                || unsafe {
+                    mi_bitmap_is_setN(
+                        (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                        slice_index,
+                        slice_count,
+                    )
+                }
+        );
+        crate::mi_assert_internal!(!unsafe {
+            mi_bitmap_is_setN((*arena_pages).pages_abandoned[bin], slice_index, 1)
+        });
+        crate::mi_assert_internal!(unsafe {
+            mi_bitmap_is_setN((*arena_pages).pages, slice_index, 1)
+        });
+    }
+
+    unsafe { _mi_page_map_unregister(page) };
+    if unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA } {
+        let mut arena_pages = ptr::null_mut();
+        let mut slice_index = 0usize;
+        let mut slice_count = 0usize;
+        let arena = unsafe {
+            mi_page_arena_pages(page, &mut slice_index, &mut slice_count, &mut arena_pages)
+        };
+        crate::mi_assert_internal!(!arena_pages.is_null());
+        unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
+        if unsafe { (*page).slice_committed > 0 } {
+            let total_slices = unsafe { (*page).slice_committed / MI_ARENA_SLICE_SIZE };
+            crate::mi_assert_internal!(slice_count >= total_slices);
+            if total_slices > 0 {
+                unsafe {
+                    mi_bitmap_setN(
+                        (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                        slice_index,
+                        total_slices,
+                        ptr::null_mut(),
+                    )
+                };
+            }
+            let extra = unsafe { (*page).slice_committed % MI_ARENA_SLICE_SIZE };
+            if extra > 0 {
+                unsafe {
+                    crate::internal::__mi_stat_decrease_mt(
+                        &mut (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed,
+                        extra,
+                    )
+                };
+            }
+        } else {
+            crate::mi_assert_internal!(unsafe {
+                mi_bitmap_is_setN(
+                    (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                    slice_index,
+                    slice_count,
+                )
+            });
+        }
+    }
+    if unsafe { mi_page_meta_is_separated(page) } {
+        unsafe { (*page).block_size = 0 };
+    }
+    unsafe {
+        _mi_arenas_free(
+            mi_page_slice_start(page).cast(),
+            mi_page_full_size(page),
+            (*page).memid,
+        )
+    };
+}
+
+/// # Safety
+/// Internal arena abandon path matching the C ABI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_arenas_page_abandon(
+    page: *mut mi_page_t,
+    current_theap: *mut mi_theap_t,
+) {
+    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        unsafe { mi_page_slice_start(page) }.cast(),
+        MI_PAGE_ALIGN
+    ));
+    crate::mi_assert_internal!(unsafe {
+        crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
+    });
+    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
+    crate::mi_assert_internal!(unsafe { (*page).next.is_null() && (*page).prev.is_null() });
+
+    let heap = unsafe { mi_page_heap(page) };
+    crate::mi_assert_internal!(heap == unsafe { _mi_theap_heap(current_theap) });
+    if unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA }
+        && !unsafe { mi_page_is_full_local(page) }
+    {
+        let bin = _mi_bin(unsafe { mi_page_block_size(page) });
+        let mut slice_index = 0usize;
+        let mut slice_count = 0usize;
+        let mut arena_pages = ptr::null_mut();
+        let arena = unsafe {
+            mi_page_arena_pages(page, &mut slice_index, &mut slice_count, &mut arena_pages)
+        };
+        let _ = arena;
+        crate::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
+        crate::mi_assert_internal!(unsafe {
+            mi_bbitmap_is_clearN(
+                (*arena.cast::<MiArenaPrefix>()).slices_free,
+                slice_index,
+                slice_count,
+            )
+        });
+        crate::mi_assert_internal!(
+            unsafe { (*page).slice_committed > 0 }
+                || unsafe {
+                    mi_bitmap_is_setN(
+                        (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                        slice_index,
+                        slice_count,
+                    )
+                }
+        );
+        crate::mi_assert_internal!(unsafe {
+            mi_bitmap_is_setN(
+                (*arena.cast::<MiArenaPrefix>()).slices_dirty,
+                slice_index,
+                slice_count,
+            )
+        });
+
+        // Preserve current page flags while switching the abandoned thread id state.
+        let flags = unsafe { crate::internal::mi_page_flags(page) };
+        unsafe { (*page).xthread_id = MI_THREADID_ABANDONED_MAPPED | flags };
+        let was_clear = unsafe { mi_bitmap_set((*arena_pages).pages_abandoned[bin], slice_index) };
+        crate::MI_UNUSED!(was_clear);
+        crate::mi_assert_internal!(was_clear);
+        unsafe {
+            (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin].fetch_add(1, Ordering::Relaxed)
+        };
+        unsafe { __mi_stat_increase(&mut (*current_theap).stats.pages_abandoned, 1) };
+    } else {
+        if unsafe { (*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA }
+            && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
+        {
+            unsafe {
+                mi_lock_acquire(ptr::addr_of_mut!(
+                    (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
+                ))
+            };
+            unsafe {
+                (*page).prev = ptr::null_mut();
+                (*page).next = (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages;
+                if !(*page).next.is_null() {
+                    (*(*page).next).prev = page;
+                }
+                (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages = page;
+            }
+            unsafe {
+                mi_lock_release(ptr::addr_of_mut!(
+                    (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
+                ))
+            };
+        }
+        unsafe { __mi_stat_increase(&mut (*current_theap).stats.pages_abandoned, 1) };
+    }
+    unsafe { mi_abandoned_page_unown(page, current_theap) };
 }
 
 unsafe fn mi_reserve_os_memory_ex2(

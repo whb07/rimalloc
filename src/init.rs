@@ -805,6 +805,7 @@ unsafe extern "C" {
 unsafe extern "system" {
     fn TlsAlloc() -> u32;
     fn TlsFree(dw_tls_index: u32) -> i32;
+    fn TlsSetValue(dw_tls_index: u32, lp_tls_value: *mut c_void) -> i32;
 }
 
 #[cfg(windows)]
@@ -889,6 +890,44 @@ unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
     unsafe { raw_index.write(TLS_OUT_OF_INDEXES) };
 }
 
+#[cfg(windows)]
+#[allow(dead_code)]
+unsafe fn mi_win_tls_slot_set(slot: usize, extended_slot: usize, value: *mut c_void) {
+    crate::mi_assert_internal!(
+        (slot >= MI_TLS_DIRECT_FIRST && slot < MI_TLS_DIRECT_FIRST + MI_TLS_DIRECT_SLOTS)
+            || slot == MI_TLS_EXPANSION_SLOT
+    );
+    if slot < MI_TLS_DIRECT_FIRST + MI_TLS_DIRECT_SLOTS {
+        crate::prim::mi_prim_tls_slot_set(slot, value);
+    } else {
+        crate::mi_assert_internal!(extended_slot < MI_TLS_EXPANSION_SLOTS);
+        let _ = unsafe { TlsSetValue((extended_slot + MI_TLS_DIRECT_SLOTS) as u32, value) };
+    }
+}
+
+#[cfg(not(windows))]
+#[allow(dead_code)]
+unsafe fn mi_win_tls_slot_set(_slot: usize, _extended_slot: usize, _value: *mut c_void) {}
+
+#[cfg(any(target_os = "openbsd", target_os = "android"))]
+#[allow(dead_code)]
+unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
+    let key = crate::threadlocal::_mi_thread_local_create();
+    if key == 0 {
+        EFAULT
+    } else {
+        unsafe { pkey.write(key) };
+        0
+    }
+}
+
+#[cfg(not(any(target_os = "openbsd", target_os = "android")))]
+#[allow(dead_code)]
+unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
+    unsafe { pkey.write(0) };
+    0
+}
+
 #[allow(dead_code)]
 fn mi_tls_slots_init() {
     static TLS_SLOTS_INIT: Once = Once::new();
@@ -916,11 +955,32 @@ fn mi_tls_slots_init() {
                 );
             }
         }
+
+        #[cfg(any(target_os = "openbsd", target_os = "android"))]
+        unsafe {
+            let mut err = mi_pthread_key_create(ptr::addr_of_mut!(_mi_theap_default_key));
+            if err == 0 {
+                err = mi_pthread_key_create(ptr::addr_of_mut!(_mi_theap_cached_key));
+            }
+            if err != 0 {
+                _mi_error_message(
+                    EFAULT,
+                    c"unable to allocate pthread keys (error %d)\n".as_ptr(),
+                    err,
+                );
+            }
+        }
     });
 }
 
 #[allow(dead_code)]
 fn mi_tls_slots_done() {
+    #[cfg(windows)]
+    unsafe {
+        mi_win_tls_slot_free(ptr::addr_of_mut!(mi_tls_raw_index_default));
+        mi_win_tls_slot_free(ptr::addr_of_mut!(mi_tls_raw_index_cached));
+    }
+
     #[cfg(any(target_os = "openbsd", target_os = "android"))]
     unsafe {
         if _mi_theap_default_key != 0 {
@@ -994,6 +1054,70 @@ fn mi_cpuid(_regs4: *mut u32, _level: u32, _sublevel: u32) -> bool {
 /// Returns a borrowed process-global opaque subproc pointer.
 pub unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
     unsafe { mi_subproc_main_ptr() }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// `theap` must be a valid default theap for the current thread.
+pub unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
+    let theap_old = unsafe { crate::prim::_mi_theap_default() };
+    crate::mi_assert_internal!(!theap.is_null());
+    crate::mi_assert_internal!(
+        unsafe { (*(*theap).tld).thread_id } == 0
+            || unsafe { (*(*theap).tld).thread_id } == _mi_thread_id()
+    );
+
+    mi_tls_slots_init();
+    if crate::prim::MI_TLS_MODEL_THREAD_LOCAL {
+        unsafe {
+            crate::prim::__mi_theap_default = theap;
+        }
+    } else if crate::prim::MI_TLS_MODEL_FIXED_SLOT {
+        crate::prim::mi_prim_tls_slot_set(
+            crate::prim::MI_TLS_MODEL_FIXED_SLOT_DEFAULT,
+            theap.cast(),
+        );
+    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
+        unsafe {
+            mi_win_tls_slot_set(
+                _mi_theap_default_slot,
+                _mi_theap_default_expansion_slot,
+                theap.cast(),
+            );
+        }
+    } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_default_key } != 0 {
+        let _ = crate::threadlocal::_mi_thread_local_set(
+            unsafe { _mi_theap_default_key },
+            theap.cast(),
+        );
+    }
+
+    if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
+        unsafe { crate::prim::_mi_prim_thread_associate_default_theap(theap) };
+        if unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) } {
+            unsafe {
+                __mi_theap_main = theap;
+            }
+        }
+    }
+
+    if unsafe { crate::internal::mi_theap_is_initialized(theap_old) }
+        && unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_old)) }
+    {
+        unsafe {
+            __mi_theap_main = theap_old;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// Marks the current thread-local data as belonging to a threadpool thread.
+pub unsafe extern "C" fn mi_thread_set_in_threadpool() {
+    let theap = unsafe { _mi_theap_default_safe() };
+    unsafe {
+        (*(*theap).tld).is_in_threadpool = true;
+    }
 }
 
 #[unsafe(no_mangle)]

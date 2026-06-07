@@ -527,7 +527,10 @@ unsafe fn mi_subproc_prefix(subproc: *mut mi_subproc_t) -> *mut MiSubprocPrefix 
     subproc.cast::<MiSubprocPrefix>()
 }
 
-unsafe fn mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_subproc_id_t {
+#[unsafe(no_mangle)]
+/// # Safety
+/// The returned opaque identifier must only be passed back to this crate's subproc functions.
+pub unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_subproc_id_t {
     mi_subproc_id_t {
         _mi_subproc_id: subproc.cast::<c_void>(),
     }
@@ -1059,14 +1062,14 @@ pub unsafe extern "C" fn _mi_subproc_from_id(subproc_id: mi_subproc_id_t) -> *mu
 /// # Safety
 /// Returns an opaque identifier for the main subproc.
 pub unsafe extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
-    unsafe { mi_subproc_to_id(_mi_subproc_main()) }
+    unsafe { _mi_subproc_to_id(_mi_subproc_main()) }
 }
 
 #[unsafe(no_mangle)]
 /// # Safety
 /// Returns the current subproc identifier for the bounded crate state.
 pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
-    unsafe { mi_subproc_to_id(_mi_subproc()) }
+    unsafe { _mi_subproc_to_id(_mi_subproc()) }
 }
 
 #[unsafe(no_mangle)]
@@ -1119,6 +1122,16 @@ pub unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
 
 #[unsafe(no_mangle)]
 /// # Safety
+/// `theap` must be null or point to a valid thread-heap structure.
+pub unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
+    unsafe {
+        crate::internal::mi_theap_is_initialized(theap)
+            && _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
 pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     mi_subproc_main_init();
@@ -1139,7 +1152,7 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
         }
         subprocs = subproc_ptr.cast::<mi_subproc_t>();
         mi_lock_release(ptr::addr_of_mut!(subprocs_lock));
-        mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>())
+        _mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>())
     }
 }
 

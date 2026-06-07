@@ -86728,7 +86728,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001065",
@@ -86772,7 +86772,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001066",
@@ -86816,7 +86816,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001067",
@@ -86860,7 +86860,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001068",
@@ -86904,7 +86904,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001069",
@@ -86948,7 +86948,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001070",
@@ -86992,7 +86992,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001071",
@@ -87168,7 +87168,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001075",
@@ -87212,7 +87212,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001076",
@@ -87300,7 +87300,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001078",
@@ -87344,7 +87344,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001079",
@@ -87388,7 +87388,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001080",
@@ -87432,7 +87432,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001081",
@@ -87476,7 +87476,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001082",
@@ -87608,7 +87608,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001085",
@@ -87652,7 +87652,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001086",
@@ -87696,7 +87696,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001087",
@@ -87740,7 +87740,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001088",
@@ -87784,7 +87784,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001089",
@@ -87828,7 +87828,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001090",
@@ -87872,7 +87872,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001091",
@@ -87960,7 +87960,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001093",
@@ -88004,7 +88004,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001094",
@@ -88048,7 +88048,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001095",
@@ -88092,7 +88092,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001096",
@@ -88136,7 +88136,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001097",
@@ -88180,7 +88180,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001098",
@@ -88224,7 +88224,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001099",
@@ -88268,7 +88268,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001100",
@@ -88312,7 +88312,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001101",
@@ -88356,7 +88356,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001102",
@@ -88400,7 +88400,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001103",
@@ -88444,7 +88444,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001104",
@@ -88488,7 +88488,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001105",
@@ -88576,7 +88576,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001107",
@@ -88620,7 +88620,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001108",
@@ -88664,7 +88664,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001109",
@@ -88708,7 +88708,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001110",
@@ -88752,7 +88752,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001111",
@@ -88796,7 +88796,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001112",
@@ -88884,7 +88884,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001114",
@@ -88933,7 +88933,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001115",
@@ -88977,7 +88977,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001116",
@@ -89065,7 +89065,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization as deprecated alias",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001118",
@@ -89109,7 +89109,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization as deprecated alias",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001119",
@@ -89153,7 +89153,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization as deprecated alias",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001120",
@@ -89197,7 +89197,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization as deprecated alias",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001121",
@@ -89241,7 +89241,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization as deprecated alias",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001122",

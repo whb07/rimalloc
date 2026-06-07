@@ -22,6 +22,8 @@ use crate::types::{
     mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
     mi_tld_t,
 };
+#[cfg(windows)]
+use crate::{internal::_mi_error_message, prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
 
 pub const MI_TLS_DIRECT_SLOTS: usize = 64;
 pub const MI_TLS_EXPANSION_SLOTS: usize = 1024;
@@ -342,6 +344,9 @@ pub static mut _mi_cpu_movsb_max: usize = 0;
 pub static mut _mi_cpu_stosb_max: usize = 0;
 
 #[unsafe(no_mangle)]
+pub static mut _mi_theap_default_slot: usize = MI_TLS_INITIAL_SLOT;
+
+#[unsafe(no_mangle)]
 pub static mut _mi_theap_default_expansion_slot: usize = 0;
 
 #[unsafe(no_mangle)]
@@ -590,6 +595,124 @@ pub unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
 unsafe extern "C" {
     fn pthread_key_delete(key: mi_thread_local_t) -> i32;
+}
+
+#[cfg(windows)]
+unsafe extern "system" {
+    fn TlsAlloc() -> u32;
+    fn TlsFree(dw_tls_index: u32) -> i32;
+}
+
+#[cfg(windows)]
+#[allow(dead_code)]
+unsafe fn mi_win_tls_slot_alloc(
+    slot: *mut usize,
+    extended: *mut usize,
+    raw_index: *mut u32,
+) -> bool {
+    let index = unsafe { TlsAlloc() };
+    unsafe { raw_index.write(index) };
+    if index == TLS_OUT_OF_INDEXES {
+        unsafe {
+            extended.write(0);
+            slot.write(0);
+        }
+        false
+    } else if usize::try_from(index)
+        .ok()
+        .is_some_and(|i| i < MI_TLS_DIRECT_SLOTS)
+    {
+        unsafe {
+            extended.write(0);
+            slot.write(index as usize + MI_TLS_DIRECT_FIRST);
+        }
+        true
+    } else if usize::try_from(index)
+        .ok()
+        .is_some_and(|i| i < MI_TLS_DIRECT_SLOTS + MI_TLS_EXPANSION_SLOTS - 1)
+    {
+        unsafe {
+            extended.write(index as usize - MI_TLS_DIRECT_SLOTS);
+            slot.write(MI_TLS_EXPANSION_SLOT);
+        }
+        true
+    } else {
+        unsafe {
+            _mi_error_message(
+                EFAULT,
+                c"returned tls index was too high (%u)\n".as_ptr(),
+                index,
+            );
+            let _ = TlsFree(index);
+            raw_index.write(TLS_OUT_OF_INDEXES);
+            extended.write(0);
+            slot.write(0);
+        }
+        false
+    }
+}
+
+#[cfg(not(windows))]
+#[allow(dead_code)]
+unsafe fn mi_win_tls_slot_alloc(
+    slot: *mut usize,
+    extended: *mut usize,
+    raw_index: *mut u32,
+) -> bool {
+    unsafe {
+        raw_index.write(TLS_OUT_OF_INDEXES);
+        extended.write(0);
+        slot.write(0);
+    }
+    false
+}
+
+#[cfg(windows)]
+#[allow(dead_code)]
+unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
+    let index = unsafe { raw_index.read() };
+    if index != TLS_OUT_OF_INDEXES {
+        unsafe {
+            let _ = TlsFree(index);
+            raw_index.write(TLS_OUT_OF_INDEXES);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+#[allow(dead_code)]
+unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
+    unsafe { raw_index.write(TLS_OUT_OF_INDEXES) };
+}
+
+#[allow(dead_code)]
+fn mi_tls_slots_init() {
+    static TLS_SLOTS_INIT: Once = Once::new();
+    TLS_SLOTS_INIT.call_once(|| {
+        #[cfg(windows)]
+        // SAFETY: one-time initialization of process-global TLS slot metadata.
+        unsafe {
+            let mut ok = mi_win_tls_slot_alloc(
+                ptr::addr_of_mut!(_mi_theap_default_slot),
+                ptr::addr_of_mut!(_mi_theap_default_expansion_slot),
+                ptr::addr_of_mut!(mi_tls_raw_index_default),
+            );
+            if ok {
+                ok = mi_win_tls_slot_alloc(
+                    ptr::addr_of_mut!(_mi_theap_cached_slot),
+                    ptr::addr_of_mut!(_mi_theap_cached_expansion_slot),
+                    ptr::addr_of_mut!(mi_tls_raw_index_cached),
+                );
+            }
+            if !ok {
+                _mi_error_message(
+                    EFAULT,
+                    c"unable to allocate fast TLS user slot (0x%zx)\n".as_ptr(),
+                    _mi_theap_cached_slot,
+                );
+            }
+        }
+    });
 }
 
 #[allow(dead_code)]

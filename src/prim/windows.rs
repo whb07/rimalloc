@@ -18,7 +18,9 @@ use core::{
 
 pub const ETW_INLINE: () = ();
 pub const MCGEN_USE_KERNEL_MODE_APIS: usize = 0;
-pub const MCGEN_HAVE_EVENTSETINFORMATION: usize = 2;
+pub const MCGEN_HAVE_EVENTSETINFORMATION_direct: usize = 1;
+pub const MCGEN_HAVE_EVENTSETINFORMATION_dynamic_lookup: usize = 2;
+pub const MCGEN_HAVE_EVENTSETINFORMATION: usize = MCGEN_HAVE_EVENTSETINFORMATION_dynamic_lookup;
 pub const MCGEN_EVENTUNREGISTER_EtwUnregister: &str = "EtwUnregister";
 pub const MCGEN_EVENTUNREGISTER_EventUnregister: &str = "EventUnregister";
 pub const MCGEN_EVENTUNREGISTER: &str = MCGEN_EVENTUNREGISTER_EventUnregister;
@@ -584,5 +586,21 @@ pub unsafe fn McTemplateU0xx_EventWriteTransfer(
         null(),
         (McTemplateU0xx_ARGCOUNT + 1) as ULONG,
         EventData.as_mut_ptr(),
+    )
+}
+
+#[inline]
+pub unsafe fn EventEnabledETW_MI_ALLOC() -> bool {
+    _mcgen_EVENT_BIT_SET(
+        (&raw const microsoft_windows_mimallocEnableBits).cast::<ULONG>(),
+        0,
+    )
+}
+
+#[inline]
+pub unsafe fn EventEnabledETW_MI_FREE() -> bool {
+    _mcgen_EVENT_BIT_SET(
+        (&raw const microsoft_windows_mimallocEnableBits).cast::<ULONG>(),
+        0,
     )
 }

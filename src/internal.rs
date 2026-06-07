@@ -233,6 +233,62 @@ macro_rules! mi_theap_stat_adjust_decrease {
     ($theap:expr, $stat:ident, $amount:expr) => {{ unsafe { $crate::internal::__mi_stat_adjust_decrease(&mut (*$theap).stats.$stat, $amount) } }};
 }
 
+#[macro_export]
+macro_rules! mi_heap_stat_decrease {
+    ($heap:expr, $stat:ident, $amount:expr) => {{ unsafe { $crate::internal::__mi_stat_decrease_mt(&mut (*$heap).stats.$stat, $amount) } }};
+}
+
+#[macro_export]
+macro_rules! mi_subproc_stat_decrease {
+    ($subproc:expr, $stat:ident, $amount:expr) => {{ unsafe { $crate::internal::__mi_stat_decrease_mt(&mut (*$subproc).stats.$stat, $amount) } }};
+}
+
+#[macro_export]
+macro_rules! mi_heap_stat_adjust_decrease {
+    ($heap:expr, $stat:ident, $amount:expr) => {{
+        unsafe {
+            $crate::internal::__mi_stat_adjust_decrease_mt(&mut (*$heap).stats.$stat, $amount)
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_subproc_stat_adjust_decrease {
+    ($subproc:expr, $stat:ident, $amount:expr) => {{
+        unsafe {
+            $crate::internal::__mi_stat_adjust_decrease_mt(&mut (*$subproc).stats.$stat, $amount)
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_heap_stat_counter_increase {
+    ($heap:expr, $stat:ident, $amount:expr) => {{
+        unsafe {
+            $crate::internal::__mi_stat_counter_increase_mt(&mut (*$heap).stats.$stat, $amount)
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_subproc_stat_counter_increase {
+    ($subproc:expr, $stat:ident, $amount:expr) => {{
+        unsafe {
+            $crate::internal::__mi_stat_counter_increase_mt(&mut (*$subproc).stats.$stat, $amount)
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_os_stat_counter_increase {
+    ($stat:ident, $amount:expr) => {{ $crate::mi_subproc_stat_counter_increase!($crate::internal::_mi_subproc(), $stat, $amount) }};
+}
+
+#[macro_export]
+macro_rules! mi_os_stat_decrease {
+    ($stat:ident, $amount:expr) => {{ $crate::mi_subproc_stat_decrease!($crate::internal::_mi_subproc(), $stat, $amount) }};
+}
+
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum mi_memkind_t {

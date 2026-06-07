@@ -441,9 +441,22 @@ unsafe extern "C" {
     pub fn _mi_os_large_page_size() -> usize;
 
     pub fn _mi_arena_id_none() -> mi_arena_id_t;
+    pub fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t;
+    pub fn _mi_arena_memid_is_suitable(memid: mi_memid_t, request_arena: *mut mi_arena_t) -> bool;
+    pub fn _mi_arenas_alloc(
+        heap: *mut mi_heap_t,
+        size: usize,
+        commit: bool,
+        allow_pinned: bool,
+        req_arena: *mut mi_arena_t,
+        tseq: usize,
+        numa_node: c_int,
+        memid: *mut mi_memid_t,
+    ) -> *mut c_void;
     pub fn _mi_arenas_contain(p: *const c_void) -> bool;
     pub fn _mi_meta_is_meta_page(p: *mut c_void) -> bool;
     pub fn _mi_page_map_init() -> bool;
+    pub fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t);
     pub fn _mi_page_map_unregister_range(start: *mut c_void, size: usize);
 }
 

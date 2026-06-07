@@ -1017,6 +1017,35 @@ pub unsafe extern "C" fn _mi_arenas_alloc_aligned(
     }
 }
 
+/// # Safety
+/// Internal arena allocator wrapper following the C ABI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_arenas_alloc(
+    heap: *mut mi_heap_t,
+    size: usize,
+    commit: bool,
+    allow_large: bool,
+    req_arena: *mut mi_arena_t,
+    tseq: usize,
+    numa_node: c_int,
+    memid: *mut mi_memid_t,
+) -> *mut c_void {
+    unsafe {
+        _mi_arenas_alloc_aligned(
+            heap,
+            size,
+            MI_ARENA_SLICE_SIZE,
+            0,
+            commit,
+            allow_large,
+            req_arena,
+            tseq,
+            numa_node,
+            memid,
+        )
+    }
+}
+
 #[allow(dead_code)]
 unsafe fn mi_abandoned_page_unown(page: *mut mi_page_t, current_theap: *mut mi_theap_t) -> bool {
     crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });

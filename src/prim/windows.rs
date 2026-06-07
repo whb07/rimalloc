@@ -12,9 +12,12 @@
 )]
 
 use core::{
-    ffi::c_void,
-    ptr::{null, write_bytes},
+    ffi::{CStr, c_char, c_void},
+    ptr::{copy_nonoverlapping, null, null_mut, write_bytes},
+    sync::atomic::{AtomicI64, Ordering},
 };
+
+use crate::types::{mi_msecs_t, mi_theap_t};
 
 pub const ETW_INLINE: () = ();
 pub const MCGEN_USE_KERNEL_MODE_APIS: usize = 0;
@@ -30,6 +33,11 @@ pub const MCGEN_EVENTSETINFORMATION: &str = MCGEN_EVENTSETINFORMATION_EventSetIn
 pub const MCGEN_EVENTWRITETRANSFER_EtwWriteTransfer: &str = "EtwWriteTransfer";
 pub const MCGEN_EVENTWRITETRANSFER_EventWriteTransfer: &str = "EventWriteTransfer";
 pub const MCGEN_EVENTWRITETRANSFER: &str = MCGEN_EVENTWRITETRANSFER_EventWriteTransfer;
+pub const MI_HAS_CONSOLE_IO: usize = 1;
+pub const MI_WIN_INIT_USE_CRT_TLS: usize = 1;
+pub const MI_WIN_INIT_USE_TLS_DLLMAIN: usize = 0;
+pub const MI_PRIM_HAS_PROCESS_ATTACH: usize = 1;
+pub const MI_PRIM_HAS_ALLOCATOR_INIT: usize = 0;
 pub const MI_MEM_EXTENDED_PARAMETER_NONPAGED_HUGE: u32 = 0x0000_0010;
 pub const DECLSPEC_ALIGN: usize = 8;
 
@@ -65,8 +73,17 @@ pub type PEVENT_FILTER_DESCRIPTOR = *const EVENT_FILTER_DESCRIPTOR;
 
 pub const TRUE: BOOLEAN = 1;
 pub const FALSE: BOOLEAN = 0;
+pub const DLL_PROCESS_DETACH: DWORD = 0;
+pub const DLL_PROCESS_ATTACH: DWORD = 1;
+pub const DLL_THREAD_ATTACH: DWORD = 2;
+pub const DLL_THREAD_DETACH: DWORD = 3;
+pub const ERROR_COMMITMENT_MINIMUM: DWORD = 635;
+pub const ERROR_COMMITMENT_LIMIT: DWORD = 1455;
+pub const ERROR_PAGEFILE_QUOTA: DWORD = 1454;
+pub const ERROR_NOT_ENOUGH_MEMORY: DWORD = 8;
 pub const EVENT_CONTROL_CODE_DISABLE_PROVIDER: ULONG = 0;
 pub const EVENT_CONTROL_CODE_ENABLE_PROVIDER: ULONG = 1;
+pub const FLS_OUT_OF_INDEXES: DWORD = u32::MAX;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -206,7 +223,134 @@ unsafe extern "system" {
     pub fn FlsGetValue(dwFlsIndex: DWORD) -> PVOID;
     pub fn FlsSetValue(dwFlsIndex: DWORD, lpFlsData: PVOID) -> BOOL;
     pub fn FlsFree(dwFlsIndex: DWORD) -> BOOL;
+    pub fn QueryPerformanceFrequency(lpFrequency: *mut LARGE_INTEGER) -> BOOL;
 }
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LARGE_INTEGER {
+    pub QuadPart: i64,
+}
+
+static MI_MSECS_FREQ: AtomicI64 = AtomicI64::new(0);
+static mut mi_fls_key: DWORD = FLS_OUT_OF_INDEXES;
+
+#[inline]
+fn mi_getenv_value(name: &str) -> Option<String> {
+    if let Some(value) = std::env::var_os(name) {
+        return Some(value.to_string_lossy().into_owned());
+    }
+    std::env::vars_os().find_map(|(key, value)| {
+        key.to_str()
+            .filter(|candidate| candidate.eq_ignore_ascii_case(name))
+            .map(|_| value.to_string_lossy().into_owned())
+    })
+}
+
+#[inline]
+pub fn win_is_out_of_memory_error(err: DWORD) -> bool {
+    matches!(
+        err,
+        ERROR_COMMITMENT_MINIMUM
+            | ERROR_COMMITMENT_LIMIT
+            | ERROR_PAGEFILE_QUOTA
+            | ERROR_NOT_ENOUGH_MEMORY
+    )
+}
+
+#[inline]
+pub fn mi_to_msecs(t: LARGE_INTEGER) -> mi_msecs_t {
+    let mut freq = MI_MSECS_FREQ.load(Ordering::Acquire);
+    if freq == 0 {
+        let mut raw_freq = LARGE_INTEGER::default();
+        let measured = unsafe {
+            if QueryPerformanceFrequency(&mut raw_freq) != FALSE as BOOL {
+                raw_freq.QuadPart / 1000
+            } else {
+                1
+            }
+        };
+        freq = measured.max(1);
+        MI_MSECS_FREQ.store(freq, Ordering::Release);
+    }
+    t.QuadPart / freq
+}
+
+#[inline]
+unsafe fn mi_win_main(module: PVOID, reason: DWORD, reserved: PVOID) {
+    let _ = module;
+    let _ = reserved;
+    match reason {
+        DLL_PROCESS_ATTACH => unsafe { crate::internal::_mi_auto_process_init() },
+        DLL_PROCESS_DETACH => unsafe { crate::internal::_mi_auto_process_done() },
+        DLL_THREAD_DETACH => {
+            if !unsafe { crate::prim::_mi_is_redirected() } {
+                unsafe { crate::internal::_mi_thread_done(null_mut()) };
+            }
+        }
+        _ => {}
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_getenv(
+    name: *const c_char,
+    result: *mut c_char,
+    result_size: usize,
+) -> bool {
+    if result.is_null() || result_size == 0 {
+        return false;
+    }
+    unsafe { *result = 0 };
+    if name.is_null() {
+        return false;
+    }
+    let key = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    let Some(value) = mi_getenv_value(&key) else {
+        return false;
+    };
+    let bytes = value.as_bytes();
+    if bytes.len() >= result_size {
+        return false;
+    }
+    unsafe {
+        copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), result, bytes.len());
+        *result.add(bytes.len()) = 0;
+    }
+    true
+}
+
+#[inline]
+pub unsafe extern "system" fn mi_fls_done(value: PVOID) {
+    let theap = value.cast::<mi_theap_t>();
+    if !theap.is_null() {
+        unsafe { crate::internal::_mi_thread_done(theap) };
+        if unsafe { mi_fls_key } != FLS_OUT_OF_INDEXES {
+            unsafe {
+                FlsSetValue(mi_fls_key, null_mut());
+            }
+        }
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {}
+
+#[inline]
+pub unsafe extern "system" fn mi_dll_main_raw(
+    module: PVOID,
+    reason: DWORD,
+    reserved: PVOID,
+) -> BOOL {
+    unsafe { mi_win_main(module, reason, reserved) };
+    TRUE as BOOL
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_allocator_done() {}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

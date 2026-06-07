@@ -13,6 +13,7 @@ pub mod atomic;
 pub mod bitmap;
 pub mod bits;
 pub mod free;
+pub mod headers;
 pub mod heap;
 pub mod init;
 pub mod internal;

@@ -18,15 +18,15 @@ use crate::bits::MI_INTPTR_SIZE;
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_decrease, _mi_align_down_ptr,
     _mi_arena_memid_is_suitable, _mi_error_message, _mi_memset_aligned, _mi_option_get_fast,
-    _mi_os_page_size, _mi_page_ptr_unalign, _mi_ptr_page, _mi_safe_ptr_page, _mi_theap_heap,
-    _mi_theap_page_reclaim, EAGAIN, EFAULT, EINVAL, MI_DEBUG, MI_ENCODE_FREELIST, MI_GUARDED,
-    MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK, MI_SECURE, MI_TRACK_ENABLED,
-    mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded, mi_block_set_next, mi_is_in_same_page,
-    mi_page_all_free, mi_page_block_size, mi_page_has_interior_pointers,
-    mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned,
-    mi_page_is_singleton, mi_page_queue, mi_page_start, mi_page_thread_free,
-    mi_page_usable_block_size, mi_page_xthread_id, mi_ptr_encode_canary, mi_tf_block, mi_tf_create,
-    mi_tf_is_owned, mi_theap_is_initialized,
+    _mi_os_page_size, _mi_os_unprotect, _mi_page_ptr_unalign, _mi_ptr_page, _mi_safe_ptr_page,
+    _mi_theap_heap, _mi_theap_page_reclaim, EAGAIN, EFAULT, EINVAL, MI_BLOCK_TAG_GUARDED, MI_DEBUG,
+    MI_ENCODE_FREELIST, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK,
+    MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded,
+    mi_block_set_next, mi_is_in_same_page, mi_page_all_free, mi_page_block_size,
+    mi_page_has_interior_pointers, mi_page_is_abandoned_mapped, mi_page_is_full,
+    mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_queue, mi_page_start,
+    mi_page_thread_free, mi_page_usable_block_size, mi_page_xthread_id, mi_ptr_encode_canary,
+    mi_tf_block, mi_tf_create, mi_tf_is_owned, mi_theap_is_initialized,
 };
 use crate::options::{mi_option_is_enabled, mi_option_t};
 use crate::page::{
@@ -96,6 +96,49 @@ unsafe fn mi_page_decode_padding(
         core::mem::size_of::<mi_padding_t>(),
     );
     ok
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_padding_shrink(
+    page: *const mi_page_t,
+    block: *const mi_block_t,
+    min_size: usize,
+) {
+    if MI_PADDING == 0 {
+        let _ = page;
+        let _ = block;
+        let _ = min_size;
+        return;
+    }
+
+    let mut bsize = 0usize;
+    let mut delta = 0usize;
+    let ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
+    crate::mi_assert_internal!(ok);
+    if !ok || (bsize - delta) >= min_size {
+        return;
+    }
+
+    crate::mi_assert_internal!(bsize >= min_size);
+    if bsize < min_size {
+        return;
+    }
+
+    let new_delta = bsize - min_size;
+    crate::mi_assert_internal!(new_delta < bsize);
+    let padding = (block.cast::<u8>())
+        .add(bsize)
+        .cast_mut()
+        .cast::<mi_padding_t>();
+    mi_track_mem_defined(
+        padding.cast::<c_void>(),
+        core::mem::size_of::<mi_padding_t>(),
+    );
+    (*padding).delta = new_delta as u32;
+    mi_track_mem_noaccess(
+        padding.cast::<c_void>(),
+        core::mem::size_of::<mi_padding_t>(),
+    );
 }
 
 unsafe fn mi_verify_padding(
@@ -289,15 +332,39 @@ pub unsafe fn mi_free_block_mt(page: *mut mi_page_t, block: *mut mi_block_t, was
     }
 }
 
+unsafe fn mi_block_unguard(page: *mut mi_page_t, block: *mut mi_block_t, p: *mut c_void) {
+    if MI_GUARDED == 0 {
+        let _ = page;
+        let _ = block;
+        let _ = p;
+        return;
+    }
+
+    crate::mi_assert_internal!(mi_block_ptr_is_guarded(block, p));
+    crate::mi_assert_internal!(mi_page_has_interior_pointers(page));
+    crate::mi_assert_internal!(
+        p.cast::<u8>().offset_from(block.cast::<u8>())
+            >= core::mem::size_of::<mi_block_t>() as isize
+    );
+    crate::mi_assert_internal!((*block).next == MI_BLOCK_TAG_GUARDED);
+
+    let bsize = mi_page_block_size(page);
+    let psize = _mi_os_page_size();
+    crate::mi_assert_internal!(bsize > psize);
+    crate::mi_assert_internal!(!(*page).memid.is_pinned);
+
+    let gpage = block.cast::<u8>().add(bsize - psize).cast::<c_void>();
+    crate::mi_assert_internal!((gpage as usize).is_multiple_of(psize));
+    _mi_os_unprotect(gpage, psize);
+}
+
 pub unsafe fn mi_block_check_unguard(
     page: *mut mi_page_t,
     block: *mut mi_block_t,
     p: *mut c_void,
 ) -> bool {
     if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block, p) {
-        let _ = page;
-        let _ = block;
-        let _ = p;
+        mi_block_unguard(page, block, p);
         true
     } else {
         let _ = page;
@@ -340,6 +407,15 @@ pub unsafe fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
     };
     let was_guarded = mi_block_check_unguard(page, block, p);
     mi_free_block_mt(page, block, was_guarded);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_free_generic(page: *mut mi_page_t, is_local: bool, p: *mut c_void) {
+    if is_local {
+        mi_free_generic_local(page, p);
+    } else {
+        mi_free_generic_mt(page, p);
+    }
 }
 
 unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page_t {

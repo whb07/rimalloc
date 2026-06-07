@@ -8,6 +8,47 @@ use std::os::raw::c_long;
 use crate::atomic::mi_lock_t;
 use crate::stats::mi_stats_t;
 
+pub const MI_TYPES_H: () = ();
+pub const MI_MAX_ALIGN_SIZE: usize = 16;
+
+const MI_SECURE: usize = 0;
+const MI_DEBUG: usize = if cfg!(debug_assertions) { 1 } else { 0 };
+pub const MI_STAT: usize = if MI_DEBUG > 0 { 2 } else { 0 };
+const MI_GUARDED: usize = 0;
+pub const MI_PADDING: usize = if MI_DEBUG >= 1
+    || crate::track::MI_TRACK_VALGRIND != 0
+    || crate::track::MI_TRACK_ASAN != 0
+    || crate::track::MI_TRACK_ETW != 0
+{
+    1
+} else {
+    0
+};
+pub const MI_PADDING_CHECK: usize = if MI_PADDING != 0 && MI_DEBUG >= 1 {
+    1
+} else {
+    0
+};
+pub const MI_ENCODE_FREELIST: usize = if MI_DEBUG >= 1 { 1 } else { 0 };
+const MI_PAGE_META_IS_SEPARATED: usize = if crate::bits::MI_PAGE_MAP_FLAT != 0 {
+    0
+} else {
+    1
+};
+pub const MI_PAGE_META_ALIGNED_FREE_SMALL: usize = 0;
+const MI_ARENA_SLICE_ALIGN: usize = crate::arena::MI_ARENA_SLICE_SIZE;
+pub const MI_ARENA_MIN_OBJ_SLICES: usize = 1;
+const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
+pub const MI_PAGE_MIN_COMMIT_SIZE: usize = crate::arena::MI_ARENA_SLICE_SIZE;
+
+const _: (usize, usize, usize, usize, usize) = (
+    MI_SECURE,
+    MI_GUARDED,
+    MI_PAGE_META_IS_SEPARATED,
+    MI_ARENA_SLICE_ALIGN,
+    MI_MAX_ALLOC_SIZE,
+);
+
 pub const MI_MALLOC_VERSION: i32 = 30302;
 pub const MI_ENABLE_LARGE_PAGES: usize = 1;
 pub const MI_SMALL_WSIZE_MAX: usize = 128;

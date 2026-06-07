@@ -88852,7 +88852,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization; controls allocator behavior",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001113",
@@ -89033,7 +89033,7 @@
       "thread_safety": "[]",
       "ownership": "Read during option initialization as deprecated alias",
       "mutability": "process environment mutable before initialization",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001117",
@@ -96156,7 +96156,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001255",
@@ -96230,7 +96230,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001256",
@@ -96299,7 +96299,7 @@
       "thread_safety": "n/a",
       "ownership": "C enum discriminant value",
       "mutability": "immutable compile-time",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001257",
@@ -96342,7 +96342,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001258",
@@ -96408,7 +96408,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001260",
@@ -194006,7 +194006,7 @@
       "thread_safety": "uses atomics; uses locks or lock macro",
       "ownership": "pointer ownership follows C API; raw pointers unsafe unless proven",
       "mutability": "may mutate through pointers/global state; inspect body",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002381",
@@ -242764,7 +242764,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002653",
@@ -242848,7 +242848,7 @@
       "thread_safety": "uses locks or lock macro",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002654",

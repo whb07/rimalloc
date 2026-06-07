@@ -10,19 +10,25 @@ use core::ffi::c_void;
 use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::atomic::{mi_lock_done, mi_lock_init, mi_lock_t};
+use crate::arena::MI_ARENA_SLICE_SIZE;
+use crate::atomic::{
+    mi_atomic_cas_strong_acq_rel, mi_atomic_load_ptr_acquire, mi_lock_acquire, mi_lock_done,
+    mi_lock_init, mi_lock_release, mi_lock_t,
+};
 use crate::bitmap::MI_BFIELD_BITS;
 use crate::bits::{MI_KiB, MI_PAGE_MAP_FLAT, MI_SIZE_BITS};
 use crate::internal::{
-    _mi_align_up, _mi_error_message, _mi_memid_create_os, _mi_memid_none, _mi_memzero_aligned,
-    _mi_os_commit, _mi_os_free_ex, _mi_os_has_overcommit, _mi_os_virtual_address_bits,
-    _mi_page_map_at, MI_ARENA_SLICE_SHIFT, MI_PAGE_MAP_COUNT, MI_PAGE_MAP_SUB_COUNT,
-    MI_PAGE_MAP_SUB_SHIFT, mi_memid_mem_t, mi_memid_os_info_t, mi_memid_t, mi_memkind_t,
-    mi_submap_t,
+    _mi_align_up, _mi_divide_up, _mi_error_message, _mi_is_aligned, _mi_memid_create_os,
+    _mi_memid_none, _mi_memzero_aligned, _mi_os_commit, _mi_os_free, _mi_os_free_ex,
+    _mi_os_has_overcommit, _mi_os_virtual_address_bits, _mi_page_map_at, _mi_page_map_index,
+    MI_ARENA_SLICE_SHIFT, MI_PAGE_MAP_COUNT, MI_PAGE_MAP_SUB_COUNT, MI_PAGE_MAP_SUB_SHIFT,
+    mi_memid_mem_t, mi_memid_os_info_t, mi_memid_t, mi_memkind_t, mi_page_area,
+    mi_page_slice_start, mi_slice_count_of_size, mi_submap_t,
 };
 use crate::options::{_mi_warning_message, mi_option_get_clamp, mi_option_is_enabled, mi_option_t};
-use crate::os::_mi_os_alloc_aligned;
-use crate::types::{ENOMEM, mi_page_t, mi_subproc_t};
+use crate::os::{_mi_os_alloc_aligned, _mi_os_zalloc};
+use crate::page::MI_LARGE_PAGE_SIZE;
+use crate::types::{ENOMEM, MI_PAGE_ALIGN, mi_page_t, mi_subproc_t};
 
 pub const MI_PAGE_MAP_SUB_SIZE: usize =
     MI_PAGE_MAP_SUB_COUNT * core::mem::size_of::<*mut mi_page_t>();
@@ -243,4 +249,173 @@ pub unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t)
         mi_page_map_max_address = ptr::null_mut();
     }
     mi_page_map_commit.store(0, Ordering::Release);
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+unsafe fn mi_page_map_ensure_submap_at(idx: usize, submap: *mut mi_submap_t) -> bool {
+    crate::mi_assert_internal!(!submap.is_null() && unsafe { (*submap).is_null() });
+    let mut sub = ptr::null_mut();
+    if !unsafe { mi_page_map_ensure_committed(idx, &mut sub) } {
+        return false;
+    }
+    if sub.is_null() {
+        unsafe { mi_lock_acquire(&raw mut mi_page_map_lock) };
+        sub = unsafe { mi_atomic_load_ptr_acquire(_mi_page_map.add(idx)) };
+        if sub.is_null() {
+            let mut memid = unsafe { _mi_memid_none() };
+            let new_sub = unsafe { _mi_os_zalloc(MI_PAGE_MAP_SUB_SIZE, &raw mut memid) }
+                .cast::<*mut mi_page_t>();
+            if new_sub.is_null() {
+                _mi_warning_message(format_args!(
+                    "internal error: unable to extend the page map\n"
+                ));
+            } else {
+                let mut expect: mi_submap_t = ptr::null_mut();
+                if !unsafe {
+                    mi_atomic_cas_strong_acq_rel(
+                        _mi_page_map.add(idx).cast::<usize>(),
+                        (&raw mut expect).cast::<usize>(),
+                        new_sub as usize,
+                    )
+                } {
+                    unsafe { _mi_os_free(new_sub.cast::<c_void>(), MI_PAGE_MAP_SUB_SIZE, memid) };
+                    sub = expect;
+                } else {
+                    sub = new_sub;
+                }
+            }
+        }
+        unsafe { mi_lock_release(&raw mut mi_page_map_lock) };
+        if sub.is_null() {
+            return false;
+        }
+    }
+    unsafe { *submap = sub };
+    true
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+unsafe fn mi_page_map_set_range_prim(
+    page: *mut mi_page_t,
+    mut idx: usize,
+    mut sub_idx: usize,
+    mut slice_count: usize,
+) -> bool {
+    while slice_count > 0 {
+        let mut sub: mi_submap_t = ptr::null_mut();
+        if !unsafe { mi_page_map_ensure_submap_at(idx, &mut sub) } {
+            return false;
+        }
+        crate::mi_assert_internal!(!sub.is_null());
+        while slice_count > 0 && sub_idx < MI_PAGE_MAP_SUB_COUNT {
+            unsafe { *sub.add(sub_idx) = page };
+            slice_count -= 1;
+            sub_idx += 1;
+        }
+        idx += 1;
+        sub_idx = 0;
+    }
+    true
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+unsafe fn mi_page_map_set_range(
+    page: *mut mi_page_t,
+    idx: usize,
+    sub_idx: usize,
+    slice_count: usize,
+) -> bool {
+    if !unsafe { mi_page_map_set_range_prim(page, idx, sub_idx, slice_count) } {
+        if !page.is_null() {
+            unsafe { mi_page_map_set_range_prim(ptr::null_mut(), idx, sub_idx, slice_count) };
+        }
+        return false;
+    }
+    true
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+unsafe fn mi_page_map_get_idx(
+    page: *mut mi_page_t,
+    sub_idx: *mut usize,
+    slice_count: *mut usize,
+) -> usize {
+    let mut page_size = 0usize;
+    let page_start = unsafe { mi_page_area(page, &mut page_size) };
+    if page_size > MI_LARGE_PAGE_SIZE {
+        page_size = MI_LARGE_PAGE_SIZE - MI_ARENA_SLICE_SIZE;
+    }
+    unsafe {
+        *slice_count = mi_slice_count_of_size(page_size)
+            + ((page_start as usize - mi_page_slice_start(page) as usize) / MI_ARENA_SLICE_SIZE);
+    }
+    unsafe { _mi_page_map_index(page_start.cast::<c_void>(), sub_idx) }
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
+    crate::mi_assert_internal!(!page.is_null());
+    crate::mi_assert_internal!(unsafe {
+        _mi_is_aligned(mi_page_slice_start(page).cast::<c_void>(), MI_PAGE_ALIGN)
+    });
+    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    if unsafe { _mi_page_map }.is_null() && !unsafe { _mi_page_map_init() } {
+        return false;
+    }
+    crate::mi_assert!(!(unsafe { _mi_page_map }).is_null());
+    let mut slice_count = 0usize;
+    let mut sub_idx = 0usize;
+    let idx = unsafe { mi_page_map_get_idx(page, &mut sub_idx, &mut slice_count) };
+    unsafe { mi_page_map_set_range(page, idx, sub_idx, slice_count) }
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
+    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    crate::mi_assert_internal!(!page.is_null());
+    crate::mi_assert_internal!(unsafe {
+        _mi_is_aligned(mi_page_slice_start(page).cast::<c_void>(), MI_PAGE_ALIGN)
+    });
+    if unsafe { _mi_page_map }.is_null() {
+        return;
+    }
+    let mut slice_count = 0usize;
+    let mut sub_idx = 0usize;
+    let idx = unsafe { mi_page_map_get_idx(page, &mut sub_idx, &mut slice_count) };
+    unsafe { mi_page_map_set_range(ptr::null_mut(), idx, sub_idx, slice_count) };
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
+    if unsafe { _mi_page_map }.is_null() {
+        return;
+    }
+    let slice_count = _mi_divide_up(size, MI_ARENA_SLICE_SIZE);
+    let mut sub_idx = 0usize;
+    let idx = unsafe { _mi_page_map_index(start.cast_const(), &mut sub_idx) };
+    unsafe { mi_page_map_set_range(ptr::null_mut(), idx, sub_idx, slice_count) };
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
+    if p >= unsafe { mi_page_map_max_address } {
+        return ptr::null_mut();
+    }
+    let mut sub_idx = 0usize;
+    let idx = unsafe { _mi_page_map_index(p, &mut sub_idx) };
+    let sub = unsafe { _mi_page_map_at(idx) };
+    if sub.is_null() {
+        return ptr::null_mut();
+    }
+    unsafe { *sub.add(sub_idx) }
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_is_in_heap_region(p: *const c_void) -> bool {
+    !unsafe { _mi_safe_ptr_page(p) }.is_null()
 }

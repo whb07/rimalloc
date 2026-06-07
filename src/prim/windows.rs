@@ -602,7 +602,7 @@ pub unsafe fn McGenEventEnabled(
 }
 
 #[inline]
-pub unsafe fn McGenControlCallbackV2(
+pub unsafe extern "system" fn McGenControlCallbackV2(
     _source_id: LPCGUID,
     control_code: ULONG,
     level: UCHAR,
@@ -710,6 +710,35 @@ pub unsafe fn McGenEventUnregister(reg_handle: PREGHANDLE) -> ULONG {
     error
 }
 
+macro_rules! McGenEventWrite {
+    ($($arg:expr),* $(,)?) => {
+        $crate::prim::windows::McGenEventWrite($($arg),*)
+    };
+}
+
+macro_rules! McGenEventRegister {
+    ($($arg:expr),* $(,)?) => {
+        $crate::prim::windows::McGenEventRegister($($arg),*)
+    };
+}
+
+macro_rules! McGenEventUnregister {
+    ($($arg:expr),* $(,)?) => {
+        $crate::prim::windows::McGenEventUnregister($($arg),*)
+    };
+}
+
+macro_rules! MCGEN_EVENT_ENABLED {
+    ($event_name:ident) => {
+        unsafe {
+            $crate::prim::windows::McGenEventEnabled(
+                core::ptr::addr_of!($crate::prim::windows::ETW_MI_Provider_Context),
+                core::ptr::addr_of!($crate::prim::windows::$event_name),
+            ) != $crate::prim::windows::FALSE
+        }
+    };
+}
+
 #[inline]
 pub unsafe fn _mcgen_EVENT_BIT_SET(enable_bits: *const ULONG, bit_position: usize) -> bool {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -797,6 +826,59 @@ pub unsafe fn microsoft_windows_mimallocHandle_ForContext(
     &raw mut (*pContext).Context.RegistrationHandle
 }
 
+#[inline]
+pub unsafe fn _mcgen_RegisterForContext_microsoft_windows_mimalloc_EventRegister(
+    provider_id: LPCGUID,
+    pContext: *mut McGenContext_microsoft_windows_mimalloc,
+) -> ULONG {
+    if pContext.is_null() {
+        return 0;
+    }
+    let context = &mut *pContext;
+    write_bytes(
+        context as *mut McGenContext_microsoft_windows_mimalloc,
+        0,
+        1,
+    );
+    context.Context.Logger = ETW_MI_Provider_Traits as ULONG_PTR;
+    context.Context.EnableBitsCount = 1;
+    context.Context.EnableBitMask = context.EnableBits.as_mut_ptr();
+    context.Context.EnableKeyWords =
+        (&raw const microsoft_windows_mimallocKeywords).cast::<ULONGLONG>();
+    context.Context.EnableLevel = (&raw const microsoft_windows_mimallocLevels).cast::<UCHAR>();
+    McGenEventRegister(
+        provider_id,
+        Some(McGenControlCallbackV2),
+        (&raw mut context.Context).cast::<c_void>(),
+        &raw mut context.Context.RegistrationHandle,
+    )
+}
+
+macro_rules! EventRegistermicrosoft_windows_mimalloc_ForContext {
+    ($pContext:expr $(,)?) => {
+        $crate::prim::windows::_mcgen_RegisterForContext_microsoft_windows_mimalloc_EventRegister(
+            core::ptr::addr_of!($crate::prim::windows::ETW_MI_Provider),
+            $pContext,
+        )
+    };
+}
+
+macro_rules! EventUnregistermicrosoft_windows_mimalloc {
+    () => {
+        $crate::prim::windows::McGenEventUnregister(
+            $crate::prim::windows::microsoft_windows_mimallocHandle(),
+        )
+    };
+}
+
+macro_rules! EventUnregistermicrosoft_windows_mimalloc_ForContext {
+    ($pContext:expr $(,)?) => {
+        $crate::prim::windows::McGenEventUnregister(core::ptr::addr_of_mut!(
+            (*$pContext).Context.RegistrationHandle
+        ))
+    };
+}
+
 pub const McTemplateU0xx_def: () = ();
 pub const McTemplateU0xx_ARGCOUNT: usize = 2;
 
@@ -824,6 +906,18 @@ pub unsafe fn McTemplateU0xx_EventWriteTransfer(
         (McTemplateU0xx_ARGCOUNT + 1) as ULONG,
         EventData.as_mut_ptr(),
     )
+}
+
+macro_rules! _mcgen_TEMPLATE_FOR_ETW_MI_ALLOC {
+    ($($arg:expr),* $(,)?) => {
+        $crate::prim::windows::McTemplateU0xx_EventWriteTransfer($($arg),*)
+    };
+}
+
+macro_rules! _mcgen_TEMPLATE_FOR_ETW_MI_FREE {
+    ($($arg:expr),* $(,)?) => {
+        $crate::prim::windows::McTemplateU0xx_EventWriteTransfer($($arg),*)
+    };
 }
 
 #[inline]

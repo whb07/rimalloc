@@ -492,3 +492,97 @@ pub struct tagMcGenContext_microsoft_windows_mimalloc {
 }
 
 pub type McGenContext_microsoft_windows_mimalloc = tagMcGenContext_microsoft_windows_mimalloc;
+
+pub const ETW_MI_Provider: GUID = GUID {
+    data1: 0x138f4dbb,
+    data2: 0xee04,
+    data3: 0x4899,
+    data4: [0xaa, 0x0a, 0x57, 0x2a, 0xd4, 0x47, 0x57, 0x79],
+};
+
+pub const ETW_MI_Provider_Traits: *const USHORT = null();
+
+pub const ETW_MI_ALLOC_value: USHORT = 0x64;
+pub const ETW_MI_FREE_value: USHORT = 0x65;
+
+pub const ETW_MI_ALLOC: EVENT_DESCRIPTOR = EVENT_DESCRIPTOR {
+    Id: ETW_MI_ALLOC_value,
+    Version: 0x1,
+    Channel: 0x0,
+    Level: 0x4,
+    Opcode: 0x0,
+    Task: 0x0,
+    Keyword: 0x0,
+};
+
+pub const ETW_MI_FREE: EVENT_DESCRIPTOR = EVENT_DESCRIPTOR {
+    Id: ETW_MI_FREE_value,
+    Version: 0x1,
+    Channel: 0x0,
+    Level: 0x4,
+    Opcode: 0x0,
+    Task: 0x0,
+    Keyword: 0x0,
+};
+
+pub static mut microsoft_windows_mimallocEnableBits: [ULONG; 1] = [0; 1];
+pub static microsoft_windows_mimallocKeywords: [ULONGLONG; 1] = [0x0];
+pub static microsoft_windows_mimallocLevels: [UCHAR; 1] = [0x4];
+
+pub static mut ETW_MI_Provider_Context: MCGEN_TRACE_CONTEXT = MCGEN_TRACE_CONTEXT {
+    RegistrationHandle: 0,
+    Logger: 0,
+    MatchAnyKeyword: 0,
+    MatchAllKeyword: 0,
+    Flags: 0,
+    IsEnabled: 0,
+    Level: 0,
+    Reserve: 0,
+    EnableBitsCount: 1,
+    EnableBitMask: (&raw mut microsoft_windows_mimallocEnableBits).cast::<ULONG>(),
+    EnableKeyWords: (&raw const microsoft_windows_mimallocKeywords).cast::<ULONGLONG>(),
+    EnableLevel: (&raw const microsoft_windows_mimallocLevels).cast::<UCHAR>(),
+};
+
+#[inline]
+pub unsafe fn microsoft_windows_mimallocHandle() -> PREGHANDLE {
+    &raw mut ETW_MI_Provider_Context.RegistrationHandle
+}
+
+pub const ETW_MI_Provider_EventWriteActivity: ULONG = 0;
+
+#[inline]
+pub unsafe fn microsoft_windows_mimallocHandle_ForContext(
+    pContext: *mut McGenContext_microsoft_windows_mimalloc,
+) -> PREGHANDLE {
+    &raw mut (*pContext).Context.RegistrationHandle
+}
+
+pub const McTemplateU0xx_def: () = ();
+pub const McTemplateU0xx_ARGCOUNT: usize = 2;
+
+#[inline]
+pub unsafe fn McTemplateU0xx_EventWriteTransfer(
+    Context: PMCGEN_TRACE_CONTEXT,
+    Descriptor: PCEVENT_DESCRIPTOR,
+    Arg0: u64,
+    Arg1: u64,
+) -> ULONG {
+    let mut EventData = [EVENT_DATA_DESCRIPTOR::default(); McTemplateU0xx_ARGCOUNT + 1];
+
+    EventData[1].Ptr = (&raw const Arg0).cast::<c_void>() as ULONG_PTR;
+    EventData[1].Size = core::mem::size_of::<u64>() as ULONG;
+    EventData[1].Reserved = 0;
+
+    EventData[2].Ptr = (&raw const Arg1).cast::<c_void>() as ULONG_PTR;
+    EventData[2].Size = core::mem::size_of::<u64>() as ULONG;
+    EventData[2].Reserved = 0;
+
+    McGenEventWrite(
+        Context,
+        Descriptor,
+        null(),
+        (McTemplateU0xx_ARGCOUNT + 1) as ULONG,
+        EventData.as_mut_ptr(),
+    )
+}

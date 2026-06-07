@@ -17,6 +17,7 @@ pub mod mimalloc;
 pub mod options;
 pub mod os;
 pub mod page;
+pub mod page_map;
 pub mod prim;
 pub mod random;
 #[path = "static.rs"]

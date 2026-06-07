@@ -10,17 +10,22 @@
 use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 use std::io::{self, Write};
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 use crate::arena::MI_ARENA_SLICE_SIZE;
+use crate::atomic::mi_lock_t;
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB};
 use crate::internal::{
-    _mi_align_down_ptr, _mi_align_up, _mi_align_up_ptr, _mi_memid_create_os, _mi_memid_none,
-    MI_SECURE, mi_memid_t,
+    __mi_stat_decrease, _mi_align_down_ptr, _mi_align_up, _mi_align_up_ptr, _mi_memid_create_os,
+    _mi_memid_none, MI_SECURE, mi_commit_fun_t, mi_memid_t,
 };
-use crate::options::_mi_warning_message;
+use crate::options::{_mi_warning_message, mi_option_get, mi_option_get_size, mi_option_t};
 use crate::prim::mi_os_mem_config_t;
-use crate::prim::{_mi_prim_alloc, _mi_prim_commit, _mi_prim_free, _mi_prim_protect};
-use crate::types::mi_process_info_t;
+use crate::prim::{
+    _mi_prim_alloc, _mi_prim_commit, _mi_prim_free, _mi_prim_mem_init, _mi_prim_protect,
+};
+use crate::stats::mi_stats_t;
+use crate::types::{mi_arena_t, mi_heap_t, mi_page_t, mi_process_info_t, mi_subproc_t};
 
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_4_GIB: usize = 4 * MI_MiB;
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_32_GIB: usize = 32 * MI_MiB;
@@ -31,8 +36,14 @@ pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB: usize = if MI_INTPTR_SIZE < 8 {
 };
 
 pub const MI_HINT_ALIGN: usize = 4usize << 20;
+pub const MI_HINT_BASE: usize = 2usize << 40;
 pub const MI_HINT_AREA: usize = 4usize << 40;
+pub const MI_HINT_MAX: usize = 30usize << 40;
 pub const MI_HUGE_OS_PAGE_SIZE: usize = MI_GiB;
+
+const MI_MAX_ARENAS: usize = 160;
+
+static ALIGNED_BASE: AtomicUsize = AtomicUsize::new(0);
 
 static mut mi_os_mem_config: mi_os_mem_config_t = mi_os_mem_config_t {
     page_size: 4096,
@@ -49,6 +60,48 @@ static mut mi_os_mem_config: mi_os_mem_config_t = mi_os_mem_config_t {
 #[inline]
 unsafe fn mi_os_mem_config_ptr() -> *const mi_os_mem_config_t {
     core::ptr::addr_of!(mi_os_mem_config)
+}
+
+#[repr(C)]
+struct MiSubprocStatsPrefix {
+    subproc_seq: usize,
+    next: *mut mi_subproc_t,
+    prev: *mut mi_subproc_t,
+    arena_count: AtomicUsize,
+    arenas: [*mut c_void; MI_MAX_ARENAS],
+    arena_reserve_lock: mi_lock_t,
+    purge_expire: AtomicI64,
+    heap_main: *mut mi_heap_t,
+    heaps: *mut mi_heap_t,
+    heaps_lock: mi_lock_t,
+    thread_count: AtomicUsize,
+    thread_total_count: AtomicUsize,
+    heap_count: AtomicUsize,
+    heap_total_count: AtomicUsize,
+    memid: mi_memid_t,
+    stats: mi_stats_t,
+}
+
+#[repr(C)]
+struct MiArenaCommitPrefix {
+    memid: mi_memid_t,
+    subproc: *mut mi_subproc_t,
+    arena_idx: usize,
+    slice_count: usize,
+    info_slices: usize,
+    numa_node: i32,
+    is_exclusive: bool,
+    _padding: [u8; 7],
+    purge_expire: AtomicI64,
+    commit_fun: mi_commit_fun_t,
+    commit_fun_arg: *mut c_void,
+    total_size: usize,
+    parent: *mut mi_arena_t,
+    slices_free: *mut c_void,
+    slices_committed: *mut c_void,
+    slices_dirty: *mut c_void,
+    slices_purge: *mut c_void,
+    pages_meta: *mut mi_page_t,
 }
 
 #[inline]
@@ -102,6 +155,20 @@ pub unsafe extern "C" fn _mi_os_large_page_size() -> usize {
 }
 
 #[inline]
+pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
+    let minsize = mi_option_get_size(mi_option_t::mi_option_minimal_purge_size);
+    if minsize != 0 {
+        _mi_align_up(minsize, unsafe { _mi_os_page_size() })
+    } else if unsafe { (*mi_os_mem_config_ptr()).has_transparent_huge_pages }
+        && mi_option_get(mi_option_t::mi_option_allow_thp) == 2
+    {
+        unsafe { _mi_os_large_page_size() }
+    } else {
+        unsafe { _mi_os_page_size() }
+    }
+}
+
+#[inline]
 pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
     let gsize = unsafe { _mi_os_page_size() };
     debug_assert!(gsize <= (MI_ARENA_SLICE_SIZE / 4));
@@ -113,6 +180,14 @@ pub unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
     let vbits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
     debug_assert!(vbits <= MI_MAX_VABITS);
     vbits
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize) -> bool {
+    let large_page_size = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
+    large_page_size != 0
+        && size.is_multiple_of(large_page_size)
+        && alignment.is_multiple_of(large_page_size)
 }
 
 #[inline]
@@ -133,6 +208,44 @@ pub unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
     } else {
         _mi_align_up(size, align_size)
     }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_os_init() {
+    unsafe { _mi_prim_mem_init(core::ptr::addr_of_mut!(mi_os_mem_config)) };
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usize) -> *mut c_void {
+    if MI_INTPTR_SIZE < 8 || try_alignment <= unsafe { (*mi_os_mem_config_ptr()).alloc_granularity }
+    {
+        return core::ptr::null_mut();
+    }
+    if try_alignment > MI_HINT_ALIGN
+        || unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits } < 46
+    {
+        return core::ptr::null_mut();
+    }
+    let size = _mi_align_up(size, MI_HINT_ALIGN);
+    if size > 16 * MI_GiB {
+        return core::ptr::null_mut();
+    }
+    let size = size.saturating_add(MI_HINT_ALIGN);
+
+    let mut hint = ALIGNED_BASE.fetch_add(size, Ordering::AcqRel);
+    if hint == 0 || hint > MI_HINT_MAX {
+        let _ = ALIGNED_BASE.compare_exchange(
+            hint.saturating_add(size),
+            MI_HINT_BASE,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+        hint = ALIGNED_BASE.fetch_add(size, Ordering::AcqRel);
+    }
+    if !hint.is_multiple_of(MI_HINT_ALIGN) || !hint.is_multiple_of(try_alignment) {
+        return core::ptr::null_mut();
+    }
+    hint as *mut c_void
 }
 
 #[inline]
@@ -191,6 +304,96 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_size() -> usize {
         unsafe { _mi_os_guard_page_size() }
     } else {
         0
+    }
+}
+
+#[inline]
+#[allow(clippy::absurd_extreme_comparisons)]
+pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
+    addr: *mut c_void,
+    memid: mi_memid_t,
+) -> bool {
+    if addr.is_null() {
+        return true;
+    }
+    if MI_SECURE > 0 && !memid.is_pinned {
+        let arena = unsafe { memid.mem.arena.arena };
+        if !arena.is_null()
+            && unsafe { ((*arena.cast::<MiArenaCommitPrefix>()).commit_fun as usize) != 0 }
+        {
+            return unsafe {
+                ((*arena.cast::<MiArenaCommitPrefix>()).commit_fun)(
+                    false,
+                    addr,
+                    _mi_os_secure_guard_page_size(),
+                    core::ptr::null_mut(),
+                    (*arena.cast::<MiArenaCommitPrefix>()).commit_fun_arg,
+                )
+            };
+        }
+        return false;
+    }
+    true
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_os_secure_guard_page_set_before(
+    addr: *mut c_void,
+    memid: mi_memid_t,
+) -> bool {
+    unsafe {
+        _mi_os_secure_guard_page_set_at(
+            addr.cast::<u8>()
+                .sub(_mi_os_secure_guard_page_size())
+                .cast::<c_void>(),
+            memid,
+        )
+    }
+}
+
+#[inline]
+#[allow(clippy::absurd_extreme_comparisons)]
+pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
+    addr: *mut c_void,
+    memid: mi_memid_t,
+) -> bool {
+    if addr.is_null() {
+        return true;
+    }
+    if MI_SECURE > 0 && !memid.is_pinned {
+        let arena = unsafe { memid.mem.arena.arena };
+        if !arena.is_null()
+            && unsafe { ((*arena.cast::<MiArenaCommitPrefix>()).commit_fun as usize) != 0 }
+        {
+            return unsafe {
+                ((*arena.cast::<MiArenaCommitPrefix>()).commit_fun)(
+                    true,
+                    addr,
+                    _mi_os_secure_guard_page_size(),
+                    core::ptr::null_mut(),
+                    (*arena.cast::<MiArenaCommitPrefix>()).commit_fun_arg,
+                )
+            };
+        }
+        return unsafe {
+            _mi_os_commit(addr, _mi_os_secure_guard_page_size(), core::ptr::null_mut())
+        };
+    }
+    true
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_before(
+    addr: *mut c_void,
+    memid: mi_memid_t,
+) -> bool {
+    unsafe {
+        _mi_os_secure_guard_page_reset_at(
+            addr.cast::<u8>()
+                .sub(_mi_os_secure_guard_page_size())
+                .cast::<c_void>(),
+            memid,
+        )
     }
 }
 
@@ -259,6 +462,91 @@ unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool 
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
 pub unsafe extern "C" fn _mi_os_protect(addr: *mut c_void, size: usize) -> bool {
     unsafe { mi_os_protectx(addr, size, true) }
+}
+
+#[inline]
+unsafe fn mi_os_prim_free(
+    addr: *mut c_void,
+    size: usize,
+    commit_size: usize,
+    subproc: *mut mi_subproc_t,
+) {
+    crate::mi_assert_internal!(size.is_multiple_of(unsafe { _mi_os_page_size() }));
+    if addr.is_null() {
+        return;
+    }
+    let err = unsafe { _mi_prim_free(addr, size) };
+    if err != 0 {
+        _mi_warning_message(format_args!(
+            "unable to free OS memory (error: {} (0x{:x}), size: 0x{:x} bytes, address: {:p})\n",
+            err, err, size, addr
+        ));
+    }
+    let subproc = if subproc.is_null() {
+        unsafe { crate::internal::_mi_subproc() }
+    } else {
+        subproc
+    };
+    if !subproc.is_null() {
+        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
+        if commit_size > 0 {
+            __mi_stat_decrease(&mut stats.committed, commit_size);
+        }
+        __mi_stat_decrease(&mut stats.reserved, size);
+    }
+}
+
+#[inline]
+const fn mi_memkind_is_os(memkind: crate::internal::mi_memkind_t) -> bool {
+    matches!(
+        memkind,
+        crate::internal::mi_memkind_t::MI_MEM_OS
+            | crate::internal::mi_memkind_t::MI_MEM_OS_HUGE
+            | crate::internal::mi_memkind_t::MI_MEM_OS_REMAP
+    )
+}
+
+pub unsafe extern "C" fn _mi_os_free_ex(
+    addr: *mut c_void,
+    size: usize,
+    still_committed: bool,
+    memid: mi_memid_t,
+    subproc: *mut mi_subproc_t,
+) {
+    if !mi_memkind_is_os(memid.memkind) {
+        return;
+    }
+    let mut csize = unsafe { memid.mem.os.size };
+    if csize == 0 {
+        csize = unsafe { _mi_os_good_alloc_size(size) };
+    }
+    crate::mi_assert_internal!(csize >= size);
+
+    let mut commit_size = if still_committed { csize } else { 0 };
+    let mut base = addr;
+    if unsafe { memid.mem.os.base } != base {
+        crate::mi_assert_internal!(unsafe { memid.mem.os.base } <= addr);
+        base = unsafe { memid.mem.os.base };
+        let diff = addr as usize - base as usize;
+        if csize == 0 {
+            csize += diff;
+        }
+        if still_committed {
+            commit_size -= diff;
+        }
+    }
+    unsafe {
+        mi_os_prim_free(
+            base,
+            csize,
+            if still_committed { commit_size } else { 0 },
+            subproc,
+        )
+    };
+}
+
+pub unsafe extern "C" fn _mi_os_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
+    unsafe { _mi_os_free_ex(p, size, true, memid, core::ptr::null_mut()) };
 }
 
 unsafe fn mi_os_alloc_aligned_memid(

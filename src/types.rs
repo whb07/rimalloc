@@ -3,6 +3,7 @@
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::{c_char, c_int, c_void};
+use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize};
 use std::os::raw::c_long;
 
 use crate::atomic::mi_lock_t;
@@ -86,17 +87,8 @@ pub type mi_threadid_t = usize;
 pub type mi_msecs_t = i64;
 pub type mi_thread_local_t = usize;
 
-pub enum mi_arena_s {}
-pub type mi_arena_t = mi_arena_s;
-
-pub enum mi_heap_s {}
-pub type mi_heap_t = mi_heap_s;
-
 pub type mi_theap_t = mi_theap_s;
 pub type mi_page_t = mi_page_s;
-
-pub enum mi_subproc_s {}
-pub type mi_subproc_t = mi_subproc_s;
 pub type mi_page_flags_t = usize;
 pub type mi_thread_free_t = usize;
 
@@ -203,6 +195,36 @@ pub type mi_forall_set_fun_t = unsafe extern "C" fn(
 ) -> bool;
 
 #[repr(C)]
+pub struct mi_arena_pages_s {
+    pub pages: *mut mi_bitmap_t,
+    pub pages_abandoned: [*mut mi_bitmap_t; MI_ARENA_BIN_COUNT],
+}
+
+pub type mi_arena_pages_t = mi_arena_pages_s;
+
+#[repr(C)]
+pub struct mi_subproc_s {
+    pub subproc_seq: usize,
+    pub next: *mut mi_subproc_t,
+    pub prev: *mut mi_subproc_t,
+    pub arena_count: AtomicUsize,
+    pub arenas: [*mut mi_arena_t; MI_MAX_ARENAS],
+    pub arena_reserve_lock: mi_lock_t,
+    pub purge_expire: AtomicI64,
+    pub heap_main: *mut mi_heap_t,
+    pub heaps: *mut mi_heap_t,
+    pub heaps_lock: mi_lock_t,
+    pub thread_count: AtomicUsize,
+    pub thread_total_count: AtomicUsize,
+    pub heap_count: AtomicUsize,
+    pub heap_total_count: AtomicUsize,
+    pub memid: crate::internal::mi_memid_t,
+    pub stats: mi_stats_t,
+}
+
+pub type mi_subproc_t = mi_subproc_s;
+
+#[repr(C)]
 pub struct mi_tld_s {
     pub thread_id: mi_threadid_t,
     pub thread_seq: usize,
@@ -218,6 +240,53 @@ pub struct mi_tld_s {
 pub type mi_tld_t = mi_tld_s;
 unsafe impl Send for mi_tld_s {}
 unsafe impl Sync for mi_tld_s {}
+
+#[repr(C)]
+pub struct mi_arena_s {
+    pub memid: crate::internal::mi_memid_t,
+    pub subproc: *mut mi_subproc_t,
+    pub arena_idx: usize,
+    pub slice_count: usize,
+    pub info_slices: usize,
+    pub numa_node: i32,
+    pub is_exclusive: bool,
+    pub _padding: [u8; 7],
+    pub purge_expire: AtomicI64,
+    pub commit_fun: mi_commit_fun_t,
+    pub commit_fun_arg: *mut c_void,
+    pub total_size: usize,
+    pub parent: *mut mi_arena_t,
+    pub slices_free: *mut mi_bbitmap_t,
+    pub slices_committed: *mut mi_bitmap_t,
+    pub slices_dirty: *mut mi_bitmap_t,
+    pub slices_purge: *mut mi_bitmap_t,
+    pub pages_meta: *mut mi_page_t,
+    pub pages_main: mi_arena_pages_t,
+}
+
+pub type mi_arena_t = mi_arena_s;
+
+#[repr(C)]
+pub struct mi_heap_s {
+    pub subproc: *mut mi_subproc_t,
+    pub heap_seq: usize,
+    pub next: *mut mi_heap_t,
+    pub prev: *mut mi_heap_t,
+    pub theap: mi_thread_local_t,
+    pub exclusive_arena: *mut mi_arena_t,
+    pub numa_node: i32,
+    pub _padding: u32,
+    pub theaps: *mut mi_theap_t,
+    pub theaps_lock: mi_lock_t,
+    pub abandoned_count: [AtomicUsize; MI_BIN_COUNT],
+    pub os_abandoned_pages: *mut mi_page_t,
+    pub os_abandoned_pages_lock: mi_lock_t,
+    pub arena_pages: [AtomicPtr<c_void>; MI_MAX_ARENAS],
+    pub arena_pages_lock: mi_lock_t,
+    pub stats: mi_stats_t,
+}
+
+pub type mi_heap_t = mi_heap_s;
 
 #[repr(C)]
 pub struct mi_page_s {
@@ -271,6 +340,14 @@ pub struct mi_theap_s {
 }
 unsafe impl Send for mi_theap_s {}
 unsafe impl Sync for mi_theap_s {}
+unsafe impl Send for mi_arena_pages_s {}
+unsafe impl Sync for mi_arena_pages_s {}
+unsafe impl Send for mi_subproc_s {}
+unsafe impl Sync for mi_subproc_s {}
+unsafe impl Send for mi_arena_s {}
+unsafe impl Sync for mi_arena_s {}
+unsafe impl Send for mi_heap_s {}
+unsafe impl Sync for mi_heap_s {}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

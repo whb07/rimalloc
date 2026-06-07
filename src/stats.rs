@@ -376,17 +376,23 @@ fn mi_stats_add(stats: &mut mi_stats_t, src: &mi_stats_t) {
         return;
     }
 
-    mi_stat_count_add_mt(&mut stats.pages, &src.pages);
-    mi_stat_count_add_mt(&mut stats.reserved, &src.reserved);
-    mi_stat_count_add_mt(&mut stats.committed, &src.committed);
+    macro_rules! MI_STAT_COUNT {
+        ($field:ident) => {
+            mi_stat_count_add_mt(&mut stats.$field, &src.$field)
+        };
+    }
+
+    MI_STAT_COUNT!(pages);
+    MI_STAT_COUNT!(reserved);
+    MI_STAT_COUNT!(committed);
     mi_stat_counter_add_mt(&mut stats.reset, &src.reset);
     mi_stat_counter_add_mt(&mut stats.purged, &src.purged);
-    mi_stat_count_add_mt(&mut stats.page_committed, &src.page_committed);
-    mi_stat_count_add_mt(&mut stats.pages_abandoned, &src.pages_abandoned);
-    mi_stat_count_add_mt(&mut stats.threads, &src.threads);
-    mi_stat_count_add_mt(&mut stats.malloc_normal, &src.malloc_normal);
-    mi_stat_count_add_mt(&mut stats.malloc_huge, &src.malloc_huge);
-    mi_stat_count_add_mt(&mut stats.malloc_requested, &src.malloc_requested);
+    MI_STAT_COUNT!(page_committed);
+    MI_STAT_COUNT!(pages_abandoned);
+    MI_STAT_COUNT!(threads);
+    MI_STAT_COUNT!(malloc_normal);
+    MI_STAT_COUNT!(malloc_huge);
+    MI_STAT_COUNT!(malloc_requested);
     mi_stat_counter_add_mt(&mut stats.mmap_calls, &src.mmap_calls);
     mi_stat_counter_add_mt(&mut stats.commit_calls, &src.commit_calls);
     mi_stat_counter_add_mt(&mut stats.reset_calls, &src.reset_calls);
@@ -401,12 +407,12 @@ fn mi_stats_add(stats: &mut mi_stats_t, src: &mi_stats_t) {
     mi_stat_counter_add_mt(&mut stats.pages_retire, &src.pages_retire);
     mi_stat_counter_add_mt(&mut stats.page_searches, &src.page_searches);
     mi_stat_counter_add_mt(&mut stats.page_searches_count, &src.page_searches_count);
-    mi_stat_count_add_mt(&mut stats.segments, &src.segments);
-    mi_stat_count_add_mt(&mut stats.segments_abandoned, &src.segments_abandoned);
-    mi_stat_count_add_mt(&mut stats.segments_cache, &src.segments_cache);
-    mi_stat_count_add_mt(&mut stats._segments_reserved, &src._segments_reserved);
-    mi_stat_count_add_mt(&mut stats.heaps, &src.heaps);
-    mi_stat_count_add_mt(&mut stats.theaps, &src.theaps);
+    MI_STAT_COUNT!(segments);
+    MI_STAT_COUNT!(segments_abandoned);
+    MI_STAT_COUNT!(segments_cache);
+    MI_STAT_COUNT!(_segments_reserved);
+    MI_STAT_COUNT!(heaps);
+    MI_STAT_COUNT!(theaps);
     mi_stat_counter_add_mt(
         &mut stats.pages_reclaim_on_alloc,
         &src.pages_reclaim_on_alloc,
@@ -1417,17 +1423,23 @@ fn mi_json_buf_print_counter_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &
 }
 
 fn append_stats_json(hbuf: &mut mi_json_buf_t, stats: &mi_stats_t) {
-    mi_json_buf_print_count_value(hbuf, "pages", &stats.pages);
-    mi_json_buf_print_count_value(hbuf, "reserved", &stats.reserved);
-    mi_json_buf_print_count_value(hbuf, "committed", &stats.committed);
+    macro_rules! MI_STAT_COUNT {
+        ($field:ident) => {
+            mi_json_buf_print_count_value(hbuf, stringify!($field), &stats.$field)
+        };
+    }
+
+    MI_STAT_COUNT!(pages);
+    MI_STAT_COUNT!(reserved);
+    MI_STAT_COUNT!(committed);
     mi_json_buf_print_counter_value(hbuf, "reset", &stats.reset);
     mi_json_buf_print_counter_value(hbuf, "purged", &stats.purged);
-    mi_json_buf_print_count_value(hbuf, "page_committed", &stats.page_committed);
-    mi_json_buf_print_count_value(hbuf, "pages_abandoned", &stats.pages_abandoned);
-    mi_json_buf_print_count_value(hbuf, "threads", &stats.threads);
-    mi_json_buf_print_count_value(hbuf, "malloc_normal", &stats.malloc_normal);
-    mi_json_buf_print_count_value(hbuf, "malloc_huge", &stats.malloc_huge);
-    mi_json_buf_print_count_value(hbuf, "malloc_requested", &stats.malloc_requested);
+    MI_STAT_COUNT!(page_committed);
+    MI_STAT_COUNT!(pages_abandoned);
+    MI_STAT_COUNT!(threads);
+    MI_STAT_COUNT!(malloc_normal);
+    MI_STAT_COUNT!(malloc_huge);
+    MI_STAT_COUNT!(malloc_requested);
     mi_json_buf_print_counter_value(hbuf, "mmap_calls", &stats.mmap_calls);
     mi_json_buf_print_counter_value(hbuf, "commit_calls", &stats.commit_calls);
     mi_json_buf_print_counter_value(hbuf, "reset_calls", &stats.reset_calls);
@@ -1442,12 +1454,12 @@ fn append_stats_json(hbuf: &mut mi_json_buf_t, stats: &mi_stats_t) {
     mi_json_buf_print_counter_value(hbuf, "pages_retire", &stats.pages_retire);
     mi_json_buf_print_counter_value(hbuf, "page_searches", &stats.page_searches);
     mi_json_buf_print_counter_value(hbuf, "page_searches_count", &stats.page_searches_count);
-    mi_json_buf_print_count_value(hbuf, "segments", &stats.segments);
-    mi_json_buf_print_count_value(hbuf, "segments_abandoned", &stats.segments_abandoned);
-    mi_json_buf_print_count_value(hbuf, "segments_cache", &stats.segments_cache);
-    mi_json_buf_print_count_value(hbuf, "_segments_reserved", &stats._segments_reserved);
-    mi_json_buf_print_count_value(hbuf, "heaps", &stats.heaps);
-    mi_json_buf_print_count_value(hbuf, "theaps", &stats.theaps);
+    MI_STAT_COUNT!(segments);
+    MI_STAT_COUNT!(segments_abandoned);
+    MI_STAT_COUNT!(segments_cache);
+    MI_STAT_COUNT!(_segments_reserved);
+    MI_STAT_COUNT!(heaps);
+    MI_STAT_COUNT!(theaps);
     mi_json_buf_print_counter_value(
         hbuf,
         "pages_reclaim_on_alloc",

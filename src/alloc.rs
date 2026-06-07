@@ -39,6 +39,7 @@ unsafe extern "C" {
         usable: *mut usize,
     ) -> *mut c_void;
     fn _mi_theap_malloc_guarded(theap: *mut mi_theap_t, size: usize, zero: bool) -> *mut c_void;
+    fn abort() -> !;
 }
 
 pub const _DEFAULT_SOURCE: () = ();
@@ -700,8 +701,22 @@ pub unsafe extern "C" fn mi_strdup(s: *const c_char) -> *mut c_char {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_strdup(heap: *mut mi_heap_t, s: *const c_char) -> *mut c_char {
+    mi_theap_strdup(_mi_heap_theap(heap), s)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_strndup(s: *const c_char, n: usize) -> *mut c_char {
     mi_theap_strndup(_mi_theap_default(), s, n)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_strndup(
+    heap: *mut mi_heap_t,
+    s: *const c_char,
+    n: usize,
+) -> *mut c_char {
+    mi_theap_strndup(_mi_heap_theap(heap), s, n)
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]
@@ -732,7 +747,8 @@ unsafe fn mi_path_max() -> usize {
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]
-pub unsafe fn mi_theap_realpath(
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_theap_realpath(
     theap: *mut mi_theap_t,
     fname: *const c_char,
     resolved_name: *mut c_char,
@@ -751,4 +767,92 @@ pub unsafe fn mi_theap_realpath(
     let result = mi_theap_strndup(theap, rname, n);
     mi_free(buf.cast::<c_void>());
     result
+}
+
+#[cfg(all(unix, not(target_os = "wasi")))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_realpath(
+    heap: *mut mi_heap_t,
+    fname: *const c_char,
+    resolved_name: *mut c_char,
+) -> *mut c_char {
+    mi_theap_realpath(_mi_heap_theap(heap), fname, resolved_name)
+}
+
+type StdNewHandler = Option<unsafe extern "C" fn()>;
+
+#[allow(non_snake_case)]
+unsafe fn _ZSt15get_new_handlerv() -> StdNewHandler {
+    None
+}
+
+unsafe fn mi_get_new_handler() -> StdNewHandler {
+    _ZSt15get_new_handlerv()
+}
+
+unsafe fn mi_try_new_handler(nothrow: bool) -> bool {
+    let h = mi_get_new_handler();
+    if let Some(h) = h {
+        h();
+        true
+    } else {
+        crate::internal::_mi_error_message(ENOMEM, c"out of memory in 'new'".as_ptr());
+        if !nothrow {
+            abort();
+        }
+        false
+    }
+}
+
+#[inline(never)]
+unsafe fn mi_theap_try_new(theap: *mut mi_theap_t, size: usize, nothrow: bool) -> *mut c_void {
+    let mut p: *mut c_void = ptr::null_mut();
+    while p.is_null() && mi_try_new_handler(nothrow) {
+        p = mi_theap_malloc(theap, size);
+    }
+    p
+}
+
+unsafe fn mi_theap_alloc_new(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
+    let p = mi_theap_malloc(theap, size);
+    if mi_unlikely(p.is_null()) {
+        mi_theap_try_new(theap, size, false)
+    } else {
+        p
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_alloc_new(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
+    let p = mi_heap_malloc(heap, size);
+    if mi_unlikely(p.is_null()) {
+        mi_theap_try_new(_mi_heap_theap(heap), size, false)
+    } else {
+        p
+    }
+}
+
+unsafe fn mi_theap_alloc_new_n(theap: *mut mi_theap_t, count: usize, size: usize) -> *mut c_void {
+    let mut total = 0usize;
+    if mi_unlikely(mi_count_size_overflow(count, size, &mut total)) {
+        mi_try_new_handler(false);
+        ptr::null_mut()
+    } else {
+        mi_theap_alloc_new(theap, total)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_new_n(count: usize, size: usize) -> *mut c_void {
+    mi_theap_alloc_new_n(_mi_theap_default(), count, size)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
+    let p = mi_malloc(size);
+    if mi_unlikely(p.is_null()) {
+        mi_theap_try_new(_mi_theap_default(), size, true)
+    } else {
+        p
+    }
 }

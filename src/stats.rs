@@ -4,7 +4,6 @@
 
 use core::ffi::{c_char, c_void};
 use core::{mem::size_of, ptr};
-use std::ffi::CString;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 use std::time::Instant;
@@ -14,6 +13,7 @@ use crate::atomic::{
 };
 use crate::internal::{_mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
 use crate::mimalloc::mi_heap_main;
+use crate::mimalloc::{mi_good_size, mi_rezalloc};
 use crate::options::{_mi_fprintf, _mi_fputs};
 use crate::os::_mi_prim_process_info;
 use crate::page::{
@@ -1118,15 +1118,65 @@ pub extern "C" fn mi_process_info_print() {
 }
 
 #[repr(C)]
-#[derive(Default)]
 struct mi_json_buf_s {
-    buf: String,
+    buf: *mut c_char,
+    size: usize,
+    used: usize,
+    can_realloc: bool,
 }
 
 type mi_json_buf_t = mi_json_buf_s;
 
+impl Default for mi_json_buf_s {
+    fn default() -> Self {
+        Self {
+            buf: ptr::null_mut(),
+            size: 0,
+            used: 0,
+            can_realloc: true,
+        }
+    }
+}
+
+fn mi_json_buf_expand(hbuf: &mut mi_json_buf_t) -> bool {
+    if !hbuf.buf.is_null() && hbuf.size > 0 {
+        // SAFETY: `buf` is valid for `size` bytes when non-null.
+        unsafe { *hbuf.buf.add(hbuf.size - 1) = 0 };
+    }
+    if hbuf.size > usize::MAX / 2 || !hbuf.can_realloc {
+        return false;
+    }
+    let newsize = if hbuf.size == 0 {
+        unsafe { mi_good_size(12 * 1024) }
+    } else {
+        2 * hbuf.size
+    };
+    // SAFETY: `mi_rezalloc` accepts null for fresh allocation and preserves the old contents.
+    let newbuf = unsafe { mi_rezalloc(hbuf.buf.cast(), newsize).cast::<c_char>() };
+    if newbuf.is_null() {
+        return false;
+    }
+    hbuf.buf = newbuf;
+    hbuf.size = newsize;
+    true
+}
+
 fn mi_json_buf_print(hbuf: &mut mi_json_buf_t, msg: &str) {
-    hbuf.buf.push_str(msg);
+    if hbuf.used + 1 >= hbuf.size && !hbuf.can_realloc {
+        return;
+    }
+    for byte in msg.bytes() {
+        if hbuf.used + 1 >= hbuf.size && !mi_json_buf_expand(hbuf) {
+            return;
+        }
+        debug_assert!(hbuf.used < hbuf.size);
+        // SAFETY: capacity is ensured just above and `used < size`.
+        unsafe { *hbuf.buf.add(hbuf.used) = byte as c_char };
+        hbuf.used += 1;
+    }
+    debug_assert!(hbuf.used < hbuf.size);
+    // SAFETY: capacity is ensured above and the trailing NUL fits.
+    unsafe { *hbuf.buf.add(hbuf.used) = 0 };
 }
 
 fn mi_json_buf_print_count_bin(
@@ -1290,6 +1340,15 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
     }
 
     let mut hbuf = mi_json_buf_t::default();
+    if output_size > 0 && !output_buf.is_null() {
+        // SAFETY: caller provides `output_buf` writable for `output_size` bytes.
+        unsafe { ptr::write_bytes(output_buf, 0, output_size) };
+        hbuf.buf = output_buf;
+        hbuf.size = output_size;
+        hbuf.can_realloc = false;
+    } else if !mi_json_buf_expand(&mut hbuf) {
+        return ptr::null_mut();
+    }
     mi_json_buf_print(&mut hbuf, "{\n");
     mi_json_buf_print_value(&mut hbuf, "stat_version", MI_STAT_VERSION as i64);
     mi_json_buf_print_value(&mut hbuf, "mimalloc_version", MI_MALLOC_VERSION as i64);
@@ -1357,20 +1416,14 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
     mi_json_buf_print(&mut hbuf, "  ]\n");
     mi_json_buf_print(&mut hbuf, "}\n");
 
-    if !output_buf.is_null() && output_size > 0 {
-        if hbuf.buf.len() + 1 > output_size {
-            return ptr::null_mut();
+    if hbuf.used >= hbuf.size {
+        if hbuf.can_realloc {
+            // SAFETY: the buffer came from mimalloc when `can_realloc` is true.
+            unsafe { crate::mimalloc::mi_free(hbuf.buf.cast()) };
         }
-        unsafe {
-            ptr::copy_nonoverlapping(hbuf.buf.as_ptr(), output_buf as *mut u8, hbuf.buf.len());
-            *output_buf.add(hbuf.buf.len()) = 0;
-        }
-        output_buf
+        ptr::null_mut()
     } else {
-        match CString::new(hbuf.buf) {
-            Ok(s) => s.into_raw(),
-            Err(_) => ptr::null_mut(),
-        }
+        hbuf.buf
     }
 }
 

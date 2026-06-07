@@ -452,9 +452,12 @@ unsafe extern "C" {
     pub fn _mi_theap_options_init(theap: *mut mi_theap_t);
     pub fn _mi_theap_default_safe() -> *mut mi_theap_t;
     pub fn _mi_theap_main_safe() -> *mut mi_theap_t;
+    pub fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool);
     pub fn _mi_theap_delete(theap: *mut mi_theap_t, acquire_tld_theaps_lock: bool);
     pub fn _mi_theap_default_set(theap: *mut mi_theap_t);
     pub fn _mi_theap_cached_set(theap: *mut mi_theap_t);
+    pub fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool);
+    pub fn _mi_theap_collect_abandon(theap: *mut mi_theap_t);
     pub fn _mi_theap_free(
         theap: *mut mi_theap_t,
         acquire_heap_theaps_lock: bool,
@@ -462,6 +465,27 @@ unsafe extern "C" {
     ) -> bool;
     pub fn _mi_theap_incref(theap: *mut mi_theap_t);
     pub fn _mi_theap_decref(theap: *mut mi_theap_t);
+    pub fn _mi_theap_malloc_zero(
+        theap: *mut mi_theap_t,
+        size: usize,
+        zero: bool,
+        usable: *mut usize,
+    ) -> *mut c_void;
+    pub fn _mi_theap_malloc_zero_ex(
+        theap: *mut mi_theap_t,
+        size: usize,
+        zero: bool,
+        huge_alignment: usize,
+        usable: *mut usize,
+    ) -> *mut c_void;
+    pub fn _mi_theap_realloc_zero(
+        theap: *mut mi_theap_t,
+        p: *mut c_void,
+        newsize: usize,
+        zero: bool,
+        usable_pre: *mut usize,
+        usable_post: *mut usize,
+    ) -> *mut c_void;
 
     pub fn _mi_os_init();
     pub fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;

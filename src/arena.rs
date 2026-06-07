@@ -1,23 +1,25 @@
 //! Arena management
 
-use core::ffi::{c_int, c_void};
+use core::ffi::{c_int, c_long, c_void};
 use core::mem::size_of;
 use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{
     EFAULT, mi_atomic_cas_ptr_strong_release, mi_atomic_cas_strong_acq_rel,
-    mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_atomic_load_ptr_acquire,
-    mi_atomic_store_ptr_release, mi_lock_acquire, mi_lock_release, mi_memory_order_e,
+    mi_atomic_cas_weak_acq_rel, mi_atomic_casi64_strong_acq_rel, mi_atomic_load_explicit,
+    mi_atomic_load_ptr_acquire, mi_atomic_store_ptr_release, mi_lock_acquire, mi_lock_release,
+    mi_memory_order_e,
 };
 use crate::bitmap::{
     MI_BCHUNK_BITS, MI_BCHUNK_FIELDS, MI_BCHUNK_SIZE, MI_BFIELD_BITS, MI_BITMAP_MAX_BIT_COUNT,
     mi_bbitmap_bsr_inv, mi_bbitmap_chunk_count, mi_bbitmap_debug_get_bin, mi_bbitmap_init,
     mi_bbitmap_is_clearN, mi_bbitmap_is_setN, mi_bbitmap_setN, mi_bbitmap_size, mi_bbitmap_t,
-    mi_bbitmap_try_find_and_clearN, mi_bbitmap_unsafe_setN, mi_bchunk_t, mi_bchunkmap_t,
-    mi_bfield_t, mi_bitmap_clear, mi_bitmap_clear_once_set, mi_bitmap_clearN, mi_bitmap_init,
-    mi_bitmap_is_set, mi_bitmap_is_setN, mi_bitmap_popcountN, mi_bitmap_set, mi_bitmap_setN,
-    mi_bitmap_size, mi_bitmap_t, mi_bitmap_try_find_and_claim, mi_bitmap_unsafe_setN,
+    mi_bbitmap_try_clearNC, mi_bbitmap_try_find_and_clearN, mi_bbitmap_unsafe_setN, mi_bchunk_t,
+    mi_bchunkmap_t, mi_bfield_t, mi_bitmap_clear, mi_bitmap_clear_once_set, mi_bitmap_clearN,
+    mi_bitmap_init, mi_bitmap_is_clearN, mi_bitmap_is_set, mi_bitmap_is_setN, mi_bitmap_popcountN,
+    mi_bitmap_set, mi_bitmap_setN, mi_bitmap_size, mi_bitmap_t, mi_bitmap_try_find_and_claim,
+    mi_bitmap_unsafe_setN,
 };
 use crate::bits::{MI_INTPTR_BITS, MI_MiB};
 use crate::internal::{
@@ -37,7 +39,10 @@ use crate::internal::{
 };
 use crate::mimalloc::{mi_heap_main, mi_heap_zalloc_aligned};
 use crate::options::{mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t};
-use crate::os::{_mi_os_alloc_aligned, _mi_os_alloc_aligned_at_offset};
+use crate::os::{
+    _mi_os_alloc_aligned, _mi_os_alloc_aligned_at_offset, _mi_os_alloc_huge_os_pages,
+    _mi_os_numa_node_count,
+};
 use crate::page::{
     _mi_bin, _mi_page_free_collect, _mi_page_stats_bin, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE,
     MI_MEDIUM_MAX_OBJ_SIZE, MI_MEDIUM_PAGE_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2,
@@ -2729,7 +2734,7 @@ pub unsafe extern "C" fn _mi_arenas_page_unabandon(
 }
 
 unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize) {
-    let delay = mi_option_get(mi_option_t::mi_option_purge_delay);
+    let delay = unsafe { mi_arena_purge_delay() };
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned }
         || delay < 0
         || unsafe { _mi_preloading() }
@@ -2743,19 +2748,30 @@ unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, sl
             slice_count,
         )
     });
+    if delay == 0 {
+        unsafe { mi_arena_purge(arena, slice_index, slice_count) };
+        return;
+    }
 
     let expire = crate::stats::_mi_clock_now() + delay as i64;
-    let _ = unsafe {
-        (*arena.cast::<MiArenaPrefix>())
-            .purge_expire
-            .compare_exchange(0, expire, Ordering::AcqRel, Ordering::Acquire)
-    };
-    let subproc = unsafe { (*arena.cast::<MiArenaPrefix>()).subproc };
-    let _ = unsafe {
-        (*subproc.cast::<MiSubprocPrefix>())
-            .purge_expire
-            .compare_exchange(0, expire, Ordering::AcqRel, Ordering::Acquire)
-    };
+    let mut expire0 = 0i64;
+    if unsafe {
+        mi_atomic_casi64_strong_acq_rel(
+            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
+            &mut expire0,
+            expire,
+        )
+    } {
+        crate::mi_assert_internal!(expire0 == 0);
+        let subproc = unsafe { (*arena.cast::<MiArenaPrefix>()).subproc };
+        unsafe {
+            mi_atomic_casi64_strong_acq_rel(
+                ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast::<i64>(),
+                &mut expire0,
+                expire,
+            )
+        };
+    }
     unsafe {
         mi_bitmap_setN(
             (*arena.cast::<MiArenaPrefix>()).slices_purge,
@@ -2837,6 +2853,95 @@ pub unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_
             memid.memkind,
             mi_memkind_t::MI_MEM_NONE | mi_memkind_t::MI_MEM_EXTERNAL | mi_memkind_t::MI_MEM_STATIC
         ));
+    }
+}
+
+unsafe fn mi_arena_purge_delay() -> c_long {
+    mi_option_get(mi_option_t::mi_option_purge_delay)
+        * mi_option_get(mi_option_t::mi_option_arena_purge_mult)
+}
+
+unsafe fn mi_arena_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize) -> bool {
+    crate::mi_assert_internal!(!unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned });
+    crate::mi_assert_internal!(unsafe {
+        mi_bbitmap_is_clearN(
+            (*arena.cast::<MiArenaPrefix>()).slices_free,
+            slice_index,
+            slice_count,
+        )
+    });
+
+    let size = mi_size_of_slices(slice_count);
+    let p = unsafe { mi_arena_slice_start(arena, slice_index).cast::<c_void>() };
+    let mut already_committed = 0usize;
+    unsafe {
+        mi_bitmap_setN(
+            (*arena.cast::<MiArenaPrefix>()).slices_committed,
+            slice_index,
+            slice_count,
+            &mut already_committed,
+        )
+    };
+    let all_committed = already_committed == slice_count;
+    let needs_recommit = unsafe {
+        crate::internal::_mi_os_purge_ex(
+            p,
+            size,
+            all_committed,
+            mi_size_of_slices(already_committed),
+            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).commit_fun),
+            (*arena.cast::<MiArenaPrefix>()).commit_fun_arg,
+        )
+    };
+
+    if needs_recommit || !all_committed {
+        unsafe {
+            mi_bitmap_clearN(
+                (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                slice_index,
+                slice_count,
+            )
+        };
+    }
+
+    needs_recommit
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_try_purge_range(
+    arena: *mut mi_arena_t,
+    slice_index: usize,
+    slice_count: usize,
+) -> bool {
+    crate::mi_assert!(slice_count < MI_BCHUNK_BITS);
+    if unsafe {
+        mi_bbitmap_try_clearNC(
+            (*arena.cast::<MiArenaPrefix>()).slices_free,
+            slice_index,
+            slice_count,
+        )
+    } {
+        let decommitted = unsafe { mi_arena_purge(arena, slice_index, slice_count) };
+        crate::mi_assert_internal!(
+            !decommitted
+                || unsafe {
+                    mi_bitmap_is_clearN(
+                        (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                        slice_index,
+                        slice_count,
+                    )
+                }
+        );
+        unsafe {
+            mi_bbitmap_setN(
+                (*arena.cast::<MiArenaPrefix>()).slices_free,
+                slice_index,
+                slice_count,
+            )
+        };
+        true
+    } else {
+        false
     }
 }
 
@@ -3452,4 +3557,155 @@ pub unsafe extern "C" fn mi_debug_show_arenas() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_arenas_print() {
     unsafe { mi_debug_show_arenas() }
+}
+
+/// # Safety
+/// Matches the C API and may reserve/manage huge-page backed arena memory.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
+    pages: usize,
+    mut numa_node: c_int,
+    timeout_msecs: usize,
+    exclusive: bool,
+    arena_id: *mut mi_arena_id_t,
+) -> c_int {
+    if !arena_id.is_null() {
+        unsafe { *arena_id = ptr::null_mut() };
+    }
+    if pages == 0 {
+        return 0;
+    }
+    if numa_node < -1 {
+        numa_node = -1;
+    }
+    if numa_node >= 0 {
+        numa_node %= unsafe { _mi_os_numa_node_count() };
+    }
+    let mut hsize = 0usize;
+    let mut pages_reserved = 0usize;
+    let mut memid = unsafe { _mi_memid_none() };
+    let p = unsafe {
+        _mi_os_alloc_huge_os_pages(
+            pages,
+            numa_node,
+            timeout_msecs as i64,
+            &mut pages_reserved,
+            &mut hsize,
+            &mut memid,
+        )
+    };
+    if p.is_null() || pages_reserved == 0 {
+        crate::options::_mi_warning_message(format_args!(
+            "failed to reserve {} GiB huge pages\n",
+            pages
+        ));
+        return ENOMEM;
+    }
+    crate::options::_mi_verbose_message(format_args!(
+        "numa node {}: reserved {} GiB huge pages (of the {} GiB requested)\n",
+        numa_node, pages_reserved, pages
+    ));
+
+    if !unsafe {
+        mi_manage_os_memory_ex2(
+            _mi_subproc(),
+            p,
+            hsize,
+            numa_node,
+            exclusive,
+            memid,
+            mi_commit_null,
+            ptr::null_mut(),
+            arena_id,
+        )
+    } {
+        unsafe { _mi_os_free(p, hsize, memid) };
+        return ENOMEM;
+    }
+    0
+}
+
+/// # Safety
+/// Matches the C API and reserves huge-page backed arena memory on a specific NUMA node.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_reserve_huge_os_pages_at(
+    pages: usize,
+    numa_node: c_int,
+    timeout_msecs: usize,
+) -> c_int {
+    unsafe {
+        mi_reserve_huge_os_pages_at_ex(pages, numa_node, timeout_msecs, false, ptr::null_mut())
+    }
+}
+
+/// # Safety
+/// Matches the C API and reserves huge-page backed arena memory interleaved across NUMA nodes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
+    mut pages: usize,
+    numa_nodes: usize,
+    timeout_msecs: usize,
+) -> c_int {
+    if pages == 0 {
+        return 0;
+    }
+
+    let mut numa_count = if numa_nodes > 0 && numa_nodes <= c_int::MAX as usize {
+        numa_nodes as c_int
+    } else {
+        unsafe { _mi_os_numa_node_count() }
+    };
+    if numa_count <= 0 {
+        numa_count = 1;
+    }
+    let pages_per = pages / numa_count as usize;
+    let pages_mod = pages % numa_count as usize;
+    let timeout_per = if timeout_msecs == 0 {
+        0
+    } else {
+        (timeout_msecs / numa_count as usize) + 50
+    };
+
+    for numa_node in 0..numa_count {
+        if pages == 0 {
+            break;
+        }
+        let mut node_pages = pages_per;
+        if (numa_node as usize) < pages_mod {
+            node_pages += 1;
+        }
+        let err = unsafe { mi_reserve_huge_os_pages_at(node_pages, numa_node, timeout_per) };
+        if err != 0 {
+            return err;
+        }
+        if pages < node_pages {
+            pages = 0;
+        } else {
+            pages -= node_pages;
+        }
+    }
+
+    0
+}
+
+/// # Safety
+/// Matches the deprecated C API and forwards to the interleaved huge-page reservation path.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_reserve_huge_os_pages(
+    pages: usize,
+    max_secs: f64,
+    pages_reserved: *mut usize,
+) -> c_int {
+    crate::options::_mi_warning_message(format_args!(
+        "mi_reserve_huge_os_pages is deprecated: use mi_reserve_huge_os_pages_interleave/at instead\n"
+    ));
+    if !pages_reserved.is_null() {
+        unsafe { *pages_reserved = 0 };
+    }
+    let err =
+        unsafe { mi_reserve_huge_os_pages_interleave(pages, 0, (max_secs * 1000.0) as usize) };
+    if err == 0 && !pages_reserved.is_null() {
+        unsafe { *pages_reserved = pages };
+    }
+    err
 }

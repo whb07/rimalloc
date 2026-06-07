@@ -26,8 +26,11 @@ pub const MCGEN_EVENTWRITETRANSFER_EtwWriteTransfer: &str = "EtwWriteTransfer";
 pub const MCGEN_EVENTWRITETRANSFER_EventWriteTransfer: &str = "EventWriteTransfer";
 pub const MCGEN_EVENTWRITETRANSFER: &str = MCGEN_EVENTWRITETRANSFER_EventWriteTransfer;
 pub const MI_MEM_EXTENDED_PARAMETER_NONPAGED_HUGE: u32 = 0x0000_0010;
+pub const DECLSPEC_ALIGN: usize = 8;
 
+pub type BYTE = u8;
 pub type DWORD64 = u64;
+pub type WORD = u16;
 pub type PVOID = *mut c_void;
 pub type SIZE_T = usize;
 pub type HANDLE = *mut c_void;
@@ -88,6 +91,16 @@ pub struct MI_MEM_ADDRESS_REQUIREMENTS_S {
 }
 
 pub type MI_MEM_ADDRESS_REQUIREMENTS = MI_MEM_ADDRESS_REQUIREMENTS_S;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MI_PROCESSOR_NUMBER_S {
+    pub Group: WORD,
+    pub Number: BYTE,
+    pub Reserved: BYTE,
+}
+
+pub type MI_PROCESSOR_NUMBER = MI_PROCESSOR_NUMBER_S;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

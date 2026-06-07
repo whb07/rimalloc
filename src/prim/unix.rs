@@ -15,14 +15,15 @@
 use core::ffi::{c_char, c_int, c_long};
 use core::ffi::{c_uint, c_void};
 use core::ptr;
-use core::sync::atomic::{AtomicI32, Ordering};
+use core::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::io::{self, Write};
 
-use crate::bits::MI_MiB;
+use crate::arena::MI_ARENA_SLICE_ALIGN;
+use crate::bits::{MI_GiB, MI_MiB};
 use crate::internal::MI_DEBUG;
-use crate::options::{mi_option_is_enabled, mi_option_t};
+use crate::options::{_mi_warning_message, mi_option_is_enabled, mi_option_t};
 use crate::os::{
     _mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_has_overcommit, _mi_os_page_size,
 };
@@ -118,6 +119,14 @@ pub const EINVAL: c_int = 22;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub const MADV_HUGEPAGE: c_int = 14;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub const MAP_HUGETLB: c_int = 0x40000;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub const MAP_HUGE_SHIFT: c_int = 26;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub const MAP_HUGE_2MB: c_int = 21 << MAP_HUGE_SHIFT;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub const MAP_HUGE_1GB: c_int = 30 << MAP_HUGE_SHIFT;
 
 type c_ulong = u64;
 type pthread_key_t = c_uint;
@@ -187,6 +196,8 @@ unsafe extern "C" {
     ) -> c_int;
     fn pthread_key_delete(key: pthread_key_t) -> c_int;
     fn pthread_setspecific(key: pthread_key_t, value: *const c_void) -> c_int;
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    fn syscall(num: c_long, ...) -> c_long;
 }
 
 #[cfg(target_os = "macos")]
@@ -200,6 +211,28 @@ unsafe extern "C" {
 }
 
 static mut _mi_heap_default_key: pthread_key_t = PTHREAD_KEY_INVALID;
+static large_page_try_ok: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(all(
+    any(target_os = "linux", target_os = "android"),
+    target_arch = "x86_64"
+))]
+const SYS_MBind: c_long = 237;
+#[cfg(all(
+    any(target_os = "linux", target_os = "android"),
+    target_arch = "x86_64"
+))]
+const SYS_Getcpu: c_long = 309;
+#[cfg(all(
+    any(target_os = "linux", target_os = "android"),
+    target_arch = "aarch64"
+))]
+const SYS_MBind: c_long = 235;
+#[cfg(all(
+    any(target_os = "linux", target_os = "android"),
+    target_arch = "aarch64"
+))]
+const SYS_Getcpu: c_long = 168;
 
 #[inline]
 fn mi_last_errno() -> c_int {
@@ -384,12 +417,74 @@ unsafe fn unix_mmap(
     if !is_large.is_null() {
         *is_large = false;
     }
-    if large_only {
-        return ptr::null_mut();
-    }
     let mut flags = MAP_PRIVATE | MAP_ANONYMOUS;
     if _mi_os_has_overcommit() {
         flags |= MAP_NORESERVE;
+    }
+    if allow_large
+        && (large_only
+            || (_mi_os_canuse_large_page(size, try_alignment)
+                && mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)))
+    {
+        let try_ok = large_page_try_ok.load(Ordering::Acquire);
+        if !large_only && try_ok > 0 {
+            let _ = large_page_try_ok.compare_exchange(
+                try_ok,
+                try_ok - 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            );
+        } else {
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            {
+                let mut lflags = flags & !MAP_NORESERVE;
+                lflags |= MAP_HUGETLB;
+                let mut p = ptr::null_mut();
+                if large_only && size.is_multiple_of(MI_GiB) {
+                    p = unix_mmap_prim_aligned(
+                        addr,
+                        size,
+                        try_alignment,
+                        protect_flags,
+                        lflags | MAP_HUGE_1GB,
+                        unix_mmap_fd(),
+                    );
+                    if p.is_null() {
+                        _mi_warning_message(format_args!(
+                            "unable to allocate huge (1GiB) page, trying large (2MiB) pages instead (errno: {})\n",
+                            mi_last_errno()
+                        ));
+                    }
+                }
+                if p.is_null() {
+                    p = unix_mmap_prim_aligned(
+                        addr,
+                        size,
+                        try_alignment,
+                        protect_flags,
+                        lflags | MAP_HUGE_2MB,
+                        unix_mmap_fd(),
+                    );
+                }
+                if large_only {
+                    if !is_large.is_null() {
+                        *is_large = !p.is_null();
+                    }
+                    return p;
+                }
+                if !p.is_null() {
+                    if !is_large.is_null() {
+                        *is_large = true;
+                    }
+                    return p;
+                }
+                large_page_try_ok.store(8, Ordering::Release);
+            }
+            #[cfg(not(any(target_os = "linux", target_os = "android")))]
+            if large_only {
+                return ptr::null_mut();
+            }
+        }
     }
     let p = unix_mmap_prim_aligned(
         addr,
@@ -538,12 +633,112 @@ pub unsafe extern "C" fn mi_prim_mbind(
     maxnode: c_ulong,
     flags: c_uint,
 ) -> c_long {
-    let _ = start;
-    let _ = len;
-    let _ = mode;
-    let _ = nmask;
-    let _ = maxnode;
-    let _ = flags;
+    #[cfg(all(
+        any(target_os = "linux", target_os = "android"),
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    {
+        syscall(SYS_MBind, start, len, mode, nmask, maxnode, flags)
+    }
+    #[cfg(not(all(
+        any(target_os = "linux", target_os = "android"),
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    )))]
+    {
+        let _ = (start, len, mode, nmask, maxnode, flags);
+        0
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
+    hint_addr: *mut c_void,
+    size: usize,
+    numa_node: c_int,
+    is_zero: *mut bool,
+    addr: *mut *mut c_void,
+) -> c_int {
+    #[cfg(all(
+        target_pointer_width = "64",
+        not(any(target_os = "haiku", target_os = "cygwin"))
+    ))]
+    {
+        let mut is_large = true;
+        if !is_zero.is_null() {
+            *is_zero = true;
+        }
+        if addr.is_null() {
+            return ENOMEM;
+        }
+        *addr = unix_mmap(
+            hint_addr,
+            size,
+            MI_ARENA_SLICE_ALIGN,
+            PROT_READ | PROT_WRITE,
+            true,
+            true,
+            &mut is_large,
+        );
+        if !(*addr).is_null() && numa_node >= 0 && (numa_node as usize) < (8 * usize::BITS as usize)
+        {
+            let numa_mask: c_ulong = 1u64 << (numa_node as u32);
+            let err = mi_prim_mbind(
+                *addr,
+                size as c_ulong,
+                MPOL_PREFERRED,
+                &numa_mask,
+                (8 * usize::BITS as usize) as c_ulong,
+                0,
+            );
+            if err != 0 {
+                let errno = mi_last_errno();
+                _mi_warning_message(format_args!(
+                    "failed to bind huge (1GiB) pages to numa node {} (error: {} (0x{:x}))\n",
+                    numa_node, errno, errno
+                ));
+            }
+        }
+        if (*addr).is_null() {
+            mi_last_errno()
+        } else {
+            0
+        }
+    }
+    #[cfg(not(all(
+        target_pointer_width = "64",
+        not(any(target_os = "haiku", target_os = "cygwin"))
+    )))]
+    {
+        let _ = (hint_addr, size, numa_node);
+        if !is_zero.is_null() {
+            *is_zero = false;
+        }
+        if !addr.is_null() {
+            *addr = ptr::null_mut();
+        }
+        ENOMEM
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
+    #[cfg(target_os = "linux")]
+    {
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        {
+            let mut node: c_ulong = 0;
+            let mut ncpu: c_ulong = 0;
+            if syscall(
+                SYS_Getcpu,
+                &mut ncpu as *mut c_ulong,
+                &mut node as *mut c_ulong,
+                ptr::null_mut::<c_void>(),
+            ) == 0
+            {
+                return node as usize;
+            }
+        }
+    }
     0
 }
 

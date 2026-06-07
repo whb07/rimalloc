@@ -286,6 +286,40 @@ unsafe fn mi_arena_from_memid(
     arena
 }
 
+#[allow(dead_code)]
+const fn mi_memkind_is_os(memkind: mi_memkind_t) -> bool {
+    matches!(
+        memkind,
+        mi_memkind_t::MI_MEM_OS | mi_memkind_t::MI_MEM_OS_HUGE | mi_memkind_t::MI_MEM_OS_REMAP
+    )
+}
+
+#[allow(dead_code)]
+unsafe fn mi_memid_is_os(memid: mi_memid_t) -> bool {
+    mi_memkind_is_os(memid.memkind)
+}
+
+#[allow(dead_code)]
+unsafe fn mi_page_full_size(page: *mut mi_page_t) -> usize {
+    let memid = unsafe { (*page).memid };
+    if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
+        unsafe { memid.mem.arena.slice_count as usize * MI_ARENA_SLICE_SIZE }
+    } else if unsafe { mi_memid_is_os(memid) } || memid.memkind == mi_memkind_t::MI_MEM_EXTERNAL {
+        let base = unsafe { memid.mem.os.base.cast::<u8>() };
+        let page_ptr = page.cast::<u8>();
+        crate::mi_assert_internal!(base <= page_ptr);
+        let presize = unsafe { page_ptr.offset_from(base) };
+        crate::mi_assert_internal!(unsafe { memid.mem.os.size as isize >= presize });
+        if presize > unsafe { memid.mem.os.size as isize } {
+            0
+        } else {
+            unsafe { memid.mem.os.size - presize as usize }
+        }
+    } else {
+        0
+    }
+}
+
 /// # Safety
 /// `subproc` must point to a valid `mi_subproc_t`, and `idx` must be in range.
 #[unsafe(no_mangle)]
@@ -328,4 +362,32 @@ unsafe fn mi_arena_start_idx(heap: *mut mi_heap_t, tseq: usize, arena_cycle: usi
     };
     crate::mi_assert_internal!(start < arena_cycle);
     start
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_is_suitable_ex(
+    arena: *mut mi_arena_t,
+    req_arena: *mut mi_arena_t,
+    match_numa: bool,
+    numa_node: i32,
+    allow_pinned: bool,
+) -> bool {
+    if !allow_pinned && unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
+        return false;
+    }
+    if unsafe { !mi_arena_is_suitable(arena, req_arena) } {
+        return false;
+    }
+    if req_arena.is_null() {
+        let arena_numa = unsafe { (*arena.cast::<MiArenaPrefix>()).numa_node };
+        let numa_suitable = numa_node < 0 || arena_numa < 0 || arena_numa == numa_node;
+        if match_numa {
+            if !numa_suitable {
+                return false;
+            }
+        } else if numa_suitable {
+            return false;
+        }
+    }
+    true
 }

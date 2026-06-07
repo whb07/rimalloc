@@ -249,6 +249,13 @@ macro_rules! mi_stats_t_decl {
     };
 }
 
+#[macro_export]
+macro_rules! MI_STAT_COUNTER {
+    ($name:ident) => {
+        pub $name: $crate::stats::mi_stat_counter_t,
+    };
+}
+
 pub(crate) fn bin_block_size(bin: usize) -> usize {
     MI_BIN_WORD_SIZES[bin] * size_of::<usize>()
 }

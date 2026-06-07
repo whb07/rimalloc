@@ -410,6 +410,16 @@ unsafe extern "C" {
     pub fn mi_stats_merge();
     pub fn mi_stats_print(out: *mut c_void);
     pub fn mi_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void);
+    pub fn mi_subproc_stats_print_out(
+        subproc_id: mi_subproc_id_t,
+        out: Option<mi_output_fun>,
+        arg: *mut c_void,
+    );
+    pub fn mi_subproc_heap_stats_print_out(
+        subproc_id: mi_subproc_id_t,
+        out: Option<mi_output_fun>,
+        arg: *mut c_void,
+    );
     pub fn mi_stats_get_json(buf_size: usize, buf: *mut c_char) -> *mut c_char;
 
     pub fn mi_option_is_enabled(option: mi_option_t) -> bool;

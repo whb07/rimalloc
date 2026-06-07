@@ -68,7 +68,11 @@ pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t) -> *mut mi_heap_t {
+    crate::mimalloc::mi_thread_init();
     let heap_main = mi_heap_main();
+    if heap_main.is_null() {
+        return ptr::null_mut();
+    }
     let heap = mi_heap_zalloc(heap_main, core::mem::size_of::<mi_heap_t>()).cast::<mi_heap_t>();
     if heap.is_null() {
         return ptr::null_mut();

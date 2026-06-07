@@ -254,7 +254,6 @@ pub unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
     crate::mi_assert_internal!(unsafe {
         _mi_is_aligned(mi_page_slice_start(page).cast::<c_void>(), MI_PAGE_ALIGN)
     });
-    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
     if unsafe { _mi_page_map }.is_null() && !unsafe { _mi_page_map_init() } {
         return false;
     }
@@ -598,7 +597,6 @@ pub unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
     crate::mi_assert_internal!(unsafe {
         _mi_is_aligned(mi_page_slice_start(page).cast::<c_void>(), MI_PAGE_ALIGN)
     });
-    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
     if unsafe { _mi_page_map }.is_null() && !unsafe { _mi_page_map_init() } {
         return false;
     }

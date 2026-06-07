@@ -291,7 +291,8 @@ pub fn mi_prim_thread_local_cached_set(theap: *mut mi_theap_t) {
 
 #[inline]
 pub unsafe fn _mi_thread_is_initialized() -> bool {
-    !_mi_theap_default().is_null()
+    let theap = _mi_theap_default();
+    !theap.is_null() && crate::internal::mi_theap_is_initialized(theap)
 }
 
 #[inline]

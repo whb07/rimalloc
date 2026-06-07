@@ -10,16 +10,25 @@
     unsafe_op_in_unsafe_fn
 )]
 
-use core::ffi::{c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr::null_mut;
+use std::ffi::CStr;
+use std::io::{self, Write};
 
-use crate::internal::{_mi_align_up, _mi_align_up_ptr};
+use crate::internal::{
+    _mi_align_up, _mi_align_up_ptr, _mi_preloading, _mi_strlcpy, _mi_strnlen, _mi_toupper,
+};
 use crate::os::_mi_os_page_size;
 use crate::prim::{mi_os_mem_config_t, mi_process_info_t};
 use crate::types::mi_theap_t;
 
 pub const MI_WASI_PRIM_C: () = ();
 const ENOMEM: c_int = 12;
+const ENOSYS: c_int = 38;
+
+unsafe extern "C" {
+    fn getenv(name: *const c_char) -> *const c_char;
+}
 
 #[cfg(target_os = "wasi")]
 unsafe extern "C" {
@@ -177,8 +186,71 @@ pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
 }
 
 #[inline]
+pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
+    hint_addr: *mut c_void,
+    size: usize,
+    numa_node: c_int,
+    is_zero: *mut bool,
+    addr: *mut *mut c_void,
+) -> c_int {
+    let _ = hint_addr;
+    let _ = size;
+    let _ = numa_node;
+    if !is_zero.is_null() {
+        *is_zero = true;
+    }
+    if !addr.is_null() {
+        *addr = null_mut();
+    }
+    ENOSYS
+}
+
+#[inline]
 pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
     let _ = pinfo;
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
+    if msg.is_null() {
+        return;
+    }
+    let bytes = CStr::from_ptr(msg).to_bytes();
+    let mut stderr = io::stderr().lock();
+    let _ = stderr.write_all(bytes);
+    let _ = stderr.flush();
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_getenv(
+    name: *const c_char,
+    result: *mut c_char,
+    result_size: usize,
+) -> bool {
+    if name.is_null() || result.is_null() || result_size == 0 || _mi_preloading() {
+        return false;
+    }
+
+    let mut s = getenv(name);
+    if s.is_null() {
+        let mut buf = [0 as c_char; 65];
+        let len = _mi_strnlen(name, buf.len() - 1);
+        for (i, slot) in buf.iter_mut().take(len).enumerate() {
+            *slot = _mi_toupper(*name.add(i));
+        }
+        buf[len] = 0;
+        s = getenv(buf.as_ptr());
+    }
+    if s.is_null() || _mi_strnlen(s, result_size) >= result_size {
+        return false;
+    }
+    _mi_strlcpy(result, s, result_size);
+    true
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
+    // nothing
 }
 
 #[inline]

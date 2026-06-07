@@ -19,7 +19,7 @@ use crate::internal::{
     mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_ptr_encode_canary,
     mi_theap_malloc_use_guarded, mi_unlikely,
 };
-use crate::mimalloc::{mi_free, mi_theap_malloc, mi_theap_realloc};
+use crate::mimalloc::{mi_free, mi_malloc_aligned, mi_theap_malloc, mi_theap_realloc};
 use crate::options::{mi_option_is_enabled, mi_option_t};
 use crate::page::{_mi_bin, MI_MAX_ALLOC_SIZE, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
@@ -38,7 +38,6 @@ unsafe extern "C" {
         zero_huge_alignment: usize,
         usable: *mut usize,
     ) -> *mut c_void;
-    fn _mi_theap_malloc_guarded(theap: *mut mi_theap_t, size: usize, zero: bool) -> *mut c_void;
     fn abort() -> !;
 }
 
@@ -855,4 +854,67 @@ pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
     } else {
         p
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_new_aligned(size: usize, alignment: usize) -> *mut c_void {
+    let mut p: *mut c_void;
+    loop {
+        p = mi_malloc_aligned(size, alignment);
+        if !p.is_null() || !mi_try_new_handler(false) {
+            return p;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_new_aligned_nothrow(size: usize, alignment: usize) -> *mut c_void {
+    let mut p: *mut c_void;
+    loop {
+        p = mi_malloc_aligned(size, alignment);
+        if !p.is_null() || !mi_try_new_handler(true) {
+            return p;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_new_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
+    let mut q: *mut c_void;
+    loop {
+        q = mi_realloc(p, newsize);
+        if !q.is_null() || !mi_try_new_handler(false) {
+            return q;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_new_reallocn(
+    p: *mut c_void,
+    newcount: usize,
+    size: usize,
+) -> *mut c_void {
+    let mut total = 0usize;
+    if mi_unlikely(mi_count_size_overflow(newcount, size, &mut total)) {
+        mi_try_new_handler(false);
+        ptr::null_mut()
+    } else {
+        mi_new_realloc(p, total)
+    }
+}
+
+unsafe fn mi_block_ptr_set_guarded(block: *mut mi_block_t, obj_size: usize) -> *mut c_void {
+    let _ = obj_size;
+    block.cast()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_theap_malloc_guarded(
+    theap: *mut mi_theap_t,
+    size: usize,
+    zero: bool,
+) -> *mut c_void {
+    let _ = mi_block_ptr_set_guarded as unsafe fn(*mut mi_block_t, usize) -> *mut c_void;
+    _mi_theap_malloc_zero(theap, size, zero, ptr::null_mut())
 }

@@ -19,7 +19,7 @@ use crate::page::{_mi_page_free_collect, MI_SMALL_PAGE_SIZE};
 use crate::prim::_mi_prim_free;
 use crate::types::{
     mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t, mi_heap_area_t, mi_heap_t,
-    mi_msecs_t, mi_page_t, mi_subproc_t,
+    mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t,
 };
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
@@ -140,6 +140,14 @@ struct mi_heap_visit_info_t {
     visitor: mi_block_visit_fun,
     arg: *mut c_void,
     visit_blocks: bool,
+}
+
+#[allow(dead_code, non_camel_case_types)]
+#[repr(C)]
+struct mi_heap_delete_visit_info_t {
+    heap_target: *mut mi_heap_t,
+    theap_target: *mut mi_theap_t,
+    theap: *mut mi_theap_t,
 }
 
 #[allow(dead_code)]

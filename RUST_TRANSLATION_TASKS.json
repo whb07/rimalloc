@@ -119928,7 +119928,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001637",
@@ -119971,7 +119971,7 @@
       "thread_safety": "n/a",
       "ownership": "owned within containing struct; raw pointers are borrowed/unsafe by convention",
       "mutability": "per-instance mutable unless const-qualified",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-001638",
@@ -242932,7 +242932,7 @@
       "thread_safety": "n/a",
       "ownership": "type/callback ABI; pointer ownership follows users",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002655",
@@ -243016,7 +243016,7 @@
       "thread_safety": "n/a",
       "ownership": "ABI tag/type identity",
       "mutability": "n/a",
-      "implemented": false
+      "implemented": true
     },
     {
       "task_id": "TASK-002656",

@@ -12,7 +12,7 @@
 )]
 
 use core::{
-    ffi::{CStr, c_char, c_void},
+    ffi::{CStr, c_char, c_int, c_void},
     mem::zeroed,
     ptr::{copy_nonoverlapping, null, null_mut, write_bytes},
     sync::atomic::{AtomicI64, AtomicUsize, Ordering},
@@ -364,6 +364,10 @@ unsafe extern "system" {
     pub fn SwitchToThread() -> BOOL;
 }
 
+unsafe extern "C" {
+    fn atexit(func: Option<unsafe extern "C" fn()>) -> c_int;
+}
+
 unsafe extern "system" {
     fn NtCurrentTeb() -> *mut c_void;
 }
@@ -437,7 +441,14 @@ pub unsafe fn filetime_msecs(ftime: *const FILETIME) -> mi_msecs_t {
 }
 
 #[inline]
-unsafe fn mi_win_main(module: PVOID, reason: DWORD, reserved: PVOID) {
+pub unsafe extern "system" fn _mi_prim_thread_yield() {
+    unsafe {
+        SwitchToThread();
+    }
+}
+
+#[inline]
+unsafe extern "system" fn mi_win_main(module: PVOID, reason: DWORD, reserved: LPVOID) {
     let _ = module;
     let _ = reserved;
     match reason {
@@ -470,6 +481,36 @@ unsafe fn win_enable_large_os_pages(large_page_size: *mut usize) -> bool {
         }
     }
     unsafe { win_large_os_pages_enabled }
+}
+
+#[inline]
+unsafe extern "C" fn mi_current_module_is_dll() -> bool {
+    let mut module: HMODULE = null_mut();
+    let ok = unsafe {
+        GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            mi_current_module_is_dll as *const () as LPCSTR,
+            &mut module,
+        )
+    } != FALSE as BOOL;
+    ok && unsafe { mi_module_is_dll(module.cast::<c_void>()) }
+}
+
+#[inline]
+unsafe extern "C" fn mi_crt_done() {
+    unsafe {
+        mi_win_main(null_mut(), DLL_PROCESS_DETACH, null_mut());
+    }
+}
+
+#[inline]
+unsafe extern "C" fn mi_crt_init() -> c_int {
+    if unsafe { mi_current_module_is_dll() } {
+        unsafe {
+            atexit(Some(mi_crt_done));
+        }
+    }
+    0
 }
 
 #[inline]
@@ -512,6 +553,13 @@ unsafe fn mi_module_is_dll(mod_: PVOID) -> bool {
 }
 
 #[inline]
+pub unsafe extern "system" fn mi_tls_attach(module: PVOID, reason: DWORD, reserved: LPVOID) {
+    if reason == DLL_THREAD_ATTACH || reason == DLL_PROCESS_ATTACH {
+        unsafe { mi_win_main(module, reason, reserved) };
+    }
+}
+
+#[inline]
 pub unsafe extern "system" fn mi_win_main_detach(module: PVOID, reason: DWORD, reserved: LPVOID) {
     if reason == DLL_PROCESS_DETACH || reason == DLL_THREAD_DETACH {
         unsafe { mi_win_main(module, reason, reserved) };
@@ -520,8 +568,8 @@ pub unsafe extern "system" fn mi_win_main_detach(module: PVOID, reason: DWORD, r
 
 #[inline]
 pub unsafe extern "system" fn mi_tls_detach(module: PVOID, reason: DWORD, reserved: LPVOID) {
-    if (reason == DLL_THREAD_DETACH || reason == DLL_PROCESS_DETACH)
-        && !unsafe { mi_module_is_dll(module) }
+    if reason == DLL_THREAD_DETACH
+        || (reason == DLL_PROCESS_DETACH && !unsafe { mi_module_is_dll(module) })
     {
         unsafe { mi_win_main(module, reason, reserved) };
     }
@@ -552,6 +600,13 @@ pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_
         unsafe {
             FlsSetValue(mi_fls_key, theap.cast::<c_void>());
         }
+    }
+}
+
+#[inline]
+pub unsafe extern "system" fn mi_win_main_attach(module: PVOID, reason: DWORD, reserved: LPVOID) {
+    if reason == DLL_PROCESS_ATTACH || reason == DLL_THREAD_ATTACH {
+        unsafe { mi_win_main(module, reason, reserved) };
     }
 }
 

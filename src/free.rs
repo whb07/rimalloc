@@ -11,6 +11,7 @@ use core::ffi::c_void;
 use core::{cmp, ptr};
 
 use crate::atomic::{mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_memory_order_e};
+use crate::bits::MI_INTPTR_SIZE;
 use crate::internal::{
     __mi_stat_decrease, _mi_error_message, _mi_memset_aligned, _mi_os_page_size, EAGAIN, EFAULT,
     MI_DEBUG, MI_ENCODE_FREELIST, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK,
@@ -24,8 +25,8 @@ use crate::page::{
 use crate::prim::_mi_theap_default;
 use crate::track::{mi_track_free_size, mi_track_mem_defined, mi_track_mem_noaccess};
 use crate::types::{
-    MI_DEBUG_FREED, MI_DEBUG_PADDING, MI_INTPTR_SIZE, MI_MAX_ALIGN_SIZE, mi_block_t, mi_padding_t,
-    mi_page_t, mi_theap_t,
+    MI_DEBUG_FREED, MI_DEBUG_PADDING, MI_MAX_ALIGN_SIZE, mi_block_t, mi_padding_t, mi_page_t,
+    mi_theap_t,
 };
 
 unsafe extern "C" {
@@ -53,9 +54,7 @@ unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_bloc
     {
         _mi_error_message(
             EAGAIN,
-            b"double free detected of block %p with size %zu\n\0"
-                .as_ptr()
-                .cast(),
+            c"double free detected of block %p with size %zu\n".as_ptr(),
             block,
             mi_page_block_size(page),
         );
@@ -73,7 +72,7 @@ unsafe fn mi_page_decode_padding(
     *bsize = mi_page_usable_block_size(page);
     let padding = (block.cast::<u8>()).add(*bsize).cast::<mi_padding_t>();
     mi_track_mem_defined(
-        padding.cast::<c_void>(),
+        padding.cast_mut().cast::<c_void>(),
         core::mem::size_of::<mi_padding_t>(),
     );
     *delta = (*padding).delta as usize;
@@ -82,7 +81,7 @@ unsafe fn mi_page_decode_padding(
     let ok = mi_ptr_encode_canary(page.cast::<c_void>(), block.cast::<c_void>(), &keys) == canary
         && *delta <= *bsize;
     mi_track_mem_noaccess(
-        padding.cast::<c_void>(),
+        padding.cast_mut().cast::<c_void>(),
         core::mem::size_of::<mi_padding_t>(),
     );
     ok
@@ -107,7 +106,7 @@ unsafe fn mi_verify_padding(
     if !mi_page_is_huge(page) {
         let fill = block.cast::<u8>().add(bsize - delta);
         let maxpad = cmp::min(delta, MI_MAX_ALIGN_SIZE);
-        mi_track_mem_defined(fill.cast::<c_void>(), maxpad);
+        mi_track_mem_defined(fill.cast_mut().cast::<c_void>(), maxpad);
         for i in 0..maxpad {
             if *fill.add(i) != MI_DEBUG_PADDING {
                 *wrong = bsize - delta + i;
@@ -115,7 +114,7 @@ unsafe fn mi_verify_padding(
                 break;
             }
         }
-        mi_track_mem_noaccess(fill.cast::<c_void>(), maxpad);
+        mi_track_mem_noaccess(fill.cast_mut().cast::<c_void>(), maxpad);
     }
     ok
 }
@@ -130,9 +129,7 @@ pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t)
     if !mi_verify_padding(page, block, &mut size, &mut wrong) {
         _mi_error_message(
             EFAULT,
-            b"buffer overflow in theap block %p of size %zu: write after %zu bytes\n\0"
-                .as_ptr()
-                .cast(),
+            c"buffer overflow in theap block %p of size %zu: write after %zu bytes\n".as_ptr(),
             block,
             size,
             wrong,

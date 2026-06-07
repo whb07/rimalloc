@@ -6,7 +6,7 @@
     clippy::missing_safety_doc
 )]
 
-use core::ffi::{c_char, c_long, c_void};
+use core::ffi::{c_long, c_void};
 use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use std::sync::Once;
@@ -16,9 +16,7 @@ use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release
 use crate::bits::MI_SIZE_SIZE;
 use crate::internal::{_mi_allocator_done, _mi_error_message, mi_memid_t, mi_memkind_t};
 use crate::options::{_mi_warning_message, mi_option_get, mi_option_get_clamp, mi_option_t};
-use crate::stats::{
-    _mi_stats_merge_into, mi_stat_count_t, mi_stats_get_json_from, mi_stats_header_init, mi_stats_t,
-};
+use crate::stats::{_mi_stats_merge_into, mi_stat_count_t, mi_stats_header_init, mi_stats_t};
 use crate::types::{
     MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_heap_visit_fun,
     mi_page_queue_t, mi_page_t, mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
@@ -1533,25 +1531,6 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
         }
         mi_lock_release(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
         ok
-    }
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-/// `subproc_id` must be valid for this crate, and `buf` must be writable for `buf_size` bytes when non-null.
-pub unsafe extern "C" fn mi_subproc_stats_get_json(
-    subproc_id: mi_subproc_id_t,
-    buf_size: usize,
-    buf: *mut c_char,
-) -> *mut c_char {
-    let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
-    if subproc.is_null() {
-        return ptr::null_mut();
-    }
-    // SAFETY: `stats` lives inside the local prefix for this bounded subproc surface.
-    unsafe {
-        let stats = ptr::addr_of!((*mi_subproc_prefix(subproc)).stats);
-        mi_stats_get_json_from(stats, buf_size, buf)
     }
 }
 

@@ -9,18 +9,22 @@ use crate::atomic::mi_atomic_load_ptr_acquire;
 use crate::bitmap::{MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT};
 use crate::bits::MI_INTPTR_BITS;
 use crate::internal::{
-    _mi_align_up, _mi_memid_create, _mi_os_commit, _mi_os_commit_ex, _mi_subproc, mi_memid_t,
-    mi_memkind_t, mi_size_of_slices,
+    _mi_align_up, _mi_divide_up, _mi_memid_create, _mi_os_commit, _mi_os_commit_ex, _mi_subproc,
+    mi_block_next, mi_memid_t, mi_memkind_t, mi_page_area, mi_page_block_size, mi_page_heap,
+    mi_page_start, mi_page_usable_block_size, mi_size_of_slices,
 };
 use crate::options::{mi_option_get_size, mi_option_t};
+use crate::page::{_mi_page_free_collect, MI_SMALL_PAGE_SIZE};
 use crate::types::{
-    mi_arena_id_t, mi_arena_t, mi_commit_fun_t, mi_heap_t, mi_page_t, mi_subproc_t,
+    mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t, mi_heap_area_t, mi_heap_t,
+    mi_msecs_t, mi_page_t, mi_subproc_t,
 };
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
 pub const MI_ARENA_SLICE_ALIGN: usize = MI_ARENA_SLICE_SIZE;
 pub const MI_ARENA_BCHUNK_BITS: usize = 64 * size_of::<usize>();
 pub const MI_ARENA_MIN_SIZE: usize = MI_ARENA_BCHUNK_BITS * MI_ARENA_SLICE_SIZE;
+pub const MI_META_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_BLOCK_START_MAX_OFFSET: usize = 8 * MI_INTPTR_BITS;
 #[allow(non_upper_case_globals)]
 pub const mi_forall_arenas_end: () = ();
@@ -28,6 +32,7 @@ pub const mi_forall_arenas_end: () = ();
 const MI_MAX_ARENAS: usize = 160;
 const MI_ARENA_MIN_OBJ_SIZE: usize = MI_ARENA_SLICE_SIZE;
 const MI_ARENA_MAX_SIZE: usize = MI_BITMAP_MAX_BIT_COUNT * MI_ARENA_SLICE_SIZE;
+const MI_MAX_BLOCKS: usize = MI_SMALL_PAGE_SIZE / size_of::<usize>();
 
 #[repr(C)]
 struct MiHeapPrefix {
@@ -72,6 +77,168 @@ struct MiArenaPrefix {
     slices_dirty: *mut crate::bitmap::mi_bitmap_t,
     slices_purge: *mut crate::bitmap::mi_bitmap_t,
     pages_meta: *mut mi_page_t,
+}
+
+#[allow(dead_code, non_camel_case_types)]
+#[repr(C)]
+struct mi_purge_visit_info_t {
+    now: mi_msecs_t,
+    delay: mi_msecs_t,
+    all_purged: bool,
+    any_purged: bool,
+}
+
+#[allow(dead_code, non_camel_case_types)]
+#[repr(C)]
+struct mi_heap_visit_info_t {
+    heap: *mut mi_heap_t,
+    visitor: mi_block_visit_fun,
+    arg: *mut c_void,
+    visit_blocks: bool,
+}
+
+#[allow(dead_code)]
+unsafe fn mi_heap_area_init(area: *mut mi_heap_area_t, page: *mut mi_page_t) {
+    let bsize = unsafe { mi_page_block_size(page) };
+    let ubsize = unsafe { mi_page_usable_block_size(page) };
+    unsafe {
+        (*area).reserved = (*page).reserved as usize * bsize;
+        (*area).committed = (*page).capacity as usize * bsize;
+        (*area).blocks = mi_page_start(page).cast::<c_void>();
+        (*area).used = (*page).used as usize;
+        (*area).block_size = ubsize;
+        (*area).full_block_size = bsize;
+        (*area).reserved1 = page.cast::<c_void>();
+    }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_theap_area_visit_blocks(
+    area: *const mi_heap_area_t,
+    page: *mut mi_page_t,
+    visitor: mi_block_visit_fun,
+    arg: *mut c_void,
+) -> bool {
+    crate::mi_assert_internal!(!area.is_null());
+    crate::mi_assert_internal!(!page.is_null());
+
+    unsafe { _mi_page_free_collect(page, true) };
+    crate::mi_assert_internal!(unsafe { (*page).local_free.is_null() });
+    if unsafe { (*page).used == 0 } {
+        return true;
+    }
+
+    let mut psize = 0usize;
+    let pstart = unsafe { mi_page_area(page, &mut psize) };
+    let heap = unsafe { mi_page_heap(page) };
+    let bsize = unsafe { mi_page_block_size(page) };
+    let ubsize = unsafe { mi_page_usable_block_size(page) };
+
+    if unsafe { (*page).capacity == 1 } {
+        crate::mi_assert_internal!(unsafe { (*page).used == 1 && (*page).free.is_null() });
+        return unsafe { visitor(heap, area, pstart.cast::<c_void>(), ubsize, arg) };
+    }
+
+    if unsafe { (*page).used == (*page).capacity } {
+        let mut block = pstart;
+        for _ in 0..unsafe { (*page).capacity as usize } {
+            if !unsafe { visitor(heap, area, block.cast::<c_void>(), ubsize, arg) } {
+                return false;
+            }
+            block = unsafe { block.add(bsize) };
+        }
+        return true;
+    }
+
+    let mut free_map = [0usize; MI_MAX_BLOCKS / MI_INTPTR_BITS];
+    let bmapsize = _mi_divide_up(unsafe { (*page).capacity as usize }, MI_INTPTR_BITS);
+    if !unsafe { (*page).capacity as usize }.is_multiple_of(MI_INTPTR_BITS) {
+        let shift = unsafe { (*page).capacity as usize % MI_INTPTR_BITS };
+        free_map[bmapsize - 1] = usize::MAX << shift;
+    }
+
+    let mut block = unsafe { (*page).free };
+    while !block.is_null() {
+        crate::mi_assert_internal!(
+            block.cast::<u8>() >= pstart && block.cast::<u8>() < unsafe { pstart.add(psize) }
+        );
+        let offset = block.cast::<u8>() as usize - pstart as usize;
+        crate::mi_assert_internal!(offset.is_multiple_of(bsize));
+        let blockidx = offset / bsize;
+        crate::mi_assert_internal!(blockidx < MI_MAX_BLOCKS);
+        let bitidx = blockidx / MI_INTPTR_BITS;
+        let bit = blockidx - (bitidx * MI_INTPTR_BITS);
+        free_map[bitidx] |= 1usize << bit;
+        block = unsafe { mi_block_next(page, block) };
+    }
+
+    let mut block = pstart;
+    for m in free_map.iter().take(bmapsize) {
+        if *m == 0 {
+            for _ in 0..MI_INTPTR_BITS {
+                if !unsafe { visitor(heap, area, block.cast::<c_void>(), ubsize, arg) } {
+                    return false;
+                }
+                block = unsafe { block.add(bsize) };
+            }
+        } else {
+            let mut used_mask = !*m;
+            while used_mask != 0 {
+                let bitidx = used_mask.trailing_zeros() as usize;
+                if !unsafe {
+                    visitor(
+                        heap,
+                        area,
+                        block.add(bitidx * bsize).cast::<c_void>(),
+                        ubsize,
+                        arg,
+                    )
+                } {
+                    return false;
+                }
+                used_mask &= used_mask - 1;
+            }
+            block = unsafe { block.add(bsize * MI_INTPTR_BITS) };
+        }
+    }
+    true
+}
+
+#[allow(dead_code)]
+unsafe fn mi_heap_visit_page(page: *mut mi_page_t, vinfo: *mut mi_heap_visit_info_t) -> bool {
+    let mut area = mi_heap_area_t::default();
+    unsafe { mi_heap_area_init(ptr::addr_of_mut!(area), page) };
+    crate::mi_assert_internal!(unsafe { (*vinfo).heap == mi_page_heap(page) });
+    if !unsafe {
+        ((*vinfo).visitor)(
+            (*vinfo).heap,
+            ptr::addr_of!(area),
+            ptr::null_mut(),
+            area.block_size,
+            (*vinfo).arg,
+        )
+    } {
+        return false;
+    }
+    if unsafe { (*vinfo).visit_blocks } {
+        unsafe {
+            mi_theap_area_visit_blocks(ptr::addr_of!(area), page, (*vinfo).visitor, (*vinfo).arg)
+        }
+    } else {
+        true
+    }
+}
+
+#[allow(dead_code)]
+unsafe fn mi_heap_visit_page_at(
+    slice_index: usize,
+    _slice_count: usize,
+    arena: *mut mi_arena_t,
+    arg: *mut c_void,
+) -> bool {
+    let vinfo = arg.cast::<mi_heap_visit_info_t>();
+    let page = unsafe { mi_arena_page_at_slice(arena, slice_index) };
+    unsafe { mi_heap_visit_page(page, vinfo) }
 }
 
 pub extern "C" fn mi_arena_min_alignment() -> usize {

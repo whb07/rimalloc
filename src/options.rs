@@ -914,6 +914,7 @@ fn parse_option_value(raw: &str, size_in_kib: bool) -> Option<c_long> {
     }
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_version() -> i32 {
     MI_MALLOC_VERSION
 }

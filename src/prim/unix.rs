@@ -328,7 +328,7 @@ pub unsafe fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
     ((*tv).tv_sec as mi_msecs_t * 1000) + ((*tv).tv_usec as mi_msecs_t / 1000)
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
     if size == 0 {
         return 0;
@@ -566,7 +566,7 @@ unsafe fn unix_mmap(
     p
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_alloc(
     hint_addr: *mut c_void,
     size: usize,
@@ -606,7 +606,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
 #[inline]
 unsafe fn unix_mprotect_hint(_err: c_int) {}
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_commit(
     start: *mut c_void,
     size: usize,
@@ -803,7 +803,7 @@ pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
     0
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     #[cfg(target_os = "linux")]
     {
@@ -1086,7 +1086,7 @@ pub unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
     false
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_thread_yield() {
     let _ = sleep(0);
 }

@@ -434,6 +434,7 @@ pub unsafe extern "C" fn mi_heap_zalloc_aligned_at(
     mi_theap_zalloc_aligned_at(_mi_heap_theap(heap), size, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_aligned(
     heap: *mut mi_heap_t,
     size: usize,

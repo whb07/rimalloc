@@ -189,7 +189,7 @@ fn mi_random_init_ex(ctx: &mut mi_random_ctx_t, use_weak: bool) {
     chacha_init(ctx, &key, nonce);
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_random_split(
     ctx: *mut mi_random_ctx_t,
     ctx_new: *mut mi_random_ctx_t,
@@ -205,7 +205,7 @@ pub unsafe extern "C" fn _mi_random_split(
     );
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize {
     let ctx = &mut *ctx;
     debug_assert!(mi_random_is_initialized(ctx));
@@ -234,7 +234,7 @@ pub extern "C" fn _mi_os_random_weak(extra_seed: usize) -> usize {
     x
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_random_init(ctx: *mut mi_random_ctx_t) {
     mi_random_init_ex(&mut *ctx, false);
 }

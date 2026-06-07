@@ -699,6 +699,7 @@ pub unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_t) -> *
     unsafe { mi_os_ensure_zero(p, size, memid) }
 }
 
+#[allow(dead_code)]
 #[inline]
 unsafe fn mi_os_claim_huge_pages(pages: usize, total_size: *mut usize) -> *mut u8 {
     let _ = pages;

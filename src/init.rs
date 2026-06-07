@@ -859,6 +859,17 @@ fn mi_tld_free(tld: *mut mi_tld_t) {
     }
 }
 
+unsafe extern "C" {
+    fn _mi_theap_cached_set(theap: *mut mi_theap_t);
+    fn _mi_theap_collect_abandon(theap: *mut mi_theap_t);
+    fn _mi_theap_create(heap: *mut mi_heap_t, tld: *mut mi_tld_t) -> *mut mi_theap_t;
+    fn _mi_theap_free(
+        theap: *mut mi_theap_t,
+        acquire_heap_theaps_lock: bool,
+        acquire_tld_theaps_lock: bool,
+    ) -> bool;
+}
+
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
 unsafe extern "C" {
     fn pthread_key_delete(key: mi_thread_local_t) -> i32;
@@ -1314,6 +1325,96 @@ pub unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
     unsafe {
         crate::internal::mi_theap_is_initialized(theap)
             && _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))
+    }
+}
+
+#[allow(dead_code)]
+unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
+    let mut theap = unsafe { crate::prim::_mi_theap_default() };
+    if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
+        return theap;
+    }
+    if _mi_is_main_thread() {
+        mi_heap_main_init();
+        theap = ptr::addr_of_mut!(theap_main);
+    } else {
+        let tld = mi_tld_alloc();
+        if tld.is_null() {
+            return ptr::null_mut();
+        }
+        theap = unsafe { _mi_theap_create(mi_heap_main(), tld) };
+    }
+    unsafe { _mi_theap_default_set(theap) };
+    theap
+}
+
+#[allow(dead_code)]
+unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
+    let empty = unsafe { _mi_theap_empty_get() };
+    unsafe {
+        _mi_theap_default_set(empty);
+        _mi_theap_cached_set(empty);
+        crate::prim::__mi_theap_main = ptr::null_mut();
+    }
+
+    unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };
+    let mut theap = unsafe { (*tld).theaps };
+    while !theap.is_null() {
+        let next = unsafe { (*theap).tnext };
+        unsafe { _mi_theap_collect_abandon(theap) };
+        crate::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
+        theap = next;
+    }
+    unsafe { mi_lock_release(ptr::addr_of_mut!((*tld).theaps_lock)) };
+
+    loop {
+        let mut all_freed = true;
+        unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };
+        let mut theap = unsafe { (*tld).theaps };
+        while !theap.is_null() {
+            let next = unsafe { (*theap).tnext };
+            crate::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
+            if !unsafe { _mi_theap_free(theap, true, false) } {
+                all_freed = false;
+            }
+            theap = next;
+        }
+        unsafe { mi_lock_release(ptr::addr_of_mut!((*tld).theaps_lock)) };
+
+        if !all_freed {
+            let subproc = unsafe { mi_subproc_prefix((*tld).subproc) };
+            crate::internal::__mi_stat_counter_increase_mt(
+                unsafe { &mut (*subproc).stats.heaps_delete_wait },
+                1,
+            );
+            unsafe { crate::prim::_mi_prim_thread_yield() };
+        } else {
+            crate::mi_assert_internal!(unsafe { (*tld).theaps }.is_null());
+            break;
+        }
+    }
+
+    crate::mi_assert_internal!(unsafe { crate::prim::_mi_theap_default() } == empty);
+    crate::mi_assert_internal!(!unsafe { crate::internal::mi_theap_is_initialized(empty) });
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// Initializes per-thread mimalloc state for the current thread when it is not already set up.
+pub unsafe extern "C" fn mi_thread_init() {
+    unsafe { crate::internal::_mi_auto_process_init() };
+    if unsafe { crate::prim::_mi_thread_is_initialized() } {
+        return;
+    }
+    if unsafe { _mi_thread_init_theap_default() }.is_null() {
+        return;
+    }
+    let heap = unsafe { mi_heap_main() };
+    if !heap.is_null() {
+        crate::internal::__mi_stat_increase(
+            unsafe { &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads },
+            1,
+        );
     }
 }
 

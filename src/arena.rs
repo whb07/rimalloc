@@ -81,20 +81,6 @@ const EAGAIN: c_int = 11;
 const EINVAL: c_int = 22;
 const ENOMEM: c_int = 12;
 
-unsafe extern "C" {
-    fn mi_arenas_try_find_free(
-        heap: *mut mi_heap_t,
-        slice_count: usize,
-        alignment: usize,
-        commit: bool,
-        allow_large: bool,
-        req_arena: *mut mi_arena_t,
-        tseq: usize,
-        numa_node: c_int,
-        memid: *mut mi_memid_t,
-    ) -> *mut c_void;
-}
-
 #[allow(non_camel_case_types)]
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -634,6 +620,7 @@ pub extern "C" fn mi_arena_min_alignment() -> usize {
     MI_ARENA_SLICE_ALIGN
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_arena_min_size() -> usize {
     MI_ARENA_MIN_SIZE
 }
@@ -1092,7 +1079,7 @@ unsafe fn mi_arena_try_alloc_at(
                 && unsafe { (*memid).initially_zero }
                 && !unsafe { mi_mem_is_zero(p, mi_size_of_slices(slice_count)) }
             {
-                crate::options::_mi_error_message(
+                crate::options::_mi_error_message_fmt(
                     EFAULT,
                     format_args!("internal error: arena allocation was not zero-initialized!\n"),
                 );
@@ -1316,6 +1303,69 @@ unsafe fn mi_forall_suitable_arenas<F>(
                 || visit(arena)
         })
     };
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe fn mi_arenas_try_find_free(
+    heap: *mut mi_heap_t,
+    slice_count: usize,
+    alignment: usize,
+    commit: bool,
+    allow_large: bool,
+    req_arena: *mut mi_arena_t,
+    tseq: usize,
+    numa_node: c_int,
+    memid: *mut mi_memid_t,
+) -> *mut c_void {
+    crate::mi_assert!(alignment <= MI_ARENA_SLICE_ALIGN);
+    if alignment > MI_ARENA_SLICE_ALIGN {
+        return ptr::null_mut();
+    }
+
+    let mut found = ptr::null_mut();
+    unsafe {
+        mi_forall_suitable_arenas(
+            heap,
+            req_arena,
+            tseq,
+            true,
+            numa_node,
+            allow_large,
+            |arena| {
+                let p = mi_arena_try_alloc_at(arena, slice_count, commit, tseq, memid);
+                if !p.is_null() {
+                    found = p;
+                    false
+                } else {
+                    true
+                }
+            },
+        );
+    }
+    if !found.is_null() || numa_node < 0 {
+        return found;
+    }
+
+    unsafe {
+        mi_forall_suitable_arenas(
+            heap,
+            req_arena,
+            tseq,
+            false,
+            numa_node,
+            allow_large,
+            |arena| {
+                let p = mi_arena_try_alloc_at(arena, slice_count, commit, tseq, memid);
+                if !p.is_null() {
+                    found = p;
+                    false
+                } else {
+                    true
+                }
+            },
+        );
+    }
+    found
 }
 
 #[allow(dead_code)]
@@ -2476,7 +2526,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
         && memid.initially_committed
         && !unsafe { mi_mem_is_zero(slice_start.cast(), page_noguard_size) }
     {
-        crate::options::_mi_error_message(
+        crate::options::_mi_error_message_fmt(
             EFAULT,
             format_args!("internal error: page memory was not zero initialized.\n"),
         );
@@ -3055,7 +3105,7 @@ pub unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_
         crate::mi_assert_internal!(size.is_multiple_of(MI_ARENA_SLICE_SIZE));
         crate::mi_assert_internal!(slice_count * MI_ARENA_SLICE_SIZE == size);
         if arena.is_null() {
-            crate::options::_mi_error_message(
+            crate::options::_mi_error_message_fmt(
                 EINVAL,
                 format_args!(
                     "trying to free from an invalid arena: {:p}, size {}\n",
@@ -3071,7 +3121,7 @@ pub unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_
         if slice_index < unsafe { mi_arena_info_slices(arena) }
             || slice_index >= unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
         {
-            crate::options::_mi_error_message(
+            crate::options::_mi_error_message_fmt(
                 EINVAL,
                 format_args!(
                     "trying to free from an invalid arena block: {:p}, size {}\n",
@@ -3093,7 +3143,7 @@ pub unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_
             )
         };
         if !all_inuse {
-            crate::options::_mi_error_message(
+            crate::options::_mi_error_message_fmt(
                 EAGAIN,
                 format_args!(
                     "trying to free an already freed arena block: {:p}, size {}\n",

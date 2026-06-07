@@ -17,8 +17,8 @@ use crate::atomic::{mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_memo
 use crate::bits::MI_INTPTR_SIZE;
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_decrease, _mi_align_down_ptr,
-    _mi_arena_memid_is_suitable, _mi_error_message, _mi_memset_aligned, _mi_option_get_fast,
-    _mi_os_page_size, _mi_os_unprotect, _mi_page_ptr_unalign, _mi_ptr_page, _mi_safe_ptr_page,
+    _mi_arena_memid_is_suitable, _mi_error_message, _mi_is_power_of_two, _mi_memset_aligned,
+    _mi_option_get_fast, _mi_os_page_size, _mi_os_unprotect, _mi_ptr_page, _mi_safe_ptr_page,
     _mi_theap_heap, _mi_theap_page_reclaim, EAGAIN, EFAULT, EINVAL, MI_BLOCK_TAG_GUARDED, MI_DEBUG,
     MI_ENCODE_FREELIST, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK,
     MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded,
@@ -56,6 +56,22 @@ unsafe fn mi_list_contains(
         list = mi_block_next(page, list);
     }
     false
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_page_ptr_unalign(
+    page: *const mi_page_t,
+    p: *const c_void,
+) -> *mut mi_block_t {
+    crate::mi_assert_internal!(!page.is_null() && !p.is_null());
+    let diff = p.cast::<u8>().offset_from(mi_page_start(page)) as usize;
+    let block_size = mi_page_block_size(page);
+    let adjust = if _mi_is_power_of_two(block_size) {
+        diff & (block_size - 1)
+    } else {
+        diff % block_size
+    };
+    p.cast_mut().cast::<u8>().sub(adjust).cast::<mi_block_t>()
 }
 
 unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_block_t) -> bool {

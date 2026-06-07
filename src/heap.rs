@@ -14,7 +14,7 @@ use crate::internal::{
     mi_page_heap,
 };
 use crate::mimalloc::{mi_free, mi_heap_zalloc};
-use crate::options::{_mi_error_message, _mi_warning_message};
+use crate::options::{_mi_error_message_fmt, _mi_warning_message};
 use crate::os::_mi_os_numa_node_count;
 use crate::page_map::_mi_safe_ptr_page;
 use crate::prim::{_mi_heap_theap, _mi_prim_thread_yield};
@@ -76,7 +76,7 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
 
     let theap_slot = _mi_thread_local_create();
     if theap_slot == 0 {
-        _mi_error_message(
+        _mi_error_message_fmt(
             EFAULT,
             format_args!("unable to dynamically create a thread local for a heap\n"),
         );
@@ -239,6 +239,11 @@ pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_vo
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_void) -> bool {
+    mi_heap_contains(heap.cast_const(), p)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_check_owned(p: *const c_void) -> bool {
     mi_any_heap_contains(p)
 }
@@ -292,7 +297,7 @@ unsafe fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
 
     crate::mi_assert_internal!((*heap).theap != 0);
     if (*heap).theap == 0 {
-        _mi_error_message(
+        _mi_error_message_fmt(
             EFAULT,
             format_args!("no thread-local reserved for heap ({:p})\n", heap),
         );
@@ -302,7 +307,7 @@ unsafe fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let mut theap = _mi_thread_local_get((*heap).theap).cast::<mi_theap_t>();
     if theap.is_null() {
         if !_mi_thread_local_set((*heap).theap, MI_THEAP_TLS_BUSY.cast::<c_void>()) {
-            _mi_error_message(
+            _mi_error_message_fmt(
                 EFAULT,
                 format_args!("unable to allocate memory for thread local storage\n"),
             );
@@ -311,7 +316,7 @@ unsafe fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
         theap = _mi_theap_create(heap, (*_mi_theap_default_safe()).tld);
         _mi_thread_local_set((*heap).theap, theap.cast::<c_void>());
         if theap.is_null() {
-            _mi_error_message(
+            _mi_error_message_fmt(
                 EFAULT,
                 format_args!("unable to allocate memory for a thread local heap\n"),
             );

@@ -803,7 +803,7 @@ pub(crate) fn _mi_warning_message(args: fmt::Arguments<'_>) {
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: warning: ".as_ptr(), args);
 }
 
-pub(crate) fn _mi_error_message(err: c_int, args: fmt::Arguments<'_>) {
+pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
     mi_show_error_message(args);
     let handler = *lock_unpoisoned(&mi_error_handler);
     let arg = mi_error_arg.load(Ordering::Acquire);
@@ -812,6 +812,18 @@ pub(crate) fn _mi_error_message(err: c_int, args: fmt::Arguments<'_>) {
     } else {
         mi_error_default(err);
     }
+}
+
+/// # Safety
+/// Matches the exported C helper surface. Extra varargs from C-style callers are ignored here.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char) {
+    let args = if fmt.is_null() {
+        format_args!("")
+    } else {
+        format_args!("{}", CStr::from_ptr(fmt).to_string_lossy())
+    };
+    _mi_error_message_fmt(err, args);
 }
 
 #[inline]
@@ -1019,13 +1031,18 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
     }
 }
 
-pub(crate) fn _mi_option_get_fast(option: mi_option_t) -> c_long {
+fn mi_option_get_fast_impl(option: mi_option_t) -> c_long {
     let idx = option as usize;
     let table = lock_unpoisoned(&OPTIONS);
     debug_assert!(idx < MI_OPTION_COUNT);
     let desc = &table[idx];
     debug_assert!(desc.option as usize == idx);
     desc.value
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
+    mi_option_get_fast_impl(option)
 }
 
 pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {

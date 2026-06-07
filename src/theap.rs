@@ -271,6 +271,28 @@ unsafe extern "C" fn mi_theap_area_visitor(
     }
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_theap_visit_blocks(
+    theap: *const mi_theap_t,
+    visit_blocks: bool,
+    visitor: Option<mi_block_visit_fun>,
+    arg: *mut c_void,
+) -> bool {
+    let Some(visitor) = visitor else {
+        return false;
+    };
+    let mut args = mi_visit_blocks_args_t {
+        visit_blocks,
+        visitor,
+        arg,
+    };
+    mi_theap_visit_areas(
+        theap,
+        Some(mi_theap_area_visitor),
+        ptr::addr_of_mut!(args).cast::<c_void>(),
+    )
+}
+
 pub unsafe fn mi_theap_visit_pages(
     theap: *mut mi_theap_t,
     fn_page: Option<theap_page_visitor_fun>,

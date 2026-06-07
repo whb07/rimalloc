@@ -83,6 +83,8 @@ pub const MI_THREADID_ABANDONED_MAPPED: usize = MI_PAGE_FLAG_MASK + 1;
 pub const MI_PAGES_DIRECT: usize = MI_SMALL_WSIZE_MAX + 1;
 
 pub type mi_arena_id_t = *mut c_void;
+pub use crate::internal::mi_memkind_t;
+pub type mi_memkind_e = crate::internal::mi_memkind_t;
 pub type mi_threadid_t = usize;
 pub type mi_msecs_t = i64;
 pub type mi_thread_local_t = usize;
@@ -95,6 +97,14 @@ pub type mi_thread_free_t = usize;
 pub type mi_bitmap_t = crate::bitmap::mi_bitmap_t;
 pub type mi_bbitmap_t = crate::bitmap::mi_bbitmap_t;
 pub type mi_encoded_t = usize;
+
+#[inline]
+pub const fn mi_memkind_needs_no_free(memkind: mi_memkind_t) -> bool {
+    matches!(
+        memkind,
+        mi_memkind_t::MI_MEM_NONE | mi_memkind_t::MI_MEM_EXTERNAL | mi_memkind_t::MI_MEM_STATIC
+    )
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

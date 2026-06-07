@@ -14,6 +14,7 @@
 
 use core::ffi::{c_char, c_int, c_long};
 use core::ffi::{c_uint, c_void};
+use core::mem::MaybeUninit;
 use core::ptr;
 use core::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
 use std::ffi::CStr;
@@ -161,6 +162,13 @@ pub struct mi_timeval {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct timespec {
+    pub tv_sec: c_long,
+    pub tv_nsec: c_long,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct rusage {
     pub ru_utime: mi_timeval,
     pub ru_stime: mi_timeval,
@@ -190,6 +198,7 @@ unsafe extern "C" {
     fn munmap(addr: *mut c_void, len: usize) -> c_int;
     fn access(path: *const c_char, amode: c_int) -> c_int;
     fn sysconf(name: c_int) -> c_long;
+    fn clock() -> c_long;
     fn mmap(
         addr: *mut c_void,
         len: usize,
@@ -201,6 +210,7 @@ unsafe extern "C" {
     fn madvise(addr: *mut c_void, len: usize, advice: c_int) -> c_int;
     fn mprotect(addr: *mut c_void, len: usize, prot: c_int) -> c_int;
     fn getrusage(who: c_int, usage: *mut rusage) -> c_int;
+    fn clock_gettime(clk_id: c_int, tp: *mut timespec) -> c_int;
     fn pthread_key_create(
         key: *mut pthread_key_t,
         dtor: Option<unsafe extern "C" fn(*mut c_void)>,
@@ -224,6 +234,30 @@ unsafe extern "C" {
 static mut _mi_heap_default_key: pthread_key_t = PTHREAD_KEY_INVALID;
 static large_page_try_ok: AtomicUsize = AtomicUsize::new(0);
 static no_getrandom: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd"
+))]
+const CLOCK_REALTIME: c_int = 0;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd"
+))]
+const CLOCK_MONOTONIC: c_int = 1;
+#[cfg(target_os = "macos")]
+const CLOCK_REALTIME: c_int = 0;
+#[cfg(target_os = "macos")]
+const CLOCK_MONOTONIC: c_int = 6;
+const CLOCKS_PER_SEC: c_long = 1_000_000;
 
 #[cfg(all(
     any(target_os = "linux", target_os = "android"),
@@ -789,6 +823,60 @@ pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     #[cfg(not(target_os = "linux"))]
     {
         1
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    ))]
+    {
+        let mut t = MaybeUninit::<timespec>::uninit();
+        let clock_id = if cfg!(any(
+            target_os = "linux",
+            target_os = "android",
+            target_os = "macos",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd"
+        )) {
+            CLOCK_MONOTONIC
+        } else {
+            CLOCK_REALTIME
+        };
+        if clock_gettime(clock_id, t.as_mut_ptr()) == 0 {
+            let t = t.assume_init();
+            return (t.tv_sec as mi_msecs_t * 1000) + (t.tv_nsec as mi_msecs_t / 1_000_000);
+        }
+        0
+    }
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    )))]
+    {
+        let ticks = clock() as mi_msecs_t;
+        #[allow(clippy::if_same_then_else)]
+        if CLOCKS_PER_SEC == 1000 || CLOCKS_PER_SEC == 0 {
+            ticks
+        } else if CLOCKS_PER_SEC < 1000 {
+            ticks * (1000 / CLOCKS_PER_SEC as mi_msecs_t)
+        } else {
+            ticks / (CLOCKS_PER_SEC as mi_msecs_t / 1000)
+        }
     }
 }
 

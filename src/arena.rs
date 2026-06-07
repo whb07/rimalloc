@@ -6,14 +6,16 @@ use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{
-    EFAULT, mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_atomic_load_ptr_acquire,
-    mi_lock_acquire, mi_lock_release, mi_memory_order_e,
+    EFAULT, mi_atomic_cas_ptr_strong_release, mi_atomic_cas_strong_acq_rel,
+    mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_atomic_load_ptr_acquire,
+    mi_atomic_store_ptr_release, mi_lock_acquire, mi_lock_release, mi_memory_order_e,
 };
 use crate::bitmap::{
-    MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT, mi_bbitmap_is_clearN, mi_bbitmap_setN,
-    mi_bbitmap_try_find_and_clearN, mi_bitmap_clear, mi_bitmap_clear_once_set, mi_bitmap_clearN,
+    MI_BCHUNK_SIZE, MI_BITMAP_MAX_BIT_COUNT, mi_bbitmap_init, mi_bbitmap_is_clearN,
+    mi_bbitmap_setN, mi_bbitmap_size, mi_bbitmap_t, mi_bbitmap_try_find_and_clearN,
+    mi_bbitmap_unsafe_setN, mi_bitmap_clear, mi_bitmap_clear_once_set, mi_bitmap_clearN,
     mi_bitmap_init, mi_bitmap_is_setN, mi_bitmap_popcountN, mi_bitmap_set, mi_bitmap_setN,
-    mi_bitmap_size, mi_bitmap_t, mi_bitmap_try_find_and_claim,
+    mi_bitmap_size, mi_bitmap_t, mi_bitmap_try_find_and_claim, mi_bitmap_unsafe_setN,
 };
 use crate::bits::MI_INTPTR_BITS;
 use crate::internal::{
@@ -1072,11 +1074,46 @@ unsafe fn mi_arena_pages_size(slice_count: usize, bitmap_base: *mut usize) -> us
 }
 
 #[allow(dead_code)]
+unsafe fn mi_arena_info_slices_needed(slice_count: usize, bitmap_base: *mut usize) -> usize {
+    let slice_count = if slice_count == 0 {
+        MI_ARENA_BCHUNK_BITS
+    } else {
+        slice_count
+    };
+    crate::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
+    let base_size = _mi_align_up(size_of::<mi_arena_t>(), MI_BCHUNK_SIZE);
+    let bitmaps_count = 4 + MI_ARENA_BIN_COUNT;
+    let bitmaps_size = (bitmaps_count * unsafe { mi_bitmap_size(slice_count, ptr::null_mut()) })
+        + unsafe { mi_bbitmap_size(slice_count, ptr::null_mut()) };
+    let pages_size = if crate::internal::MI_PAGE_META_IS_SEPARATED != 0 {
+        slice_count * size_of::<mi_page_t>()
+    } else {
+        0
+    };
+    let size = base_size + bitmaps_size + pages_size;
+    let info_size = _mi_align_up(size, unsafe { crate::os::_mi_os_page_size() })
+        + unsafe { crate::os::_mi_os_secure_guard_page_size() };
+    let info_slices = mi_slice_count_of_size(info_size);
+    if !bitmap_base.is_null() {
+        unsafe { *bitmap_base = base_size };
+    }
+    info_slices
+}
+
+#[allow(dead_code)]
 unsafe fn mi_arena_bitmap_init(slice_count: usize, base: *mut *mut u8) -> *mut mi_bitmap_t {
     let bitmap = unsafe { *base }.cast::<mi_bitmap_t>();
     let size = unsafe { mi_bitmap_init(bitmap, slice_count, true) };
     unsafe { *base = (*base).add(size) };
     bitmap
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arena_bbitmap_init(slice_count: usize, base: *mut *mut u8) -> *mut mi_bbitmap_t {
+    let bbitmap = unsafe { *base }.cast::<mi_bbitmap_t>();
+    let size = unsafe { mi_bbitmap_init(bbitmap, slice_count, true) };
+    unsafe { *base = (*base).add(size) };
+    bbitmap
 }
 
 #[allow(dead_code)]
@@ -1096,6 +1133,306 @@ unsafe fn mi_arena_pages_alloc(arena: *mut mi_arena_t) -> *mut mi_arena_pages_t 
         unsafe { (*arena_pages).pages_abandoned[i] = mi_arena_bitmap_init(slice_count, &mut base) };
     }
     arena_pages
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arenas_unsafe_destroy(subproc: *mut mi_subproc_t) {
+    crate::mi_assert_internal!(!subproc.is_null());
+    let arena_count = unsafe { mi_arenas_get_count(subproc) };
+    for i in 0..arena_count {
+        let arena = unsafe {
+            mi_atomic_load_ptr_acquire(ptr::addr_of!(
+                (*subproc.cast::<MiSubprocPrefix>()).arenas[i]
+            ))
+        };
+        if !arena.is_null() {
+            unsafe {
+                mi_atomic_store_ptr_release(
+                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arenas[i]),
+                    ptr::null_mut(),
+                );
+            }
+            if mi_memkind_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.memkind }) {
+                unsafe {
+                    crate::internal::_mi_os_free_ex(
+                        mi_arena_start(arena).cast::<c_void>(),
+                        mi_arena_size(arena),
+                        true,
+                        (*arena.cast::<MiArenaPrefix>()).memid,
+                        subproc,
+                    );
+                }
+            }
+        }
+    }
+    let mut expected = arena_count;
+    let _ = unsafe {
+        mi_atomic_cas_strong_acq_rel(
+            ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
+            &mut expected,
+            0,
+        )
+    };
+}
+
+/// # Safety
+/// Caller must ensure `subproc` is valid and destruction is only used in the same narrow cases
+/// as the original C implementation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t) {
+    unsafe { mi_arenas_unsafe_destroy(subproc) };
+}
+
+#[allow(dead_code)]
+unsafe fn mi_arenas_add(
+    subproc: *mut mi_subproc_t,
+    arena: *mut mi_arena_t,
+    arena_id: *mut mi_arena_id_t,
+) -> bool {
+    crate::mi_assert_internal!(!arena.is_null());
+    crate::mi_assert_internal!(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count > 0 });
+    if !arena_id.is_null() {
+        unsafe { *arena_id = _mi_arena_id_none() };
+    }
+
+    let mut count = unsafe { mi_arenas_get_count(subproc) };
+    for i in 0..count {
+        if unsafe { mi_arena_from_index(subproc, i) }.is_null() {
+            unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx = i };
+            let mut expected = ptr::null_mut::<mi_arena_t>();
+            if unsafe {
+                mi_atomic_cas_ptr_strong_release(
+                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arenas[i]),
+                    &mut expected,
+                    arena,
+                )
+            } {
+                if !arena_id.is_null() {
+                    unsafe { *arena_id = mi_arena_id_from_arena(arena) };
+                }
+                return true;
+            }
+        }
+    }
+
+    while count < MI_MAX_ARENAS {
+        if unsafe {
+            mi_atomic_cas_strong_acq_rel(
+                ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
+                &mut count,
+                count + 1,
+            )
+        } {
+            unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx = count };
+            let mut expected = ptr::null_mut::<mi_arena_t>();
+            if unsafe {
+                mi_atomic_cas_ptr_strong_release(
+                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arenas[count]),
+                    &mut expected,
+                    arena,
+                )
+            } {
+                unsafe {
+                    __mi_stat_counter_increase(
+                        &mut (*(*arena.cast::<MiArenaPrefix>()).subproc)
+                            .stats
+                            .arena_count,
+                        1,
+                    )
+                };
+                if !arena_id.is_null() {
+                    unsafe { *arena_id = mi_arena_id_from_arena(arena) };
+                }
+                return true;
+            }
+        }
+    }
+
+    unsafe {
+        (*arena.cast::<MiArenaPrefix>()).arena_idx = 0;
+        (*arena.cast::<MiArenaPrefix>()).subproc = ptr::null_mut();
+    }
+    false
+}
+
+#[allow(dead_code, clippy::too_many_arguments)]
+unsafe fn mi_arena_initialize(
+    subproc: *mut mi_subproc_t,
+    start: *mut c_void,
+    slice_count: usize,
+    parent: *mut mi_arena_t,
+    total_size: usize,
+    numa_node: c_int,
+    exclusive: bool,
+    memid: mi_memid_t,
+    commit_fun: mi_commit_fun_t,
+    commit_fun_arg: *mut c_void,
+    arena_id: *mut mi_arena_id_t,
+) -> *mut mi_arena_t {
+    crate::mi_assert_internal!((start as usize).is_multiple_of(MI_ARENA_SLICE_ALIGN));
+    crate::mi_assert_internal!(mi_size_of_slices(slice_count) >= MI_ARENA_MIN_SIZE);
+
+    if slice_count > MI_BITMAP_MAX_BIT_COUNT {
+        crate::options::_mi_warning_message(format_args!(
+            "cannot use OS memory since it is too large (size {} MiB, maximum is {} MiB)",
+            mi_size_of_slices(slice_count) / (1024 * 1024),
+            mi_size_of_slices(MI_BITMAP_MAX_BIT_COUNT) / (1024 * 1024)
+        ));
+        return ptr::null_mut();
+    }
+
+    let mut bitmap_base = 0usize;
+    let info_slices = unsafe { mi_arena_info_slices_needed(slice_count, &mut bitmap_base) };
+    if slice_count < info_slices + 1 {
+        crate::options::_mi_warning_message(format_args!(
+            "cannot use OS memory since it is not large enough (size {} KiB, minimum required is {} KiB)",
+            mi_size_of_slices(slice_count) / 1024,
+            mi_size_of_slices(info_slices + 1) / 1024
+        ));
+        return ptr::null_mut();
+    } else if info_slices >= MI_ARENA_BCHUNK_BITS {
+        crate::options::_mi_warning_message(format_args!(
+            "cannot use OS memory since it is too large with respect to the maximum object size (size {} MiB, meta-info slices {}, maximum object slices are {})",
+            mi_size_of_slices(slice_count) / (1024 * 1024),
+            info_slices,
+            MI_ARENA_BCHUNK_BITS
+        ));
+        return ptr::null_mut();
+    }
+
+    let arena = start.cast::<mi_arena_t>();
+    if !memid.initially_committed {
+        let mut commit_size = mi_size_of_slices(info_slices);
+        if !memid.is_pinned {
+            commit_size -= unsafe { crate::os::_mi_os_secure_guard_page_size() };
+        }
+        let ok = if (commit_fun as usize) != 0 {
+            unsafe {
+                commit_fun(
+                    true,
+                    arena.cast::<c_void>(),
+                    commit_size,
+                    ptr::null_mut(),
+                    commit_fun_arg,
+                )
+            }
+        } else {
+            unsafe { _mi_os_commit(arena.cast::<c_void>(), commit_size, ptr::null_mut()) }
+        };
+        if !ok {
+            crate::options::_mi_warning_message(format_args!(
+                "unable to commit meta-data for OS memory"
+            ));
+            return ptr::null_mut();
+        }
+    } else if !memid.is_pinned {
+        unsafe {
+            crate::os::_mi_os_secure_guard_page_set_before(
+                arena
+                    .cast::<u8>()
+                    .add(mi_size_of_slices(info_slices))
+                    .cast::<c_void>(),
+                memid,
+            )
+        };
+    }
+    if !memid.initially_zero {
+        unsafe {
+            crate::internal::_mi_memzero(
+                arena.cast::<c_void>(),
+                mi_size_of_slices(info_slices) - crate::os::_mi_os_secure_guard_page_size(),
+            )
+        };
+    }
+
+    unsafe {
+        (*arena.cast::<MiArenaPrefix>()).subproc = subproc;
+        (*arena.cast::<MiArenaPrefix>()).memid = memid;
+        (*arena.cast::<MiArenaPrefix>()).is_exclusive = exclusive;
+        (*arena.cast::<MiArenaPrefix>()).slice_count = slice_count;
+        (*arena.cast::<MiArenaPrefix>()).info_slices = info_slices;
+        (*arena.cast::<MiArenaPrefix>()).numa_node =
+            if numa_node < 0 && mi_option_is_enabled(mi_option_t::mi_option_arena_is_numa_local) {
+                crate::os::_mi_os_numa_node()
+            } else {
+                numa_node
+            };
+        (*arena.cast::<MiArenaPrefix>())
+            .purge_expire
+            .store(0, Ordering::Relaxed);
+        (*arena.cast::<MiArenaPrefix>()).commit_fun = commit_fun;
+        (*arena.cast::<MiArenaPrefix>()).commit_fun_arg = commit_fun_arg;
+        (*arena.cast::<MiArenaPrefix>()).parent = parent;
+        (*arena.cast::<MiArenaPrefix>()).total_size = total_size;
+    }
+
+    let mut base = unsafe { mi_arena_start(arena).add(bitmap_base) };
+    unsafe {
+        (*arena.cast::<MiArenaPrefix>()).slices_free = mi_arena_bbitmap_init(slice_count, &mut base)
+    };
+    unsafe {
+        (*arena.cast::<MiArenaPrefix>()).slices_committed =
+            mi_arena_bitmap_init(slice_count, &mut base)
+    };
+    unsafe {
+        (*arena.cast::<MiArenaPrefix>()).slices_dirty = mi_arena_bitmap_init(slice_count, &mut base)
+    };
+    unsafe {
+        (*arena.cast::<MiArenaPrefix>()).slices_purge = mi_arena_bitmap_init(slice_count, &mut base)
+    };
+    unsafe {
+        (*arena.cast::<MiArenaPrefix>()).pages_main.pages =
+            mi_arena_bitmap_init(slice_count, &mut base)
+    };
+    for i in 0..MI_ARENA_BIN_COUNT {
+        unsafe {
+            (*arena.cast::<MiArenaPrefix>()).pages_main.pages_abandoned[i] =
+                mi_arena_bitmap_init(slice_count, &mut base)
+        };
+    }
+    if crate::internal::MI_PAGE_META_IS_SEPARATED != 0 {
+        unsafe {
+            (*arena.cast::<MiArenaPrefix>()).pages_meta = base.cast::<mi_page_t>();
+            base = base.add(slice_count * size_of::<mi_page_t>());
+        }
+    } else {
+        unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta = ptr::null_mut() };
+    }
+    crate::mi_assert_internal!(
+        mi_size_of_slices(info_slices)
+            >= unsafe { base.offset_from(mi_arena_start(arena)) as usize }
+    );
+
+    unsafe {
+        mi_bbitmap_unsafe_setN(
+            (*arena.cast::<MiArenaPrefix>()).slices_free,
+            info_slices,
+            (*arena.cast::<MiArenaPrefix>()).slice_count - info_slices,
+        )
+    };
+    if memid.initially_committed {
+        unsafe {
+            mi_bitmap_unsafe_setN(
+                (*arena.cast::<MiArenaPrefix>()).slices_committed,
+                0,
+                (*arena.cast::<MiArenaPrefix>()).slice_count,
+            )
+        };
+    }
+    if !memid.initially_zero {
+        unsafe {
+            mi_bitmap_unsafe_setN(
+                (*arena.cast::<MiArenaPrefix>()).slices_dirty,
+                0,
+                (*arena.cast::<MiArenaPrefix>()).slice_count,
+            )
+        };
+    }
+
+    if !unsafe { mi_arenas_add(subproc, arena, arena_id) } {
+        return ptr::null_mut();
+    }
+    arena
 }
 
 #[allow(dead_code, clippy::too_many_arguments)]

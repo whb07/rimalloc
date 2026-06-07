@@ -10,6 +10,8 @@ use crate::stats::mi_stats_t;
 
 pub const MI_TYPES_H: () = ();
 pub const MI_MAX_ALIGN_SIZE: usize = 16;
+pub const MI_ARENA_SLICE_SHIFT: usize = crate::bits::MI_SIZE_SHIFT + 13;
+pub const MI_BCHUNK_BITS_SHIFT: usize = crate::bits::MI_SIZE_SHIFT + 6;
 
 const MI_SECURE: usize = 0;
 const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
@@ -38,9 +40,15 @@ const MI_PAGE_META_IS_SEPARATED: usize = if crate::bits::MI_PAGE_MAP_FLAT != 0 {
 pub const MI_PAGE_META_ALIGNED_FREE_SMALL: usize = 0;
 const MI_ARENA_SLICE_ALIGN: usize = crate::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_ARENA_MIN_OBJ_SLICES: usize = 1;
+pub const MI_ARENA_MIN_OBJ_SIZE: usize =
+    MI_ARENA_MIN_OBJ_SLICES * crate::arena::MI_ARENA_SLICE_SIZE;
 const MI_MAX_ALLOC_SIZE: usize = isize::MAX as usize;
 pub const MI_PAGE_MIN_COMMIT_SIZE: usize = crate::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = crate::arena::MI_ARENA_SLICE_SIZE;
+pub const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
+pub const MI_MAX_ARENAS: usize = 160;
+pub const MI_ARENA_MAX_SIZE: usize =
+    crate::bitmap::MI_BITMAP_MAX_BIT_COUNT * crate::arena::MI_ARENA_SLICE_SIZE;
 pub const MI_ARENA_BIN_COUNT: usize = MI_BIN_COUNT;
 pub const EAGAIN: c_int = 11;
 pub const ENOMEM: c_int = 12;

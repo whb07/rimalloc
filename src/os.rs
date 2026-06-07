@@ -1136,6 +1136,42 @@ pub unsafe extern "C" fn _mi_os_numa_node_count() -> i32 {
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+unsafe fn mi_os_alloc_aligned_ex(
+    size: usize,
+    alignment: usize,
+    commit: bool,
+    allow_large: bool,
+    is_committed: *mut bool,
+    is_pinned: *mut bool,
+    base: *mut *mut c_void,
+    full_size: *mut usize,
+) -> *mut c_void {
+    let (p, memid) = unsafe { mi_os_alloc_aligned_memid(size, alignment, commit, allow_large) };
+    if p.is_null() {
+        return p;
+    }
+    if !is_committed.is_null() {
+        unsafe { *is_committed = memid.initially_committed };
+    }
+    if !is_pinned.is_null() {
+        unsafe { *is_pinned = memid.is_pinned };
+    }
+    if !base.is_null() {
+        unsafe { *base = memid.mem.os.base };
+    }
+    if !full_size.is_null() {
+        unsafe { *full_size = memid.mem.os.size };
+    }
+    if memid.initially_committed && !memid.initially_zero {
+        unsafe { _mi_memzero_aligned(memid.mem.os.base, memid.mem.os.size) };
+    }
+    p
+}
+
+/// # Safety
+/// Preserves the exported C ABI wrapper from `src/os.c`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_os_commit(p: *mut c_void, size: usize) {
     let _ = unsafe { _mi_os_commit(p, size, core::ptr::null_mut()) };
@@ -1151,17 +1187,18 @@ pub unsafe extern "C" fn mi_os_alloc_aligned(
     base: *mut *mut c_void,
     full_size: *mut usize,
 ) -> *mut c_void {
-    let (p, memid) = unsafe { mi_os_alloc_aligned_memid(size, alignment, commit, false) };
-    if p.is_null() {
-        return p;
+    unsafe {
+        mi_os_alloc_aligned_ex(
+            size,
+            alignment,
+            commit,
+            false,
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            base,
+            full_size,
+        )
     }
-    if !base.is_null() {
-        unsafe { *base = memid.mem.os.base };
-    }
-    if !full_size.is_null() {
-        unsafe { *full_size = memid.mem.os.size };
-    }
-    p
 }
 
 /// # Safety
@@ -1195,24 +1232,34 @@ pub unsafe extern "C" fn mi_os_alloc_aligned_allow_large(
     base: *mut *mut c_void,
     full_size: *mut usize,
 ) -> *mut c_void {
-    let (p, memid) = unsafe { mi_os_alloc_aligned_memid(size, alignment, commit, true) };
-    if p.is_null() {
-        return p;
+    unsafe {
+        mi_os_alloc_aligned_ex(
+            size,
+            alignment,
+            commit,
+            true,
+            is_committed,
+            is_pinned,
+            base,
+            full_size,
+        )
     }
-    if !is_committed.is_null() {
-        unsafe { *is_committed = memid.initially_committed };
+}
+
+/// # Safety
+/// Preserves the exported C ABI wrapper from `src/os.c`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_os_free(p: *mut c_void, size: usize) {
+    if p.is_null() || size == 0 {
+        return;
     }
-    if !is_pinned.is_null() {
-        unsafe { *is_pinned = memid.is_pinned };
-    }
-    if !base.is_null() {
-        unsafe { *base = memid.mem.os.base };
-    }
-    if !full_size.is_null() {
-        unsafe { *full_size = memid.mem.os.size };
-    }
-    if memid.initially_committed && !memid.initially_zero {
-        unsafe { _mi_memzero_aligned(memid.mem.os.base, memid.mem.os.size) };
-    }
-    p
+    let memid = unsafe { _mi_memid_create_os(p, size, true, false, false) };
+    unsafe { _mi_os_free(p, size, memid) };
+}
+
+/// # Safety
+/// Preserves the exported C ABI wrapper from `src/os.c`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_os_decommit(p: *mut c_void, size: usize) {
+    let _ = unsafe { _mi_os_decommit(p, size) };
 }

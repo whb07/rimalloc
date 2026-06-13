@@ -1,11 +1,13 @@
 # Rust Translation Specification for mimalloc 3.3.2
 Generated at: 2026-05-29T21:39:36+00:00
 ## Status
-This specification was generated before any Rust translation files were created. It is intentionally conservative: every scanned source, build, test, configuration, callback, environment, macro, type, global, function, method, and test helper symbol is listed with a planned Rust destination and translation strategy. Generated documentation and binary-only artifacts are explicitly excluded from translation and recorded below.
+This specification is a historical translation inventory, generated before the Rust allocator implementation reached its current state. It is intentionally conservative: every scanned source, build, test, configuration, callback, environment, macro, type, global, function, method, and test helper symbol is listed with a planned Rust destination and translation strategy. Generated documentation and binary-only artifacts are explicitly excluded from translation and recorded below.
+
+Current status as of 2026-06-13: the Rust tree now contains allocator, heap, arena, option, stats, OS, public ABI, and behavioral parity work beyond the original Stage 001 declaration scaffold. This file is no longer the authoritative completion checklist. Use `TODO.md` for the remaining parity work, `PARITY.md` for the supported parity matrix and signoff commands, and the validation scripts under `scripts/` for current ABI/symbol/behavior evidence. `RUST_TRANSLATION_TASKS.json` is likewise retained as generated task-inventory metadata, not as an exact per-symbol implementation ledger.
 
 ## Clarification: complete allocator-replacement scope
 
-This file is now the complete implementation specification/checklist for a full mechanical Rust allocator replacement. Stage 001 code is only a first translated slice; the checklist below is the authoritative remaining work breakdown. Each symbol has an implementation task of the form “Implement/define/port/map `<symbol>` located in `<file>` lines `<range>`,” so the translation can proceed without silently skipping private symbols, tests, build definitions, environment options, or platform-specific branches.
+This file remains useful as a complete generated implementation specification/checklist for a full mechanical Rust allocator replacement. The historical Stage 001 notes below describe the repository state when this document was generated; they do not describe the current Rust implementation. Current remaining work is tracked in `TODO.md`.
 
 ## Repository Overview
 - Detected languages: C11, C++17 test/header adapter code, C/C++ headers, CMake, shell/batch scripts.
@@ -36070,10 +36072,10 @@ Translated cluster:
 - Stats declaration model: `mi_stat_count_t`, `mi_stat_counter_t`, `mi_chunkbin_t`, `mi_stats_t`, and `mi_stats_init`/`mi_stats_header_init` equivalents.
 - Function: `mi_version`.
 
-Current status: source files are created, but Cargo validation is blocked by missing Rust tooling in this environment.
+Historical Stage 001 status: source files were created, but Cargo validation was blocked by missing Rust tooling in that environment. This no longer describes the current repository state; use `TODO.md`, `PARITY.md`, and the validation scripts for current status.
 
 ## Deliberate Deviations So Far
-- No allocator implementation has been translated yet. Stage 001 is limited to constants, option enum discriminants, callback type aliases, stats declarations, opaque handles, and descriptors. This avoids depending on untranslated memory-management internals.
+- At Stage 001, no allocator implementation had been translated yet; that historical note no longer describes the current repository state.
 - Generated docs and prebuilt binaries are not translated as source code. Binary Windows redirect behavior is documented as an unknown/blocker for full Windows parity.
 
 ## Toolchain Blocker
@@ -71950,4 +71952,3 @@ Each item uses this format: task ID / symbol ID, required action, source locatio
 ## Machine-Readable Companion
 
 A JSON copy of this checklist is written to `RUST_TRANSLATION_TASKS.json`. It contains the same task IDs, symbol IDs, dependency categories, reverse dependencies, cycle cluster IDs, stages, and status fields.
-

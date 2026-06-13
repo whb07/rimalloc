@@ -336252,5 +336252,18 @@
       "mutability": "n/a",
       "implemented": true
     }
-  ]
+  ],
+  "current_status": {
+    "updated_at": "2026-06-13",
+    "status": "historical generated translation inventory",
+    "current_implementation_note": "The Rust implementation has progressed beyond the original generated Stage 001/declaration scaffold. This JSON is retained as generated task-inventory metadata, not an exact per-symbol completion ledger.",
+    "authoritative_remaining_work": "TODO.md",
+    "authoritative_parity_matrix": "PARITY.md",
+    "authoritative_validation_scripts": [
+      "scripts/check-public-abi.py",
+      "scripts/check-public-symbols.py",
+      "scripts/check-c-link-public-api.py",
+      "scripts/check-behavioral-parity.py"
+    ]
+  }
 }

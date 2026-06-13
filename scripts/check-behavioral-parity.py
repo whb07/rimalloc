@@ -21,6 +21,7 @@ SCENARIO_C = r"""
 
 #include <dlfcn.h>
 #include <errno.h>
+#include <limits.h>
 #include <sys/mman.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -79,6 +80,10 @@ static void result_bool(const char* name, int ok) {
 
 static void result_size(const char* name, size_t value) {
   printf("%s=%zu\n", name, value);
+}
+
+static void result_long(const char* name, long value) {
+  printf("%s=%ld\n", name, value);
 }
 
 static void result_indexed_size(const char* name, size_t index, size_t value) {
@@ -212,6 +217,25 @@ int main(void) {
   mi_option_set_enabled_default(mi_option_verbose, true);
   mi_option_set_default(mi_option_verbose, original_verbose);
   mi_option_set(mi_option_verbose, original_verbose);
+
+  long original_purge_delay = mi_option_get(mi_option_purge_delay);
+  mi_option_set(mi_option_purge_delay, -1);
+  result_long("option_get_clamp_negative_to_min", mi_option_get_clamp(mi_option_purge_delay, 0, 100));
+  result_long("option_get_clamp_negative_in_range", mi_option_get_clamp(mi_option_purge_delay, -5, 100));
+  result_size("option_get_size_negative_zero", mi_option_get_size(mi_option_purge_delay));
+  mi_option_set(mi_option_purge_delay, 1000);
+  result_long("option_get_clamp_max", mi_option_get_clamp(mi_option_purge_delay, 0, 250));
+  result_size("option_get_size_plain_bytes", mi_option_get_size(mi_option_purge_delay));
+  mi_option_set(mi_option_purge_delay, original_purge_delay);
+
+  long original_reserve_os_memory = mi_option_get(mi_option_reserve_os_memory);
+  mi_option_set(mi_option_reserve_os_memory, 3);
+  result_size("option_get_size_kib_bytes", mi_option_get_size(mi_option_reserve_os_memory));
+  mi_option_set(mi_option_reserve_os_memory, -7);
+  result_size("option_get_size_kib_negative_zero", mi_option_get_size(mi_option_reserve_os_memory));
+  mi_option_set(mi_option_reserve_os_memory, LONG_MAX);
+  result_size("option_get_size_kib_large_clamped", mi_option_get_size(mi_option_reserve_os_memory));
+  mi_option_set(mi_option_reserve_os_memory, original_reserve_os_memory);
 
   registered_output_a = 0;
   registered_output_b = 0;

@@ -68,7 +68,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [x] Match `mi_cfree` checked-free behavior. Validation: tests pass mimalloc-owned, null, and non-owned pointers in modes where this is detectable and compare return/diagnostic behavior with C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match string allocation APIs `mi_strdup`, `mi_strndup`, `mi_heap_strdup`, `mi_heap_strndup`, `mi_wcsdup`, and `mi_mbsdup`. Validation: tests cover null where applicable, empty strings, truncation, embedded bytes where applicable, wide characters, allocation ownership, and exact copied content. Guarded by `scripts/check-behavioral-parity.py`.
 - [ ] Match `mi_dupenv_s` and `mi_wdupenv_s`. Validation: subprocess tests set/unset environment variables and compare return codes, allocated buffer content, reported size, null arguments, and free semantics with C mimalloc.
-- [ ] Match `mi_reallocarray` and `mi_reallocarr`. Validation: tests cover overflow, null pointer, successful resize, failure semantics, and pointer-to-pointer update rules against C mimalloc.
+- [x] Match `mi_reallocarray` and `mi_reallocarr`. Validation: tests cover overflow, null pointer, successful resize, failure semantics, and pointer-to-pointer update rules against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match ownership predicates `mi_check_owned`, `mi_heap_contains`, `mi_any_heap_contains`, `mi_heap_of`, and `mi_is_in_heap_region`. Validation: tests cover live pointers, freed pointers, stack pointers, foreign malloc pointers, aligned pointers, heap-specific pointers, and abandoned-thread pointers. Guarded by `scripts/check-behavioral-parity.py`.
 
 ## Aligned Allocation Semantics

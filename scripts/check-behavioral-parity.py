@@ -302,6 +302,37 @@ int main(void) {
   result_bool("realloc_preserved_prefix", r != NULL && bytes_equal(r, 0x5A, 8));
   mi_free(r);
 
+  unsigned char* ra = (unsigned char*)mi_reallocarray(NULL, 4, 8);
+  result_bool("reallocarray_null_nonnull", ra != NULL);
+  result_bool("reallocarray_null_size", ra != NULL && mi_usable_size(ra) >= 32);
+  fill_sequence(ra, 32);
+  ra = (unsigned char*)mi_reallocarray(ra, 8, 8);
+  result_bool("reallocarray_grow_preserve", ra != NULL && has_sequence_prefix(ra, 32));
+  errno = 0;
+  void* ra_overflow = mi_reallocarray(ra, overflow_count, 2);
+  result_bool("reallocarray_overflow_null", ra_overflow == NULL);
+  result_bool("reallocarray_overflow_errno", errno == EOVERFLOW);
+  result_bool("reallocarray_overflow_original_owned", mi_check_owned(ra));
+  mi_free(ra);
+
+  unsigned char* rar = (unsigned char*)mi_malloc(16);
+  fill_sequence(rar, 16);
+  void* rar_ptr = rar;
+  errno = 0;
+  int rar_err = mi_reallocarr(&rar_ptr, 4, 8);
+  result_bool("reallocarr_grow_success", rar_err == 0 && rar_ptr != NULL);
+  result_bool("reallocarr_grow_preserve", rar_ptr != NULL && has_sequence_prefix((const unsigned char*)rar_ptr, 16));
+  errno = 0;
+  void* rar_before_overflow = rar_ptr;
+  rar_err = mi_reallocarr(&rar_ptr, overflow_count, 2);
+  result_bool("reallocarr_overflow_error", rar_err == EOVERFLOW && errno == EOVERFLOW);
+  result_bool("reallocarr_overflow_preserve_ptr", rar_ptr == rar_before_overflow);
+  mi_free(rar_ptr);
+  rar_ptr = NULL;
+  rar_err = mi_reallocarr(&rar_ptr, 3, 8);
+  result_bool("reallocarr_null_source_success", rar_err == 0 && rar_ptr != NULL && mi_usable_size(rar_ptr) >= 24);
+  mi_free(rar_ptr);
+
   void* aligned = mi_malloc_aligned(64, 32);
   result_bool("aligned_nonnull", aligned != NULL);
   result_bool("aligned_mod_32", is_aligned_at(aligned, 32, 0));

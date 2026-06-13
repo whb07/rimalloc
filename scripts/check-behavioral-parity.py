@@ -295,12 +295,29 @@ int main(void) {
   result_bool("calloc_zeroed", c != NULL && bytes_equal(c, 0, 32));
   mi_free(c);
 
+  unsigned char* mn = (unsigned char*)mi_mallocn(5, 9);
+  result_bool("mallocn_nonnull", mn != NULL);
+  result_bool("mallocn_size", mn != NULL && mi_usable_size(mn) >= 45);
+  mi_free(mn);
+  result_bool("mallocn_overflow_null", mi_mallocn(overflow_count, 2) == NULL);
+
   unsigned char* r = (unsigned char*)mi_malloc(8);
   if (r != NULL) memset(r, 0x5A, 8);
   r = (unsigned char*)mi_realloc(r, 32);
   result_bool("realloc_nonnull", r != NULL);
   result_bool("realloc_preserved_prefix", r != NULL && bytes_equal(r, 0x5A, 8));
   mi_free(r);
+
+  unsigned char* rn = (unsigned char*)mi_reallocn(NULL, 4, 8);
+  result_bool("reallocn_null_nonnull", rn != NULL);
+  result_bool("reallocn_null_size", rn != NULL && mi_usable_size(rn) >= 32);
+  fill_sequence(rn, 32);
+  rn = (unsigned char*)mi_reallocn(rn, 8, 8);
+  result_bool("reallocn_grow_preserve", rn != NULL && has_sequence_prefix(rn, 32));
+  void* rn_overflow = mi_reallocn(rn, overflow_count, 2);
+  result_bool("reallocn_overflow_null", rn_overflow == NULL);
+  result_bool("reallocn_overflow_original_owned", mi_check_owned(rn));
+  mi_free(rn);
 
   unsigned char* ra = (unsigned char*)mi_reallocarray(NULL, 4, 8);
   result_bool("reallocarray_null_nonnull", ra != NULL);

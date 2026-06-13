@@ -176,6 +176,7 @@ def c_source() -> str:
 
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 #define PRINT_SIZE(name, ty) printf("size." name "=%zu\\n", sizeof(ty))
 #define PRINT_ALIGN(name, ty) printf("align." name "=%zu\\n", _Alignof(ty))
@@ -231,6 +232,28 @@ int main(void) {{
   printf("const.MI_CBIN_NONE=%d\\n", (int)MI_CBIN_NONE);
   printf("const.MI_CBIN_COUNT=%d\\n", (int)MI_CBIN_COUNT);
 {option_values}
+
+  mi_stats_t stats_header;
+  memset(&stats_header, 0, sizeof(stats_header));
+  mi_stats_header_init(&stats_header);
+  printf("stats_header.size=%zu\\n", stats_header.size);
+  printf("stats_header.version=%zu\\n", stats_header.version);
+
+  mi_stats_t stats_init;
+  memset(&stats_init, 0, sizeof(stats_init));
+  stats_init.pages.total = 123;
+  stats_init.committed.current = 456;
+  stats_init.malloc_bins[0].peak = 789;
+  stats_init.page_bins[MI_BIN_HUGE].current = 321;
+  stats_init.chunk_bins[MI_CBIN_HUGE].total = 654;
+  mi_stats_init(&stats_init);
+  printf("stats_init.size=%zu\\n", stats_init.size);
+  printf("stats_init.version=%zu\\n", stats_init.version);
+  printf("stats_init.pages.total=%lld\\n", (long long)stats_init.pages.total);
+  printf("stats_init.committed.current=%lld\\n", (long long)stats_init.committed.current);
+  printf("stats_init.malloc_bins0.peak=%lld\\n", (long long)stats_init.malloc_bins[0].peak);
+  printf("stats_init.page_bins_huge.current=%lld\\n", (long long)stats_init.page_bins[MI_BIN_HUGE].current);
+  printf("stats_init.chunk_bins_huge.total=%lld\\n", (long long)stats_init.chunk_bins[MI_CBIN_HUGE].total);
   return 0;
 }}
 """
@@ -259,7 +282,7 @@ use mechanical_mimalloc::options::{{{", ".join(OPTION_NAMES[48:])}, mi_option_t}
 use mechanical_mimalloc::stats::{{
     MI_BIN_HUGE, MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_NONE,
     MI_CBIN_OTHER, MI_CBIN_SMALL, MI_STAT_VERSION, mi_chunkbin_t, mi_stat_count_t,
-    mi_stat_counter_t, mi_stats_t,
+    mi_stat_counter_t, mi_stats_header_init, mi_stats_init, mi_stats_t,
 }};
 
 fn main() {{
@@ -313,6 +336,26 @@ fn main() {{
     println!("const.MI_CBIN_COUNT={{}}", MI_CBIN_COUNT as i32);
 {option_values}
 {legacy_values}
+
+    let mut stats_header = mi_stats_t::default();
+    unsafe {{ mi_stats_header_init(&mut stats_header) }};
+    println!("stats_header.size={{}}", stats_header.size);
+    println!("stats_header.version={{}}", stats_header.version);
+
+    let mut stats_init = mi_stats_t::default();
+    stats_init.pages.total = 123;
+    stats_init.committed.current = 456;
+    stats_init.malloc_bins[0].peak = 789;
+    stats_init.page_bins[MI_BIN_HUGE].current = 321;
+    stats_init.chunk_bins[MI_CBIN_HUGE as usize].total = 654;
+    unsafe {{ mi_stats_init(&mut stats_init) }};
+    println!("stats_init.size={{}}", stats_init.size);
+    println!("stats_init.version={{}}", stats_init.version);
+    println!("stats_init.pages.total={{}}", stats_init.pages.total);
+    println!("stats_init.committed.current={{}}", stats_init.committed.current);
+    println!("stats_init.malloc_bins0.peak={{}}", stats_init.malloc_bins[0].peak);
+    println!("stats_init.page_bins_huge.current={{}}", stats_init.page_bins[MI_BIN_HUGE].current);
+    println!("stats_init.chunk_bins_huge.total={{}}", stats_init.chunk_bins[MI_CBIN_HUGE as usize].total);
 }}
 """
 

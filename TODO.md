@@ -149,7 +149,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## Statistics and JSON
 
-- [ ] Match `mi_stats_t` initialization and versioning. Validation: C/Rust layout tests verify `mi_stats_header_init`, `mi_stats_init`, size, version, alignment, and zeroed fields against C mimalloc.
+- [x] Match `mi_stats_t` initialization and versioning. Validation: C/Rust layout tests verify `mi_stats_header_init`, `mi_stats_init`, size, version, alignment, and zeroed fields against C mimalloc. Guarded by `scripts/check-public-abi.py`.
 - [ ] Match live stats counters for normal allocations. Validation: tests allocate/free normal blocks and compare current, peak, total, requested, count, bin, and page stats against C mimalloc.
 - [ ] Match stats counters for huge allocations, guarded allocations, arenas, purges, resets, commits, and mmap calls. Validation: targeted tests drive each path and compare public stats fields with C mimalloc within documented OS nondeterminism.
 - [ ] Match `mi_stats_reset`. Validation: tests allocate before and after reset and compare reset scope, persistent counters, current counters, and peak behavior against C mimalloc.

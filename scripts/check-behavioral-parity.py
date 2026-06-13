@@ -350,6 +350,27 @@ int main(void) {
   result_bool("realloc_preserved_prefix", r != NULL && bytes_equal(r, 0x5A, 8));
   mi_free(r);
 
+  result_bool("expand_null_fails", mi_expand(NULL, 16) == NULL);
+  errno = 0;
+  result_bool("mi__expand_null_fails", mi__expand(NULL, 16) == NULL && errno == ENOMEM);
+  unsigned char* ex = (unsigned char*)mi_malloc(64);
+  fill_sequence(ex, 64);
+  size_t ex_usable = mi_usable_size(ex);
+  void* ex_same = mi_expand(ex, ex_usable);
+  result_size("expand_same_size_in_place", ex_same == ex ? 1 : 0);
+  result_bool("expand_same_size_original_valid", (ex_same == ex || ex_same == NULL) && mi_check_owned(ex) && has_sequence_prefix(ex, 64));
+  void* ex_shrink = mi_expand(ex, 32);
+  result_size("expand_shrink_in_place", ex_shrink == ex ? 1 : 0);
+  result_bool("expand_shrink_original_valid", (ex_shrink == ex || ex_shrink == NULL) && mi_check_owned(ex) && has_sequence_prefix(ex, 32));
+  void* ex_too_large = mi_expand(ex, ex_usable + 1);
+  result_bool("expand_too_large_null", ex_too_large == NULL);
+  result_bool("expand_too_large_original_owned", mi_check_owned(ex) && has_sequence_prefix(ex, 32));
+  errno = 0;
+  void* ex_compat_too_large = mi__expand(ex, ex_usable + 1);
+  result_bool("mi__expand_too_large_errno", ex_compat_too_large == NULL && errno == ENOMEM);
+  result_bool("mi__expand_too_large_original_owned", mi_check_owned(ex) && has_sequence_prefix(ex, 32));
+  mi_free(ex);
+
   unsigned char* rn = (unsigned char*)mi_reallocn(NULL, 4, 8);
   result_bool("reallocn_null_nonnull", rn != NULL);
   result_bool("reallocn_null_size", rn != NULL && mi_usable_size(rn) >= 32);

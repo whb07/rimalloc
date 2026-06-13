@@ -818,6 +818,53 @@ int main(void) {
   result_bool("heap_cross_thread_free_joined", heap_free_joined);
   result_bool("heap_cross_thread_owned_before_free", heap_free_joined && heap_thread_result.owned_before_free);
 
+  unsigned char* hre = heap == NULL ? NULL : (unsigned char*)mi_heap_realloc(heap, NULL, 24);
+  result_bool("heap_realloc_null_owner", hre != NULL && mi_heap_contains(heap, hre) && mi_usable_size(hre) >= 24);
+  fill_sequence(hre, 24);
+  hre = (unsigned char*)mi_heap_realloc(heap, hre, 96);
+  result_bool("heap_realloc_grow_preserve", hre != NULL && mi_heap_contains(heap, hre) && has_sequence_prefix(hre, 24) && mi_usable_size(hre) >= 96);
+  hre = (unsigned char*)mi_heap_realloc(heap, hre, 16);
+  result_bool("heap_realloc_shrink_preserve", hre != NULL && mi_heap_contains(heap, hre) && has_sequence_prefix(hre, 16) && mi_usable_size(hre) >= 16);
+  mi_free(hre);
+
+  unsigned char* hrn = heap == NULL ? NULL : (unsigned char*)mi_heap_reallocn(heap, NULL, 4, 8);
+  result_bool("heap_reallocn_null_owner", hrn != NULL && mi_heap_contains(heap, hrn) && mi_usable_size(hrn) >= 32);
+  fill_sequence(hrn, 32);
+  hrn = (unsigned char*)mi_heap_reallocn(heap, hrn, 8, 8);
+  result_bool("heap_reallocn_grow_preserve", hrn != NULL && mi_heap_contains(heap, hrn) && has_sequence_prefix(hrn, 32) && mi_usable_size(hrn) >= 64);
+  void* hrn_overflow = heap == NULL ? NULL : mi_heap_reallocn(heap, hrn, overflow_count, 2);
+  result_bool("heap_reallocn_overflow_null", hrn_overflow == NULL);
+  result_bool("heap_reallocn_overflow_keeps_old", hrn != NULL && has_sequence_prefix(hrn, 32));
+  mi_free(hrn);
+
+  unsigned char* hrez = heap == NULL ? NULL : (unsigned char*)mi_heap_rezalloc(heap, NULL, 24);
+  result_bool("heap_rezalloc_null_zeroed", hrez != NULL && mi_heap_contains(heap, hrez) && bytes_equal(hrez, 0, 24));
+  fill_sequence(hrez, 24);
+  size_t hrez_usable = mi_usable_size(hrez);
+  hrez = (unsigned char*)mi_heap_rezalloc(heap, hrez, hrez_usable + 32);
+  result_bool("heap_rezalloc_grow_zeroed", hrez != NULL && mi_heap_contains(heap, hrez) && has_sequence_prefix(hrez, 24) && bytes_equal(hrez + hrez_usable, 0, 32));
+  hrez = (unsigned char*)mi_heap_rezalloc(heap, hrez, 16);
+  result_bool("heap_rezalloc_shrink_preserve", hrez != NULL && mi_heap_contains(heap, hrez) && has_sequence_prefix(hrez, 16));
+  mi_free(hrez);
+
+  unsigned char* hrec = heap == NULL ? NULL : (unsigned char*)mi_heap_recalloc(heap, NULL, 3, 8);
+  result_bool("heap_recalloc_null_zeroed", hrec != NULL && mi_heap_contains(heap, hrec) && bytes_equal(hrec, 0, 24));
+  fill_sequence(hrec, 24);
+  size_t hrec_usable = mi_usable_size(hrec);
+  hrec = (unsigned char*)mi_heap_recalloc(heap, hrec, 1, hrec_usable + 32);
+  result_bool("heap_recalloc_grow_zeroed", hrec != NULL && mi_heap_contains(heap, hrec) && has_sequence_prefix(hrec, 24) && bytes_equal(hrec + hrec_usable, 0, 32));
+  hrec = (unsigned char*)mi_heap_recalloc(heap, hrec, 1, 16);
+  result_bool("heap_recalloc_shrink_preserve", hrec != NULL && mi_heap_contains(heap, hrec) && has_sequence_prefix(hrec, 16));
+  void* hrec_overflow = heap == NULL ? NULL : mi_heap_recalloc(heap, hrec, overflow_count, 2);
+  result_bool("heap_recalloc_overflow_null", hrec_overflow == NULL);
+  result_bool("heap_recalloc_overflow_keeps_old", hrec != NULL && has_sequence_prefix(hrec, 16));
+  mi_free(hrec);
+
+  unsigned char* hrf = heap == NULL ? NULL : (unsigned char*)mi_heap_malloc(heap, 32);
+  result_bool("heap_reallocf_source_owner", hrf != NULL && mi_heap_contains(heap, hrf));
+  void* hrf_failed = heap == NULL ? NULL : mi_heap_reallocf(heap, hrf, overflow_count);
+  result_bool("heap_reallocf_failure_null", hrf_failed == NULL);
+
   void* ha = heap == NULL ? NULL : mi_heap_malloc_aligned(heap, 96, 32);
   result_bool("heap_malloc_aligned", is_aligned_at(ha, 32, 0) && mi_heap_contains(heap, ha));
   mi_free(ha);

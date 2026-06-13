@@ -27,8 +27,8 @@ use crate::track::{
     MI_TRACK_ENABLED, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
 };
 use crate::types::{
-    EINVAL, ENOMEM, MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING_SIZE, MI_SMALL_SIZE_MAX,
-    MI_STAT, mi_block_t, mi_heap_t, mi_padding_t, mi_page_t, mi_theap_t,
+    EINVAL, ENOMEM, EOVERFLOW, MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING_SIZE,
+    MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_heap_t, mi_padding_t, mi_page_t, mi_theap_t,
 };
 
 unsafe extern "C" {
@@ -246,9 +246,17 @@ unsafe fn mi_theap_malloc_generic(
             || (*(*theap).tld).thread_id == _mi_thread_id()
     );
     crate::mi_assert!((huge_alignment & 1) == 0);
+    let Some(padded_size) = size.checked_add(MI_PADDING_SIZE) else {
+        crate::internal::_mi_error_message(
+            EOVERFLOW,
+            c"allocation request is too large (%zu bytes)\n".as_ptr(),
+            size,
+        );
+        return ptr::null_mut();
+    };
     let p = _mi_malloc_generic(
         theap,
-        size + MI_PADDING_SIZE,
+        padded_size,
         usize::from(zero) | huge_alignment,
         usable,
     );

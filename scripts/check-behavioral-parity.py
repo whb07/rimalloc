@@ -293,7 +293,26 @@ int main(void) {
   unsigned char* c = (unsigned char*)mi_calloc(8, 4);
   result_bool("calloc_nonnull", c != NULL);
   result_bool("calloc_zeroed", c != NULL && bytes_equal(c, 0, 32));
+  result_bool("calloc_usable_size", c != NULL && mi_usable_size(c) >= 32);
   mi_free(c);
+
+  unsigned char* c_zero_count = (unsigned char*)mi_calloc(0, 32);
+  result_bool("calloc_zero_count_nonnull", c_zero_count != NULL);
+  result_size("calloc_zero_count_usable", c_zero_count == NULL ? 0 : mi_usable_size(c_zero_count));
+  mi_free(c_zero_count);
+
+  unsigned char* c_zero_size = (unsigned char*)mi_calloc(32, 0);
+  result_bool("calloc_zero_size_nonnull", c_zero_size != NULL);
+  result_size("calloc_zero_size_usable", c_zero_size == NULL ? 0 : mi_usable_size(c_zero_size));
+  mi_free(c_zero_size);
+
+  result_bool("calloc_overflow_null", mi_calloc(overflow_count, 2) == NULL);
+
+  unsigned char* c_large = (unsigned char*)mi_calloc(1024, 1024);
+  result_bool("calloc_large_nonnull", c_large != NULL);
+  result_bool("calloc_large_zeroed", c_large != NULL && bytes_equal(c_large, 0, 1024 * 1024));
+  result_bool("calloc_large_usable_size", c_large != NULL && mi_usable_size(c_large) >= 1024 * 1024);
+  mi_free(c_large);
 
   size_t zalloc_sizes[] = { 0, 1, 17, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX, MI_SMALL_SIZE_MAX + 1 };
   size_t zalloc_size_count = sizeof(zalloc_sizes) / sizeof(zalloc_sizes[0]);

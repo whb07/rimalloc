@@ -544,6 +544,42 @@ static int foreign_size_case_status(int op) {
   return -3;
 }
 
+static int free_small_case_status(int op) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+    switch (op) {
+      case 0:
+        mi_free_small(NULL);
+        _exit(0);
+      case 1: {
+        void* p = mi_malloc(MI_SMALL_SIZE_MAX + 1);
+        if (p == NULL) _exit(10);
+        mi_free_small(p);
+        _exit(0);
+      }
+      case 2: {
+        void* p = mi_malloc_aligned(64, 64);
+        if (p == NULL) _exit(11);
+        mi_free_small(p);
+        _exit(0);
+      }
+      default:
+        _exit(41);
+    }
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static int realloc_failure_case_status(int op) {
   fflush(stdout);
   pid_t pid = fork();
@@ -818,6 +854,52 @@ int main(void) {
     result_indexed_size("zalloc_small_usable_size", i, zp == NULL ? 0 : mi_usable_size(zp));
     mi_free(zp);
   }
+
+  mi_stats_t small_stats_before;
+  mi_stats_t small_stats_live;
+  mi_stats_t small_stats_after;
+  mi_stats_init(&small_stats_before);
+  mi_stats_init(&small_stats_live);
+  mi_stats_init(&small_stats_after);
+  result_bool("malloc_small_stats_before_ok", mi_stats_get(&small_stats_before));
+
+  void* small_ptrs[MI_BIN_HUGE + 1];
+  size_t small_requests[MI_BIN_HUGE + 1];
+  size_t small_bin_count = 0;
+  for (size_t bin = 0; bin <= MI_BIN_HUGE; bin++) {
+    size_t bin_size = mi_stats_get_bin_size(bin);
+    if (bin_size == 0 || bin_size > MI_SMALL_SIZE_MAX) continue;
+    void* sp = mi_malloc_small(bin_size);
+    small_ptrs[small_bin_count] = sp;
+    small_requests[small_bin_count] = bin_size;
+    result_bool("malloc_small_bin_nonnull", sp != NULL);
+    result_bool("malloc_small_bin_usable", sp != NULL && mi_usable_size(sp) >= bin_size);
+    result_bool("malloc_small_bin_owned", sp != NULL && mi_check_owned(sp));
+    result_indexed_size("malloc_small_bin_request", small_bin_count, bin_size);
+    result_indexed_size("malloc_small_bin_usable_size", small_bin_count, sp == NULL ? 0 : mi_usable_size(sp));
+    small_bin_count++;
+  }
+  result_size("malloc_small_bin_count", small_bin_count);
+  result_bool("malloc_small_stats_live_ok", mi_stats_get(&small_stats_live));
+  result_bool("malloc_small_stats_live_increased",
+              small_stats_live.malloc_normal.current >= small_stats_before.malloc_normal.current &&
+              small_stats_live.malloc_normal.peak >= small_stats_live.malloc_normal.current &&
+              small_stats_live.malloc_normal.total >= small_stats_before.malloc_normal.total);
+
+  for (size_t i = 0; i < small_bin_count; i++) {
+    if (small_ptrs[i] != NULL) {
+      memset(small_ptrs[i], 0xB6, small_requests[i]);
+    }
+    mi_free_small(small_ptrs[i]);
+  }
+  result_bool("malloc_small_stats_after_ok", mi_stats_get(&small_stats_after));
+  result_bool("malloc_small_stats_after_decreased",
+              small_stats_after.malloc_normal.current <= small_stats_live.malloc_normal.current &&
+              small_stats_after.malloc_normal.peak >= small_stats_live.malloc_normal.current &&
+              small_stats_after.malloc_normal.total >= small_stats_live.malloc_normal.total);
+  result_size("free_small_null_status", (size_t)free_small_case_status(0));
+  result_size("free_small_oversize_status", (size_t)free_small_case_status(1));
+  result_size("free_small_aligned_status", (size_t)free_small_case_status(2));
 
   unsigned char* mn = (unsigned char*)mi_mallocn(5, 9);
   result_bool("mallocn_nonnull", mn != NULL);

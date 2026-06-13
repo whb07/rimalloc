@@ -44,6 +44,10 @@ static void result_size(const char* name, size_t value) {
   printf("%s=%zu\n", name, value);
 }
 
+static void result_indexed_size(const char* name, size_t index, size_t value) {
+  printf("%s[%zu]=%zu\n", name, index, value);
+}
+
 static int bytes_equal(const unsigned char* p, unsigned char value, size_t size) {
   for (size_t i = 0; i < size; i++) {
     if (p[i] != value) return 0;
@@ -307,6 +311,45 @@ int main(void) {
   result_size("malloc_good_size_small_max", mi_malloc_good_size(MI_SMALL_SIZE_MAX));
   result_size("good_size_small_max_plus_1", mi_good_size(MI_SMALL_SIZE_MAX + 1));
   result_size("malloc_good_size_small_max_plus_1", mi_malloc_good_size(MI_SMALL_SIZE_MAX + 1));
+
+  for (size_t bin = 0; bin <= MI_BIN_HUGE; bin++) {
+    size_t bin_size = mi_stats_get_bin_size(bin);
+    result_indexed_size("stats_bin_size", bin, bin_size);
+    if (bin_size > 0) {
+      result_indexed_size("good_size_bin", bin, mi_good_size(bin_size));
+      result_indexed_size("malloc_good_size_bin", bin, mi_malloc_good_size(bin_size));
+      if (bin_size > 1) {
+        result_indexed_size("good_size_bin_minus_1", bin, mi_good_size(bin_size - 1));
+        result_indexed_size("malloc_good_size_bin_minus_1", bin, mi_malloc_good_size(bin_size - 1));
+      }
+      if (bin_size < ((size_t)-1)) {
+        result_indexed_size("good_size_bin_plus_1", bin, mi_good_size(bin_size + 1));
+        result_indexed_size("malloc_good_size_bin_plus_1", bin, mi_malloc_good_size(bin_size + 1));
+      }
+    }
+  }
+  result_size("stats_bin_size_out_of_range", mi_stats_get_bin_size(MI_BIN_HUGE + 1));
+
+  size_t size_checks[] = { 0, 1, 8, 16, 17, 32, 33, 64, 65, 128, 129, 256, 257, 512, 513,
+                           1024, 1025, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX,
+                           MI_SMALL_SIZE_MAX + 1, 8*1024 - 1, 8*1024, 8*1024 + 1,
+                           64*1024, 1024*1024, 2*1024*1024 };
+  size_t size_check_count = sizeof(size_checks) / sizeof(size_checks[0]);
+  for (size_t i = 0; i < size_check_count; i++) {
+    size_t requested = size_checks[i];
+    void* sized = mi_malloc(requested);
+    result_bool("malloc_size_live_nonnull", sized != NULL);
+    if (sized != NULL) {
+      result_bool("malloc_size_live_ge_request", mi_malloc_size(sized) >= requested);
+      result_bool("malloc_usable_size_matches_size", mi_malloc_usable_size(sized) == mi_malloc_size(sized));
+      mi_free(sized);
+    }
+  }
+  void* aligned_sized = mi_malloc_aligned(257, 128);
+  result_bool("malloc_size_aligned_ge_request", aligned_sized != NULL && mi_malloc_size(aligned_sized) >= 257);
+  result_bool("malloc_usable_size_aligned_matches", aligned_sized != NULL && mi_malloc_usable_size(aligned_sized) == mi_malloc_size(aligned_sized));
+  mi_free(aligned_sized);
+
   result_bool("usable_null_zero", mi_usable_size(NULL) == 0);
   result_bool("malloc_size_null_zero", mi_malloc_size(NULL) == 0);
 

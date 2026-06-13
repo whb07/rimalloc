@@ -712,7 +712,36 @@ pub unsafe extern "C" fn mi_thread_done() {
 /// # Safety
 /// `theap` must be null or the current thread's thread-local heap.
 pub unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
-    let _ = theap;
+    let mut default_theap = theap;
+    if default_theap.is_null() {
+        default_theap = unsafe { __mi_theap_main };
+        if default_theap.is_null() {
+            default_theap = unsafe { crate::prim::_mi_theap_default() };
+            crate::mi_assert_internal!(
+                default_theap.is_null() || unsafe { _mi_is_theap_main(default_theap) }
+            );
+        }
+    }
+
+    if !unsafe { crate::internal::mi_theap_is_initialized(default_theap) } {
+        return;
+    }
+
+    let tld = unsafe { (*default_theap).tld };
+    let heap = unsafe { _mi_subproc_heap_main((*tld).subproc) };
+    if !heap.is_null() {
+        crate::internal::__mi_stat_decrease(
+            unsafe { &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads },
+            1,
+        );
+    }
+
+    if unsafe { (*tld).thread_id } != crate::prim::_mi_prim_thread_id() {
+        return;
+    }
+
+    unsafe { mi_thread_theaps_done(tld) };
+    mi_tld_free(tld);
 }
 
 #[unsafe(no_mangle)]

@@ -130,6 +130,14 @@ struct heap_cross_thread_free_result {
   int owned_before_free;
 };
 
+struct heap_abandoned_result {
+  mi_heap_t* heap;
+  void* a;
+  void* b;
+  void* c;
+  int allocated;
+};
+
 struct theap_wrong_thread_result {
   mi_theap_t* theap;
   int op;
@@ -207,6 +215,20 @@ static void* heap_cross_thread_free_worker(void* arg) {
   result->owned_before_free = (result->ptr != NULL && mi_check_owned(result->ptr));
   mi_free(result->ptr);
   result->ptr = NULL;
+  mi_thread_done();
+  return NULL;
+}
+
+static void* heap_abandoned_worker(void* arg) {
+  struct heap_abandoned_result* result = (struct heap_abandoned_result*)arg;
+  mi_thread_init();
+  result->a = mi_heap_malloc(result->heap, 80);
+  result->b = mi_heap_malloc(result->heap, 160);
+  result->c = mi_heap_zalloc(result->heap, 240);
+  result->allocated = (result->a != NULL && result->b != NULL && result->c != NULL &&
+                       mi_heap_contains(result->heap, result->a) &&
+                       mi_heap_contains(result->heap, result->b) &&
+                       mi_heap_contains(result->heap, result->c));
   mi_thread_done();
   return NULL;
 }
@@ -1254,6 +1276,50 @@ int main(void) {
   errno = 0;
   rp = mi_realpath("/definitely/not/a/mechanical_mimalloc/path", resolved);
   result_bool("realpath_stack_missing_errno", rp == NULL && errno == ENOENT);
+
+  long original_visit_abandoned = mi_option_get(mi_option_visit_abandoned);
+  mi_option_disable(mi_option_visit_abandoned);
+  struct heap_abandoned_result abandoned_disabled = { heap, NULL, NULL, NULL, 0 };
+  pthread_t abandoned_disabled_thread;
+  int abandoned_disabled_started = (pthread_create(&abandoned_disabled_thread, NULL, heap_abandoned_worker, &abandoned_disabled) == 0);
+  result_bool("heap_visit_abandoned_disabled_started", abandoned_disabled_started);
+  int abandoned_disabled_joined = abandoned_disabled_started && pthread_join(abandoned_disabled_thread, NULL) == 0;
+  result_bool("heap_visit_abandoned_disabled_joined", abandoned_disabled_joined);
+  result_bool("heap_visit_abandoned_disabled_allocated", abandoned_disabled_joined && abandoned_disabled.allocated);
+  struct heap_visit_result abandoned_disabled_visit = { heap, 0, 0, 1, 1, 1 };
+  bool abandoned_disabled_ok = mi_heap_visit_abandoned_blocks(heap, true, heap_visit_counting_visitor, &abandoned_disabled_visit);
+  result_bool("heap_visit_abandoned_disabled_success", abandoned_disabled_ok);
+  result_bool("heap_visit_abandoned_disabled_seen", abandoned_disabled_ok && abandoned_disabled_visit.areas > 0 && abandoned_disabled_visit.blocks > 0);
+  result_bool("heap_visit_abandoned_disabled_fields", abandoned_disabled_visit.heap_matches && abandoned_disabled_visit.area_fields_ok && abandoned_disabled_visit.block_fields_ok);
+  mi_free(abandoned_disabled.a);
+  mi_free(abandoned_disabled.b);
+  mi_free(abandoned_disabled.c);
+
+  mi_option_enable(mi_option_visit_abandoned);
+  struct heap_abandoned_result abandoned_enabled = { heap, NULL, NULL, NULL, 0 };
+  pthread_t abandoned_enabled_thread;
+  int abandoned_enabled_started = (pthread_create(&abandoned_enabled_thread, NULL, heap_abandoned_worker, &abandoned_enabled) == 0);
+  result_bool("heap_visit_abandoned_enabled_started", abandoned_enabled_started);
+  int abandoned_enabled_joined = abandoned_enabled_started && pthread_join(abandoned_enabled_thread, NULL) == 0;
+  result_bool("heap_visit_abandoned_enabled_joined", abandoned_enabled_joined);
+  result_bool("heap_visit_abandoned_enabled_allocated", abandoned_enabled_joined && abandoned_enabled.allocated);
+  struct heap_visit_result abandoned_areas = { heap, 0, 0, 1, 1, 1 };
+  bool abandoned_areas_ok = mi_heap_visit_abandoned_blocks(heap, false, heap_visit_counting_visitor, &abandoned_areas);
+  result_bool("heap_visit_abandoned_areas_success", abandoned_areas_ok);
+  result_bool("heap_visit_abandoned_areas_only", abandoned_areas_ok && abandoned_areas.areas > 0 && abandoned_areas.blocks == 0);
+  result_bool("heap_visit_abandoned_area_fields", abandoned_areas.heap_matches && abandoned_areas.area_fields_ok);
+  struct heap_visit_result abandoned_blocks = { heap, 0, 0, 1, 1, 1 };
+  bool abandoned_blocks_ok = mi_heap_visit_abandoned_blocks(heap, true, heap_visit_counting_visitor, &abandoned_blocks);
+  result_bool("heap_visit_abandoned_blocks_success", abandoned_blocks_ok);
+  result_bool("heap_visit_abandoned_blocks_seen", abandoned_blocks_ok && abandoned_blocks.blocks > 0);
+  result_bool("heap_visit_abandoned_block_fields", abandoned_blocks.heap_matches && abandoned_blocks.area_fields_ok && abandoned_blocks.block_fields_ok);
+  struct heap_visit_result abandoned_stop = { heap, 0, 0, 1, 1, 1 };
+  bool abandoned_stop_ok = mi_heap_visit_abandoned_blocks(heap, true, heap_visit_stop_visitor, &abandoned_stop);
+  result_bool("heap_visit_abandoned_stop_returns_false", !abandoned_stop_ok && abandoned_stop.areas == 1);
+  mi_free(abandoned_enabled.a);
+  mi_free(abandoned_enabled.b);
+  mi_free(abandoned_enabled.c);
+  mi_option_set(mi_option_visit_abandoned, original_visit_abandoned);
 
   if (heap != NULL) mi_heap_delete(heap);
 

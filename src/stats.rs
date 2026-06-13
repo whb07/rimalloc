@@ -16,6 +16,7 @@ use std::time::Instant;
 use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed, mi_lock_t,
 };
+use crate::init::_mi_subproc_main;
 use crate::internal::{_mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
 use crate::mimalloc::{mi_good_size, mi_rezalloc};
 use crate::mimalloc::{mi_heap_main, mi_subproc_current, mi_subproc_visit_heaps};
@@ -1316,6 +1317,11 @@ pub unsafe extern "C" fn mi_process_info(
         elapsed: _mi_clock_end(PROCESS_START.load(Ordering::Relaxed)),
         ..Default::default()
     };
+    let subproc = unsafe { _mi_subproc_main() }.cast::<MiSubprocStatsPrefix>();
+    if let Some(subproc) = unsafe { subproc.as_ref() } {
+        pinfo.current_commit = subproc.stats.committed.current.max(0) as usize;
+        pinfo.peak_commit = subproc.stats.committed.peak.max(0) as usize;
+    }
     pinfo.current_rss = pinfo.current_commit;
     pinfo.peak_rss = pinfo.peak_commit;
     // SAFETY: `pinfo` is a valid mutable primitive info struct.

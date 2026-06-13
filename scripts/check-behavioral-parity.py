@@ -1984,6 +1984,46 @@ int main(void) {
 }
 """
 
+PROCESS_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <stdio.h>
+#include <string.h>
+
+static void emit_process_info(const char* phase) {
+  size_t elapsed = 0;
+  size_t user = 0;
+  size_t system = 0;
+  size_t current_rss = 0;
+  size_t peak_rss = 0;
+  size_t current_commit = 0;
+  size_t peak_commit = 0;
+  size_t page_faults = 0;
+  mi_process_info(&elapsed, &user, &system, &current_rss, &peak_rss, &current_commit, &peak_commit, &page_faults);
+  printf("@@PROCESS %s %zu %zu %zu %zu %zu %zu %zu %zu\n",
+         phase, elapsed, user, system, current_rss, peak_rss, current_commit, peak_commit, page_faults);
+}
+
+int main(void) {
+  mi_process_info(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+  emit_process_info("initial");
+
+  const size_t size = 4 * 1024 * 1024;
+  unsigned char* p = (unsigned char*)mi_malloc(size);
+  if (p == NULL) return 1;
+  for (size_t i = 0; i < size; i += 4096) {
+    p[i] = (unsigned char)i;
+  }
+  emit_process_info("allocated");
+
+  mi_free(p);
+  mi_collect(true);
+  emit_process_info("collected");
+  return 0;
+}
+"""
+
 
 def rust_staticlib() -> pathlib.Path:
     subprocess.run(
@@ -2230,6 +2270,71 @@ def validate_json_capture(c_docs: dict[str, object], rust_docs: dict[str, object
         raise AssertionError("Rust mi_stats_get_json_from schema differs from mi_stats_as_json")
 
 
+PROCESS_CAPTURE_KEYS = (
+    "elapsed",
+    "user",
+    "system",
+    "current_rss",
+    "peak_rss",
+    "current_commit",
+    "peak_commit",
+    "page_faults",
+)
+
+
+def parse_process_capture(output: str) -> dict[str, dict[str, int]]:
+    phases: dict[str, dict[str, int]] = {}
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) != 10 or fields[0] != "@@PROCESS":
+            raise AssertionError(f"unexpected process capture line: {line!r}")
+        phase = fields[1]
+        phases[phase] = {
+            key: int(value)
+            for key, value in zip(PROCESS_CAPTURE_KEYS, fields[2:], strict=True)
+        }
+    expected = {"initial", "allocated", "collected"}
+    if set(phases) != expected:
+        raise AssertionError(f"unexpected process phases: {sorted(phases)}")
+    return phases
+
+
+def close_enough(left: int, right: int, absolute: int, ratio: float) -> bool:
+    if abs(left - right) <= absolute:
+        return True
+    high = max(left, right)
+    low = min(left, right)
+    return high == 0 or (low > 0 and high / low <= ratio)
+
+
+def validate_process_capture(c_info: dict[str, dict[str, int]], rust_info: dict[str, dict[str, int]]) -> None:
+    for label, info in (("c", c_info), ("rust", rust_info)):
+        for phase, fields in info.items():
+            for key, value in fields.items():
+                if value < 0:
+                    raise AssertionError(f"{label}.{phase}.{key} is negative")
+            if fields["peak_commit"] < fields["current_commit"]:
+                raise AssertionError(f"{label}.{phase} commit peak is below current")
+            if fields["peak_rss"] < fields["current_rss"]:
+                raise AssertionError(f"{label}.{phase} RSS peak is below current")
+        if info["allocated"]["elapsed"] < info["initial"]["elapsed"]:
+            raise AssertionError(f"{label} elapsed time moved backward after allocation")
+        if info["collected"]["elapsed"] < info["allocated"]["elapsed"]:
+            raise AssertionError(f"{label} elapsed time moved backward after collection")
+
+    for phase in ("initial", "allocated", "collected"):
+        c_phase = c_info[phase]
+        rust_phase = rust_info[phase]
+        for key in ("elapsed", "user", "system"):
+            if abs(c_phase[key] - rust_phase[key]) > 5000:
+                raise AssertionError(f"{phase}.{key} differs by more than 5s")
+        if abs(c_phase["page_faults"] - rust_phase["page_faults"]) > 10000:
+            raise AssertionError(f"{phase}.page_faults differs by more than 10000")
+        for key in ("current_rss", "peak_rss", "current_commit", "peak_commit"):
+            if not close_enough(c_phase[key], rust_phase[key], 64 * 1024 * 1024, 4.0):
+                raise AssertionError(f"{phase}.{key} differs beyond RSS/commit tolerance: C={c_phase[key]} Rust={rust_phase[key]}")
+
+
 def main() -> int:
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
@@ -2238,19 +2343,25 @@ def main() -> int:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     scenario = BUILD_DIR / "behavioral-parity.c"
     json_capture = BUILD_DIR / "json-capture.c"
+    process_capture = BUILD_DIR / "process-capture.c"
     scenario.write_text(SCENARIO_C)
     json_capture.write_text(JSON_CAPTURE_C)
+    process_capture.write_text(PROCESS_CAPTURE_C)
 
     rust_lib = rust_staticlib()
     c_bin = BUILD_DIR / "behavioral-parity-c"
     rust_bin = BUILD_DIR / "behavioral-parity-rust"
     c_json_bin = BUILD_DIR / "json-capture-c"
     rust_json_bin = BUILD_DIR / "json-capture-rust"
+    c_process_bin = BUILD_DIR / "process-capture-c"
+    rust_process_bin = BUILD_DIR / "process-capture-rust"
 
     compile_binary(cc, c_bin, [ROOT / "mimalloc-3.3.2/src/static.c", scenario])
     compile_binary(cc, rust_bin, [scenario, rust_lib])
     compile_binary(cc, c_json_bin, [ROOT / "mimalloc-3.3.2/src/static.c", json_capture])
     compile_binary(cc, rust_json_bin, [json_capture, rust_lib], ["-DRUST_HELPER_CAPTURE"])
+    compile_binary(cc, c_process_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_capture])
+    compile_binary(cc, rust_process_bin, [process_capture, rust_lib])
 
     c_output = run(c_bin)
     rust_output = run(rust_bin)
@@ -2270,8 +2381,15 @@ def main() -> int:
         print(f"JSON parity mismatch: {err}", file=sys.stderr)
         return 1
 
+    try:
+        validate_process_capture(parse_process_capture(run(c_process_bin)), parse_process_capture(run(rust_process_bin)))
+    except AssertionError as err:
+        print(f"process info parity mismatch: {err}", file=sys.stderr)
+        return 1
+
     print("ok: C and Rust mimalloc behavior smoke outputs match")
     print("ok: C and Rust mimalloc JSON schemas parse and match")
+    print("ok: C and Rust mimalloc process info is within tolerance")
     print(c_output, end="")
     return 0
 

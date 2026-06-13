@@ -157,7 +157,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Match `mi_heap_stats_get`, `mi_heap_stats_merge_to_subproc`, and heap stats print APIs. Validation: heap-local tests compare per-heap counters, merge side effects, and printed output categories against C mimalloc.
 - [x] Match `mi_stats_print`, `mi_stats_print_out`, `mi_thread_stats_print_out`, `mi_process_info_print`, and `mi_process_info_print_out`. Validation: output-captured tests compare required sections, callback behavior, null output handling, and deprecated compatibility behavior against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match JSON APIs `mi_stats_get_json`, `mi_stats_as_json`, `mi_heap_stats_get_json`, `mi_subproc_stats_get_json`, and any Rust helper currently exposed as `mi_stats_get_json_from`. Validation: tests parse JSON, compare schema, field names, numeric relationships, buffer ownership, truncation, provided-buffer behavior, and allocation/free behavior against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
-- [ ] Match process information reporting. Validation: tests compare elapsed/user/system/current RSS/peak RSS/current commit/peak commit/page faults against C mimalloc within explicit OS tolerance.
+- [x] Match process information reporting. Validation: tests compare elapsed/user/system/current RSS/peak RSS/current commit/peak commit/page faults against C mimalloc within explicit OS tolerance. Guarded by `scripts/check-behavioral-parity.py`.
 
 ## Debug, Secure, Guarded, and Tracking Modes
 

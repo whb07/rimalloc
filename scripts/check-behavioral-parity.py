@@ -115,6 +115,43 @@ static int has_sequence_prefix(const unsigned char* p, size_t size) {
   return 1;
 }
 
+static size_t count_substrings(const char* text, const char* needle) {
+  size_t count = 0;
+  const char* p = text;
+  while (p != NULL && *p != '\0') {
+    p = strstr(p, needle);
+    if (p == NULL) break;
+    count++;
+    p += strlen(needle);
+  }
+  return count;
+}
+
+static int json_tail_ok(const char* json) {
+  if (json == NULL) return 0;
+  size_t len = strlen(json);
+  return len >= 3 && json[len - 2] == '}' && json[len - 1] == '\n';
+}
+
+static int stats_json_schema_ok(const char* json) {
+  if (json == NULL || json[0] != '{' || !json_tail_ok(json)) return 0;
+  return strstr(json, "\"stat_version\": 5") != NULL &&
+         strstr(json, "\"mimalloc_version\": 30302") != NULL &&
+         strstr(json, "\"process\": {") != NULL &&
+         strstr(json, "\"elapsed_msecs\"") != NULL &&
+         strstr(json, "\"page_faults\"") != NULL &&
+         strstr(json, "\"rss_current\"") != NULL &&
+         strstr(json, "\"commit_peak\"") != NULL &&
+         strstr(json, "\"pages\": {") != NULL &&
+         strstr(json, "\"malloc_requested\": {") != NULL &&
+         strstr(json, "\"malloc_bins\": [") != NULL &&
+         strstr(json, "\"page_bins\": [") != NULL &&
+         strstr(json, "\"chunk_bins\": [") != NULL &&
+         count_substrings(json, "\"block_size\"") == 2 * (MI_BIN_HUGE + 1) &&
+         count_substrings(json, "\"page_size\"") == 2 * (MI_BIN_HUGE + 1) &&
+         count_substrings(json, "\"bin\"") == MI_CBIN_COUNT;
+}
+
 struct thread_lifecycle_result {
   int init_alloc_owned;
   int threadpool_alloc_owned;
@@ -1610,6 +1647,72 @@ int main(void) {
   result_size("usable_size_foreign_status", (size_t)foreign_size_case_status(0));
   result_size("malloc_usable_size_foreign_status", (size_t)foreign_size_case_status(1));
   result_size("malloc_size_foreign_status", (size_t)foreign_size_case_status(2));
+
+  size_t arena_invalid_size = 123;
+  result_bool("arena_area_invalid_null", mi_arena_area(NULL, &arena_invalid_size) == NULL && arena_invalid_size == 0);
+  result_bool("arena_area_invalid_no_size", mi_arena_area(NULL, NULL) == NULL);
+  result_bool("arena_contains_invalid_false", !mi_arena_contains(NULL, &arena_invalid_size));
+  result_size("arena_min_alignment", mi_arena_min_alignment());
+  result_size("arena_min_size", mi_arena_min_size());
+  result_bool("arena_min_alignment_power2", mi_arena_min_alignment() != 0 && (mi_arena_min_alignment() & (mi_arena_min_alignment() - 1)) == 0);
+  result_bool("arena_min_size_aligned", mi_arena_min_size() != 0 && (mi_arena_min_size() % mi_arena_min_alignment()) == 0);
+
+  mi_arena_id_t arena_id = NULL;
+  int arena_err = mi_reserve_os_memory_ex(mi_arena_min_size(), true, false, true, &arena_id);
+  result_bool("arena_reserve_for_inspection", arena_err == 0 && arena_id != NULL);
+  size_t arena_size = 0;
+  void* arena_area = (arena_err == 0 ? mi_arena_area(arena_id, &arena_size) : NULL);
+  result_bool("arena_area_valid_nonnull", arena_area != NULL && arena_size >= mi_arena_min_size());
+  result_bool("arena_area_valid_aligned", arena_area != NULL && ((uintptr_t)arena_area % mi_arena_min_alignment()) == 0);
+  result_bool("arena_area_size_aligned", arena_size != 0 && (arena_size % mi_arena_min_alignment()) == 0);
+  result_bool("arena_contains_start", arena_area != NULL && mi_arena_contains(arena_id, arena_area));
+  result_bool("arena_contains_inside", arena_area != NULL && mi_arena_contains(arena_id, (char*)arena_area + mi_arena_min_alignment()));
+  result_bool("arena_contains_end_false", arena_area != NULL && !mi_arena_contains(arena_id, (char*)arena_area + arena_size));
+  int arena_stack_value = 0;
+  result_bool("arena_contains_stack_false", !mi_arena_contains(arena_id, &arena_stack_value));
+
+  char json_buf[65536];
+  memset(json_buf, 0xA5, sizeof(json_buf));
+  char* json = mi_stats_get_json(sizeof(json_buf), json_buf);
+  result_bool("stats_get_json_provided_buffer", json == json_buf);
+  result_bool("stats_get_json_schema", stats_json_schema_ok(json));
+
+  mi_stats_t json_stats;
+  mi_stats_init(&json_stats);
+  result_bool("stats_get_for_json", mi_stats_get(&json_stats));
+  memset(json_buf, 0xA5, sizeof(json_buf));
+  json = mi_stats_as_json(&json_stats, sizeof(json_buf), json_buf);
+  result_bool("stats_as_json_provided_buffer", json == json_buf);
+  result_bool("stats_as_json_schema", stats_json_schema_ok(json));
+
+  mi_stats_t invalid_json_stats;
+  mi_stats_init(&invalid_json_stats);
+  invalid_json_stats.version = 0;
+  result_bool("stats_as_json_invalid_null", mi_stats_as_json(&invalid_json_stats, sizeof(json_buf), json_buf) == NULL);
+  result_bool("stats_as_json_null_stats_null", mi_stats_as_json(NULL, sizeof(json_buf), json_buf) == NULL);
+
+  mi_heap_t* json_heap = mi_heap_new();
+  memset(json_buf, 0xA5, sizeof(json_buf));
+  json = json_heap == NULL ? NULL : mi_heap_stats_get_json(json_heap, sizeof(json_buf), json_buf);
+  result_bool("heap_stats_get_json_provided_buffer", json_heap != NULL && json == json_buf);
+  result_bool("heap_stats_get_json_schema", stats_json_schema_ok(json));
+  if (json_heap != NULL) mi_heap_delete(json_heap);
+
+  memset(json_buf, 0xA5, sizeof(json_buf));
+  json = mi_subproc_stats_get_json(mi_subproc_current(), sizeof(json_buf), json_buf);
+  result_bool("subproc_stats_get_json_provided_buffer", json == json_buf);
+  result_bool("subproc_stats_get_json_schema", stats_json_schema_ok(json));
+
+  char small_json[32];
+  memset(small_json, 0xCC, sizeof(small_json));
+  json = mi_stats_get_json(sizeof(small_json), small_json);
+  result_bool("stats_get_json_small_buffer_returned_buffer", json == small_json);
+  result_bool("stats_get_json_small_buffer_terminated", memchr(small_json, '\0', sizeof(small_json)) != NULL);
+  result_bool("stats_get_json_small_buffer_truncated", !stats_json_schema_ok(small_json));
+
+  json = mi_stats_get_json(0, NULL);
+  result_bool("stats_get_json_allocated_schema", stats_json_schema_ok(json));
+  mi_free(json);
 
   output_callbacks = 0;
   mi_stats_print_out(output_callback, NULL);

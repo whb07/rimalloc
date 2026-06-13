@@ -533,13 +533,60 @@ int main(void) {
 
   unsigned char* caligned = (unsigned char*)mi_calloc_aligned(9, 7, 32);
   result_bool("calloc_aligned_zeroed", is_aligned_at(caligned, 32, 0) && bytes_equal(caligned, 0, 63));
+  result_bool("calloc_aligned_size", caligned != NULL && mi_usable_size(caligned) >= 63);
   mi_free(caligned);
+
+  caligned = (unsigned char*)mi_calloc_aligned(0, 64, 32);
+  result_bool("calloc_aligned_zero_count", is_aligned_at(caligned, 32, 0));
+  mi_free(caligned);
+
+  caligned = (unsigned char*)mi_calloc_aligned(64, 0, 32);
+  result_bool("calloc_aligned_zero_size", is_aligned_at(caligned, 32, 0));
+  mi_free(caligned);
+
+  size_t calloc_aligned_counts[] = { 1, 3, 5, 1 };
+  size_t calloc_aligned_sizes[] = { 0, 8, 17, MI_SMALL_SIZE_MAX + 1 };
+  size_t calloc_aligned_alignments[] = { 8, 16, 64, 4096 };
+  size_t calloc_aligned_count = sizeof(calloc_aligned_counts) / sizeof(calloc_aligned_counts[0]);
+  for (size_t i = 0; i < calloc_aligned_count; i++) {
+    size_t count = calloc_aligned_counts[i];
+    size_t size = calloc_aligned_sizes[i];
+    size_t total = count * size;
+    size_t alignment = calloc_aligned_alignments[i];
+    caligned = (unsigned char*)mi_calloc_aligned(count, size, alignment);
+    result_bool("calloc_aligned_matrix_nonnull", caligned != NULL);
+    result_bool("calloc_aligned_matrix_alignment", is_aligned_at(caligned, alignment, 0));
+    result_bool("calloc_aligned_matrix_zeroed", caligned != NULL && bytes_equal(caligned, 0, total));
+    result_bool("calloc_aligned_matrix_usable", caligned != NULL && mi_usable_size(caligned) >= total);
+    mi_free(caligned);
+  }
 
   caligned = (unsigned char*)mi_calloc_aligned_at(9, 7, 32, 24);
   result_bool("calloc_aligned_at_zeroed", is_aligned_at(caligned, 32, 24) && bytes_equal(caligned, 0, 63));
+  result_bool("calloc_aligned_at_size", caligned != NULL && mi_usable_size(caligned) >= 63);
   mi_free(caligned);
 
+  size_t calloc_aligned_at_counts[] = { 1, 3, 4, 1 };
+  size_t calloc_aligned_at_sizes[] = { 0, 8, 16, 512 };
+  size_t calloc_aligned_at_alignments[] = { 8, 16, 64, 4096 };
+  size_t calloc_aligned_at_offsets[] = { 0, 8, 24, 128 };
+  size_t calloc_aligned_at_count = sizeof(calloc_aligned_at_counts) / sizeof(calloc_aligned_at_counts[0]);
+  for (size_t i = 0; i < calloc_aligned_at_count; i++) {
+    size_t count = calloc_aligned_at_counts[i];
+    size_t size = calloc_aligned_at_sizes[i];
+    size_t total = count * size;
+    size_t alignment = calloc_aligned_at_alignments[i];
+    size_t offset = calloc_aligned_at_offsets[i];
+    caligned = (unsigned char*)mi_calloc_aligned_at(count, size, alignment, offset);
+    result_bool("calloc_aligned_at_matrix_nonnull", caligned != NULL);
+    result_bool("calloc_aligned_at_matrix_offset", is_aligned_at(caligned, alignment, offset));
+    result_bool("calloc_aligned_at_matrix_zeroed", caligned != NULL && bytes_equal(caligned, 0, total));
+    result_bool("calloc_aligned_at_matrix_usable", caligned != NULL && mi_usable_size(caligned) >= total);
+    mi_free(caligned);
+  }
+
   result_bool("calloc_aligned_overflow_null", mi_calloc_aligned(overflow_count, 2, 32) == NULL);
+  result_bool("calloc_aligned_at_overflow_null", mi_calloc_aligned_at(overflow_count, 2, 32, 8) == NULL);
 
   void* posix = NULL;
   errno = 0;

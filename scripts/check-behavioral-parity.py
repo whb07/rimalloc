@@ -20,6 +20,7 @@ SCENARIO_C = r"""
 #include <mimalloc-stats.h>
 
 #include <errno.h>
+#include <sys/mman.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -215,6 +216,22 @@ int main(void) {
   result_bool("malloc_usable_ge_17", p != NULL && mi_usable_size(p) >= 17);
   result_bool("malloc_errno_unchanged", errno == 0);
   mi_free(p);
+
+  mi_cfree(NULL);
+  result_bool("cfree_null_ok", 1);
+  void* cfree_owned = mi_malloc(19);
+  result_bool("cfree_owned_region", cfree_owned != NULL && mi_is_in_heap_region(cfree_owned));
+  mi_cfree(cfree_owned);
+  void* cfree_foreign = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  result_bool("cfree_foreign_allocated", cfree_foreign != MAP_FAILED);
+  if (cfree_foreign != MAP_FAILED) {
+    result_bool("cfree_foreign_not_in_heap", !mi_is_in_heap_region(cfree_foreign));
+    mi_cfree(cfree_foreign);
+    result_bool("cfree_foreign_unmap_ok", munmap(cfree_foreign, 4096) == 0);
+  } else {
+    result_bool("cfree_foreign_not_in_heap", 0);
+    result_bool("cfree_foreign_unmap_ok", 0);
+  }
 
   unsigned char* c = (unsigned char*)mi_calloc(8, 4);
   result_bool("calloc_nonnull", c != NULL);

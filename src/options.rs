@@ -945,6 +945,7 @@ pub(crate) fn mi_error_default(err: i32) {
     let _ = err;
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
     mi_out_default.store(
         mi_output_fun_to_ptr(out.unwrap_or(mi_out_stderr)),
@@ -956,6 +957,7 @@ pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_voi
     }
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void) {
     *lock_unpoisoned(&mi_error_handler) = fun;
     mi_error_arg.store(arg, Ordering::Release);
@@ -1052,6 +1054,7 @@ pub extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
     mi_option_get_fast_impl(option)
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
     let idx = option as usize;
     if idx >= MI_OPTION_COUNT {
@@ -1083,6 +1086,7 @@ pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
     table[idx].value
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get_clamp(option: mi_option_t, min: c_long, max: c_long) -> c_long {
     let x = mi_option_get(option);
     if x < min {
@@ -1094,6 +1098,7 @@ pub extern "C" fn mi_option_get_clamp(option: mi_option_t, min: c_long, max: c_l
     }
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get_size(option: mi_option_t) -> usize {
     let x = mi_option_get(option);
     let mut size = if x < 0 { 0 } else { x as usize };
@@ -1108,6 +1113,7 @@ pub extern "C" fn mi_option_get_size(option: mi_option_t) -> usize {
     size
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
     let idx = option as usize;
     if idx >= MI_OPTION_COUNT {
@@ -1139,6 +1145,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
     }
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
     let idx = option as usize;
     if idx >= MI_OPTION_COUNT {
@@ -1151,26 +1158,32 @@ pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
     }
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_is_enabled(option: mi_option_t) -> bool {
     mi_option_get(option) != 0
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_enabled(option: mi_option_t, enable: bool) {
     mi_option_set(option, if enable { 1 } else { 0 });
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_enabled_default(option: mi_option_t, enable: bool) {
     mi_option_set_default(option, if enable { 1 } else { 0 });
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_enable(option: mi_option_t) {
     mi_option_set_enabled(option, true);
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_option_disable(option: mi_option_t) {
     mi_option_set_enabled(option, false);
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     let (out, arg) = if let Some(out) = out {
         (out, arg)
@@ -1227,6 +1240,7 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
     }
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_options_print() {
     mi_options_print_out(None, ptr::null_mut());
 }

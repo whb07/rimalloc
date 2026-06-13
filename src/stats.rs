@@ -310,6 +310,7 @@ pub(crate) fn bin_block_size(bin: usize) -> usize {
     MI_BIN_WORD_SIZES[bin] * size_of::<usize>()
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
     if bin > MI_BIN_HUGE {
         return 0;

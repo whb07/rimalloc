@@ -118,6 +118,7 @@ pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
     bin_block_size(bin)
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_good_size(size: usize) -> usize {
     if size <= MI_LARGE_MAX_OBJ_SIZE {
         _mi_bin_size(mi_bin(size + MI_PADDING_SIZE))

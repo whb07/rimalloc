@@ -407,6 +407,11 @@ pub unsafe extern "C" fn mi_umalloc_small(size: usize, usable: *mut usize) -> *m
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_uzalloc_small(size: usize, usable: *mut usize) -> *mut c_void {
+    mi_theap_malloc_small_zero(_mi_theap_default(), size, true, usable)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_umalloc(
     theap: *mut mi_theap_t,
     size: usize,
@@ -434,6 +439,7 @@ pub unsafe extern "C" fn mi_ucalloc(count: usize, size: usize, usable: *mut usiz
     mi_uzalloc(total, usable)
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
     mi_good_size(size)
 }

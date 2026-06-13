@@ -518,6 +518,7 @@ unsafe extern "C" {
 
     pub fn mi_stats_reset();
     pub fn mi_stats_merge();
+    pub fn mi_stats_get_bin_size(bin: usize) -> usize;
     pub fn mi_stats_get(stats: *mut mi_stats_t) -> bool;
     pub fn mi_stats_print(out: *mut c_void);
     pub fn mi_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void);

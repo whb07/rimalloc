@@ -41,6 +41,11 @@ pub unsafe extern "C" fn mi_malloc_usable_size(p: *const c_void) -> usize {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_malloc_size(p: *const c_void) -> usize {
+    unsafe { mi_usable_size(p) }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_cfree(p: *mut c_void) {
     if unsafe { mi_is_in_heap_region(p.cast_const()) } {
         unsafe { mi_free(p) };

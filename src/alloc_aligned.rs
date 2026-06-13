@@ -298,7 +298,7 @@ pub unsafe fn mi_theap_malloc_aligned_at(
     mi_theap_malloc_zero_aligned_at(theap, size, alignment, offset, false, core::ptr::null_mut())
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc_aligned(
     theap: *mut mi_theap_t,
     size: usize,
@@ -351,6 +351,7 @@ pub unsafe fn mi_theap_calloc_aligned(
     mi_theap_calloc_aligned_at(theap, count, size, alignment, 0)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_aligned_at(
     size: usize,
     alignment: usize,
@@ -359,10 +360,12 @@ pub unsafe extern "C" fn mi_malloc_aligned_at(
     mi_theap_malloc_aligned_at(_mi_theap_default(), size, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_aligned(size: usize, alignment: usize) -> *mut c_void {
     mi_theap_malloc_aligned(_mi_theap_default(), size, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_umalloc_aligned(
     size: usize,
     alignment: usize,
@@ -371,6 +374,7 @@ pub unsafe extern "C" fn mi_umalloc_aligned(
     mi_theap_malloc_zero_aligned_at(_mi_theap_default(), size, alignment, 0, false, block_size)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_aligned_at(
     size: usize,
     alignment: usize,
@@ -379,10 +383,12 @@ pub unsafe extern "C" fn mi_zalloc_aligned_at(
     mi_theap_zalloc_aligned_at(_mi_theap_default(), size, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_aligned(size: usize, alignment: usize) -> *mut c_void {
     mi_theap_zalloc_aligned(_mi_theap_default(), size, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_uzalloc_aligned(
     size: usize,
     alignment: usize,
@@ -391,6 +397,7 @@ pub unsafe extern "C" fn mi_uzalloc_aligned(
     mi_theap_malloc_zero_aligned_at(_mi_theap_default(), size, alignment, 0, true, block_size)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_calloc_aligned_at(
     count: usize,
     size: usize,
@@ -400,6 +407,7 @@ pub unsafe extern "C" fn mi_calloc_aligned_at(
     mi_theap_calloc_aligned_at(_mi_theap_default(), count, size, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_calloc_aligned(
     count: usize,
     size: usize,
@@ -408,6 +416,7 @@ pub unsafe extern "C" fn mi_calloc_aligned(
     mi_theap_calloc_aligned(_mi_theap_default(), count, size, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_aligned_at(
     heap: *mut mi_heap_t,
     size: usize,
@@ -417,6 +426,7 @@ pub unsafe extern "C" fn mi_heap_malloc_aligned_at(
     mi_theap_malloc_aligned_at(_mi_heap_theap(heap), size, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_aligned(
     heap: *mut mi_heap_t,
     size: usize,
@@ -425,6 +435,7 @@ pub unsafe extern "C" fn mi_heap_malloc_aligned(
     mi_theap_malloc_aligned(_mi_heap_theap(heap), size, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_aligned_at(
     heap: *mut mi_heap_t,
     size: usize,
@@ -443,6 +454,7 @@ pub unsafe extern "C" fn mi_heap_zalloc_aligned(
     mi_theap_zalloc_aligned(_mi_heap_theap(heap), size, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_calloc_aligned_at(
     heap: *mut mi_heap_t,
     count: usize,
@@ -453,6 +465,7 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned_at(
     mi_theap_calloc_aligned_at(_mi_heap_theap(heap), count, size, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_calloc_aligned(
     heap: *mut mi_heap_t,
     count: usize,
@@ -610,6 +623,7 @@ pub unsafe fn mi_theap_recalloc_aligned(
     mi_theap_rezalloc_aligned(theap, p, total, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realloc_aligned_at(
     p: *mut c_void,
     newsize: usize,
@@ -619,6 +633,7 @@ pub unsafe extern "C" fn mi_realloc_aligned_at(
     mi_theap_realloc_aligned_at(_mi_theap_default(), p, newsize, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realloc_aligned(
     p: *mut c_void,
     newsize: usize,
@@ -627,6 +642,7 @@ pub unsafe extern "C" fn mi_realloc_aligned(
     mi_theap_realloc_aligned(_mi_theap_default(), p, newsize, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_rezalloc_aligned_at(
     p: *mut c_void,
     newsize: usize,
@@ -636,6 +652,7 @@ pub unsafe extern "C" fn mi_rezalloc_aligned_at(
     mi_theap_rezalloc_aligned_at(_mi_theap_default(), p, newsize, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_rezalloc_aligned(
     p: *mut c_void,
     newsize: usize,
@@ -644,6 +661,7 @@ pub unsafe extern "C" fn mi_rezalloc_aligned(
     mi_theap_rezalloc_aligned(_mi_theap_default(), p, newsize, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc_aligned_at(
     p: *mut c_void,
     newcount: usize,
@@ -654,6 +672,7 @@ pub unsafe extern "C" fn mi_recalloc_aligned_at(
     mi_theap_recalloc_aligned_at(_mi_theap_default(), p, newcount, size, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc_aligned(
     p: *mut c_void,
     newcount: usize,
@@ -663,6 +682,7 @@ pub unsafe extern "C" fn mi_recalloc_aligned(
     mi_theap_recalloc_aligned(_mi_theap_default(), p, newcount, size, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     heap: *mut mi_heap_t,
     p: *mut c_void,
@@ -673,6 +693,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     mi_theap_realloc_aligned_at(_mi_heap_theap(heap), p, newsize, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc_aligned(
     heap: *mut mi_heap_t,
     p: *mut c_void,
@@ -682,6 +703,7 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
     mi_theap_realloc_aligned(_mi_heap_theap(heap), p, newsize, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     heap: *mut mi_heap_t,
     p: *mut c_void,
@@ -692,6 +714,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     mi_theap_rezalloc_aligned_at(_mi_heap_theap(heap), p, newsize, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     heap: *mut mi_heap_t,
     p: *mut c_void,
@@ -701,6 +724,7 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     mi_theap_rezalloc_aligned(_mi_heap_theap(heap), p, newsize, alignment)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     heap: *mut mi_heap_t,
     p: *mut c_void,
@@ -712,6 +736,7 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     mi_theap_recalloc_aligned_at(_mi_heap_theap(heap), p, newcount, size, alignment, offset)
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     heap: *mut mi_heap_t,
     p: *mut c_void,

@@ -1,0 +1,213 @@
+# TODO: Rust mimalloc parity with C mimalloc 3.3.2
+
+Scope: allocator, runtime, ABI, API, platform behavior, safety, and parity evidence for the Rust implementation in this repository compared to the vendored C implementation under `mimalloc-3.3.2`. This intentionally excludes CMake/build-system parity, release packaging polish, and unrelated repository tooling.
+
+Completion rule: every checkbox in this file must be closed, every intentional divergence must be documented with a compatibility rationale, and the final public ABI and behavioral test matrix must match C mimalloc 3.3.2 for supported targets.
+
+## Parity Gates
+
+- [x] Define the supported parity matrix: list OS, architecture, pointer width, endianness, libc/CRT, Rust profile, and mimalloc mode combinations that this port claims to support. Validation: the matrix is committed in this file or a referenced parity document, and every later validation item maps to at least one row in the matrix. See `PARITY.md`; guarded by `tests/parity_docs.rs`.
+- [x] Establish the C baseline commit and headers as the single source of truth for public API parity. Validation: the baseline references `mimalloc-3.3.2/include/mimalloc.h`, `mimalloc-3.3.2/include/mimalloc-stats.h`, and `mimalloc-3.3.2/include/mimalloc-new-delete.h`, with no unreviewed drift from those headers. See `PARITY.md`; guarded by `tests/parity_docs.rs`.
+- [ ] Build an authoritative public symbol allowlist from the C headers and C override behavior. Validation: comparing the Rust artifact's exported symbols against the allowlist reports zero missing public symbols and zero unexplained extra public `mi_*`, malloc-family, or C++ override symbols.
+- [ ] Classify all Rust-exported symbols not declared by the C public headers. Validation: each extra export is either hidden, renamed internal, mapped to an actual C override/C++ symbol, or documented as an intentional Rust-only extension with compatibility impact.
+- [ ] Replace declaration-only parity with link-time parity. Validation: a C program that references every public mimalloc C API symbol links successfully against the Rust artifact and exits successfully after calling the APIs in safe smoke-test combinations.
+- [ ] Add behavioral parity tests that run the same scenarios against C mimalloc and Rust mimalloc. Validation: the same test inputs produce matching return values, errno/error behavior, usable sizes where specified, output callback text classes, and allocator invariants, with all accepted differences documented.
+- [ ] Remove or resolve every no-op, placeholder, duplicate-empty test, and "stubbed for translation" implementation that affects public behavior. Validation: a repository search for stub markers, empty test bodies, and `TODO`/`unimplemented`/`panic!("todo")` style placeholders has no parity-relevant unresolved hits.
+- [ ] Refresh stale translation status documents so they no longer claim declaration-only progress for implemented modules. Validation: `RUST_TRANSLATION_SPEC.md` and any task metadata agree with the current Rust implementation and this TODO's remaining work.
+- [ ] Define the final parity signoff command set. Validation: one documented command sequence checks formatting, Rust tests, C-link tests, parity comparisons, stress tests, and all supported feature/mode combinations without relying on manual interpretation.
+
+## Public ABI Surface
+
+- [ ] Make the Rust `src/mimalloc.rs` facade match the C 3.3.2 public headers exactly. Validation: every declaration in the facade exists in the C headers with the same name, parameter order, return type, constness model, and ABI, and every stale or non-header declaration is removed or clearly marked private.
+- [ ] Export all Rust `pub extern "C"` functions that are public C API with exact unmangled C names. Validation: `nm`/`readelf`/platform equivalent shows the expected symbol for every public C API function, including functions currently implemented but missing `#[unsafe(no_mangle)]` or `#[unsafe(export_name = "...")]`.
+- [ ] Fix currently unexported aligned API wrappers: `mi_malloc_aligned`, `mi_malloc_aligned_at`, `mi_zalloc_aligned`, `mi_zalloc_aligned_at`, `mi_calloc_aligned`, and `mi_calloc_aligned_at`. Validation: the public symbol diff no longer lists these names as missing, and C tests verify alignment, offset, zeroing, overflow, and free compatibility.
+- [ ] Fix currently unexported heap aligned API wrappers: `mi_heap_malloc_aligned`, `mi_heap_malloc_aligned_at`, `mi_heap_zalloc_aligned_at`, `mi_heap_calloc_aligned`, and `mi_heap_calloc_aligned_at`. Validation: C heap tests link to these symbols and prove allocations belong to the requested heap and satisfy alignment/offset rules.
+- [ ] Fix currently unexported aligned realloc API wrappers: `mi_realloc_aligned`, `mi_realloc_aligned_at`, `mi_rezalloc_aligned`, `mi_rezalloc_aligned_at`, `mi_recalloc_aligned`, and `mi_recalloc_aligned_at`. Validation: growth, shrink, null pointer, overflow, alignment, offset, and zero-extension cases match C mimalloc.
+- [ ] Fix currently unexported heap aligned realloc API wrappers: `mi_heap_realloc_aligned`, `mi_heap_realloc_aligned_at`, `mi_heap_rezalloc_aligned`, `mi_heap_rezalloc_aligned_at`, `mi_heap_recalloc_aligned`, and `mi_heap_recalloc_aligned_at`. Validation: C heap tests verify data preservation, zero-fill rules, ownership, alignment, and behavior when the source pointer is null.
+- [ ] Fix currently unexported usable/good-size compatibility symbols: `mi_good_size`, `mi_malloc_good_size`, and `mi_malloc_size`. Validation: C callers link to each symbol and the returned sizes match C mimalloc over every small, medium, large, huge, aligned, and zero-size boundary case.
+- [ ] Implement and export `mi_aligned_recalloc` and `mi_aligned_offset_recalloc`. Validation: C tests compare null, non-null, overflow, alignment, offset, old-content preservation, and newly zeroed tail behavior against C mimalloc.
+- [ ] Implement and export `mi_mbsdup`. Validation: C tests cover null handling, empty strings, multibyte bytes, allocation size, byte-for-byte copy, and free compatibility against C mimalloc.
+- [ ] Implement and export `mi_new`. Validation: C++ tests verify C++ new-handler semantics, bad allocation behavior, successful allocation, and compatibility with `mi_free`, matching the C implementation's `mi_new`.
+- [ ] Implement and export `mi_heap_alloc_new_n`. Validation: C++/C tests verify overflow behavior, new-handler behavior, heap ownership, and returned usable size semantics against C mimalloc.
+- [ ] Implement and export `mi_process_init` and `mi_process_done`. Validation: repeated explicit init/done calls are safe in C tests, automatic initialization still works, statistics and options finalization match C behavior, and process teardown does not double-free or leak allocator-owned state.
+- [ ] Export `mi_thread_init`, `mi_thread_done`, and `mi_thread_set_in_threadpool` with exact C ABI names. Validation: multi-threaded C tests call these APIs before and after allocation, including threadpool reuse, and match C mimalloc's heap/thread state transitions.
+- [ ] Export `mi_heap_main`. Validation: C tests verify it returns the main heap, remains stable across calls, and interacts correctly with `mi_heap_contains`, `mi_heap_of`, and main-thread allocations.
+- [ ] Export `mi_is_redirected`. Validation: platform-specific override tests compare the reported redirection state to C mimalloc for static, dynamic, and non-override builds.
+- [ ] Export all option APIs: `mi_option_is_enabled`, `mi_option_enable`, `mi_option_disable`, `mi_option_set_enabled`, `mi_option_set_enabled_default`, `mi_option_get`, `mi_option_get_clamp`, `mi_option_get_size`, `mi_option_set`, `mi_option_set_default`, `mi_options_print`, and `mi_options_print_out`. Validation: a C option matrix links to all names and verifies defaults, mutation, clamping, size conversion, callback output, and invalid-option handling against C mimalloc.
+- [ ] Export callback registration APIs `mi_register_output` and `mi_register_error`. Validation: C tests register callbacks, trigger output/errors, replace callbacks, clear callbacks where supported, and verify callback order and argument forwarding against C mimalloc.
+- [ ] Implement and export `mi_collect_reduce`. Validation: C tests allocate cross-thread and abandoned-page workloads, call `mi_collect_reduce`, and verify the reduction target behavior and stats changes match C mimalloc.
+- [ ] Implement and export `mi_stats_merge`. Validation: stats before/after merge match C mimalloc for current thread, multiple threads, heaps, abandoned pages, and post-merge reset behavior.
+- [ ] Implement and export `mi_heap_stats_get` and `mi_heap_stats_merge_to_subproc`. Validation: C tests collect heap-local stats, merge them to the subprocess, and compare all public `mi_stats_t` fields against C mimalloc within documented nondeterministic tolerances.
+- [ ] Export `mi_stats_get_bin_size`. Validation: C tests iterate every bin index, compare returned bin sizes against C mimalloc, and verify out-of-range handling.
+- [ ] Implement and export subprocess APIs `mi_subproc_main`, `mi_subproc_current`, `mi_subproc_new`, `mi_subproc_destroy`, `mi_subproc_add_current_thread`, and `mi_subproc_visit_heaps`. Validation: C tests create subprocesses, attach threads, allocate per subprocess, visit heaps, destroy subprocesses, and verify isolation/statistics against C mimalloc.
+- [ ] Export `mi_theap_set_default`, `mi_theap_malloc_aligned`, and `mi_theap_malloc_small`. Validation: C tests set/reset default theaps, allocate through them, verify same-thread restrictions, and compare ownership and alignment behavior against C mimalloc.
+- [ ] Export `mi_umalloc_aligned`, `mi_uzalloc_aligned`, and `mi_uzalloc_small`. Validation: C tests verify block-size out parameters, zeroing, alignment, small-size limits, and free compatibility against C mimalloc.
+- [ ] Export `mi_realpath` or remove stale facade declarations if the Rust implementation intentionally does not support it yet. Validation: C tests compare successful path resolution, failure behavior, allocation/free semantics, and errno behavior against C mimalloc on supported platforms.
+- [ ] Implement and export `mi_manage_memory`. Validation: C tests provide custom memory with a commit callback, exercise commit/decommit paths, exclusive arena creation, arena id output, and callback zero-state propagation, then compare with C mimalloc.
+- [ ] Reconcile public Rust exports that are not C public API, including `mi_arena_from_index`, `mi_arena_id_from_arena`, `mi_arenas_get_count`, `mi_heap_check_owned`, `mi_heap_stats_merge_to_main`, `mi_malloc_size_checked`, `mi_os_*`, `mi_stats_get_json_from`, `mi_theap_realpath`, `mi_theap_umalloc`, and `mi_uzalloc`. Validation: these symbols are hidden, made private, or documented as intentional extensions, and the final exported symbol set has no unclassified extras.
+- [ ] Reconcile Rust C++ helper exports such as `mi_cxx_new_*` and `mi_cxx_delete_*` with actual platform C++ operator symbols. Validation: C++ override tests inspect exported/mangled symbols and prove C++ allocation/deallocation routes through mimalloc exactly as in the C distribution.
+- [ ] Verify all public structs and typedef-compatible layouts: `mi_heap_area_t`, `mi_stats_t`, `mi_stat_count_t`, `mi_stat_counter_t`, `mi_chunkbin_t`, `mi_subproc_id_t`, `mi_arena_id_t`, `mi_heap_t*`, and `mi_theap_t*`. Validation: C and Rust layout tests compare size, alignment, field offsets, enum discriminants, pointer opacity, and version constants against the C headers.
+- [ ] Verify all public constants and enum values: `MI_MALLOC_VERSION`, `MI_SMALL_WSIZE_MAX`, `MI_SMALL_SIZE_MAX`, `MI_STAT_VERSION`, `MI_BIN_HUGE`, `MI_CBIN_*`, and every `mi_option_t` discriminant including legacy aliases. Validation: compile-time C assertions and Rust tests compare exact numeric values.
+- [ ] Preserve C calling convention details. Validation: platform ABI tests confirm `mi_cdecl`, noexcept-compatible behavior, callback function pointer calling conventions, and symbol visibility match C mimalloc on each supported target.
+
+## Core Allocation Semantics
+
+- [ ] Match `mi_malloc` for zero-size, small, medium, large, huge, and OOM requests. Validation: C/Rust parity tests compare null/non-null behavior, usable size, alignment, errno, and stats for a representative size sweep including all size-class boundaries.
+- [ ] Match `mi_calloc` overflow and zero-initialization semantics. Validation: parity tests cover zero count, zero size, count-size overflow, normal allocation, large allocation, and byte-for-byte zeroed memory.
+- [ ] Match `mi_zalloc` and `mi_zalloc_small` semantics. Validation: tests verify zeroing, small-size constraints, usable sizes, and behavior around `MI_SMALL_SIZE_MAX` against C mimalloc.
+- [ ] Match `mi_malloc_small` and `mi_free_small` fast-path contracts. Validation: tests allocate every small size class, free with `mi_free_small`, reject or diagnose misuse according to C mode behavior, and compare stats and debug behavior.
+- [ ] Match `mi_mallocn` and `mi_reallocn` overflow semantics. Validation: tests cover multiplication overflow, normal count-size allocation, null source pointer, and old-content preservation against C mimalloc.
+- [ ] Match `mi_realloc` behavior for null, zero new size, shrink, grow-in-place, grow-move, huge objects, and OOM. Validation: parity tests compare returned pointer rules, old content preservation, free-on-zero behavior, errno, and usable size.
+- [ ] Match `mi_reallocf` failure semantics. Validation: tests force allocation failure and verify the original pointer is freed or retained exactly as C mimalloc specifies.
+- [ ] Match `mi_expand` and `mi__expand` behavior. Validation: tests verify in-place-only expansion, null behavior, failure behavior, and old pointer validity against C mimalloc.
+- [ ] Match `mi_recalloc` and `mi_rezalloc` zero-extension semantics. Validation: tests verify preserved old bytes, zeroed new bytes, overflow handling, null pointer behavior, and shrink behavior against C mimalloc.
+- [ ] Match `mi_usable_size`, `mi_malloc_usable_size`, and `mi_malloc_size`. Validation: tests compare null pointer behavior, live pointer results, aligned allocation results, and foreign pointer/debug behavior with C mimalloc.
+- [ ] Match `mi_good_size` and `mi_malloc_good_size` across all bins. Validation: exhaustive boundary tests compare every requested size around small, medium, large, huge, and maximum-size transitions against C mimalloc.
+- [ ] Match `mi_free` null-pointer and normal-pointer semantics. Validation: tests verify null is accepted, every allocation family can be freed, stats update correctly, and debug fills/checks match C mode behavior.
+- [ ] Match `mi_free_size`, `mi_free_size_aligned`, and `mi_free_aligned` contracts. Validation: tests free correctly and incorrectly annotated sizes/alignments under normal and debug modes and compare diagnostics against C mimalloc.
+- [ ] Match `mi_cfree` checked-free behavior. Validation: tests pass mimalloc-owned, null, and non-owned pointers in modes where this is detectable and compare return/diagnostic behavior with C mimalloc.
+- [ ] Match string allocation APIs `mi_strdup`, `mi_strndup`, `mi_heap_strdup`, `mi_heap_strndup`, `mi_wcsdup`, and `mi_mbsdup`. Validation: tests cover null where applicable, empty strings, truncation, embedded bytes where applicable, wide characters, allocation ownership, and exact copied content.
+- [ ] Match `mi_dupenv_s` and `mi_wdupenv_s`. Validation: subprocess tests set/unset environment variables and compare return codes, allocated buffer content, reported size, null arguments, and free semantics with C mimalloc.
+- [ ] Match `mi_reallocarray` and `mi_reallocarr`. Validation: tests cover overflow, null pointer, successful resize, failure semantics, and pointer-to-pointer update rules against C mimalloc.
+- [ ] Match ownership predicates `mi_check_owned`, `mi_heap_contains`, `mi_any_heap_contains`, `mi_heap_of`, and `mi_is_in_heap_region`. Validation: tests cover live pointers, freed pointers, stack pointers, foreign malloc pointers, aligned pointers, heap-specific pointers, and abandoned-thread pointers.
+
+## Aligned Allocation Semantics
+
+- [ ] Match `mi_malloc_aligned` for valid and invalid alignments. Validation: tests compare power-of-two requirements, minimum alignment, large alignment, zero size, overflow, errno, and pointer alignment against C mimalloc.
+- [ ] Match `mi_malloc_aligned_at` offset semantics. Validation: tests verify `(ptr + offset) % alignment == 0` for many offset/alignment pairs and compare failure behavior with C mimalloc.
+- [ ] Match `mi_zalloc_aligned` and `mi_zalloc_aligned_at`. Validation: tests verify alignment/offset and byte-for-byte zeroing over every relevant size-class boundary.
+- [ ] Match `mi_calloc_aligned` and `mi_calloc_aligned_at`. Validation: tests cover count-size overflow, zero count/size, alignment/offset, zeroing, and usable size against C mimalloc.
+- [ ] Match `mi_realloc_aligned` and `mi_realloc_aligned_at`. Validation: tests cover null, shrink, grow, move, in-place, invalid alignment, offset, old-content preservation, and free compatibility against C mimalloc.
+- [ ] Match `mi_rezalloc_aligned` and `mi_rezalloc_aligned_at`. Validation: tests verify alignment/offset, old-content preservation, newly zeroed tail, and overflow behavior against C mimalloc.
+- [ ] Match `mi_recalloc_aligned` and `mi_recalloc_aligned_at`. Validation: tests verify multiplication overflow, zeroing, alignment/offset, old-content preservation, and null pointer behavior against C mimalloc.
+- [ ] Match POSIX-compatible `mi_posix_memalign`. Validation: tests compare return codes, output pointer preservation on failure, alignment rules, size zero, errno behavior, and free compatibility against C mimalloc.
+- [ ] Match `mi_memalign`, `mi_valloc`, `mi_pvalloc`, and `mi_aligned_alloc`. Validation: tests verify page-size alignment, rounded size behavior for `pvalloc`, C11 alignment constraints, zero-size behavior, and failure behavior against C mimalloc.
+
+## Heap, Theap, and Subprocess Behavior
+
+- [ ] Match `mi_heap_new`, `mi_heap_delete`, and `mi_heap_destroy`. Validation: tests verify live-block migration vs destruction, delayed frees, cross-thread frees, stats, and post-delete invalid-use diagnostics against C mimalloc.
+- [ ] Match `mi_heap_collect`. Validation: tests trigger page retirement, abandoned pages, delayed frees, and forced/non-forced collection, then compare memory/stat changes against C mimalloc.
+- [ ] Match `mi_heap_set_numa_affinity`. Validation: NUMA-capable tests verify requested NUMA affinity affects subsequent heap allocations as C mimalloc does, and non-NUMA targets degrade identically.
+- [ ] Match heap allocation APIs `mi_heap_malloc`, `mi_heap_zalloc`, `mi_heap_calloc`, `mi_heap_mallocn`, `mi_heap_malloc_small`, and `mi_heap_zalloc_small`. Validation: heap-specific tests verify ownership, zeroing, overflow, small-size limits, and cross-thread free behavior against C mimalloc.
+- [ ] Match heap realloc APIs `mi_heap_realloc`, `mi_heap_reallocn`, `mi_heap_reallocf`, `mi_heap_recalloc`, and `mi_heap_rezalloc`. Validation: tests compare heap ownership, content preservation, zero-extension, overflow, null, and failure semantics against C mimalloc.
+- [ ] Match heap realpath/string helpers `mi_heap_realpath`, `mi_heap_strdup`, and `mi_heap_strndup`. Validation: tests prove returned buffers are allocated from the requested heap and content/error behavior matches C mimalloc.
+- [ ] Match `mi_heap_visit_blocks`. Validation: tests allocate known block patterns, visit with and without blocks, verify area fields and visitor order constraints, stop-on-false behavior, and compare with C mimalloc.
+- [ ] Match `mi_heap_visit_abandoned_blocks`. Validation: tests create abandoned pages from exited threads and verify visit eligibility, block counts, option gating, and visitor behavior against C mimalloc.
+- [ ] Match `mi_heap_theap`, `mi_theap_get_default`, and `mi_theap_set_default`. Validation: tests verify mapping between heaps and theaps, default switching, restoration, and allocation routing against C mimalloc.
+- [ ] Match theap allocation APIs `mi_theap_malloc`, `mi_theap_zalloc`, `mi_theap_calloc`, `mi_theap_malloc_small`, `mi_theap_zalloc_small`, `mi_theap_malloc_aligned`, and `mi_theap_realloc`. Validation: same-thread tests compare allocation behavior with C mimalloc, and wrong-thread tests compare diagnostics or allowed behavior by mode.
+- [ ] Match `mi_theap_collect` and `mi_theap_visit_blocks`. Validation: tests verify forced/non-forced collection and block visiting for thread-local heaps against C mimalloc.
+- [ ] Match guarded theap controls `mi_theap_guarded_set_sample_rate` and `mi_theap_guarded_set_size_bound`. Validation: guarded-mode tests verify sampling, seed determinism, size bounds, and guard-page placement against C mimalloc.
+- [ ] Match subprocess creation, current subprocess tracking, heap isolation, and destruction. Validation: tests allocate across subprocesses and threads, verify no cross-subprocess reclamation, validate stats isolation, and compare with C mimalloc.
+
+## Arenas and Managed Memory
+
+- [ ] Match `mi_reserve_os_memory` and `mi_reserve_os_memory_ex`. Validation: tests reserve committed/uncommitted, large-page allowed/disallowed, exclusive/non-exclusive memory and compare return values, arena ids, and allocation eligibility with C mimalloc.
+- [ ] Match `mi_manage_os_memory` and `mi_manage_os_memory_ex`. Validation: tests hand in caller-owned memory ranges with combinations of committed, pinned, zeroed, NUMA node, and exclusive flags, then verify allocation, purge, and containment behavior against C mimalloc.
+- [ ] Match experimental `mi_manage_memory` with commit callback. Validation: callback tests compare commit/decommit call sequences, zero-state propagation, failure rollback, exclusive arena behavior, and arena id results with C mimalloc.
+- [ ] Match huge OS page reservation APIs `mi_reserve_huge_os_pages`, `mi_reserve_huge_os_pages_at`, `mi_reserve_huge_os_pages_at_ex`, and `mi_reserve_huge_os_pages_interleave`. Validation: privileged environments compare reservation counts and NUMA placement with C mimalloc, while unprivileged environments compare failure codes and diagnostics.
+- [ ] Match arena inspection APIs `mi_arena_area`, `mi_arena_contains`, `mi_arena_min_alignment`, and `mi_arena_min_size`. Validation: tests compare returned area pointer/size, containment, alignment, minimum size, and invalid arena handling against C mimalloc.
+- [ ] Match arena debug output APIs `mi_debug_show_arenas` and `mi_arenas_print`. Validation: output callback or captured output tests verify presence and structure of arena diagnostics without requiring byte-identical addresses.
+- [ ] Match exclusive arena allocation through `mi_heap_new_in_arena`. Validation: tests allocate from a specific arena, verify containment, enforce isolation from normal arenas, and compare failure behavior against C mimalloc.
+- [ ] Match arena fallback rules when arena allocation or OS allocation is disallowed. Validation: option-driven tests compare allocation success/failure, retry behavior, and error output with C mimalloc.
+
+## Pages, Chunks, and Internal Algorithms
+
+- [ ] Match size-class and bin mapping. Validation: tests compare good sizes, bin sizes, page queues, and stats bin assignment against C mimalloc across every boundary.
+- [ ] Match page allocation, extension, retirement, and reuse rules. Validation: stress tests compare allocation success, page stats, retire counts, reuse patterns, and invariant checks against C mimalloc.
+- [ ] Match local free, thread free, delayed free, and abandoned free-list behavior. Validation: multi-thread tests allocate/free from different threads and compare delayed-free processing, abandonment, reclamation, and stats against C mimalloc.
+- [ ] Match abandoned page and heap reclamation policy. Validation: tests create abandoned heaps, force collections, allocate from new threads, and compare reclaim counts and ownership transitions against C mimalloc.
+- [ ] Match page full-retain, max-candidate, reclaim-on-free, and cross-thread reclaim options. Validation: option matrix tests compare page search counts, retained pages, reclaimed pages, and latency-sensitive behavior against C mimalloc.
+- [ ] Match segment/chunk reservation, commit, decommit, reset, purge, and rollback behavior. Validation: memory pressure and stats tests compare committed/reserved/reset/purged counters and rollback counts against C mimalloc.
+- [ ] Match huge-object allocation paths. Validation: tests allocate around huge thresholds, verify page/chunk classification, usable size, stats, alignment, and free behavior against C mimalloc.
+- [ ] Match randomization and encoded free-list behavior for secure/debug modes. Validation: secure-mode tests verify encoded pointers, randomized allocation choices where specified, and corruption detection behavior against C mimalloc.
+- [ ] Match generic collect heartbeat behavior. Validation: tests set `mi_option_generic_collect`, drive allocation counts, and compare collection timing and stats against C mimalloc.
+
+## OS and Platform Runtime Behavior
+
+- [ ] Match Unix `mmap`/`munmap`/`madvise`/`mprotect` use for reserve, commit, decommit, reset, purge, and guard pages. Validation: Linux syscall tracing or platform tests compare semantic effects, page protections, and stats with C mimalloc.
+- [ ] Match Linux transparent huge page and large page options. Validation: tests compare `mi_option_allow_thp`, minimal purge size defaults, huge page reservations, and graceful fallback behavior with C mimalloc.
+- [ ] Match Linux NUMA detection and allocation policy. Validation: NUMA tests compare detected node count, interleaving, node affinity, and fallback behavior against C mimalloc.
+- [ ] Match Unix environment variable parsing and process information collection. Validation: subprocess tests compare option values, elapsed/user/system time, RSS, committed memory, peak values, and page faults against C mimalloc within documented OS tolerance.
+- [ ] Match fork handling where C mimalloc installs or relies on fork-safe behavior. Validation: fork tests allocate before and after fork in parent and child, then compare safety, stats, and cleanup behavior with C mimalloc.
+- [ ] Match macOS malloc zone and interpose behavior. Validation: macOS tests verify zone registration, default allocator redirection, `malloc_size`, process info, purge behavior, and override state against C mimalloc.
+- [ ] Match Windows `VirtualAlloc`/`VirtualFree`, large pages, NUMA, FLS/TLS, process init/done, and CRT integration. Validation: Windows tests compare allocation, decommit/reset, large-page fallback, thread teardown, `_aligned_*` behavior, and redirection state against C mimalloc.
+- [ ] Match Windows-specific compatibility APIs such as `_msize`, `_expand`, `_aligned_malloc`, `_aligned_realloc`, `_aligned_recalloc`, `_aligned_free`, `_dupenv_s`, `_wdupenv_s`, `_wcsdup`, and `_mbsdup` through the `mi_` implementations and overrides. Validation: MSVC/MinGW tests compare return values, errno, invalid parameter behavior, and free compatibility against C mimalloc.
+- [ ] Match WASI/Emscripten or explicitly mark them unsupported. Validation: either the supported target matrix includes passing allocation and stats tests for these targets, or the matrix documents unsupported status with no accidental exported claim of support.
+- [ ] Match sanitizer-friendly behavior on supported platforms. Validation: ASAN/TSAN/UBSAN-compatible builds either pass the relevant test subset or document the same limitations as C mimalloc.
+
+## Options, Environment, Output, and Errors
+
+- [ ] Match the full `mi_option_t` table, including stable, advanced, deprecated, experimental, and legacy alias options. Validation: tests compare enum values, option names, default values, initialization states, and alias behavior against C mimalloc.
+- [ ] Match environment variable parsing for every option. Validation: subprocess tests set canonical and legacy environment names, decimal/size suffix values, boolean values, invalid values, and duplicate values, then compare resulting options and warnings with C mimalloc.
+- [ ] Match default option initialization order and mutability. Validation: tests compare pre-init default setting, post-init setting, default-vs-current value separation, and process/thread init interactions against C mimalloc.
+- [ ] Match `mi_option_get_clamp` and `mi_option_get_size`. Validation: tests cover negative values, KiB-backed options, min/max bounds, and overflow-like large values against C mimalloc.
+- [ ] Match output callback behavior. Validation: tests register output callbacks, trigger options/stats/process/arena output, verify callback args and chunking, and compare content categories with C mimalloc.
+- [ ] Match error callback behavior. Validation: tests trigger OOM, invalid free/debug errors, invalid options, and arena failures, then compare error codes, callback args, output limits, and fallback output against C mimalloc.
+- [ ] Match warning/error throttling through `mi_option_max_errors` and `mi_option_max_warnings`. Validation: tests intentionally trigger repeated warnings/errors and compare emitted count and suppression behavior with C mimalloc.
+- [ ] Match verbose, show-errors, show-stats, and destroy-on-exit behavior. Validation: subprocess tests compare process exit output, cleanup, stats printing, and teardown side effects against C mimalloc.
+- [ ] Match deferred free callback registration and invocation. Validation: tests register callbacks, drive heartbeat/force conditions, verify callback timing and arguments, and compare with C mimalloc.
+
+## Statistics and JSON
+
+- [ ] Match `mi_stats_t` initialization and versioning. Validation: C/Rust layout tests verify `mi_stats_header_init`, `mi_stats_init`, size, version, alignment, and zeroed fields against C mimalloc.
+- [ ] Match live stats counters for normal allocations. Validation: tests allocate/free normal blocks and compare current, peak, total, requested, count, bin, and page stats against C mimalloc.
+- [ ] Match stats counters for huge allocations, guarded allocations, arenas, purges, resets, commits, and mmap calls. Validation: targeted tests drive each path and compare public stats fields with C mimalloc within documented OS nondeterminism.
+- [ ] Match `mi_stats_reset`. Validation: tests allocate before and after reset and compare reset scope, persistent counters, current counters, and peak behavior against C mimalloc.
+- [ ] Match `mi_stats_get`, `mi_subproc_stats_get`, and `mi_subproc_stats_get_exclusive`. Validation: tests compare aggregated and exclusive stats for main subprocess, custom subprocesses, and multiple heaps against C mimalloc.
+- [ ] Match `mi_heap_stats_get`, `mi_heap_stats_merge_to_subproc`, and heap stats print APIs. Validation: heap-local tests compare per-heap counters, merge side effects, and printed output categories against C mimalloc.
+- [ ] Match `mi_stats_print`, `mi_stats_print_out`, `mi_thread_stats_print_out`, `mi_process_info_print`, and `mi_process_info_print_out`. Validation: output-captured tests compare required sections, callback behavior, null output handling, and deprecated compatibility behavior against C mimalloc.
+- [ ] Match JSON APIs `mi_stats_get_json`, `mi_stats_as_json`, `mi_heap_stats_get_json`, `mi_subproc_stats_get_json`, and any Rust helper currently exposed as `mi_stats_get_json_from`. Validation: tests parse JSON, compare schema, field names, numeric relationships, buffer ownership, truncation, provided-buffer behavior, and allocation/free behavior against C mimalloc.
+- [ ] Match process information reporting. Validation: tests compare elapsed/user/system/current RSS/peak RSS/current commit/peak commit/page faults against C mimalloc within explicit OS tolerance.
+
+## Debug, Secure, Guarded, and Tracking Modes
+
+- [ ] Implement a real configuration matrix for `MI_DEBUG`, `MI_SECURE`, `MI_GUARDED`, padding, and tracking instead of hard-coded disabled behavior. Validation: builds for each claimed mode expose the same constants and behavior as the corresponding C mimalloc mode.
+- [ ] Match debug fill patterns and padding checks. Validation: tests inspect freshly allocated, freed, reallocated, and overrun-adjacent memory in debug modes and compare diagnostics/fill behavior with C mimalloc.
+- [ ] Match double-free, invalid-free, and heap-corruption detection in debug/secure modes. Validation: negative tests compare detection, error callbacks, abort/continue policy, and output with C mimalloc.
+- [ ] Match secure free-list encoding and pointer cookie behavior. Validation: corruption-injection tests verify encoded free-list checks and failure modes against C mimalloc.
+- [ ] Match guarded allocation behavior. Validation: guarded-mode tests verify guard-page placement, sample rate, sample seed, size bounds, precise mode, stats, and fault behavior against C mimalloc.
+- [ ] Implement Valgrind tracking parity instead of unconditional no-ops. Validation: Valgrind-enabled tests verify defined/undefined/noaccess annotations and leak reports align with C mimalloc.
+- [ ] Implement ASAN integration parity instead of unconditional no-ops. Validation: ASAN-enabled tests verify poisoning/unpoisoning, allocator annotations, and error reports align with C mimalloc.
+- [ ] Implement ETW/event tracking parity where Windows support is claimed. Validation: Windows event tests verify allocation/free/heap/stat events are emitted or explicitly match C mimalloc's disabled behavior for the chosen build mode.
+- [ ] Match assertion, invariant, and diagnostic behavior. Validation: debug test builds exercise representative invariant failures and compare abort/log/callback behavior with C mimalloc.
+
+## Override and Interposition Behavior
+
+- [ ] Match Unix malloc-family override exports: `malloc`, `calloc`, `realloc`, `free`, `cfree`, `malloc_usable_size`, `malloc_size` where applicable, `posix_memalign`, `memalign`, `valloc`, `pvalloc`, `aligned_alloc`, `reallocarray`, and related platform aliases. Validation: C programs linked with the Rust artifact resolve these functions to mimalloc and pass the original C override tests.
+- [ ] Match dynamic preload/interposition behavior on supported Unix platforms. Validation: `LD_PRELOAD`/platform equivalent tests show third-party allocations route through Rust mimalloc and `mi_is_redirected` reports the same state as C mimalloc.
+- [ ] Match static override behavior. Validation: statically linked C tests verify override precedence, no duplicate symbol conflicts, and allocator initialization/teardown behavior against C mimalloc.
+- [ ] Match macOS interpose and malloc-zone override behavior. Validation: macOS executables verify zone registration, interposed symbols, `malloc_zone_*` behavior, and redirection state against C mimalloc.
+- [ ] Match Windows override/redirect behavior. Validation: Windows tests verify CRT allocation redirection, DLL initialization, delayed initialization, `_aligned_*` APIs, and `mi_is_redirected` against C mimalloc.
+- [ ] Match C++ global new/delete override semantics from `mimalloc-new-delete.h`. Validation: C++11/14/17/20 tests cover scalar, array, sized delete, aligned new/delete, nothrow new, new-handler calls, exceptions, and STL allocator behavior against C mimalloc.
+- [ ] Match `mi_stl_allocator` behavior exposed by the C++ header. Validation: C++ tests use standard containers, allocator propagation, rebind, max_size, construction/destruction, and exception paths against C mimalloc.
+
+## Original Test Coverage Parity
+
+- [ ] Port or directly run the C distribution's public API tests against the Rust artifact. Validation: every relevant C test source under the vendored mimalloc test suite has a Rust-artifact run result, and failures are fixed or documented as unsupported target differences.
+- [ ] Replace empty or duplicate Rust characterization tests with real assertions. Validation: no test function is empty unless explicitly marked as a compile-only test with a comment explaining the parity purpose.
+- [ ] Add C-link smoke tests for every public header symbol. Validation: generated or handwritten C code compiles, links, calls every function in safe combinations, and fails the build if any symbol is missing.
+- [ ] Add parity tests for every allocation family. Validation: malloc, calloc, realloc, aligned, heap, theap, subprocess, arena, string, env, stats, options, and override APIs each have at least one direct C-vs-Rust comparison test.
+- [ ] Add boundary tests around every allocator threshold. Validation: tests cover sizes immediately below, at, and above small, medium, large, huge, page, segment/chunk, alignment, and maximum allocation boundaries.
+- [ ] Add multi-threaded stress tests. Validation: repeated runs with many threads, cross-thread frees, abandoned heaps, threadpool mode, subprocesses, and forced collections pass under debug and release profiles with invariants enabled.
+- [ ] Add long-running randomized allocation tests. Validation: deterministic seeded tests perform mixed allocate/free/realloc/aligned/heap operations, compare invariants with C mimalloc, and reproduce failures from the seed.
+- [ ] Add OOM and allocation-failure tests. Validation: constrained-memory or fault-injection tests verify return values, errno, callbacks, new-handler behavior, and original-pointer preservation against C mimalloc.
+- [ ] Add foreign-pointer and misuse tests for debug/secure modes. Validation: tests compare invalid free, double free, wrong heap, wrong size/alignment hints, and buffer overrun behavior with C mimalloc.
+- [ ] Add stats consistency tests after stress. Validation: after randomized and multi-threaded tests, public stats never go negative, current counters return to expected values, and C/Rust stats relationships match.
+- [ ] Add platform-specific tests for every claimed target. Validation: each supported target has at least one passing allocation, aligned allocation, heap, options, stats, and override/interposition test result.
+
+## Safety and Rust-Specific Correctness
+
+- [ ] Audit all `unsafe` blocks that manipulate allocator metadata or raw pointers. Validation: each unsafe block has documented preconditions or is small enough to be self-evident, and code review confirms it preserves the corresponding C invariant.
+- [ ] Audit atomic orderings against the C implementation. Validation: every atomic operation that corresponds to C mimalloc atomics has equivalent or stronger ordering, and concurrency stress tests pass under tools available for the platform.
+- [ ] Audit TLS/thread-local behavior. Validation: thread init/done, default heap/theap, abandoned heaps, subprocess current state, and process teardown are correct under repeated thread creation and threadpool reuse.
+- [ ] Audit global initialization and destructor ordering. Validation: allocations before explicit init, during init, during output/error callbacks, during thread teardown, and during process exit do not deadlock or use uninitialized state.
+- [ ] Audit no-allocation critical paths. Validation: allocator-internal paths that must not allocate are reviewed and tested with recursion detection or hooks that fail on unintended recursive allocation.
+- [ ] Audit pointer provenance and integer arithmetic. Validation: boundary tests and Miri/UB-oriented checks where possible show no invalid pointer arithmetic, integer overflow, misalignment, or out-of-bounds metadata access in safe test scenarios.
+- [ ] Audit public callback reentrancy. Validation: output, error, commit, visitor, and deferred-free callbacks may allocate or fail in the same ways as C mimalloc without deadlock or corrupted state.
+- [ ] Audit panic behavior across FFI. Validation: no Rust panic crosses an `extern "C"` boundary; tests force internal error paths and verify C-compatible abort/error behavior.
+
+## Documentation and Divergence Control
+
+- [ ] Document every intentional non-parity decision. Validation: each divergence includes affected APIs, target/mode, user-visible behavior, reason, and tests proving the divergence is contained.
+- [ ] Document public safety contracts for Rust-only APIs if any remain. Validation: Rust docs or comments specify ownership, aliasing, thread, heap, and callback requirements, and these APIs are excluded from the C parity symbol allowlist.
+- [ ] Keep the TODO as the parity checklist until completion. Validation: closing the final checkbox requires a clean final symbol diff, passing parity matrix, no unresolved stubs, and an explicit statement that Rust mimalloc is functionally equivalent to C mimalloc 3.3.2 for the supported matrix.

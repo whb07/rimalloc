@@ -319,6 +319,31 @@ int main(void) {
   result_bool("reallocn_overflow_original_owned", mi_check_owned(rn));
   mi_free(rn);
 
+  unsigned char* rz_plain = (unsigned char*)mi_rezalloc(NULL, 24);
+  result_bool("rezalloc_null_zeroed", rz_plain != NULL && bytes_equal(rz_plain, 0, 24));
+  size_t rz_plain_usable = mi_usable_size(rz_plain);
+  memset(rz_plain, 0, rz_plain_usable);
+  fill_sequence(rz_plain, 24);
+  rz_plain = (unsigned char*)mi_rezalloc(rz_plain, rz_plain_usable + 32);
+  result_bool("rezalloc_grow_zeroed", rz_plain != NULL && has_sequence_prefix(rz_plain, 24) && bytes_equal(rz_plain + 24, 0, rz_plain_usable + 8));
+  rz_plain = (unsigned char*)mi_rezalloc(rz_plain, 16);
+  result_bool("rezalloc_shrink_preserve", rz_plain != NULL && has_sequence_prefix(rz_plain, 16));
+  mi_free(rz_plain);
+
+  unsigned char* rc_plain = (unsigned char*)mi_recalloc(NULL, 3, 8);
+  result_bool("recalloc_null_zeroed", rc_plain != NULL && bytes_equal(rc_plain, 0, 24));
+  size_t rc_plain_usable = mi_usable_size(rc_plain);
+  memset(rc_plain, 0, rc_plain_usable);
+  fill_sequence(rc_plain, 24);
+  rc_plain = (unsigned char*)mi_recalloc(rc_plain, 1, rc_plain_usable + 32);
+  result_bool("recalloc_grow_zeroed", rc_plain != NULL && has_sequence_prefix(rc_plain, 24) && bytes_equal(rc_plain + 24, 0, rc_plain_usable + 8));
+  rc_plain = (unsigned char*)mi_recalloc(rc_plain, 1, 16);
+  result_bool("recalloc_shrink_preserve", rc_plain != NULL && has_sequence_prefix(rc_plain, 16));
+  void* rc_plain_overflow = mi_recalloc(rc_plain, overflow_count, 2);
+  result_bool("recalloc_overflow_null", rc_plain_overflow == NULL);
+  result_bool("recalloc_overflow_original_owned", mi_check_owned(rc_plain));
+  mi_free(rc_plain);
+
   unsigned char* ra = (unsigned char*)mi_reallocarray(NULL, 4, 8);
   result_bool("reallocarray_null_nonnull", ra != NULL);
   result_bool("reallocarray_null_size", ra != NULL && mi_usable_size(ra) >= 32);

@@ -301,6 +301,70 @@ static int theap_wrong_thread_case_status(mi_theap_t* theap, int op) {
   return -3;
 }
 
+static int heap_lifecycle_case_status(int op) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+    mi_heap_t* heap = mi_heap_new();
+    if (heap == NULL) _exit(31);
+    void* p = NULL;
+    struct heap_cross_thread_free_result free_result = { NULL, 0 };
+    pthread_t thread;
+    int started = 0;
+    int joined = 0;
+    switch (op) {
+      case 0:
+        p = mi_heap_malloc(heap, 77);
+        if (p == NULL || !mi_heap_contains(heap, p)) _exit(32);
+        mi_heap_delete(heap);
+        if (!mi_check_owned(p) || !mi_heap_contains(mi_heap_main(), p)) _exit(33);
+        mi_free(p);
+        _exit(0);
+      case 1:
+        p = mi_heap_malloc(heap, 78);
+        if (p == NULL || !mi_heap_contains(heap, p)) _exit(34);
+        mi_heap_destroy(heap);
+        mi_free(p);
+        _exit(0);
+      case 2:
+        free_result.ptr = mi_heap_malloc(heap, 81);
+        if (free_result.ptr == NULL || !mi_heap_contains(heap, free_result.ptr)) _exit(35);
+        started = (pthread_create(&thread, NULL, heap_cross_thread_free_worker, &free_result) == 0);
+        joined = started && pthread_join(thread, NULL) == 0;
+        if (!joined || !free_result.owned_before_free) _exit(36);
+        mi_heap_delete(heap);
+        p = mi_malloc(82);
+        if (p == NULL || !mi_check_owned(p)) _exit(37);
+        mi_free(p);
+        _exit(0);
+      case 3:
+        free_result.ptr = mi_heap_malloc(heap, 83);
+        if (free_result.ptr == NULL || !mi_heap_contains(heap, free_result.ptr)) _exit(38);
+        started = (pthread_create(&thread, NULL, heap_cross_thread_free_worker, &free_result) == 0);
+        joined = started && pthread_join(thread, NULL) == 0;
+        if (!joined || !free_result.owned_before_free) _exit(39);
+        mi_heap_destroy(heap);
+        p = mi_malloc(84);
+        if (p == NULL || !mi_check_owned(p)) _exit(40);
+        mi_free(p);
+        _exit(0);
+      default:
+        mi_heap_delete(heap);
+        _exit(41);
+    }
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static void options_print_with_stderr_suppressed(void) {
   FILE* devnull = fopen("/dev/null", "w");
   if (devnull == NULL) return;
@@ -903,6 +967,16 @@ int main(void) {
 
   mi_heap_t* heap = mi_heap_new();
   result_bool("heap_nonnull", heap != NULL);
+  mi_heap_t* heap_delete_migrate = mi_heap_new();
+  void* heap_delete_live = heap_delete_migrate == NULL ? NULL : mi_heap_malloc(heap_delete_migrate, 77);
+  result_bool("heap_delete_live_owner", heap_delete_migrate != NULL && heap_delete_live != NULL && mi_heap_contains(heap_delete_migrate, heap_delete_live));
+  if (heap_delete_migrate != NULL) mi_heap_delete(heap_delete_migrate);
+  result_bool("heap_delete_live_migrated", heap_delete_live != NULL && mi_check_owned(heap_delete_live) && mi_heap_contains(mi_heap_main(), heap_delete_live));
+  mi_free(heap_delete_live);
+  result_size("heap_lifecycle_delete_live_status", (size_t)heap_lifecycle_case_status(0));
+  result_size("heap_lifecycle_destroy_live_free_status", (size_t)heap_lifecycle_case_status(1));
+  result_size("heap_lifecycle_delete_delayed_free_status", (size_t)heap_lifecycle_case_status(2));
+  result_size("heap_lifecycle_destroy_delayed_free_status", (size_t)heap_lifecycle_case_status(3));
   char* hdup = heap == NULL ? NULL : mi_heap_strdup(heap, "heap-string");
   result_bool("heap_strdup_content_owner", hdup != NULL && strcmp(hdup, "heap-string") == 0 && mi_heap_contains(heap, hdup));
   mi_free(hdup);

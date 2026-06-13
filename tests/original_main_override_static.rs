@@ -101,7 +101,28 @@ unsafe fn test_manage_os_memory() {
 }
 
 #[cfg(not(windows))]
-unsafe fn test_manage_os_memory() {}
+unsafe fn test_manage_os_memory() {
+    let _manage: unsafe extern "C" fn(
+        *mut c_void,
+        usize,
+        bool,
+        bool,
+        bool,
+        i32,
+        bool,
+        *mut mi_arena_id_t,
+    ) -> bool = mimalloc::mi_manage_os_memory_ex;
+
+    let heap = unsafe { mimalloc::mi_heap_new_in_arena(ptr::null_mut()) };
+    assert!(!heap.is_null());
+
+    let p = unsafe { mimalloc::mi_heap_malloc(heap, 8) };
+    assert!(!p.is_null());
+    assert!(unsafe { mimalloc::mi_heap_contains(heap, p) });
+
+    unsafe { mimalloc::mi_free(p) };
+    unsafe { mimalloc::mi_heap_delete(heap) };
+}
 
 unsafe fn test_large_pages() {
     let mut arena_id: mi_arena_id_t = ptr::null_mut();
@@ -162,7 +183,9 @@ unsafe fn test_canary_leak() {
     unsafe { mimalloc::mi_free(p.cast()) };
 }
 
-fn test_dep() {}
+fn test_dep() {
+    assert!(unsafe { mimalloc::mi_is_redirected() } || unsafe { mimalloc::mi_version() } == 30302);
+}
 
 unsafe fn main_override_static_body() {
     assert!(unsafe { mimalloc::mi_version() } > 0);

@@ -389,6 +389,29 @@ int main(void) {
   result_bool("posix_memalign_zero_size_alignment", posix == NULL || ((uintptr_t)posix % 64) == 0);
   mi_free(posix);
 
+  long sys_page_size = sysconf(_SC_PAGESIZE);
+  size_t page_size = (sys_page_size > 0 ? (size_t)sys_page_size : (size_t)4096);
+  void* memaligned = mi_memalign(128, 77);
+  result_bool("memalign_aligned", memaligned != NULL && ((uintptr_t)memaligned % 128) == 0);
+  result_bool("memalign_size", memaligned != NULL && mi_usable_size(memaligned) >= 77);
+  mi_free(memaligned);
+
+  void* vallocated = mi_valloc(79);
+  result_bool("valloc_page_aligned", vallocated != NULL && ((uintptr_t)vallocated % page_size) == 0);
+  result_bool("valloc_size", vallocated != NULL && mi_usable_size(vallocated) >= 79);
+  mi_free(vallocated);
+
+  void* pvallocated = mi_pvalloc(page_size + 17);
+  result_bool("pvalloc_page_aligned", pvallocated != NULL && ((uintptr_t)pvallocated % page_size) == 0);
+  result_bool("pvalloc_rounded_size", pvallocated != NULL && mi_usable_size(pvallocated) >= (page_size * 2));
+  mi_free(pvallocated);
+  result_bool("pvalloc_overflow_null", mi_pvalloc(overflow_count) == NULL);
+
+  void* c11aligned = mi_aligned_alloc(64, 96);
+  result_bool("aligned_alloc_aligned", c11aligned != NULL && ((uintptr_t)c11aligned % 64) == 0);
+  result_bool("aligned_alloc_non_multiple_size", c11aligned != NULL && mi_usable_size(c11aligned) >= 96);
+  mi_free(c11aligned);
+
   char* dup = mi_strdup("abc");
   result_bool("strdup_content", dup != NULL && strcmp(dup, "abc") == 0);
   mi_free(dup);

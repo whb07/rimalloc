@@ -23,6 +23,7 @@ SCENARIO_C = r"""
 #include <errno.h>
 #include <limits.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -129,6 +130,12 @@ struct heap_cross_thread_free_result {
   int owned_before_free;
 };
 
+struct theap_wrong_thread_result {
+  mi_theap_t* theap;
+  int op;
+  int ok;
+};
+
 struct heap_visit_result {
   const mi_heap_t* expected_heap;
   size_t areas;
@@ -202,6 +209,74 @@ static void* heap_cross_thread_free_worker(void* arg) {
   result->ptr = NULL;
   mi_thread_done();
   return NULL;
+}
+
+static void* theap_wrong_thread_worker(void* arg) {
+  struct theap_wrong_thread_result* result = (struct theap_wrong_thread_result*)arg;
+  mi_thread_init();
+  void* p = NULL;
+  unsigned char* bytes = NULL;
+  switch (result->op) {
+    case 0:
+      p = mi_theap_malloc(result->theap, 40);
+      result->ok = (p != NULL);
+      break;
+    case 1:
+      bytes = (unsigned char*)mi_theap_zalloc(result->theap, 41);
+      p = bytes;
+      result->ok = (bytes != NULL && bytes_equal(bytes, 0, 41));
+      break;
+    case 2:
+      bytes = (unsigned char*)mi_theap_calloc(result->theap, 3, 17);
+      p = bytes;
+      result->ok = (bytes != NULL && bytes_equal(bytes, 0, 51));
+      break;
+    case 3:
+      p = mi_theap_malloc_small(result->theap, 42);
+      result->ok = (p != NULL);
+      break;
+    case 4:
+      bytes = (unsigned char*)mi_theap_zalloc_small(result->theap, 43);
+      p = bytes;
+      result->ok = (bytes != NULL && bytes_equal(bytes, 0, 43));
+      break;
+    case 5:
+      p = mi_theap_malloc_aligned(result->theap, 96, 32);
+      result->ok = is_aligned_at(p, 32, 0);
+      break;
+    case 6:
+      p = mi_theap_realloc(result->theap, NULL, 44);
+      result->ok = (p != NULL);
+      break;
+    default:
+      result->ok = 0;
+      break;
+  }
+  mi_free(p);
+  mi_thread_done();
+  return NULL;
+}
+
+static int theap_wrong_thread_case_status(mi_theap_t* theap, int op) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+    struct theap_wrong_thread_result result = { theap, op, 0 };
+    pthread_t thread;
+    int started = (pthread_create(&thread, NULL, theap_wrong_thread_worker, &result) == 0);
+    int joined = started && pthread_join(thread, NULL) == 0;
+    _exit((joined && result.ok) ? 0 : 7);
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
 }
 
 static void options_print_with_stderr_suppressed(void) {
@@ -1099,12 +1174,49 @@ int main(void) {
   mi_free(newp);
 
   mi_theap_t* theap = heap == NULL ? NULL : mi_heap_theap(heap);
+  unsigned char* tm = (unsigned char*)mi_theap_malloc(theap, 70);
+  result_bool("theap_malloc_owner", tm != NULL && mi_heap_contains(heap, tm) && mi_usable_size(tm) >= 70);
+  mi_free(tm);
+
+  unsigned char* tz = (unsigned char*)mi_theap_zalloc(theap, 71);
+  result_bool("theap_zalloc_zeroed_owner", tz != NULL && mi_heap_contains(heap, tz) && mi_usable_size(tz) >= 71 && bytes_equal(tz, 0, 71));
+  mi_free(tz);
+
+  unsigned char* tc = (unsigned char*)mi_theap_calloc(theap, 5, 17);
+  result_bool("theap_calloc_zeroed_owner", tc != NULL && mi_heap_contains(heap, tc) && mi_usable_size(tc) >= 85 && bytes_equal(tc, 0, 85));
+  mi_free(tc);
+  result_bool("theap_calloc_overflow_null", mi_theap_calloc(theap, overflow_count, 2) == NULL);
+
   void* tsp = mi_theap_malloc_small(theap, 32);
-  result_bool("theap_malloc_small", tsp != NULL && mi_usable_size(tsp) >= 32);
+  result_bool("theap_malloc_small_owner", tsp != NULL && mi_heap_contains(heap, tsp) && mi_usable_size(tsp) >= 32);
   mi_free(tsp);
+
+  unsigned char* tzsp = (unsigned char*)mi_theap_zalloc_small(theap, 33);
+  result_bool("theap_zalloc_small_zeroed_owner", tzsp != NULL && mi_heap_contains(heap, tzsp) && mi_usable_size(tzsp) >= 33 && bytes_equal(tzsp, 0, 33));
+  mi_free(tzsp);
+
   void* tap = mi_theap_malloc_aligned(theap, 96, 32);
-  result_bool("theap_malloc_aligned", is_aligned_at(tap, 32, 0));
+  result_bool("theap_malloc_aligned_owner", is_aligned_at(tap, 32, 0) && mi_heap_contains(heap, tap) && mi_usable_size(tap) >= 96);
   mi_free(tap);
+
+  unsigned char* tr = (unsigned char*)mi_theap_malloc(theap, 48);
+  if (tr != NULL) fill_sequence(tr, 48);
+  unsigned char* trg = (unsigned char*)mi_theap_realloc(theap, tr, 112);
+  result_bool("theap_realloc_grow_owner_preserves", trg != NULL && mi_heap_contains(heap, trg) && mi_usable_size(trg) >= 112 && has_sequence_prefix(trg, 48));
+  unsigned char* trs = (unsigned char*)mi_theap_realloc(theap, trg, 24);
+  result_bool("theap_realloc_shrink_preserves", trs != NULL && mi_heap_contains(heap, trs) && mi_usable_size(trs) >= 24 && has_sequence_prefix(trs, 24));
+  mi_free(trs);
+  void* trn = mi_theap_realloc(theap, NULL, 52);
+  result_bool("theap_realloc_null_allocates", trn != NULL && mi_heap_contains(heap, trn) && mi_usable_size(trn) >= 52);
+  mi_free(trn);
+
+  result_size("theap_wrong_thread_malloc_status", (size_t)theap_wrong_thread_case_status(theap, 0));
+  result_size("theap_wrong_thread_zalloc_status", (size_t)theap_wrong_thread_case_status(theap, 1));
+  result_size("theap_wrong_thread_calloc_status", (size_t)theap_wrong_thread_case_status(theap, 2));
+  result_size("theap_wrong_thread_malloc_small_status", (size_t)theap_wrong_thread_case_status(theap, 3));
+  result_size("theap_wrong_thread_zalloc_small_status", (size_t)theap_wrong_thread_case_status(theap, 4));
+  result_size("theap_wrong_thread_malloc_aligned_status", (size_t)theap_wrong_thread_case_status(theap, 5));
+  result_size("theap_wrong_thread_realloc_null_status", (size_t)theap_wrong_thread_case_status(theap, 6));
 
   void* theap_visit_a = theap == NULL ? NULL : mi_theap_malloc(theap, 72);
   void* theap_visit_b = theap == NULL ? NULL : mi_theap_zalloc(theap, 144);

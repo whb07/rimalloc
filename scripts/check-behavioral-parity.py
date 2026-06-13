@@ -701,6 +701,10 @@ int main(void) {
   result_size("malloc_good_size_small_max", mi_malloc_good_size(MI_SMALL_SIZE_MAX));
   result_size("good_size_small_max_plus_1", mi_good_size(MI_SMALL_SIZE_MAX + 1));
   result_size("malloc_good_size_small_max_plus_1", mi_malloc_good_size(MI_SMALL_SIZE_MAX + 1));
+  result_size("good_size_size_max_minus_1", mi_good_size(overflow_count - 1));
+  result_size("malloc_good_size_size_max_minus_1", mi_malloc_good_size(overflow_count - 1));
+  result_size("good_size_size_max", mi_good_size(overflow_count));
+  result_size("malloc_good_size_size_max", mi_malloc_good_size(overflow_count));
 
   for (size_t bin = 0; bin <= MI_BIN_HUGE; bin++) {
     size_t bin_size = mi_stats_get_bin_size(bin);

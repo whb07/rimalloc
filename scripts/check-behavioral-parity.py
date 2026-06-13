@@ -974,6 +974,49 @@ int main(void) {
   int heap_free_joined = heap_free_started && pthread_join(heap_free_thread, NULL) == 0;
   result_bool("heap_cross_thread_free_joined", heap_free_joined);
   result_bool("heap_cross_thread_owned_before_free", heap_free_joined && heap_thread_result.owned_before_free);
+  mi_heap_collect(heap, false);
+  void* heap_delayed_reuse = heap == NULL ? NULL : mi_heap_malloc(heap, 64);
+  result_bool("heap_collect_delayed_nonforced_reuse", heap_delayed_reuse != NULL && mi_heap_contains(heap, heap_delayed_reuse));
+  mi_free(heap_delayed_reuse);
+  mi_heap_collect(heap, true);
+  heap_delayed_reuse = heap == NULL ? NULL : mi_heap_malloc(heap, 64);
+  result_bool("heap_collect_delayed_forced_reuse", heap_delayed_reuse != NULL && mi_heap_contains(heap, heap_delayed_reuse));
+  mi_free(heap_delayed_reuse);
+
+  void* heap_collect_live_a = heap == NULL ? NULL : mi_heap_malloc(heap, 72);
+  void* heap_collect_live_b = heap == NULL ? NULL : mi_heap_malloc(heap, 144);
+  result_bool("heap_collect_live_owner", heap_collect_live_a != NULL && heap_collect_live_b != NULL && mi_heap_contains(heap, heap_collect_live_a) && mi_heap_contains(heap, heap_collect_live_b));
+  mi_heap_collect(heap, false);
+  result_bool("heap_collect_nonforced_keeps_live", heap_collect_live_a != NULL && heap_collect_live_b != NULL && mi_heap_contains(heap, heap_collect_live_a) && mi_heap_contains(heap, heap_collect_live_b));
+  mi_heap_collect(heap, true);
+  result_bool("heap_collect_forced_keeps_live", heap_collect_live_a != NULL && heap_collect_live_b != NULL && mi_heap_contains(heap, heap_collect_live_a) && mi_heap_contains(heap, heap_collect_live_b));
+  mi_free(heap_collect_live_a);
+  mi_free(heap_collect_live_b);
+
+  void* heap_retire_blocks[96];
+  size_t heap_retire_allocated = 0;
+  for (size_t i = 0; i < 96; i++) {
+    heap_retire_blocks[i] = heap == NULL ? NULL : mi_heap_malloc(heap, 1024);
+    if (heap_retire_blocks[i] != NULL && mi_heap_contains(heap, heap_retire_blocks[i])) heap_retire_allocated++;
+  }
+  result_bool("heap_collect_retire_allocated", heap_retire_allocated == 96);
+  for (size_t i = 0; i < heap_retire_allocated; i++) {
+    mi_free(heap_retire_blocks[i]);
+  }
+  mi_stats_t_decl(heap_collect_stats_before);
+  bool heap_collect_stats_before_ok = heap != NULL && mi_heap_stats_get(heap, &heap_collect_stats_before);
+  result_bool("heap_collect_stats_before_success", heap_collect_stats_before_ok);
+  mi_heap_collect(heap, false);
+  mi_heap_collect(heap, true);
+  mi_stats_t_decl(heap_collect_stats_after);
+  bool heap_collect_stats_after_ok = heap != NULL && mi_heap_stats_get(heap, &heap_collect_stats_after);
+  result_bool("heap_collect_stats_after_success", heap_collect_stats_after_ok);
+  result_bool("heap_collect_stats_pages_nonnegative", heap_collect_stats_after_ok && heap_collect_stats_after.pages.current >= 0);
+  result_bool("heap_collect_stats_page_peak_consistent", heap_collect_stats_after_ok && heap_collect_stats_after.pages.peak >= heap_collect_stats_after.pages.current);
+  result_bool("heap_collect_stats_malloc_peak_consistent", heap_collect_stats_after_ok && heap_collect_stats_after.malloc_normal.peak >= heap_collect_stats_after.malloc_normal.current);
+  void* heap_retire_reuse = heap == NULL ? NULL : mi_heap_malloc(heap, 1024);
+  result_bool("heap_collect_retire_reuse", heap_retire_reuse != NULL && mi_heap_contains(heap, heap_retire_reuse));
+  mi_free(heap_retire_reuse);
 
   void* visit_a = heap == NULL ? NULL : mi_heap_malloc(heap, 80);
   void* visit_b = heap == NULL ? NULL : mi_heap_malloc(heap, 160);
@@ -1278,6 +1321,25 @@ int main(void) {
   result_bool("realpath_stack_missing_errno", rp == NULL && errno == ENOENT);
 
   long original_visit_abandoned = mi_option_get(mi_option_visit_abandoned);
+  mi_option_enable(mi_option_visit_abandoned);
+  struct heap_abandoned_result abandoned_collect = { heap, NULL, NULL, NULL, 0 };
+  pthread_t abandoned_collect_thread;
+  int abandoned_collect_started = (pthread_create(&abandoned_collect_thread, NULL, heap_abandoned_worker, &abandoned_collect) == 0);
+  result_bool("heap_collect_abandoned_started", abandoned_collect_started);
+  int abandoned_collect_joined = abandoned_collect_started && pthread_join(abandoned_collect_thread, NULL) == 0;
+  result_bool("heap_collect_abandoned_joined", abandoned_collect_joined);
+  result_bool("heap_collect_abandoned_allocated", abandoned_collect_joined && abandoned_collect.allocated);
+  mi_heap_collect(heap, false);
+  mi_heap_collect(heap, true);
+  struct heap_visit_result abandoned_collect_visit = { heap, 0, 0, 1, 1, 1 };
+  bool abandoned_collect_ok = mi_heap_visit_abandoned_blocks(heap, true, heap_visit_counting_visitor, &abandoned_collect_visit);
+  result_bool("heap_collect_abandoned_visit_success", abandoned_collect_ok);
+  result_bool("heap_collect_abandoned_visit_seen", abandoned_collect_ok && abandoned_collect_visit.areas > 0 && abandoned_collect_visit.blocks > 0);
+  result_bool("heap_collect_abandoned_visit_fields", abandoned_collect_visit.heap_matches && abandoned_collect_visit.area_fields_ok && abandoned_collect_visit.block_fields_ok);
+  mi_free(abandoned_collect.a);
+  mi_free(abandoned_collect.b);
+  mi_free(abandoned_collect.c);
+
   mi_option_disable(mi_option_visit_abandoned);
   struct heap_abandoned_result abandoned_disabled = { heap, NULL, NULL, NULL, 0 };
   pthread_t abandoned_disabled_thread;

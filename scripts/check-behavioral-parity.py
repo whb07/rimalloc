@@ -39,6 +39,10 @@ static size_t registered_output_a = 0;
 static size_t registered_output_b = 0;
 static size_t registered_error_a = 0;
 static size_t registered_error_b = 0;
+static size_t arena_output_callbacks = 0;
+static int arena_output_seen_arena = 0;
+static int arena_output_seen_chunks = 0;
+static int arena_output_seen_total = 0;
 static volatile size_t overflow_count = (size_t)-1;
 
 typedef void* (*system_malloc_fun)(size_t);
@@ -73,6 +77,14 @@ static void registered_error_callback_b(int err, void* arg) {
   if (err != 0 && arg == (void*)0xE22B) {
     registered_error_b++;
   }
+}
+
+static void arena_output_callback(const char* msg, void* arg) {
+  if (arg != (void*)0xA4E4A || msg == NULL || msg[0] == '\0') return;
+  arena_output_callbacks++;
+  if (strstr(msg, "arena ") != NULL && strstr(msg, "slices") != NULL) arena_output_seen_arena = 1;
+  if (strstr(msg, "chunks (p:page") != NULL) arena_output_seen_chunks = 1;
+  if (strstr(msg, "total pages in arenas:") != NULL) arena_output_seen_total = 1;
 }
 
 static void result_bool(const char* name, int ok) {
@@ -1671,6 +1683,23 @@ int main(void) {
   result_bool("arena_contains_end_false", arena_area != NULL && !mi_arena_contains(arena_id, (char*)arena_area + arena_size));
   int arena_stack_value = 0;
   result_bool("arena_contains_stack_false", !mi_arena_contains(arena_id, &arena_stack_value));
+
+  arena_output_callbacks = 0;
+  arena_output_seen_arena = 0;
+  arena_output_seen_chunks = 0;
+  arena_output_seen_total = 0;
+  mi_register_output(arena_output_callback, (void*)0xA4E4A);
+  mi_debug_show_arenas();
+  result_bool("debug_show_arenas_output_nonempty", arena_output_callbacks > 0);
+  result_bool("debug_show_arenas_output_structure", arena_output_seen_arena && arena_output_seen_chunks && arena_output_seen_total);
+  size_t debug_arena_output_callbacks = arena_output_callbacks;
+  arena_output_seen_arena = 0;
+  arena_output_seen_chunks = 0;
+  arena_output_seen_total = 0;
+  mi_arenas_print();
+  result_bool("arenas_print_output_nonempty", arena_output_callbacks > debug_arena_output_callbacks);
+  result_bool("arenas_print_output_structure", arena_output_seen_arena && arena_output_seen_chunks && arena_output_seen_total);
+  mi_register_output(NULL, NULL);
 
   char json_buf[65536];
   memset(json_buf, 0xA5, sizeof(json_buf));

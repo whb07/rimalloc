@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import json
 import pathlib
 import shutil
 import subprocess
@@ -1723,6 +1724,64 @@ int main(void) {
 }
 """
 
+JSON_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+#include <mimalloc-stats.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef RUST_HELPER_CAPTURE
+extern char* mi_stats_get_json_from(const mi_stats_t* stats, size_t buf_size, char* buf);
+#endif
+
+static int emit_json(const char* name, char* json, int owned) {
+  if (json == NULL) return 1;
+  size_t len = strlen(json);
+  printf("@@JSON %s %zu\n", name, len);
+  fwrite(json, 1, len, stdout);
+  printf("\n@@END\n");
+  if (owned) mi_free(json);
+  return 0;
+}
+
+int main(void) {
+  char buf[65536];
+  int failures = 0;
+
+  memset(buf, 0xA5, sizeof(buf));
+  failures += emit_json("stats_get_json_buffer", mi_stats_get_json(sizeof(buf), buf), 0);
+
+  mi_stats_t stats;
+  mi_stats_init(&stats);
+  if (!mi_stats_get(&stats)) failures++;
+  memset(buf, 0xA5, sizeof(buf));
+  failures += emit_json("stats_as_json_buffer", mi_stats_as_json(&stats, sizeof(buf), buf), 0);
+
+  mi_heap_t* heap = mi_heap_new();
+  memset(buf, 0xA5, sizeof(buf));
+  failures += emit_json("heap_stats_get_json_buffer", heap == NULL ? NULL : mi_heap_stats_get_json(heap, sizeof(buf), buf), 0);
+  if (heap != NULL) mi_heap_delete(heap);
+
+  memset(buf, 0xA5, sizeof(buf));
+  failures += emit_json("subproc_stats_get_json_buffer", mi_subproc_stats_get_json(mi_subproc_current(), sizeof(buf), buf), 0);
+
+  failures += emit_json("stats_get_json_allocated", mi_stats_get_json(0, NULL), 1);
+
+#ifdef RUST_HELPER_CAPTURE
+  mi_stats_t helper_stats;
+  mi_stats_init(&helper_stats);
+  if (!mi_stats_get(&helper_stats)) failures++;
+  memset(buf, 0xA5, sizeof(buf));
+  failures += emit_json("stats_get_json_from_buffer", mi_stats_get_json_from(&helper_stats, sizeof(buf), buf), 0);
+#endif
+
+  return failures == 0 ? 0 : 1;
+}
+"""
+
 
 def rust_staticlib() -> pathlib.Path:
     subprocess.run(
@@ -1740,7 +1799,12 @@ def rust_staticlib() -> pathlib.Path:
     return libs[0]
 
 
-def compile_binary(cc: str, output: pathlib.Path, objects: list[pathlib.Path]) -> None:
+def compile_binary(
+    cc: str,
+    output: pathlib.Path,
+    objects: list[pathlib.Path],
+    cflags: list[str] | None = None,
+) -> None:
     subprocess.run(
         [
             cc,
@@ -1749,6 +1813,7 @@ def compile_binary(cc: str, output: pathlib.Path, objects: list[pathlib.Path]) -
             str(ROOT / "mimalloc-3.3.2/include"),
             "-I",
             str(ROOT / "mimalloc-3.3.2/src"),
+            *(cflags or []),
             *[str(obj) for obj in objects],
             "-pthread",
             "-ldl",
@@ -1772,6 +1837,197 @@ def run(binary: pathlib.Path) -> str:
     return completed.stdout
 
 
+STAT_COUNT_KEYS = {
+    "pages",
+    "reserved",
+    "committed",
+    "page_committed",
+    "pages_abandoned",
+    "threads",
+    "malloc_normal",
+    "malloc_huge",
+    "malloc_requested",
+    "segments",
+    "segments_abandoned",
+    "segments_cache",
+    "_segments_reserved",
+    "heaps",
+    "theaps",
+}
+
+STAT_COUNTER_KEYS = {
+    "reset",
+    "purged",
+    "mmap_calls",
+    "commit_calls",
+    "reset_calls",
+    "purge_calls",
+    "arena_count",
+    "malloc_normal_count",
+    "malloc_huge_count",
+    "malloc_guarded_count",
+    "arena_rollback_count",
+    "arena_purges",
+    "pages_extended",
+    "pages_retire",
+    "page_searches",
+    "page_searches_count",
+    "pages_reclaim_on_alloc",
+    "pages_reclaim_on_free",
+    "pages_reabandon_full",
+    "pages_unabandon_busy_wait",
+    "heaps_delete_wait",
+}
+
+PROCESS_KEYS = {
+    "elapsed_msecs",
+    "user_msecs",
+    "system_msecs",
+    "page_faults",
+    "rss_current",
+    "rss_peak",
+    "commit_current",
+    "commit_peak",
+}
+
+TOP_KEYS = (
+    {"stat_version", "mimalloc_version", "process", "malloc_bins", "page_bins", "chunk_bins"}
+    | STAT_COUNT_KEYS
+    | STAT_COUNTER_KEYS
+)
+
+
+def parse_json_documents(output: str) -> dict[str, object]:
+    docs: dict[str, object] = {}
+    pos = 0
+    while pos < len(output):
+        if output.startswith("\n", pos):
+            pos += 1
+            continue
+        if not output.startswith("@@JSON ", pos):
+            raise AssertionError(f"unexpected JSON capture output at byte {pos}: {output[pos:pos + 80]!r}")
+        header_end = output.index("\n", pos)
+        _, name, length_text = output[pos:header_end].split()
+        length = int(length_text)
+        doc_start = header_end + 1
+        doc_text = output[doc_start : doc_start + length]
+        doc_end = doc_start + length
+        if output[doc_end : doc_end + 7] != "\n@@END\n":
+            raise AssertionError(f"missing JSON terminator for {name}")
+        docs[name] = json.loads(doc_text)
+        pos = doc_end + 7
+    return docs
+
+
+def schema(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: schema(value[key]) for key in sorted(value)}
+    if isinstance(value, list):
+        return ["list", len(value), schema(value[0]) if value else None]
+    return type(value).__name__
+
+
+def require_int(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise AssertionError(f"{name} is not an integer")
+    return value
+
+
+def validate_count_object(value: object, name: str) -> None:
+    if not isinstance(value, dict) or set(value) != {"total", "peak", "current"}:
+        raise AssertionError(f"{name} has unexpected count schema")
+    total = require_int(value["total"], f"{name}.total")
+    peak = require_int(value["peak"], f"{name}.peak")
+    current = require_int(value["current"], f"{name}.current")
+    if total < 0 or peak < 0 or current < 0 or current > peak:
+        raise AssertionError(f"{name} has invalid count values")
+
+
+def validate_bin_counts(items: object, name: str) -> None:
+    if not isinstance(items, list) or not items:
+        raise AssertionError(f"{name} is not a non-empty array")
+    for index, item in enumerate(items):
+        item_name = f"{name}[{index}]"
+        if not isinstance(item, dict) or set(item) != {"total", "peak", "current", "block_size", "page_size"}:
+            raise AssertionError(f"{item_name} has unexpected bin schema")
+        total = require_int(item["total"], f"{item_name}.total")
+        peak = require_int(item["peak"], f"{item_name}.peak")
+        current = require_int(item["current"], f"{item_name}.current")
+        block_size = require_int(item["block_size"], f"{item_name}.block_size")
+        page_size = require_int(item["page_size"], f"{item_name}.page_size")
+        if total < 0 or peak < 0 or current < 0 or current > peak:
+            raise AssertionError(f"{item_name} has invalid count values")
+        if block_size < 0 or page_size < 0:
+            raise AssertionError(f"{item_name} has invalid size values")
+
+
+def validate_chunk_bins(items: object, name: str) -> None:
+    expected_bins = ["S", "X", "M", "L", "H", " "]
+    if not isinstance(items, list) or len(items) != len(expected_bins):
+        raise AssertionError(f"{name} has unexpected length")
+    if [item.get("bin") for item in items if isinstance(item, dict)] != expected_bins:
+        raise AssertionError(f"{name} has unexpected labels")
+    for index, item in enumerate(items):
+        item_name = f"{name}[{index}]"
+        if not isinstance(item, dict) or set(item) != {"total", "peak", "current", "bin"}:
+            raise AssertionError(f"{item_name} has unexpected chunk-bin schema")
+        total = require_int(item["total"], f"{item_name}.total")
+        peak = require_int(item["peak"], f"{item_name}.peak")
+        current = require_int(item["current"], f"{item_name}.current")
+        if total < 0 or peak < 0 or current < 0 or current > peak:
+            raise AssertionError(f"{item_name} has invalid count values")
+
+
+def validate_stats_json(doc: object, name: str) -> None:
+    if not isinstance(doc, dict) or set(doc) != TOP_KEYS:
+        raise AssertionError(f"{name} has unexpected top-level schema")
+    if doc["stat_version"] != 5 or doc["mimalloc_version"] != 30302:
+        raise AssertionError(f"{name} has unexpected version fields")
+
+    process = doc["process"]
+    if not isinstance(process, dict) or set(process) != PROCESS_KEYS:
+        raise AssertionError(f"{name}.process has unexpected schema")
+    for key in PROCESS_KEYS:
+        if require_int(process[key], f"{name}.process.{key}") < 0:
+            raise AssertionError(f"{name}.process.{key} is negative")
+
+    for key in STAT_COUNT_KEYS:
+        validate_count_object(doc[key], f"{name}.{key}")
+    for key in STAT_COUNTER_KEYS:
+        if require_int(doc[key], f"{name}.{key}") < 0:
+            raise AssertionError(f"{name}.{key} is negative")
+
+    validate_bin_counts(doc["malloc_bins"], f"{name}.malloc_bins")
+    validate_bin_counts(doc["page_bins"], f"{name}.page_bins")
+    if len(doc["malloc_bins"]) != len(doc["page_bins"]):
+        raise AssertionError(f"{name} malloc/page bin lengths differ")
+    validate_chunk_bins(doc["chunk_bins"], f"{name}.chunk_bins")
+
+
+def validate_json_capture(c_docs: dict[str, object], rust_docs: dict[str, object]) -> None:
+    common_names = {
+        "stats_get_json_buffer",
+        "stats_as_json_buffer",
+        "heap_stats_get_json_buffer",
+        "subproc_stats_get_json_buffer",
+        "stats_get_json_allocated",
+    }
+    if set(c_docs) != common_names:
+        raise AssertionError(f"unexpected C JSON documents: {sorted(c_docs)}")
+    if set(rust_docs) != common_names | {"stats_get_json_from_buffer"}:
+        raise AssertionError(f"unexpected Rust JSON documents: {sorted(rust_docs)}")
+
+    for name in sorted(common_names):
+        validate_stats_json(c_docs[name], f"c.{name}")
+        validate_stats_json(rust_docs[name], f"rust.{name}")
+        if schema(c_docs[name]) != schema(rust_docs[name]):
+            raise AssertionError(f"JSON schema mismatch for {name}")
+
+    validate_stats_json(rust_docs["stats_get_json_from_buffer"], "rust.stats_get_json_from_buffer")
+    if schema(rust_docs["stats_get_json_from_buffer"]) != schema(rust_docs["stats_as_json_buffer"]):
+        raise AssertionError("Rust mi_stats_get_json_from schema differs from mi_stats_as_json")
+
+
 def main() -> int:
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
@@ -1779,14 +2035,20 @@ def main() -> int:
 
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     scenario = BUILD_DIR / "behavioral-parity.c"
+    json_capture = BUILD_DIR / "json-capture.c"
     scenario.write_text(SCENARIO_C)
+    json_capture.write_text(JSON_CAPTURE_C)
 
     rust_lib = rust_staticlib()
     c_bin = BUILD_DIR / "behavioral-parity-c"
     rust_bin = BUILD_DIR / "behavioral-parity-rust"
+    c_json_bin = BUILD_DIR / "json-capture-c"
+    rust_json_bin = BUILD_DIR / "json-capture-rust"
 
     compile_binary(cc, c_bin, [ROOT / "mimalloc-3.3.2/src/static.c", scenario])
     compile_binary(cc, rust_bin, [scenario, rust_lib])
+    compile_binary(cc, c_json_bin, [ROOT / "mimalloc-3.3.2/src/static.c", json_capture])
+    compile_binary(cc, rust_json_bin, [json_capture, rust_lib], ["-DRUST_HELPER_CAPTURE"])
 
     c_output = run(c_bin)
     rust_output = run(rust_bin)
@@ -1798,7 +2060,16 @@ def main() -> int:
         print(rust_output, file=sys.stderr)
         return 1
 
+    c_json_docs = parse_json_documents(run(c_json_bin))
+    rust_json_docs = parse_json_documents(run(rust_json_bin))
+    try:
+        validate_json_capture(c_json_docs, rust_json_docs)
+    except AssertionError as err:
+        print(f"JSON parity mismatch: {err}", file=sys.stderr)
+        return 1
+
     print("ok: C and Rust mimalloc behavior smoke outputs match")
+    print("ok: C and Rust mimalloc JSON schemas parse and match")
     print(c_output, end="")
     return 0
 

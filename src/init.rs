@@ -1320,7 +1320,7 @@ pub unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
 /// Returns the current subproc without forcing thread-local initialization.
 pub unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
     let theap = unsafe { crate::prim::_mi_theap_default() };
-    if theap.is_null() {
+    if !unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         unsafe { _mi_subproc_main() }
     } else {
         let tld = unsafe { (*theap).tld };

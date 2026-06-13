@@ -1016,6 +1016,9 @@ unsafe fn mi_heap_get_stats(mut heap: *mut mi_heap_t) -> *const mi_stats_t {
     if heap.is_null() {
         heap = unsafe { mi_heap_main() };
     }
+    if !unsafe { crate::prim::_mi_thread_is_initialized() } {
+        return unsafe { &(*heap.cast::<MiHeapStatsPrefix>()).stats };
+    }
     let theap = unsafe { _mi_heap_theap_peek(heap) };
     if theap.is_null() {
         unsafe { &(*heap.cast::<MiHeapStatsPrefix>()).stats }

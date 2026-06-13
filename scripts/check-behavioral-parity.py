@@ -20,6 +20,7 @@ SCENARIO_C = r"""
 #include <mimalloc-stats.h>
 
 #include <errno.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -101,6 +102,33 @@ static int has_sequence_prefix(const unsigned char* p, size_t size) {
   return 1;
 }
 
+struct thread_lifecycle_result {
+  int init_alloc_owned;
+  int threadpool_alloc_owned;
+  int after_done_alloc_owned;
+};
+
+static void* thread_lifecycle_worker(void* arg) {
+  struct thread_lifecycle_result* result = (struct thread_lifecycle_result*)arg;
+  mi_thread_init();
+  void* p = mi_malloc(32);
+  result->init_alloc_owned = (p != NULL && mi_check_owned(p));
+  mi_free(p);
+
+  mi_thread_set_in_threadpool();
+  void* q = mi_malloc(33);
+  result->threadpool_alloc_owned = (q != NULL && mi_check_owned(q));
+  mi_free(q);
+
+  mi_thread_done();
+  mi_thread_init();
+  void* r = mi_malloc(34);
+  result->after_done_alloc_owned = (r != NULL && mi_check_owned(r));
+  mi_free(r);
+  mi_thread_done();
+  return NULL;
+}
+
 static void options_print_with_stderr_suppressed(void) {
   FILE* devnull = fopen("/dev/null", "w");
   if (devnull == NULL) return;
@@ -123,6 +151,16 @@ int main(void) {
   mi_option_disable(mi_option_show_errors);
 
   result_bool("version_30302", mi_version() == 30302);
+
+  struct thread_lifecycle_result thread_result = {0, 0, 0};
+  pthread_t thread;
+  int thread_started = (pthread_create(&thread, NULL, thread_lifecycle_worker, &thread_result) == 0);
+  result_bool("thread_lifecycle_started", thread_started);
+  int thread_joined = thread_started && pthread_join(thread, NULL) == 0;
+  result_bool("thread_lifecycle_joined", thread_joined);
+  result_bool("thread_init_alloc_owned", thread_joined && thread_result.init_alloc_owned);
+  result_bool("threadpool_alloc_owned", thread_joined && thread_result.threadpool_alloc_owned);
+  result_bool("thread_after_done_alloc_owned", thread_joined && thread_result.after_done_alloc_owned);
 
   long original_verbose = mi_option_get(mi_option_verbose);
   mi_option_disable(mi_option_verbose);

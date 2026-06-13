@@ -39,7 +39,7 @@ fn as_bytes_mut_ptr(p: *mut c_char) -> *mut u8 {
     p as *mut u8
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub extern "C" fn _mi_toupper(c: c_char) -> c_char {
     let b = c as u8;
     if b.is_ascii_lowercase() {

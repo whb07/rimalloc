@@ -669,7 +669,7 @@ pub unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_in
     err
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_protect(start: *mut c_void, size: usize, protect: bool) -> c_int {
     let prot = if protect {
         PROT_NONE

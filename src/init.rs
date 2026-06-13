@@ -709,6 +709,13 @@ pub unsafe extern "C" fn mi_thread_done() {
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+/// `theap` must be null or the current thread's thread-local heap.
+pub unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
+    let _ = theap;
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn _mi_preloading() -> bool {
     false
 }

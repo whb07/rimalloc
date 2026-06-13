@@ -365,6 +365,58 @@ static int heap_lifecycle_case_status(int op) {
   return -3;
 }
 
+static int option_invalid_case_status(int op) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+    mi_option_t invalid_option = (mi_option_t)-1;
+    switch (op) {
+      case 0:
+        { volatile long value = mi_option_get(invalid_option); (void)value; }
+        _exit(0);
+      case 1:
+        mi_option_set(invalid_option, 123);
+        _exit(0);
+      case 2:
+        mi_option_set_default(invalid_option, 456);
+        _exit(0);
+      case 3:
+        { volatile long value = mi_option_get_clamp(invalid_option, 3, 7); (void)value; }
+        _exit(0);
+      case 4:
+        { volatile size_t value = mi_option_get_size(invalid_option); (void)value; }
+        _exit(0);
+      case 5:
+        { volatile bool value = mi_option_is_enabled(invalid_option); (void)value; }
+        _exit(0);
+      case 6:
+        mi_option_enable(invalid_option);
+        _exit(0);
+      case 7:
+        mi_option_disable(invalid_option);
+        _exit(0);
+      case 8:
+        mi_option_set_enabled(invalid_option, true);
+        _exit(0);
+      case 9:
+        mi_option_set_enabled_default(invalid_option, true);
+        _exit(0);
+      default:
+        _exit(41);
+    }
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static void options_print_with_stderr_suppressed(void) {
   FILE* devnull = fopen("/dev/null", "w");
   if (devnull == NULL) return;
@@ -433,6 +485,17 @@ int main(void) {
   mi_option_set(mi_option_reserve_os_memory, LONG_MAX);
   result_size("option_get_size_kib_large_clamped", mi_option_get_size(mi_option_reserve_os_memory));
   mi_option_set(mi_option_reserve_os_memory, original_reserve_os_memory);
+
+  result_size("option_invalid_get_status", (size_t)option_invalid_case_status(0));
+  result_size("option_invalid_set_status", (size_t)option_invalid_case_status(1));
+  result_size("option_invalid_set_default_status", (size_t)option_invalid_case_status(2));
+  result_size("option_invalid_get_clamp_status", (size_t)option_invalid_case_status(3));
+  result_size("option_invalid_get_size_status", (size_t)option_invalid_case_status(4));
+  result_size("option_invalid_is_enabled_status", (size_t)option_invalid_case_status(5));
+  result_size("option_invalid_enable_status", (size_t)option_invalid_case_status(6));
+  result_size("option_invalid_disable_status", (size_t)option_invalid_case_status(7));
+  result_size("option_invalid_set_enabled_status", (size_t)option_invalid_case_status(8));
+  result_size("option_invalid_set_enabled_default_status", (size_t)option_invalid_case_status(9));
 
   registered_output_a = 0;
   registered_output_b = 0;

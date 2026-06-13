@@ -1042,8 +1042,8 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
 
 fn mi_option_get_fast_impl(option: mi_option_t) -> c_long {
     let idx = option as usize;
+    crate::mi_assert!(idx < MI_OPTION_COUNT);
     let table = lock_unpoisoned(&OPTIONS);
-    debug_assert!(idx < MI_OPTION_COUNT);
     let desc = &table[idx];
     debug_assert!(desc.option as usize == idx);
     desc.value
@@ -1057,6 +1057,7 @@ pub extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
     let idx = option as usize;
+    crate::mi_assert!(idx < MI_OPTION_COUNT);
     if idx >= MI_OPTION_COUNT {
         return 0;
     }
@@ -1116,6 +1117,7 @@ pub extern "C" fn mi_option_get_size(option: mi_option_t) -> usize {
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
     let idx = option as usize;
+    crate::mi_assert!(idx < MI_OPTION_COUNT);
     if idx >= MI_OPTION_COUNT {
         return;
     }
@@ -1148,6 +1150,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
     let idx = option as usize;
+    crate::mi_assert!(idx < MI_OPTION_COUNT);
     if idx >= MI_OPTION_COUNT {
         return;
     }

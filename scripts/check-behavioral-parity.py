@@ -119,6 +119,11 @@ struct abandoned_pointer_result {
   void* ptr;
 };
 
+struct heap_cross_thread_free_result {
+  void* ptr;
+  int owned_before_free;
+};
+
 static void* thread_lifecycle_worker(void* arg) {
   struct thread_lifecycle_result* result = (struct thread_lifecycle_result*)arg;
   mi_thread_init();
@@ -144,6 +149,16 @@ static void* abandoned_pointer_worker(void* arg) {
   struct abandoned_pointer_result* result = (struct abandoned_pointer_result*)arg;
   mi_thread_init();
   result->ptr = mi_malloc(37);
+  mi_thread_done();
+  return NULL;
+}
+
+static void* heap_cross_thread_free_worker(void* arg) {
+  struct heap_cross_thread_free_result* result = (struct heap_cross_thread_free_result*)arg;
+  mi_thread_init();
+  result->owned_before_free = (result->ptr != NULL && mi_check_owned(result->ptr));
+  mi_free(result->ptr);
+  result->ptr = NULL;
   mi_thread_done();
   return NULL;
 }
@@ -751,6 +766,57 @@ int main(void) {
   result_bool("heap_contains", heap != NULL && hp != NULL && mi_heap_contains(heap, hp));
   result_bool("any_heap_contains", hp != NULL && mi_any_heap_contains(hp));
   mi_free(hp);
+
+  size_t heap_alloc_sizes[] = { 0, 1, 17, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX, MI_SMALL_SIZE_MAX + 1 };
+  size_t heap_alloc_size_count = sizeof(heap_alloc_sizes) / sizeof(heap_alloc_sizes[0]);
+  for (size_t i = 0; i < heap_alloc_size_count; i++) {
+    size_t requested = heap_alloc_sizes[i];
+    unsigned char* hmp = heap == NULL ? NULL : (unsigned char*)mi_heap_malloc(heap, requested);
+    result_bool("heap_malloc_owner", hmp != NULL && mi_heap_contains(heap, hmp));
+    result_bool("heap_malloc_usable_ge_request", hmp != NULL && mi_usable_size(hmp) >= requested);
+    result_indexed_size("heap_malloc_usable_size", i, hmp == NULL ? 0 : mi_usable_size(hmp));
+    mi_free(hmp);
+  }
+
+  unsigned char* hzp = heap == NULL ? NULL : (unsigned char*)mi_heap_zalloc(heap, 48);
+  result_bool("heap_zalloc_zeroed_owner", hzp != NULL && bytes_equal(hzp, 0, 48) && mi_heap_contains(heap, hzp));
+  mi_free(hzp);
+
+  unsigned char* hcp = heap == NULL ? NULL : (unsigned char*)mi_heap_calloc(heap, 6, 7);
+  result_bool("heap_calloc_zeroed_owner", hcp != NULL && bytes_equal(hcp, 0, 42) && mi_heap_contains(heap, hcp));
+  mi_free(hcp);
+  result_bool("heap_calloc_overflow_null", heap != NULL && mi_heap_calloc(heap, overflow_count, 2) == NULL);
+
+  unsigned char* hmnp = heap == NULL ? NULL : (unsigned char*)mi_heap_mallocn(heap, 5, 9);
+  result_bool("heap_mallocn_owner", hmnp != NULL && mi_heap_contains(heap, hmnp) && mi_usable_size(hmnp) >= 45);
+  mi_free(hmnp);
+  result_bool("heap_mallocn_overflow_null", heap != NULL && mi_heap_mallocn(heap, overflow_count, 2) == NULL);
+
+  size_t heap_small_sizes[] = { 0, 1, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX };
+  size_t heap_small_size_count = sizeof(heap_small_sizes) / sizeof(heap_small_sizes[0]);
+  for (size_t i = 0; i < heap_small_size_count; i++) {
+    size_t requested = heap_small_sizes[i];
+    unsigned char* hsp = heap == NULL ? NULL : (unsigned char*)mi_heap_malloc_small(heap, requested);
+    result_bool("heap_malloc_small_owner", hsp != NULL && mi_heap_contains(heap, hsp));
+    result_bool("heap_malloc_small_usable_ge_request", hsp != NULL && mi_usable_size(hsp) >= requested);
+    result_indexed_size("heap_malloc_small_usable_size", i, hsp == NULL ? 0 : mi_usable_size(hsp));
+    mi_free(hsp);
+
+    unsigned char* hzsp = heap == NULL ? NULL : (unsigned char*)mi_heap_zalloc_small(heap, requested);
+    result_bool("heap_zalloc_small_zeroed_owner", hzsp != NULL && bytes_equal(hzsp, 0, requested) && mi_heap_contains(heap, hzsp));
+    result_bool("heap_zalloc_small_usable_ge_request", hzsp != NULL && mi_usable_size(hzsp) >= requested);
+    result_indexed_size("heap_zalloc_small_usable_size", i, hzsp == NULL ? 0 : mi_usable_size(hzsp));
+    mi_free(hzsp);
+  }
+
+  struct heap_cross_thread_free_result heap_thread_result = { heap == NULL ? NULL : mi_heap_malloc(heap, 64), 0 };
+  result_bool("heap_cross_thread_alloc_owner", heap_thread_result.ptr != NULL && mi_heap_contains(heap, heap_thread_result.ptr));
+  pthread_t heap_free_thread;
+  int heap_free_started = (pthread_create(&heap_free_thread, NULL, heap_cross_thread_free_worker, &heap_thread_result) == 0);
+  result_bool("heap_cross_thread_free_started", heap_free_started);
+  int heap_free_joined = heap_free_started && pthread_join(heap_free_thread, NULL) == 0;
+  result_bool("heap_cross_thread_free_joined", heap_free_joined);
+  result_bool("heap_cross_thread_owned_before_free", heap_free_joined && heap_thread_result.owned_before_free);
 
   void* ha = heap == NULL ? NULL : mi_heap_malloc_aligned(heap, 96, 32);
   result_bool("heap_malloc_aligned", is_aligned_at(ha, 32, 0) && mi_heap_contains(heap, ha));

@@ -23,15 +23,44 @@ SCENARIO_C = r"""
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 static int failures = 0;
 static size_t output_callbacks = 0;
+static size_t registered_output_a = 0;
+static size_t registered_output_b = 0;
+static size_t registered_error_a = 0;
+static size_t registered_error_b = 0;
 static volatile size_t overflow_count = (size_t)-1;
 
 static void output_callback(const char* msg, void* arg) {
   (void)arg;
   if (msg != NULL && msg[0] != '\0') {
     output_callbacks++;
+  }
+}
+
+static void registered_output_callback_a(const char* msg, void* arg) {
+  if (msg != NULL && msg[0] != '\0' && arg == (void*)0xA11CE) {
+    registered_output_a++;
+  }
+}
+
+static void registered_output_callback_b(const char* msg, void* arg) {
+  if (msg != NULL && msg[0] != '\0' && arg == (void*)0xB0B) {
+    registered_output_b++;
+  }
+}
+
+static void registered_error_callback_a(int err, void* arg) {
+  if (err != 0 && arg == (void*)0xE11A) {
+    registered_error_a++;
+  }
+}
+
+static void registered_error_callback_b(int err, void* arg) {
+  if (err != 0 && arg == (void*)0xE22B) {
+    registered_error_b++;
   }
 }
 
@@ -72,10 +101,74 @@ static int has_sequence_prefix(const unsigned char* p, size_t size) {
   return 1;
 }
 
+static void options_print_with_stderr_suppressed(void) {
+  FILE* devnull = fopen("/dev/null", "w");
+  if (devnull == NULL) return;
+  fflush(stderr);
+  int saved = dup(fileno(stderr));
+  if (saved < 0) {
+    fclose(devnull);
+    return;
+  }
+  if (dup2(fileno(devnull), fileno(stderr)) >= 0) {
+    mi_options_print();
+    fflush(stderr);
+    (void)dup2(saved, fileno(stderr));
+  }
+  close(saved);
+  fclose(devnull);
+}
+
 int main(void) {
   mi_option_disable(mi_option_show_errors);
 
   result_bool("version_30302", mi_version() == 30302);
+
+  long original_verbose = mi_option_get(mi_option_verbose);
+  mi_option_disable(mi_option_verbose);
+  result_bool("option_disable", !mi_option_is_enabled(mi_option_verbose));
+  result_size("option_get_clamp_disabled", (size_t)mi_option_get_clamp(mi_option_verbose, 3, 7));
+  mi_option_enable(mi_option_verbose);
+  result_bool("option_enable", mi_option_is_enabled(mi_option_verbose));
+  mi_option_set(mi_option_verbose, 5);
+  result_size("option_get_set", (size_t)mi_option_get(mi_option_verbose));
+  result_size("option_get_clamp_mid", (size_t)mi_option_get_clamp(mi_option_verbose, 3, 7));
+  result_size("option_get_clamp_min", (size_t)mi_option_get_clamp(mi_option_verbose, 6, 7));
+  result_size("option_get_size", mi_option_get_size(mi_option_verbose));
+  mi_option_set_enabled(mi_option_verbose, false);
+  result_size("option_set_enabled_false", (size_t)mi_option_get(mi_option_verbose));
+  mi_option_set_enabled_default(mi_option_verbose, true);
+  mi_option_set_default(mi_option_verbose, original_verbose);
+  mi_option_set(mi_option_verbose, original_verbose);
+
+  registered_output_a = 0;
+  registered_output_b = 0;
+  mi_register_output(registered_output_callback_a, (void*)0xA11CE);
+  mi_options_print();
+  result_bool("register_output_a_called", registered_output_a > 0);
+  mi_register_output(registered_output_callback_b, (void*)0xB0B);
+  mi_options_print();
+  result_bool("register_output_b_called", registered_output_b > 0);
+  mi_register_output(NULL, NULL);
+  size_t output_after_clear = registered_output_b;
+  options_print_with_stderr_suppressed();
+  result_bool("register_output_clear", registered_output_b == output_after_clear);
+
+  registered_error_a = 0;
+  registered_error_b = 0;
+  mi_register_error(registered_error_callback_a, (void*)0xE11A);
+  volatile void* err_alloc = mi_calloc(overflow_count, 2);
+  (void)err_alloc;
+  result_bool("register_error_a_called", registered_error_a > 0);
+  mi_register_error(registered_error_callback_b, (void*)0xE22B);
+  err_alloc = mi_calloc(overflow_count, 2);
+  (void)err_alloc;
+  result_bool("register_error_b_called", registered_error_b > 0);
+  mi_register_error(NULL, NULL);
+  size_t error_after_clear = registered_error_b;
+  err_alloc = mi_calloc(overflow_count, 2);
+  (void)err_alloc;
+  result_bool("register_error_clear", registered_error_b == error_after_clear);
 
   errno = 0;
   void* p = mi_malloc(17);

@@ -3,7 +3,7 @@ mod original_testhelper;
 
 use std::ffi::c_void;
 
-use mechanical_mimalloc::{alloc, free, heap, mimalloc};
+use mechanical_mimalloc::{alloc, free, heap};
 
 fn test_heap(p_out: *mut *mut c_void) {
     unsafe {
@@ -13,7 +13,7 @@ fn test_heap(p_out: *mut *mut c_void) {
         let p = alloc::mi_heap_malloc(test_heap, 256);
         assert!(!p.is_null());
         assert!(heap::mi_heap_contains(test_heap, p));
-        assert!(mimalloc::mi_heap_check_owned(test_heap, p));
+        assert!(heap::mi_heap_check_owned(test_heap, p));
 
         if !p_out.is_null() {
             *p_out = p;

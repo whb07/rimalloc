@@ -295,6 +295,29 @@ int main(void) {
   result_bool("calloc_zeroed", c != NULL && bytes_equal(c, 0, 32));
   mi_free(c);
 
+  size_t zalloc_sizes[] = { 0, 1, 17, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX, MI_SMALL_SIZE_MAX + 1 };
+  size_t zalloc_size_count = sizeof(zalloc_sizes) / sizeof(zalloc_sizes[0]);
+  for (size_t i = 0; i < zalloc_size_count; i++) {
+    size_t requested = zalloc_sizes[i];
+    unsigned char* zp = (unsigned char*)mi_zalloc(requested);
+    result_bool("zalloc_nonnull", zp != NULL);
+    result_bool("zalloc_zeroed", zp != NULL && bytes_equal(zp, 0, requested));
+    result_indexed_size("zalloc_usable_size", i, zp == NULL ? 0 : mi_usable_size(zp));
+    mi_free(zp);
+  }
+
+  size_t zalloc_small_sizes[] = { 0, 1, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX };
+  size_t zalloc_small_size_count = sizeof(zalloc_small_sizes) / sizeof(zalloc_small_sizes[0]);
+  for (size_t i = 0; i < zalloc_small_size_count; i++) {
+    size_t requested = zalloc_small_sizes[i];
+    unsigned char* zp = (unsigned char*)mi_zalloc_small(requested);
+    result_bool("zalloc_small_nonnull", zp != NULL);
+    result_bool("zalloc_small_zeroed", zp != NULL && bytes_equal(zp, 0, requested));
+    result_bool("zalloc_small_usable_ge_request", zp != NULL && mi_usable_size(zp) >= requested);
+    result_indexed_size("zalloc_small_usable_size", i, zp == NULL ? 0 : mi_usable_size(zp));
+    mi_free(zp);
+  }
+
   unsigned char* mn = (unsigned char*)mi_mallocn(5, 9);
   result_bool("mallocn_nonnull", mn != NULL);
   result_bool("mallocn_size", mn != NULL && mi_usable_size(mn) >= 45);

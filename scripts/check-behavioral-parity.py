@@ -737,6 +737,15 @@ int main(void) {
   char* hndup = heap == NULL ? NULL : mi_heap_strndup(heap, "heap-prefix", 4);
   result_bool("heap_strndup_content_owner", hndup != NULL && strcmp(hndup, "heap") == 0 && mi_heap_contains(heap, hndup));
   mi_free(hndup);
+  char heap_resolved[4096];
+  char* hrp_stack = heap == NULL ? NULL : mi_heap_realpath(heap, ".", heap_resolved);
+  result_bool("heap_realpath_stack_success", hrp_stack == heap_resolved && heap_resolved[0] == '/');
+  char* hrp = heap == NULL ? NULL : mi_heap_realpath(heap, ".", NULL);
+  result_bool("heap_realpath_alloc_content_owner", hrp != NULL && strcmp(hrp, heap_resolved) == 0 && mi_heap_contains(heap, hrp));
+  mi_free(hrp);
+  errno = 0;
+  hrp = heap == NULL ? NULL : mi_heap_realpath(heap, "/definitely/not/a/mechanical_mimalloc/path", NULL);
+  result_bool("heap_realpath_missing_errno", hrp == NULL && errno == ENOENT);
   void* hp = heap == NULL ? NULL : mi_heap_malloc(heap, 24);
   result_bool("heap_malloc_nonnull", hp != NULL);
   result_bool("heap_contains", heap != NULL && hp != NULL && mi_heap_contains(heap, hp));
@@ -884,9 +893,19 @@ int main(void) {
   result_bool("theap_malloc_aligned", is_aligned_at(tap, 32, 0));
   mi_free(tap);
 
+  char resolved[4096];
+  char* rp_stack = mi_realpath(".", resolved);
+  result_bool("realpath_stack_success", rp_stack == resolved && resolved[0] == '/');
   char* rp = mi_realpath(".", NULL);
-  result_bool("realpath_alloc_or_platform_failure", rp != NULL);
+  result_bool("realpath_alloc_success", rp != NULL && strcmp(rp, resolved) == 0);
+  result_bool("realpath_alloc_owned", rp != NULL && mi_check_owned(rp));
   if (rp != NULL) mi_free(rp);
+  errno = 0;
+  rp = mi_realpath("/definitely/not/a/mechanical_mimalloc/path", NULL);
+  result_bool("realpath_missing_errno", rp == NULL && errno == ENOENT);
+  errno = 0;
+  rp = mi_realpath("/definitely/not/a/mechanical_mimalloc/path", resolved);
+  result_bool("realpath_stack_missing_errno", rp == NULL && errno == ENOENT);
 
   if (heap != NULL) mi_heap_delete(heap);
 

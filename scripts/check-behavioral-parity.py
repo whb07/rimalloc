@@ -26,6 +26,7 @@ SCENARIO_C = r"""
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <wchar.h>
 
 static int failures = 0;
 static size_t output_callbacks = 0;
@@ -288,6 +289,12 @@ int main(void) {
   result_bool("strndup_content", ndup != NULL && strcmp(ndup, "abc") == 0);
   mi_free(ndup);
 
+  result_bool("strdup_null", mi_strdup(NULL) == NULL);
+  char* full_ndup = mi_strndup("abc", 99);
+  result_bool("strndup_full_content", full_ndup != NULL && strcmp(full_ndup, "abc") == 0);
+  mi_free(full_ndup);
+  result_bool("strndup_null", mi_strndup(NULL, 3) == NULL);
+
   result_bool("mbsdup_null", mi_mbsdup(NULL) == NULL);
   unsigned char* mdup = mi_mbsdup((const unsigned char*)"");
   result_bool("mbsdup_empty", mdup != NULL && mdup[0] == 0);
@@ -295,6 +302,11 @@ int main(void) {
   mdup = mi_mbsdup((const unsigned char*)"multi-byte-\xc3\xa9");
   result_bool("mbsdup_content", mdup != NULL && strcmp((const char*)mdup, "multi-byte-\xc3\xa9") == 0);
   mi_free(mdup);
+
+  result_bool("wcsdup_null", mi_wcsdup(NULL) == NULL);
+  wchar_t* wdup = mi_wcsdup(L"wide-\u03bb");
+  result_bool("wcsdup_content", wdup != NULL && wcscmp(wdup, L"wide-\u03bb") == 0);
+  mi_free(wdup);
 
   mi_heap_t* main_heap = mi_heap_main();
   mi_heap_t* main_heap_again = mi_heap_main();
@@ -307,6 +319,12 @@ int main(void) {
 
   mi_heap_t* heap = mi_heap_new();
   result_bool("heap_nonnull", heap != NULL);
+  char* hdup = heap == NULL ? NULL : mi_heap_strdup(heap, "heap-string");
+  result_bool("heap_strdup_content_owner", hdup != NULL && strcmp(hdup, "heap-string") == 0 && mi_heap_contains(heap, hdup));
+  mi_free(hdup);
+  char* hndup = heap == NULL ? NULL : mi_heap_strndup(heap, "heap-prefix", 4);
+  result_bool("heap_strndup_content_owner", hndup != NULL && strcmp(hndup, "heap") == 0 && mi_heap_contains(heap, hndup));
+  mi_free(hndup);
   void* hp = heap == NULL ? NULL : mi_heap_malloc(heap, 24);
   result_bool("heap_malloc_nonnull", hp != NULL);
   result_bool("heap_contains", heap != NULL && hp != NULL && mi_heap_contains(heap, hp));

@@ -498,6 +498,39 @@ static int foreign_size_case_status(int op) {
   return -3;
 }
 
+static int realloc_failure_case_status(int op) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+    unsigned char* p = (unsigned char*)mi_malloc(64);
+    if (p == NULL) _exit(10);
+    fill_sequence(p, 64);
+    switch (op) {
+      case 0: {
+        void* q = mi_realloc(p, overflow_count);
+        if (q != NULL || !has_sequence_prefix(p, 64)) _exit(11);
+        void* replacement = mi_malloc(64);
+        if (replacement == NULL || replacement == p) _exit(13);
+        mi_free(replacement);
+        mi_free(p);
+        _exit(0);
+      }
+      default:
+        _exit(41);
+    }
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static void options_print_with_stderr_suppressed(void) {
   FILE* devnull = fopen("/dev/null", "w");
   if (devnull == NULL) return;
@@ -730,6 +763,47 @@ int main(void) {
   result_bool("realloc_nonnull", r != NULL);
   result_bool("realloc_preserved_prefix", r != NULL && bytes_equal(r, 0x5A, 8));
   mi_free(r);
+  unsigned char* rnz = (unsigned char*)mi_realloc(NULL, 40);
+  result_bool("realloc_null_allocates", rnz != NULL && mi_usable_size(rnz) >= 40);
+  mi_free(rnz);
+  unsigned char* rg = (unsigned char*)mi_malloc(33);
+  fill_sequence(rg, 33);
+  size_t rg_usable = mi_usable_size(rg);
+  unsigned char* rg2 = (unsigned char*)mi_realloc(rg, rg_usable);
+  result_bool("realloc_fit_in_place", rg2 == rg && has_sequence_prefix(rg2, 33) && mi_usable_size(rg2) >= rg_usable);
+  mi_free(rg2);
+  unsigned char* rs = (unsigned char*)mi_malloc(64);
+  fill_sequence(rs, 64);
+  unsigned char* rs2 = (unsigned char*)mi_realloc(rs, 48);
+  result_bool("realloc_shrink_in_place", rs2 == rs && has_sequence_prefix(rs2, 48) && mi_usable_size(rs2) >= 48);
+  mi_free(rs2);
+  void* realloc_zero = mi_realloc(NULL, 0);
+  result_bool("realloc_null_zero_allocates", realloc_zero != NULL);
+  result_bool("realloc_null_zero_usable", realloc_zero != NULL && mi_usable_size(realloc_zero) == mi_malloc_size(realloc_zero));
+  mi_free(realloc_zero);
+  unsigned char* rz_nonnull = (unsigned char*)mi_malloc(16);
+  fill_sequence(rz_nonnull, 16);
+  rz_nonnull = (unsigned char*)mi_realloc(rz_nonnull, 0);
+  result_bool("realloc_nonnull_zero_allocates", rz_nonnull != NULL && mi_usable_size(rz_nonnull) == mi_malloc_size(rz_nonnull));
+  mi_free(rz_nonnull);
+  unsigned char* rh = (unsigned char*)mi_malloc(1024);
+  fill_sequence(rh, 1024);
+  unsigned char* rh_old = rh;
+  rh = (unsigned char*)mi_realloc(rh, 3*1024*1024);
+  result_bool("realloc_huge_grow_preserve", rh != NULL && has_sequence_prefix(rh, 1024) && mi_usable_size(rh) >= 3*1024*1024);
+  result_bool("realloc_huge_grow_moves", rh != NULL && rh != rh_old);
+  rh = (unsigned char*)mi_realloc(rh, 512);
+  result_bool("realloc_huge_shrink_preserve", rh != NULL && has_sequence_prefix(rh, 512) && mi_usable_size(rh) >= 512);
+  mi_free(rh);
+  unsigned char* rf = (unsigned char*)mi_malloc(64);
+  fill_sequence(rf, 64);
+  errno = 0;
+  void* rf_failed = mi_realloc(rf, overflow_count);
+  result_bool("realloc_failure_null", rf_failed == NULL);
+  result_size("realloc_failure_errno", (size_t)errno);
+  result_bool("realloc_failure_original_owned", mi_check_owned(rf) && has_sequence_prefix(rf, 64));
+  mi_free(rf);
+  result_size("realloc_failure_retains_original_status", (size_t)realloc_failure_case_status(0));
 
   result_bool("expand_null_fails", mi_expand(NULL, 16) == NULL);
   errno = 0;

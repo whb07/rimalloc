@@ -19,6 +19,7 @@ SCENARIO_C = r"""
 #include <mimalloc.h>
 #include <mimalloc-stats.h>
 
+#include <dlfcn.h>
 #include <errno.h>
 #include <sys/mman.h>
 #include <pthread.h>
@@ -35,6 +36,9 @@ static size_t registered_output_b = 0;
 static size_t registered_error_a = 0;
 static size_t registered_error_b = 0;
 static volatile size_t overflow_count = (size_t)-1;
+
+typedef void* (*system_malloc_fun)(size_t);
+typedef void (*system_free_fun)(void*);
 
 static void output_callback(const char* msg, void* arg) {
   (void)arg;
@@ -110,6 +114,10 @@ struct thread_lifecycle_result {
   int after_done_alloc_owned;
 };
 
+struct abandoned_pointer_result {
+  void* ptr;
+};
+
 static void* thread_lifecycle_worker(void* arg) {
   struct thread_lifecycle_result* result = (struct thread_lifecycle_result*)arg;
   mi_thread_init();
@@ -127,6 +135,14 @@ static void* thread_lifecycle_worker(void* arg) {
   void* r = mi_malloc(34);
   result->after_done_alloc_owned = (r != NULL && mi_check_owned(r));
   mi_free(r);
+  mi_thread_done();
+  return NULL;
+}
+
+static void* abandoned_pointer_worker(void* arg) {
+  struct abandoned_pointer_result* result = (struct abandoned_pointer_result*)arg;
+  mi_thread_init();
+  result->ptr = mi_malloc(37);
   mi_thread_done();
   return NULL;
 }
@@ -216,7 +232,32 @@ int main(void) {
   result_bool("malloc_owned", p != NULL && mi_is_in_heap_region(p));
   result_bool("malloc_usable_ge_17", p != NULL && mi_usable_size(p) >= 17);
   result_bool("malloc_errno_unchanged", errno == 0);
+  result_bool("owned_live_check_owned", p != NULL && mi_check_owned(p));
+  result_bool("owned_live_any_heap_contains", p != NULL && mi_any_heap_contains(p));
+  result_bool("owned_live_heap_of_nonnull", p != NULL && mi_heap_of(p) != NULL);
+  result_bool("owned_live_heap_contains", p != NULL && mi_heap_contains(mi_heap_of(p), p));
   mi_free(p);
+  result_bool("owned_freed_check_owned", mi_check_owned(p));
+  result_bool("owned_freed_any_heap_contains", mi_any_heap_contains(p));
+
+  int stack_value = 42;
+  result_bool("owned_stack_check_owned", !mi_check_owned(&stack_value));
+  result_bool("owned_stack_any_heap_contains", !mi_any_heap_contains(&stack_value));
+  result_bool("owned_stack_heap_of_null", mi_heap_of(&stack_value) == NULL);
+  result_bool("owned_stack_not_in_region", !mi_is_in_heap_region(&stack_value));
+
+  system_malloc_fun system_malloc = (system_malloc_fun)dlsym(RTLD_NEXT, "malloc");
+  system_free_fun system_free = (system_free_fun)dlsym(RTLD_NEXT, "free");
+  void* foreign_malloc = (system_malloc == NULL ? NULL : system_malloc(41));
+  result_bool("owned_foreign_malloc_allocated", foreign_malloc != NULL && system_free != NULL);
+  if (foreign_malloc != NULL && system_free != NULL) {
+    result_bool("owned_foreign_malloc_check_owned", !mi_check_owned(foreign_malloc));
+    result_bool("owned_foreign_malloc_not_in_region", !mi_is_in_heap_region(foreign_malloc));
+    system_free(foreign_malloc);
+  } else {
+    result_bool("owned_foreign_malloc_check_owned", 0);
+    result_bool("owned_foreign_malloc_not_in_region", 0);
+  }
 
   mi_cfree(NULL);
   result_bool("cfree_null_ok", 1);
@@ -233,6 +274,21 @@ int main(void) {
     result_bool("cfree_foreign_not_in_heap", 0);
     result_bool("cfree_foreign_unmap_ok", 0);
   }
+
+  void* owned_aligned = mi_malloc_aligned(55, 64);
+  result_bool("owned_aligned_check_owned", owned_aligned != NULL && mi_check_owned(owned_aligned));
+  result_bool("owned_aligned_any_heap_contains", owned_aligned != NULL && mi_any_heap_contains(owned_aligned));
+  result_bool("owned_aligned_heap_of_nonnull", owned_aligned != NULL && mi_heap_of(owned_aligned) != NULL);
+  mi_free(owned_aligned);
+
+  struct abandoned_pointer_result abandoned_result = {NULL};
+  pthread_t abandoned_thread;
+  int abandoned_started = (pthread_create(&abandoned_thread, NULL, abandoned_pointer_worker, &abandoned_result) == 0);
+  int abandoned_joined = abandoned_started && pthread_join(abandoned_thread, NULL) == 0;
+  result_bool("owned_abandoned_thread_joined", abandoned_joined);
+  result_bool("owned_abandoned_check_owned", abandoned_joined && abandoned_result.ptr != NULL && mi_check_owned(abandoned_result.ptr));
+  result_bool("owned_abandoned_in_region", abandoned_joined && abandoned_result.ptr != NULL && mi_is_in_heap_region(abandoned_result.ptr));
+  mi_free(abandoned_result.ptr);
 
   unsigned char* c = (unsigned char*)mi_calloc(8, 4);
   result_bool("calloc_nonnull", c != NULL);

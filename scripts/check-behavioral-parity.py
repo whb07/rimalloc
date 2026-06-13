@@ -417,6 +417,37 @@ static int option_invalid_case_status(int op) {
   return -3;
 }
 
+static int foreign_size_case_status(int op) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+    int stack_value = 42;
+    switch (op) {
+      case 0:
+        { volatile size_t value = mi_usable_size(&stack_value); (void)value; }
+        _exit(0);
+      case 1:
+        { volatile size_t value = mi_malloc_usable_size(&stack_value); (void)value; }
+        _exit(0);
+      case 2:
+        { volatile size_t value = mi_malloc_size(&stack_value); (void)value; }
+        _exit(0);
+      default:
+        _exit(41);
+    }
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static void options_print_with_stderr_suppressed(void) {
   FILE* devnull = fopen("/dev/null", "w");
   if (devnull == NULL) return;
@@ -1575,6 +1606,10 @@ int main(void) {
 
   result_bool("usable_null_zero", mi_usable_size(NULL) == 0);
   result_bool("malloc_size_null_zero", mi_malloc_size(NULL) == 0);
+  result_bool("malloc_usable_size_null_zero", mi_malloc_usable_size(NULL) == 0);
+  result_size("usable_size_foreign_status", (size_t)foreign_size_case_status(0));
+  result_size("malloc_usable_size_foreign_status", (size_t)foreign_size_case_status(1));
+  result_size("malloc_size_foreign_status", (size_t)foreign_size_case_status(2));
 
   output_callbacks = 0;
   mi_stats_print_out(output_callback, NULL);

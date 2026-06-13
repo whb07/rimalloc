@@ -80,7 +80,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Match `mi_realloc_aligned` and `mi_realloc_aligned_at`. Validation: tests cover null, shrink, grow, move, in-place, invalid alignment, offset, old-content preservation, and free compatibility against C mimalloc.
 - [ ] Match `mi_rezalloc_aligned` and `mi_rezalloc_aligned_at`. Validation: tests verify alignment/offset, old-content preservation, newly zeroed tail, and overflow behavior against C mimalloc.
 - [ ] Match `mi_recalloc_aligned` and `mi_recalloc_aligned_at`. Validation: tests verify multiplication overflow, zeroing, alignment/offset, old-content preservation, and null pointer behavior against C mimalloc.
-- [ ] Match POSIX-compatible `mi_posix_memalign`. Validation: tests compare return codes, output pointer preservation on failure, alignment rules, size zero, errno behavior, and free compatibility against C mimalloc.
+- [x] Match POSIX-compatible `mi_posix_memalign`. Validation: tests compare return codes, output pointer preservation on failure, alignment rules, size zero, errno behavior, and free compatibility against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [ ] Match `mi_memalign`, `mi_valloc`, `mi_pvalloc`, and `mi_aligned_alloc`. Validation: tests verify page-size alignment, rounded size behavior for `pvalloc`, C11 alignment constraints, zero-size behavior, and failure behavior against C mimalloc.
 
 ## Heap, Theap, and Subprocess Behavior

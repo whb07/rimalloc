@@ -368,6 +368,27 @@ int main(void) {
   result_bool("posix_memalign_errno_unchanged", errno == 0);
   mi_free(posix);
 
+  posix = (void*)0xBAD;
+  errno = 0;
+  perr = mi_posix_memalign(&posix, 3, 64);
+  result_bool("posix_memalign_invalid_alignment_error", perr == EINVAL);
+  result_bool("posix_memalign_invalid_alignment_preserve", posix == (void*)0xBAD);
+  result_bool("posix_memalign_invalid_alignment_errno", errno == 0);
+
+  posix = (void*)0xBAD;
+  perr = mi_posix_memalign(&posix, sizeof(void*) / 2, 64);
+  result_bool("posix_memalign_small_alignment_error", perr == EINVAL);
+  result_bool("posix_memalign_small_alignment_preserve", posix == (void*)0xBAD);
+
+  perr = mi_posix_memalign(NULL, 32, 64);
+  result_bool("posix_memalign_null_out_error", perr == EINVAL);
+
+  posix = (void*)0xBAD;
+  perr = mi_posix_memalign(&posix, 64, 0);
+  result_bool("posix_memalign_zero_size_success", perr == 0);
+  result_bool("posix_memalign_zero_size_alignment", posix == NULL || ((uintptr_t)posix % 64) == 0);
+  mi_free(posix);
+
   char* dup = mi_strdup("abc");
   result_bool("strdup_content", dup != NULL && strcmp(dup, "abc") == 0);
   mi_free(dup);

@@ -25,6 +25,7 @@ SCENARIO_C = r"""
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <wchar.h>
@@ -666,6 +667,58 @@ int main(void) {
   wchar_t* wdup = mi_wcsdup(L"wide-\u03bb");
   result_bool("wcsdup_content", wdup != NULL && wcscmp(wdup, L"wide-\u03bb") == 0);
   mi_free(wdup);
+
+  char* envbuf = (char*)0xBAD;
+  size_t envsize = 123;
+  result_bool("dupenv_setenv", setenv("MI_PARITY_ENV", "value", 1) == 0);
+  int env_err = mi_dupenv_s(&envbuf, &envsize, "MI_PARITY_ENV");
+  result_bool("dupenv_present_success", env_err == 0 && envbuf != NULL);
+  result_bool("dupenv_present_content", envbuf != NULL && strcmp(envbuf, "value") == 0);
+  result_bool("dupenv_present_size", envsize == 6);
+  result_bool("dupenv_present_owned", envbuf != NULL && mi_check_owned(envbuf));
+  mi_free(envbuf);
+
+  envbuf = (char*)0xBAD;
+  envsize = 123;
+  result_bool("dupenv_unsetenv", unsetenv("MI_PARITY_ENV") == 0);
+  env_err = mi_dupenv_s(&envbuf, &envsize, "MI_PARITY_ENV");
+  result_bool("dupenv_missing_success", env_err == 0 && envbuf == NULL && envsize == 0);
+
+  envbuf = (char*)0xBAD;
+  env_err = mi_dupenv_s(&envbuf, NULL, "MI_PARITY_ENV");
+  result_bool("dupenv_missing_null_size", env_err == 0 && envbuf == NULL);
+
+  envsize = 123;
+  env_err = mi_dupenv_s(NULL, &envsize, "MI_PARITY_ENV");
+  result_bool("dupenv_null_buf_error", env_err == EINVAL && envsize == 0);
+
+  envbuf = (char*)0xBAD;
+  envsize = 123;
+  env_err = mi_dupenv_s(&envbuf, &envsize, NULL);
+  result_bool("dupenv_null_name_error", env_err == EINVAL && envbuf == (char*)0xBAD && envsize == 0);
+
+  static const unsigned char nonutf8_value[] = { 'b', 'y', 't', 'e', '-', 0xFF, 0 };
+  result_bool("dupenv_nonutf8_setenv", setenv("MI_PARITY_ENV_BYTES", (const char*)nonutf8_value, 1) == 0);
+  envbuf = NULL;
+  envsize = 0;
+  env_err = mi_dupenv_s(&envbuf, &envsize, "MI_PARITY_ENV_BYTES");
+  result_bool("dupenv_nonutf8_success", env_err == 0 && envbuf != NULL);
+  result_bool("dupenv_nonutf8_content", envbuf != NULL && memcmp(envbuf, nonutf8_value, sizeof(nonutf8_value)) == 0);
+  result_bool("dupenv_nonutf8_size", envsize == sizeof(nonutf8_value));
+  mi_free(envbuf);
+  (void)unsetenv("MI_PARITY_ENV_BYTES");
+
+  wchar_t* wenvbuf = (wchar_t*)0xBAD;
+  size_t wenvsize = 123;
+  int wenv_err = mi_wdupenv_s(&wenvbuf, &wenvsize, L"MI_PARITY_ENV");
+  result_bool("wdupenv_unsupported_error", wenv_err == EINVAL && wenvbuf == NULL && wenvsize == 0);
+  wenvsize = 123;
+  wenv_err = mi_wdupenv_s(NULL, &wenvsize, L"MI_PARITY_ENV");
+  result_bool("wdupenv_null_buf_error", wenv_err == EINVAL && wenvsize == 0);
+  wenvbuf = (wchar_t*)0xBAD;
+  wenvsize = 123;
+  wenv_err = mi_wdupenv_s(&wenvbuf, &wenvsize, NULL);
+  result_bool("wdupenv_null_name_error", wenv_err == EINVAL && wenvbuf == (wchar_t*)0xBAD && wenvsize == 0);
 
   mi_heap_t* main_heap = mi_heap_main();
   mi_heap_t* main_heap_again = mi_heap_main();

@@ -2,10 +2,6 @@
 
 #![allow(dead_code, clippy::missing_safety_doc, unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{c_int, c_void};
-use core::{mem::size_of, ptr};
-use std::ffi::{CStr, CString};
-
 use crate::internal::{
     _mi_align_up, _mi_is_aligned, _mi_is_power_of_two, _mi_memcpy, _mi_os_page_size,
     mi_count_size_overflow, mi_mul_overflow,
@@ -15,6 +11,13 @@ use crate::mimalloc::{
     mi_strdup, mi_usable_size,
 };
 use crate::types::{EINVAL, ENOMEM, EOVERFLOW};
+use core::ffi::{c_int, c_void};
+use core::{mem::size_of, ptr};
+use std::ffi::CStr;
+
+unsafe extern "C" {
+    fn getenv(name: *const i8) -> *const i8;
+}
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 unsafe fn mi_set_errno(err: c_int) {
@@ -232,28 +235,17 @@ pub unsafe extern "C" fn mi_dupenv_s(
     if buf.is_null() || name.is_null() {
         return EINVAL;
     }
-    let name = match CStr::from_ptr(name).to_str() {
-        Ok(name) => name,
-        Err(_) => return EINVAL,
-    };
-    let value = match std::env::var_os(name).and_then(|v| v.into_string().ok()) {
-        Some(value) => value,
-        None => {
-            *buf = ptr::null_mut();
-            return 0;
-        }
-    };
-    let value = match CString::new(value) {
-        Ok(value) => value,
-        Err(_) => return EINVAL,
-    };
-
-    *buf = mi_strdup(value.as_ptr());
+    let value = getenv(name);
+    if value.is_null() {
+        *buf = ptr::null_mut();
+        return 0;
+    }
+    *buf = mi_strdup(value);
     if (*buf).is_null() {
         return ENOMEM;
     }
     if !size.is_null() {
-        *size = value.as_bytes_with_nul().len();
+        *size = CStr::from_ptr(value).to_bytes_with_nul().len();
     }
     0
 }

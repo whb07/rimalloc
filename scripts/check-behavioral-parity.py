@@ -43,6 +43,14 @@ static size_t arena_output_callbacks = 0;
 static int arena_output_seen_arena = 0;
 static int arena_output_seen_chunks = 0;
 static int arena_output_seen_total = 0;
+static size_t stats_output_callbacks = 0;
+static int stats_output_seen_heap = 0;
+static int stats_output_seen_subproc = 0;
+static int stats_output_seen_blocks = 0;
+static int stats_output_seen_pages = 0;
+static int stats_output_seen_process = 0;
+static int stats_output_seen_elapsed = 0;
+static int stats_output_seen_default_arg = 0;
 static volatile size_t overflow_count = (size_t)-1;
 
 typedef void* (*system_malloc_fun)(size_t);
@@ -85,6 +93,29 @@ static void arena_output_callback(const char* msg, void* arg) {
   if (strstr(msg, "arena ") != NULL && strstr(msg, "slices") != NULL) arena_output_seen_arena = 1;
   if (strstr(msg, "chunks (p:page") != NULL) arena_output_seen_chunks = 1;
   if (strstr(msg, "total pages in arenas:") != NULL) arena_output_seen_total = 1;
+}
+
+static void stats_output_reset(void) {
+  stats_output_callbacks = 0;
+  stats_output_seen_heap = 0;
+  stats_output_seen_subproc = 0;
+  stats_output_seen_blocks = 0;
+  stats_output_seen_pages = 0;
+  stats_output_seen_process = 0;
+  stats_output_seen_elapsed = 0;
+  stats_output_seen_default_arg = 0;
+}
+
+static void stats_output_callback(const char* msg, void* arg) {
+  if (msg == NULL || msg[0] == '\0') return;
+  stats_output_callbacks++;
+  if (arg == (void*)0x57A75) stats_output_seen_default_arg = 1;
+  if (strncmp(msg, "heap ", 5) == 0) stats_output_seen_heap = 1;
+  if (strncmp(msg, "subproc ", 8) == 0) stats_output_seen_subproc = 1;
+  if (strstr(msg, "blocks") != NULL) stats_output_seen_blocks = 1;
+  if (strstr(msg, "pages") != NULL) stats_output_seen_pages = 1;
+  if (strstr(msg, "process") != NULL) stats_output_seen_process = 1;
+  if (strstr(msg, "elapsed") != NULL) stats_output_seen_elapsed = 1;
 }
 
 static void result_bool(const char* name, int ok) {
@@ -1826,9 +1857,39 @@ int main(void) {
   result_bool("stats_get_json_allocated_schema", stats_json_schema_ok(json));
   mi_free(json);
 
-  output_callbacks = 0;
-  mi_stats_print_out(output_callback, NULL);
-  result_bool("stats_output_callback_nonempty", output_callbacks > 0);
+  void* stats_probe = mi_malloc(4096);
+  result_bool("stats_print_probe_alloc", stats_probe != NULL);
+
+  stats_output_reset();
+  mi_stats_print_out(stats_output_callback, NULL);
+  result_bool("stats_print_out_callback_nonempty", stats_output_callbacks > 0);
+  result_bool("stats_print_out_structure", stats_output_seen_subproc && stats_output_seen_blocks && stats_output_seen_pages);
+
+  stats_output_reset();
+  mi_stats_print((void*)stats_output_callback);
+  result_bool("stats_print_deprecated_callback_nonempty", stats_output_callbacks > 0);
+  result_bool("stats_print_deprecated_callback_structure", stats_output_seen_subproc && stats_output_seen_blocks);
+
+  stats_output_reset();
+  mi_thread_stats_print_out(stats_output_callback, NULL);
+  result_bool("thread_stats_print_out_callback_nonempty", stats_output_callbacks > 0);
+  result_bool("thread_stats_print_out_structure", stats_output_seen_heap);
+
+  stats_output_reset();
+  mi_process_info_print_out(stats_output_callback, NULL);
+  result_bool("process_info_print_out_callback_nonempty", stats_output_callbacks > 0);
+  result_bool("process_info_print_out_structure", stats_output_seen_process && stats_output_seen_elapsed);
+
+  mi_register_output(stats_output_callback, (void*)0x57A75);
+  stats_output_reset();
+  mi_stats_print(NULL);
+  result_bool("stats_print_null_uses_registered_output", stats_output_callbacks > 0 && stats_output_seen_default_arg);
+  stats_output_reset();
+  mi_process_info_print();
+  result_bool("process_info_print_null_uses_registered_output", stats_output_callbacks > 0 && stats_output_seen_default_arg);
+  mi_register_output(NULL, NULL);
+
+  mi_free(stats_probe);
 
   mi_collect(false);
   return failures == 0 ? 0 : 1;

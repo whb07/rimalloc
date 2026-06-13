@@ -1211,8 +1211,14 @@ pub unsafe extern "C" fn mi_stats_print_out(out: Option<mi_output_fun>, arg: *mu
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_stats_print(_out: *mut c_void) {
-    unsafe { mi_stats_print_out(None, ptr::null_mut()) };
+pub unsafe extern "C" fn mi_stats_print(out: *mut c_void) {
+    let out_fun = if out.is_null() {
+        None
+    } else {
+        // The legacy C API accepts an output callback through a `void*`.
+        Some(unsafe { std::mem::transmute::<*mut c_void, mi_output_fun>(out) })
+    };
+    unsafe { mi_stats_print_out(out_fun, ptr::null_mut()) };
 }
 
 #[unsafe(no_mangle)]

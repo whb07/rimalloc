@@ -241,6 +241,15 @@ int main(void) {
   result_bool("mbsdup_content", mdup != NULL && strcmp((const char*)mdup, "multi-byte-\xc3\xa9") == 0);
   mi_free(mdup);
 
+  mi_heap_t* main_heap = mi_heap_main();
+  mi_heap_t* main_heap_again = mi_heap_main();
+  result_bool("heap_main_nonnull", main_heap != NULL);
+  result_bool("heap_main_stable", main_heap != NULL && main_heap == main_heap_again);
+  void* main_alloc = mi_malloc(24);
+  result_bool("heap_main_contains_malloc", main_heap != NULL && main_alloc != NULL && mi_heap_contains(main_heap, main_alloc));
+  result_bool("heap_main_of_malloc", main_heap != NULL && main_alloc != NULL && mi_heap_of(main_alloc) == main_heap);
+  mi_free(main_alloc);
+
   mi_heap_t* heap = mi_heap_new();
   result_bool("heap_nonnull", heap != NULL);
   void* hp = heap == NULL ? NULL : mi_heap_malloc(heap, 24);

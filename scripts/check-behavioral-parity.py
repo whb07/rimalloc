@@ -129,6 +129,42 @@ struct heap_cross_thread_free_result {
   int owned_before_free;
 };
 
+struct heap_visit_result {
+  const mi_heap_t* expected_heap;
+  size_t areas;
+  size_t blocks;
+  int heap_matches;
+  int area_fields_ok;
+  int block_fields_ok;
+};
+
+static bool heap_visit_counting_visitor(const mi_heap_t* heap, const mi_heap_area_t* area, void* block, size_t block_size, void* arg) {
+  struct heap_visit_result* result = (struct heap_visit_result*)arg;
+  if (heap != result->expected_heap) result->heap_matches = 0;
+  if (area == NULL || area->blocks == NULL || area->reserved < area->committed || area->full_block_size < area->block_size) {
+    result->area_fields_ok = 0;
+  }
+  if (block == NULL) {
+    result->areas++;
+  } else {
+    result->blocks++;
+    if (block_size == 0 || area == NULL || block_size > area->full_block_size) {
+      result->block_fields_ok = 0;
+    }
+  }
+  return true;
+}
+
+static bool heap_visit_stop_visitor(const mi_heap_t* heap, const mi_heap_area_t* area, void* block, size_t block_size, void* arg) {
+  (void)heap;
+  (void)area;
+  (void)block;
+  (void)block_size;
+  struct heap_visit_result* result = (struct heap_visit_result*)arg;
+  result->areas++;
+  return false;
+}
+
 static void* thread_lifecycle_worker(void* arg) {
   struct thread_lifecycle_result* result = (struct thread_lifecycle_result*)arg;
   mi_thread_init();
@@ -841,6 +877,25 @@ int main(void) {
   int heap_free_joined = heap_free_started && pthread_join(heap_free_thread, NULL) == 0;
   result_bool("heap_cross_thread_free_joined", heap_free_joined);
   result_bool("heap_cross_thread_owned_before_free", heap_free_joined && heap_thread_result.owned_before_free);
+
+  void* visit_a = heap == NULL ? NULL : mi_heap_malloc(heap, 80);
+  void* visit_b = heap == NULL ? NULL : mi_heap_malloc(heap, 160);
+  result_bool("heap_visit_allocations_owner", visit_a != NULL && visit_b != NULL && mi_heap_contains(heap, visit_a) && mi_heap_contains(heap, visit_b));
+  struct heap_visit_result visit_areas = { heap, 0, 0, 1, 1, 1 };
+  bool visit_areas_ok = heap != NULL && mi_heap_visit_blocks(heap, false, heap_visit_counting_visitor, &visit_areas);
+  result_bool("heap_visit_areas_success", visit_areas_ok);
+  result_bool("heap_visit_areas_only", visit_areas_ok && visit_areas.areas > 0 && visit_areas.blocks == 0);
+  result_bool("heap_visit_area_fields", visit_areas.heap_matches && visit_areas.area_fields_ok);
+  struct heap_visit_result visit_blocks = { heap, 0, 0, 1, 1, 1 };
+  bool visit_blocks_ok = heap != NULL && mi_heap_visit_blocks(heap, true, heap_visit_counting_visitor, &visit_blocks);
+  result_bool("heap_visit_blocks_success", visit_blocks_ok);
+  result_bool("heap_visit_blocks_seen", visit_blocks_ok && visit_blocks.blocks > 0);
+  result_bool("heap_visit_block_fields", visit_blocks.heap_matches && visit_blocks.area_fields_ok && visit_blocks.block_fields_ok);
+  struct heap_visit_result visit_stop = { heap, 0, 0, 1, 1, 1 };
+  bool visit_stop_ok = heap != NULL && mi_heap_visit_blocks(heap, true, heap_visit_stop_visitor, &visit_stop);
+  result_bool("heap_visit_stop_returns_false", !visit_stop_ok && visit_stop.areas == 1);
+  mi_free(visit_a);
+  mi_free(visit_b);
 
   unsigned char* hre = heap == NULL ? NULL : (unsigned char*)mi_heap_realloc(heap, NULL, 24);
   result_bool("heap_realloc_null_owner", hre != NULL && mi_heap_contains(heap, hre) && mi_usable_size(hre) >= 24);

@@ -520,6 +520,13 @@ static int realloc_failure_case_status(int op) {
         mi_free(p);
         _exit(0);
       }
+      case 1: {
+        void* q = mi_reallocf(p, overflow_count);
+        if (q != NULL) _exit(12);
+        volatile size_t old_size = mi_malloc_size(p);
+        (void)old_size;
+        _exit(0);
+      }
       default:
         _exit(41);
     }
@@ -804,6 +811,7 @@ int main(void) {
   result_bool("realloc_failure_original_owned", mi_check_owned(rf) && has_sequence_prefix(rf, 64));
   mi_free(rf);
   result_size("realloc_failure_retains_original_status", (size_t)realloc_failure_case_status(0));
+  result_size("reallocf_failure_invalidates_original_status", (size_t)realloc_failure_case_status(1));
 
   result_bool("expand_null_fails", mi_expand(NULL, 16) == NULL);
   errno = 0;

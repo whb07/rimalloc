@@ -493,11 +493,43 @@ int main(void) {
 
   unsigned char* zaligned = (unsigned char*)mi_zalloc_aligned(66, 32);
   result_bool("zalloc_aligned_zeroed", is_aligned_at(zaligned, 32, 0) && bytes_equal(zaligned, 0, 66));
+  result_bool("zalloc_aligned_size", zaligned != NULL && mi_usable_size(zaligned) >= 66);
   mi_free(zaligned);
+
+  size_t zalloc_aligned_sizes[] = { 0, 1, 17, MI_SMALL_SIZE_MAX, MI_SMALL_SIZE_MAX + 1 };
+  size_t zalloc_aligned_alignments[] = { 8, 16, 32, 64, 4096 };
+  size_t zalloc_aligned_count = sizeof(zalloc_aligned_sizes) / sizeof(zalloc_aligned_sizes[0]);
+  for (size_t i = 0; i < zalloc_aligned_count; i++) {
+    size_t requested = zalloc_aligned_sizes[i];
+    size_t alignment = zalloc_aligned_alignments[i];
+    zaligned = (unsigned char*)mi_zalloc_aligned(requested, alignment);
+    result_bool("zalloc_aligned_matrix_nonnull", zaligned != NULL);
+    result_bool("zalloc_aligned_matrix_alignment", is_aligned_at(zaligned, alignment, 0));
+    result_bool("zalloc_aligned_matrix_zeroed", zaligned != NULL && bytes_equal(zaligned, 0, requested));
+    result_bool("zalloc_aligned_matrix_usable", zaligned != NULL && mi_usable_size(zaligned) >= requested);
+    mi_free(zaligned);
+  }
 
   zaligned = (unsigned char*)mi_zalloc_aligned_at(67, 32, 16);
   result_bool("zalloc_aligned_at_zeroed", is_aligned_at(zaligned, 32, 16) && bytes_equal(zaligned, 0, 67));
+  result_bool("zalloc_aligned_at_size", zaligned != NULL && mi_usable_size(zaligned) >= 67);
   mi_free(zaligned);
+
+  size_t zalloc_aligned_at_sizes[] = { 0, 24, 32, 64, 512 };
+  size_t zalloc_aligned_at_alignments[] = { 8, 16, 32, 64, 4096 };
+  size_t zalloc_aligned_at_offsets[] = { 0, 8, 16, 24, 128 };
+  size_t zalloc_aligned_at_count = sizeof(zalloc_aligned_at_sizes) / sizeof(zalloc_aligned_at_sizes[0]);
+  for (size_t i = 0; i < zalloc_aligned_at_count; i++) {
+    size_t requested = zalloc_aligned_at_sizes[i];
+    size_t alignment = zalloc_aligned_at_alignments[i];
+    size_t offset = zalloc_aligned_at_offsets[i];
+    zaligned = (unsigned char*)mi_zalloc_aligned_at(requested, alignment, offset);
+    result_bool("zalloc_aligned_at_matrix_nonnull", zaligned != NULL);
+    result_bool("zalloc_aligned_at_matrix_offset", is_aligned_at(zaligned, alignment, offset));
+    result_bool("zalloc_aligned_at_matrix_zeroed", zaligned != NULL && bytes_equal(zaligned, 0, requested));
+    result_bool("zalloc_aligned_at_matrix_usable", zaligned != NULL && mi_usable_size(zaligned) >= requested);
+    mi_free(zaligned);
+  }
 
   unsigned char* caligned = (unsigned char*)mi_calloc_aligned(9, 7, 32);
   result_bool("calloc_aligned_zeroed", is_aligned_at(caligned, 32, 0) && bytes_equal(caligned, 0, 63));

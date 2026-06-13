@@ -55,3 +55,23 @@ fn c_baseline_documents_required_public_headers_and_versions() {
     assert!(PARITY_DOC.contains("| `MI_MALLOC_VERSION` | 30302 |"));
     assert!(PARITY_DOC.contains("| `MI_STAT_VERSION` | 5 |"));
 }
+
+#[test]
+fn parity_signoff_documents_required_commands() {
+    for command in [
+        "cargo fmt --check",
+        "cargo clippy --all-targets -- -D warnings",
+        "cargo test",
+        "cargo test --release",
+        "scripts/check-public-abi.py",
+        "scripts/check-public-symbols.py",
+        "scripts/check-public-symbols.py --missing-only",
+        "scripts/check-c-link-public-api.py",
+        "scripts/check-behavioral-parity.py",
+    ] {
+        assert!(
+            PARITY_DOC.contains(command),
+            "missing signoff command {command}"
+        );
+    }
+}

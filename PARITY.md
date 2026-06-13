@@ -37,3 +37,25 @@ The header constants currently verified from the baseline are:
 
 Any change to these vendored headers must be reviewed as a baseline change
 before Rust public API parity items can be considered complete.
+
+## Signoff Command Set
+
+Run this sequence from the repository root before declaring a parity checkpoint
+complete for the currently supported matrix:
+
+```sh
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+cargo test --release
+scripts/check-public-abi.py
+scripts/check-public-symbols.py
+scripts/check-public-symbols.py --missing-only
+scripts/check-c-link-public-api.py
+scripts/check-behavioral-parity.py
+```
+
+Each command must exit successfully. The script checks compare the Rust artifact
+against the vendored C mimalloc 3.3.2 headers and implementation; `cargo test`
+and `cargo test --release` cover the two Rust profiles currently listed in the
+supported parity matrix.

@@ -14,7 +14,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [x] Add behavioral parity tests that run the same scenarios against C mimalloc and Rust mimalloc. Validation: the same test inputs produce matching return values, errno/error behavior, usable sizes where specified, output callback text classes, and allocator invariants, with all accepted differences documented. Guarded by `scripts/check-behavioral-parity.py`.
 - [ ] Remove or resolve every no-op, placeholder, duplicate-empty test, and "stubbed for translation" implementation that affects public behavior. Validation: a repository search for stub markers, empty test bodies, and `TODO`/`unimplemented`/`panic!("todo")` style placeholders has no parity-relevant unresolved hits.
 - [ ] Refresh stale translation status documents so they no longer claim declaration-only progress for implemented modules. Validation: `RUST_TRANSLATION_SPEC.md` and any task metadata agree with the current Rust implementation and this TODO's remaining work.
-- [ ] Define the final parity signoff command set. Validation: one documented command sequence checks formatting, Rust tests, C-link tests, parity comparisons, stress tests, and all supported feature/mode combinations without relying on manual interpretation.
+- [x] Define the final parity signoff command set. Validation: one documented command sequence checks formatting, Rust tests, C-link tests, parity comparisons, stress tests, and all supported feature/mode combinations without relying on manual interpretation. See `PARITY.md`; guarded by `tests/parity_docs.rs`.
 
 ## Public ABI Surface
 

@@ -733,7 +733,7 @@ pub unsafe extern "C" fn mi_unix_realloc_export(p: *mut c_void, newsize: usize) 
 
 #[inline]
 pub unsafe fn mi_unix_free(p: *mut c_void) {
-    unsafe { crate::mimalloc::mi_free(p) }
+    unsafe { crate::mimalloc::mi_cfree(p) }
 }
 
 #[cfg(not(windows))]
@@ -789,7 +789,7 @@ pub unsafe fn mi_unix_aligned_alloc(alignment: usize, size: usize) -> *mut c_voi
 
 #[inline]
 pub unsafe fn mi_unix_cfree(p: *mut c_void) {
-    unsafe { crate::mimalloc::mi_free(p) }
+    unsafe { crate::mimalloc::mi_cfree(p) }
 }
 
 #[inline]

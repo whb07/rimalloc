@@ -341,7 +341,7 @@ pub unsafe extern "C" fn _mi_is_redirected() -> bool {
     false
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
     if !message.is_null() {
         unsafe { *message = ptr::null() };
@@ -349,5 +349,5 @@ pub unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool
     true
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_allocator_done() {}

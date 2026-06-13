@@ -1024,7 +1024,8 @@ unsafe fn mi_heap_get_stats(mut heap: *mut mi_heap_t) -> *const mi_stats_t {
     }
 }
 
-unsafe fn mi_heap_stats_merge_to_subproc(mut heap: *mut mi_heap_t) {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_stats_merge_to_subproc(mut heap: *mut mi_heap_t) {
     if heap.is_null() {
         heap = unsafe { mi_heap_main() };
     }
@@ -1037,6 +1038,16 @@ unsafe fn mi_heap_stats_merge_to_subproc(mut heap: *mut mi_heap_t) {
 /// Uses the process-default heap/theap state and follows the legacy C ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_reset() {
+    if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
+        return;
+    }
+    let heap = unsafe { mi_heap_main() };
+    let _ = unsafe { mi_heap_get_stats(heap) };
+    unsafe { mi_heap_stats_merge_to_subproc(heap) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_stats_merge() {
     if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
         return;
     }
@@ -1152,6 +1163,19 @@ pub unsafe extern "C" fn mi_subproc_stats_get(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_get(stats: *mut mi_stats_t) -> bool {
     unsafe { mi_subproc_stats_get(mi_subproc_current(), stats) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_stats_get(heap: *mut mi_heap_t, stats: *mut mi_stats_t) -> bool {
+    if stats.is_null() {
+        return false;
+    }
+    unsafe { mi_stats_copy(stats, mi_heap_get_stats(heap)) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_collect_reduce(_target_thread_owned: usize) {
+    unsafe { crate::theap::mi_collect(false) };
 }
 
 #[unsafe(no_mangle)]

@@ -616,6 +616,7 @@ pub unsafe extern "C" fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t) {
     unsafe { mi_heap_delete_pages(heap_from, ptr::null_mut()) };
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_arena_min_alignment() -> usize {
     MI_ARENA_SLICE_ALIGN
 }
@@ -3611,6 +3612,44 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
             memid,
             mi_commit_null,
             ptr::null_mut(),
+            arena_id,
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[unsafe(no_mangle)]
+/// # Safety
+/// `start..start+size` must describe caller-owned memory suitable for arena management.
+/// `commit_fun` and `arena_id`, when present, must follow the C ABI contract.
+pub unsafe extern "C" fn mi_manage_memory(
+    start: *mut c_void,
+    size: usize,
+    is_committed: bool,
+    is_pinned: bool,
+    is_zero: bool,
+    numa_node: c_int,
+    exclusive: bool,
+    commit_fun: Option<mi_commit_fun_t>,
+    commit_fun_arg: *mut c_void,
+    arena_id: *mut mi_arena_id_t,
+) -> bool {
+    let mut memid = unsafe { _mi_memid_create(mi_memkind_t::MI_MEM_EXTERNAL) };
+    memid.mem.os.base = start;
+    memid.mem.os.size = size;
+    memid.initially_committed = is_committed;
+    memid.initially_zero = is_zero;
+    memid.is_pinned = is_pinned;
+    unsafe {
+        mi_manage_os_memory_ex2(
+            _mi_subproc(),
+            start,
+            size,
+            numa_node,
+            exclusive,
+            memid,
+            commit_fun.unwrap_or(mi_commit_null),
+            commit_fun_arg,
             arena_id,
         )
     }

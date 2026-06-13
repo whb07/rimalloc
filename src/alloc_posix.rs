@@ -159,6 +159,11 @@ pub unsafe extern "C" fn mi__expand(p: *mut c_void, newsize: usize) -> *mut c_vo
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_mbsdup(s: *const u8) -> *mut u8 {
+    unsafe { mi_strdup(s.cast::<i8>()).cast::<u8>() }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_wcsdup(s: *const c_wchar) -> *mut c_wchar {
     if s.is_null() {
         return ptr::null_mut();
@@ -192,6 +197,27 @@ pub unsafe extern "C" fn mi_wdupenv_s(
     }
     unsafe { *buf = ptr::null_mut() };
     EINVAL
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_aligned_offset_recalloc(
+    p: *mut c_void,
+    newcount: usize,
+    size: usize,
+    alignment: usize,
+    offset: usize,
+) -> *mut c_void {
+    unsafe { crate::alloc_aligned::mi_recalloc_aligned_at(p, newcount, size, alignment, offset) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_aligned_recalloc(
+    p: *mut c_void,
+    newcount: usize,
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    unsafe { crate::alloc_aligned::mi_recalloc_aligned(p, newcount, size, alignment) }
 }
 
 #[unsafe(no_mangle)]

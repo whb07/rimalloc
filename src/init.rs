@@ -713,6 +713,7 @@ pub extern "C" fn _mi_preloading() -> bool {
     false
 }
 
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_is_redirected() -> bool {
     false
 }
@@ -1595,6 +1596,13 @@ pub unsafe extern "C" fn _mi_auto_process_init() {
 
 #[unsafe(no_mangle)]
 /// # Safety
+/// Public C ABI wrapper for process-global initialization.
+pub unsafe extern "C" fn mi_process_init() {
+    unsafe { _mi_auto_process_init() };
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
 /// Performs process-global teardown for the bounded init/subproc surface and must not race with concurrent mutation of it.
 pub unsafe extern "C" fn _mi_auto_process_done() {
     mi_subproc_main_init();
@@ -1603,4 +1611,11 @@ pub unsafe extern "C" fn _mi_auto_process_done() {
         _mi_process_is_initialized = false;
         _mi_allocator_done();
     }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+/// Public C ABI wrapper for process-global teardown.
+pub unsafe extern "C" fn mi_process_done() {
+    unsafe { _mi_auto_process_done() };
 }

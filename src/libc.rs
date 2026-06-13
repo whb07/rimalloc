@@ -120,7 +120,7 @@ pub unsafe extern "C" fn _mi_strlcat(dest: *mut c_char, src: *const c_char, dest
     _mi_strlcpy(dest.add(len), src, dest_size - len);
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize {
     if s.is_null() {
         return 0;

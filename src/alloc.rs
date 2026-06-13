@@ -280,6 +280,11 @@ pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
+    mi_theap_malloc_small_zero(theap, size, false, ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     mi_theap_malloc_small_zero_nonnull(_mi_heap_theap(heap), size, false, ptr::null_mut())
 }
@@ -798,6 +803,15 @@ pub unsafe extern "C" fn mi_heap_realpath(
     mi_theap_realpath(_mi_heap_theap(heap), fname, resolved_name)
 }
 
+#[cfg(all(unix, not(target_os = "wasi")))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_realpath(
+    fname: *const c_char,
+    resolved_name: *mut c_char,
+) -> *mut c_char {
+    mi_theap_realpath(_mi_theap_default(), fname, resolved_name)
+}
+
 type StdNewHandler = Option<unsafe extern "C" fn()>;
 
 #[allow(non_snake_case)]
@@ -842,6 +856,11 @@ unsafe fn mi_theap_alloc_new(theap: *mut mi_theap_t, size: usize) -> *mut c_void
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
+    mi_theap_alloc_new(_mi_theap_default(), size)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_alloc_new(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     let p = mi_heap_malloc(heap, size);
     if mi_unlikely(p.is_null()) {
@@ -864,6 +883,15 @@ unsafe fn mi_theap_alloc_new_n(theap: *mut mi_theap_t, count: usize, size: usize
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_n(count: usize, size: usize) -> *mut c_void {
     mi_theap_alloc_new_n(_mi_theap_default(), count, size)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_heap_alloc_new_n(
+    heap: *mut mi_heap_t,
+    count: usize,
+    size: usize,
+) -> *mut c_void {
+    mi_theap_alloc_new_n(_mi_heap_theap(heap), count, size)
 }
 
 #[unsafe(no_mangle)]

@@ -51,6 +51,11 @@ static int stats_output_seen_pages = 0;
 static int stats_output_seen_process = 0;
 static int stats_output_seen_elapsed = 0;
 static int stats_output_seen_default_arg = 0;
+static int stats_output_seen_version = 0;
+static int stats_output_seen_option = 0;
+static int stats_output_seen_debug = 0;
+static int stats_output_seen_secure = 0;
+static int stats_output_seen_tracking = 0;
 static volatile size_t overflow_count = (size_t)-1;
 
 typedef void* (*system_malloc_fun)(size_t);
@@ -104,6 +109,11 @@ static void stats_output_reset(void) {
   stats_output_seen_process = 0;
   stats_output_seen_elapsed = 0;
   stats_output_seen_default_arg = 0;
+  stats_output_seen_version = 0;
+  stats_output_seen_option = 0;
+  stats_output_seen_debug = 0;
+  stats_output_seen_secure = 0;
+  stats_output_seen_tracking = 0;
 }
 
 static void stats_output_callback(const char* msg, void* arg) {
@@ -116,6 +126,11 @@ static void stats_output_callback(const char* msg, void* arg) {
   if (strstr(msg, "pages") != NULL) stats_output_seen_pages = 1;
   if (strstr(msg, "process") != NULL) stats_output_seen_process = 1;
   if (strstr(msg, "elapsed") != NULL) stats_output_seen_elapsed = 1;
+  if (msg[0] == 'v' && strstr(msg, "3.3.2") != NULL) stats_output_seen_version = 1;
+  if (strstr(msg, "option '") != NULL) stats_output_seen_option = 1;
+  if (strstr(msg, "debug level") != NULL) stats_output_seen_debug = 1;
+  if (strstr(msg, "secure level") != NULL) stats_output_seen_secure = 1;
+  if (strstr(msg, "mem tracking") != NULL) stats_output_seen_tracking = 1;
 }
 
 static void result_bool(const char* name, int ok) {
@@ -661,6 +676,21 @@ int main(void) {
   size_t output_after_clear = registered_output_b;
   options_print_with_stderr_suppressed();
   result_bool("register_output_clear", registered_output_b == output_after_clear);
+
+  stats_output_reset();
+  mi_options_print_out(stats_output_callback, (void*)0x57A75);
+  result_bool("options_print_out_callback_nonempty", stats_output_callbacks > 0);
+  result_bool("options_print_out_callback_arg", stats_output_seen_default_arg);
+  result_bool("options_print_out_structure", stats_output_seen_version && stats_output_seen_option && stats_output_seen_debug && stats_output_seen_secure && stats_output_seen_tracking);
+  result_bool("options_print_out_chunking", stats_output_callbacks > 4);
+
+  stats_output_reset();
+  mi_register_output(stats_output_callback, (void*)0x57A75);
+  mi_options_print();
+  result_bool("options_print_registered_output_nonempty", stats_output_callbacks > 0);
+  result_bool("options_print_registered_output_arg", stats_output_seen_default_arg);
+  result_bool("options_print_registered_output_structure", stats_output_seen_version && stats_output_seen_option && stats_output_seen_debug && stats_output_seen_secure && stats_output_seen_tracking);
+  mi_register_output(NULL, NULL);
 
   registered_error_a = 0;
   registered_error_b = 0;

@@ -74,7 +74,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 ## Aligned Allocation Semantics
 
 - [x] Match `mi_malloc_aligned` for valid and invalid alignments. Validation: tests compare power-of-two requirements, minimum alignment, large alignment, zero size, overflow, errno, and pointer alignment against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
-- [ ] Match `mi_malloc_aligned_at` offset semantics. Validation: tests verify `(ptr + offset) % alignment == 0` for many offset/alignment pairs and compare failure behavior with C mimalloc.
+- [x] Match `mi_malloc_aligned_at` offset semantics. Validation: tests verify `(ptr + offset) % alignment == 0` for many offset/alignment pairs and compare failure behavior with C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [ ] Match `mi_zalloc_aligned` and `mi_zalloc_aligned_at`. Validation: tests verify alignment/offset and byte-for-byte zeroing over every relevant size-class boundary.
 - [ ] Match `mi_calloc_aligned` and `mi_calloc_aligned_at`. Validation: tests cover count-size overflow, zero count/size, alignment/offset, zeroing, and usable size against C mimalloc.
 - [ ] Match `mi_realloc_aligned` and `mi_realloc_aligned_at`. Validation: tests cover null, shrink, grow, move, in-place, invalid alignment, offset, old-content preservation, and free compatibility against C mimalloc.

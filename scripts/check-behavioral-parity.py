@@ -467,9 +467,29 @@ int main(void) {
   result_bool("malloc_aligned_oversize_null", mi_malloc_aligned(overflow_count, 64) == NULL);
   result_size("malloc_aligned_oversize_errno", (size_t)errno);
 
-  aligned = mi_malloc_aligned_at(65, 32, 8);
+  aligned = mi_malloc_aligned_at(24, 32, 8);
   result_bool("aligned_at_offset", is_aligned_at(aligned, 32, 8));
+  result_bool("aligned_at_size", aligned != NULL && mi_usable_size(aligned) >= 24);
   mi_free(aligned);
+
+  size_t malloc_aligned_at_sizes[] = { 0, 24, 32, 64, 512 };
+  size_t malloc_aligned_at_alignments[] = { 8, 16, 32, 64, 4096 };
+  size_t malloc_aligned_at_offsets[] = { 0, 8, 16, 24, 128 };
+  size_t malloc_aligned_at_count = sizeof(malloc_aligned_at_sizes) / sizeof(malloc_aligned_at_sizes[0]);
+  for (size_t i = 0; i < malloc_aligned_at_count; i++) {
+    size_t requested = malloc_aligned_at_sizes[i];
+    size_t alignment = malloc_aligned_at_alignments[i];
+    size_t offset = malloc_aligned_at_offsets[i];
+    aligned = mi_malloc_aligned_at(requested, alignment, offset);
+    result_bool("malloc_aligned_at_matrix_nonnull", aligned != NULL);
+    result_bool("malloc_aligned_at_matrix_offset", is_aligned_at(aligned, alignment, offset));
+    result_bool("malloc_aligned_at_matrix_usable", aligned != NULL && mi_usable_size(aligned) >= requested);
+    mi_free(aligned);
+  }
+
+  result_bool("malloc_aligned_at_invalid_zero_alignment", mi_malloc_aligned_at(64, 0, 0) == NULL);
+  result_bool("malloc_aligned_at_invalid_non_power_two", mi_malloc_aligned_at(64, 3, 1) == NULL);
+  result_bool("malloc_aligned_at_large_alignment_offset_null", mi_malloc_aligned_at(64, 1024 * 1024 * 4, 1) == NULL);
 
   unsigned char* zaligned = (unsigned char*)mi_zalloc_aligned(66, 32);
   result_bool("zalloc_aligned_zeroed", is_aligned_at(zaligned, 32, 0) && bytes_equal(zaligned, 0, 66));

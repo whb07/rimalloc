@@ -1106,6 +1106,29 @@ int main(void) {
   result_bool("theap_malloc_aligned", is_aligned_at(tap, 32, 0));
   mi_free(tap);
 
+  void* theap_visit_a = theap == NULL ? NULL : mi_theap_malloc(theap, 72);
+  void* theap_visit_b = theap == NULL ? NULL : mi_theap_zalloc(theap, 144);
+  result_bool("theap_collect_allocations_owner", theap_visit_a != NULL && theap_visit_b != NULL && mi_heap_contains(heap, theap_visit_a) && mi_heap_contains(heap, theap_visit_b));
+  if (theap != NULL) mi_theap_collect(theap, false);
+  result_bool("theap_collect_nonforced_keeps_live", theap_visit_a != NULL && theap_visit_b != NULL && mi_heap_contains(heap, theap_visit_a) && mi_heap_contains(heap, theap_visit_b));
+  if (theap != NULL) mi_theap_collect(theap, true);
+  result_bool("theap_collect_forced_keeps_live", theap_visit_a != NULL && theap_visit_b != NULL && mi_heap_contains(heap, theap_visit_a) && mi_heap_contains(heap, theap_visit_b));
+  struct heap_visit_result theap_visit_areas = { heap, 0, 0, 1, 1, 1 };
+  bool theap_visit_areas_ok = theap != NULL && mi_theap_visit_blocks(theap, false, heap_visit_counting_visitor, &theap_visit_areas);
+  result_bool("theap_visit_areas_success", theap_visit_areas_ok);
+  result_bool("theap_visit_areas_only", theap_visit_areas_ok && theap_visit_areas.areas > 0 && theap_visit_areas.blocks == 0);
+  result_bool("theap_visit_area_fields", theap_visit_areas.heap_matches && theap_visit_areas.area_fields_ok);
+  struct heap_visit_result theap_visit_blocks = { heap, 0, 0, 1, 1, 1 };
+  bool theap_visit_blocks_ok = theap != NULL && mi_theap_visit_blocks(theap, true, heap_visit_counting_visitor, &theap_visit_blocks);
+  result_bool("theap_visit_blocks_success", theap_visit_blocks_ok);
+  result_bool("theap_visit_blocks_seen", theap_visit_blocks_ok && theap_visit_blocks.blocks > 0);
+  result_bool("theap_visit_block_fields", theap_visit_blocks.heap_matches && theap_visit_blocks.area_fields_ok && theap_visit_blocks.block_fields_ok);
+  struct heap_visit_result theap_visit_stop = { heap, 0, 0, 1, 1, 1 };
+  bool theap_visit_stop_ok = theap != NULL && mi_theap_visit_blocks(theap, true, heap_visit_stop_visitor, &theap_visit_stop);
+  result_bool("theap_visit_stop_returns_false", !theap_visit_stop_ok && theap_visit_stop.areas == 1);
+  mi_free(theap_visit_a);
+  mi_free(theap_visit_b);
+
   char resolved[4096];
   char* rp_stack = mi_realpath(".", resolved);
   result_bool("realpath_stack_success", rp_stack == resolved && resolved[0] == '/');

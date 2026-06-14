@@ -72,6 +72,39 @@ fn parity_docs_record_cxx_bad_alloc_divergence() {
 }
 
 #[test]
+fn parity_docs_record_rust_only_export_safety_contracts() {
+    assert!(PARITY_DOC.contains("Rust-Only Public Export Safety Contracts"));
+    assert!(PARITY_DOC.contains("symbols/public-symbol-classification.tsv"));
+    assert!(PARITY_DOC.contains("scripts/check-public-symbols.py"));
+
+    for export in [
+        "_mi_*",
+        "mi_arena_from_index",
+        "mi_os_alloc",
+        "mi_theap_umalloc",
+        "mi_subproc_delete",
+        "mi_stats_get_json_from",
+    ] {
+        assert!(PARITY_DOC.contains(export), "missing export {export}");
+    }
+
+    for contract_term in [
+        "ownership",
+        "aliasing",
+        "thread",
+        "heap",
+        "callback",
+        "must not unwind",
+        "mi_free",
+    ] {
+        assert!(
+            PARITY_DOC.contains(contract_term),
+            "missing safety contract term {contract_term}"
+        );
+    }
+}
+
+#[test]
 fn parity_signoff_documents_required_commands() {
     for command in [
         "cargo fmt --check",

@@ -1714,6 +1714,7 @@ pub unsafe extern "C" fn _mi_auto_process_init() {
     if !unsafe { _mi_process_is_initialized } {
         mi_subproc_main_init();
     }
+    mi_heap_main_init();
     mi_mark_main_thread();
     mi_tls_slots_init();
     if OPTIONS_POST_INIT_STATE
@@ -1754,6 +1755,8 @@ pub unsafe extern "C" fn mi_process_done() {
     }
 
     unsafe {
+        crate::threadlocal::_mi_thread_locals_done();
+        crate::prim::_mi_prim_thread_done_auto_done();
         if mi_option_is_enabled(mi_option_t::mi_option_destroy_on_exit) {
             mi_subprocs_unsafe_destroy_all();
         } else {

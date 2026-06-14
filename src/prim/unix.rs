@@ -1061,13 +1061,13 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
     }
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     crate::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
     let _ = pthread_key_create(&raw mut _mi_heap_default_key, Some(mi_pthread_done));
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
     if _mi_heap_default_key != PTHREAD_KEY_INVALID {
         let _ = pthread_key_delete(_mi_heap_default_key);

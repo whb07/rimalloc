@@ -336,6 +336,26 @@ pub unsafe fn mi_process_detach() {
     unsafe { crate::internal::_mi_auto_process_done() }
 }
 
+#[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
+unsafe extern "C" fn mi_process_attach_ctor() {
+    unsafe { mi_process_attach() };
+}
+
+#[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
+unsafe extern "C" fn mi_process_detach_dtor() {
+    unsafe { mi_process_detach() };
+}
+
+#[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
+#[used]
+#[unsafe(link_section = ".init_array")]
+pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern "C" fn() = mi_process_attach_ctor;
+
+#[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
+#[used]
+#[unsafe(link_section = ".fini_array")]
+pub(crate) static _MI_PROCESS_DETACH_DTOR: unsafe extern "C" fn() = mi_process_detach_dtor;
+
 #[inline]
 pub unsafe extern "C" fn _mi_is_redirected() -> bool {
     false
@@ -351,3 +371,19 @@ pub unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_allocator_done() {}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
+    #[test]
+    fn elf_process_lifecycle_hooks_are_registered() {
+        assert_eq!(
+            super::_MI_PROCESS_ATTACH_CTOR as usize,
+            super::mi_process_attach_ctor as usize
+        );
+        assert_eq!(
+            super::_MI_PROCESS_DETACH_DTOR as usize,
+            super::mi_process_detach_dtor as usize
+        );
+    }
+}

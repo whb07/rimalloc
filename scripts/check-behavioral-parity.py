@@ -5677,7 +5677,9 @@ def run_args_status(binary: pathlib.Path, args: list[str]) -> tuple[int, str, st
     return completed.returncode, completed.stdout, completed.stderr
 
 
-def run_with_env(binary: pathlib.Path, env_updates: dict[str, str], label: str) -> str:
+def run_with_env_capture(
+    binary: pathlib.Path, env_updates: dict[str, str], label: str
+) -> tuple[str, str]:
     env = {
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
@@ -5701,7 +5703,12 @@ def run_with_env(binary: pathlib.Path, env_updates: dict[str, str], label: str) 
         raise AssertionError(
             f"{label} timed out for {binary.name} with env {env_updates}; stdout={stdout!r}; stderr={stderr!r}"
         ) from err
-    return completed.stdout
+    return completed.stdout, completed.stderr
+
+
+def run_with_env(binary: pathlib.Path, env_updates: dict[str, str], label: str) -> str:
+    stdout, _stderr = run_with_env_capture(binary, env_updates, label)
+    return stdout
 
 
 STAT_COUNT_KEYS = {
@@ -6086,6 +6093,29 @@ def validate_redirect_capture(
         raise AssertionError(f"dlopen unexpectedly exercised malloc family aliases: {cases['dlopen'][0]}")
     if cases["preload"][0]["family_ok"] != 1:
         raise AssertionError(f"LD_PRELOAD malloc family aliases failed: {cases['preload'][0]}")
+
+
+def validate_preload_show_stats(
+    c_dynamic_bin: pathlib.Path,
+    rust_dynamic_bin: pathlib.Path,
+    c_shared: pathlib.Path,
+    rust_shared: pathlib.Path,
+) -> None:
+    cases = (
+        ("C", c_dynamic_bin, c_shared),
+        ("Rust", rust_dynamic_bin, rust_shared),
+    )
+    for name, binary, shared in cases:
+        stdout, stderr = run_with_env_capture(
+            binary,
+            {"LD_PRELOAD": str(shared), "mimalloc_show_stats": "1"},
+            f"{name} redirect preload show-stats",
+        )
+        values = parse_redirect_capture(stdout)
+        if values["mode"] != "preload" or values["malloc_owned"] != 1:
+            raise AssertionError(f"{name} LD_PRELOAD redirect failed while checking stats: {values}")
+        if "subproc " not in stderr or " process " not in stderr or "peak rss" not in stderr:
+            raise AssertionError(f"{name} LD_PRELOAD show_stats did not print shutdown stats: {stderr!r}")
 
 
 PROCESS_CAPTURE_KEYS = (
@@ -6793,6 +6823,12 @@ def main() -> int:
         print(f"redirection parity mismatch: {err}", file=sys.stderr)
         return 1
 
+    try:
+        validate_preload_show_stats(c_redirect_dynamic_bin, rust_redirect_dynamic_bin, c_shared, rust_shared)
+    except AssertionError as err:
+        print(f"preload show-stats parity mismatch: {err}", file=sys.stderr)
+        return 1
+
     print("ok: C and Rust mimalloc behavior smoke outputs match")
     print("ok: C and Rust mimalloc JSON schemas parse and match")
     print("ok: C and Rust mimalloc C++ new-handler behavior matches")
@@ -6812,6 +6848,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc seeded randomized allocation behavior matches")
     print("ok: C and Rust mimalloc huge OS page fallback behavior matches")
     print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")
+    print("ok: C and Rust mimalloc LD_PRELOAD show-stats shutdown behavior matches")
     print(c_output, end="")
     return 0
 

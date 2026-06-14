@@ -949,6 +949,59 @@ static int option_invalid_case_status(int op) {
   return -3;
 }
 
+static int custom_subproc_stats_status(void) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+
+    mi_subproc_id_t main_id = mi_subproc_main();
+    mi_subproc_id_t subproc = mi_subproc_new();
+    if (subproc._mi_subproc_id == NULL) _exit(10);
+
+    mi_subproc_add_current_thread(subproc);
+    if (mi_subproc_current()._mi_subproc_id != subproc._mi_subproc_id) _exit(11);
+
+    mi_stats_t exclusive_before;
+    mi_stats_init(&exclusive_before);
+    if (!mi_subproc_stats_get_exclusive(subproc, &exclusive_before)) _exit(12);
+    if (mi_subproc_stats_get(subproc, NULL)) _exit(13);
+    if (mi_subproc_stats_get_exclusive(subproc, NULL)) _exit(14);
+
+    void* p = mi_malloc(2048);
+    void* q = mi_calloc(4, 512);
+    if (p == NULL || q == NULL) _exit(15);
+
+    mi_stats_t exclusive_live;
+    mi_stats_t aggregate_live;
+    mi_stats_t main_live;
+    mi_stats_init(&exclusive_live);
+    mi_stats_init(&aggregate_live);
+    mi_stats_init(&main_live);
+
+    if (!mi_subproc_stats_get_exclusive(subproc, &exclusive_live)) _exit(18);
+    if (!mi_subproc_stats_get(subproc, &aggregate_live)) _exit(19);
+    if (!mi_subproc_stats_get(main_id, &main_live)) _exit(21);
+
+    if (stats_alloc_current(&exclusive_live) < stats_alloc_current(&exclusive_before)) _exit(22);
+    if (stats_alloc_current(&aggregate_live) < stats_alloc_current(&exclusive_live)) _exit(24);
+    if (stats_alloc_current(&main_live) < 0) _exit(25);
+
+    mi_free(q);
+    mi_free(p);
+    _exit(0);
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static int foreign_size_case_status(int op) {
   fflush(stdout);
   pid_t pid = fork();
@@ -3137,6 +3190,7 @@ int main(void) {
   result_bool("heap_stats_get_rejects_bad_header", !mi_heap_stats_get(NULL, &invalid_stats));
   result_bool("subproc_stats_get_rejects_null_output", !mi_subproc_stats_get(mi_subproc_current(), NULL));
   result_bool("subproc_stats_get_exclusive_rejects_null_output", !mi_subproc_stats_get_exclusive(mi_subproc_current(), NULL));
+  result_size("subproc_stats_custom_status", (size_t)custom_subproc_stats_status());
 
   mi_heap_t* stats_heap = mi_heap_new();
   void* stats_heap_block_a = stats_heap == NULL ? NULL : mi_heap_malloc(stats_heap, 2048);

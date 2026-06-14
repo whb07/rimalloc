@@ -48,7 +48,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Reconcile Rust C++ helper exports such as `mi_cxx_new_*` and `mi_cxx_delete_*` with actual platform C++ operator symbols. Validation: C++ override tests inspect exported/mangled symbols and prove C++ allocation/deallocation routes through mimalloc exactly as in the C distribution.
 - [x] Verify all public structs and typedef-compatible layouts: `mi_heap_area_t`, `mi_stats_t`, `mi_stat_count_t`, `mi_stat_counter_t`, `mi_chunkbin_t`, `mi_subproc_id_t`, `mi_arena_id_t`, `mi_heap_t*`, and `mi_theap_t*`. Validation: C and Rust layout tests compare size, alignment, field offsets, enum discriminants, pointer opacity, and version constants against the C headers. Guarded by `scripts/check-public-abi.py`.
 - [x] Verify all public constants and enum values: `MI_MALLOC_VERSION`, `MI_SMALL_WSIZE_MAX`, `MI_SMALL_SIZE_MAX`, `MI_STAT_VERSION`, `MI_BIN_HUGE`, `MI_CBIN_*`, and every `mi_option_t` discriminant including legacy aliases. Validation: compile-time C assertions and Rust tests compare exact numeric values. Guarded by `scripts/check-public-abi.py`.
-- [ ] Preserve C calling convention details. Validation: platform ABI tests confirm `mi_cdecl`, noexcept-compatible behavior, callback function pointer calling conventions, and symbol visibility match C mimalloc on each supported target.
+- [x] Preserve C calling convention details. Validation: platform ABI tests confirm `mi_cdecl`, noexcept-compatible behavior, callback function pointer calling conventions, and symbol visibility match C mimalloc on each supported target. Guarded by `scripts/check-public-abi.py`, `scripts/check-public-symbols.py`, and `scripts/check-c-link-public-api.py`.
 
 ## Core Allocation Semantics
 

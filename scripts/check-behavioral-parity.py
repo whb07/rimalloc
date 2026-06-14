@@ -2381,6 +2381,38 @@ int main(void) {
   result_size("good_size_size_max", mi_good_size(overflow_count));
   result_size("malloc_good_size_size_max", mi_malloc_good_size(overflow_count));
 
+  size_t threshold_sizes[] = {
+    MI_SMALL_MAX_OBJ_SIZE - 1,
+    MI_SMALL_MAX_OBJ_SIZE,
+    MI_SMALL_MAX_OBJ_SIZE + 1,
+    MI_MEDIUM_MAX_OBJ_SIZE - 1,
+    MI_MEDIUM_MAX_OBJ_SIZE,
+    MI_MEDIUM_MAX_OBJ_SIZE + 1,
+    MI_LARGE_MAX_OBJ_SIZE - 1,
+    MI_LARGE_MAX_OBJ_SIZE,
+    MI_LARGE_MAX_OBJ_SIZE + 1,
+    MI_SMALL_PAGE_SIZE - 1,
+    MI_SMALL_PAGE_SIZE,
+    MI_SMALL_PAGE_SIZE + 1,
+    MI_MEDIUM_PAGE_SIZE - 1,
+    MI_MEDIUM_PAGE_SIZE,
+    MI_MEDIUM_PAGE_SIZE + 1,
+    MI_LARGE_PAGE_SIZE - 1,
+    MI_LARGE_PAGE_SIZE,
+    MI_LARGE_PAGE_SIZE + 1,
+  };
+  size_t threshold_count = sizeof(threshold_sizes) / sizeof(threshold_sizes[0]);
+  for (size_t i = 0; i < threshold_count; i++) {
+    size_t requested = threshold_sizes[i];
+    result_indexed_size("threshold_request", i, requested);
+    result_indexed_size("threshold_good_size", i, mi_good_size(requested));
+    result_indexed_size("threshold_malloc_good_size", i, mi_malloc_good_size(requested));
+    void* threshold_ptr = mi_malloc(requested);
+    result_bool("threshold_malloc_nonnull", threshold_ptr != NULL);
+    result_indexed_size("threshold_malloc_usable_size", i, threshold_ptr == NULL ? 0 : mi_usable_size(threshold_ptr));
+    mi_free(threshold_ptr);
+  }
+
   for (size_t bin = 0; bin <= MI_BIN_HUGE; bin++) {
     size_t bin_size = mi_stats_get_bin_size(bin);
     result_indexed_size("stats_bin_size", bin, bin_size);

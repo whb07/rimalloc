@@ -150,6 +150,24 @@ static int64_t stats_alloc_total(const mi_stats_t* stats) {
   return stats->malloc_normal.total + stats->malloc_huge.total;
 }
 
+static int64_t stats_count_current_sum(const mi_stat_count_t* stats, size_t count) {
+  int64_t total = 0;
+  for (size_t i = 0; i < count; i++) total += stats[i].current;
+  return total;
+}
+
+static int64_t stats_count_peak_sum(const mi_stat_count_t* stats, size_t count) {
+  int64_t total = 0;
+  for (size_t i = 0; i < count; i++) total += stats[i].peak;
+  return total;
+}
+
+static int64_t stats_count_total_sum(const mi_stat_count_t* stats, size_t count) {
+  int64_t total = 0;
+  for (size_t i = 0; i < count; i++) total += stats[i].total;
+  return total;
+}
+
 static void result_size(const char* name, size_t value) {
   printf("%s=%zu\n", name, value);
 }
@@ -1958,6 +1976,63 @@ int main(void) {
               stats_alloc_total(&reset_exclusive_final) >= stats_alloc_total(&reset_exclusive_after));
   result_bool("stats_reset_peak_persistent",
               stats_alloc_peak(&reset_exclusive_final) >= stats_alloc_peak(&reset_exclusive_after));
+
+  mi_stats_reset();
+  mi_stats_t normal_stats_before;
+  mi_stats_t normal_stats_live;
+  mi_stats_t normal_stats_after;
+  mi_stats_init(&normal_stats_before);
+  mi_stats_init(&normal_stats_live);
+  mi_stats_init(&normal_stats_after);
+  result_bool("stats_normal_before_ok", mi_stats_get(&normal_stats_before));
+  size_t normal_stat_sizes[] = { 16, 128, 4096, 65536 };
+  size_t normal_stat_count = sizeof(normal_stat_sizes) / sizeof(normal_stat_sizes[0]);
+  void* normal_stat_ptrs[sizeof(normal_stat_sizes) / sizeof(normal_stat_sizes[0])];
+  size_t normal_stat_requested = 0;
+  for (size_t i = 0; i < normal_stat_count; i++) {
+    normal_stat_requested += normal_stat_sizes[i];
+    normal_stat_ptrs[i] = mi_malloc(normal_stat_sizes[i]);
+    result_bool("stats_normal_allocated", normal_stat_ptrs[i] != NULL);
+  }
+  result_bool("stats_normal_live_ok", mi_stats_get(&normal_stats_live));
+  int64_t normal_current_delta = normal_stats_live.malloc_normal.current - normal_stats_before.malloc_normal.current;
+  int64_t normal_requested_delta = normal_stats_live.malloc_requested.current - normal_stats_before.malloc_requested.current;
+  int64_t normal_count_delta = normal_stats_live.malloc_normal_count.total - normal_stats_before.malloc_normal_count.total;
+  int64_t normal_bins_before = stats_count_current_sum(normal_stats_before.malloc_bins, MI_BIN_HUGE + 1);
+  int64_t normal_bins_live = stats_count_current_sum(normal_stats_live.malloc_bins, MI_BIN_HUGE + 1);
+  int64_t normal_page_bins_before_total = stats_count_total_sum(normal_stats_before.page_bins, MI_BIN_HUGE + 1);
+  int64_t normal_page_bins_live_total = stats_count_total_sum(normal_stats_live.page_bins, MI_BIN_HUGE + 1);
+  result_bool("stats_normal_current_delta",
+              normal_current_delta >= (int64_t)normal_stat_requested);
+  result_bool("stats_normal_requested_delta",
+              normal_requested_delta >= (int64_t)normal_stat_requested &&
+              normal_requested_delta <= normal_current_delta);
+  result_bool("stats_normal_count_delta", normal_count_delta >= (int64_t)normal_stat_count);
+  result_bool("stats_normal_bin_current_delta", normal_bins_live - normal_bins_before >= (int64_t)normal_stat_count);
+  result_bool("stats_normal_page_bin_total_monotonic", normal_page_bins_live_total >= normal_page_bins_before_total);
+  result_bool("stats_normal_peak_consistent",
+              normal_stats_live.malloc_normal.peak >= normal_stats_live.malloc_normal.current &&
+              normal_stats_live.malloc_requested.peak >= normal_stats_live.malloc_requested.current &&
+              stats_count_peak_sum(normal_stats_live.malloc_bins, MI_BIN_HUGE + 1) >=
+              stats_count_current_sum(normal_stats_live.malloc_bins, MI_BIN_HUGE + 1) &&
+              stats_count_peak_sum(normal_stats_live.page_bins, MI_BIN_HUGE + 1) >=
+              stats_count_current_sum(normal_stats_live.page_bins, MI_BIN_HUGE + 1));
+  for (size_t i = 0; i < normal_stat_count; i++) {
+    mi_free(normal_stat_ptrs[i]);
+  }
+  result_bool("stats_normal_after_ok", mi_stats_get(&normal_stats_after));
+  result_bool("stats_normal_current_after_free",
+              normal_stats_after.malloc_normal.current <= normal_stats_live.malloc_normal.current &&
+              normal_stats_after.malloc_requested.current <= normal_stats_live.malloc_requested.current);
+  result_bool("stats_normal_bin_current_after_free",
+              stats_count_current_sum(normal_stats_after.malloc_bins, MI_BIN_HUGE + 1) <=
+              stats_count_current_sum(normal_stats_live.malloc_bins, MI_BIN_HUGE + 1));
+  result_bool("stats_normal_totals_persistent",
+              normal_stats_after.malloc_normal.total >= normal_stats_live.malloc_normal.total &&
+              normal_stats_after.malloc_requested.total >= normal_stats_live.malloc_requested.total &&
+              normal_stats_after.malloc_normal_count.total >= normal_stats_live.malloc_normal_count.total &&
+              stats_count_total_sum(normal_stats_after.malloc_bins, MI_BIN_HUGE + 1) >=
+              stats_count_total_sum(normal_stats_live.malloc_bins, MI_BIN_HUGE + 1));
 
   size_t size_checks[] = { 0, 1, 8, 16, 17, 32, 33, 64, 65, 128, 129, 256, 257, 512, 513,
                            1024, 1025, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX,

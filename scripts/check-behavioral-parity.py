@@ -1079,6 +1079,34 @@ int main(void) {
   result_bool("owned_aligned_heap_of_nonnull", owned_aligned != NULL && mi_heap_of(owned_aligned) != NULL);
   mi_free(owned_aligned);
 
+  mi_free_size(NULL, 0);
+  mi_free_size_aligned(NULL, 0, 1);
+  mi_free_aligned(NULL, 1);
+  result_bool("free_hint_null_ok", 1);
+  mi_stats_t free_hint_before;
+  mi_stats_init(&free_hint_before);
+  int free_hint_before_ok = mi_stats_get(&free_hint_before);
+  void* free_sized = mi_malloc(73);
+  size_t free_sized_usable = (free_sized == NULL ? 0 : mi_usable_size(free_sized));
+  result_bool("free_size_allocated", free_sized != NULL && free_sized_usable >= 73);
+  mi_free_size(free_sized, 73);
+  void* free_aligned = mi_malloc_aligned(74, 64);
+  size_t free_aligned_usable = (free_aligned == NULL ? 0 : mi_usable_size(free_aligned));
+  result_bool("free_aligned_allocated", is_aligned_at(free_aligned, 64, 0) && free_aligned_usable >= 74);
+  mi_free_aligned(free_aligned, 64);
+  void* free_size_aligned = mi_malloc_aligned(75, 128);
+  size_t free_size_aligned_usable = (free_size_aligned == NULL ? 0 : mi_usable_size(free_size_aligned));
+  result_bool("free_size_aligned_allocated", is_aligned_at(free_size_aligned, 128, 0) && free_size_aligned_usable >= 75);
+  mi_free_size_aligned(free_size_aligned, 75, 128);
+  mi_collect(true);
+  mi_stats_t free_hint_after;
+  mi_stats_init(&free_hint_after);
+  int free_hint_after_ok = mi_stats_get(&free_hint_after);
+  result_bool("free_hint_stats_success", free_hint_before_ok && free_hint_after_ok);
+  result_bool("free_hint_stats_current_restored",
+              !free_hint_before_ok || !free_hint_after_ok ||
+              stats_alloc_current(&free_hint_after) <= stats_alloc_current(&free_hint_before));
+
   struct abandoned_pointer_result abandoned_result = {NULL};
   pthread_t abandoned_thread;
   int abandoned_started = (pthread_create(&abandoned_thread, NULL, abandoned_pointer_worker, &abandoned_result) == 0);

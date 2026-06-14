@@ -81,7 +81,8 @@ fn parity_docs_record_cxx_bad_alloc_divergence() {
     assert!(PARITY_DOC.contains("std::bad_alloc"));
     assert!(PARITY_DOC.contains("`extern \"C\"` Rust boundary"));
     assert!(PARITY_DOC.contains("scripts/check-cxx-bad-alloc-divergence.py"));
-    assert!(PARITY_DOC.contains("keeps the `mi_new` and C++ override TODO items open"));
+    assert!(PARITY_DOC.contains("scripts/check-cxx-operator-new-parity.py"));
+    assert!(PARITY_DOC.contains("keeps the `mi_new` TODO item open"));
 }
 
 #[test]
@@ -201,6 +202,7 @@ fn parity_signoff_documents_required_commands() {
         "scripts/check-subproc-heap-main-baseline.py",
         "scripts/check-behavioral-parity.py",
         "scripts/check-cxx-bad-alloc-divergence.py",
+        "scripts/check-cxx-operator-new-parity.py",
         "scripts/check-secure-mode-parity.py",
         "scripts/check-guarded-mode-parity.py",
         "scripts/check-valgrind-tracking-parity.py",

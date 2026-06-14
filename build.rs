@@ -34,10 +34,50 @@ fn compile_track_shim(defines: &[&str], flags: &[&str]) {
     println!("cargo:rustc-link-lib=static=mechanical_mimalloc_track_shim");
 }
 
+fn compile_cxx_new_shim() {
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set by cargo"));
+    let obj = out_dir.join("cxx_new_shim.o");
+    let lib = out_dir.join("libmechanical_mimalloc_cxx_new_shim.a");
+
+    let cxx = env::var_os("CXX").unwrap_or_else(|| "c++".into());
+    let status = Command::new(cxx)
+        .arg("-std=c++17")
+        .arg("-c")
+        .arg("src/cxx_new_shim.cpp")
+        .arg("-o")
+        .arg(&obj)
+        .arg("-fPIC")
+        .status()
+        .expect("failed to run C++ compiler for new/delete shim");
+    assert!(
+        status.success(),
+        "C++ compiler failed to compile new/delete shim"
+    );
+
+    let status = Command::new("ar")
+        .arg("crus")
+        .arg(&lib)
+        .arg(&obj)
+        .status()
+        .expect("failed to run ar for C++ new/delete shim");
+    assert!(status.success(), "ar failed to archive C++ new/delete shim");
+
+    println!("cargo:rustc-link-search=native={}", out_dir.display());
+    println!("cargo:rustc-link-lib=static=mechanical_mimalloc_cxx_new_shim");
+}
+
 fn main() {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target OS is set by cargo");
+
     println!("cargo:rerun-if-changed=src/track_shim.c");
+    println!("cargo:rerun-if-changed=src/cxx_new_shim.cpp");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_VALGRIND");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_ASAN");
+    println!("cargo:rerun-if-env-changed=CXX");
+
+    if target_os != "windows" {
+        compile_cxx_new_shim();
+    }
 
     let valgrind = env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_some();
     let asan = env::var_os("CARGO_FEATURE_TRACK_ASAN").is_some();

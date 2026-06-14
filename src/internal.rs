@@ -1317,7 +1317,11 @@ pub unsafe fn mi_block_nextx(
     keys: &[usize; 2],
 ) -> *mut mi_block_t {
     unsafe { crate::track::mi_track_mem_defined(block.cast_mut().cast(), size_of::<mi_block_t>()) };
-    let next = mi_ptr_decode(null, (*block).next, keys).cast::<mi_block_t>();
+    let next = if MI_ENCODE_FREELIST != 0 {
+        mi_ptr_decode(null, (*block).next, keys).cast::<mi_block_t>()
+    } else {
+        (*block).next as *mut mi_block_t
+    };
     unsafe {
         crate::track::mi_track_mem_noaccess(block.cast_mut().cast(), size_of::<mi_block_t>())
     };
@@ -1332,12 +1336,19 @@ pub unsafe fn mi_block_set_nextx(
     keys: &[usize; 2],
 ) {
     unsafe { crate::track::mi_track_mem_undefined(block.cast(), size_of::<mi_block_t>()) };
-    (*block).next = mi_ptr_encode(null, next.cast(), keys);
+    (*block).next = if MI_ENCODE_FREELIST != 0 {
+        mi_ptr_encode(null, next.cast(), keys)
+    } else {
+        next as usize
+    };
     unsafe { crate::track::mi_track_mem_noaccess(block.cast(), size_of::<mi_block_t>()) };
 }
 
 #[inline]
 pub unsafe fn mi_block_next(page: *const mi_page_t, block: *const mi_block_t) -> *mut mi_block_t {
+    if MI_ENCODE_FREELIST == 0 {
+        return unsafe { mi_block_nextx(page.cast(), block, &(*page).keys) };
+    }
     let mut next = unsafe { mi_block_nextx(page.cast(), block, &(*page).keys) };
     if !next.is_null() && !mi_is_in_same_page(block.cast(), next.cast()) {
         _mi_error_message_fmt(

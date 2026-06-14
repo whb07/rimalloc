@@ -203,7 +203,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Audit global initialization and destructor ordering. Validation: allocations before explicit init, during init, during output/error callbacks, during thread teardown, and during process exit do not deadlock or use uninitialized state.
 - [ ] Audit no-allocation critical paths. Validation: allocator-internal paths that must not allocate are reviewed and tested with recursion detection or hooks that fail on unintended recursive allocation.
 - [ ] Audit pointer provenance and integer arithmetic. Validation: boundary tests and Miri/UB-oriented checks where possible show no invalid pointer arithmetic, integer overflow, misalignment, or out-of-bounds metadata access in safe test scenarios.
-- [ ] Audit public callback reentrancy. Validation: output, error, commit, visitor, and deferred-free callbacks may allocate or fail in the same ways as C mimalloc without deadlock or corrupted state.
+- [x] Audit public callback reentrancy. Validation: output, error, commit, visitor, and deferred-free callbacks may allocate or fail in the same ways as C mimalloc without deadlock or corrupted state. Guarded by `scripts/check-behavioral-parity.py`, including registered output/error/deferred callback allocation, managed-memory commit callback allocation and rollback failure, heap/theap/abandoned/subprocess visitor early-stop behavior, and heap/subprocess visitor allocation.
 - [ ] Audit panic behavior across FFI. Validation: no Rust panic crosses an `extern "C"` boundary; tests force internal error paths and verify C-compatible abort/error behavior.
 
 ## Documentation and Divergence Control

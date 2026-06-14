@@ -2464,6 +2464,9 @@ int main(void) {
     MI_LARGE_PAGE_SIZE - 1,
     MI_LARGE_PAGE_SIZE,
     MI_LARGE_PAGE_SIZE + 1,
+    MI_ARENA_MAX_CHUNK_OBJ_SIZE - 1,
+    MI_ARENA_MAX_CHUNK_OBJ_SIZE,
+    MI_ARENA_MAX_CHUNK_OBJ_SIZE + 1,
   };
   size_t threshold_count = sizeof(threshold_sizes) / sizeof(threshold_sizes[0]);
   for (size_t i = 0; i < threshold_count; i++) {
@@ -2475,6 +2478,39 @@ int main(void) {
     result_bool("threshold_malloc_nonnull", threshold_ptr != NULL);
     result_indexed_size("threshold_malloc_usable_size", i, threshold_ptr == NULL ? 0 : mi_usable_size(threshold_ptr));
     mi_free(threshold_ptr);
+  }
+
+  size_t max_alloc_boundary_sizes[] = {
+    ((size_t)MI_MAX_ALLOC_SIZE) - 1,
+    (size_t)MI_MAX_ALLOC_SIZE,
+    ((size_t)MI_MAX_ALLOC_SIZE) + 1,
+    overflow_count,
+  };
+  size_t max_alloc_boundary_count = sizeof(max_alloc_boundary_sizes) / sizeof(max_alloc_boundary_sizes[0]);
+  for (size_t i = 0; i < max_alloc_boundary_count; i++) {
+    errno = 0;
+    void* max_ptr = mi_malloc(max_alloc_boundary_sizes[i]);
+    result_bool("max_alloc_boundary_null", max_ptr == NULL);
+    result_indexed_size("max_alloc_boundary_errno", i, (size_t)errno);
+    mi_free(max_ptr);
+  }
+
+  size_t alignment_boundary_values[] = {
+    MI_MAX_ALIGN_SIZE / 2,
+    MI_MAX_ALIGN_SIZE,
+    MI_MAX_ALIGN_SIZE * 2,
+    MI_SMALL_PAGE_SIZE / 2,
+    MI_SMALL_PAGE_SIZE,
+    MI_SMALL_PAGE_SIZE * 2,
+  };
+  size_t alignment_boundary_count = sizeof(alignment_boundary_values) / sizeof(alignment_boundary_values[0]);
+  for (size_t i = 0; i < alignment_boundary_count; i++) {
+    size_t alignment = alignment_boundary_values[i];
+    void* aligned_ptr = mi_malloc_aligned(257, alignment);
+    result_bool("alignment_boundary_nonnull", aligned_ptr != NULL);
+    result_bool("alignment_boundary_aligned", is_aligned_at(aligned_ptr, alignment, 0));
+    result_indexed_size("alignment_boundary_usable_size", i, aligned_ptr == NULL ? 0 : mi_usable_size(aligned_ptr));
+    mi_free(aligned_ptr);
   }
 
   for (size_t bin = 0; bin <= MI_BIN_HUGE; bin++) {

@@ -123,6 +123,7 @@ fn parity_docs_record_unresolved_baseline_mismatches() {
     assert!(PARITY_DOC.contains("not accepted Rust non-parity decisions"));
     assert!(PARITY_DOC.contains("vendored public headers declare a symbol"));
     assert!(PARITY_DOC.contains("linkable definition"));
+    assert!(PARITY_DOC.contains("scripts/check-c-baseline-missing-exports.py"));
 
     for api in [
         "mi_stats_merge",
@@ -193,6 +194,7 @@ fn parity_signoff_documents_required_commands() {
         "scripts/check-public-symbols.py",
         "scripts/check-public-symbols.py --missing-only",
         "scripts/check-c-link-public-api.py",
+        "scripts/check-c-baseline-missing-exports.py",
         "scripts/check-behavioral-parity.py",
         "scripts/check-cxx-bad-alloc-divergence.py",
         "scripts/check-secure-mode-parity.py",

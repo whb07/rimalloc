@@ -76,9 +76,9 @@ declared surface directly.
 
 | Affected APIs | Baseline observation | TODO impact |
 |---|---|---|
-| `mi_stats_merge`, `mi_collect_reduce` | `mimalloc-3.3.2/include/mimalloc.h` declares both deprecated APIs, but compiling `mimalloc-3.3.2/src/static.c` and building the vendored CMake static archive both produce no linkable definitions for them. | TODO items for these APIs remain open until the C baseline is reconciled or the Rust behavior is otherwise proven against an authoritative C implementation. |
-| `mi_theap_set_default` | The Rust artifact exports the API, but the vendored `static.c` and CMake static baselines used for direct link parity do not provide a linkable public definition. | The theap default-switching TODOs remain open until the C baseline can directly link and compare the behavior. |
-| `mi_uzalloc_small` | The Rust artifact exports the API, but the vendored `static.c` and CMake static baselines used for direct link parity do not provide a linkable public definition. | The usable-size allocation-family TODO remains open until the C baseline can directly link and compare the behavior. |
+| `mi_stats_merge`, `mi_collect_reduce` | `mimalloc-3.3.2/include/mimalloc.h` declares both deprecated APIs, but compiling `mimalloc-3.3.2/src/static.c` and building the vendored CMake static archive both produce no linkable definitions for them. Guarded by `scripts/check-c-baseline-missing-exports.py`. | TODO items for these APIs remain open until the C baseline is reconciled or the Rust behavior is otherwise proven against an authoritative C implementation. |
+| `mi_theap_set_default` | The Rust artifact exports the API, but the vendored `static.c` and CMake static baselines used for direct link parity do not provide a linkable public definition. Guarded by `scripts/check-c-baseline-missing-exports.py`. | The theap default-switching TODOs remain open until the C baseline can directly link and compare the behavior. |
+| `mi_uzalloc_small` | The Rust artifact exports the API, but the vendored `static.c` and CMake static baselines used for direct link parity do not provide a linkable public definition. Guarded by `scripts/check-c-baseline-missing-exports.py`. | The usable-size allocation-family TODO remains open until the C baseline can directly link and compare the behavior. |
 
 ## Vendored C Test Coverage
 
@@ -126,6 +126,7 @@ scripts/check-public-abi.py
 scripts/check-public-symbols.py
 scripts/check-public-symbols.py --missing-only
 scripts/check-c-link-public-api.py
+scripts/check-c-baseline-missing-exports.py
 scripts/check-behavioral-parity.py
 scripts/check-cxx-bad-alloc-divergence.py
 scripts/check-secure-mode-parity.py

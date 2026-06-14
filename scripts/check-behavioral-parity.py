@@ -2283,6 +2283,57 @@ int main(void) {
   result_bool("subproc_stats_get_json_provided_buffer", json == json_buf);
   result_bool("subproc_stats_get_json_schema", stats_json_schema_ok(json));
 
+  mi_stats_t invalid_stats;
+  mi_stats_init(&invalid_stats);
+  invalid_stats.version = 0;
+  result_bool("heap_stats_get_rejects_null_output", !mi_heap_stats_get(NULL, NULL));
+  result_bool("heap_stats_get_rejects_bad_header", !mi_heap_stats_get(NULL, &invalid_stats));
+  result_bool("subproc_stats_get_rejects_null_output", !mi_subproc_stats_get(mi_subproc_current(), NULL));
+  result_bool("subproc_stats_get_exclusive_rejects_null_output", !mi_subproc_stats_get_exclusive(mi_subproc_current(), NULL));
+
+  mi_heap_t* stats_heap = mi_heap_new();
+  void* stats_heap_block_a = stats_heap == NULL ? NULL : mi_heap_malloc(stats_heap, 2048);
+  void* stats_heap_block_b = stats_heap == NULL ? NULL : mi_heap_malloc(stats_heap, 4096);
+  result_bool("heap_stats_merge_probe_alloc", stats_heap != NULL && stats_heap_block_a != NULL && stats_heap_block_b != NULL);
+
+  mi_stats_t stats_heap_before;
+  mi_stats_init(&stats_heap_before);
+  int heap_stats_before_ok = stats_heap != NULL && mi_heap_stats_get(stats_heap, &stats_heap_before);
+  result_bool("heap_stats_get_before_merge_success", heap_stats_before_ok);
+  result_bool("heap_stats_get_before_merge_live", heap_stats_before_ok && stats_alloc_current(&stats_heap_before) >= 6144);
+  result_bool("heap_stats_get_before_merge_peak", heap_stats_before_ok && stats_alloc_peak(&stats_heap_before) >= stats_alloc_current(&stats_heap_before));
+  result_bool("heap_stats_get_before_merge_total", heap_stats_before_ok && stats_alloc_total(&stats_heap_before) >= stats_alloc_current(&stats_heap_before));
+
+  mi_stats_t subproc_exclusive_before;
+  mi_stats_init(&subproc_exclusive_before);
+  result_bool("subproc_stats_get_exclusive_before_success", mi_subproc_stats_get_exclusive(mi_subproc_current(), &subproc_exclusive_before));
+
+  mi_stats_t subproc_aggregate_before;
+  mi_stats_init(&subproc_aggregate_before);
+  result_bool("subproc_stats_get_before_success", mi_subproc_stats_get(mi_subproc_current(), &subproc_aggregate_before));
+  result_bool("subproc_stats_get_before_includes_heap", stats_alloc_current(&subproc_aggregate_before) >= stats_alloc_current(&subproc_exclusive_before) + stats_alloc_current(&stats_heap_before));
+
+  mi_heap_stats_merge_to_subproc(stats_heap);
+
+  mi_stats_t stats_heap_after_merge;
+  mi_stats_init(&stats_heap_after_merge);
+  int heap_stats_after_merge_ok = stats_heap != NULL && mi_heap_stats_get(stats_heap, &stats_heap_after_merge);
+  result_bool("heap_stats_get_after_merge_cleared_header", !heap_stats_after_merge_ok);
+
+  mi_stats_t subproc_exclusive_after;
+  mi_stats_init(&subproc_exclusive_after);
+  result_bool("subproc_stats_get_exclusive_after_success", mi_subproc_stats_get_exclusive(mi_subproc_current(), &subproc_exclusive_after));
+  result_bool("subproc_stats_get_exclusive_after_includes_heap", stats_alloc_current(&subproc_exclusive_after) >= stats_alloc_current(&subproc_exclusive_before) + stats_alloc_current(&stats_heap_before));
+
+  mi_stats_t subproc_aggregate_after;
+  mi_stats_init(&subproc_aggregate_after);
+  result_bool("subproc_stats_get_after_success", mi_subproc_stats_get(mi_subproc_current(), &subproc_aggregate_after));
+  result_bool("subproc_stats_get_after_consistent", stats_alloc_current(&subproc_aggregate_after) >= stats_alloc_current(&subproc_exclusive_after));
+
+  mi_free(stats_heap_block_a);
+  mi_free(stats_heap_block_b);
+  if (stats_heap != NULL) mi_heap_delete(stats_heap);
+
   char small_json[32];
   memset(small_json, 0xCC, sizeof(small_json));
   json = mi_stats_get_json(sizeof(small_json), small_json);
@@ -2388,6 +2439,36 @@ int main(void) {
 #endif
 
   return failures == 0 ? 0 : 1;
+}
+"""
+
+CXX_NEW_HANDLER_CAPTURE = r"""
+#include <mimalloc.h>
+
+#include <new>
+#include <stdio.h>
+#include <stdint.h>
+
+static int handler_calls = 0;
+
+static void counting_new_handler(void) {
+  handler_calls++;
+}
+
+int main(void) {
+  std::set_new_handler(counting_new_handler);
+  mi_heap_t* heap = mi_heap_new();
+  void* p = (heap == NULL ? NULL : mi_heap_alloc_new_n(heap, (size_t)-1, 2));
+  int overflow_null = (p == NULL ? 1 : 0);
+  int calls_after_overflow = handler_calls;
+  void* q = mi_new(64);
+  int new_success = (q != NULL && mi_usable_size(q) >= 64 ? 1 : 0);
+  mi_free(q);
+  if (heap != NULL) mi_heap_delete(heap);
+  std::set_new_handler(NULL);
+  printf("@@CXX_NEW overflow_null=%d handler_calls=%d new_success=%d\n",
+         overflow_null, calls_after_overflow, new_success);
+  return (overflow_null == 1 && calls_after_overflow == 1 && new_success == 1 ? 0 : 1);
 }
 """
 
@@ -2615,6 +2696,31 @@ def compile_binary(
             "-I",
             str(ROOT / "mimalloc-3.3.2/src"),
             *(cflags or []),
+            *[str(obj) for obj in objects],
+            "-pthread",
+            "-ldl",
+            "-lm",
+            "-o",
+            str(output),
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+
+
+def compile_cxx_binary(
+    cxx: str,
+    output: pathlib.Path,
+    objects: list[pathlib.Path],
+) -> None:
+    subprocess.run(
+        [
+            cxx,
+            "-std=c++20",
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/include"),
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/src"),
             *[str(obj) for obj in objects],
             "-pthread",
             "-ldl",
@@ -2931,6 +3037,20 @@ def validate_json_capture(c_docs: dict[str, object], rust_docs: dict[str, object
         raise AssertionError("Rust mi_stats_get_json_from schema differs from mi_stats_as_json")
 
 
+def parse_cxx_new_handler_capture(output: str) -> dict[str, int]:
+    fields = output.strip().split()
+    if len(fields) != 4 or fields[0] != "@@CXX_NEW":
+        raise AssertionError(f"unexpected C++ new-handler output: {output!r}")
+    values: dict[str, int] = {}
+    for field in fields[1:]:
+        key, value = field.split("=", 1)
+        values[key] = int(value)
+    expected = {"overflow_null": 1, "handler_calls": 1, "new_success": 1}
+    if values != expected:
+        raise AssertionError(f"unexpected C++ new-handler values: {values}")
+    return values
+
+
 PROCESS_CAPTURE_KEYS = (
     "elapsed",
     "user",
@@ -3148,16 +3268,21 @@ def main() -> int:
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
         raise SystemExit("no C compiler found; set CC")
+    cxx = os.environ.get("CXX") or shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
+    if cxx is None:
+        raise SystemExit("no C++ compiler found; set CXX")
 
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     scenario = BUILD_DIR / "behavioral-parity.c"
     json_capture = BUILD_DIR / "json-capture.c"
+    cxx_new_handler_capture = BUILD_DIR / "cxx-new-handler.cpp"
     process_capture = BUILD_DIR / "process-capture.c"
     env_capture = BUILD_DIR / "env-capture.c"
     throttle_capture = BUILD_DIR / "throttle-capture.c"
     process_lifecycle = BUILD_DIR / "process-lifecycle.c"
     scenario.write_text(SCENARIO_C)
     json_capture.write_text(JSON_CAPTURE_C)
+    cxx_new_handler_capture.write_text(CXX_NEW_HANDLER_CAPTURE)
     process_capture.write_text(PROCESS_CAPTURE_C)
     env_capture.write_text(ENV_CAPTURE_C)
     throttle_capture.write_text(THROTTLE_CAPTURE_C)
@@ -3168,6 +3293,8 @@ def main() -> int:
     rust_bin = BUILD_DIR / "behavioral-parity-rust"
     c_json_bin = BUILD_DIR / "json-capture-c"
     rust_json_bin = BUILD_DIR / "json-capture-rust"
+    c_cxx_new_handler_bin = BUILD_DIR / "cxx-new-handler-c"
+    rust_cxx_new_handler_bin = BUILD_DIR / "cxx-new-handler-rust"
     c_process_bin = BUILD_DIR / "process-capture-c"
     rust_process_bin = BUILD_DIR / "process-capture-rust"
     c_env_bin = BUILD_DIR / "env-capture-c"
@@ -3181,6 +3308,8 @@ def main() -> int:
     compile_binary(cc, rust_bin, [scenario, rust_lib])
     compile_binary(cc, c_json_bin, [ROOT / "mimalloc-3.3.2/src/static.c", json_capture])
     compile_binary(cc, rust_json_bin, [json_capture, rust_lib], ["-DRUST_HELPER_CAPTURE"])
+    compile_cxx_binary(cxx, c_cxx_new_handler_bin, [cxx_new_handler_capture, ROOT / "mimalloc-3.3.2/src/static.c"])
+    compile_cxx_binary(cxx, rust_cxx_new_handler_bin, [cxx_new_handler_capture, rust_lib])
     compile_binary(cc, c_process_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_capture])
     compile_binary(cc, rust_process_bin, [process_capture, rust_lib])
     compile_binary(cc, c_env_bin, [ROOT / "mimalloc-3.3.2/src/static.c", env_capture])
@@ -3209,6 +3338,15 @@ def main() -> int:
         return 1
 
     try:
+        c_cxx_new_handler = parse_cxx_new_handler_capture(run(c_cxx_new_handler_bin))
+        rust_cxx_new_handler = parse_cxx_new_handler_capture(run(rust_cxx_new_handler_bin))
+        if c_cxx_new_handler != rust_cxx_new_handler:
+            raise AssertionError(f"C={c_cxx_new_handler} Rust={rust_cxx_new_handler}")
+    except AssertionError as err:
+        print(f"C++ new-handler parity mismatch: {err}", file=sys.stderr)
+        return 1
+
+    try:
         validate_process_capture(parse_process_capture(run(c_process_bin)), parse_process_capture(run(rust_process_bin)))
     except AssertionError as err:
         print(f"process info parity mismatch: {err}", file=sys.stderr)
@@ -3234,6 +3372,7 @@ def main() -> int:
 
     print("ok: C and Rust mimalloc behavior smoke outputs match")
     print("ok: C and Rust mimalloc JSON schemas parse and match")
+    print("ok: C and Rust mimalloc C++ new-handler behavior matches")
     print("ok: C and Rust mimalloc process info is within tolerance")
     print("ok: C and Rust mimalloc environment option parsing matches")
     print("ok: C and Rust mimalloc warning/error throttling matches")

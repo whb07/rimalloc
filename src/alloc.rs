@@ -822,11 +822,30 @@ pub unsafe extern "C" fn mi_realpath(
 
 type StdNewHandler = Option<unsafe extern "C" fn()>;
 
+#[cfg(all(unix, not(target_os = "wasi")))]
+unsafe fn mi_get_new_handler() -> StdNewHandler {
+    type GetNewHandler = unsafe extern "C" fn() -> StdNewHandler;
+
+    unsafe extern "C" {
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+    }
+
+    let symbol = dlsym(ptr::null_mut(), c"_ZSt15get_new_handlerv".as_ptr());
+    if symbol.is_null() {
+        None
+    } else {
+        let get_new_handler = core::mem::transmute::<*mut c_void, GetNewHandler>(symbol);
+        get_new_handler()
+    }
+}
+
+#[cfg(not(all(unix, not(target_os = "wasi"))))]
 #[allow(non_snake_case)]
 unsafe fn _ZSt15get_new_handlerv() -> StdNewHandler {
     None
 }
 
+#[cfg(not(all(unix, not(target_os = "wasi"))))]
 unsafe fn mi_get_new_handler() -> StdNewHandler {
     _ZSt15get_new_handlerv()
 }

@@ -124,7 +124,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## OS and Platform Runtime Behavior
 
-- [ ] Match Unix `mmap`/`munmap`/`madvise`/`mprotect` use for reserve, commit, decommit, reset, purge, and guard pages. Validation: Linux syscall tracing or platform tests compare semantic effects, page protections, and stats with C mimalloc.
+- [x] Match Unix `mmap`/`munmap`/`madvise`/`mprotect` use for reserve, commit, decommit, reset, purge, and guard pages. Validation: Linux syscall tracing or platform tests compare semantic effects, page protections, and stats with C mimalloc. Guarded by `scripts/check-unix-syscall-parity.py`, which traces a focused primitive reserve/free, commit, reset, decommit, protect/unprotect, and free sequence against C and Rust mimalloc and requires matching normalized memory syscall classes for the supported default matrix.
 - [x] Match Linux transparent huge page and large page options. Validation: tests compare `mi_option_allow_thp`, minimal purge size defaults, huge page reservations, and graceful fallback behavior with C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match Linux NUMA detection and allocation policy. Validation: NUMA tests compare detected node count, interleaving, node affinity, and fallback behavior against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match Unix environment variable parsing and process information collection. Validation: subprocess tests compare option values, elapsed/user/system time, RSS, committed memory, peak values, and page faults against C mimalloc within documented OS tolerance. Guarded by `scripts/check-behavioral-parity.py`.

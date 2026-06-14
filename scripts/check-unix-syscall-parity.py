@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+"""Compare Linux memory-management syscall classes for C and Rust mimalloc."""
+
+from __future__ import annotations
+
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+BUILD_DIR = ROOT / "target/unix-syscall-parity"
+
+PROBE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+#include <mimalloc/prim.h>
+#include <mimalloc/types.h>
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+
+int main(void) {
+  size_t page = _mi_os_page_size();
+  void* p = NULL;
+  bool is_large = true;
+  bool is_zero = false;
+  mi_memid_t memid = _mi_memid_none();
+
+  fprintf(stderr, "@@BEGIN_UNIX_SYSCALL_PROBE\n");
+
+  if (_mi_os_alloc(page * 4, &memid) == NULL) return 10;
+  _mi_os_free(memid.mem.os.base, memid.mem.os.size, memid);
+
+  int err = _mi_prim_alloc(NULL, page * 4, page, false, false, &is_large, &is_zero, &p);
+  if (err != 0 || p == NULL) return 11;
+  if (_mi_prim_commit(p, page * 4, &is_zero) != 0) return 12;
+  if (_mi_prim_reset(p, page * 4) != 0) return 13;
+  bool needs_recommit = false;
+  if (_mi_prim_decommit(p, page * 4, &needs_recommit) != 0) return 14;
+  if (needs_recommit && _mi_prim_commit(p, page * 4, &is_zero) != 0) return 15;
+  if (_mi_prim_protect(p, page, true) != 0) return 16;
+  if (_mi_prim_protect(p, page, false) != 0) return 17;
+  _mi_prim_free(p, page * 4);
+
+  fprintf(stderr, "@@END_UNIX_SYSCALL_PROBE\n");
+  return 0;
+}
+"""
+
+
+SYSCALL_RE = re.compile(r"^(?:\[[^\]]+\]\s+)?(?P<name>mmap|munmap|mprotect|madvise)\(")
+MPROTECT_RE = re.compile(r"mprotect\([^,]+,\s*[^,]+,\s*(?P<prot>[^)]+)\)")
+MMAP_RE = re.compile(r"mmap\([^,]+,\s*[^,]+,\s*(?P<prot>[^,]+),")
+MADVISE_RE = re.compile(r"madvise\([^,]+,\s*[^,]+,\s*(?P<advice>[^)]+)\)")
+
+
+def rust_staticlib() -> pathlib.Path:
+    subprocess.run(
+        ["cargo", "rustc", "--lib", "--", "--crate-type", "staticlib"],
+        cwd=ROOT,
+        check=True,
+    )
+    libs = sorted(
+        (ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not libs:
+        raise SystemExit("no Rust staticlib artifact found")
+    return libs[0]
+
+
+def compile_binary(cc: str, output: pathlib.Path, objects: list[pathlib.Path]) -> None:
+    subprocess.run(
+        [
+            cc,
+            "-std=c11",
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/include"),
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/src"),
+            *[str(obj) for obj in objects],
+            "-pthread",
+            "-ldl",
+            "-lm",
+            "-o",
+            str(output),
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+
+
+def c_mimalloc_object(cc: str) -> pathlib.Path:
+    obj = BUILD_DIR / "mimalloc-static.o"
+    subprocess.run(
+        [
+            cc,
+            "-std=c11",
+            "-DMI_MALLOC_OVERRIDE=0",
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/include"),
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/src"),
+            "-c",
+            str(ROOT / "mimalloc-3.3.2/src/static.c"),
+            "-o",
+            str(obj),
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+    return obj
+
+
+def normalize_syscalls(stderr: str) -> list[str]:
+    events: list[str] = []
+    in_probe = False
+    for line in stderr.splitlines():
+        if "@@BEGIN_UNIX_SYSCALL_PROBE" in line:
+            in_probe = True
+            continue
+        if "@@END_UNIX_SYSCALL_PROBE" in line:
+            break
+        if not in_probe:
+            continue
+        match = SYSCALL_RE.match(line)
+        if match is None:
+            continue
+        name = match.group("name")
+        if name == "mmap":
+            mmap = MMAP_RE.search(line)
+            events.append(f"mmap:{mmap.group('prot') if mmap else '?'}")
+        elif name == "mprotect":
+            mprotect = MPROTECT_RE.search(line)
+            events.append(f"mprotect:{mprotect.group('prot') if mprotect else '?'}")
+        elif name == "madvise":
+            madvise = MADVISE_RE.search(line)
+            advice = madvise.group("advice") if madvise else "?"
+            if advice in {"MADV_FREE", "MADV_DONTNEED"}:
+                events.append("madvise:purge")
+            else:
+                events.append(f"madvise:{advice}")
+        else:
+            events.append(name)
+    return events
+
+
+def run_strace(binary: pathlib.Path) -> list[str]:
+    completed = subprocess.run(
+        [
+            "strace",
+            "-e",
+            "trace=mmap,munmap,madvise,mprotect",
+            str(binary),
+        ],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return normalize_syscalls(completed.stderr)
+
+
+def assert_required(events: list[str], label: str) -> None:
+    required = {
+        "mmap:PROT_READ|PROT_WRITE",
+        "mmap:PROT_NONE",
+        "mprotect:PROT_READ|PROT_WRITE",
+        "mprotect:PROT_NONE",
+        "madvise:purge",
+        "munmap",
+    }
+    missing = sorted(required - set(events))
+    if missing:
+        raise AssertionError(f"{label} missing syscall classes: {', '.join(missing)}")
+
+
+def main() -> int:
+    if sys.platform != "linux":
+        print("skipping: Linux strace syscall parity only")
+        return 0
+    cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
+    if cc is None:
+        raise SystemExit("no C compiler found; set CC")
+    if shutil.which("strace") is None:
+        raise SystemExit("strace not found")
+
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    probe = BUILD_DIR / "unix-syscall-probe.c"
+    probe.write_text(PROBE_C)
+
+    c_bin = BUILD_DIR / "unix-syscall-c"
+    rust_bin = BUILD_DIR / "unix-syscall-rust"
+    compile_binary(cc, c_bin, [probe, c_mimalloc_object(cc)])
+    compile_binary(cc, rust_bin, [probe, rust_staticlib()])
+
+    c_events = run_strace(c_bin)
+    rust_events = run_strace(rust_bin)
+    assert_required(c_events, "C")
+    assert_required(rust_events, "Rust")
+
+    if c_events != rust_events:
+        print("C syscall classes:", file=sys.stderr)
+        print("\n".join(c_events), file=sys.stderr)
+        print("Rust syscall classes:", file=sys.stderr)
+        print("\n".join(rust_events), file=sys.stderr)
+        return 1
+
+    print(f"ok: {len(c_events)} normalized Unix memory syscall classes match")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

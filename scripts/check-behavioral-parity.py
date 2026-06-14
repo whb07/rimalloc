@@ -222,6 +222,47 @@ static void option_table_output_callback(const char* msg, void* arg) {
   }
 }
 
+struct managed_commit_result {
+  size_t commit_calls;
+  size_t decommit_calls;
+  size_t commit_bytes;
+  int arg_seen;
+  int zero_state_seen;
+};
+
+static bool managed_commit_callback(bool commit, void* start, size_t size, bool* is_zero, void* user_arg) {
+  struct managed_commit_result* result = (struct managed_commit_result*)user_arg;
+  if (result != NULL) {
+    if (commit) {
+      result->commit_calls++;
+      result->commit_bytes += size;
+    }
+    else {
+      result->decommit_calls++;
+    }
+    if (user_arg == (void*)result) result->arg_seen = 1;
+    if (is_zero != NULL) {
+      result->zero_state_seen = 1;
+      *is_zero = false;
+    }
+  }
+  (void)start;
+  return true;
+}
+
+static bool managed_commit_fail_callback(bool commit, void* start, size_t size, bool* is_zero, void* user_arg) {
+  struct managed_commit_result* result = (struct managed_commit_result*)user_arg;
+  if (result != NULL) {
+    if (commit) result->commit_calls++;
+    else result->decommit_calls++;
+    if (is_zero != NULL) result->zero_state_seen = 1;
+  }
+  (void)start;
+  (void)size;
+  (void)is_zero;
+  return false;
+}
+
 static void result_bool(const char* name, int ok) {
   printf("%s=%d\n", name, ok ? 1 : 0);
   if (!ok) failures++;
@@ -2361,6 +2402,70 @@ int main(void) {
   result_bool("arena_contains_end_false", arena_area != NULL && !mi_arena_contains(arena_id, (char*)arena_area + arena_size));
   int arena_stack_value = 0;
   result_bool("arena_contains_stack_false", !mi_arena_contains(arena_id, &arena_stack_value));
+
+  long managed_original_purge_delay = mi_option_get(mi_option_purge_delay);
+  long managed_original_purge_decommits = mi_option_get(mi_option_purge_decommits);
+  mi_option_set(mi_option_purge_delay, 0);
+  mi_option_set(mi_option_purge_decommits, 1);
+
+  size_t managed_size = mi_arena_min_size();
+  size_t managed_map_size = managed_size + mi_arena_min_alignment();
+  void* managed_map = mmap(NULL, managed_map_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  void* managed_mem = managed_map == MAP_FAILED ? MAP_FAILED : (void*)(((uintptr_t)managed_map + mi_arena_min_alignment() - 1) & ~(uintptr_t)(mi_arena_min_alignment() - 1));
+  struct managed_commit_result managed_result = { 0, 0, 0, 0, 0 };
+  mi_arena_id_t managed_arena_id = NULL;
+  bool managed_ok = managed_mem != MAP_FAILED && mi_manage_memory(
+    managed_mem,
+    managed_size,
+    false,
+    false,
+    false,
+    -1,
+    true,
+    managed_commit_callback,
+    &managed_result,
+    &managed_arena_id);
+  result_bool("manage_memory_callback_registered_arena", managed_ok && managed_arena_id != NULL);
+  result_bool("manage_memory_callback_invoked", managed_result.commit_calls > 0 && managed_result.commit_bytes > 0);
+  result_bool("manage_memory_callback_arg_seen", managed_result.arg_seen);
+  result_size("manage_memory_commit_calls_after_register", managed_result.commit_calls);
+  result_size("manage_memory_decommit_calls_after_register", managed_result.decommit_calls);
+  size_t managed_area_size = 0;
+  void* managed_area = managed_ok ? mi_arena_area(managed_arena_id, &managed_area_size) : NULL;
+  result_bool("manage_memory_area_matches", managed_area == managed_mem && managed_area_size == managed_size);
+  mi_heap_t* managed_heap = managed_ok ? mi_heap_new_in_arena(managed_arena_id) : NULL;
+  void* managed_alloc = managed_heap == NULL ? NULL : mi_heap_malloc(managed_heap, 256);
+  result_bool("manage_memory_exclusive_heap_alloc", managed_alloc != NULL && mi_heap_contains(managed_heap, managed_alloc) && mi_arena_contains(managed_arena_id, managed_alloc));
+  mi_free(managed_alloc);
+  void* managed_large = managed_heap == NULL ? NULL : mi_heap_malloc(managed_heap, 4 * 1024 * 1024);
+  result_bool("manage_memory_large_commit_zero_state", managed_large != NULL && mi_arena_contains(managed_arena_id, managed_large) && managed_result.zero_state_seen);
+  result_size("manage_memory_commit_calls_after_large", managed_result.commit_calls);
+  mi_free(managed_large);
+  if (managed_heap != NULL) mi_heap_collect(managed_heap, true);
+  mi_collect(true);
+  result_bool("manage_memory_decommit_callback", managed_result.decommit_calls > 0);
+  result_size("manage_memory_decommit_calls_after_collect", managed_result.decommit_calls);
+  if (managed_heap != NULL) mi_heap_delete(managed_heap);
+
+  void* fail_map = mmap(NULL, managed_map_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  void* fail_mem = fail_map == MAP_FAILED ? MAP_FAILED : (void*)(((uintptr_t)fail_map + mi_arena_min_alignment() - 1) & ~(uintptr_t)(mi_arena_min_alignment() - 1));
+  struct managed_commit_result fail_result = { 0, 0, 0, 0, 0 };
+  mi_arena_id_t fail_arena_id = NULL;
+  bool fail_ok = fail_mem != MAP_FAILED && mi_manage_memory(
+    fail_mem,
+    managed_size,
+    false,
+    false,
+    false,
+    -1,
+    true,
+    managed_commit_fail_callback,
+    &fail_result,
+    &fail_arena_id);
+  result_bool("manage_memory_failure_rollback", !fail_ok && fail_arena_id == NULL && fail_result.commit_calls > 0 && !mi_arena_contains(fail_arena_id, fail_mem));
+
+  mi_option_set(mi_option_purge_delay, managed_original_purge_delay);
+  mi_option_set(mi_option_purge_decommits, managed_original_purge_decommits);
 
   arena_output_callbacks = 0;
   arena_output_seen_arena = 0;

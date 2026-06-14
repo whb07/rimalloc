@@ -106,7 +106,9 @@ pub static mi_init_done: mi_init_done_t = mi_init_done_t;
 thread_local! {
     static TLS_SLOT_DEFAULT: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
     static TLS_SLOT_CACHED: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
+    #[cfg(not(target_os = "linux"))]
     static TLS_THEAP_DEFAULT: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
+    #[cfg(not(target_os = "linux"))]
     static TLS_THEAP_CACHED: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
@@ -162,6 +164,14 @@ unsafe extern "C" {
     pub fn _mi_heap_theap_get_or_init(heap: *const mi_heap_t) -> *mut mi_theap_t;
     pub fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t;
     pub fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut c_void;
+}
+
+#[cfg(target_os = "linux")]
+unsafe extern "C" {
+    fn _mi_tls_theap_default_get() -> *mut mi_theap_t;
+    fn _mi_tls_theap_default_set(theap: *mut mi_theap_t);
+    fn _mi_tls_theap_cached_get() -> *mut mi_theap_t;
+    fn _mi_tls_theap_cached_set(theap: *mut mi_theap_t);
 }
 
 #[unsafe(no_mangle)]
@@ -225,10 +235,20 @@ unsafe fn mi_prim_tls_slot_theap(slot: usize, expansion_slot: usize) -> *mut mi_
 #[inline]
 pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
     if MI_TLS_MODEL_THREAD_LOCAL {
+        #[cfg(target_os = "linux")]
+        {
+            let theap = unsafe { _mi_tls_theap_default_get() };
+            if theap.is_null() {
+                unsafe { __mi_theap_empty() }
+            } else {
+                theap
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
         TLS_THEAP_DEFAULT.with(|cell| {
             let theap = cell.get();
             if theap.is_null() {
-                __mi_theap_empty()
+                unsafe { __mi_theap_empty() }
             } else {
                 theap
             }
@@ -251,10 +271,20 @@ pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
 #[inline]
 pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
     if MI_TLS_MODEL_THREAD_LOCAL {
+        #[cfg(target_os = "linux")]
+        {
+            let theap = unsafe { _mi_tls_theap_cached_get() };
+            if theap.is_null() {
+                unsafe { __mi_theap_empty() }
+            } else {
+                theap
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
         TLS_THEAP_CACHED.with(|cell| {
             let theap = cell.get();
             if theap.is_null() {
-                __mi_theap_empty()
+                unsafe { __mi_theap_empty() }
             } else {
                 theap
             }
@@ -275,15 +305,25 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
 }
 
 #[inline]
-pub fn mi_prim_thread_local_default_set(theap: *mut mi_theap_t) {
+pub(crate) fn mi_prim_thread_local_default_set(theap: *mut mi_theap_t) {
     if MI_TLS_MODEL_THREAD_LOCAL {
+        #[cfg(target_os = "linux")]
+        unsafe {
+            _mi_tls_theap_default_set(theap);
+        }
+        #[cfg(not(target_os = "linux"))]
         TLS_THEAP_DEFAULT.with(|cell| cell.set(theap));
     }
 }
 
 #[inline]
-pub fn mi_prim_thread_local_cached_set(theap: *mut mi_theap_t) {
+pub(crate) fn mi_prim_thread_local_cached_set(theap: *mut mi_theap_t) {
     if MI_TLS_MODEL_THREAD_LOCAL {
+        #[cfg(target_os = "linux")]
+        unsafe {
+            _mi_tls_theap_cached_set(theap);
+        }
+        #[cfg(not(target_os = "linux"))]
         TLS_THEAP_CACHED.with(|cell| cell.set(theap));
     }
 }
@@ -374,6 +414,39 @@ pub unsafe extern "C" fn _mi_allocator_done() {}
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_theap_tls_shim_stores_empty_sentinel() {
+        let marker = core::ptr::addr_of!(super::_mi_theap_empty).cast_mut();
+        unsafe {
+            super::_mi_tls_theap_default_set(marker);
+            super::_mi_tls_theap_cached_set(marker);
+            assert_eq!(super::_mi_tls_theap_default_get(), marker);
+            assert_eq!(super::_mi_tls_theap_cached_get(), marker);
+            super::_mi_tls_theap_default_set(core::ptr::null_mut());
+            super::_mi_tls_theap_cached_set(core::ptr::null_mut());
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_theap_tls_accessors_map_null_to_empty() {
+        unsafe {
+            super::_mi_tls_theap_default_set(core::ptr::null_mut());
+            super::_mi_tls_theap_cached_set(core::ptr::null_mut());
+            assert_eq!(super::_mi_theap_default(), super::__mi_theap_empty());
+            assert_eq!(super::_mi_theap_cached(), super::__mi_theap_empty());
+
+            super::_mi_tls_theap_default_set(super::__mi_theap_empty());
+            super::_mi_tls_theap_cached_set(super::__mi_theap_empty());
+            assert_eq!(super::_mi_theap_default(), super::__mi_theap_empty());
+            assert_eq!(super::_mi_theap_cached(), super::__mi_theap_empty());
+
+            super::_mi_tls_theap_default_set(core::ptr::null_mut());
+            super::_mi_tls_theap_cached_set(core::ptr::null_mut());
+        }
+    }
+
     #[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
     #[test]
     fn elf_process_lifecycle_hooks_are_registered() {

@@ -66,17 +66,49 @@ fn compile_cxx_new_shim() {
     println!("cargo:rustc-link-lib=static=mechanical_mimalloc_cxx_new_shim");
 }
 
+fn compile_tls_shim() {
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set by cargo"));
+    let obj = out_dir.join("tls_shim.o");
+    let lib = out_dir.join("libmechanical_mimalloc_tls_shim.a");
+
+    let status = Command::new("cc")
+        .arg("-c")
+        .arg("src/tls_shim.c")
+        .arg("-o")
+        .arg(&obj)
+        .arg("-O3")
+        .arg("-fPIC")
+        .status()
+        .expect("failed to run cc for TLS shim");
+    assert!(status.success(), "cc failed to compile TLS shim");
+
+    let status = Command::new("ar")
+        .arg("crus")
+        .arg(&lib)
+        .arg(&obj)
+        .status()
+        .expect("failed to run ar for TLS shim");
+    assert!(status.success(), "ar failed to archive TLS shim");
+
+    println!("cargo:rustc-link-search=native={}", out_dir.display());
+    println!("cargo:rustc-link-lib=static=mechanical_mimalloc_tls_shim");
+}
+
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target OS is set by cargo");
 
     println!("cargo:rerun-if-changed=src/track_shim.c");
     println!("cargo:rerun-if-changed=src/cxx_new_shim.cpp");
+    println!("cargo:rerun-if-changed=src/tls_shim.c");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_VALGRIND");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_ASAN");
     println!("cargo:rerun-if-env-changed=CXX");
 
     if target_os != "windows" {
         compile_cxx_new_shim();
+    }
+    if target_os == "linux" {
+        compile_tls_shim();
     }
 
     let valgrind = env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_some();

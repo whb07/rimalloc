@@ -208,6 +208,6 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## Documentation and Divergence Control
 
-- [ ] Document every intentional non-parity decision. Validation: each divergence includes affected APIs, target/mode, user-visible behavior, reason, and tests proving the divergence is contained.
+- [x] Document every intentional non-parity decision. Validation: each divergence includes affected APIs, target/mode, user-visible behavior, reason, and tests proving the divergence is contained. Guarded by `PARITY.md` and `tests/parity_docs.rs`, which document the accepted C++ bad-allocation divergence separately from unresolved baseline mismatches and unsupported matrix rows.
 - [x] Document public safety contracts for Rust-only APIs if any remain. Validation: Rust docs or comments specify ownership, aliasing, thread, heap, and callback requirements, and these APIs are excluded from the C parity symbol allowlist. Guarded by `PARITY.md`, `tests/parity_docs.rs`, `scripts/check-public-symbols.py`, and `symbols/public-symbol-classification.tsv`.
 - [ ] Keep the TODO as the parity checklist until completion. Validation: closing the final checkbox requires a clean final symbol diff, passing parity matrix, no unresolved stubs, and an explicit statement that Rust mimalloc is functionally equivalent to C mimalloc 3.3.2 for the supported matrix.

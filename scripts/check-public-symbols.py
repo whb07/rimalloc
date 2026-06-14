@@ -17,14 +17,22 @@ PUBLIC_HEADERS = [
 ]
 CLASSIFICATION_FILE = ROOT / "symbols/public-symbol-classification.tsv"
 
-# The C override header maps most compatibility names with preprocessor
-# redirects. These four names and the Itanium C++ operators are actual
-# externally visible override symbols in the Rust static artifact on Linux.
+# These names and the Itanium C++ operators are actual externally visible
+# override symbols in the C `MI_MALLOC_OVERRIDE` artifact on Linux.
 MALLOC_OVERRIDE_SYMBOLS = {
-    "malloc",
+    "aligned_alloc",
     "calloc",
-    "realloc",
+    "cfree",
     "free",
+    "malloc",
+    "malloc_size",
+    "malloc_usable_size",
+    "memalign",
+    "posix_memalign",
+    "pvalloc",
+    "realloc",
+    "reallocarray",
+    "valloc",
 }
 
 CXX_OPERATOR_OVERRIDE_SYMBOLS = {

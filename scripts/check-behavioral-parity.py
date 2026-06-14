@@ -2796,8 +2796,66 @@ REDIRECT_STATIC_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
 
+#include <malloc.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+
+extern void cfree(void*);
+extern size_t malloc_size(const void*);
+
+static int pointer_aligned(void* p, size_t alignment) {
+  return p != NULL && (((uintptr_t)p % alignment) == 0);
+}
+
+static int check_malloc_family(void) {
+  int ok = 1;
+  size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
+
+  unsigned char* p = (unsigned char*)malloc(24);
+  ok = ok && p != NULL && mi_check_owned(p);
+  if (p != NULL) {
+    p[0] = 0xA5;
+    p = (unsigned char*)realloc(p, 48);
+    ok = ok && p != NULL && mi_check_owned(p) && p[0] == 0xA5;
+    ok = ok && malloc_usable_size(p) >= 48 && malloc_size(p) == malloc_usable_size(p);
+    free(p);
+  }
+
+  unsigned char* c = (unsigned char*)calloc(4, 8);
+  ok = ok && c != NULL && mi_check_owned(c);
+  for (size_t i = 0; c != NULL && i < 32; i++) {
+    ok = ok && c[i] == 0;
+  }
+  cfree(c);
+
+  void* pm = NULL;
+  ok = ok && posix_memalign(&pm, 32, 64) == 0 && pointer_aligned(pm, 32) && mi_check_owned(pm);
+  free(pm);
+
+  void* mm = memalign(64, 65);
+  ok = ok && pointer_aligned(mm, 64) && mi_check_owned(mm);
+  free(mm);
+
+  void* va = valloc(66);
+  ok = ok && pointer_aligned(va, page_size) && mi_check_owned(va);
+  free(va);
+
+  void* pv = pvalloc(page_size + 1);
+  ok = ok && pointer_aligned(pv, page_size) && mi_check_owned(pv) && malloc_usable_size(pv) >= page_size * 2;
+  free(pv);
+
+  void* aa = aligned_alloc(128, 128);
+  ok = ok && pointer_aligned(aa, 128) && mi_check_owned(aa);
+  free(aa);
+
+  void* ra = reallocarray(NULL, 4, 16);
+  ok = ok && ra != NULL && mi_check_owned(ra) && malloc_usable_size(ra) >= 64;
+  free(ra);
+
+  return ok;
+}
 
 int main(void) {
   void* p = malloc(64);
@@ -2808,10 +2866,11 @@ int main(void) {
   int mi_malloc_owned = (q != NULL && mi_check_owned(q));
   mi_free(q);
 
-  printf("@@REDIRECT static is_redirected=%d malloc_owned=%d mi_malloc_owned=%d\n",
+  printf("@@REDIRECT static is_redirected=%d malloc_owned=%d mi_malloc_owned=%d family_ok=%d\n",
          mi_is_redirected() ? 1 : 0,
          malloc_owned,
-         mi_malloc_owned);
+         mi_malloc_owned,
+         check_malloc_family());
   return mi_malloc_owned == 1 ? 0 : 1;
 }
 """
@@ -2820,14 +2879,98 @@ REDIRECT_DYNAMIC_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <dlfcn.h>
 
+#include <malloc.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 typedef bool (*mi_is_redirected_fun)(void);
 typedef bool (*mi_check_owned_fun)(const void*);
 typedef void* (*mi_malloc_fun)(size_t);
 typedef void (*mi_free_fun)(void*);
+typedef void* (*malloc_fun)(size_t);
+typedef void* (*calloc_fun)(size_t, size_t);
+typedef void* (*realloc_fun)(void*, size_t);
+typedef void (*free_fun)(void*);
+typedef void (*cfree_fun)(void*);
+typedef size_t (*malloc_size_fun)(const void*);
+typedef int (*posix_memalign_fun)(void**, size_t, size_t);
+typedef void* (*memalign_fun)(size_t, size_t);
+typedef void* (*aligned_alloc_fun)(size_t, size_t);
+typedef void* (*reallocarray_fun)(void*, size_t, size_t);
+
+static int pointer_aligned(void* p, size_t alignment) {
+  return p != NULL && (((uintptr_t)p % alignment) == 0);
+}
+
+static int check_malloc_family_dynamic(mi_check_owned_fun check_owned) {
+  int ok = 1;
+  size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
+  malloc_fun mallocp = (malloc_fun)dlsym(RTLD_DEFAULT, "malloc");
+  calloc_fun callocp = (calloc_fun)dlsym(RTLD_DEFAULT, "calloc");
+  realloc_fun reallocp = (realloc_fun)dlsym(RTLD_DEFAULT, "realloc");
+  free_fun freep = (free_fun)dlsym(RTLD_DEFAULT, "free");
+  cfree_fun cfreep = (cfree_fun)dlsym(RTLD_DEFAULT, "cfree");
+  malloc_size_fun malloc_usable_sizep = (malloc_size_fun)dlsym(RTLD_DEFAULT, "malloc_usable_size");
+  malloc_size_fun malloc_sizep = (malloc_size_fun)dlsym(RTLD_DEFAULT, "malloc_size");
+  posix_memalign_fun posix_memalignp = (posix_memalign_fun)dlsym(RTLD_DEFAULT, "posix_memalign");
+  memalign_fun memalignp = (memalign_fun)dlsym(RTLD_DEFAULT, "memalign");
+  malloc_fun vallocp = (malloc_fun)dlsym(RTLD_DEFAULT, "valloc");
+  malloc_fun pvallocp = (malloc_fun)dlsym(RTLD_DEFAULT, "pvalloc");
+  aligned_alloc_fun aligned_allocp = (aligned_alloc_fun)dlsym(RTLD_DEFAULT, "aligned_alloc");
+  reallocarray_fun reallocarrayp = (reallocarray_fun)dlsym(RTLD_DEFAULT, "reallocarray");
+  if (mallocp == NULL || callocp == NULL || reallocp == NULL || freep == NULL ||
+      cfreep == NULL || malloc_usable_sizep == NULL || malloc_sizep == NULL ||
+      posix_memalignp == NULL || memalignp == NULL || vallocp == NULL ||
+      pvallocp == NULL || aligned_allocp == NULL || reallocarrayp == NULL) {
+    return 0;
+  }
+
+  unsigned char* p = (unsigned char*)mallocp(24);
+  ok = ok && p != NULL && check_owned(p);
+  if (p != NULL) {
+    p[0] = 0xA5;
+    p = (unsigned char*)reallocp(p, 48);
+    ok = ok && p != NULL && check_owned(p) && p[0] == 0xA5;
+    ok = ok && malloc_usable_sizep(p) >= 48 && malloc_sizep(p) == malloc_usable_sizep(p);
+    freep(p);
+  }
+
+  unsigned char* c = (unsigned char*)callocp(4, 8);
+  ok = ok && c != NULL && check_owned(c);
+  for (size_t i = 0; c != NULL && i < 32; i++) {
+    ok = ok && c[i] == 0;
+  }
+  cfreep(c);
+
+  void* pm = NULL;
+  ok = ok && posix_memalignp(&pm, 32, 64) == 0 && pointer_aligned(pm, 32) && check_owned(pm);
+  freep(pm);
+
+  void* mm = memalignp(64, 65);
+  ok = ok && pointer_aligned(mm, 64) && check_owned(mm);
+  freep(mm);
+
+  void* va = vallocp(66);
+  ok = ok && pointer_aligned(va, page_size) && check_owned(va);
+  freep(va);
+
+  void* pv = pvallocp(page_size + 1);
+  ok = ok && pointer_aligned(pv, page_size) && check_owned(pv) && malloc_usable_sizep(pv) >= page_size * 2;
+  freep(pv);
+
+  void* aa = aligned_allocp(128, 128);
+  ok = ok && pointer_aligned(aa, 128) && check_owned(aa);
+  freep(aa);
+
+  void* ra = reallocarrayp(NULL, 4, 16);
+  ok = ok && ra != NULL && check_owned(ra) && malloc_usable_sizep(ra) >= 64;
+  freep(ra);
+
+  return ok;
+}
 
 int main(int argc, char** argv) {
   const char* mode = "preload";
@@ -2857,12 +3000,14 @@ int main(int argc, char** argv) {
   void* q = alloc(64);
   int mi_malloc_owned = (q != NULL && check_owned(q));
   dealloc(q);
+  int family_ok = (argc == 2 ? -1 : check_malloc_family_dynamic(check_owned));
 
-  printf("@@REDIRECT %s is_redirected=%d malloc_owned=%d mi_malloc_owned=%d\n",
+  printf("@@REDIRECT %s is_redirected=%d malloc_owned=%d mi_malloc_owned=%d family_ok=%d\n",
          mode,
          is_redirected() ? 1 : 0,
          malloc_owned,
-         mi_malloc_owned);
+         mi_malloc_owned,
+         family_ok);
   return mi_malloc_owned == 1 ? 0 : 1;
 }
 """
@@ -3312,7 +3457,7 @@ def parse_cxx_new_handler_capture(output: str) -> dict[str, int]:
 
 def parse_redirect_capture(output: str) -> dict[str, int | str]:
     fields = output.strip().split()
-    if len(fields) != 5 or fields[0] != "@@REDIRECT":
+    if len(fields) < 5 or fields[0] != "@@REDIRECT":
         raise AssertionError(f"unexpected redirect capture output: {output!r}")
     values: dict[str, int | str] = {"mode": fields[1]}
     for field in fields[2:]:
@@ -3358,6 +3503,12 @@ def validate_redirect_capture(
         raise AssertionError(f"dlopen unexpectedly redirects plain malloc: {cases['dlopen'][0]}")
     if cases["preload"][0]["malloc_owned"] != 1:
         raise AssertionError(f"LD_PRELOAD did not redirect plain malloc: {cases['preload'][0]}")
+    if cases["static"][0]["family_ok"] != 1:
+        raise AssertionError(f"static malloc family aliases failed: {cases['static'][0]}")
+    if cases["dlopen"][0]["family_ok"] != -1:
+        raise AssertionError(f"dlopen unexpectedly exercised malloc family aliases: {cases['dlopen'][0]}")
+    if cases["preload"][0]["family_ok"] != 1:
+        raise AssertionError(f"LD_PRELOAD malloc family aliases failed: {cases['preload'][0]}")
 
 
 PROCESS_CAPTURE_KEYS = (

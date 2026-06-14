@@ -694,9 +694,11 @@ unsafe fn mi_subprocs_unsafe_destroy_all() {
 }
 
 static MAIN_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(8);
 
 thread_local! {
+    #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
     static THREAD_ID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static THEAP_MAIN: std::cell::Cell<*mut mi_theap_t> = const { std::cell::Cell::new(ptr::null_mut()) };
 }
@@ -712,7 +714,8 @@ pub(crate) fn mi_theap_main_tls_set(theap: *mut mi_theap_t) {
 }
 
 #[inline]
-fn current_thread_id() -> mi_threadid_t {
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
+pub(crate) fn fallback_thread_id() -> mi_threadid_t {
     THREAD_ID.with(|slot| {
         let tid = slot.get();
         if tid != 0 {
@@ -723,6 +726,11 @@ fn current_thread_id() -> mi_threadid_t {
             tid
         }
     })
+}
+
+#[inline]
+fn current_thread_id() -> mi_threadid_t {
+    crate::prim::_mi_prim_thread_id()
 }
 
 #[allow(dead_code)]

@@ -23,7 +23,6 @@ use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
-use crate::init::_mi_thread_id;
 use crate::types::{
     mi_heap_t, mi_msecs_t, mi_page_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
 };
@@ -206,7 +205,22 @@ pub fn mi_prim_tls_slot_set(slot: usize, value: *mut c_void) {
 
 #[inline]
 pub fn __mi_prim_thread_id() -> mi_threadid_t {
-    _mi_thread_id()
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    {
+        let tid: usize;
+        unsafe {
+            core::arch::asm!(
+                "mov {}, fs:0",
+                out(reg) tid,
+                options(nostack, preserves_flags, readonly)
+            );
+        }
+        tid
+    }
+    #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
+    {
+        crate::init::fallback_thread_id()
+    }
 }
 
 #[inline]
@@ -414,6 +428,23 @@ pub unsafe extern "C" fn _mi_allocator_done() {}
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    #[test]
+    fn linux_x86_64_prim_thread_id_uses_thread_pointer() {
+        let tid = super::__mi_prim_thread_id();
+        assert_eq!(tid, super::_mi_prim_thread_id());
+        assert_eq!(tid, crate::init::_mi_thread_id());
+        assert!(tid > 1);
+        assert_eq!(tid & crate::internal::MI_PAGE_FLAG_MASK, 0);
+
+        let child = std::thread::spawn(super::__mi_prim_thread_id)
+            .join()
+            .unwrap_or(0);
+        assert!(child > 1);
+        assert_eq!(child & crate::internal::MI_PAGE_FLAG_MASK, 0);
+        assert_ne!(tid, child);
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_theap_tls_shim_stores_empty_sentinel() {

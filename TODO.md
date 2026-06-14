@@ -112,7 +112,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## Pages, Chunks, and Internal Algorithms
 
-- [ ] Match size-class and bin mapping. Validation: tests compare good sizes, bin sizes, page queues, and stats bin assignment against C mimalloc across every boundary.
+- [x] Match size-class and bin mapping. Validation: tests compare good sizes, bin sizes, page queues, and stats bin assignment against C mimalloc across every boundary. Guarded by `scripts/check-behavioral-parity.py`, including `mi_stats_get_bin_size`, `mi_good_size`, `mi_malloc_good_size`, threshold/boundary allocation sizes, stats `malloc_bins`/`page_bins` movement, and direct default-theap page-queue count checks for representative normal allocation bins.
 - [ ] Match page allocation, extension, retirement, and reuse rules. Validation: stress tests compare allocation success, page stats, retire counts, reuse patterns, and invariant checks against C mimalloc.
 - [ ] Match local free, thread free, delayed free, and abandoned free-list behavior. Validation: multi-thread tests allocate/free from different threads and compare delayed-free processing, abandonment, reclamation, and stats against C mimalloc.
 - [ ] Match abandoned page and heap reclamation policy. Validation: tests create abandoned heaps, force collections, allocate from new threads, and compare reclaim counts and ownership transitions against C mimalloc.

@@ -20,6 +20,7 @@ SCENARIO_C = r"""
 #include <mimalloc.h>
 #include <mimalloc-stats.h>
 #include <mimalloc/types.h>
+#include <mimalloc/internal.h>
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -78,6 +79,16 @@ static size_t option_table_seen_count = 0;
 static size_t option_table_kib_count = 0;
 static int option_table_arg_seen = 0;
 static volatile size_t overflow_count = (size_t)-1;
+
+static size_t page_queue_count_for_request(mi_theap_t* theap, size_t size) {
+  if (theap == NULL) return 0;
+  size_t block_size = mi_good_size(size);
+  for (size_t bin = 0; bin < MI_BIN_FULL; bin++) {
+    mi_page_queue_t* pq = &theap->pages[bin];
+    if (pq->block_size == block_size) return pq->count;
+  }
+  return 0;
+}
 
 static const char* option_table_names[_mi_option_last] = {
   "show_errors",
@@ -2928,6 +2939,11 @@ int main(void) {
     normal_stat_requested += normal_stat_sizes[i];
     normal_stat_ptrs[i] = mi_malloc(normal_stat_sizes[i]);
     result_bool("stats_normal_allocated", normal_stat_ptrs[i] != NULL);
+  }
+  mi_theap_t* normal_theap = mi_theap_get_default();
+  for (size_t i = 0; i < normal_stat_count; i++) {
+    result_bool("page_queue_count_for_normal_alloc",
+                page_queue_count_for_request(normal_theap, normal_stat_sizes[i]) > 0);
   }
   result_bool("stats_normal_live_ok", mi_stats_get(&normal_stats_live));
   int64_t normal_current_delta = normal_stats_live.malloc_normal.current - normal_stats_before.malloc_normal.current;

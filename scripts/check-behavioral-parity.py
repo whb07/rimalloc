@@ -747,6 +747,21 @@ static void options_print_with_stderr_suppressed(void) {
 }
 
 int main(void) {
+  mi_option_set_default(mi_option_os_tag, 1234);
+  mi_process_init();
+  result_long("option_preinit_default_survives_process_init", mi_option_get(mi_option_os_tag));
+  result_long("option_preinit_default_get", mi_option_get(mi_option_os_tag));
+  mi_option_set(mi_option_os_tag, 5678);
+  mi_thread_init();
+  result_long("option_postinit_set_survives_thread_init", mi_option_get(mi_option_os_tag));
+  mi_option_set_default(mi_option_os_tag, 4321);
+  mi_process_init();
+  result_long("option_postinit_default_does_not_override", mi_option_get(mi_option_os_tag));
+  mi_option_set(mi_option_os_tag, 8765);
+  result_long("option_postinit_set_overrides_current", mi_option_get(mi_option_os_tag));
+  mi_option_set_default(mi_option_os_tag, 100);
+  result_long("option_postinit_default_keeps_current", mi_option_get(mi_option_os_tag));
+  mi_option_set(mi_option_os_tag, 100);
   mi_option_disable(mi_option_show_errors);
 
   result_bool("version_30302", mi_version() == 30302);

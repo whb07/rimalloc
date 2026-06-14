@@ -1221,6 +1221,29 @@ int main(void) {
   result_bool("owned_freed_check_owned", mi_check_owned(p));
   result_bool("owned_freed_any_heap_contains", mi_any_heap_contains(p));
 
+  mi_stats_t free_plain_before;
+  mi_stats_t free_plain_live;
+  mi_stats_t free_plain_after;
+  mi_stats_init(&free_plain_before);
+  mi_stats_init(&free_plain_live);
+  mi_stats_init(&free_plain_after);
+  result_bool("free_plain_before_ok", mi_stats_get(&free_plain_before));
+  mi_free(NULL);
+  result_bool("free_plain_null_ok", 1);
+  void* free_plain = mi_malloc(211);
+  size_t free_plain_usable = free_plain == NULL ? 0 : mi_usable_size(free_plain);
+  result_bool("free_plain_allocated", free_plain != NULL && free_plain_usable >= 211);
+  result_bool("free_plain_live_ok", mi_stats_get(&free_plain_live));
+  result_bool("free_plain_live_increased",
+              stats_alloc_current(&free_plain_live) >= stats_alloc_current(&free_plain_before) &&
+              stats_alloc_total(&free_plain_live) >= stats_alloc_total(&free_plain_before));
+  mi_free(free_plain);
+  result_bool("free_plain_after_ok", mi_stats_get(&free_plain_after));
+  result_bool("free_plain_current_restored",
+              stats_alloc_current(&free_plain_after) <= stats_alloc_current(&free_plain_live));
+  result_bool("free_plain_totals_persistent",
+              stats_alloc_total(&free_plain_after) >= stats_alloc_total(&free_plain_live));
+
   int stack_value = 42;
   result_bool("owned_stack_check_owned", !mi_check_owned(&stack_value));
   result_bool("owned_stack_any_heap_contains", !mi_any_heap_contains(&stack_value));

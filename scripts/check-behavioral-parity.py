@@ -1244,6 +1244,70 @@ int main(void) {
   result_bool("free_plain_totals_persistent",
               stats_alloc_total(&free_plain_after) >= stats_alloc_total(&free_plain_live));
 
+  mi_stats_t free_family_before;
+  mi_stats_t free_family_live;
+  mi_stats_t free_family_after;
+  mi_stats_init(&free_family_before);
+  mi_stats_init(&free_family_live);
+  mi_stats_init(&free_family_after);
+  result_bool("free_family_before_ok", mi_stats_get(&free_family_before));
+  long free_family_page_size_long = sysconf(_SC_PAGESIZE);
+  size_t free_family_page_size = free_family_page_size_long > 0 ? (size_t)free_family_page_size_long : 4096;
+  void* free_family[16];
+  size_t free_family_requested[16];
+  size_t free_family_count = 0;
+  free_family_requested[free_family_count] = 23;
+  free_family[free_family_count++] = mi_malloc(23);
+  free_family_requested[free_family_count] = 24;
+  free_family[free_family_count++] = mi_zalloc(24);
+  free_family_requested[free_family_count] = 25;
+  free_family[free_family_count++] = mi_calloc(5, 5);
+  free_family_requested[free_family_count] = 27;
+  free_family[free_family_count++] = mi_mallocn(3, 9);
+  free_family_requested[free_family_count] = 29;
+  free_family[free_family_count++] = mi_realloc(NULL, 29);
+  free_family_requested[free_family_count] = 31;
+  free_family[free_family_count++] = mi_rezalloc(NULL, 31);
+  free_family_requested[free_family_count] = 32;
+  free_family[free_family_count++] = mi_recalloc(NULL, 4, 8);
+  free_family_requested[free_family_count] = 33;
+  free_family[free_family_count++] = mi_malloc_aligned(33, 32);
+  free_family_requested[free_family_count] = 34;
+  free_family[free_family_count++] = mi_malloc_aligned_at(34, 64, 16);
+  free_family_requested[free_family_count] = 35;
+  free_family[free_family_count++] = mi_zalloc_aligned(35, 32);
+  free_family_requested[free_family_count] = 36;
+  free_family[free_family_count++] = mi_calloc_aligned(6, 6, 64);
+  void* free_family_posix = NULL;
+  result_bool("free_family_posix_memalign_ok", mi_posix_memalign(&free_family_posix, 64, 37) == 0);
+  free_family_requested[free_family_count] = 37;
+  free_family[free_family_count++] = free_family_posix;
+  free_family_requested[free_family_count] = 38;
+  free_family[free_family_count++] = mi_memalign(128, 38);
+  free_family_requested[free_family_count] = 39;
+  free_family[free_family_count++] = mi_valloc(39);
+  free_family_requested[free_family_count] = free_family_page_size + 1;
+  free_family[free_family_count++] = mi_pvalloc(free_family_page_size + 1);
+  free_family_requested[free_family_count] = 64;
+  free_family[free_family_count++] = mi_aligned_alloc(64, 64);
+  for (size_t i = 0; i < free_family_count; i++) {
+    result_bool("free_family_allocated", free_family[i] != NULL && mi_check_owned(free_family[i]));
+    result_bool("free_family_usable_ge_request",
+                free_family[i] != NULL && mi_usable_size(free_family[i]) >= free_family_requested[i]);
+  }
+  result_bool("free_family_live_ok", mi_stats_get(&free_family_live));
+  result_bool("free_family_live_increased",
+              stats_alloc_current(&free_family_live) >= stats_alloc_current(&free_family_before) &&
+              stats_alloc_total(&free_family_live) >= stats_alloc_total(&free_family_before));
+  for (size_t i = 0; i < free_family_count; i++) {
+    mi_free(free_family[i]);
+  }
+  result_bool("free_family_after_ok", mi_stats_get(&free_family_after));
+  result_bool("free_family_current_restored",
+              stats_alloc_current(&free_family_after) <= stats_alloc_current(&free_family_live));
+  result_bool("free_family_totals_persistent",
+              stats_alloc_total(&free_family_after) >= stats_alloc_total(&free_family_live));
+
   int stack_value = 42;
   result_bool("owned_stack_check_owned", !mi_check_owned(&stack_value));
   result_bool("owned_stack_any_heap_contains", !mi_any_heap_contains(&stack_value));

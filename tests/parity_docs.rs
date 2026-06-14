@@ -180,6 +180,7 @@ fn parity_signoff_documents_required_commands() {
         "scripts/check-c-link-public-api.py",
         "scripts/check-behavioral-parity.py",
         "scripts/check-valgrind-tracking-parity.py",
+        "scripts/check-asan-tracking-parity.py",
     ] {
         assert!(
             PARITY_DOC.contains(command),

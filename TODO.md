@@ -167,7 +167,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Match secure free-list encoding and pointer cookie behavior. Validation: corruption-injection tests verify encoded free-list checks and failure modes against C mimalloc.
 - [ ] Match guarded allocation behavior. Validation: guarded-mode tests verify guard-page placement, sample rate, sample seed, size bounds, precise mode, stats, and fault behavior against C mimalloc.
 - [x] Implement Valgrind tracking parity instead of unconditional no-ops. Validation: Valgrind-enabled tests verify defined/undefined/noaccess annotations and leak reports align with C mimalloc. Guarded by `scripts/check-valgrind-tracking-parity.py`.
-- [ ] Implement ASAN integration parity instead of unconditional no-ops. Validation: ASAN-enabled tests verify poisoning/unpoisoning, allocator annotations, and error reports align with C mimalloc.
+- [x] Implement ASAN integration parity instead of unconditional no-ops. Validation: ASAN-enabled tests verify poisoning/unpoisoning, allocator annotations, and error reports align with C mimalloc. Guarded by `scripts/check-asan-tracking-parity.py`.
 - [x] Implement ETW/event tracking parity where Windows support is claimed. Validation: Windows event tests verify allocation/free/heap/stat events are emitted or explicitly match C mimalloc's disabled behavior for the chosen build mode. Windows and ETW/event tracking are outside the current supported parity matrix in `PARITY.md`; guarded by `tests/parity_docs.rs`.
 - [ ] Match assertion, invariant, and diagnostic behavior. Validation: debug test builds exercise representative invariant failures and compare abort/log/callback behavior with C mimalloc.
 

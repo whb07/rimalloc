@@ -2,7 +2,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
-fn compile_track_shim(defines: &[&str]) {
+fn compile_track_shim(defines: &[&str], flags: &[&str]) {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set by cargo"));
     let obj = out_dir.join("track_shim.o");
     let lib = out_dir.join("libmechanical_mimalloc_track_shim.a");
@@ -13,6 +13,9 @@ fn compile_track_shim(defines: &[&str]) {
         .arg("-o")
         .arg(&obj)
         .arg("-fPIC");
+    for flag in flags {
+        cc.arg(flag);
+    }
     for define in defines {
         cc.arg(format!("-D{define}"));
     }
@@ -40,8 +43,8 @@ fn main() {
     let asan = env::var_os("CARGO_FEATURE_TRACK_ASAN").is_some();
 
     match (valgrind, asan) {
-        (true, false) => compile_track_shim(&["MI_TRACK_VALGRIND=1"]),
-        (false, true) => compile_track_shim(&["MI_TRACK_ASAN=1"]),
+        (true, false) => compile_track_shim(&["MI_TRACK_VALGRIND=1"], &[]),
+        (false, true) => compile_track_shim(&["MI_TRACK_ASAN=1"], &["-fsanitize=address"]),
         _ => {}
     }
 }

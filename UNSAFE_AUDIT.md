@@ -2,9 +2,8 @@
 
 Scope: Rust sources in `src/` that use `unsafe`, raw pointers, exported C ABI
 entry points, or allocator metadata structs. This audit is for the supported
-default parity matrix documented in `PARITY.md`; debug, secure, guarded, ASAN,
-Valgrind, and platform-specific override gaps remain tracked by their own TODO
-items.
+default parity matrix documented in `PARITY.md`; debug, secure, guarded, and
+platform-specific override gaps remain tracked by their own TODO items.
 
 The Rust port is an allocator replacement and necessarily keeps the C layout and
 pointer-oriented control flow. The unsafe surface is acceptable under these
@@ -110,8 +109,9 @@ Per-file review:
   TLS bookkeeping path.
 - `src/track.rs`: tracking hooks are no-op compatibility shims in the default
   matrix and forward to the C tracking shim when `track-valgrind` or
-  `track-asan` is enabled. Full Valgrind/ASAN report parity remains open in
-  TODO 169 and TODO 170.
+  `track-asan` is enabled. Full Valgrind/ASAN report parity is guarded by
+  `scripts/check-valgrind-tracking-parity.py` and
+  `scripts/check-asan-tracking-parity.py`.
 - `src/types.rs`: unsafe `Send`/`Sync` impls preserve the allocator's C
   concurrency model: mutation is protected by ownership, atomics, or locks; raw
   callback types are ABI declarations only.

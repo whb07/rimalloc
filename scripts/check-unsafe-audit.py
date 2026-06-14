@@ -50,7 +50,8 @@ REQUIRED_AUDIT_SNIPPETS = [
     "Cross-thread metadata mutation goes through the audited atomic helpers",
     "Callback invocation and process/thread lifecycle entry points",
     "`ATOMIC_ORDERING_AUDIT.md`",
-    "TODO 169 and TODO 170",
+    "scripts/check-valgrind-tracking-parity.py",
+    "scripts/check-asan-tracking-parity.py",
 ]
 
 

@@ -4154,6 +4154,10 @@ static int stats_alloc_current_nonnegative(const mi_stats_t* stats) {
   return stats->malloc_normal.current >= 0 && stats->malloc_huge.current >= 0;
 }
 
+static int64_t stats_alloc_current_total(const mi_stats_t* stats) {
+  return stats->malloc_normal.current + stats->malloc_huge.current;
+}
+
 static int stats_alloc_peak_consistent(const mi_stats_t* stats) {
   return stats->malloc_normal.peak >= stats->malloc_normal.current &&
          stats->malloc_huge.peak >= stats->malloc_huge.current;
@@ -4375,7 +4379,8 @@ static int run_random_seed(uint64_t seed, size_t seed_index) {
       !stats_alloc_peak_consistent(&after) ||
       !stats_alloc_peak_consistent(&final) ||
       !stats_alloc_total_monotonic(&before, &after) ||
-      !stats_alloc_total_monotonic(&after, &final)) {
+      !stats_alloc_total_monotonic(&after, &final) ||
+      stats_alloc_current_total(&final) > stats_alloc_current_total(&after)) {
     fprintf(stderr, "@@RANDOM_FAIL seed=%llu op=stats_consistency slot=0\n", (unsigned long long)seed);
     return 0;
   }

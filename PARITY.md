@@ -16,7 +16,7 @@ The current claimed parity matrix is intentionally narrow. Later validations in
 Unsupported until added here with evidence: Windows, macOS, WASI,
 Emscripten, non-x86_64 architectures, big-endian targets, debug mode, secure
 mode, guarded mode, Valgrind tracking, sanitizer builds (ASAN/TSAN/UBSAN),
-Windows ETW/event tracking, and allocator override/interposition parity.
+Windows ETW/event tracking, and non-Linux allocator override/interposition parity.
 
 ## Intentional Non-Parity Decisions
 

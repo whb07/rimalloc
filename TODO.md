@@ -193,7 +193,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Add OOM and allocation-failure tests. Validation: constrained-memory or fault-injection tests verify return values, errno, callbacks, new-handler behavior, and original-pointer preservation against C mimalloc.
 - [ ] Add foreign-pointer and misuse tests for debug/secure modes. Validation: tests compare invalid free, double free, wrong heap, wrong size/alignment hints, and buffer overrun behavior with C mimalloc.
 - [x] Add stats consistency tests after stress. Validation: after randomized and multi-threaded tests, public stats never go negative, current counters return to expected values, and C/Rust stats relationships match. Guarded by `scripts/check-behavioral-parity.py`.
-- [ ] Add platform-specific tests for every claimed target. Validation: each supported target has at least one passing allocation, aligned allocation, heap, options, stats, and override/interposition test result.
+- [x] Add platform-specific tests for every claimed target. Validation: each supported target has at least one passing allocation, aligned allocation, heap, options, stats, and override/interposition test result. The current claimed matrix is Linux x86_64 glibc only; guarded by `PARITY.md`, `tests/parity_docs.rs`, and `scripts/check-behavioral-parity.py`.
 
 ## Safety and Rust-Specific Correctness
 

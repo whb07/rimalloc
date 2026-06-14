@@ -4411,6 +4411,18 @@ HUGE_OS_PAGES_CAPTURE_C = r"""
 #include <stdio.h>
 
 int main(void) {
+  long allow_thp_default = mi_option_get(mi_option_allow_thp);
+  size_t minimal_purge_default = mi_option_get_size(mi_option_minimal_purge_size);
+  mi_option_set(mi_option_allow_thp, 2);
+  long allow_thp_set = mi_option_get(mi_option_allow_thp);
+  mi_option_set(mi_option_minimal_purge_size, 3);
+  size_t minimal_purge_set = mi_option_get_size(mi_option_minimal_purge_size);
+  printf("@@HUGE_OS_OPTIONS allow_thp=%ld minimal_purge=%zu allow_thp_set=%ld set_minimal=%zu\n",
+         allow_thp_default,
+         minimal_purge_default,
+         allow_thp_set,
+         minimal_purge_set);
+
   size_t reserved = 123;
   mi_arena_id_t arena = (mi_arena_id_t)0x1;
   int zero_at = mi_reserve_huge_os_pages_at(0, -1, 0);

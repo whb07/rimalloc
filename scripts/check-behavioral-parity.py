@@ -3340,6 +3340,44 @@ int main(void) {
 }
 """
 
+HUGE_OS_PAGES_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <stdio.h>
+
+int main(void) {
+  size_t reserved = 123;
+  mi_arena_id_t arena = (mi_arena_id_t)0x1;
+  int zero_at = mi_reserve_huge_os_pages_at(0, -1, 0);
+  int zero_interleave = mi_reserve_huge_os_pages_interleave(0, 0, 0);
+  int zero_legacy = mi_reserve_huge_os_pages(0, 0.0, &reserved);
+  int zero_ex = mi_reserve_huge_os_pages_at_ex(0, -1, 0, false, &arena);
+  printf("@@HUGE_OS zero_at=%d zero_interleave=%d zero_legacy=%d zero_reserved=%zu zero_ex=%d zero_arena_null=%d\n",
+         zero_at,
+         zero_interleave,
+         zero_legacy,
+         reserved,
+         zero_ex,
+         arena == NULL ? 1 : 0);
+
+  reserved = 123;
+  arena = (mi_arena_id_t)0x1;
+  int one_at = mi_reserve_huge_os_pages_at(1, -1, 0);
+  int one_interleave = mi_reserve_huge_os_pages_interleave(1, 0, 0);
+  int one_legacy = mi_reserve_huge_os_pages(1, 0.0, &reserved);
+  int one_ex = mi_reserve_huge_os_pages_at_ex(1, -1, 0, false, &arena);
+  printf("@@HUGE_OS one_at=%d one_interleave=%d one_legacy=%d one_reserved=%zu one_ex=%d one_arena_null=%d\n",
+         one_at,
+         one_interleave,
+         one_legacy,
+         reserved,
+         one_ex,
+         arena == NULL ? 1 : 0);
+  return 0;
+}
+"""
+
 REDIRECT_STATIC_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -4391,6 +4429,7 @@ def main() -> int:
     process_lifecycle = BUILD_DIR / "process-lifecycle.c"
     numa_affinity_capture = BUILD_DIR / "numa-affinity-capture.c"
     free_hint_release_capture = BUILD_DIR / "free-hint-release-capture.c"
+    huge_os_pages_capture = BUILD_DIR / "huge-os-pages-capture.c"
     redirect_static_capture = BUILD_DIR / "redirect-static-capture.c"
     redirect_dynamic_capture = BUILD_DIR / "redirect-dynamic-capture.c"
     scenario.write_text(SCENARIO_C)
@@ -4404,6 +4443,7 @@ def main() -> int:
     process_lifecycle.write_text(PROCESS_LIFECYCLE_C)
     numa_affinity_capture.write_text(NUMA_AFFINITY_CAPTURE_C)
     free_hint_release_capture.write_text(FREE_HINT_RELEASE_CAPTURE_C)
+    huge_os_pages_capture.write_text(HUGE_OS_PAGES_CAPTURE_C)
     redirect_static_capture.write_text(REDIRECT_STATIC_CAPTURE_C)
     redirect_dynamic_capture.write_text(REDIRECT_DYNAMIC_CAPTURE_C)
 
@@ -4432,6 +4472,8 @@ def main() -> int:
     rust_numa_affinity_bin = BUILD_DIR / "numa-affinity-rust"
     c_free_hint_release_bin = BUILD_DIR / "free-hint-release-c"
     rust_free_hint_release_bin = BUILD_DIR / "free-hint-release-rust"
+    c_huge_os_pages_bin = BUILD_DIR / "huge-os-pages-c"
+    rust_huge_os_pages_bin = BUILD_DIR / "huge-os-pages-rust"
     c_redirect_static_bin = BUILD_DIR / "redirect-static-c"
     rust_redirect_static_bin = BUILD_DIR / "redirect-static-rust"
     c_redirect_dynamic_bin = BUILD_DIR / "redirect-dynamic-c"
@@ -4470,6 +4512,8 @@ def main() -> int:
         ["-DNDEBUG"],
     )
     compile_binary(cc, rust_free_hint_release_bin, [free_hint_release_capture, rust_release_lib], ["-DNDEBUG"])
+    compile_binary(cc, c_huge_os_pages_bin, [ROOT / "mimalloc-3.3.2/src/static.c", huge_os_pages_capture])
+    compile_binary(cc, rust_huge_os_pages_bin, [huge_os_pages_capture, rust_lib])
     compile_binary(
         cc,
         c_redirect_static_bin,
@@ -4571,6 +4615,16 @@ def main() -> int:
         print(rust_free_hint_release, file=sys.stderr)
         return 1
 
+    c_huge_os_pages = run(c_huge_os_pages_bin)
+    rust_huge_os_pages = run(rust_huge_os_pages_bin)
+    if c_huge_os_pages != rust_huge_os_pages:
+        print("huge OS page parity mismatch", file=sys.stderr)
+        print("--- C mimalloc ---", file=sys.stderr)
+        print(c_huge_os_pages, file=sys.stderr)
+        print("--- Rust mimalloc ---", file=sys.stderr)
+        print(rust_huge_os_pages, file=sys.stderr)
+        return 1
+
     try:
         validate_redirect_capture(
             c_redirect_static_bin,
@@ -4595,6 +4649,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc process lifecycle output matches")
     print("ok: C and Rust mimalloc NUMA affinity behavior matches")
     print("ok: C and Rust mimalloc release free-hint behavior matches")
+    print("ok: C and Rust mimalloc huge OS page fallback behavior matches")
     print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")
     print(c_output, end="")
     return 0

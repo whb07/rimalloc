@@ -512,6 +512,21 @@ struct heap_visit_alloc_result {
   int alloc_ok;
 };
 
+struct huge_visit_result {
+  void* target;
+  size_t areas;
+  size_t blocks;
+  size_t target_blocks;
+  size_t target_block_size;
+  size_t target_area_block_size;
+  size_t target_area_full_block_size;
+  size_t target_area_reserved;
+  size_t target_area_committed;
+  size_t target_area_used;
+  int area_fields_ok;
+  int target_area_huge;
+};
+
 struct subproc_visit_alloc_result {
   size_t calls;
   int alloc_ok;
@@ -552,6 +567,31 @@ static bool heap_visit_allocating_visitor(const mi_heap_t* heap, const mi_heap_a
   result->calls++;
   if (heap != result->expected_heap) result->heap_matches = 0;
   if (!callback_alloc_roundtrip(47)) result->alloc_ok = 0;
+  return true;
+}
+
+static bool heap_visit_huge_visitor(const mi_heap_t* heap, const mi_heap_area_t* area, void* block, size_t block_size, void* arg) {
+  (void)heap;
+  struct huge_visit_result* result = (struct huge_visit_result*)arg;
+  if (area == NULL || area->blocks == NULL || area->reserved < area->committed || area->full_block_size < area->block_size) {
+    result->area_fields_ok = 0;
+    return true;
+  }
+  if (block == NULL) {
+    result->areas++;
+    return true;
+  }
+  result->blocks++;
+  if (block == result->target) {
+    result->target_blocks++;
+    result->target_block_size = block_size;
+    result->target_area_block_size = area->block_size;
+    result->target_area_full_block_size = area->full_block_size;
+    result->target_area_reserved = area->reserved;
+    result->target_area_committed = area->committed;
+    result->target_area_used = area->used;
+    result->target_area_huge = area->used == 1 && area->full_block_size > MI_LARGE_MAX_OBJ_SIZE && block_size > MI_LARGE_MAX_OBJ_SIZE;
+  }
   return true;
 }
 
@@ -3099,6 +3139,79 @@ int main(void) {
     result_bool("large_threshold_current_after_free",
                 stats_alloc_current(&large_after) <= stats_alloc_current(&large_live));
   }
+
+  mi_heap_t* huge_heap = mi_heap_new();
+  mi_stats_t huge_before;
+  mi_stats_t huge_live;
+  mi_stats_t huge_after;
+  mi_stats_init(&huge_before);
+  mi_stats_init(&huge_live);
+  mi_stats_init(&huge_after);
+  mi_stats_reset();
+  result_bool("huge_object_stats_before_ok", mi_stats_get(&huge_before));
+  size_t huge_object_request = MI_LARGE_MAX_OBJ_SIZE + 1;
+  void* huge_object = huge_heap == NULL ? NULL : mi_heap_malloc(huge_heap, huge_object_request);
+  size_t huge_object_usable = huge_object == NULL ? 0 : mi_usable_size(huge_object);
+  result_bool("huge_object_allocated", huge_object != NULL);
+  result_bool("huge_object_usable", huge_object != NULL && huge_object_usable >= huge_object_request);
+  struct huge_visit_result huge_visit = {
+    huge_object, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0
+  };
+  bool huge_visit_ok = huge_heap != NULL && mi_heap_visit_blocks(huge_heap, true, heap_visit_huge_visitor, &huge_visit);
+  result_bool("huge_object_visit_success", huge_visit_ok);
+  result_bool("huge_object_visit_found", huge_visit_ok && huge_visit.target_blocks == 1);
+  result_bool("huge_object_visit_area_fields", huge_visit.area_fields_ok);
+  result_bool("huge_object_visit_classified_huge", huge_visit.target_area_huge);
+  result_size("huge_object_visit_block_size", huge_visit.target_block_size);
+  result_size("huge_object_visit_area_block_size", huge_visit.target_area_block_size);
+  result_size("huge_object_visit_area_full_block_size", huge_visit.target_area_full_block_size);
+  result_size("huge_object_visit_area_reserved", huge_visit.target_area_reserved);
+  result_size("huge_object_visit_area_committed", huge_visit.target_area_committed);
+  result_size("huge_object_visit_area_used", huge_visit.target_area_used);
+  result_bool("huge_object_stats_live_ok", mi_stats_get(&huge_live));
+  result_long("huge_object_normal_current_delta",
+              (long)(huge_live.malloc_normal.current - huge_before.malloc_normal.current));
+  result_long("huge_object_huge_current_delta",
+              (long)(huge_live.malloc_huge.current - huge_before.malloc_huge.current));
+  result_long("huge_object_huge_count_delta",
+              (long)(huge_live.malloc_huge_count.total - huge_before.malloc_huge_count.total));
+  mi_free(huge_object);
+  result_bool("huge_object_stats_after_ok", mi_stats_get(&huge_after));
+  result_long("huge_object_huge_current_after_delta",
+              (long)(huge_after.malloc_huge.current - huge_before.malloc_huge.current));
+  result_bool("huge_object_free_released_stats",
+              huge_after.malloc_huge.current <= huge_before.malloc_huge.current);
+  if (huge_heap != NULL) mi_heap_delete(huge_heap);
+
+  mi_stats_t huge_aligned_before;
+  mi_stats_t huge_aligned_live;
+  mi_stats_t huge_aligned_after;
+  mi_stats_init(&huge_aligned_before);
+  mi_stats_init(&huge_aligned_live);
+  mi_stats_init(&huge_aligned_after);
+  mi_stats_reset();
+  result_bool("huge_aligned_stats_before_ok", mi_stats_get(&huge_aligned_before));
+  size_t huge_alignment = MI_PAGE_MAX_OVERALLOC_ALIGN * 2;
+  void* huge_aligned = mi_malloc_aligned(257, huge_alignment);
+  size_t huge_aligned_usable = huge_aligned == NULL ? 0 : mi_usable_size(huge_aligned);
+  result_bool("huge_aligned_allocated", huge_aligned != NULL);
+  result_bool("huge_aligned_alignment", is_aligned_at(huge_aligned, huge_alignment, 0));
+  result_bool("huge_aligned_usable", huge_aligned != NULL && huge_aligned_usable >= 257);
+  result_bool("huge_aligned_stats_live_ok", mi_stats_get(&huge_aligned_live));
+  result_long("huge_aligned_normal_current_delta",
+              (long)(huge_aligned_live.malloc_normal.current - huge_aligned_before.malloc_normal.current));
+  result_long("huge_aligned_huge_current_delta",
+              (long)(huge_aligned_live.malloc_huge.current - huge_aligned_before.malloc_huge.current));
+  result_long("huge_aligned_huge_count_delta",
+              (long)(huge_aligned_live.malloc_huge_count.total - huge_aligned_before.malloc_huge_count.total));
+  result_size("huge_aligned_usable_size", huge_aligned_usable);
+  mi_free(huge_aligned);
+  result_bool("huge_aligned_stats_after_ok", mi_stats_get(&huge_aligned_after));
+  result_long("huge_aligned_huge_current_after_delta",
+              (long)(huge_aligned_after.malloc_huge.current - huge_aligned_before.malloc_huge.current));
+  result_bool("huge_aligned_free_retains_full_page_stats",
+              huge_aligned_after.malloc_huge.current >= huge_aligned_before.malloc_huge.current);
+  mi_collect(true);
 
   size_t size_checks[] = { 0, 1, 8, 16, 17, 32, 33, 64, 65, 128, 129, 256, 257, 512, 513,
                            1024, 1025, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX,

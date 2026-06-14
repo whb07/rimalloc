@@ -7,19 +7,18 @@
     unsafe_op_in_unsafe_fn
 )]
 
-use core::alloc::Layout;
 use core::cell::Cell;
-use core::mem::{align_of, size_of};
+use core::mem::size_of;
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
-use std::alloc::{alloc_zeroed, dealloc, realloc};
 
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bitmap::{
-    mi_bitmap_init, mi_bitmap_max_bits, mi_bitmap_set, mi_bitmap_size, mi_bitmap_t,
+    MI_BCHUNK_SIZE, mi_bitmap_init, mi_bitmap_max_bits, mi_bitmap_set, mi_bitmap_size, mi_bitmap_t,
     mi_bitmap_try_find_and_claim, mi_bitmap_unsafe_setN,
 };
 use crate::bits::MI_SIZE_BITS;
+use crate::mimalloc::{mi_free, mi_rezalloc, mi_zalloc_aligned};
 use crate::types::{mi_arena_t, mi_thread_local_t, mi_thread_locals_t, mi_tls_slot_t};
 
 pub const MI_TLS_IDX_BITS: usize = if MI_SIZE_BITS < 64 {
@@ -70,16 +69,13 @@ fn tls_slots(tls: *mut mi_thread_locals_t) -> *mut mi_tls_slot_t {
 }
 
 #[inline]
-fn thread_locals_layout(count: usize) -> Option<Layout> {
-    let bytes = size_of::<mi_thread_locals_t>()
-        .checked_add(count.checked_mul(size_of::<mi_tls_slot_t>())?)?;
-    Layout::from_size_align(bytes, align_of::<mi_thread_locals_t>()).ok()
+fn thread_locals_size(count: usize) -> Option<usize> {
+    size_of::<mi_thread_locals_t>().checked_add(count.checked_mul(size_of::<mi_tls_slot_t>())?)
 }
 
 #[inline]
-fn bitmap_layout(bit_count: usize) -> Option<Layout> {
-    let size = unsafe { mi_bitmap_size(bit_count, ptr::null_mut()) };
-    Layout::from_size_align(size, align_of::<mi_bitmap_t>()).ok()
+fn bitmap_alloc_size(bit_count: usize) -> usize {
+    unsafe { mi_bitmap_size(bit_count, ptr::null_mut()) }
 }
 
 #[inline]
@@ -119,27 +115,13 @@ fn mi_thread_locals_expand(least_idx: usize) -> Option<*mut mi_thread_locals_t> 
         return None;
     }
 
-    let layout_new = thread_locals_layout(count)?;
-    let tls = if count_old == 0 {
-        unsafe { alloc_zeroed(layout_new) as *mut mi_thread_locals_t }
+    let size_new = thread_locals_size(count)?;
+    let old_ptr = if count_old == 0 {
+        ptr::null_mut()
     } else {
-        let layout_old = thread_locals_layout(count_old)?;
-        let new_ptr = unsafe { realloc(tls_old.cast::<u8>(), layout_old, layout_new.size()) };
-        if new_ptr.is_null() {
-            return None;
-        }
-        let tls = new_ptr.cast::<mi_thread_locals_t>();
-        if layout_new.size() > layout_old.size() {
-            unsafe {
-                ptr::write_bytes(
-                    new_ptr.add(layout_old.size()),
-                    0,
-                    layout_new.size() - layout_old.size(),
-                );
-            }
-        }
-        tls
+        tls_old.cast()
     };
+    let tls = unsafe { mi_rezalloc(old_ptr, size_new).cast::<mi_thread_locals_t>() };
 
     if tls.is_null() {
         return None;
@@ -223,26 +205,17 @@ fn mi_thread_local_create_expand() -> bool {
     if newcount > MI_TLS_IDX_MAX {
         return false;
     }
-    let Some(layout_new) = bitmap_layout(newcount) else {
-        return false;
-    };
-    let newslots = unsafe { alloc_zeroed(layout_new).cast::<mi_bitmap_t>() };
+    let newsize = bitmap_alloc_size(newcount);
+    let newslots = unsafe { mi_zalloc_aligned(newsize, MI_BCHUNK_SIZE).cast::<mi_bitmap_t>() };
     if newslots.is_null() {
         return false;
     }
 
     if !slots.is_null() {
         let oldsize = unsafe { mi_bitmap_size(oldcount, ptr::null_mut()) };
-        let Some(layout_old) = Layout::from_size_align(oldsize, align_of::<mi_bitmap_t>()).ok()
-        else {
-            unsafe {
-                dealloc(newslots.cast::<u8>(), layout_new);
-            }
-            return false;
-        };
         unsafe {
             ptr::copy_nonoverlapping(slots.cast::<u8>(), newslots.cast::<u8>(), oldsize);
-            dealloc(slots.cast::<u8>(), layout_old);
+            mi_free(slots.cast());
         }
     }
 
@@ -262,11 +235,8 @@ fn free_thread_locals(tls: *mut mi_thread_locals_t) {
     if count == 0 {
         return;
     }
-    let Some(layout) = thread_locals_layout(count) else {
-        return;
-    };
     unsafe {
-        dealloc(tls.cast::<u8>(), layout);
+        mi_free(tls.cast());
     }
 }
 
@@ -284,11 +254,8 @@ pub extern "C" fn _mi_thread_locals_done() {
     }
     let slots = mi_thread_locals_free.swap(ptr::null_mut(), Ordering::AcqRel);
     if !slots.is_null() {
-        let count = unsafe { mi_bitmap_max_bits(slots) };
-        if let Some(layout) = bitmap_layout(count) {
-            unsafe {
-                dealloc(slots.cast::<u8>(), layout);
-            }
+        unsafe {
+            mi_free(slots.cast());
         }
     }
     unsafe {

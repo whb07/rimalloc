@@ -975,6 +975,29 @@ static int heap_lifecycle_case_status(int op) {
   return -3;
 }
 
+static int heap_deleted_invalid_use_status(void) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+    mi_heap_t* heap = mi_heap_new();
+    if (heap == NULL) _exit(31);
+    mi_heap_delete(heap);
+    void* p = mi_heap_malloc(heap, 16);
+    mi_free(p);
+    _exit(0);
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static int option_invalid_case_status(int op) {
   fflush(stdout);
   pid_t pid = fork();
@@ -2248,6 +2271,7 @@ int main(void) {
   result_size("heap_lifecycle_destroy_live_free_status", (size_t)heap_lifecycle_case_status(1));
   result_size("heap_lifecycle_delete_delayed_free_status", (size_t)heap_lifecycle_case_status(2));
   result_size("heap_lifecycle_destroy_delayed_free_status", (size_t)heap_lifecycle_case_status(3));
+  result_size("heap_deleted_invalid_use_status", (size_t)heap_deleted_invalid_use_status());
   char* hdup = heap == NULL ? NULL : mi_heap_strdup(heap, "heap-string");
   result_bool("heap_strdup_content_owner", hdup != NULL && strcmp(hdup, "heap-string") == 0 && mi_heap_contains(heap, hdup));
   mi_free(hdup);

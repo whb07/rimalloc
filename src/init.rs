@@ -530,6 +530,14 @@ unsafe fn mi_subproc_prefix(subproc: *mut mi_subproc_t) -> *mut MiSubprocPrefix 
     subproc.cast::<MiSubprocPrefix>()
 }
 
+unsafe fn mi_subproc_heap_main_raw(subproc: *mut mi_subproc_t) -> *mut mi_heap_t {
+    unsafe { ptr::addr_of!((*mi_subproc_prefix(subproc)).heap_main).read_unaligned() }
+}
+
+unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
+    unsafe { ptr::addr_of!((*(heap.cast::<MiHeapMainPrefix>())).subproc).read_unaligned() }
+}
+
 #[unsafe(no_mangle)]
 /// # Safety
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
@@ -1369,7 +1377,7 @@ pub unsafe extern "C" fn _mi_subproc_heap_main(subproc: *mut mi_subproc_t) -> *m
         return ptr::null_mut();
     }
     let prefix = unsafe { mi_subproc_prefix(subproc) };
-    let heap = unsafe { (*prefix).heap_main };
+    let heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if !heap.is_null() {
         return heap;
     }
@@ -1405,7 +1413,7 @@ pub unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
     if heap.is_null() {
         return false;
     }
-    let subproc = unsafe { (*(heap.cast::<MiHeapMainPrefix>())).subproc };
+    let subproc = unsafe { mi_heap_subproc_raw(heap) };
     ptr::eq(unsafe { _mi_subproc_heap_main(subproc) }, heap.cast_mut())
 }
 

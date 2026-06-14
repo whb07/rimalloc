@@ -85,7 +85,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## Heap, Theap, and Subprocess Behavior
 
-- [ ] Match `mi_heap_new`, `mi_heap_delete`, and `mi_heap_destroy`. Validation: tests verify live-block migration vs destruction, delayed frees, cross-thread frees, stats, and post-delete invalid-use diagnostics against C mimalloc.
+- [x] Match `mi_heap_new`, `mi_heap_delete`, and `mi_heap_destroy`. Validation: tests verify live-block migration vs destruction, delayed frees, cross-thread frees, stats, and post-delete invalid-use diagnostics against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match `mi_heap_collect`. Validation: tests trigger page retirement, abandoned pages, delayed frees, and forced/non-forced collection, then compare memory/stat changes against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match `mi_heap_set_numa_affinity`. Validation: NUMA-capable tests verify requested NUMA affinity affects subsequent heap allocations as C mimalloc does, and non-NUMA targets degrade identically. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match heap allocation APIs `mi_heap_malloc`, `mi_heap_zalloc`, `mi_heap_calloc`, `mi_heap_mallocn`, `mi_heap_malloc_small`, and `mi_heap_zalloc_small`. Validation: heap-specific tests verify ownership, zeroing, overflow, small-size limits, and cross-thread free behavior against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.

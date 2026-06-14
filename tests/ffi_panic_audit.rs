@@ -1,5 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt;
 
 const FORBIDDEN: [&str; 7] = [
     "panic!",
@@ -58,4 +62,36 @@ fn production_sources_do_not_use_panic_prone_shortcuts() {
         "panic-prone production source markers found:\n{}",
         hits.join("\n")
     );
+}
+
+#[test]
+fn mimalloc_assert_fail_aborts_instead_of_unwinding() {
+    const CHILD_ENV: &str = "MI_FFI_PANIC_AUDIT_ASSERT_CHILD";
+
+    if std::env::var_os(CHILD_ENV).is_some() {
+        unsafe {
+            mechanical_mimalloc::options::_mi_assert_fail(
+                c"false".as_ptr(),
+                c"ffi_panic_audit.rs".as_ptr(),
+                line!(),
+                c"mimalloc_assert_fail_aborts_instead_of_unwinding".as_ptr(),
+            )
+        };
+    }
+
+    let current_exe = std::env::current_exe().expect("current test executable path");
+    let status = Command::new(current_exe)
+        .arg("--exact")
+        .arg("mimalloc_assert_fail_aborts_instead_of_unwinding")
+        .arg("--nocapture")
+        .env(CHILD_ENV, "1")
+        .status()
+        .expect("run assertion-abort child process");
+
+    assert!(
+        !status.success(),
+        "assert failure child unexpectedly returned"
+    );
+    #[cfg(unix)]
+    assert_eq!(status.signal(), Some(6), "expected SIGABRT from child");
 }

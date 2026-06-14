@@ -1,7 +1,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const FORBIDDEN: [&str; 5] = ["panic!", "todo!", "unimplemented!", ".unwrap(", ".expect("];
+const FORBIDDEN: [&str; 7] = [
+    "panic!",
+    "todo!",
+    "unimplemented!",
+    "debug_assert!(",
+    "debug_assert_eq!(",
+    ".unwrap(",
+    ".expect(",
+];
 
 fn rust_sources_under(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(dir).expect("read source directory") {
@@ -26,6 +34,11 @@ fn production_sources_do_not_use_panic_prone_shortcuts() {
         let contents = fs::read_to_string(&path).expect("read source file");
         for (line_index, line) in contents.lines().enumerate() {
             for marker in FORBIDDEN {
+                if (marker == "debug_assert!(" || marker == "debug_assert_eq!(")
+                    && line.contains("mi_debug_assert")
+                {
+                    continue;
+                }
                 if line.contains(marker) {
                     hits.push(format!(
                         "{}:{} contains `{}`",

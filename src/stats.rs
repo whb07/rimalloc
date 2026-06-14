@@ -1412,12 +1412,12 @@ fn mi_json_buf_print(hbuf: &mut mi_json_buf_t, msg: &str) {
         if hbuf.used + 1 >= hbuf.size && !mi_json_buf_expand(hbuf) {
             return;
         }
-        debug_assert!(hbuf.used < hbuf.size);
+        crate::mi_debug_assert!(hbuf.used < hbuf.size);
         // SAFETY: capacity is ensured just above and `used < size`.
         unsafe { *hbuf.buf.add(hbuf.used) = byte as c_char };
         hbuf.used += 1;
     }
-    debug_assert!(hbuf.used < hbuf.size);
+    crate::mi_debug_assert!(hbuf.used < hbuf.size);
     // SAFETY: capacity is ensured above and the trailing NUL fits.
     unsafe { *hbuf.buf.add(hbuf.used) = 0 };
 }

@@ -181,14 +181,14 @@ pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
 #[inline]
 pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
     let gsize = unsafe { _mi_os_page_size() };
-    debug_assert!(gsize <= (MI_ARENA_SLICE_SIZE / 4));
+    crate::mi_debug_assert!(gsize <= (MI_ARENA_SLICE_SIZE / 4));
     gsize
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
     let vbits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
-    debug_assert!(vbits <= MI_MAX_VABITS);
+    crate::mi_debug_assert!(vbits <= MI_MAX_VABITS);
     vbits
 }
 

@@ -83,10 +83,51 @@ pub const MI_BLOCK_TAG_GUARDED: usize = !MI_BLOCK_TAG_ALIGNED;
 
 pub type mi_submap_t = *mut *mut mi_page_t;
 
+#[cold]
+pub(crate) fn _mi_rust_assert_fail(assertion: *const c_char, fname: *const c_char, line: u32) -> ! {
+    unsafe { crate::options::_mi_assert_fail(assertion, fname, line, ptr::null()) }
+}
+
 macro_rules! __has_builtin {
     ($x:expr) => {
         false
     };
+}
+
+#[macro_export]
+macro_rules! mi_debug_assert {
+    ($expr:expr $(,)?) => {{
+        if !$expr {
+            $crate::internal::_mi_rust_assert_fail(
+                concat!(stringify!($expr), "\0").as_ptr().cast(),
+                concat!(file!(), "\0").as_ptr().cast(),
+                line!(),
+            )
+        }
+    }};
+    ($expr:expr, $($arg:tt)+) => {{
+        $crate::mi_debug_assert!($expr);
+    }};
+}
+
+#[macro_export]
+macro_rules! mi_debug_assert_eq {
+    ($left:expr, $right:expr $(,)?) => {{
+        let left = &$left;
+        let right = &$right;
+        if !(*left == *right) {
+            $crate::internal::_mi_rust_assert_fail(
+                concat!(stringify!($left), " == ", stringify!($right), "\0")
+                    .as_ptr()
+                    .cast(),
+                concat!(file!(), "\0").as_ptr().cast(),
+                line!(),
+            )
+        }
+    }};
+    ($left:expr, $right:expr, $($arg:tt)+) => {{
+        $crate::mi_debug_assert_eq!($left, $right);
+    }};
 }
 
 #[macro_export]
@@ -102,12 +143,12 @@ macro_rules! mi_trace_message {
 macro_rules! mi_assert {
     ($expr:expr $(,)?) => {{
         if $crate::internal::MI_DEBUG > 0 {
-            debug_assert!($expr);
+            $crate::mi_debug_assert!($expr);
         }
     }};
     ($expr:expr, $($arg:tt)+) => {{
         if $crate::internal::MI_DEBUG > 0 {
-            debug_assert!($expr, $($arg)+);
+            $crate::mi_debug_assert!($expr, $($arg)+);
         }
     }};
 }

@@ -105,7 +105,9 @@ fn chacha_split(ctx: &mut mi_random_ctx_t, nonce: u64, ctx_new: &mut mi_random_c
     ctx_new.input[13] = 0;
     ctx_new.input[14] = nonce as u32;
     ctx_new.input[15] = (nonce >> 32) as u32;
-    debug_assert!(ctx.input[14] != ctx_new.input[14] || ctx.input[15] != ctx_new.input[15]);
+    crate::mi_debug_assert!(
+        ctx.input[14] != ctx_new.input[14] || ctx.input[15] != ctx_new.input[15]
+    );
     chacha_block(ctx_new);
 }
 
@@ -145,7 +147,7 @@ fn _mi_prim_random_buf(buf: *mut u8, buf_len: usize) -> bool {
     if buf_len == 0 {
         return true;
     }
-    debug_assert!(!buf.is_null());
+    crate::mi_debug_assert!(!buf.is_null());
     #[cfg(unix)]
     {
         use std::fs::File;
@@ -196,8 +198,8 @@ pub unsafe extern "C" fn _mi_random_split(
 ) {
     let ctx = &mut *ctx;
     let ctx_new = &mut *ctx_new;
-    debug_assert!(mi_random_is_initialized(ctx));
-    debug_assert!(!std::ptr::eq(ctx, ctx_new));
+    crate::mi_debug_assert!(mi_random_is_initialized(ctx));
+    crate::mi_debug_assert!(!std::ptr::eq(ctx, ctx_new));
     chacha_split(
         ctx,
         ctx_new as *mut mi_random_ctx_t as usize as u64,
@@ -208,7 +210,7 @@ pub unsafe extern "C" fn _mi_random_split(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize {
     let ctx = &mut *ctx;
-    debug_assert!(mi_random_is_initialized(ctx));
+    crate::mi_debug_assert!(mi_random_is_initialized(ctx));
     loop {
         #[cfg(target_pointer_width = "32")]
         let r = chacha_next32(ctx) as usize;
@@ -230,7 +232,7 @@ pub extern "C" fn _mi_os_random_weak(extra_seed: usize) -> usize {
         x = _mi_random_shuffle(x);
         i += 1;
     }
-    debug_assert!(x != 0);
+    crate::mi_debug_assert!(x != 0);
     x
 }
 

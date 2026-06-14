@@ -77,6 +77,6 @@ pub unsafe fn mi_track_malloc(p: *mut c_void, reqsize: usize, zero: bool) {
         return;
     }
     let size = unsafe { crate::mimalloc::mi_usable_size(p.cast_const()) };
-    debug_assert!(size >= reqsize);
+    crate::mi_debug_assert!(size >= reqsize);
     unsafe { mi_track_malloc_size(p, reqsize, size, zero) };
 }

@@ -78,7 +78,7 @@ const MI_ALIGN2W: bool = cfg!(target_pointer_width = "64");
 const MI_PAGE_ALIGN: usize = MI_ARENA_SLICE_ALIGN;
 
 fn align_up(size: usize, alignment: usize) -> usize {
-    debug_assert!(alignment.is_power_of_two());
+    crate::mi_debug_assert!(alignment.is_power_of_two());
     (size + alignment - 1) & !(alignment - 1)
 }
 
@@ -107,7 +107,7 @@ pub extern "C" fn mi_bin(size: usize) -> usize {
     wsize -= 1;
     let b = (usize::BITS as usize - 1) - wsize.leading_zeros() as usize;
     let bin = ((b << 2) + ((wsize >> (b - 2)) & 0x03)) - 3;
-    debug_assert!(bin > 0 && bin < MI_BIN_HUGE);
+    crate::mi_debug_assert!(bin > 0 && bin < MI_BIN_HUGE);
     bin
 }
 
@@ -116,7 +116,7 @@ pub extern "C" fn _mi_bin(size: usize) -> usize {
 }
 
 pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
-    debug_assert!(bin <= MI_BIN_HUGE);
+    crate::mi_debug_assert!(bin <= MI_BIN_HUGE);
     bin_block_size(bin)
 }
 

@@ -202,8 +202,8 @@ pub fn __mi_prim_thread_id() -> mi_threadid_t {
 #[inline]
 pub fn _mi_prim_thread_id() -> mi_threadid_t {
     let tid = __mi_prim_thread_id();
-    debug_assert!(tid > 1);
-    debug_assert_eq!(tid & 0x03, 0);
+    crate::mi_debug_assert!(tid > 1);
+    crate::mi_debug_assert_eq!(tid & 0x03, 0);
     tid
 }
 

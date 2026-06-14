@@ -260,9 +260,9 @@ fn mi_bfield_foreach_bit(x: &mut mi_bfield_t, idx: &mut usize) -> bool {
 
 #[inline]
 fn mi_bfield_mask(bit_count: usize, shiftl: usize) -> mi_bfield_t {
-    debug_assert!(bit_count > 0);
-    debug_assert!(shiftl < MI_BFIELD_BITS);
-    debug_assert!(bit_count + shiftl <= MI_BFIELD_BITS);
+    crate::mi_debug_assert!(bit_count > 0);
+    crate::mi_debug_assert!(shiftl < MI_BFIELD_BITS);
+    crate::mi_debug_assert!(bit_count + shiftl <= MI_BFIELD_BITS);
     let mask0 = if bit_count < MI_BFIELD_BITS {
         (mi_bfield_one() << bit_count) - 1
     } else {
@@ -273,7 +273,7 @@ fn mi_bfield_mask(bit_count: usize, shiftl: usize) -> mi_bfield_t {
 
 #[inline]
 fn mi_bfield_atomic_set(b: &AtomicUsize, idx: usize) -> bool {
-    debug_assert!(idx < MI_BFIELD_BITS);
+    crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
     let mask = mi_bfield_mask(1, idx);
     let old = b.fetch_or(mask, Ordering::AcqRel);
     (old & mask) == 0
@@ -281,7 +281,7 @@ fn mi_bfield_atomic_set(b: &AtomicUsize, idx: usize) -> bool {
 
 #[inline]
 fn mi_bfield_atomic_clear(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bool>) -> bool {
-    debug_assert!(idx < MI_BFIELD_BITS);
+    crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
     let mask = mi_bfield_mask(1, idx);
     let old = b.fetch_and(!mask, Ordering::AcqRel);
     if let Some(all_clear) = all_clear {
@@ -292,7 +292,7 @@ fn mi_bfield_atomic_clear(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bo
 
 #[inline]
 fn mi_bfield_atomic_clear_once_set(b: &AtomicUsize, idx: usize) {
-    debug_assert!(idx < MI_BFIELD_BITS);
+    crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
     let mask = mi_bfield_mask(1, idx);
     let mut old = b.load(Ordering::Relaxed);
     loop {
@@ -316,7 +316,7 @@ fn mi_bfield_atomic_set_mask(
     mask: mi_bfield_t,
     already_set: Option<&mut usize>,
 ) -> bool {
-    debug_assert!(mask != 0);
+    crate::mi_debug_assert!(mask != 0);
     let mut old = b.load(Ordering::Relaxed);
     while b
         .compare_exchange_weak(old, old | mask, Ordering::AcqRel, Ordering::Acquire)
@@ -336,7 +336,7 @@ fn mi_bfield_atomic_clear_mask(
     mask: mi_bfield_t,
     all_clear: Option<&mut bool>,
 ) -> bool {
-    debug_assert!(mask != 0);
+    crate::mi_debug_assert!(mask != 0);
     let mut old = b.load(Ordering::Relaxed);
     while b
         .compare_exchange_weak(old, old & !mask, Ordering::AcqRel, Ordering::Acquire)
@@ -366,7 +366,7 @@ fn mi_bfield_atomic_try_clear_mask_of(
     mut expect: mi_bfield_t,
     all_clear: Option<&mut bool>,
 ) -> bool {
-    debug_assert!(mask != 0);
+    crate::mi_debug_assert!(mask != 0);
     loop {
         if (expect & mask) != mask {
             if let Some(all_clear) = all_clear {
@@ -392,22 +392,22 @@ fn mi_bfield_atomic_try_clear_mask(
     mask: mi_bfield_t,
     all_clear: Option<&mut bool>,
 ) -> bool {
-    debug_assert!(mask != 0);
+    crate::mi_debug_assert!(mask != 0);
     let expect = b.load(Ordering::Relaxed);
     mi_bfield_atomic_try_clear_mask_of(b, mask, expect, all_clear)
 }
 
 #[inline]
 fn mi_bfield_atomic_try_clear(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bool>) -> bool {
-    debug_assert!(idx < MI_BFIELD_BITS);
+    crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
     let mask = mi_bfield_one() << idx;
     mi_bfield_atomic_try_clear_mask(b, mask, all_clear)
 }
 
 #[inline]
 fn mi_bfield_atomic_try_clear8(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bool>) -> bool {
-    debug_assert!(idx < MI_BFIELD_BITS);
-    debug_assert!((idx % 8) == 0);
+    crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
+    crate::mi_debug_assert!((idx % 8) == 0);
     let mask = (0xFFusize) << idx;
     mi_bfield_atomic_try_clear_mask(b, mask, all_clear)
 }
@@ -428,14 +428,14 @@ fn mi_bfield_atomic_try_clearX(b: &AtomicUsize, all_clear: Option<&mut bool>) ->
 
 #[inline]
 fn mi_bfield_atomic_is_set(b: &AtomicUsize, idx: usize) -> bool {
-    debug_assert!(idx < MI_BFIELD_BITS);
+    crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
     let x = b.load(Ordering::Acquire);
     (x & mi_bfield_mask(1, idx)) != 0
 }
 
 #[inline]
 fn mi_bfield_atomic_is_clear(b: &AtomicUsize, idx: usize) -> bool {
-    debug_assert!(idx < MI_BFIELD_BITS);
+    crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
     let x = b.load(Ordering::Acquire);
     (x & mi_bfield_mask(1, idx)) == 0
 }
@@ -451,14 +451,14 @@ fn mi_bfield_atomic_is_xset(set: mi_xset_t, b: &AtomicUsize, idx: usize) -> bool
 
 #[inline]
 fn mi_bfield_atomic_is_set_mask(b: &AtomicUsize, mask: mi_bfield_t) -> bool {
-    debug_assert!(mask != 0);
+    crate::mi_debug_assert!(mask != 0);
     let x = b.load(Ordering::Acquire);
     (x & mask) == mask
 }
 
 #[inline]
 fn mi_bfield_atomic_is_clear_mask(b: &AtomicUsize, mask: mi_bfield_t) -> bool {
-    debug_assert!(mask != 0);
+    crate::mi_debug_assert!(mask != 0);
     let x = b.load(Ordering::Acquire);
     (x & mask) == 0
 }
@@ -480,7 +480,7 @@ fn mi_bfield_atomic_popcount_mask(b: &AtomicUsize, mask: mi_bfield_t) -> usize {
 
 #[inline]
 fn mi_bchunk_set(chunk: &mut mi_bchunk_t, cidx: usize, already_set: Option<&mut usize>) -> bool {
-    debug_assert!(cidx < MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(cidx < MI_BCHUNK_BITS);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
     let was_clear = mi_bfield_atomic_set(&chunk.bfields[i], idx);
@@ -497,16 +497,16 @@ fn mi_bchunk_setNX(
     n: usize,
     already_set: Option<&mut usize>,
 ) -> bool {
-    debug_assert!(cidx < MI_BCHUNK_BITS);
-    debug_assert!(n > 0 && n <= MI_BFIELD_BITS);
+    crate::mi_debug_assert!(cidx < MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(n > 0 && n <= MI_BFIELD_BITS);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
     if idx + n <= MI_BFIELD_BITS {
         mi_bfield_atomic_set_mask(&chunk.bfields[i], mi_bfield_mask(n, idx), already_set)
     } else {
         let m = MI_BFIELD_BITS - idx;
-        debug_assert!(m < n);
-        debug_assert!(i < MI_BCHUNK_FIELDS - 1);
+        crate::mi_debug_assert!(m < n);
+        crate::mi_debug_assert!(i < MI_BCHUNK_FIELDS - 1);
         let mut already_set1 = 0usize;
         let all_set1 = mi_bfield_atomic_set_mask(
             &chunk.bfields[i],
@@ -535,8 +535,8 @@ fn mi_bchunk_xsetNC(
     palready_set: Option<&mut usize>,
     mut pmaybe_all_clear: Option<&mut bool>,
 ) -> bool {
-    debug_assert!(cidx + n <= MI_BCHUNK_BITS);
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(cidx + n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(n > 0);
     let mut all_transition = true;
     let mut maybe_all_clear = true;
     let mut total_already_set = 0usize;
@@ -547,8 +547,8 @@ fn mi_bchunk_xsetNC(
         if m > n {
             m = n;
         }
-        debug_assert!(idx + m <= MI_BFIELD_BITS);
-        debug_assert!(field < MI_BCHUNK_FIELDS);
+        crate::mi_debug_assert!(idx + m <= MI_BFIELD_BITS);
+        crate::mi_debug_assert!(field < MI_BCHUNK_FIELDS);
         let mask = mi_bfield_mask(m, idx);
         let mut already_set = 0usize;
         let mut all_clear = false;
@@ -557,7 +557,9 @@ fn mi_bchunk_xsetNC(
         } else {
             mi_bfield_atomic_clear_mask(&chunk.bfields[field], mask, Some(&mut all_clear))
         };
-        debug_assert!((transition && already_set == 0) || (!transition && already_set > 0) || set);
+        crate::mi_debug_assert!(
+            (transition && already_set == 0) || (!transition && already_set > 0) || set
+        );
         all_transition &= transition;
         total_already_set += already_set;
         maybe_all_clear &= all_clear;
@@ -581,7 +583,7 @@ fn mi_bchunk_setN(
     n: usize,
     already_set: Option<&mut usize>,
 ) -> bool {
-    debug_assert!(n > 0 && n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(n > 0 && n <= MI_BCHUNK_BITS);
     if n == 1 {
         mi_bchunk_set(chunk, cidx, already_set)
     } else if n <= MI_BFIELD_BITS {
@@ -593,7 +595,7 @@ fn mi_bchunk_setN(
 
 #[inline]
 fn mi_bchunk_clear(chunk: &mut mi_bchunk_t, cidx: usize, all_clear: Option<&mut bool>) -> bool {
-    debug_assert!(cidx < MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(cidx < MI_BCHUNK_BITS);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
     mi_bfield_atomic_clear(&chunk.bfields[i], idx, all_clear)
@@ -606,7 +608,7 @@ fn mi_bchunk_clearN(
     n: usize,
     maybe_all_clear: Option<&mut bool>,
 ) -> bool {
-    debug_assert!(n > 0 && n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(n > 0 && n <= MI_BCHUNK_BITS);
     if n == 1 {
         mi_bchunk_clear(chunk, cidx, maybe_all_clear)
     } else if n <= MI_BFIELD_BITS {
@@ -623,15 +625,15 @@ fn mi_bchunk_popcountNC(
     mut idx: usize,
     mut n: usize,
 ) -> usize {
-    debug_assert!((field_idx * MI_BFIELD_BITS) + idx + n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!((field_idx * MI_BFIELD_BITS) + idx + n <= MI_BCHUNK_BITS);
     let mut count = 0usize;
     while n > 0 {
         let mut m = MI_BFIELD_BITS - idx;
         if m > n {
             m = n;
         }
-        debug_assert!(idx + m <= MI_BFIELD_BITS);
-        debug_assert!(field_idx < MI_BCHUNK_FIELDS);
+        crate::mi_debug_assert!(idx + m <= MI_BFIELD_BITS);
+        crate::mi_debug_assert!(field_idx < MI_BCHUNK_FIELDS);
         let mask = mi_bfield_mask(m, idx);
         count += mi_bfield_atomic_popcount_mask(&chunk.bfields[field_idx], mask);
         field_idx += 1;
@@ -643,8 +645,8 @@ fn mi_bchunk_popcountNC(
 
 #[inline]
 fn mi_bchunk_popcountN(chunk: &mi_bchunk_t, cidx: usize, n: usize) -> usize {
-    debug_assert!(cidx + n <= MI_BCHUNK_BITS);
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(cidx + n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(n > 0);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
     if n == 1 {
@@ -668,14 +670,14 @@ fn mi_bchunk_is_xsetNC(
     mut idx: usize,
     mut n: usize,
 ) -> bool {
-    debug_assert!((field_idx * MI_BFIELD_BITS) + idx + n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!((field_idx * MI_BFIELD_BITS) + idx + n <= MI_BCHUNK_BITS);
     while n > 0 {
         let mut m = MI_BFIELD_BITS - idx;
         if m > n {
             m = n;
         }
-        debug_assert!(idx + m <= MI_BFIELD_BITS);
-        debug_assert!(field_idx < MI_BCHUNK_FIELDS);
+        crate::mi_debug_assert!(idx + m <= MI_BFIELD_BITS);
+        crate::mi_debug_assert!(field_idx < MI_BCHUNK_FIELDS);
         let mask = mi_bfield_mask(m, idx);
         if !mi_bfield_atomic_is_xset_mask(set, &chunk.bfields[field_idx], mask) {
             return false;
@@ -689,8 +691,8 @@ fn mi_bchunk_is_xsetNC(
 
 #[inline]
 fn mi_bchunk_is_xsetN(set: mi_xset_t, chunk: &mi_bchunk_t, cidx: usize, n: usize) -> bool {
-    debug_assert!(cidx + n <= MI_BCHUNK_BITS);
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(cidx + n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(n > 0);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
     if n == 1 {
@@ -709,16 +711,16 @@ fn mi_bchunk_try_clearNX(
     n: usize,
     pmaybe_all_clear: Option<&mut bool>,
 ) -> bool {
-    debug_assert!(cidx < MI_BCHUNK_BITS);
-    debug_assert!(n <= MI_BFIELD_BITS);
+    crate::mi_debug_assert!(cidx < MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(n <= MI_BFIELD_BITS);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
     if idx + n <= MI_BFIELD_BITS {
         mi_bfield_atomic_try_clear_mask(&chunk.bfields[i], mi_bfield_mask(n, idx), pmaybe_all_clear)
     } else {
         let m = MI_BFIELD_BITS - idx;
-        debug_assert!(m < n);
-        debug_assert!(i < MI_BCHUNK_FIELDS - 1);
+        crate::mi_debug_assert!(m < n);
+        crate::mi_debug_assert!(i < MI_BCHUNK_FIELDS - 1);
         let mut field1_is_clear = false;
         if !mi_bfield_atomic_try_clear_mask(
             &chunk.bfields[i],
@@ -750,8 +752,8 @@ fn mi_bchunk_try_clearNC(
     mut n: usize,
     mut pmaybe_all_clear: Option<&mut bool>,
 ) -> bool {
-    debug_assert!(cidx + n <= MI_BCHUNK_BITS);
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(cidx + n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(n > 0);
     if let Some(pmaybe_all_clear) = &mut pmaybe_all_clear {
         **pmaybe_all_clear = true;
     }
@@ -762,8 +764,8 @@ fn mi_bchunk_try_clearNC(
     if m > n {
         m = n;
     }
-    debug_assert!(start_idx + m <= MI_BFIELD_BITS);
-    debug_assert!(start_field < MI_BCHUNK_FIELDS);
+    crate::mi_debug_assert!(start_idx + m <= MI_BFIELD_BITS);
+    crate::mi_debug_assert!(start_field < MI_BCHUNK_FIELDS);
     let mask_start = mi_bfield_mask(m, start_idx);
     let mut maybe_all_clear = false;
     if !mi_bfield_atomic_try_clear_mask(
@@ -776,7 +778,7 @@ fn mi_bchunk_try_clearNC(
     n -= m;
     while n >= MI_BFIELD_BITS {
         field += 1;
-        debug_assert!(field < MI_BCHUNK_FIELDS);
+        crate::mi_debug_assert!(field < MI_BCHUNK_FIELDS);
         let mut field_is_clear = false;
         if !mi_bfield_atomic_try_clearX(&chunk.bfields[field], Some(&mut field_is_clear)) {
             let mut restore = field;
@@ -795,7 +797,7 @@ fn mi_bchunk_try_clearNC(
     }
     if n > 0 {
         field += 1;
-        debug_assert!(field < MI_BCHUNK_FIELDS);
+        crate::mi_debug_assert!(field < MI_BCHUNK_FIELDS);
         let mut field_is_clear = false;
         if !mi_bfield_atomic_try_clear_mask(
             &chunk.bfields[field],
@@ -828,7 +830,7 @@ fn mi_bchunk_try_clearN(
     n: usize,
     maybe_all_clear: Option<&mut bool>,
 ) -> bool {
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(n > 0);
     if n <= MI_BFIELD_BITS {
         mi_bchunk_try_clearNX(chunk, cidx, n, maybe_all_clear)
     } else {
@@ -842,7 +844,7 @@ fn mi_bchunk_try_find_and_clear_at(
     chunk_idx: usize,
     pidx: &mut usize,
 ) -> bool {
-    debug_assert!(chunk_idx < MI_BCHUNK_FIELDS);
+    crate::mi_debug_assert!(chunk_idx < MI_BCHUNK_FIELDS);
     let b = chunk.bfields[chunk_idx].load(Ordering::Acquire);
     let mut idx = 0usize;
     if mi_bfield_find_least_bit(b, &mut idx) {
@@ -853,7 +855,7 @@ fn mi_bchunk_try_find_and_clear_at(
             None,
         ) {
             *pidx = (chunk_idx * MI_BFIELD_BITS) + idx;
-            debug_assert!(*pidx < MI_BCHUNK_BITS);
+            crate::mi_debug_assert!(*pidx < MI_BCHUNK_BITS);
             return true;
         }
     }
@@ -880,12 +882,12 @@ fn mi_bchunk_try_find_and_clear8_at(
     let has_set8 = (((!b).wrapping_sub(MI_BFIELD_LO_BIT8)) & (b & MI_BFIELD_HI_BIT8)) >> 7;
     let mut idx = 0usize;
     if mi_bfield_find_least_bit(has_set8, &mut idx) {
-        debug_assert!(idx <= MI_BFIELD_BITS - 8);
-        debug_assert!((idx % 8) == 0);
+        crate::mi_debug_assert!(idx <= MI_BFIELD_BITS - 8);
+        crate::mi_debug_assert!((idx % 8) == 0);
         if mi_bfield_atomic_try_clear_mask_of(&chunk.bfields[chunk_idx], 0xFFusize << idx, b, None)
         {
             *pidx = (chunk_idx * MI_BFIELD_BITS) + idx;
-            debug_assert!(*pidx + 8 <= MI_BCHUNK_BITS);
+            crate::mi_debug_assert!(*pidx + 8 <= MI_BCHUNK_BITS);
             return true;
         }
     }
@@ -917,12 +919,12 @@ fn mi_bchunk_try_find_and_clearNX(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
                 break;
             }
             let bmask = mask << idx;
-            debug_assert!(bmask >> idx == mask);
+            crate::mi_debug_assert!(bmask >> idx == mask);
             if (b & bmask) == bmask {
                 if mi_bfield_atomic_try_clear_mask_of(&chunk.bfields[i], bmask, b0, None) {
                     *pidx = (i * MI_BFIELD_BITS) + idx;
-                    debug_assert!(*pidx < MI_BCHUNK_BITS);
-                    debug_assert!(*pidx + n <= MI_BCHUNK_BITS);
+                    crate::mi_debug_assert!(*pidx < MI_BCHUNK_BITS);
+                    crate::mi_debug_assert!(*pidx + n <= MI_BCHUNK_BITS);
                     return true;
                 } else {
                     b0 = chunk.bfields[i].load(Ordering::Acquire);
@@ -941,8 +943,8 @@ fn mi_bchunk_try_find_and_clearNX(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
                     let cidx = (i * MI_BFIELD_BITS) + (MI_BFIELD_BITS - post);
                     if mi_bchunk_try_clearNX(chunk, cidx, n, None) {
                         *pidx = cidx;
-                        debug_assert!(*pidx < MI_BCHUNK_BITS);
-                        debug_assert!(*pidx + n <= MI_BCHUNK_BITS);
+                        crate::mi_debug_assert!(*pidx < MI_BCHUNK_BITS);
+                        crate::mi_debug_assert!(*pidx + n <= MI_BCHUNK_BITS);
                         return true;
                     }
                 }
@@ -987,8 +989,8 @@ fn mi_bchunk_try_find_and_clearNC(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
         }
         if m == 0 && mi_bchunk_try_clearN(chunk, cidx, n, None) {
             *pidx = cidx;
-            debug_assert!(*pidx < MI_BCHUNK_BITS);
-            debug_assert!(*pidx + n <= MI_BCHUNK_BITS);
+            crate::mi_debug_assert!(*pidx < MI_BCHUNK_BITS);
+            crate::mi_debug_assert!(*pidx + n <= MI_BCHUNK_BITS);
             return true;
         }
         i += 1;
@@ -998,7 +1000,7 @@ fn mi_bchunk_try_find_and_clearNC(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
 
 #[inline]
 fn mi_bchunk_clear_once_set(chunk: &mut mi_bchunk_t, cidx: usize) {
-    debug_assert!(cidx < MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(cidx < MI_BCHUNK_BITS);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
     mi_bfield_atomic_clear_once_set(&chunk.bfields[i], idx);
@@ -1061,13 +1063,13 @@ fn mi_bchunk_popcount(chunk: &mi_bchunk_t) -> usize {
 
 #[inline]
 fn mi_bitmap_chunkmap_set(bitmap: &mut mi_bitmap_t, chunk_idx: usize) {
-    debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
+    crate::mi_debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
     mi_bchunk_set(&mut bitmap.chunkmap, chunk_idx, None);
 }
 
 #[inline]
 fn mi_bitmap_chunkmap_try_clear(bitmap: &mut mi_bitmap_t, chunk_idx: usize) -> bool {
-    debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
+    crate::mi_debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
     if !mi_bchunk_all_are_clear_relaxed(&bitmap.chunks[chunk_idx]) {
         return false;
     }
@@ -1081,7 +1083,7 @@ fn mi_bitmap_chunkmap_try_clear(bitmap: &mut mi_bitmap_t, chunk_idx: usize) -> b
 
 #[inline]
 fn mi_bbitmap_set_chunk_bin(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, bin: mi_chunkbin_t) {
-    debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
+    crate::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     let mut ibin = MI_CBIN_SMALL;
     while (ibin as i32) < (MI_CBIN_NONE as i32) {
         if ibin == bin {
@@ -1111,7 +1113,7 @@ fn mi_bbitmap_chunkmap_set_max(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize) {
 
 #[inline]
 fn mi_bbitmap_chunkmap_set(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, check_all_set: bool) {
-    debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
+    crate::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     if check_all_set && mi_bchunk_all_are_set_relaxed(&bbitmap.chunks[chunk_idx]) {
         mi_bbitmap_set_chunk_bin(bbitmap, chunk_idx, MI_CBIN_NONE);
     }
@@ -1121,7 +1123,7 @@ fn mi_bbitmap_chunkmap_set(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, check_a
 
 #[inline]
 fn mi_bbitmap_chunkmap_try_clear(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize) -> bool {
-    debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
+    crate::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     if !mi_bchunk_all_are_clear_relaxed(&bbitmap.chunks[chunk_idx]) {
         return false;
     }
@@ -1139,10 +1141,10 @@ fn mi_bfield_cycle_iterate<F>(bfield: mi_bfield_t, tseq: usize, cycle: usize, mu
 where
     F: FnMut(usize) -> bool,
 {
-    debug_assert!(cycle > 0);
-    debug_assert!(cycle <= MI_BFIELD_BITS);
+    crate::mi_debug_assert!(cycle > 0);
+    crate::mi_debug_assert!(cycle <= MI_BFIELD_BITS);
     let start = (tseq as u32 as usize) % cycle;
-    debug_assert!(start <= cycle);
+    crate::mi_debug_assert!(start <= cycle);
     let cycle_mask = mi_bfield_mask(cycle - start, start);
     let mut bcount = mi_bfield_popcount(bfield);
     let mut b = bfield & cycle_mask;
@@ -1154,7 +1156,7 @@ where
         let mut name_idx = 0usize;
         let found = mi_bfield_find_least_bit(b, &mut name_idx);
         b = mi_bfield_clear_least_bit(b);
-        debug_assert!(found);
+        crate::mi_debug_assert!(found);
         if !visit(name_idx) {
             return false;
         }
@@ -1183,7 +1185,7 @@ unsafe fn mi_bitmap_find(
             let mut found = false;
             let _ = mi_bfield_cycle_iterate(cmap_entry, tseq % 8, hi + 1, |eidx| {
                 let chunk_idx = (i * MI_BFIELD_BITS) + eidx;
-                debug_assert!(chunk_idx < unsafe { mi_bitmap_chunk_count(bitmap) });
+                crate::mi_debug_assert!(chunk_idx < unsafe { mi_bitmap_chunk_count(bitmap) });
                 if on_find(bitmap, chunk_idx, n, pidx, arg1, arg2) {
                     found = true;
                     return false;
@@ -1207,23 +1209,23 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
     arg1: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    debug_assert!(n == 1);
+    crate::mi_debug_assert!(n == 1);
     let claim_fun = arg1 as *mut mi_claim_fun_t;
     let claim_data = &mut *(arg2 as *mut mi_claim_fun_data_t);
     let chunk = &mut (*bitmap).chunks[chunk_idx];
     let mut cidx = 0usize;
     if mi_bchunk_try_find_and_clear(chunk, &mut cidx) {
         let slice_index = (chunk_idx * MI_BCHUNK_BITS) + cidx;
-        debug_assert!(slice_index < unsafe { mi_bitmap_max_bits(bitmap) });
+        crate::mi_debug_assert!(slice_index < unsafe { mi_bitmap_max_bits(bitmap) });
         let mut keep_set = true;
         if (*claim_fun)(slice_index, claim_data.arena, &mut keep_set as *mut bool) {
-            debug_assert!(!keep_set);
+            crate::mi_debug_assert!(!keep_set);
             *pidx = slice_index;
             return true;
         }
         if keep_set {
             let wasclear = mi_bchunk_set(chunk, cidx, None);
-            debug_assert!(wasclear);
+            crate::mi_debug_assert!(wasclear);
         }
     } else {
         mi_bitmap_chunkmap_try_clear(&mut *bitmap, chunk_idx);
@@ -1258,7 +1260,7 @@ struct mi_claim_fun_data_t {
 
 #[inline]
 fn mi_chunkbin_inc(bbin: mi_chunkbin_t) -> mi_chunkbin_t {
-    debug_assert!((bbin as i32) < (MI_CBIN_COUNT as i32));
+    crate::mi_debug_assert!((bbin as i32) < (MI_CBIN_COUNT as i32));
     match bbin {
         MI_CBIN_SMALL => MI_CBIN_OTHER,
         MI_CBIN_OTHER => MI_CBIN_MEDIUM,
@@ -1271,7 +1273,7 @@ fn mi_chunkbin_inc(bbin: mi_chunkbin_t) -> mi_chunkbin_t {
 
 #[inline]
 fn mi_chunkbin_dec(bbin: mi_chunkbin_t) -> mi_chunkbin_t {
-    debug_assert!((bbin as i32) > (MI_CBIN_NONE as i32));
+    crate::mi_debug_assert!((bbin as i32) > (MI_CBIN_NONE as i32));
     match bbin {
         MI_CBIN_NONE => MI_CBIN_HUGE,
         MI_CBIN_HUGE => MI_CBIN_LARGE,
@@ -1322,7 +1324,7 @@ pub unsafe fn mi_bitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usiz
         return 0;
     }
     let bit_count = bit_count.div_ceil(MI_BCHUNK_BITS) * MI_BCHUNK_BITS;
-    debug_assert!(bit_count <= MI_BITMAP_MAX_BIT_COUNT);
+    crate::mi_debug_assert!(bit_count <= MI_BITMAP_MAX_BIT_COUNT);
     let chunk_count = bit_count / MI_BCHUNK_BITS;
     if !pchunk_count.is_null() {
         *pchunk_count = chunk_count;
@@ -1342,7 +1344,7 @@ pub unsafe fn mi_bitmap_init(
         ptr::write_bytes(bitmap.cast::<u8>(), 0, size);
     }
     (*bitmap).chunk_count.store(chunk_count, Ordering::Release);
-    debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } <= MI_BITMAP_MAX_CHUNK_COUNT);
+    crate::mi_debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } <= MI_BITMAP_MAX_CHUNK_COUNT);
     size
 }
 
@@ -1353,7 +1355,7 @@ fn mi_bchunks_unsafe_setN(
     idx: usize,
     mut n: usize,
 ) {
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(n > 0);
     let mut chunk_idx = idx / MI_BCHUNK_BITS;
     let cidx = idx % MI_BCHUNK_BITS;
     let ccount = n.div_ceil(MI_BCHUNK_BITS);
@@ -1378,15 +1380,15 @@ fn mi_bchunks_unsafe_setN(
         n -= mid_chunks * MI_BCHUNK_BITS;
     }
     if n > 0 {
-        debug_assert!(n < MI_BCHUNK_BITS);
+        crate::mi_debug_assert!(n < MI_BCHUNK_BITS);
         mi_bchunk_setN(unsafe { &mut *chunks.add(chunk_idx) }, 0, n, None);
     }
 }
 
 #[inline]
 pub unsafe fn mi_bitmap_unsafe_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) {
-    debug_assert!(n > 0);
-    debug_assert!(idx + n <= unsafe { mi_bitmap_max_bits(bitmap) });
+    crate::mi_debug_assert!(n > 0);
+    crate::mi_debug_assert!(idx + n <= unsafe { mi_bitmap_max_bits(bitmap) });
     mi_bchunks_unsafe_setN(
         (*bitmap).chunks.as_mut_ptr(),
         &mut (*bitmap).chunkmap,
@@ -1402,9 +1404,9 @@ pub unsafe fn mi_bitmap_setN(
     mut n: usize,
     palready_set: *mut usize,
 ) -> bool {
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(n > 0);
     let maxbits = mi_bitmap_max_bits(bitmap);
-    debug_assert!(idx + n <= maxbits);
+    crate::mi_debug_assert!(idx + n <= maxbits);
     if idx + n > maxbits {
         if idx >= maxbits {
             return false;
@@ -1442,9 +1444,9 @@ pub unsafe fn mi_bitmap_setN(
 
 #[inline]
 pub unsafe fn mi_bitmap_clearN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usize) -> bool {
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(n > 0);
     let maxbits = mi_bitmap_max_bits(bitmap);
-    debug_assert!(idx + n <= maxbits);
+    crate::mi_debug_assert!(idx + n <= maxbits);
     if idx + n > maxbits {
         if idx >= maxbits {
             return false;
@@ -1489,9 +1491,9 @@ pub unsafe fn mi_bitmap_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
 
 #[inline]
 pub unsafe fn mi_bitmap_popcountN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usize) -> usize {
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(n > 0);
     let maxbits = mi_bitmap_max_bits(bitmap);
-    debug_assert!(idx + n <= maxbits);
+    crate::mi_debug_assert!(idx + n <= maxbits);
     if idx + n > maxbits {
         if idx >= maxbits {
             return 0;
@@ -1522,9 +1524,9 @@ pub unsafe fn mi_bitmap_is_xsetN(
     idx: usize,
     mut n: usize,
 ) -> bool {
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(n > 0);
     let maxbits = mi_bitmap_max_bits(bitmap);
-    debug_assert!(idx + n <= maxbits);
+    crate::mi_debug_assert!(idx + n <= maxbits);
     if idx + n > maxbits {
         if idx >= maxbits {
             return false;
@@ -1575,10 +1577,10 @@ pub unsafe fn mi_bitmap_is_all_clear(bitmap: *mut mi_bitmap_t) -> bool {
 
 #[inline]
 pub unsafe fn mi_bitmap_clear_once_set(bitmap: *mut mi_bitmap_t, idx: usize) {
-    debug_assert!(idx < unsafe { mi_bitmap_max_bits(bitmap) });
+    crate::mi_debug_assert!(idx < unsafe { mi_bitmap_max_bits(bitmap) });
     let chunk_idx = idx / MI_BCHUNK_BITS;
     let cidx = idx % MI_BCHUNK_BITS;
-    debug_assert!(chunk_idx < unsafe { mi_bitmap_chunk_count(bitmap) });
+    crate::mi_debug_assert!(chunk_idx < unsafe { mi_bitmap_chunk_count(bitmap) });
     mi_bchunk_clear_once_set(&mut (*bitmap).chunks[chunk_idx], cidx);
 }
 
@@ -1668,9 +1670,9 @@ pub unsafe fn _mi_bitmap_forall_setc_ranges(
                     let rng = mi_ctz(!(b >> bidx));
                     rngcount += rng;
                     let idx = base_idx + bidx;
-                    debug_assert!(rng >= 1 && rng <= MI_BFIELD_BITS);
-                    debug_assert!((idx % MI_BFIELD_BITS) + rng <= MI_BFIELD_BITS);
-                    debug_assert!(
+                    crate::mi_debug_assert!(rng >= 1 && rng <= MI_BFIELD_BITS);
+                    crate::mi_debug_assert!((idx % MI_BFIELD_BITS) + rng <= MI_BFIELD_BITS);
+                    crate::mi_debug_assert!(
                         (idx / MI_BCHUNK_BITS) < unsafe { mi_bitmap_chunk_count(bitmap) }
                     );
                     if !visit(idx, rng, arena, arg) {
@@ -1681,7 +1683,7 @@ pub unsafe fn _mi_bitmap_forall_setc_ranges(
                     }
                     b &= !mi_bfield_mask(rng, bidx);
                 }
-                debug_assert!(rngcount == bpopcount);
+                crate::mi_debug_assert!(rngcount == bpopcount);
             }
         }
     }
@@ -1724,7 +1726,7 @@ pub unsafe fn _mi_bitmap_forall_setc_rangesn(
                             if shift + rngslices < MI_BFIELD_BITS {
                                 notyet_visited = b & (!0usize << (shift + rngslices));
                             }
-                            debug_assert!((notyet_visited & skipped) == 0);
+                            crate::mi_debug_assert!((notyet_visited & skipped) == 0);
                             if (notyet_visited | skipped) != 0 {
                                 chunk.bfields[j]
                                     .fetch_or(notyet_visited | skipped, Ordering::Relaxed);
@@ -1753,7 +1755,7 @@ pub unsafe fn mi_bbitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usi
         return 0;
     }
     let bit_count = bit_count.div_ceil(MI_BCHUNK_BITS) * MI_BCHUNK_BITS;
-    debug_assert!(bit_count <= MI_BITMAP_MAX_BIT_COUNT);
+    crate::mi_debug_assert!(bit_count <= MI_BITMAP_MAX_BIT_COUNT);
     let chunk_count = bit_count / MI_BCHUNK_BITS;
     if !pchunk_count.is_null() {
         *pchunk_count = chunk_count;
@@ -1773,14 +1775,16 @@ pub unsafe fn mi_bbitmap_init(
         ptr::write_bytes(bbitmap.cast::<u8>(), 0, size);
     }
     (*bbitmap).chunk_count.store(chunk_count, Ordering::Release);
-    debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } <= MI_BITMAP_MAX_CHUNK_COUNT);
+    crate::mi_debug_assert!(
+        unsafe { mi_bbitmap_chunk_count(bbitmap) } <= MI_BITMAP_MAX_CHUNK_COUNT
+    );
     size
 }
 
 #[inline]
 pub unsafe fn mi_bbitmap_unsafe_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) {
-    debug_assert!(n > 0);
-    debug_assert!(idx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
+    crate::mi_debug_assert!(n > 0);
+    crate::mi_debug_assert!(idx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
     mi_bchunks_unsafe_setN(
         (*bbitmap).chunks.as_mut_ptr(),
         &mut (*bbitmap).chunkmap,
@@ -1816,9 +1820,9 @@ pub unsafe fn mi_bbitmap_bsr_inv(bbitmap: *mut mi_bbitmap_t, idx: *mut usize) ->
 
 #[inline]
 pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usize) -> bool {
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(n > 0);
     let maxbits = mi_bbitmap_max_bits(bbitmap);
-    debug_assert!(idx + n <= maxbits);
+    crate::mi_debug_assert!(idx + n <= maxbits);
     if idx + n > maxbits {
         if idx >= maxbits {
             return false;
@@ -1845,13 +1849,13 @@ pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usi
 
 #[inline]
 pub unsafe fn mi_bbitmap_try_clearNC(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
-    debug_assert!(n > 0);
-    debug_assert!(n <= MI_BCHUNK_BITS);
-    debug_assert!(idx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
+    crate::mi_debug_assert!(n > 0);
+    crate::mi_debug_assert!(n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(idx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
     let chunk_idx = idx / MI_BCHUNK_BITS;
     let cidx = idx % MI_BCHUNK_BITS;
-    debug_assert!(cidx + n <= MI_BCHUNK_BITS);
-    debug_assert!(chunk_idx < unsafe { mi_bbitmap_chunk_count(bbitmap) });
+    crate::mi_debug_assert!(cidx + n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(chunk_idx < unsafe { mi_bbitmap_chunk_count(bbitmap) });
     if cidx + n > MI_BCHUNK_BITS {
         return false;
     }
@@ -1875,9 +1879,9 @@ pub unsafe fn mi_bbitmap_is_xsetN(
     idx: usize,
     mut n: usize,
 ) -> bool {
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(n > 0);
     let maxbits = mi_bbitmap_max_bits(bbitmap);
-    debug_assert!(idx + n <= maxbits);
+    crate::mi_debug_assert!(idx + n <= maxbits);
     if idx + n > maxbits {
         if idx >= maxbits {
             return false;
@@ -1915,13 +1919,13 @@ type mi_bchunk_try_find_and_clear_fun_t = fn(&mut mi_bchunk_t, usize, &mut usize
 
 #[inline]
 fn mi_bchunk_try_find_and_clear_1(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
-    debug_assert!(n == 1);
+    crate::mi_debug_assert!(n == 1);
     mi_bchunk_try_find_and_clear(chunk, pidx)
 }
 
 #[inline]
 fn mi_bchunk_try_find_and_clear_8(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
-    debug_assert!(n == 8);
+    crate::mi_debug_assert!(n == 8);
     mi_bchunk_try_find_and_clear8(chunk, pidx)
 }
 
@@ -1981,7 +1985,7 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
                         mi_bbitmap_set_chunk_bin(&mut *bbitmap, chunk_idx, bbin);
                     }
                     *pidx = (chunk_idx * MI_BCHUNK_BITS) + cidx;
-                    debug_assert!(*pidx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
+                    crate::mi_debug_assert!(*pidx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
                     found = true;
                     return false;
                 } else {
@@ -2028,7 +2032,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearNX(
     n: usize,
     pidx: *mut usize,
 ) -> bool {
-    debug_assert!(n <= MI_BFIELD_BITS);
+    crate::mi_debug_assert!(n <= MI_BFIELD_BITS);
     mi_bbitmap_try_find_and_clear_generic(bbitmap, tseq, n, pidx, mi_bchunk_try_find_and_clearNX)
 }
 
@@ -2039,13 +2043,15 @@ pub unsafe fn mi_bbitmap_try_find_and_clearNC(
     n: usize,
     pidx: *mut usize,
 ) -> bool {
-    debug_assert!(n <= MI_BCHUNK_BITS);
+    crate::mi_debug_assert!(n <= MI_BCHUNK_BITS);
     mi_bbitmap_try_find_and_clear_generic(bbitmap, tseq, n, pidx, mi_bchunk_try_find_and_clearNC)
 }
 
 #[inline]
 fn mi_bchunk_try_clearN_(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, n: usize) -> bool {
-    debug_assert!((chunk_idx * MI_BCHUNK_BITS) + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
+    crate::mi_debug_assert!(
+        (chunk_idx * MI_BCHUNK_BITS) + n <= unsafe { mi_bbitmap_max_bits(bbitmap) }
+    );
     let mut m = n;
     let mut count = 0usize;
     while m > 0 {
@@ -2085,7 +2091,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN_(
     pidx: *mut usize,
 ) -> bool {
     let _ = tseq;
-    debug_assert!(n > 0);
+    crate::mi_debug_assert!(n > 0);
     let chunk_max = mi_bbitmap_chunk_count(bbitmap);
     let chunk_req = n.div_ceil(MI_BCHUNK_BITS);
     if chunk_max < chunk_req {
@@ -2110,7 +2116,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN_(
                 for i in 0..count {
                     mi_bbitmap_set_chunk_bin(&mut *bbitmap, chunk_idx + i, MI_CBIN_HUGE);
                 }
-                debug_assert!(*pidx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
+                crate::mi_debug_assert!(*pidx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
                 return true;
             }
         }

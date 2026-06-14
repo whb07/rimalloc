@@ -924,7 +924,7 @@ fn parse_long_prefix(s: &str) -> Option<(i128, &str)> {
 
 #[inline]
 fn option_from_index(i: usize) -> mi_option_t {
-    debug_assert!(i < MI_OPTION_COUNT);
+    crate::mi_debug_assert!(i < MI_OPTION_COUNT);
     unsafe { core::mem::transmute::<i32, mi_option_t>(i as i32) }
 }
 
@@ -1090,7 +1090,7 @@ fn mi_option_get_fast_impl(option: mi_option_t) -> c_long {
     crate::mi_assert!(idx < MI_OPTION_COUNT);
     let table = lock_unpoisoned(&OPTIONS);
     let desc = &table[idx];
-    debug_assert!(desc.option as usize == idx);
+    crate::mi_debug_assert!(desc.option as usize == idx);
     desc.value
 }
 

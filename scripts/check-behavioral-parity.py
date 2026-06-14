@@ -2659,6 +2659,147 @@ int main(void) {
 }
 """
 
+CXX_STL_ALLOCATOR_CAPTURE = r"""
+#include <mimalloc.h>
+
+#include <memory>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdexcept>
+#include <type_traits>
+#include <vector>
+
+struct Counted {
+  static int constructed;
+  static int destroyed;
+  static bool throw_on_value_13;
+  int value;
+
+  explicit Counted(int v = 0) : value(v) {
+    if (throw_on_value_13 && v == 13) throw std::runtime_error("expected");
+    constructed++;
+  }
+  Counted(const Counted& other) : value(other.value) { constructed++; }
+  ~Counted() { destroyed++; }
+};
+
+int Counted::constructed = 0;
+int Counted::destroyed = 0;
+bool Counted::throw_on_value_13 = false;
+
+static int pointer_owned(const void* p) {
+  return p != NULL && mi_check_owned(p);
+}
+
+int main(void) {
+  int trait_ok =
+      std::is_same<mi_stl_allocator<int>::rebind<double>::other, mi_stl_allocator<double>>::value &&
+      std::allocator_traits<mi_stl_allocator<int>>::propagate_on_container_copy_assignment::value &&
+      std::allocator_traits<mi_stl_allocator<int>>::propagate_on_container_move_assignment::value &&
+      std::allocator_traits<mi_stl_allocator<int>>::propagate_on_container_swap::value &&
+      std::allocator_traits<mi_stl_allocator<int>>::is_always_equal::value &&
+      !std::allocator_traits<mi_heap_stl_allocator<int>>::is_always_equal::value &&
+      !std::allocator_traits<mi_heap_destroy_stl_allocator<int>>::is_always_equal::value;
+
+  mi_stl_allocator<int> plain_alloc;
+  int* plain = plain_alloc.allocate(8);
+  int plain_owned = pointer_owned(plain) && plain_alloc.max_size() >= 8;
+  plain_alloc.deallocate(plain, 8);
+
+  std::vector<int, mi_stl_allocator<int>> plain_vec;
+  for (int i = 0; i < 16; i++) plain_vec.push_back(i);
+  int plain_vector_ok = (plain_vec.size() == 16 &&
+                         plain_vec.front() == 0 &&
+                         plain_vec.back() == 15 &&
+                         pointer_owned(plain_vec.data()));
+
+  mi_stl_allocator<Counted> counted_alloc;
+  Counted::constructed = 0;
+  Counted::destroyed = 0;
+  Counted* counted = counted_alloc.allocate(1);
+  std::allocator_traits<mi_stl_allocator<Counted>>::construct(counted_alloc, counted, 42);
+  int construct_ok = (Counted::constructed == 1 && counted->value == 42);
+  std::allocator_traits<mi_stl_allocator<Counted>>::destroy(counted_alloc, counted);
+  int destroy_ok = (Counted::destroyed == 1);
+  counted_alloc.deallocate(counted, 1);
+
+  int exception_ok = 0;
+  {
+    std::vector<Counted, mi_stl_allocator<Counted>> counted_vec;
+    counted_vec.emplace_back(7);
+    Counted::throw_on_value_13 = true;
+    try {
+      counted_vec.emplace_back(13);
+    } catch (const std::runtime_error&) {
+      exception_ok = (counted_vec.size() == 1 && counted_vec[0].value == 7 && pointer_owned(counted_vec.data()));
+    }
+    Counted::throw_on_value_13 = false;
+  }
+
+  mi_heap_t* heap = mi_heap_new();
+  mi_heap_stl_allocator<int> heap_alloc(heap);
+  int* heap_ptr = heap_alloc.allocate(4);
+  int heap_owned = (heap != NULL && pointer_owned(heap_ptr) && mi_heap_contains(heap, heap_ptr));
+  heap_alloc.deallocate(heap_ptr, 4);
+
+  int heap_vector_ok = 0;
+  {
+    std::vector<int, mi_heap_stl_allocator<int>> heap_vec(heap_alloc);
+    for (int i = 0; i < 8; i++) heap_vec.push_back(i * 3);
+    heap_vector_ok = (heap != NULL &&
+                      heap_vec.size() == 8 &&
+                      heap_vec.back() == 21 &&
+                      pointer_owned(heap_vec.data()) &&
+                      mi_heap_contains(heap, heap_vec.data()));
+  }
+
+  mi_heap_stl_allocator<double> heap_alloc_rebound(heap_alloc);
+  int heap_eq_ok = (heap_alloc == heap_alloc_rebound);
+  mi_heap_t* other_heap = mi_heap_new();
+  mi_heap_stl_allocator<int> other_heap_alloc(other_heap);
+  int heap_ne_ok = (heap_alloc != other_heap_alloc);
+
+  mi_heap_t* destroy_heap = mi_heap_new();
+  mi_heap_destroy_stl_allocator<int> destroy_alloc(destroy_heap);
+  int* destroy_ptr = destroy_alloc.allocate(3);
+  int destroy_heap_owned = (destroy_heap != NULL &&
+                            pointer_owned(destroy_ptr) &&
+                            mi_heap_contains(destroy_heap, destroy_ptr));
+  destroy_alloc.deallocate(destroy_ptr, 3);
+  int destroy_alloc_eq = (destroy_alloc == mi_heap_destroy_stl_allocator<double>(destroy_alloc));
+
+  if (heap != NULL) mi_heap_delete(heap);
+  if (other_heap != NULL) mi_heap_delete(other_heap);
+  if (destroy_heap != NULL) mi_heap_destroy(destroy_heap);
+
+  printf("@@CXX_STL_ALLOCATOR trait=%d plain=%d plain_vector=%d construct=%d destroy=%d exception=%d heap=%d heap_vector=%d heap_eq=%d heap_ne=%d destroy_heap=%d destroy_eq=%d\n",
+         trait_ok,
+         plain_owned,
+         plain_vector_ok,
+         construct_ok,
+         destroy_ok,
+         exception_ok,
+         heap_owned,
+         heap_vector_ok,
+         heap_eq_ok,
+         heap_ne_ok,
+         destroy_heap_owned,
+         destroy_alloc_eq);
+  return (trait_ok == 1 &&
+          plain_owned == 1 &&
+          plain_vector_ok == 1 &&
+          construct_ok == 1 &&
+          destroy_ok == 1 &&
+          exception_ok == 1 &&
+          heap_owned == 1 &&
+          heap_vector_ok == 1 &&
+          heap_eq_ok == 1 &&
+          heap_ne_ok == 1 &&
+          destroy_heap_owned == 1 &&
+          destroy_alloc_eq == 1 ? 0 : 1);
+}
+"""
+
 PROCESS_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -3537,6 +3678,33 @@ def parse_cxx_override_capture(output: str) -> dict[str, int]:
     return values
 
 
+def parse_cxx_stl_allocator_capture(output: str) -> dict[str, int]:
+    fields = output.strip().split()
+    if len(fields) != 13 or fields[0] != "@@CXX_STL_ALLOCATOR":
+        raise AssertionError(f"unexpected C++ STL allocator output: {output!r}")
+    values: dict[str, int] = {}
+    for field in fields[1:]:
+        key, value = field.split("=", 1)
+        values[key] = int(value)
+    expected = {
+        "trait": 1,
+        "plain": 1,
+        "plain_vector": 1,
+        "construct": 1,
+        "destroy": 1,
+        "exception": 1,
+        "heap": 1,
+        "heap_vector": 1,
+        "heap_eq": 1,
+        "heap_ne": 1,
+        "destroy_heap": 1,
+        "destroy_eq": 1,
+    }
+    if values != expected:
+        raise AssertionError(f"unexpected C++ STL allocator values: {values}")
+    return values
+
+
 def parse_redirect_capture(output: str) -> dict[str, int | str]:
     fields = output.strip().split()
     if len(fields) < 5 or fields[0] != "@@REDIRECT":
@@ -3819,6 +3987,7 @@ def main() -> int:
     json_capture = BUILD_DIR / "json-capture.c"
     cxx_new_handler_capture = BUILD_DIR / "cxx-new-handler.cpp"
     cxx_override_capture = BUILD_DIR / "cxx-override.cpp"
+    cxx_stl_allocator_capture = BUILD_DIR / "cxx-stl-allocator.cpp"
     process_capture = BUILD_DIR / "process-capture.c"
     env_capture = BUILD_DIR / "env-capture.c"
     throttle_capture = BUILD_DIR / "throttle-capture.c"
@@ -3829,6 +3998,7 @@ def main() -> int:
     json_capture.write_text(JSON_CAPTURE_C)
     cxx_new_handler_capture.write_text(CXX_NEW_HANDLER_CAPTURE)
     cxx_override_capture.write_text(CXX_OVERRIDE_CAPTURE)
+    cxx_stl_allocator_capture.write_text(CXX_STL_ALLOCATOR_CAPTURE)
     process_capture.write_text(PROCESS_CAPTURE_C)
     env_capture.write_text(ENV_CAPTURE_C)
     throttle_capture.write_text(THROTTLE_CAPTURE_C)
@@ -3846,6 +4016,8 @@ def main() -> int:
     rust_cxx_new_handler_bin = BUILD_DIR / "cxx-new-handler-rust"
     c_cxx_override_bin = BUILD_DIR / "cxx-override-c"
     rust_cxx_override_bin = BUILD_DIR / "cxx-override-rust"
+    c_cxx_stl_allocator_bin = BUILD_DIR / "cxx-stl-allocator-c"
+    rust_cxx_stl_allocator_bin = BUILD_DIR / "cxx-stl-allocator-rust"
     c_process_bin = BUILD_DIR / "process-capture-c"
     rust_process_bin = BUILD_DIR / "process-capture-rust"
     c_env_bin = BUILD_DIR / "env-capture-c"
@@ -3873,6 +4045,8 @@ def main() -> int:
         ["-DMI_MALLOC_OVERRIDE"],
     )
     compile_cxx_binary(cxx, rust_cxx_override_bin, [cxx_override_capture, rust_lib])
+    compile_cxx_binary(cxx, c_cxx_stl_allocator_bin, [cxx_stl_allocator_capture, ROOT / "mimalloc-3.3.2/src/static.c"])
+    compile_cxx_binary(cxx, rust_cxx_stl_allocator_bin, [cxx_stl_allocator_capture, rust_lib])
     compile_binary(cc, c_process_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_capture])
     compile_binary(cc, rust_process_bin, [process_capture, rust_lib])
     compile_binary(cc, c_env_bin, [ROOT / "mimalloc-3.3.2/src/static.c", env_capture])
@@ -3934,6 +4108,15 @@ def main() -> int:
         return 1
 
     try:
+        c_cxx_stl_allocator = parse_cxx_stl_allocator_capture(run(c_cxx_stl_allocator_bin))
+        rust_cxx_stl_allocator = parse_cxx_stl_allocator_capture(run(rust_cxx_stl_allocator_bin))
+        if c_cxx_stl_allocator != rust_cxx_stl_allocator:
+            raise AssertionError(f"C={c_cxx_stl_allocator} Rust={rust_cxx_stl_allocator}")
+    except AssertionError as err:
+        print(f"C++ STL allocator parity mismatch: {err}", file=sys.stderr)
+        return 1
+
+    try:
         validate_process_capture(parse_process_capture(run(c_process_bin)), parse_process_capture(run(rust_process_bin)))
     except AssertionError as err:
         print(f"process info parity mismatch: {err}", file=sys.stderr)
@@ -3974,6 +4157,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc JSON schemas parse and match")
     print("ok: C and Rust mimalloc C++ new-handler behavior matches")
     print("ok: C and Rust mimalloc C++ override behavior matches")
+    print("ok: C and Rust mimalloc C++ STL allocator behavior matches")
     print("ok: C and Rust mimalloc process info is within tolerance")
     print("ok: C and Rust mimalloc environment option parsing matches")
     print("ok: C and Rust mimalloc warning/error throttling matches")

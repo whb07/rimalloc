@@ -179,7 +179,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Match macOS interpose and malloc-zone override behavior. Validation: macOS executables verify zone registration, interposed symbols, `malloc_zone_*` behavior, and redirection state against C mimalloc.
 - [ ] Match Windows override/redirect behavior. Validation: Windows tests verify CRT allocation redirection, DLL initialization, delayed initialization, `_aligned_*` APIs, and `mi_is_redirected` against C mimalloc.
 - [ ] Match C++ global new/delete override semantics from `mimalloc-new-delete.h`. Validation: C++11/14/17/20 tests cover scalar, array, sized delete, aligned new/delete, nothrow new, new-handler calls, exceptions, and STL allocator behavior against C mimalloc.
-- [ ] Match `mi_stl_allocator` behavior exposed by the C++ header. Validation: C++ tests use standard containers, allocator propagation, rebind, max_size, construction/destruction, and exception paths against C mimalloc.
+- [x] Match `mi_stl_allocator` behavior exposed by the C++ header. Validation: C++ tests use standard containers, allocator propagation, rebind, max_size, construction/destruction, and exception paths against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 
 ## Original Test Coverage Parity
 

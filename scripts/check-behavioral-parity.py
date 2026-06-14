@@ -3283,6 +3283,100 @@ int main(void) {
 }
 """
 
+ARENA_FALLBACK_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/mman.h>
+
+static int error_count;
+static int last_error;
+static size_t output_len;
+
+static void output_cb(const char* msg, void* arg) {
+  (void)arg;
+  if (msg != NULL) output_len += strlen(msg);
+}
+
+static void error_cb(int err, void* arg) {
+  (void)arg;
+  error_count++;
+  last_error = err;
+}
+
+static void* map_aligned_arena_memory(size_t size) {
+  size_t alignment = mi_arena_min_alignment();
+  void* mapping = mmap(NULL, size + alignment, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (mapping == MAP_FAILED) return MAP_FAILED;
+  return (void*)(((uintptr_t)mapping + alignment - 1) & ~(uintptr_t)(alignment - 1));
+}
+
+static int run_case(const char* name) {
+  int exclusive = strcmp(name, "exclusive_arena_disabled") == 0;
+  size_t size = mi_arena_min_size();
+  void* mem = map_aligned_arena_memory(size);
+  mi_arena_id_t arena = NULL;
+  int managed = mem != MAP_FAILED && mi_manage_os_memory_ex(mem, size, true, false, true, 0, exclusive, &arena);
+  mi_heap_t* heap = exclusive ? mi_heap_new_in_arena(arena) : mi_heap_new();
+  if (heap != NULL) mi_heap_set_numa_affinity(heap, 0);
+
+  mi_register_output(output_cb, NULL);
+  mi_register_error(error_cb, NULL);
+  mi_option_set(mi_option_show_errors, 1);
+  mi_option_set(mi_option_verbose, 0);
+  mi_option_set(mi_option_arena_reserve, 0);
+
+  if (strcmp(name, "arena_only") == 0) {
+    mi_option_set(mi_option_disallow_os_alloc, 1);
+    mi_option_set(mi_option_disallow_arena_alloc, 0);
+  }
+  else if (strcmp(name, "os_fallback") == 0) {
+    mi_option_set(mi_option_disallow_os_alloc, 0);
+    mi_option_set(mi_option_disallow_arena_alloc, 1);
+  }
+  else if (strcmp(name, "all_disabled") == 0) {
+    mi_option_set(mi_option_disallow_os_alloc, 1);
+    mi_option_set(mi_option_disallow_arena_alloc, 1);
+  }
+  else if (strcmp(name, "exclusive_arena_disabled") == 0) {
+    mi_option_set(mi_option_disallow_os_alloc, 0);
+    mi_option_set(mi_option_disallow_arena_alloc, 1);
+  }
+  else {
+    return 2;
+  }
+
+  errno = 0;
+  void* p = heap == NULL ? NULL : mi_heap_malloc(heap, 4 * 1024 * 1024);
+  int ptr = p != NULL;
+  int in_arena = p != NULL && mi_arena_contains(arena, p);
+  int saved_errno = errno;
+  mi_free(p);
+  if (heap != NULL) mi_heap_delete(heap);
+
+  printf("@@ARENA_FALLBACK case=%s managed=%d heap=%d ptr=%d in_arena=%d errno=%d errors=%d last_error=%d output=%zu\n",
+         name,
+         managed,
+         heap != NULL,
+         ptr,
+         in_arena,
+         saved_errno,
+         error_count,
+         last_error,
+         output_len);
+  return 0;
+}
+
+int main(int argc, char** argv) {
+  if (argc != 2) return 2;
+  return run_case(argv[1]);
+}
+"""
+
 FREE_HINT_RELEASE_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -3750,6 +3844,18 @@ def run_args(binary: pathlib.Path, args: list[str]) -> str:
         stdout=subprocess.PIPE,
     )
     return completed.stdout
+
+
+def run_args_status(binary: pathlib.Path, args: list[str]) -> tuple[int, str, str]:
+    completed = subprocess.run(
+        [str(binary), *args],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return completed.returncode, completed.stdout, completed.stderr
 
 
 def run_with_env(binary: pathlib.Path, env_updates: dict[str, str], label: str) -> str:
@@ -4409,6 +4515,44 @@ def validate_numa_affinity_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) 
             raise AssertionError(f"{label} unexpected values: {c_counts}")
 
 
+def parse_arena_fallback_capture(output: str) -> dict[str, str]:
+    fields = output.strip().split()
+    if len(fields) != 10 or fields[0] != "@@ARENA_FALLBACK":
+        raise AssertionError(f"unexpected arena fallback output: {output!r}")
+    values: dict[str, str] = {}
+    for field in fields[1:]:
+        key, value = field.split("=", 1)
+        values[key] = value
+    return values
+
+
+def validate_arena_fallback_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
+    cases = {
+        "arena_only": {"ptr": "1", "in_arena": "1", "errno": "0", "errors": "0"},
+        "os_fallback": {"ptr": "1", "in_arena": "0", "errno": "0", "errors": "0"},
+        "all_disabled": {"ptr": "0", "in_arena": "0", "errno": "12"},
+        "exclusive_arena_disabled": {"ptr": "0", "in_arena": "0", "errno": "12"},
+    }
+    for name, expected in cases.items():
+        c_status, c_stdout, _ = run_args_status(c_bin, [name])
+        rust_status, rust_stdout, _ = run_args_status(rust_bin, [name])
+        if c_status != rust_status:
+            raise AssertionError(
+                f"{name} status mismatch: C(status={c_status}, out={c_stdout!r}) "
+                f"Rust(status={rust_status}, out={rust_stdout!r})"
+            )
+        if c_status != 0:
+            raise AssertionError(f"{name} exited with status {c_status}: {c_stdout!r}")
+        c_values = parse_arena_fallback_capture(c_stdout)
+        rust_values = parse_arena_fallback_capture(rust_stdout)
+        for key, value in {"case": name, "managed": "1", "heap": "1", **expected}.items():
+            if c_values.get(key) != value or rust_values.get(key) != value:
+                raise AssertionError(f"{name} unexpected {key}: C={c_values} Rust={rust_values}")
+        if expected["ptr"] == "0":
+            if int(c_values["output"]) <= 0 or int(rust_values["output"]) <= 0:
+                raise AssertionError(f"{name} missing error output: C={c_values} Rust={rust_values}")
+
+
 def main() -> int:
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
@@ -4428,6 +4572,7 @@ def main() -> int:
     throttle_capture = BUILD_DIR / "throttle-capture.c"
     process_lifecycle = BUILD_DIR / "process-lifecycle.c"
     numa_affinity_capture = BUILD_DIR / "numa-affinity-capture.c"
+    arena_fallback_capture = BUILD_DIR / "arena-fallback-capture.c"
     free_hint_release_capture = BUILD_DIR / "free-hint-release-capture.c"
     huge_os_pages_capture = BUILD_DIR / "huge-os-pages-capture.c"
     redirect_static_capture = BUILD_DIR / "redirect-static-capture.c"
@@ -4442,6 +4587,7 @@ def main() -> int:
     throttle_capture.write_text(THROTTLE_CAPTURE_C)
     process_lifecycle.write_text(PROCESS_LIFECYCLE_C)
     numa_affinity_capture.write_text(NUMA_AFFINITY_CAPTURE_C)
+    arena_fallback_capture.write_text(ARENA_FALLBACK_CAPTURE_C)
     free_hint_release_capture.write_text(FREE_HINT_RELEASE_CAPTURE_C)
     huge_os_pages_capture.write_text(HUGE_OS_PAGES_CAPTURE_C)
     redirect_static_capture.write_text(REDIRECT_STATIC_CAPTURE_C)
@@ -4470,6 +4616,8 @@ def main() -> int:
     rust_lifecycle_bin = BUILD_DIR / "process-lifecycle-rust"
     c_numa_affinity_bin = BUILD_DIR / "numa-affinity-c"
     rust_numa_affinity_bin = BUILD_DIR / "numa-affinity-rust"
+    c_arena_fallback_bin = BUILD_DIR / "arena-fallback-c"
+    rust_arena_fallback_bin = BUILD_DIR / "arena-fallback-rust"
     c_free_hint_release_bin = BUILD_DIR / "free-hint-release-c"
     rust_free_hint_release_bin = BUILD_DIR / "free-hint-release-rust"
     c_huge_os_pages_bin = BUILD_DIR / "huge-os-pages-c"
@@ -4505,6 +4653,8 @@ def main() -> int:
     compile_binary(cc, rust_lifecycle_bin, [process_lifecycle, rust_lib])
     compile_binary(cc, c_numa_affinity_bin, [ROOT / "mimalloc-3.3.2/src/static.c", numa_affinity_capture])
     compile_binary(cc, rust_numa_affinity_bin, [numa_affinity_capture, rust_lib])
+    compile_binary(cc, c_arena_fallback_bin, [ROOT / "mimalloc-3.3.2/src/static.c", arena_fallback_capture])
+    compile_binary(cc, rust_arena_fallback_bin, [arena_fallback_capture, rust_lib])
     compile_binary(
         cc,
         c_free_hint_release_bin,
@@ -4605,6 +4755,12 @@ def main() -> int:
         print(f"NUMA affinity parity mismatch: {err}", file=sys.stderr)
         return 1
 
+    try:
+        validate_arena_fallback_capture(c_arena_fallback_bin, rust_arena_fallback_bin)
+    except AssertionError as err:
+        print(f"arena fallback parity mismatch: {err}", file=sys.stderr)
+        return 1
+
     c_free_hint_release = run(c_free_hint_release_bin)
     rust_free_hint_release = run(rust_free_hint_release_bin)
     if c_free_hint_release != rust_free_hint_release:
@@ -4648,6 +4804,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc warning/error throttling matches")
     print("ok: C and Rust mimalloc process lifecycle output matches")
     print("ok: C and Rust mimalloc NUMA affinity behavior matches")
+    print("ok: C and Rust mimalloc arena fallback behavior matches")
     print("ok: C and Rust mimalloc release free-hint behavior matches")
     print("ok: C and Rust mimalloc huge OS page fallback behavior matches")
     print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")

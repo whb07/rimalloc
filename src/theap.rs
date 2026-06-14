@@ -554,7 +554,9 @@ pub unsafe extern "C" fn _mi_theap_create(
             ptr::addr_of_mut!(memid),
         )
         .cast::<mi_theap_t>();
-        crate::mi_assert_internal!(memid.mem.os.size >= size);
+        if !theap.is_null() {
+            crate::mi_assert_internal!(memid.mem.os.size >= size);
+        }
         theap
     };
 

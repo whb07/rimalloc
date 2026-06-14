@@ -14,6 +14,7 @@ use core::ptr;
 use core::ptr::addr_of_mut;
 use std::ffi::{CStr, CString};
 use std::fmt;
+use std::fmt::Write as _;
 use std::mem::size_of;
 use std::os::raw::{c_int, c_long, c_void};
 use std::process::abort;
@@ -693,6 +694,39 @@ pub(crate) fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, args: fm
     }
 }
 
+struct StackMessage {
+    bytes: [u8; 1024],
+    len: usize,
+}
+
+impl StackMessage {
+    fn new() -> Self {
+        Self {
+            bytes: [0; 1024],
+            len: 0,
+        }
+    }
+
+    fn as_c_ptr(&mut self) -> *const c_char {
+        self.bytes[self.len] = 0;
+        self.bytes.as_ptr().cast()
+    }
+}
+
+impl fmt::Write for StackMessage {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        let capacity = self.bytes.len() - 1;
+        if self.len >= capacity {
+            return Ok(());
+        }
+        let available = capacity - self.len;
+        let copy = s.len().min(available);
+        self.bytes[self.len..self.len + copy].copy_from_slice(&s.as_bytes()[..copy]);
+        self.len += copy;
+        Ok(())
+    }
+}
+
 #[allow(dead_code)]
 fn mi_vfprintf(
     out: Option<mi_output_fun>,
@@ -700,17 +734,16 @@ fn mi_vfprintf(
     prefix: *const c_char,
     args: fmt::Arguments<'_>,
 ) {
-    let mut text = String::new();
+    let mut text = StackMessage::new();
     if !mi_recurse_enter() {
         return;
     }
-    let wrote = fmt::write(&mut text, args).is_ok();
+    let wrote = text.write_fmt(args).is_ok();
     mi_recurse_exit();
     if !wrote {
         return;
     }
-    let ctext = CString::new(text).expect("mimalloc output text contained a NUL byte");
-    unsafe { _mi_fputs(out, arg, prefix, ctext.as_ptr()) };
+    unsafe { _mi_fputs(out, arg, prefix, text.as_c_ptr()) };
 }
 
 #[allow(dead_code)]

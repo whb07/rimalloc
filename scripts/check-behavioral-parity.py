@@ -3189,6 +3189,58 @@ int main(void) {
 }
 """
 
+NUMA_AFFINITY_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <stdint.h>
+#include <stdio.h>
+#include <sys/mman.h>
+
+static void* map_aligned_arena_memory(size_t size) {
+  size_t alignment = mi_arena_min_alignment();
+  void* mapping = mmap(NULL, size + alignment, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (mapping == MAP_FAILED) return MAP_FAILED;
+  return (void*)(((uintptr_t)mapping + alignment - 1) & ~(uintptr_t)(alignment - 1));
+}
+
+int main(void) {
+  size_t size = mi_arena_min_size();
+  void* mem0 = map_aligned_arena_memory(size);
+  void* mem1 = map_aligned_arena_memory(size);
+  mi_arena_id_t arena0 = NULL;
+  mi_arena_id_t arena1 = NULL;
+  int managed0 = mem0 != MAP_FAILED && mi_manage_os_memory_ex(mem0, size, true, false, true, 0, false, &arena0);
+  int managed1 = mem1 != MAP_FAILED && mi_manage_os_memory_ex(mem1, size, true, false, true, 1, false, &arena1);
+
+  mi_heap_t* heap = mi_heap_new();
+  mi_option_set(mi_option_disallow_os_alloc, 1);
+  mi_option_set(mi_option_disallow_arena_alloc, 0);
+
+  mi_heap_set_numa_affinity(heap, 1);
+  void* node1 = heap == NULL ? NULL : mi_heap_malloc(heap, 4 * 1024 * 1024);
+  int node1_in_0 = node1 != NULL && mi_arena_contains(arena0, node1);
+  int node1_in_1 = node1 != NULL && mi_arena_contains(arena1, node1);
+  mi_free(node1);
+
+  mi_heap_set_numa_affinity(heap, 4);
+  void* node0 = heap == NULL ? NULL : mi_heap_malloc(heap, 4 * 1024 * 1024);
+  int node0_in_0 = node0 != NULL && mi_arena_contains(arena0, node0);
+  int node0_in_1 = node0 != NULL && mi_arena_contains(arena1, node0);
+  mi_free(node0);
+
+  mi_heap_set_numa_affinity(heap, -1);
+  void* any = heap == NULL ? NULL : mi_heap_malloc(heap, 4 * 1024 * 1024);
+  int reset_any = any != NULL && (mi_arena_contains(arena0, any) || mi_arena_contains(arena1, any));
+  mi_free(any);
+
+  if (heap != NULL) mi_heap_delete(heap);
+  printf("@@NUMA managed=%d%d node1=%d%d node0=%d%d reset=%d\n",
+         managed0, managed1, node1_in_0, node1_in_1, node0_in_0, node0_in_1, reset_any);
+  return managed0 && managed1 && node1 != NULL && node0 != NULL && reset_any ? 0 : 1;
+}
+"""
+
 REDIRECT_STATIC_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -4171,6 +4223,39 @@ def validate_process_lifecycle_capture(c_bin: pathlib.Path, rust_bin: pathlib.Pa
             raise AssertionError(f"{label} process lifecycle mismatch: C={c_counts} Rust={rust_counts}")
 
 
+def parse_numa_affinity_capture(output: str) -> dict[str, int]:
+    fields = output.strip().split()
+    if len(fields) != 5 or fields[0] != "@@NUMA":
+        raise AssertionError(f"unexpected NUMA affinity output: {output!r}")
+    values: dict[str, int] = {}
+    for field in fields[1:]:
+        key, value = field.split("=", 1)
+        values[key] = int(value)
+    return values
+
+
+def validate_numa_affinity_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
+    cases = [
+        (
+            "numa_affinity_forced",
+            {"mimalloc_use_numa_nodes": "4", "mimalloc_arena_reserve": "0"},
+            {"managed": 11, "node1": 1, "node0": 10, "reset": 1},
+        ),
+        (
+            "numa_affinity_single_node",
+            {"mimalloc_use_numa_nodes": "1", "mimalloc_arena_reserve": "0"},
+            {"managed": 11, "node1": 10, "node0": 10, "reset": 1},
+        ),
+    ]
+    for label, env, expected in cases:
+        c_counts = parse_numa_affinity_capture(run_with_env(c_bin, env, f"{label}_c"))
+        rust_counts = parse_numa_affinity_capture(run_with_env(rust_bin, env, f"{label}_rust"))
+        if c_counts != rust_counts:
+            raise AssertionError(f"{label} mismatch: C={c_counts} Rust={rust_counts}")
+        if c_counts != expected:
+            raise AssertionError(f"{label} unexpected values: {c_counts}")
+
+
 def main() -> int:
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
@@ -4189,6 +4274,7 @@ def main() -> int:
     env_capture = BUILD_DIR / "env-capture.c"
     throttle_capture = BUILD_DIR / "throttle-capture.c"
     process_lifecycle = BUILD_DIR / "process-lifecycle.c"
+    numa_affinity_capture = BUILD_DIR / "numa-affinity-capture.c"
     redirect_static_capture = BUILD_DIR / "redirect-static-capture.c"
     redirect_dynamic_capture = BUILD_DIR / "redirect-dynamic-capture.c"
     scenario.write_text(SCENARIO_C)
@@ -4200,6 +4286,7 @@ def main() -> int:
     env_capture.write_text(ENV_CAPTURE_C)
     throttle_capture.write_text(THROTTLE_CAPTURE_C)
     process_lifecycle.write_text(PROCESS_LIFECYCLE_C)
+    numa_affinity_capture.write_text(NUMA_AFFINITY_CAPTURE_C)
     redirect_static_capture.write_text(REDIRECT_STATIC_CAPTURE_C)
     redirect_dynamic_capture.write_text(REDIRECT_DYNAMIC_CAPTURE_C)
 
@@ -4223,6 +4310,8 @@ def main() -> int:
     rust_throttle_bin = BUILD_DIR / "throttle-capture-rust"
     c_lifecycle_bin = BUILD_DIR / "process-lifecycle-c"
     rust_lifecycle_bin = BUILD_DIR / "process-lifecycle-rust"
+    c_numa_affinity_bin = BUILD_DIR / "numa-affinity-c"
+    rust_numa_affinity_bin = BUILD_DIR / "numa-affinity-rust"
     c_redirect_static_bin = BUILD_DIR / "redirect-static-c"
     rust_redirect_static_bin = BUILD_DIR / "redirect-static-rust"
     c_redirect_dynamic_bin = BUILD_DIR / "redirect-dynamic-c"
@@ -4252,6 +4341,8 @@ def main() -> int:
     compile_binary(cc, rust_throttle_bin, [throttle_capture, rust_lib])
     compile_binary(cc, c_lifecycle_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_lifecycle])
     compile_binary(cc, rust_lifecycle_bin, [process_lifecycle, rust_lib])
+    compile_binary(cc, c_numa_affinity_bin, [ROOT / "mimalloc-3.3.2/src/static.c", numa_affinity_capture])
+    compile_binary(cc, rust_numa_affinity_bin, [numa_affinity_capture, rust_lib])
     compile_binary(
         cc,
         c_redirect_static_bin,
@@ -4338,6 +4429,12 @@ def main() -> int:
         return 1
 
     try:
+        validate_numa_affinity_capture(c_numa_affinity_bin, rust_numa_affinity_bin)
+    except AssertionError as err:
+        print(f"NUMA affinity parity mismatch: {err}", file=sys.stderr)
+        return 1
+
+    try:
         validate_redirect_capture(
             c_redirect_static_bin,
             rust_redirect_static_bin,
@@ -4359,6 +4456,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc environment option parsing matches")
     print("ok: C and Rust mimalloc warning/error throttling matches")
     print("ok: C and Rust mimalloc process lifecycle output matches")
+    print("ok: C and Rust mimalloc NUMA affinity behavior matches")
     print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")
     print(c_output, end="")
     return 0

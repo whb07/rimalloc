@@ -20,6 +20,8 @@ fn parity_matrix_documents_current_supported_rows() {
     assert!(PARITY_DOC.contains("MI_DEBUG=0"));
     assert!(PARITY_DOC.contains("MI_SECURE=0"));
     assert!(PARITY_DOC.contains("MI_GUARDED=0"));
+    assert!(PARITY_DOC.contains("WASI"));
+    assert!(PARITY_DOC.contains("Emscripten"));
 }
 
 #[test]

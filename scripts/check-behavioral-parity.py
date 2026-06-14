@@ -2714,6 +2714,81 @@ int main(void) {
 }
 """
 
+REDIRECT_STATIC_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(void) {
+  void* p = malloc(64);
+  int malloc_owned = (p != NULL && mi_check_owned(p));
+  free(p);
+
+  void* q = mi_malloc(64);
+  int mi_malloc_owned = (q != NULL && mi_check_owned(q));
+  mi_free(q);
+
+  printf("@@REDIRECT static is_redirected=%d malloc_owned=%d mi_malloc_owned=%d\n",
+         mi_is_redirected() ? 1 : 0,
+         malloc_owned,
+         mi_malloc_owned);
+  return mi_malloc_owned == 1 ? 0 : 1;
+}
+"""
+
+REDIRECT_DYNAMIC_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <dlfcn.h>
+
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef bool (*mi_is_redirected_fun)(void);
+typedef bool (*mi_check_owned_fun)(const void*);
+typedef void* (*mi_malloc_fun)(size_t);
+typedef void (*mi_free_fun)(void*);
+
+int main(int argc, char** argv) {
+  const char* mode = "preload";
+  void* handle = RTLD_DEFAULT;
+  if (argc == 2) {
+    mode = "dlopen";
+    handle = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
+    if (handle == NULL) {
+      fprintf(stderr, "dlopen failed: %s\n", dlerror());
+      return 2;
+    }
+  }
+
+  mi_is_redirected_fun is_redirected = (mi_is_redirected_fun)dlsym(handle, "mi_is_redirected");
+  mi_check_owned_fun check_owned = (mi_check_owned_fun)dlsym(handle, "mi_check_owned");
+  mi_malloc_fun alloc = (mi_malloc_fun)dlsym(handle, "mi_malloc");
+  mi_free_fun dealloc = (mi_free_fun)dlsym(handle, "mi_free");
+  if (is_redirected == NULL || check_owned == NULL || alloc == NULL || dealloc == NULL) {
+    fprintf(stderr, "missing mimalloc dynamic symbols\n");
+    return 3;
+  }
+
+  void* p = malloc(64);
+  int malloc_owned = (p != NULL && check_owned(p));
+  free(p);
+
+  void* q = alloc(64);
+  int mi_malloc_owned = (q != NULL && check_owned(q));
+  dealloc(q);
+
+  printf("@@REDIRECT %s is_redirected=%d malloc_owned=%d mi_malloc_owned=%d\n",
+         mode,
+         is_redirected() ? 1 : 0,
+         malloc_owned,
+         mi_malloc_owned);
+  return mi_malloc_owned == 1 ? 0 : 1;
+}
+"""
+
 
 def rust_staticlib() -> pathlib.Path:
     subprocess.run(
@@ -2731,6 +2806,22 @@ def rust_staticlib() -> pathlib.Path:
     return libs[0]
 
 
+def rust_cdylib() -> pathlib.Path:
+    subprocess.run(
+        ["cargo", "rustc", "--lib", "--", "--crate-type", "cdylib"],
+        cwd=ROOT,
+        check=True,
+    )
+    libs = sorted(
+        (ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.so"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not libs:
+        raise SystemExit("no Rust cdylib artifact found")
+    return libs[0]
+
+
 def compile_binary(
     cc: str,
     output: pathlib.Path,
@@ -2741,6 +2832,35 @@ def compile_binary(
         [
             cc,
             "-std=c11",
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/include"),
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/src"),
+            *(cflags or []),
+            *[str(obj) for obj in objects],
+            "-pthread",
+            "-ldl",
+            "-lm",
+            "-o",
+            str(output),
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+
+
+def compile_shared_library(
+    cc: str,
+    output: pathlib.Path,
+    objects: list[pathlib.Path],
+    cflags: list[str] | None = None,
+) -> None:
+    subprocess.run(
+        [
+            cc,
+            "-std=c11",
+            "-shared",
+            "-fPIC",
             "-I",
             str(ROOT / "mimalloc-3.3.2/include"),
             "-I",
@@ -2786,6 +2906,17 @@ def compile_cxx_binary(
 def run(binary: pathlib.Path) -> str:
     completed = subprocess.run(
         [str(binary)],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    )
+    return completed.stdout
+
+
+def run_args(binary: pathlib.Path, args: list[str]) -> str:
+    completed = subprocess.run(
+        [str(binary), *args],
         cwd=ROOT,
         check=True,
         text=True,
@@ -3101,6 +3232,56 @@ def parse_cxx_new_handler_capture(output: str) -> dict[str, int]:
     return values
 
 
+def parse_redirect_capture(output: str) -> dict[str, int | str]:
+    fields = output.strip().split()
+    if len(fields) != 5 or fields[0] != "@@REDIRECT":
+        raise AssertionError(f"unexpected redirect capture output: {output!r}")
+    values: dict[str, int | str] = {"mode": fields[1]}
+    for field in fields[2:]:
+        key, value = field.split("=", 1)
+        values[key] = int(value)
+    return values
+
+
+def validate_redirect_capture(
+    c_static_bin: pathlib.Path,
+    rust_static_bin: pathlib.Path,
+    c_dynamic_bin: pathlib.Path,
+    rust_dynamic_bin: pathlib.Path,
+    c_shared: pathlib.Path,
+    rust_shared: pathlib.Path,
+) -> None:
+    cases = {
+        "static": (
+            parse_redirect_capture(run(c_static_bin)),
+            parse_redirect_capture(run(rust_static_bin)),
+        ),
+        "dlopen": (
+            parse_redirect_capture(run_args(c_dynamic_bin, [str(c_shared)])),
+            parse_redirect_capture(run_args(rust_dynamic_bin, [str(rust_shared)])),
+        ),
+        "preload": (
+            parse_redirect_capture(
+                run_with_env(c_dynamic_bin, {"LD_PRELOAD": str(c_shared)}, "C redirect preload")
+            ),
+            parse_redirect_capture(
+                run_with_env(rust_dynamic_bin, {"LD_PRELOAD": str(rust_shared)}, "Rust redirect preload")
+            ),
+        ),
+    }
+    for mode, (c_values, rust_values) in cases.items():
+        if c_values != rust_values:
+            raise AssertionError(f"{mode} mismatch: C={c_values} Rust={rust_values}")
+        if c_values["mode"] != mode:
+            raise AssertionError(f"{mode} reported wrong mode: {c_values}")
+        if c_values["mi_malloc_owned"] != 1:
+            raise AssertionError(f"{mode} mi_malloc allocation was not owned: {c_values}")
+    if cases["dlopen"][0]["malloc_owned"] != 0:
+        raise AssertionError(f"dlopen unexpectedly redirects plain malloc: {cases['dlopen'][0]}")
+    if cases["preload"][0]["malloc_owned"] != 1:
+        raise AssertionError(f"LD_PRELOAD did not redirect plain malloc: {cases['preload'][0]}")
+
+
 PROCESS_CAPTURE_KEYS = (
     "elapsed",
     "user",
@@ -3330,6 +3511,8 @@ def main() -> int:
     env_capture = BUILD_DIR / "env-capture.c"
     throttle_capture = BUILD_DIR / "throttle-capture.c"
     process_lifecycle = BUILD_DIR / "process-lifecycle.c"
+    redirect_static_capture = BUILD_DIR / "redirect-static-capture.c"
+    redirect_dynamic_capture = BUILD_DIR / "redirect-dynamic-capture.c"
     scenario.write_text(SCENARIO_C)
     json_capture.write_text(JSON_CAPTURE_C)
     cxx_new_handler_capture.write_text(CXX_NEW_HANDLER_CAPTURE)
@@ -3337,8 +3520,11 @@ def main() -> int:
     env_capture.write_text(ENV_CAPTURE_C)
     throttle_capture.write_text(THROTTLE_CAPTURE_C)
     process_lifecycle.write_text(PROCESS_LIFECYCLE_C)
+    redirect_static_capture.write_text(REDIRECT_STATIC_CAPTURE_C)
+    redirect_dynamic_capture.write_text(REDIRECT_DYNAMIC_CAPTURE_C)
 
     rust_lib = rust_staticlib()
+    rust_shared = rust_cdylib()
     c_bin = BUILD_DIR / "behavioral-parity-c"
     rust_bin = BUILD_DIR / "behavioral-parity-rust"
     c_json_bin = BUILD_DIR / "json-capture-c"
@@ -3353,6 +3539,11 @@ def main() -> int:
     rust_throttle_bin = BUILD_DIR / "throttle-capture-rust"
     c_lifecycle_bin = BUILD_DIR / "process-lifecycle-c"
     rust_lifecycle_bin = BUILD_DIR / "process-lifecycle-rust"
+    c_redirect_static_bin = BUILD_DIR / "redirect-static-c"
+    rust_redirect_static_bin = BUILD_DIR / "redirect-static-rust"
+    c_redirect_dynamic_bin = BUILD_DIR / "redirect-dynamic-c"
+    rust_redirect_dynamic_bin = BUILD_DIR / "redirect-dynamic-rust"
+    c_shared = BUILD_DIR / "libmimalloc-c.so"
 
     compile_binary(cc, c_bin, [ROOT / "mimalloc-3.3.2/src/static.c", scenario])
     compile_binary(cc, rust_bin, [scenario, rust_lib])
@@ -3368,6 +3559,21 @@ def main() -> int:
     compile_binary(cc, rust_throttle_bin, [throttle_capture, rust_lib])
     compile_binary(cc, c_lifecycle_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_lifecycle])
     compile_binary(cc, rust_lifecycle_bin, [process_lifecycle, rust_lib])
+    compile_binary(
+        cc,
+        c_redirect_static_bin,
+        [ROOT / "mimalloc-3.3.2/src/static.c", redirect_static_capture],
+        ["-DMI_MALLOC_OVERRIDE"],
+    )
+    compile_binary(cc, rust_redirect_static_bin, [redirect_static_capture, rust_lib])
+    compile_binary(cc, c_redirect_dynamic_bin, [redirect_dynamic_capture])
+    compile_binary(cc, rust_redirect_dynamic_bin, [redirect_dynamic_capture])
+    compile_shared_library(
+        cc,
+        c_shared,
+        [ROOT / "mimalloc-3.3.2/src/static.c"],
+        ["-DMI_MALLOC_OVERRIDE"],
+    )
 
     c_output = run(c_bin)
     rust_output = run(rust_bin)
@@ -3420,6 +3626,19 @@ def main() -> int:
         print(f"process lifecycle parity mismatch: {err}", file=sys.stderr)
         return 1
 
+    try:
+        validate_redirect_capture(
+            c_redirect_static_bin,
+            rust_redirect_static_bin,
+            c_redirect_dynamic_bin,
+            rust_redirect_dynamic_bin,
+            c_shared,
+            rust_shared,
+        )
+    except AssertionError as err:
+        print(f"redirection parity mismatch: {err}", file=sys.stderr)
+        return 1
+
     print("ok: C and Rust mimalloc behavior smoke outputs match")
     print("ok: C and Rust mimalloc JSON schemas parse and match")
     print("ok: C and Rust mimalloc C++ new-handler behavior matches")
@@ -3427,6 +3646,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc environment option parsing matches")
     print("ok: C and Rust mimalloc warning/error throttling matches")
     print("ok: C and Rust mimalloc process lifecycle output matches")
+    print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")
     print(c_output, end="")
     return 0
 

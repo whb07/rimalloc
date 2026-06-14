@@ -485,6 +485,7 @@ pub static mut _mi_theap_default_key: mi_thread_local_t = 0;
 #[unsafe(no_mangle)]
 pub static mut _mi_theap_cached_key: mi_thread_local_t = 0;
 
+#[cfg(not(target_os = "linux"))]
 #[unsafe(no_mangle)]
 pub static mut __mi_theap_main: *mut mi_theap_t = ptr::null_mut();
 
@@ -700,17 +701,38 @@ static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(8);
 thread_local! {
     #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
     static THREAD_ID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    #[cfg(not(target_os = "linux"))]
     static THEAP_MAIN: std::cell::Cell<*mut mi_theap_t> = const { std::cell::Cell::new(ptr::null_mut()) };
+}
+
+#[cfg(target_os = "linux")]
+unsafe extern "C" {
+    fn _mi_tls_theap_main_get() -> *mut mi_theap_t;
+    fn _mi_tls_theap_main_set(theap: *mut mi_theap_t);
 }
 
 #[inline]
 pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
-    THEAP_MAIN.with(std::cell::Cell::get)
+    #[cfg(target_os = "linux")]
+    unsafe {
+        _mi_tls_theap_main_get()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        THEAP_MAIN.with(std::cell::Cell::get)
+    }
 }
 
 #[inline]
 pub(crate) fn mi_theap_main_tls_set(theap: *mut mi_theap_t) {
-    THEAP_MAIN.with(|slot| slot.set(theap));
+    #[cfg(target_os = "linux")]
+    unsafe {
+        _mi_tls_theap_main_set(theap);
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        THEAP_MAIN.with(|slot| slot.set(theap));
+    }
 }
 
 #[inline]
@@ -762,7 +784,7 @@ pub unsafe extern "C" fn mi_thread_done() {
 pub unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     let mut default_theap = theap;
     if default_theap.is_null() {
-        default_theap = unsafe { __mi_theap_main };
+        default_theap = mi_theap_main_tls_peek();
         if default_theap.is_null() {
             default_theap = unsafe { crate::prim::_mi_theap_default() };
             crate::mi_assert_internal!(
@@ -1801,5 +1823,33 @@ mod tests {
     fn auto_process_init_initializes_large_page_config() {
         unsafe { super::_mi_auto_process_init() };
         assert!(unsafe { crate::os::_mi_os_canuse_large_page(1 << 30, 2 << 20) });
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_theap_main_tls_is_thread_local() {
+        let previous = super::mi_theap_main_tls_peek();
+        let marker = unsafe { super::_mi_theap_empty_get() };
+        let marker_addr = marker as usize;
+
+        super::mi_theap_main_tls_set(marker);
+        assert_eq!(super::mi_theap_main_tls_peek(), marker);
+
+        let child = std::thread::spawn(move || {
+            let marker = marker_addr as *mut crate::types::mi_theap_t;
+            let before = super::mi_theap_main_tls_peek() as usize;
+            super::mi_theap_main_tls_set(marker);
+            let after = super::mi_theap_main_tls_peek() as usize;
+            super::mi_theap_main_tls_set(core::ptr::null_mut());
+            (before, after)
+        })
+        .join()
+        .unwrap_or((usize::MAX, usize::MAX));
+
+        assert_ne!(child.0, marker_addr);
+        assert_eq!(child.1, marker_addr);
+        assert_eq!(super::mi_theap_main_tls_peek(), marker);
+
+        super::mi_theap_main_tls_set(previous);
     }
 }

@@ -138,6 +138,18 @@ static void result_bool(const char* name, int ok) {
   if (!ok) failures++;
 }
 
+static int64_t stats_alloc_current(const mi_stats_t* stats) {
+  return stats->malloc_normal.current + stats->malloc_huge.current;
+}
+
+static int64_t stats_alloc_peak(const mi_stats_t* stats) {
+  return stats->malloc_normal.peak + stats->malloc_huge.peak;
+}
+
+static int64_t stats_alloc_total(const mi_stats_t* stats) {
+  return stats->malloc_normal.total + stats->malloc_huge.total;
+}
+
 static void result_size(const char* name, size_t value) {
   printf("%s=%zu\n", name, value);
 }
@@ -1903,6 +1915,49 @@ int main(void) {
   errno = 0;
   result_bool("malloc_oom_null", mi_malloc(overflow_count) == NULL);
   result_size("malloc_oom_errno", (size_t)errno);
+
+  mi_stats_t reset_exclusive_before;
+  mi_stats_t reset_live;
+  mi_stats_t reset_exclusive_after;
+  mi_stats_t reset_aggregate_after;
+  mi_stats_t reset_after_free;
+  mi_stats_t reset_exclusive_final;
+  mi_stats_init(&reset_exclusive_before);
+  mi_stats_init(&reset_live);
+  mi_stats_init(&reset_exclusive_after);
+  mi_stats_init(&reset_aggregate_after);
+  mi_stats_init(&reset_after_free);
+  mi_stats_init(&reset_exclusive_final);
+  result_bool("stats_reset_exclusive_before_ok", mi_subproc_stats_get_exclusive(mi_subproc_current(), &reset_exclusive_before));
+  void* reset_a = mi_malloc(4096);
+  void* reset_b = mi_malloc(1024 * 1024);
+  result_bool("stats_reset_allocated", reset_a != NULL && reset_b != NULL);
+  result_bool("stats_reset_live_ok", mi_stats_get(&reset_live));
+  result_bool("stats_reset_live_increased",
+              stats_alloc_current(&reset_live) >= stats_alloc_current(&reset_exclusive_before) &&
+              stats_alloc_total(&reset_live) >= stats_alloc_total(&reset_exclusive_before));
+  mi_stats_reset();
+  result_bool("stats_reset_exclusive_after_ok", mi_subproc_stats_get_exclusive(mi_subproc_current(), &reset_exclusive_after));
+  result_bool("stats_reset_aggregate_after_ok", mi_stats_get(&reset_aggregate_after));
+  result_bool("stats_reset_exclusive_total_persistent",
+              stats_alloc_total(&reset_exclusive_after) >= stats_alloc_total(&reset_exclusive_before));
+  result_bool("stats_reset_exclusive_current_merged",
+              stats_alloc_current(&reset_exclusive_after) >= stats_alloc_current(&reset_exclusive_before));
+  result_bool("stats_reset_aggregate_keeps_live_current",
+              stats_alloc_current(&reset_aggregate_after) >= stats_alloc_current(&reset_live));
+  mi_free(reset_a);
+  mi_free(reset_b);
+  result_bool("stats_reset_after_free_ok", mi_stats_get(&reset_after_free));
+  result_bool("stats_reset_after_free_decreased",
+              stats_alloc_current(&reset_after_free) <= stats_alloc_current(&reset_aggregate_after));
+  mi_stats_reset();
+  result_bool("stats_reset_exclusive_final_ok", mi_subproc_stats_get_exclusive(mi_subproc_current(), &reset_exclusive_final));
+  result_bool("stats_reset_final_current_decreased",
+              stats_alloc_current(&reset_exclusive_final) <= stats_alloc_current(&reset_exclusive_after));
+  result_bool("stats_reset_final_total_persistent",
+              stats_alloc_total(&reset_exclusive_final) >= stats_alloc_total(&reset_exclusive_after));
+  result_bool("stats_reset_peak_persistent",
+              stats_alloc_peak(&reset_exclusive_final) >= stats_alloc_peak(&reset_exclusive_after));
 
   size_t size_checks[] = { 0, 1, 8, 16, 17, 32, 33, 64, 65, 128, 129, 256, 257, 512, 513,
                            1024, 1025, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX,

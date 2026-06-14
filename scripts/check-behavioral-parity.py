@@ -1284,6 +1284,19 @@ int main(void) {
   result_bool("default_theap_alloc_owned", default_theap_ptr != NULL && mi_check_owned(default_theap_ptr));
   mi_free(default_theap_ptr);
 
+  mi_stats_t guarded_before;
+  mi_stats_t guarded_after;
+  mi_stats_init(&guarded_before);
+  mi_stats_init(&guarded_after);
+  result_bool("guarded_controls_default_stats_before_ok", mi_stats_get(&guarded_before));
+  mi_theap_guarded_set_sample_rate(default_theap, 7, 3);
+  mi_theap_guarded_set_size_bound(default_theap, 16, 4096);
+  result_bool("guarded_controls_default_no_crash", 1);
+  result_bool("guarded_controls_default_stats_after_ok", mi_stats_get(&guarded_after));
+  result_bool(
+      "guarded_controls_default_no_guarded_delta",
+      guarded_after.malloc_guarded_count.total == guarded_before.malloc_guarded_count.total);
+
   mi_stats_t stress_before;
   mi_stats_t stress_after;
   mi_stats_t stress_final;

@@ -2750,6 +2750,21 @@ int main(void) {
   result_bool("heap_collect_abandoned_visit_success", abandoned_collect_ok);
   result_bool("heap_collect_abandoned_visit_seen", abandoned_collect_ok && abandoned_collect_visit.areas > 0 && abandoned_collect_visit.blocks > 0);
   result_bool("heap_collect_abandoned_visit_fields", abandoned_collect_visit.heap_matches && abandoned_collect_visit.area_fields_ok && abandoned_collect_visit.block_fields_ok);
+  mi_stats_t_decl(heap_abandoned_stats_before_reclaim);
+  bool heap_abandoned_stats_before_reclaim_ok = heap != NULL && mi_heap_stats_get(heap, &heap_abandoned_stats_before_reclaim);
+  result_bool("heap_abandoned_stats_before_reclaim_success", heap_abandoned_stats_before_reclaim_ok);
+  void* heap_abandoned_reclaim = heap == NULL ? NULL : mi_heap_malloc(heap, 80);
+  result_bool("heap_abandoned_reclaim_allocated", heap_abandoned_reclaim != NULL && mi_heap_contains(heap, heap_abandoned_reclaim));
+  mi_stats_t_decl(heap_abandoned_stats_after_reclaim);
+  bool heap_abandoned_stats_after_reclaim_ok = heap != NULL && mi_heap_stats_get(heap, &heap_abandoned_stats_after_reclaim);
+  result_bool("heap_abandoned_stats_after_reclaim_success", heap_abandoned_stats_after_reclaim_ok);
+  long heap_abandoned_reclaim_on_alloc_delta =
+    (long)(heap_abandoned_stats_after_reclaim.pages_reclaim_on_alloc.total - heap_abandoned_stats_before_reclaim.pages_reclaim_on_alloc.total);
+  result_long("heap_abandoned_reclaim_on_alloc_delta", heap_abandoned_stats_before_reclaim_ok && heap_abandoned_stats_after_reclaim_ok ? heap_abandoned_reclaim_on_alloc_delta : 0);
+  result_bool("heap_abandoned_reclaim_on_alloc_monotonic",
+              heap_abandoned_stats_before_reclaim_ok && heap_abandoned_stats_after_reclaim_ok &&
+              heap_abandoned_stats_after_reclaim.pages_reclaim_on_alloc.total >= heap_abandoned_stats_before_reclaim.pages_reclaim_on_alloc.total);
+  mi_free(heap_abandoned_reclaim);
   mi_free(abandoned_collect.a);
   mi_free(abandoned_collect.b);
   mi_free(abandoned_collect.c);

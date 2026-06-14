@@ -1226,6 +1226,13 @@ int main(void) {
   result_bool("threadpool_alloc_owned", thread_joined && thread_result.threadpool_alloc_owned);
   result_bool("thread_after_done_alloc_owned", thread_joined && thread_result.after_done_alloc_owned);
 
+  mi_theap_t* default_theap = mi_theap_get_default();
+  mi_theap_t* main_heap_theap = mi_heap_theap(mi_heap_main());
+  void* default_theap_ptr = default_theap == NULL ? NULL : mi_theap_malloc(default_theap, 72);
+  result_bool("default_theap_matches_main_heap", default_theap != NULL && default_theap == main_heap_theap);
+  result_bool("default_theap_alloc_owned", default_theap_ptr != NULL && mi_check_owned(default_theap_ptr));
+  mi_free(default_theap_ptr);
+
   mi_stats_t stress_before;
   mi_stats_t stress_after;
   mi_stats_t stress_final;

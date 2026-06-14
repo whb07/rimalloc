@@ -2258,15 +2258,39 @@ int main(void) {
     mi_free(hzsp);
   }
 
+  mi_stats_t_decl(heap_thread_stats_before);
+  bool heap_thread_stats_before_ok = heap != NULL && mi_heap_stats_get(heap, &heap_thread_stats_before);
+  result_bool("heap_cross_thread_stats_before_success", heap_thread_stats_before_ok);
   struct heap_cross_thread_free_result heap_thread_result = { heap == NULL ? NULL : mi_heap_malloc(heap, 64), 0 };
   result_bool("heap_cross_thread_alloc_owner", heap_thread_result.ptr != NULL && mi_heap_contains(heap, heap_thread_result.ptr));
+  mi_stats_t_decl(heap_thread_stats_allocated);
+  bool heap_thread_stats_allocated_ok = heap != NULL && mi_heap_stats_get(heap, &heap_thread_stats_allocated);
+  result_bool("heap_cross_thread_stats_allocated_success", heap_thread_stats_allocated_ok);
+  long heap_thread_alloc_current_delta =
+    (long)(heap_thread_stats_allocated.malloc_normal.current - heap_thread_stats_before.malloc_normal.current);
+  result_long("heap_cross_thread_alloc_current_delta", heap_thread_stats_before_ok && heap_thread_stats_allocated_ok ? heap_thread_alloc_current_delta : 0);
   pthread_t heap_free_thread;
   int heap_free_started = (pthread_create(&heap_free_thread, NULL, heap_cross_thread_free_worker, &heap_thread_result) == 0);
   result_bool("heap_cross_thread_free_started", heap_free_started);
   int heap_free_joined = heap_free_started && pthread_join(heap_free_thread, NULL) == 0;
   result_bool("heap_cross_thread_free_joined", heap_free_joined);
   result_bool("heap_cross_thread_owned_before_free", heap_free_joined && heap_thread_result.owned_before_free);
+  mi_stats_t_decl(heap_thread_stats_after_worker);
+  bool heap_thread_stats_after_worker_ok = heap != NULL && mi_heap_stats_get(heap, &heap_thread_stats_after_worker);
+  result_bool("heap_cross_thread_stats_after_worker_success", heap_thread_stats_after_worker_ok);
+  long heap_thread_after_worker_current_delta =
+    (long)(heap_thread_stats_after_worker.malloc_normal.current - heap_thread_stats_allocated.malloc_normal.current);
+  result_long("heap_cross_thread_after_worker_current_delta", heap_thread_stats_allocated_ok && heap_thread_stats_after_worker_ok ? heap_thread_after_worker_current_delta : 0);
   mi_heap_collect(heap, false);
+  mi_stats_t_decl(heap_thread_stats_after_collect);
+  bool heap_thread_stats_after_collect_ok = heap != NULL && mi_heap_stats_get(heap, &heap_thread_stats_after_collect);
+  result_bool("heap_cross_thread_stats_after_collect_success", heap_thread_stats_after_collect_ok);
+  long heap_thread_after_collect_current_delta =
+    (long)(heap_thread_stats_after_collect.malloc_normal.current - heap_thread_stats_allocated.malloc_normal.current);
+  result_long("heap_cross_thread_after_collect_current_delta", heap_thread_stats_allocated_ok && heap_thread_stats_after_collect_ok ? heap_thread_after_collect_current_delta : 0);
+  result_bool("heap_cross_thread_after_collect_decreased",
+              heap_thread_stats_allocated_ok && heap_thread_stats_after_collect_ok &&
+              heap_thread_stats_after_collect.malloc_normal.current <= heap_thread_stats_allocated.malloc_normal.current);
   void* heap_delayed_reuse = heap == NULL ? NULL : mi_heap_malloc(heap, 64);
   result_bool("heap_collect_delayed_nonforced_reuse", heap_delayed_reuse != NULL && mi_heap_contains(heap, heap_delayed_reuse));
   mi_free(heap_delayed_reuse);

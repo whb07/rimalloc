@@ -1587,7 +1587,7 @@ unsafe fn mi_arena_initialize(
     crate::mi_assert_internal!(mi_size_of_slices(slice_count) >= MI_ARENA_MIN_SIZE);
 
     if slice_count > MI_BITMAP_MAX_BIT_COUNT {
-        crate::options::_mi_warning_message(format_args!(
+        crate::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is too large (size {} MiB, maximum is {} MiB)",
             mi_size_of_slices(slice_count) / (1024 * 1024),
             mi_size_of_slices(MI_BITMAP_MAX_BIT_COUNT) / (1024 * 1024)
@@ -1598,14 +1598,14 @@ unsafe fn mi_arena_initialize(
     let mut bitmap_base = 0usize;
     let info_slices = unsafe { mi_arena_info_slices_needed(slice_count, &mut bitmap_base) };
     if slice_count < info_slices + 1 {
-        crate::options::_mi_warning_message(format_args!(
+        crate::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is not large enough (size {} KiB, minimum required is {} KiB)",
             mi_size_of_slices(slice_count) / 1024,
             mi_size_of_slices(info_slices + 1) / 1024
         ));
         return ptr::null_mut();
     } else if info_slices >= MI_ARENA_BCHUNK_BITS {
-        crate::options::_mi_warning_message(format_args!(
+        crate::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is too large with respect to the maximum object size (size {} MiB, meta-info slices {}, maximum object slices are {})",
             mi_size_of_slices(slice_count) / (1024 * 1024),
             info_slices,
@@ -1634,7 +1634,7 @@ unsafe fn mi_arena_initialize(
             unsafe { _mi_os_commit(arena.cast::<c_void>(), commit_size, ptr::null_mut()) }
         };
         if !ok {
-            crate::options::_mi_warning_message(format_args!(
+            crate::options::_mi_warning_message_fmt(format_args!(
                 "unable to commit meta-data for OS memory"
             ));
             return ptr::null_mut();
@@ -3504,7 +3504,7 @@ unsafe fn mi_manage_os_memory_ex2(
         let aligned_start = _mi_align_up(start as usize, MI_ARENA_SLICE_SIZE) as *mut c_void;
         let diff = aligned_start as usize - start as usize;
         if diff >= size || (size - diff) < MI_ARENA_SLICE_SIZE {
-            crate::options::_mi_warning_message(format_args!(
+            crate::options::_mi_warning_message_fmt(format_args!(
                 "after alignment, the size of the arena becomes too small (memory at {:p} with size {})\n",
                 start, size
             ));
@@ -3517,7 +3517,7 @@ unsafe fn mi_manage_os_memory_ex2(
     let mut total_slice_count = (size / MI_ARENA_SLICE_SIZE / MI_BCHUNK_BITS) * MI_BCHUNK_BITS;
     let total_size = mi_size_of_slices(total_slice_count);
     if total_size < MI_ARENA_MIN_SIZE {
-        crate::options::_mi_warning_message(format_args!(
+        crate::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is not large enough (size {} KiB, minimum required is {} KiB)",
             size / crate::bits::MI_KiB,
             MI_ARENA_MIN_SIZE / crate::bits::MI_KiB
@@ -4047,7 +4047,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
         )
     };
     if p.is_null() || pages_reserved == 0 {
-        crate::options::_mi_warning_message(format_args!(
+        crate::options::_mi_warning_message_fmt(format_args!(
             "failed to reserve {} GiB huge pages\n",
             pages
         ));
@@ -4148,7 +4148,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages(
     max_secs: f64,
     pages_reserved: *mut usize,
 ) -> c_int {
-    crate::options::_mi_warning_message(format_args!(
+    crate::options::_mi_warning_message_fmt(format_args!(
         "mi_reserve_huge_os_pages is deprecated: use mi_reserve_huge_os_pages_interleave/at instead\n"
     ));
     if !pages_reserved.is_null() {

@@ -2451,6 +2451,51 @@ int main(void) {
 }
 """
 
+THROTTLE_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+void _mi_warning_message(const char* fmt, ...);
+void _mi_error_message(int err, const char* fmt, ...);
+
+static size_t output_callbacks = 0;
+static size_t warning_messages = 0;
+static size_t error_messages = 0;
+
+static void capture_output(const char* msg, void* arg) {
+  (void)arg;
+  if (msg == NULL || msg[0] == 0) return;
+  output_callbacks++;
+  if (strstr(msg, "mimalloc: warning:") != NULL) warning_messages++;
+  if (strstr(msg, "mimalloc: error:") != NULL) error_messages++;
+}
+
+int main(void) {
+  char line[256];
+  mi_register_output(capture_output, NULL);
+  mi_process_init();
+  for (int i = 0; i < 5; i++) {
+    _mi_warning_message("throttle warning\n");
+  }
+  for (int i = 0; i < 5; i++) {
+    _mi_error_message(ENOMEM, "throttle error\n");
+  }
+  int len = snprintf(line,
+                     sizeof(line),
+                     "@@THROTTLE callbacks=%zu warnings=%zu errors=%zu\n",
+                     output_callbacks,
+                     warning_messages,
+                     error_messages);
+  if (len > 0) (void)write(1, line, (size_t)len);
+  return 0;
+}
+"""
+
 
 def rust_staticlib() -> pathlib.Path:
     subprocess.run(
@@ -2924,6 +2969,62 @@ def validate_env_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
             raise AssertionError(f"{label} invalid warning mismatch: C={c_flags} Rust={rust_flags}")
 
 
+def parse_throttle_capture(output: str) -> dict[str, int]:
+    fields = output.strip().split()
+    if len(fields) != 4 or fields[0] != "@@THROTTLE":
+        raise AssertionError(f"unexpected throttle capture output: {output!r}")
+    values: dict[str, int] = {}
+    for field in fields[1:]:
+        key, value = field.split("=", 1)
+        values[key] = int(value)
+    return values
+
+
+def throttle_case_matrix() -> list[tuple[str, dict[str, str]]]:
+    return [
+        (
+            "zero_limits",
+            {
+                "mimalloc_show_errors": "1",
+                "mimalloc_verbose": "0",
+                "mimalloc_max_warnings": "0",
+                "mimalloc_max_errors": "0",
+            },
+        ),
+        (
+            "finite_limits",
+            {
+                "mimalloc_show_errors": "1",
+                "mimalloc_verbose": "0",
+                "mimalloc_max_warnings": "2",
+                "mimalloc_max_errors": "3",
+            },
+        ),
+        (
+            "unlimited_limits",
+            {
+                "mimalloc_show_errors": "1",
+                "mimalloc_verbose": "0",
+                "mimalloc_max_warnings": "-1",
+                "mimalloc_max_errors": "-1",
+            },
+        ),
+    ]
+
+
+def validate_throttle_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
+    for label, env in throttle_case_matrix():
+        c_output = run_with_env(c_bin, env, label)
+        rust_output = run_with_env(rust_bin, env, label)
+        c_counts = parse_throttle_capture(c_output)
+        rust_counts = parse_throttle_capture(rust_output)
+        if (c_counts["warnings"], c_counts["errors"]) != (
+            rust_counts["warnings"],
+            rust_counts["errors"],
+        ):
+            raise AssertionError(f"{label} throttle mismatch: C={c_counts} Rust={rust_counts}")
+
+
 def main() -> int:
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
@@ -2934,10 +3035,12 @@ def main() -> int:
     json_capture = BUILD_DIR / "json-capture.c"
     process_capture = BUILD_DIR / "process-capture.c"
     env_capture = BUILD_DIR / "env-capture.c"
+    throttle_capture = BUILD_DIR / "throttle-capture.c"
     scenario.write_text(SCENARIO_C)
     json_capture.write_text(JSON_CAPTURE_C)
     process_capture.write_text(PROCESS_CAPTURE_C)
     env_capture.write_text(ENV_CAPTURE_C)
+    throttle_capture.write_text(THROTTLE_CAPTURE_C)
 
     rust_lib = rust_staticlib()
     c_bin = BUILD_DIR / "behavioral-parity-c"
@@ -2948,6 +3051,8 @@ def main() -> int:
     rust_process_bin = BUILD_DIR / "process-capture-rust"
     c_env_bin = BUILD_DIR / "env-capture-c"
     rust_env_bin = BUILD_DIR / "env-capture-rust"
+    c_throttle_bin = BUILD_DIR / "throttle-capture-c"
+    rust_throttle_bin = BUILD_DIR / "throttle-capture-rust"
 
     compile_binary(cc, c_bin, [ROOT / "mimalloc-3.3.2/src/static.c", scenario])
     compile_binary(cc, rust_bin, [scenario, rust_lib])
@@ -2957,6 +3062,8 @@ def main() -> int:
     compile_binary(cc, rust_process_bin, [process_capture, rust_lib])
     compile_binary(cc, c_env_bin, [ROOT / "mimalloc-3.3.2/src/static.c", env_capture])
     compile_binary(cc, rust_env_bin, [env_capture, rust_lib])
+    compile_binary(cc, c_throttle_bin, [ROOT / "mimalloc-3.3.2/src/static.c", throttle_capture])
+    compile_binary(cc, rust_throttle_bin, [throttle_capture, rust_lib])
 
     c_output = run(c_bin)
     rust_output = run(rust_bin)
@@ -2988,10 +3095,17 @@ def main() -> int:
         print(f"environment option parity mismatch: {err}", file=sys.stderr)
         return 1
 
+    try:
+        validate_throttle_capture(c_throttle_bin, rust_throttle_bin)
+    except AssertionError as err:
+        print(f"warning/error throttle parity mismatch: {err}", file=sys.stderr)
+        return 1
+
     print("ok: C and Rust mimalloc behavior smoke outputs match")
     print("ok: C and Rust mimalloc JSON schemas parse and match")
     print("ok: C and Rust mimalloc process info is within tolerance")
     print("ok: C and Rust mimalloc environment option parsing matches")
+    print("ok: C and Rust mimalloc warning/error throttling matches")
     print(c_output, end="")
     return 0
 

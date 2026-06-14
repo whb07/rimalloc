@@ -763,7 +763,7 @@ fn mi_show_error_message(args: fmt::Arguments<'_>) {
             return;
         }
         let max_errors = mi_max_error_count.load(Ordering::Acquire);
-        let count = error_count.fetch_add(1, Ordering::AcqRel) + 1;
+        let count = error_count.fetch_add(1, Ordering::AcqRel);
         if max_errors >= 0 && (count as isize) > max_errors {
             return;
         }
@@ -771,18 +771,30 @@ fn mi_show_error_message(args: fmt::Arguments<'_>) {
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: error: ".as_ptr(), args);
 }
 
-pub(crate) fn _mi_warning_message(args: fmt::Arguments<'_>) {
+pub(crate) fn _mi_warning_message_fmt(args: fmt::Arguments<'_>) {
     if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
         if !mi_option_is_enabled(mi_option_t::mi_option_show_errors) {
             return;
         }
         let max_warnings = mi_max_warning_count.load(Ordering::Acquire);
-        let count = warning_count.fetch_add(1, Ordering::AcqRel) + 1;
+        let count = warning_count.fetch_add(1, Ordering::AcqRel);
         if max_warnings >= 0 && (count as isize) > max_warnings {
             return;
         }
     }
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: warning: ".as_ptr(), args);
+}
+
+/// # Safety
+/// Matches the exported C helper surface. Extra varargs from C-style callers are ignored here.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
+    let args = if fmt.is_null() {
+        format_args!("")
+    } else {
+        format_args!("{}", CStr::from_ptr(fmt).to_string_lossy())
+    };
+    _mi_warning_message_fmt(args);
 }
 
 pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
@@ -992,14 +1004,10 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
         let legacy_str = legacy.to_str().unwrap_or("");
         found = get_env_value_stack(legacy.to_bytes(), &mut value_buf);
         if found.is_some() {
-            _mi_fprintf(
-                None,
-                ptr::null_mut(),
-                format_args!(
-                    "mimalloc: warning: environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
-                    legacy_str, name_str
-                ),
-            );
+            _mi_warning_message_fmt(format_args!(
+                "environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
+                legacy_str, name_str
+            ));
         }
     }
 
@@ -1007,14 +1015,10 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
         for legacy in option_extra_legacy_names(desc.option) {
             found = get_env_value_stack(legacy.as_bytes(), &mut value_buf);
             if found.is_some() {
-                _mi_fprintf(
-                    None,
-                    ptr::null_mut(),
-                    format_args!(
-                        "mimalloc: warning: environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
-                        legacy, name_str
-                    ),
-                );
+                _mi_warning_message_fmt(format_args!(
+                    "environment option \"mimalloc_{}\" is deprecated -- use \"mimalloc_{}\" instead.\n",
+                    legacy, name_str
+                ));
                 break;
             }
         }
@@ -1028,24 +1032,16 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
             desc.init = mi_option_init_t::MI_OPTION_DEFAULTED;
             if desc.option == mi_option_t::mi_option_verbose && desc.value == 0 {
                 desc.value = 1;
-                _mi_fprintf(
-                    None,
-                    ptr::null_mut(),
-                    format_args!(
-                        "mimalloc: warning: environment option mimalloc_{} has an invalid value.\n",
-                        name_str
-                    ),
-                );
+                _mi_warning_message_fmt(format_args!(
+                    "environment option mimalloc_{} has an invalid value.\n",
+                    name_str
+                ));
                 desc.value = 0;
             } else {
-                _mi_fprintf(
-                    None,
-                    ptr::null_mut(),
-                    format_args!(
-                        "mimalloc: warning: environment option mimalloc_{} has an invalid value.\n",
-                        name_str
-                    ),
-                );
+                _mi_warning_message_fmt(format_args!(
+                    "environment option mimalloc_{} has an invalid value.\n",
+                    name_str
+                ));
             }
         }
     } else if !_mi_preloading() {

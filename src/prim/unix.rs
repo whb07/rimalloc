@@ -26,7 +26,7 @@ use crate::bits::{MI_GiB, MI_MiB};
 use crate::internal::{
     _mi_preloading, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen, _mi_toupper, MI_DEBUG,
 };
-use crate::options::{_mi_warning_message, mi_option_is_enabled, mi_option_t};
+use crate::options::{_mi_warning_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::os::{
     _mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_has_overcommit, _mi_os_page_size,
 };
@@ -511,7 +511,7 @@ unsafe fn unix_mmap(
                         unix_mmap_fd(),
                     );
                     if p.is_null() {
-                        _mi_warning_message(format_args!(
+                        _mi_warning_message_fmt(format_args!(
                             "unable to allocate huge (1GiB) page, trying large (2MiB) pages instead (errno: {})\n",
                             mi_last_errno()
                         ));
@@ -753,7 +753,7 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
             );
             if err != 0 {
                 let errno = mi_last_errno();
-                _mi_warning_message(format_args!(
+                _mi_warning_message_fmt(format_args!(
                     "failed to bind huge (1GiB) pages to numa node {} (error: {} (0x{:x}))\n",
                     numa_node, errno, errno
                 ));

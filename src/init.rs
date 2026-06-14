@@ -15,7 +15,9 @@ use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bits::MI_SIZE_SIZE;
 use crate::internal::{_mi_allocator_done, _mi_error_message, mi_memid_t, mi_memkind_t};
-use crate::options::{_mi_warning_message, mi_option_get, mi_option_get_clamp, mi_option_t};
+use crate::options::{
+    _mi_options_init, _mi_warning_message_fmt, mi_option_get, mi_option_get_clamp, mi_option_t,
+};
 use crate::stats::{_mi_stats_merge_into, mi_stat_count_t, mi_stats_header_init, mi_stats_t};
 use crate::types::{
     MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_heap_visit_fun,
@@ -560,6 +562,7 @@ fn mi_subproc_main_init() {
     SUBPROC_MAIN_INIT.call_once(|| {
         // SAFETY: one-time process initialization for local subproc scaffolding.
         unsafe {
+            _mi_options_init();
             mi_lock_init(ptr::addr_of_mut!(subprocs_lock));
             ptr::addr_of_mut!(subproc_main).write(MaybeUninit::new(MiSubprocPrefix::new_main()));
             let main = ptr::addr_of_mut!(subproc_main)
@@ -1569,7 +1572,7 @@ pub unsafe extern "C" fn mi_subproc_add_current_thread(subproc_id: mi_subproc_id
     }
     let main_subproc = unsafe { _mi_subproc_main() };
     if !ptr::eq(unsafe { (*tld).subproc }, main_subproc) {
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "unable to add thread to the subprocess as it was already in another subprocess (id: {:?})\n",
             subproc
         ));

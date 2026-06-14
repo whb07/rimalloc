@@ -23,7 +23,7 @@ use crate::internal::{
     mi_commit_fun_t, mi_memid_t,
 };
 use crate::options::{
-    _mi_verbose_message, _mi_warning_message, mi_option_get, mi_option_get_size,
+    _mi_verbose_message, _mi_warning_message_fmt, mi_option_get, mi_option_get_size,
     mi_option_is_enabled, mi_option_t,
 };
 use crate::prim::mi_os_mem_config_t;
@@ -430,7 +430,7 @@ pub unsafe extern "C" fn _mi_os_commit_ex(
     let mut os_is_zero = false;
     let err = unsafe { _mi_prim_commit(start, csize, &mut os_is_zero) };
     if err != 0 {
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "cannot commit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
             err, err, start, csize
         ));
@@ -467,7 +467,7 @@ unsafe fn mi_os_decommit_ex(
     *needs_recommit = true;
     let err = unsafe { _mi_prim_decommit(start, csize, needs_recommit) };
     if err != 0 {
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "cannot decommit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
             err, err, start, csize
         ));
@@ -511,7 +511,7 @@ pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
 
     let err = unsafe { _mi_prim_reset(start, csize) };
     if err != 0 {
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "cannot reset OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
             err, err, start, csize
         ));
@@ -530,7 +530,7 @@ pub unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
     }
     let err = unsafe { _mi_prim_reuse(start, csize) };
     if err != 0 {
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "cannot reuse OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
             err, err, start, csize
         ));
@@ -598,7 +598,7 @@ unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool 
     }
     let err = unsafe { _mi_prim_protect(start, csize, protect) };
     if err != 0 {
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "cannot {} OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
             if protect { "protect" } else { "unprotect" },
             err,
@@ -635,7 +635,7 @@ unsafe fn mi_os_prim_free(
     }
     let err = unsafe { _mi_prim_free(addr, size) };
     if err != 0 {
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "unable to free OS memory (error: {} (0x{:x}), size: 0x{:x} bytes, address: {:p})\n",
             err, err, size, addr
         ));
@@ -759,7 +759,7 @@ unsafe fn mi_os_prim_alloc_at(
         )
     };
     if err != 0 {
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "unable to allocate OS memory (error: {} (0x{:x}), addr: {:p}, size: 0x{:x} bytes, align: 0x{:x}, commit: {}, allow large: {})\n",
             err, err, hint_addr, size, try_alignment, commit as i32, allow_large as i32
         ));
@@ -1037,7 +1037,7 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
             let mut needs_recommit = false;
             let err = unsafe { _mi_prim_decommit(dstart, dsize, &mut needs_recommit) };
             if err != 0 {
-                _mi_warning_message(format_args!(
+                _mi_warning_message_fmt(format_args!(
                     "unable to decommit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
                     err, err, dstart, dsize
                 ));
@@ -1074,7 +1074,7 @@ unsafe fn mi_os_claim_huge_pages(pages: usize, total_size: *mut usize) -> *mut u
                         let r = unsafe { crate::internal::_mi_theap_random_next(theap) };
                         start += MI_HUGE_OS_PAGE_SIZE * ((r >> 17) & 0x0FFF);
                     } else {
-                        _mi_warning_message(format_args!(
+                        _mi_warning_message_fmt(format_args!(
                             "failed to randomize the start address of huge pages allocation ({} bytes at {:p})",
                             size, start as *mut c_void
                         ));
@@ -1209,7 +1209,7 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
             all_zero = false;
         }
         if err != 0 {
-            _mi_warning_message(format_args!(
+            _mi_warning_message_fmt(format_args!(
                 "unable to allocate huge OS page (error: {} (0x{:x}), address: {:p}, size: {:x} bytes)\n",
                 err, err, addr, MI_HUGE_OS_PAGE_SIZE
             ));
@@ -1217,7 +1217,7 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
         }
         if p != addr {
             if !p.is_null() {
-                _mi_warning_message(format_args!(
+                _mi_warning_message_fmt(format_args!(
                     "could not allocate contiguous huge OS page {} at {:p}\n",
                     page, addr
                 ));
@@ -1250,7 +1250,7 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
                 }
             }
             if elapsed > max_msecs {
-                _mi_warning_message(format_args!(
+                _mi_warning_message_fmt(format_args!(
                     "huge OS page allocation timed out (after allocating {} page(s))\n",
                     page
                 ));

@@ -14,7 +14,7 @@ use crate::internal::{
     mi_page_heap,
 };
 use crate::mimalloc::{mi_free, mi_heap_zalloc};
-use crate::options::{_mi_error_message_fmt, _mi_warning_message};
+use crate::options::{_mi_error_message_fmt, _mi_warning_message_fmt};
 use crate::os::_mi_os_numa_node_count;
 use crate::page_map::_mi_safe_ptr_page;
 use crate::prim::{_mi_heap_theap, _mi_prim_thread_yield};
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
         return;
     }
     if _mi_is_heap_main(heap) {
-        _mi_warning_message(format_args!("cannot delete the main heap\n"));
+        _mi_warning_message_fmt(format_args!("cannot delete the main heap\n"));
         return;
     }
     mi_heap_free_theaps(heap);
@@ -216,7 +216,7 @@ pub unsafe extern "C" fn mi_heap_destroy(heap: *mut mi_heap_t) {
         return;
     }
     if _mi_is_heap_main(heap) {
-        _mi_warning_message(format_args!("cannot destroy the main heap\n"));
+        _mi_warning_message_fmt(format_args!("cannot destroy the main heap\n"));
         return;
     }
     _mi_heap_force_destroy(heap);

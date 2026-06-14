@@ -23,7 +23,7 @@ use crate::bits::{MI_KiB, MI_MiB, MI_SIZE_BITS, mi_clz};
 use crate::init::_mi_preloading;
 use crate::internal::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_page_size};
 use crate::options::{
-    _mi_verbose_message, _mi_warning_message, mi_option_get_clamp, mi_option_is_enabled,
+    _mi_verbose_message, _mi_warning_message_fmt, mi_option_get_clamp, mi_option_is_enabled,
     mi_option_t,
 };
 use crate::prim::{mi_os_mem_config_t, mi_process_info_t};
@@ -1175,7 +1175,7 @@ unsafe fn win_enable_large_os_pages_once(large_page_size: *mut usize) -> bool {
     if err == 0 {
         err = unsafe { GetLastError() };
     }
-    _mi_warning_message(format_args!(
+    _mi_warning_message_fmt(format_args!(
         "cannot enable large OS page support, error {}\n",
         err
     ));
@@ -1234,7 +1234,7 @@ unsafe fn win_virtual_alloc_prim_once(
         if !p.is_null() {
             return p;
         }
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "unable to allocate aligned OS memory (0x{:x} bytes, error code: 0x{:x}, address: {:p}, alignment: 0x{:x}, flags: 0x{:x})\n",
             size,
             unsafe { GetLastError() },
@@ -1272,7 +1272,7 @@ unsafe fn win_virtual_alloc_prim(
             && win_is_out_of_memory_error(err)
             && tries <= 10
         {
-            _mi_warning_message(format_args!(
+            _mi_warning_message_fmt(format_args!(
                 "out-of-memory on OS allocation, try again... (attempt {}, 0x{:x} bytes, error code: 0x{:x}, address: {:p}, alignment: 0x{:x}, flags: 0x{:x})\n",
                 tries, size, err, addr, try_alignment, flags
             ));
@@ -1392,7 +1392,7 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
             return base;
         }
         MI_HUGE_PAGES_AVAILABLE.store(0, Ordering::Release);
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "unable to allocate using huge (1GiB) pages, trying large (2MiB) pages instead (status 0x{:x})\n",
             err
         ));

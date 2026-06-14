@@ -34,7 +34,9 @@ use crate::internal::{
     mi_memid_mem_t, mi_memid_os_info_t, mi_memid_t, mi_memkind_t, mi_page_area,
     mi_page_slice_start, mi_slice_count_of_size, mi_submap_t,
 };
-use crate::options::{_mi_warning_message, mi_option_get_clamp, mi_option_is_enabled, mi_option_t};
+use crate::options::{
+    _mi_warning_message_fmt, mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
+};
 use crate::os::{_mi_os_alloc_aligned, _mi_os_zalloc};
 use crate::page::MI_LARGE_PAGE_SIZE;
 use crate::types::{ENOMEM, MI_PAGE_ALIGN, mi_page_t, mi_subproc_t};
@@ -77,7 +79,7 @@ static mi_page_map_commit: AtomicUsize = AtomicUsize::new(0);
 
 #[inline]
 fn mi_page_map_cannot_commit() {
-    _mi_warning_message(format_args!(
+    _mi_warning_message_fmt(format_args!(
         "unable to commit the allocation page-map on-demand\n"
     ));
 }
@@ -191,7 +193,7 @@ pub unsafe extern "C" fn _mi_page_map_init() -> bool {
         return false;
     }
     if unsafe { mi_page_map_memid.initially_committed && !mi_page_map_memid.initially_zero } {
-        _mi_warning_message(format_args!(
+        _mi_warning_message_fmt(format_args!(
             "internal: the page map was committed but not zero initialized!\n"
         ));
         unsafe { _mi_memzero_aligned(base.cast::<c_void>(), reserve_size) };
@@ -504,7 +506,7 @@ unsafe fn mi_page_map_ensure_submap_at(idx: usize, submap: *mut mi_submap_t) -> 
             let new_sub = unsafe { _mi_os_zalloc(MI_PAGE_MAP_SUB_SIZE, &raw mut memid) }
                 .cast::<*mut mi_page_t>();
             if new_sub.is_null() {
-                _mi_warning_message(format_args!(
+                _mi_warning_message_fmt(format_args!(
                     "internal error: unable to extend the page map\n"
                 ));
             } else {

@@ -263,6 +263,13 @@ static bool managed_commit_fail_callback(bool commit, void* start, size_t size, 
   return false;
 }
 
+static void* map_aligned_arena_memory(size_t size) {
+  size_t alignment = mi_arena_min_alignment();
+  void* mapping = mmap(NULL, size + alignment, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (mapping == MAP_FAILED) return MAP_FAILED;
+  return (void*)(((uintptr_t)mapping + alignment - 1) & ~(uintptr_t)(alignment - 1));
+}
+
 static void result_bool(const char* name, int ok) {
   printf("%s=%d\n", name, ok ? 1 : 0);
   if (!ok) failures++;
@@ -2409,6 +2416,59 @@ int main(void) {
   result_bool("reserve_os_memory_ex_large_allowed_alloc", reserve_large_allowed_alloc != NULL && mi_arena_contains(reserve_large_allowed_id, reserve_large_allowed_alloc));
   mi_free(reserve_large_allowed_alloc);
   if (reserve_large_allowed_heap != NULL) mi_heap_delete(reserve_large_allowed_heap);
+
+  size_t manage_os_size = mi_arena_min_size();
+  void* manage_os_basic_mem = map_aligned_arena_memory(manage_os_size);
+  bool manage_os_basic_ok = manage_os_basic_mem != MAP_FAILED && mi_manage_os_memory(manage_os_basic_mem, manage_os_size, true, false, true, -1);
+  result_bool("manage_os_memory_basic_registered", manage_os_basic_ok);
+
+  void* manage_os_committed_mem = map_aligned_arena_memory(manage_os_size);
+  mi_arena_id_t manage_os_committed_id = NULL;
+  bool manage_os_committed_ok = manage_os_committed_mem != MAP_FAILED && mi_manage_os_memory_ex(manage_os_committed_mem, manage_os_size, true, false, true, 0, true, &manage_os_committed_id);
+  result_bool("manage_os_memory_ex_committed_zero_numa", manage_os_committed_ok && manage_os_committed_id != NULL);
+  size_t manage_os_committed_area_size = 0;
+  void* manage_os_committed_area = manage_os_committed_ok ? mi_arena_area(manage_os_committed_id, &manage_os_committed_area_size) : NULL;
+  result_bool("manage_os_memory_ex_committed_area", manage_os_committed_area == manage_os_committed_mem && manage_os_committed_area_size == manage_os_size);
+  mi_heap_t* manage_os_committed_heap = manage_os_committed_id != NULL ? mi_heap_new_in_arena(manage_os_committed_id) : NULL;
+  void* manage_os_committed_alloc = manage_os_committed_heap == NULL ? NULL : mi_heap_malloc(manage_os_committed_heap, 2048);
+  result_bool("manage_os_memory_ex_committed_alloc", manage_os_committed_alloc != NULL && mi_arena_contains(manage_os_committed_id, manage_os_committed_alloc));
+  mi_free(manage_os_committed_alloc);
+  if (manage_os_committed_heap != NULL) mi_heap_collect(manage_os_committed_heap, true);
+  mi_collect(true);
+  void* manage_os_committed_reuse = manage_os_committed_heap == NULL ? NULL : mi_heap_malloc(manage_os_committed_heap, 2048);
+  result_bool("manage_os_memory_ex_committed_reuse_after_collect", manage_os_committed_reuse != NULL && mi_arena_contains(manage_os_committed_id, manage_os_committed_reuse));
+  mi_free(manage_os_committed_reuse);
+  if (manage_os_committed_heap != NULL) mi_heap_delete(manage_os_committed_heap);
+
+  void* manage_os_uncommitted_mem = map_aligned_arena_memory(manage_os_size);
+  mi_arena_id_t manage_os_uncommitted_id = NULL;
+  bool manage_os_uncommitted_ok = manage_os_uncommitted_mem != MAP_FAILED && mi_manage_os_memory_ex(manage_os_uncommitted_mem, manage_os_size, false, false, false, -1, true, &manage_os_uncommitted_id);
+  result_bool("manage_os_memory_ex_uncommitted", manage_os_uncommitted_ok && manage_os_uncommitted_id != NULL);
+  mi_heap_t* manage_os_uncommitted_heap = manage_os_uncommitted_id != NULL ? mi_heap_new_in_arena(manage_os_uncommitted_id) : NULL;
+  void* manage_os_uncommitted_alloc = manage_os_uncommitted_heap == NULL ? NULL : mi_heap_malloc(manage_os_uncommitted_heap, 2048);
+  result_bool("manage_os_memory_ex_uncommitted_alloc", manage_os_uncommitted_alloc != NULL && mi_arena_contains(manage_os_uncommitted_id, manage_os_uncommitted_alloc));
+  mi_free(manage_os_uncommitted_alloc);
+  if (manage_os_uncommitted_heap != NULL) mi_heap_collect(manage_os_uncommitted_heap, true);
+  mi_collect(true);
+  void* manage_os_uncommitted_reuse = manage_os_uncommitted_heap == NULL ? NULL : mi_heap_malloc(manage_os_uncommitted_heap, 2048);
+  result_bool("manage_os_memory_ex_uncommitted_reuse_after_collect", manage_os_uncommitted_reuse != NULL && mi_arena_contains(manage_os_uncommitted_id, manage_os_uncommitted_reuse));
+  mi_free(manage_os_uncommitted_reuse);
+  if (manage_os_uncommitted_heap != NULL) mi_heap_delete(manage_os_uncommitted_heap);
+
+  void* manage_os_pinned_mem = map_aligned_arena_memory(manage_os_size);
+  mi_arena_id_t manage_os_pinned_id = NULL;
+  bool manage_os_pinned_ok = manage_os_pinned_mem != MAP_FAILED && mi_manage_os_memory_ex(manage_os_pinned_mem, manage_os_size, true, true, true, -1, true, &manage_os_pinned_id);
+  result_bool("manage_os_memory_ex_pinned", manage_os_pinned_ok && manage_os_pinned_id != NULL);
+  mi_heap_t* manage_os_pinned_heap = manage_os_pinned_id != NULL ? mi_heap_new_in_arena(manage_os_pinned_id) : NULL;
+  void* manage_os_pinned_alloc = manage_os_pinned_heap == NULL ? NULL : mi_heap_malloc(manage_os_pinned_heap, 2048);
+  result_bool("manage_os_memory_ex_pinned_alloc", manage_os_pinned_alloc != NULL && mi_arena_contains(manage_os_pinned_id, manage_os_pinned_alloc));
+  mi_free(manage_os_pinned_alloc);
+  if (manage_os_pinned_heap != NULL) mi_heap_collect(manage_os_pinned_heap, true);
+  mi_collect(true);
+  void* manage_os_pinned_reuse = manage_os_pinned_heap == NULL ? NULL : mi_heap_malloc(manage_os_pinned_heap, 2048);
+  result_bool("manage_os_memory_ex_pinned_reuse_after_collect", manage_os_pinned_reuse != NULL && mi_arena_contains(manage_os_pinned_id, manage_os_pinned_reuse));
+  mi_free(manage_os_pinned_reuse);
+  if (manage_os_pinned_heap != NULL) mi_heap_delete(manage_os_pinned_heap);
 
   mi_arena_id_t arena_id = NULL;
   int arena_err = mi_reserve_os_memory_ex(mi_arena_min_size(), true, false, true, &arena_id);

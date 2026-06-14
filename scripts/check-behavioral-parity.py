@@ -520,6 +520,55 @@ static int theap_wrong_thread_case_status(mi_theap_t* theap, int op) {
   return -3;
 }
 
+static int fork_allocation_case_status(void) {
+  mi_stats_t parent_before;
+  mi_stats_init(&parent_before);
+  int parent_before_ok = mi_stats_get(&parent_before);
+  void* parent_before_ptr = mi_malloc(128);
+  if (!parent_before_ok || parent_before_ptr == NULL || !mi_check_owned(parent_before_ptr)) return 10;
+
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) {
+    mi_free(parent_before_ptr);
+    return 11;
+  }
+  if (pid == 0) {
+    mi_stats_t child_before;
+    mi_stats_init(&child_before);
+    int child_before_ok = mi_stats_get(&child_before);
+    void* child_ptr = mi_malloc(256);
+    int child_alloc_ok = (child_ptr != NULL && mi_check_owned(child_ptr));
+    mi_free(child_ptr);
+    mi_collect(true);
+    mi_stats_t child_after;
+    mi_stats_init(&child_after);
+    int child_after_ok = mi_stats_get(&child_after);
+    void* child_after_ptr = mi_malloc(64);
+    int child_after_alloc_ok = (child_after_ptr != NULL && mi_check_owned(child_after_ptr));
+    mi_free(child_after_ptr);
+    mi_collect(true);
+    _exit(child_before_ok && child_alloc_ok && child_after_ok && child_after_alloc_ok ? 0 : 12);
+  }
+
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) {
+    mi_free(parent_before_ptr);
+    return 13;
+  }
+  void* parent_after_ptr = mi_malloc(512);
+  int parent_after_alloc_ok = (parent_after_ptr != NULL && mi_check_owned(parent_after_ptr));
+  mi_free(parent_after_ptr);
+  mi_free(parent_before_ptr);
+  mi_collect(true);
+  mi_stats_t parent_after;
+  mi_stats_init(&parent_after);
+  int parent_after_ok = mi_stats_get(&parent_after);
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) return WEXITSTATUS(status);
+  return parent_after_alloc_ok && parent_after_ok ? 0 : 14;
+}
+
 static int heap_lifecycle_case_status(int op) {
   fflush(stdout);
   pid_t pid = fork();
@@ -790,6 +839,7 @@ int main(void) {
   result_bool("thread_init_alloc_owned", thread_joined && thread_result.init_alloc_owned);
   result_bool("threadpool_alloc_owned", thread_joined && thread_result.threadpool_alloc_owned);
   result_bool("thread_after_done_alloc_owned", thread_joined && thread_result.after_done_alloc_owned);
+  result_bool("fork_alloc_parent_child_status", fork_allocation_case_status() == 0);
 
   result_bool("option_alias_large_os_pages", mi_option_large_os_pages == mi_option_allow_large_os_pages);
   result_bool("option_alias_eager_region_commit", mi_option_eager_region_commit == mi_option_arena_eager_commit);

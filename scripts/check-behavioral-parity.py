@@ -19,6 +19,7 @@ SCENARIO_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
 #include <mimalloc-stats.h>
+#include <mimalloc/types.h>
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -2508,6 +2509,43 @@ int main(void) {
               normal_stats_after.malloc_normal_count.total >= normal_stats_live.malloc_normal_count.total &&
               stats_count_total_sum(normal_stats_after.malloc_bins, MI_BIN_HUGE + 1) >=
               stats_count_total_sum(normal_stats_live.malloc_bins, MI_BIN_HUGE + 1));
+
+  size_t large_threshold_sizes[] = {
+    MI_LARGE_MAX_OBJ_SIZE - 1,
+    MI_LARGE_MAX_OBJ_SIZE,
+    MI_LARGE_MAX_OBJ_SIZE + 1,
+  };
+  size_t large_threshold_count = sizeof(large_threshold_sizes) / sizeof(large_threshold_sizes[0]);
+  for (size_t i = 0; i < large_threshold_count; i++) {
+    size_t requested = large_threshold_sizes[i];
+    mi_stats_t large_before;
+    mi_stats_t large_live;
+    mi_stats_t large_after;
+    mi_stats_init(&large_before);
+    mi_stats_init(&large_live);
+    mi_stats_init(&large_after);
+    mi_stats_reset();
+    result_bool("large_threshold_before_ok", mi_stats_get(&large_before));
+    void* large_ptr = mi_malloc(requested);
+    size_t large_usable = large_ptr == NULL ? 0 : mi_usable_size(large_ptr);
+    result_bool("large_threshold_nonnull", large_ptr != NULL);
+    result_bool("large_threshold_usable", large_ptr != NULL && large_usable >= requested);
+    result_bool("large_threshold_live_ok", mi_stats_get(&large_live));
+    int64_t normal_current_delta = large_live.malloc_normal.current - large_before.malloc_normal.current;
+    int64_t huge_current_delta = large_live.malloc_huge.current - large_before.malloc_huge.current;
+    int64_t normal_count_delta = large_live.malloc_normal_count.total - large_before.malloc_normal_count.total;
+    int64_t huge_count_delta = large_live.malloc_huge_count.total - large_before.malloc_huge_count.total;
+    result_bool("large_threshold_accounted", normal_current_delta > 0 || huge_current_delta > 0);
+    result_indexed_size("large_threshold_normal_current_delta", i, (size_t)normal_current_delta);
+    result_indexed_size("large_threshold_huge_current_delta", i, (size_t)huge_current_delta);
+    result_indexed_size("large_threshold_normal_count_delta", i, (size_t)normal_count_delta);
+    result_indexed_size("large_threshold_huge_count_delta", i, (size_t)huge_count_delta);
+    result_indexed_size("large_threshold_usable_size", i, large_usable);
+    mi_free(large_ptr);
+    result_bool("large_threshold_after_ok", mi_stats_get(&large_after));
+    result_bool("large_threshold_current_after_free",
+                stats_alloc_current(&large_after) <= stats_alloc_current(&large_live));
+  }
 
   size_t size_checks[] = { 0, 1, 8, 16, 17, 32, 33, 64, 65, 128, 129, 256, 257, 512, 513,
                            1024, 1025, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX,

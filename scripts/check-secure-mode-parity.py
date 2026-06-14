@@ -78,6 +78,41 @@ static int padding_overrun_reports_error(void) {
   return 0;
 }
 
+static int wrong_heap_check_rejects_pointer(void) {
+  mi_heap_t* heap = mi_heap_new();
+  mi_heap_t* other = mi_heap_new();
+  if (heap == NULL || other == NULL) return 36;
+  void* p = mi_heap_malloc(heap, 64);
+  if (p == NULL) return 37;
+  int rejected = !mi_heap_contains(other, p) && mi_heap_contains(heap, p) && mi_check_owned(p);
+  printf("wrong_heap_rejected=%d\n", rejected);
+  mi_free(p);
+  mi_heap_delete(heap);
+  mi_heap_delete(other);
+  return (rejected ? 0 : 38);
+}
+
+static int wrong_size_hint_aborts(void) {
+  void* p = mi_malloc(32);
+  if (p == NULL) return 39;
+  mi_free_size(p, 1024 * 1024);
+  return 0;
+}
+
+static int wrong_size_alignment_hint_aborts(void) {
+  void* p = mi_malloc_aligned_at(32, 64, 32);
+  if (p == NULL) return 41;
+  mi_free_size_aligned(p, 32, 64);
+  return 0;
+}
+
+static int wrong_alignment_hint_aborts(void) {
+  void* p = mi_malloc_aligned_at(32, 64, 32);
+  if (p == NULL) return 42;
+  mi_free_aligned(p, 64);
+  return 0;
+}
+
 static int corrupt_free_list_aborts(void) {
   void* p = mi_malloc(64);
   void* q = mi_malloc(64);
@@ -100,6 +135,10 @@ int main(int argc, char** argv) {
   if (strcmp(argv[1], "double-free") == 0) return double_free_reports_error();
   if (strcmp(argv[1], "invalid-free") == 0) return invalid_free_reports_error();
   if (strcmp(argv[1], "padding-overrun") == 0) return padding_overrun_reports_error();
+  if (strcmp(argv[1], "wrong-heap") == 0) return wrong_heap_check_rejects_pointer();
+  if (strcmp(argv[1], "wrong-size-hint") == 0) return wrong_size_hint_aborts();
+  if (strcmp(argv[1], "wrong-size-alignment-hint") == 0) return wrong_size_alignment_hint_aborts();
+  if (strcmp(argv[1], "wrong-alignment-hint") == 0) return wrong_alignment_hint_aborts();
   if (strcmp(argv[1], "corrupt-free-list") == 0) return corrupt_free_list_aborts();
   fprintf(stderr, "unknown case: %s\n", argv[1]);
   return 3;
@@ -131,6 +170,26 @@ CASES = {
         "status": -6,
         "stdout": None,
         "stderr": "buffer overflow",
+    },
+    "wrong-heap": {
+        "status": 0,
+        "stdout": "wrong_heap_rejected=1",
+        "stderr": None,
+    },
+    "wrong-size-hint": {
+        "status": -6,
+        "stdout": None,
+        "stderr": "assertion failed",
+    },
+    "wrong-size-alignment-hint": {
+        "status": -6,
+        "stdout": None,
+        "stderr": "assertion failed",
+    },
+    "wrong-alignment-hint": {
+        "status": -6,
+        "stdout": None,
+        "stderr": "assertion failed",
     },
     "corrupt-free-list": {
         "status": -6,
@@ -275,7 +334,17 @@ def main() -> int:
     compile_probe(cc, c_debug_bin, [c_mimalloc_object(cc, secure=False)], secure=False)
     compile_probe(cc, rust_debug_bin, [rust_staticlib([], "debug")], secure=False)
 
-    for case in ["encoded-next", "double-free", "invalid-free", "padding-overrun", "corrupt-free-list"]:
+    for case in [
+        "encoded-next",
+        "double-free",
+        "invalid-free",
+        "padding-overrun",
+        "wrong-heap",
+        "wrong-size-hint",
+        "wrong-size-alignment-hint",
+        "wrong-alignment-hint",
+        "corrupt-free-list",
+    ]:
         c_result = run_case(c_debug_bin, case)
         rust_result = run_case(rust_debug_bin, case)
         verify_case("C debug", case, c_result)

@@ -34,7 +34,9 @@ use crate::internal::{
     mi_page_slice_offset_of, mi_page_slice_start, mi_page_start, mi_page_thread_free,
     mi_page_usable_block_size, mi_theap_is_initialized,
 };
-use crate::options::{_mi_option_get_fast, mi_option_get_clamp, mi_option_t};
+use crate::options::{
+    _mi_error_message_fmt, _mi_option_get_fast, mi_option_get_clamp, mi_option_t,
+};
 use crate::stats::{MI_BIN_HUGE, bin_block_size};
 use crate::track::{
     MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
@@ -1436,10 +1438,9 @@ unsafe fn mi_find_page(
 ) -> *mut mi_page_t {
     let req_size = size.wrapping_sub(MI_PADDING_SIZE);
     if req_size > MI_MAX_ALLOC_SIZE {
-        _mi_error_message(
+        _mi_error_message_fmt(
             EOVERFLOW,
-            c"allocation request is too large (%zu bytes)\n".as_ptr(),
-            req_size,
+            format_args!("allocation request is too large ({req_size} bytes)\n"),
         );
         return ptr::null_mut();
     }
@@ -1505,10 +1506,9 @@ pub unsafe extern "C" fn _mi_malloc_generic(
 
     if page.is_null() {
         let req_size = size.wrapping_sub(MI_PADDING_SIZE);
-        _mi_error_message(
+        _mi_error_message_fmt(
             ENOMEM,
-            c"unable to allocate memory (%zu bytes)\n".as_ptr(),
-            req_size,
+            format_args!("unable to allocate memory ({req_size} bytes)\n"),
         );
         return ptr::null_mut();
     }

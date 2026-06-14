@@ -22,6 +22,7 @@ pub use crate::bits::{
     MI_ARCH_X64, MI_ARCH_X86, MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB,
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
+use crate::options::_mi_error_message_fmt;
 pub use crate::page::{
     _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
     _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, _mi_theap_page_reclaim,
@@ -741,11 +742,9 @@ pub unsafe fn mi_count_size_overflow(count: usize, size: usize, total: &mut usiz
     } else if !mi_mul_overflow(count, size, total) {
         false
     } else {
-        _mi_error_message(
+        _mi_error_message_fmt(
             75,
-            c"allocation request is too large (%zu * %zu bytes)\n".as_ptr(),
-            count,
-            size,
+            format_args!("allocation request is too large ({count} * {size} bytes)\n"),
         );
         *total = usize::MAX;
         true
@@ -1271,15 +1270,14 @@ pub unsafe fn mi_block_set_nextx(
 pub unsafe fn mi_block_next(page: *const mi_page_t, block: *const mi_block_t) -> *mut mi_block_t {
     let mut next = unsafe { mi_block_nextx(page.cast(), block, &(*page).keys) };
     if !next.is_null() && !mi_is_in_same_page(block.cast(), next.cast()) {
-        unsafe {
-            _mi_error_message(
-                14,
-                c"corrupted free list entry of size %zub at %p: value 0x%zx\n".as_ptr(),
+        _mi_error_message_fmt(
+            14,
+            format_args!(
+                "corrupted free list entry of size {}b at {block:p}: value 0x{:x}\n",
                 mi_page_block_size(page),
-                block,
-                next as usize,
-            );
-        }
+                next as usize
+            ),
+        );
         next = ptr::null_mut();
     }
     next

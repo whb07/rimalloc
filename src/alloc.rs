@@ -20,7 +20,7 @@ use crate::internal::{
     mi_theap_malloc_use_guarded, mi_unlikely,
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
-use crate::options::{mi_option_is_enabled, mi_option_t};
+use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{_mi_bin, MI_MAX_ALLOC_SIZE, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{
@@ -247,10 +247,9 @@ unsafe fn mi_theap_malloc_generic(
     );
     crate::mi_assert!((huge_alignment & 1) == 0);
     let Some(padded_size) = size.checked_add(MI_PADDING_SIZE) else {
-        crate::internal::_mi_error_message(
+        _mi_error_message_fmt(
             EOVERFLOW,
-            c"allocation request is too large (%zu bytes)\n".as_ptr(),
-            size,
+            format_args!("allocation request is too large ({size} bytes)\n"),
         );
         return ptr::null_mut();
     };
@@ -510,22 +509,17 @@ unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page
             && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
             && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
         {
-            crate::internal::_mi_error_message(
+            let msg = std::ffi::CStr::from_ptr(msg).to_string_lossy();
+            _mi_error_message_fmt(
                 EINVAL,
-                c"%s: invalid (unaligned) pointer: %p\n".as_ptr(),
-                msg,
-                p,
+                format_args!("{msg}: invalid (unaligned) pointer: {p:p}\n"),
             );
             return ptr::null_mut();
         }
         let page = _mi_safe_ptr_page(p);
         if !p.is_null() && page.is_null() {
-            crate::internal::_mi_error_message(
-                EINVAL,
-                c"%s: invalid pointer: %p\n".as_ptr(),
-                msg,
-                p,
-            );
+            let msg = std::ffi::CStr::from_ptr(msg).to_string_lossy();
+            _mi_error_message_fmt(EINVAL, format_args!("{msg}: invalid pointer: {p:p}\n"));
         }
         page
     } else {

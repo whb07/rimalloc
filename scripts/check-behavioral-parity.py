@@ -3296,10 +3296,14 @@ ARENA_FALLBACK_CAPTURE_C = r"""
 static int error_count;
 static int last_error;
 static size_t output_len;
+static int output_has_percent;
 
 static void output_cb(const char* msg, void* arg) {
   (void)arg;
-  if (msg != NULL) output_len += strlen(msg);
+  if (msg != NULL) {
+    output_len += strlen(msg);
+    if (strchr(msg, '%') != NULL) output_has_percent = 1;
+  }
 }
 
 static void error_cb(int err, void* arg) {
@@ -3358,7 +3362,7 @@ static int run_case(const char* name) {
   mi_free(p);
   if (heap != NULL) mi_heap_delete(heap);
 
-  printf("@@ARENA_FALLBACK case=%s managed=%d heap=%d ptr=%d in_arena=%d errno=%d errors=%d last_error=%d output=%zu\n",
+  printf("@@ARENA_FALLBACK case=%s managed=%d heap=%d ptr=%d in_arena=%d errno=%d errors=%d last_error=%d output=%zu output_has_percent=%d\n",
          name,
          managed,
          heap != NULL,
@@ -3367,7 +3371,8 @@ static int run_case(const char* name) {
          saved_errno,
          error_count,
          last_error,
-         output_len);
+         output_len,
+         output_has_percent);
   return 0;
 }
 
@@ -4517,7 +4522,7 @@ def validate_numa_affinity_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) 
 
 def parse_arena_fallback_capture(output: str) -> dict[str, str]:
     fields = output.strip().split()
-    if len(fields) != 10 or fields[0] != "@@ARENA_FALLBACK":
+    if len(fields) != 11 or fields[0] != "@@ARENA_FALLBACK":
         raise AssertionError(f"unexpected arena fallback output: {output!r}")
     values: dict[str, str] = {}
     for field in fields[1:]:
@@ -4551,6 +4556,8 @@ def validate_arena_fallback_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path)
         if expected["ptr"] == "0":
             if int(c_values["output"]) <= 0 or int(rust_values["output"]) <= 0:
                 raise AssertionError(f"{name} missing error output: C={c_values} Rust={rust_values}")
+            if c_values["output_has_percent"] != "0" or rust_values["output_has_percent"] != "0":
+                raise AssertionError(f"{name} unformatted error output: C={c_values} Rust={rust_values}")
 
 
 def main() -> int:

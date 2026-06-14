@@ -17,9 +17,9 @@ use crate::atomic::{mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_memo
 use crate::bits::MI_INTPTR_SIZE;
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_decrease, _mi_align_down_ptr,
-    _mi_arena_memid_is_suitable, _mi_error_message, _mi_is_power_of_two, _mi_memset_aligned,
-    _mi_option_get_fast, _mi_os_page_size, _mi_os_unprotect, _mi_ptr_page, _mi_safe_ptr_page,
-    _mi_theap_heap, _mi_theap_page_reclaim, EAGAIN, EFAULT, EINVAL, MI_BLOCK_TAG_GUARDED, MI_DEBUG,
+    _mi_arena_memid_is_suitable, _mi_is_power_of_two, _mi_memset_aligned, _mi_option_get_fast,
+    _mi_os_page_size, _mi_os_unprotect, _mi_ptr_page, _mi_safe_ptr_page, _mi_theap_heap,
+    _mi_theap_page_reclaim, EAGAIN, EFAULT, EINVAL, MI_BLOCK_TAG_GUARDED, MI_DEBUG,
     MI_ENCODE_FREELIST, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK,
     MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded,
     mi_block_set_next, mi_is_in_same_page, mi_page_all_free, mi_page_block_size,
@@ -28,7 +28,7 @@ use crate::internal::{
     mi_page_thread_free, mi_page_usable_block_size, mi_page_xthread_id, mi_ptr_encode_canary,
     mi_tf_block, mi_tf_create, mi_tf_is_owned, mi_theap_is_initialized,
 };
-use crate::options::{mi_option_is_enabled, mi_option_t};
+use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
     _mi_bin, _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_retire, _mi_page_unfull,
     MI_MEDIUM_MAX_OBJ_SIZE, mi_page_is_abandoned, mi_page_is_huge,
@@ -79,11 +79,10 @@ unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_bloc
         || mi_list_contains(page, (*page).local_free, block)
         || mi_list_contains(page, mi_page_thread_free(page), block)
     {
-        _mi_error_message(
+        let block_size = mi_page_block_size(page);
+        _mi_error_message_fmt(
             EAGAIN,
-            c"double free detected of block %p with size %zu\n".as_ptr(),
-            block,
-            mi_page_block_size(page),
+            format_args!("double free detected of block {block:p} with size {block_size}\n"),
         );
         return true;
     }
@@ -197,12 +196,11 @@ pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t)
     let mut size = 0usize;
     let mut wrong = 0usize;
     if !mi_verify_padding(page, block, &mut size, &mut wrong) {
-        _mi_error_message(
+        _mi_error_message_fmt(
             EFAULT,
-            c"buffer overflow in theap block %p of size %zu: write after %zu bytes\n".as_ptr(),
-            block,
-            size,
-            wrong,
+            format_args!(
+                "buffer overflow in theap block {block:p} of size {size}: write after {wrong} bytes\n"
+            ),
         );
     }
 }
@@ -440,17 +438,17 @@ unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page
             && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
             && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
         {
-            _mi_error_message(
+            let msg = std::ffi::CStr::from_ptr(msg).to_string_lossy();
+            _mi_error_message_fmt(
                 EINVAL,
-                c"%s: invalid (unaligned) pointer: %p\n".as_ptr(),
-                msg,
-                p,
+                format_args!("{msg}: invalid (unaligned) pointer: {p:p}\n"),
             );
             return ptr::null_mut();
         }
         let page = _mi_safe_ptr_page(p);
         if !p.is_null() && page.is_null() {
-            _mi_error_message(EINVAL, c"%s: invalid pointer: %p\n".as_ptr(), msg, p);
+            let msg = std::ffi::CStr::from_ptr(msg).to_string_lossy();
+            _mi_error_message_fmt(EINVAL, format_args!("{msg}: invalid pointer: {p:p}\n"));
         }
         page
     } else {

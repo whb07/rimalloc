@@ -13,11 +13,12 @@ use core::mem::size_of;
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
 use crate::internal::{
-    _mi_align_up_ptr, _mi_error_message, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero,
-    _mi_ptr_page, MI_BLOCK_TAG_ALIGNED, MI_GUARDED, mi_count_size_overflow, mi_likely,
+    _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero, _mi_ptr_page,
+    MI_BLOCK_TAG_ALIGNED, MI_GUARDED, mi_count_size_overflow, mi_likely,
     mi_page_set_has_interior_pointers, mi_page_usable_block_size, mi_theap_malloc_use_guarded,
     mi_unlikely,
 };
+use crate::options::_mi_error_message_fmt;
 use crate::page::{MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, _mi_theap_empty_get, MI_THEAP_INITASNULL};
 use crate::track::{mi_track_align, mi_track_malloc};
@@ -90,12 +91,11 @@ pub unsafe fn mi_theap_malloc_guarded_aligned(
         alignment >= MI_PAGE_MAX_OVERALLOC_ALIGN
             || size > (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE - alignment),
     ) {
-        _mi_error_message(
+        _mi_error_message_fmt(
             MI_EOVERFLOW,
-            c"(guarded) aligned allocation request is too large (size %zu, alignment %zu)\n"
-                .as_ptr(),
-            size,
-            alignment,
+            format_args!(
+                "(guarded) aligned allocation request is too large (size {size}, alignment {alignment})\n"
+            ),
         );
         return core::ptr::null_mut();
     }
@@ -136,13 +136,11 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
     let oversize: usize;
     if mi_unlikely(alignment > MI_PAGE_MAX_OVERALLOC_ALIGN) {
         if mi_unlikely(offset != 0) {
-            _mi_error_message(
+            _mi_error_message_fmt(
                 MI_EOVERFLOW,
-                c"aligned allocation with a large alignment cannot be used with an alignment offset (size %zu, alignment %zu, offset %zu)\n"
-                    .as_ptr(),
-                size,
-                alignment,
-                offset,
+                format_args!(
+                    "aligned allocation with a large alignment cannot be used with an alignment offset (size {size}, alignment {alignment}, offset {offset})\n"
+                ),
             );
             return core::ptr::null_mut();
         }
@@ -212,11 +210,11 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_generic(
 ) -> *mut c_void {
     crate::mi_assert_internal!(alignment != 0 && _mi_is_power_of_two(alignment));
     if mi_unlikely(size > (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE)) {
-        _mi_error_message(
+        _mi_error_message_fmt(
             MI_EOVERFLOW,
-            c"aligned allocation request is too large (size %zu, alignment %zu)\n".as_ptr(),
-            size,
-            alignment,
+            format_args!(
+                "aligned allocation request is too large (size {size}, alignment {alignment})\n"
+            ),
         );
         return core::ptr::null_mut();
     }
@@ -244,12 +242,11 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at(
 ) -> *mut c_void {
     if mi_unlikely(alignment == 0 || !_mi_is_power_of_two(alignment)) {
         if crate::internal::MI_DEBUG > 0 {
-            _mi_error_message(
+            _mi_error_message_fmt(
                 MI_EOVERFLOW,
-                c"aligned allocation requires the alignment to be a power-of-two (size %zu, alignment %zu)\n"
-                    .as_ptr(),
-                size,
-                alignment,
+                format_args!(
+                    "aligned allocation requires the alignment to be a power-of-two (size {size}, alignment {alignment})\n"
+                ),
             );
         }
         return core::ptr::null_mut();

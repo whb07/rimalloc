@@ -65,6 +65,21 @@ fn production_sources_do_not_use_panic_prone_shortcuts() {
 }
 
 #[test]
+fn production_profiles_abort_on_panic() {
+    let manifest = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"))
+        .expect("read Cargo.toml");
+
+    assert!(
+        manifest.contains("[profile.dev]\npanic = \"abort\""),
+        "dev profile must abort instead of unwinding across C ABI callers"
+    );
+    assert!(
+        manifest.contains("[profile.release]\npanic = \"abort\""),
+        "release profile must abort instead of unwinding across C ABI callers"
+    );
+}
+
+#[test]
 fn mimalloc_assert_fail_aborts_instead_of_unwinding() {
     const CHILD_ENV: &str = "MI_FFI_PANIC_AUDIT_ASSERT_CHILD";
 

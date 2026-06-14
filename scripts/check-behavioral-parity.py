@@ -39,6 +39,12 @@ static size_t registered_output_a = 0;
 static size_t registered_output_b = 0;
 static size_t registered_error_a = 0;
 static size_t registered_error_b = 0;
+static size_t reentrant_output_calls = 0;
+static int reentrant_output_alloc_ok = 1;
+static size_t reentrant_error_calls = 0;
+static int reentrant_error_alloc_ok = 1;
+static size_t reentrant_deferred_calls = 0;
+static int reentrant_deferred_alloc_ok = 1;
 static size_t deferred_calls = 0;
 static size_t deferred_force_true = 0;
 static size_t deferred_force_false = 0;
@@ -129,6 +135,13 @@ static void output_callback(const char* msg, void* arg) {
   }
 }
 
+static int callback_alloc_roundtrip(size_t size) {
+  void* p = mi_malloc(size);
+  int ok = (p != NULL && mi_check_owned(p) && mi_usable_size(p) >= size);
+  mi_free(p);
+  return ok;
+}
+
 static void registered_output_callback_a(const char* msg, void* arg) {
   if (msg != NULL && msg[0] != '\0' && arg == (void*)0xA11CE) {
     registered_output_a++;
@@ -139,6 +152,12 @@ static void registered_output_callback_b(const char* msg, void* arg) {
   if (msg != NULL && msg[0] != '\0' && arg == (void*)0xB0B) {
     registered_output_b++;
   }
+}
+
+static void reentrant_output_callback(const char* msg, void* arg) {
+  if (msg == NULL || msg[0] == '\0' || arg != (void*)0xCA11) return;
+  reentrant_output_calls++;
+  if (!callback_alloc_roundtrip(31)) reentrant_output_alloc_ok = 0;
 }
 
 static void registered_error_callback_a(int err, void* arg) {
@@ -153,6 +172,12 @@ static void registered_error_callback_b(int err, void* arg) {
   }
 }
 
+static void reentrant_error_callback(int err, void* arg) {
+  if (err == 0 || arg != (void*)0xECA11) return;
+  reentrant_error_calls++;
+  if (!callback_alloc_roundtrip(37)) reentrant_error_alloc_ok = 0;
+}
+
 static void registered_deferred_callback(bool force, unsigned long long heartbeat, void* arg) {
   deferred_calls++;
   if (force) deferred_force_true++;
@@ -160,6 +185,14 @@ static void registered_deferred_callback(bool force, unsigned long long heartbea
   if (arg == (void*)0xDEF) deferred_arg_seen = 1;
   if (heartbeat <= deferred_last_heartbeat) deferred_heartbeat_monotonic = 0;
   deferred_last_heartbeat = heartbeat;
+}
+
+static void reentrant_deferred_callback(bool force, unsigned long long heartbeat, void* arg) {
+  (void)force;
+  (void)heartbeat;
+  if (arg != (void*)0xDCA11) return;
+  reentrant_deferred_calls++;
+  if (!callback_alloc_roundtrip(43)) reentrant_deferred_alloc_ok = 0;
 }
 
 static void arena_output_callback(const char* msg, void* arg) {
@@ -228,11 +261,17 @@ struct managed_commit_result {
   size_t commit_bytes;
   int arg_seen;
   int zero_state_seen;
+  size_t alloc_calls;
+  int alloc_ok;
 };
 
 static bool managed_commit_callback(bool commit, void* start, size_t size, bool* is_zero, void* user_arg) {
   struct managed_commit_result* result = (struct managed_commit_result*)user_arg;
   if (result != NULL) {
+    if (result->alloc_calls == 0) {
+      result->alloc_calls++;
+      result->alloc_ok = callback_alloc_roundtrip(53);
+    }
     if (commit) {
       result->commit_calls++;
       result->commit_bytes += size;
@@ -420,6 +459,13 @@ struct heap_visit_result {
   int block_fields_ok;
 };
 
+struct heap_visit_alloc_result {
+  const mi_heap_t* expected_heap;
+  size_t calls;
+  int heap_matches;
+  int alloc_ok;
+};
+
 static bool heap_visit_counting_visitor(const mi_heap_t* heap, const mi_heap_area_t* area, void* block, size_t block_size, void* arg) {
   struct heap_visit_result* result = (struct heap_visit_result*)arg;
   if (heap != result->expected_heap) result->heap_matches = 0;
@@ -445,6 +491,17 @@ static bool heap_visit_stop_visitor(const mi_heap_t* heap, const mi_heap_area_t*
   struct heap_visit_result* result = (struct heap_visit_result*)arg;
   result->areas++;
   return false;
+}
+
+static bool heap_visit_allocating_visitor(const mi_heap_t* heap, const mi_heap_area_t* area, void* block, size_t block_size, void* arg) {
+  (void)area;
+  (void)block;
+  (void)block_size;
+  struct heap_visit_alloc_result* result = (struct heap_visit_alloc_result*)arg;
+  result->calls++;
+  if (heap != result->expected_heap) result->heap_matches = 0;
+  if (!callback_alloc_roundtrip(47)) result->alloc_ok = 0;
+  return true;
 }
 
 static void* thread_lifecycle_worker(void* arg) {
@@ -1074,6 +1131,14 @@ int main(void) {
   result_bool("options_print_registered_output_structure", stats_output_seen_version && stats_output_seen_option && stats_output_seen_debug && stats_output_seen_secure && stats_output_seen_tracking);
   mi_register_output(NULL, NULL);
 
+  reentrant_output_calls = 0;
+  reentrant_output_alloc_ok = 1;
+  mi_register_output(reentrant_output_callback, (void*)0xCA11);
+  mi_options_print();
+  result_bool("output_callback_alloc_called", reentrant_output_calls > 0);
+  result_bool("output_callback_alloc_ok", reentrant_output_alloc_ok);
+  mi_register_output(NULL, NULL);
+
   registered_error_a = 0;
   registered_error_b = 0;
   mi_register_error(registered_error_callback_a, (void*)0xE11A);
@@ -1089,6 +1154,15 @@ int main(void) {
   err_alloc = mi_calloc(overflow_count, 2);
   (void)err_alloc;
   result_bool("register_error_clear", registered_error_b == error_after_clear);
+
+  reentrant_error_calls = 0;
+  reentrant_error_alloc_ok = 1;
+  mi_register_error(reentrant_error_callback, (void*)0xECA11);
+  err_alloc = mi_calloc(overflow_count, 2);
+  (void)err_alloc;
+  result_bool("error_callback_alloc_called", reentrant_error_calls > 0);
+  result_bool("error_callback_alloc_ok", reentrant_error_alloc_ok);
+  mi_register_error(NULL, NULL);
 
   deferred_calls = 0;
   deferred_force_true = 0;
@@ -1108,6 +1182,16 @@ int main(void) {
   size_t deferred_after_clear = deferred_calls;
   mi_collect(true);
   result_bool("deferred_free_clear", deferred_calls == deferred_after_clear);
+
+  reentrant_deferred_calls = 0;
+  reentrant_deferred_alloc_ok = 1;
+  mi_register_deferred_free(reentrant_deferred_callback, (void*)0xDCA11);
+  mi_collect(false);
+  mi_collect(true);
+  result_bool("deferred_callback_alloc_called", reentrant_deferred_calls > 0);
+  result_bool("deferred_callback_alloc_ok", reentrant_deferred_alloc_ok);
+  mi_register_deferred_free(NULL, NULL);
+
   result_long("generic_collect_threshold_1000_status", generic_collect_case_status(1000, 2));
   result_long("generic_collect_threshold_2000_status", generic_collect_case_status(2000, 1));
 
@@ -1875,6 +1959,11 @@ int main(void) {
   struct heap_visit_result visit_stop = { heap, 0, 0, 1, 1, 1 };
   bool visit_stop_ok = heap != NULL && mi_heap_visit_blocks(heap, true, heap_visit_stop_visitor, &visit_stop);
   result_bool("heap_visit_stop_returns_false", !visit_stop_ok && visit_stop.areas == 1);
+  struct heap_visit_alloc_result visit_alloc = { heap, 0, 1, 1 };
+  bool visit_alloc_ok = heap != NULL && mi_heap_visit_blocks(heap, true, heap_visit_allocating_visitor, &visit_alloc);
+  result_bool("heap_visit_callback_alloc_success", visit_alloc_ok);
+  result_bool("heap_visit_callback_alloc_called", visit_alloc_ok && visit_alloc.calls > 0);
+  result_bool("heap_visit_callback_alloc_ok", visit_alloc.heap_matches && visit_alloc.alloc_ok);
   mi_free(visit_a);
   mi_free(visit_b);
 
@@ -2564,7 +2653,7 @@ int main(void) {
   size_t managed_map_size = managed_size + mi_arena_min_alignment();
   void* managed_map = mmap(NULL, managed_map_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   void* managed_mem = managed_map == MAP_FAILED ? MAP_FAILED : (void*)(((uintptr_t)managed_map + mi_arena_min_alignment() - 1) & ~(uintptr_t)(mi_arena_min_alignment() - 1));
-  struct managed_commit_result managed_result = { 0, 0, 0, 0, 0 };
+  struct managed_commit_result managed_result = { 0, 0, 0, 0, 0, 0, 1 };
   mi_arena_id_t managed_arena_id = NULL;
   bool managed_ok = managed_mem != MAP_FAILED && mi_manage_memory(
     managed_mem,
@@ -2580,6 +2669,8 @@ int main(void) {
   result_bool("manage_memory_callback_registered_arena", managed_ok && managed_arena_id != NULL);
   result_bool("manage_memory_callback_invoked", managed_result.commit_calls > 0 && managed_result.commit_bytes > 0);
   result_bool("manage_memory_callback_arg_seen", managed_result.arg_seen);
+  result_bool("manage_memory_callback_alloc_called", managed_result.alloc_calls > 0);
+  result_bool("manage_memory_callback_alloc_ok", managed_result.alloc_ok);
   result_size("manage_memory_commit_calls_after_register", managed_result.commit_calls);
   result_size("manage_memory_decommit_calls_after_register", managed_result.decommit_calls);
   size_t managed_area_size = 0;
@@ -2601,7 +2692,7 @@ int main(void) {
 
   void* fail_map = mmap(NULL, managed_map_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   void* fail_mem = fail_map == MAP_FAILED ? MAP_FAILED : (void*)(((uintptr_t)fail_map + mi_arena_min_alignment() - 1) & ~(uintptr_t)(mi_arena_min_alignment() - 1));
-  struct managed_commit_result fail_result = { 0, 0, 0, 0, 0 };
+  struct managed_commit_result fail_result = { 0, 0, 0, 0, 0, 0, 1 };
   mi_arena_id_t fail_arena_id = NULL;
   bool fail_ok = fail_mem != MAP_FAILED && mi_manage_memory(
     fail_mem,

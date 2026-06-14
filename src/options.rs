@@ -612,7 +612,9 @@ fn mi_out_get_default(parg: Option<&mut *mut c_void>) -> mi_output_fun {
 
 #[allow(dead_code)]
 fn mi_add_stderr_output() {
-    debug_assert!(mi_out_default.load(Ordering::Acquire).is_null());
+    if !mi_out_default.load(Ordering::Acquire).is_null() {
+        return;
+    }
     mi_out_buf_flush(mi_out_stderr, false, ptr::null_mut());
     mi_out_default.store(mi_output_fun_to_ptr(mi_out_buf_stderr), Ordering::Release);
     mi_out_arg.store(ptr::null_mut(), Ordering::Release);

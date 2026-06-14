@@ -10,13 +10,14 @@ use core::ffi::{c_long, c_void};
 use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use std::sync::Once;
-use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bits::MI_SIZE_SIZE;
 use crate::internal::{_mi_allocator_done, _mi_error_message, mi_memid_t, mi_memkind_t};
 use crate::options::{
-    _mi_options_init, _mi_warning_message_fmt, mi_option_get, mi_option_get_clamp, mi_option_t,
+    _mi_options_init, _mi_options_post_init, _mi_warning_message_fmt, mi_option_get,
+    mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
 };
 use crate::stats::{_mi_stats_merge_into, mi_stat_count_t, mi_stats_header_init, mi_stats_t};
 use crate::types::{
@@ -139,6 +140,8 @@ pub const fn MI_STATS_NULL() -> mi_stats_t {
 #[allow(dead_code)]
 static mut subprocs_lock: mi_lock_t = mi_lock_t::new();
 static SUBPROC_MAIN_INIT: Once = Once::new();
+static OPTIONS_POST_INIT_STATE: AtomicUsize = AtomicUsize::new(0);
+static PROCESS_DONE: AtomicBool = AtomicBool::new(false);
 static SUBPROC_TOTAL_COUNT: AtomicUsize = AtomicUsize::new(0);
 static mut subproc_main: MaybeUninit<MiSubprocPrefix> = MaybeUninit::uninit();
 static mut subprocs: *mut mi_subproc_t = ptr::null_mut();
@@ -1631,6 +1634,13 @@ pub unsafe extern "C" fn _mi_auto_process_init() {
     }
     mi_mark_main_thread();
     mi_tls_slots_init();
+    if OPTIONS_POST_INIT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        _mi_options_post_init();
+        OPTIONS_POST_INIT_STATE.store(2, Ordering::Release);
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1644,17 +1654,35 @@ pub unsafe extern "C" fn mi_process_init() {
 /// # Safety
 /// Performs process-global teardown for the bounded init/subproc surface and must not race with concurrent mutation of it.
 pub unsafe extern "C" fn _mi_auto_process_done() {
-    mi_subproc_main_init();
-    unsafe {
-        mi_subprocs_unsafe_destroy_all();
-        _mi_process_is_initialized = false;
-        _mi_allocator_done();
+    if mi_option_get(mi_option_t::mi_option_destroy_on_exit) > 1 {
+        return;
     }
+    unsafe { mi_process_done() };
 }
 
 #[unsafe(no_mangle)]
 /// # Safety
 /// Public C ABI wrapper for process-global teardown.
 pub unsafe extern "C" fn mi_process_done() {
-    unsafe { _mi_auto_process_done() };
+    if !unsafe { _mi_process_is_initialized } {
+        return;
+    }
+    if PROCESS_DONE.swap(true, Ordering::AcqRel) {
+        return;
+    }
+
+    unsafe {
+        if mi_option_is_enabled(mi_option_t::mi_option_destroy_on_exit) {
+            mi_subprocs_unsafe_destroy_all();
+        } else {
+            crate::stats::mi_heap_stats_merge_to_subproc(mi_heap_main());
+        }
+        if mi_option_is_enabled(mi_option_t::mi_option_show_stats)
+            || mi_option_is_enabled(mi_option_t::mi_option_verbose)
+        {
+            crate::stats::mi_subproc_stats_print_out(mi_subproc_main(), None, ptr::null_mut());
+        }
+        mi_tls_slots_done();
+        _mi_allocator_done();
+    }
 }

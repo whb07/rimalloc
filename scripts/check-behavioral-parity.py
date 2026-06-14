@@ -2496,6 +2496,59 @@ int main(void) {
 }
 """
 
+PROCESS_LIFECYCLE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+void _mi_auto_process_done(void);
+
+static char output_buf[16384];
+static size_t output_len = 0;
+static size_t output_callbacks = 0;
+
+static void capture_output(const char* msg, void* arg) {
+  (void)arg;
+  if (msg == NULL || msg[0] == 0) return;
+  output_callbacks++;
+  size_t len = strlen(msg);
+  size_t room = sizeof(output_buf) - output_len - 1;
+  if (len > room) len = room;
+  memcpy(output_buf + output_len, msg, len);
+  output_len += len;
+  output_buf[output_len] = 0;
+}
+
+int main(void) {
+  char line[256];
+  mi_register_output(capture_output, NULL);
+  mi_process_init();
+  mi_process_init();
+  void* p = mi_malloc(1024);
+  if (p != NULL) {
+    memset(p, 0xA5, 1024);
+    mi_free(p);
+  }
+  _mi_auto_process_done();
+  mi_process_done();
+  mi_process_done();
+
+  int len = snprintf(line,
+                     sizeof(line),
+                     "@@PROCESS_LIFECYCLE callbacks=%zu stats=%d process=%d option=%d len=%zu\n",
+                     output_callbacks,
+                     strstr(output_buf, "heap ") != NULL ? 1 : 0,
+                     strstr(output_buf, "process") != NULL ? 1 : 0,
+                     strstr(output_buf, "option '") != NULL ? 1 : 0,
+                     output_len);
+  if (len > 0) (void)write(1, line, (size_t)len);
+  return p == NULL ? 1 : 0;
+}
+"""
+
 
 def rust_staticlib() -> pathlib.Path:
     subprocess.run(
@@ -3025,6 +3078,38 @@ def validate_throttle_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> No
             raise AssertionError(f"{label} throttle mismatch: C={c_counts} Rust={rust_counts}")
 
 
+def parse_process_lifecycle_capture(output: str) -> dict[str, int]:
+    fields = output.strip().split()
+    if len(fields) != 6 or fields[0] != "@@PROCESS_LIFECYCLE":
+        raise AssertionError(f"unexpected process lifecycle output: {output!r}")
+    values: dict[str, int] = {}
+    for field in fields[1:]:
+        key, value = field.split("=", 1)
+        values[key] = int(value)
+    return values
+
+
+def process_lifecycle_case_matrix() -> list[tuple[str, dict[str, str]]]:
+    return [
+        ("default", {}),
+        ("show_stats", {"mimalloc_show_stats": "1"}),
+        ("verbose", {"mimalloc_verbose": "1"}),
+        ("destroy_on_exit", {"mimalloc_destroy_on_exit": "1"}),
+        ("auto_done_skip", {"mimalloc_destroy_on_exit": "2"}),
+    ]
+
+
+def validate_process_lifecycle_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
+    for label, env in process_lifecycle_case_matrix():
+        c_output = run_with_env(c_bin, env, label)
+        rust_output = run_with_env(rust_bin, env, label)
+        c_counts = parse_process_lifecycle_capture(c_output)
+        rust_counts = parse_process_lifecycle_capture(rust_output)
+        compared = ("stats", "process", "option")
+        if tuple(c_counts[key] for key in compared) != tuple(rust_counts[key] for key in compared):
+            raise AssertionError(f"{label} process lifecycle mismatch: C={c_counts} Rust={rust_counts}")
+
+
 def main() -> int:
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
@@ -3036,11 +3121,13 @@ def main() -> int:
     process_capture = BUILD_DIR / "process-capture.c"
     env_capture = BUILD_DIR / "env-capture.c"
     throttle_capture = BUILD_DIR / "throttle-capture.c"
+    process_lifecycle = BUILD_DIR / "process-lifecycle.c"
     scenario.write_text(SCENARIO_C)
     json_capture.write_text(JSON_CAPTURE_C)
     process_capture.write_text(PROCESS_CAPTURE_C)
     env_capture.write_text(ENV_CAPTURE_C)
     throttle_capture.write_text(THROTTLE_CAPTURE_C)
+    process_lifecycle.write_text(PROCESS_LIFECYCLE_C)
 
     rust_lib = rust_staticlib()
     c_bin = BUILD_DIR / "behavioral-parity-c"
@@ -3053,6 +3140,8 @@ def main() -> int:
     rust_env_bin = BUILD_DIR / "env-capture-rust"
     c_throttle_bin = BUILD_DIR / "throttle-capture-c"
     rust_throttle_bin = BUILD_DIR / "throttle-capture-rust"
+    c_lifecycle_bin = BUILD_DIR / "process-lifecycle-c"
+    rust_lifecycle_bin = BUILD_DIR / "process-lifecycle-rust"
 
     compile_binary(cc, c_bin, [ROOT / "mimalloc-3.3.2/src/static.c", scenario])
     compile_binary(cc, rust_bin, [scenario, rust_lib])
@@ -3064,6 +3153,8 @@ def main() -> int:
     compile_binary(cc, rust_env_bin, [env_capture, rust_lib])
     compile_binary(cc, c_throttle_bin, [ROOT / "mimalloc-3.3.2/src/static.c", throttle_capture])
     compile_binary(cc, rust_throttle_bin, [throttle_capture, rust_lib])
+    compile_binary(cc, c_lifecycle_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_lifecycle])
+    compile_binary(cc, rust_lifecycle_bin, [process_lifecycle, rust_lib])
 
     c_output = run(c_bin)
     rust_output = run(rust_bin)
@@ -3101,11 +3192,18 @@ def main() -> int:
         print(f"warning/error throttle parity mismatch: {err}", file=sys.stderr)
         return 1
 
+    try:
+        validate_process_lifecycle_capture(c_lifecycle_bin, rust_lifecycle_bin)
+    except AssertionError as err:
+        print(f"process lifecycle parity mismatch: {err}", file=sys.stderr)
+        return 1
+
     print("ok: C and Rust mimalloc behavior smoke outputs match")
     print("ok: C and Rust mimalloc JSON schemas parse and match")
     print("ok: C and Rust mimalloc process info is within tolerance")
     print("ok: C and Rust mimalloc environment option parsing matches")
     print("ok: C and Rust mimalloc warning/error throttling matches")
+    print("ok: C and Rust mimalloc process lifecycle output matches")
     print(c_output, end="")
     return 0
 

@@ -501,6 +501,11 @@ struct heap_visit_alloc_result {
   int alloc_ok;
 };
 
+struct subproc_visit_alloc_result {
+  size_t calls;
+  int alloc_ok;
+};
+
 static bool heap_visit_counting_visitor(const mi_heap_t* heap, const mi_heap_area_t* area, void* block, size_t block_size, void* arg) {
   struct heap_visit_result* result = (struct heap_visit_result*)arg;
   if (heap != result->expected_heap) result->heap_matches = 0;
@@ -536,6 +541,14 @@ static bool heap_visit_allocating_visitor(const mi_heap_t* heap, const mi_heap_a
   result->calls++;
   if (heap != result->expected_heap) result->heap_matches = 0;
   if (!callback_alloc_roundtrip(47)) result->alloc_ok = 0;
+  return true;
+}
+
+static bool subproc_visit_allocating_callback(mi_heap_t* heap, void* arg) {
+  if (heap == NULL || arg == NULL) return false;
+  struct subproc_visit_alloc_result* result = (struct subproc_visit_alloc_result*)arg;
+  result->calls++;
+  if (!callback_alloc_roundtrip(59)) result->alloc_ok = 0;
   return true;
 }
 
@@ -3219,6 +3232,11 @@ int main(void) {
   result_bool("subproc_visit_heaps_stops_on_false",
               !mi_subproc_visit_heaps(mi_subproc_current(), subproc_visit_stop_callback, &subproc_visit_stop_count) &&
               subproc_visit_stop_count == 1);
+  struct subproc_visit_alloc_result subproc_visit_alloc = { 0, 1 };
+  result_bool("subproc_visit_heaps_callback_alloc_success",
+              mi_subproc_visit_heaps(mi_subproc_current(), subproc_visit_allocating_callback, &subproc_visit_alloc));
+  result_bool("subproc_visit_heaps_callback_alloc_called", subproc_visit_alloc.calls > 0);
+  result_bool("subproc_visit_heaps_callback_alloc_ok", subproc_visit_alloc.alloc_ok);
   mi_subproc_id_t null_subproc = { NULL };
   size_t subproc_visit_null_count = 0;
   result_bool("subproc_visit_heaps_rejects_null_subproc",

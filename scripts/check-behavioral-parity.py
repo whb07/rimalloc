@@ -848,6 +848,45 @@ static int free_small_case_status(int op) {
   return -3;
 }
 
+static int free_hint_case_status(int op) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+    switch (op) {
+      case 0: {
+        void* p = mi_malloc(32);
+        if (p == NULL) _exit(10);
+        mi_free_size(p, 1024 * 1024);
+        _exit(0);
+      }
+      case 1: {
+        void* p = mi_malloc_aligned_at(32, 64, 32);
+        if (p == NULL) _exit(11);
+        mi_free_size_aligned(p, 32, 64);
+        _exit(0);
+      }
+      case 2: {
+        void* p = mi_malloc_aligned_at(32, 64, 32);
+        if (p == NULL) _exit(12);
+        mi_free_aligned(p, 64);
+        _exit(0);
+      }
+      default:
+        _exit(41);
+    }
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static int realloc_failure_case_status(int op) {
   fflush(stdout);
   pid_t pid = fork();
@@ -1146,6 +1185,9 @@ int main(void) {
   size_t free_size_aligned_usable = (free_size_aligned == NULL ? 0 : mi_usable_size(free_size_aligned));
   result_bool("free_size_aligned_allocated", is_aligned_at(free_size_aligned, 128, 0) && free_size_aligned_usable >= 75);
   mi_free_size_aligned(free_size_aligned, 75, 128);
+  result_size("free_hint_oversize_status", (size_t)free_hint_case_status(0));
+  result_size("free_hint_size_aligned_wrong_alignment_status", (size_t)free_hint_case_status(1));
+  result_size("free_hint_aligned_wrong_alignment_status", (size_t)free_hint_case_status(2));
   mi_collect(true);
   mi_stats_t free_hint_after;
   mi_stats_init(&free_hint_after);
@@ -3241,6 +3283,63 @@ int main(void) {
 }
 """
 
+FREE_HINT_RELEASE_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+static int free_hint_case_status(int op) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+    switch (op) {
+      case 0: {
+        void* p = mi_malloc(32);
+        if (p == NULL) _exit(10);
+        mi_free_size(p, 1024 * 1024);
+        _exit(0);
+      }
+      case 1: {
+        void* p = mi_malloc_aligned_at(32, 64, 32);
+        if (p == NULL) _exit(11);
+        mi_free_size_aligned(p, 32, 64);
+        _exit(0);
+      }
+      case 2: {
+        void* p = mi_malloc_aligned_at(32, 64, 32);
+        if (p == NULL) _exit(12);
+        mi_free_aligned(p, 64);
+        _exit(0);
+      }
+      default:
+        _exit(41);
+    }
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
+int main(void) {
+  printf("@@FREE_HINT_RELEASE oversize=%d size_aligned=%d aligned=%d\n",
+         free_hint_case_status(0),
+         free_hint_case_status(1),
+         free_hint_case_status(2));
+  return 0;
+}
+"""
+
 REDIRECT_STATIC_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -3475,6 +3574,22 @@ def rust_staticlib() -> pathlib.Path:
     )
     if not libs:
         raise SystemExit("no Rust staticlib artifact found")
+    return libs[0]
+
+
+def rust_staticlib_release() -> pathlib.Path:
+    subprocess.run(
+        ["cargo", "rustc", "--release", "--lib", "--", "--crate-type", "staticlib"],
+        cwd=ROOT,
+        check=True,
+    )
+    libs = sorted(
+        (ROOT / "target/release/deps").glob("libmechanical_mimalloc-*.a"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not libs:
+        raise SystemExit("no Rust release staticlib artifact found")
     return libs[0]
 
 
@@ -4275,6 +4390,7 @@ def main() -> int:
     throttle_capture = BUILD_DIR / "throttle-capture.c"
     process_lifecycle = BUILD_DIR / "process-lifecycle.c"
     numa_affinity_capture = BUILD_DIR / "numa-affinity-capture.c"
+    free_hint_release_capture = BUILD_DIR / "free-hint-release-capture.c"
     redirect_static_capture = BUILD_DIR / "redirect-static-capture.c"
     redirect_dynamic_capture = BUILD_DIR / "redirect-dynamic-capture.c"
     scenario.write_text(SCENARIO_C)
@@ -4287,10 +4403,12 @@ def main() -> int:
     throttle_capture.write_text(THROTTLE_CAPTURE_C)
     process_lifecycle.write_text(PROCESS_LIFECYCLE_C)
     numa_affinity_capture.write_text(NUMA_AFFINITY_CAPTURE_C)
+    free_hint_release_capture.write_text(FREE_HINT_RELEASE_CAPTURE_C)
     redirect_static_capture.write_text(REDIRECT_STATIC_CAPTURE_C)
     redirect_dynamic_capture.write_text(REDIRECT_DYNAMIC_CAPTURE_C)
 
     rust_lib = rust_staticlib()
+    rust_release_lib = rust_staticlib_release()
     rust_shared = rust_cdylib()
     c_bin = BUILD_DIR / "behavioral-parity-c"
     rust_bin = BUILD_DIR / "behavioral-parity-rust"
@@ -4312,6 +4430,8 @@ def main() -> int:
     rust_lifecycle_bin = BUILD_DIR / "process-lifecycle-rust"
     c_numa_affinity_bin = BUILD_DIR / "numa-affinity-c"
     rust_numa_affinity_bin = BUILD_DIR / "numa-affinity-rust"
+    c_free_hint_release_bin = BUILD_DIR / "free-hint-release-c"
+    rust_free_hint_release_bin = BUILD_DIR / "free-hint-release-rust"
     c_redirect_static_bin = BUILD_DIR / "redirect-static-c"
     rust_redirect_static_bin = BUILD_DIR / "redirect-static-rust"
     c_redirect_dynamic_bin = BUILD_DIR / "redirect-dynamic-c"
@@ -4343,6 +4463,13 @@ def main() -> int:
     compile_binary(cc, rust_lifecycle_bin, [process_lifecycle, rust_lib])
     compile_binary(cc, c_numa_affinity_bin, [ROOT / "mimalloc-3.3.2/src/static.c", numa_affinity_capture])
     compile_binary(cc, rust_numa_affinity_bin, [numa_affinity_capture, rust_lib])
+    compile_binary(
+        cc,
+        c_free_hint_release_bin,
+        [ROOT / "mimalloc-3.3.2/src/static.c", free_hint_release_capture],
+        ["-DNDEBUG"],
+    )
+    compile_binary(cc, rust_free_hint_release_bin, [free_hint_release_capture, rust_release_lib], ["-DNDEBUG"])
     compile_binary(
         cc,
         c_redirect_static_bin,
@@ -4434,6 +4561,16 @@ def main() -> int:
         print(f"NUMA affinity parity mismatch: {err}", file=sys.stderr)
         return 1
 
+    c_free_hint_release = run(c_free_hint_release_bin)
+    rust_free_hint_release = run(rust_free_hint_release_bin)
+    if c_free_hint_release != rust_free_hint_release:
+        print("free hint release parity mismatch", file=sys.stderr)
+        print("--- C mimalloc ---", file=sys.stderr)
+        print(c_free_hint_release, file=sys.stderr)
+        print("--- Rust mimalloc ---", file=sys.stderr)
+        print(rust_free_hint_release, file=sys.stderr)
+        return 1
+
     try:
         validate_redirect_capture(
             c_redirect_static_bin,
@@ -4457,6 +4594,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc warning/error throttling matches")
     print("ok: C and Rust mimalloc process lifecycle output matches")
     print("ok: C and Rust mimalloc NUMA affinity behavior matches")
+    print("ok: C and Rust mimalloc release free-hint behavior matches")
     print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")
     print(c_output, end="")
     return 0

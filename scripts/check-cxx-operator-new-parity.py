@@ -12,7 +12,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BUILD_DIR = ROOT / "target/cxx-operator-new-parity"
-STANDARDS = ["c++17", "c++20"]
+STANDARDS = ["c++11", "c++14", "c++17", "c++20"]
 
 PROBE = r"""
 #include <mimalloc.h>
@@ -146,6 +146,26 @@ def rust_staticlib() -> pathlib.Path:
     return libs[0]
 
 
+def c_static_object(cxx: str) -> pathlib.Path:
+    obj = BUILD_DIR / "mimalloc-static-cxx17.o"
+    run(
+        [
+            cxx,
+            "-std=c++17",
+            "-DMI_MALLOC_OVERRIDE=0",
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/include"),
+            "-I",
+            str(ROOT / "mimalloc-3.3.2/src"),
+            "-c",
+            str(ROOT / "mimalloc-3.3.2/src/static.c"),
+            "-o",
+            str(obj),
+        ]
+    )
+    return obj
+
+
 def compile_probe(
     cxx: str,
     standard: str,
@@ -175,8 +195,6 @@ def compile_probe(
     )
     if completed.returncode == 0:
         return True
-    if standard == "c++20":
-        return False
     sys.stderr.write(completed.stdout)
     sys.stderr.write(completed.stderr)
     raise AssertionError(f"{standard} probe failed to compile for {output}")
@@ -217,12 +235,13 @@ def main() -> int:
     shutil.rmtree(BUILD_DIR, ignore_errors=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
+    c_obj = c_static_object(cxx)
     rust_lib = rust_staticlib()
     checked: list[str] = []
     for standard in STANDARDS:
         c_bin = BUILD_DIR / f"operator-new-c-{standard}"
         rust_bin = BUILD_DIR / f"operator-new-rust-{standard}"
-        c_supported = compile_probe(cxx, standard, c_bin, [ROOT / "mimalloc-3.3.2/src/static.c"])
+        c_supported = compile_probe(cxx, standard, c_bin, [c_obj])
         rust_supported = compile_probe(cxx, standard, rust_bin, [rust_lib])
         if c_supported != rust_supported:
             raise AssertionError(f"{standard} support differs: C={c_supported} Rust={rust_supported}")

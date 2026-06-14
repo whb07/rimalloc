@@ -119,6 +119,7 @@ scripts/check-public-symbols.py
 scripts/check-public-symbols.py --missing-only
 scripts/check-c-link-public-api.py
 scripts/check-behavioral-parity.py
+scripts/check-valgrind-tracking-parity.py
 scripts/check-no-allocation-audit.py
 ```
 

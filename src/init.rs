@@ -14,7 +14,9 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bits::MI_SIZE_SIZE;
-use crate::internal::{_mi_allocator_done, _mi_error_message, mi_memid_t, mi_memkind_t};
+use crate::internal::{
+    _mi_allocator_done, _mi_error_message, _mi_meta_free, _mi_meta_zalloc, mi_memid_t, mi_memkind_t,
+};
 use crate::options::{
     _mi_options_init, _mi_options_post_init, _mi_warning_message_fmt, mi_option_get,
     mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
@@ -499,10 +501,6 @@ impl MiSubprocPrefix {
         Self::new_with_memid(0, memid)
     }
 
-    fn new_dynamic(seq: usize) -> Self {
-        Self::new_with_memid(seq, mi_memid_t::default())
-    }
-
     fn new_with_memid(seq: usize, memid: mi_memid_t) -> Self {
         let mut stats = mi_stats_t::default();
         // SAFETY: `stats` points to a valid local `mi_stats_t`.
@@ -551,13 +549,17 @@ unsafe fn mi_subproc_is_reclaimable(subproc: *mut MiSubprocPrefix) -> bool {
     }
 }
 
-unsafe fn mi_subproc_destroy_boxed(subproc: *mut mi_subproc_t) {
+unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
     let subproc = unsafe { mi_subproc_prefix(subproc) };
-    // SAFETY: `subproc` points to a boxed `MiSubprocPrefix` allocated by `mi_subproc_new`.
+    // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.
     unsafe {
         mi_lock_done(ptr::addr_of_mut!((*subproc).arena_reserve_lock));
         mi_lock_done(ptr::addr_of_mut!((*subproc).heaps_lock));
-        drop(Box::from_raw(subproc));
+        _mi_meta_free(
+            subproc.cast(),
+            size_of::<MiSubprocPrefix>(),
+            (*subproc).memid,
+        );
     }
 }
 
@@ -636,7 +638,7 @@ unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs
                 ptr::addr_of_mut!((*main_subproc).stats),
                 ptr::addr_of_mut!((*subproc_prefix).stats),
             );
-            mi_subproc_destroy_boxed(subproc);
+            mi_subproc_destroy_meta(subproc);
         }
     }
 }
@@ -1513,13 +1515,20 @@ pub unsafe extern "C" fn mi_thread_init() {
 pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     mi_subproc_main_init();
     let seq = SUBPROC_TOTAL_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
-    let mut subproc = Box::new(MiSubprocPrefix::new_dynamic(seq));
+    let mut memid = mi_memid_t::default();
+    let subproc_ptr = unsafe {
+        _mi_meta_zalloc(size_of::<MiSubprocPrefix>(), ptr::addr_of_mut!(memid))
+            .cast::<MiSubprocPrefix>()
+    };
+    if subproc_ptr.is_null() {
+        return unsafe { _mi_subproc_to_id(ptr::null_mut()) };
+    }
+    unsafe { subproc_ptr.write(MiSubprocPrefix::new_with_memid(seq, memid)) };
     // SAFETY: initializing lock words for a freshly allocated local prefix.
     unsafe {
-        mi_lock_init(ptr::addr_of_mut!(subproc.arena_reserve_lock));
-        mi_lock_init(ptr::addr_of_mut!(subproc.heaps_lock));
+        mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).arena_reserve_lock));
+        mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).heaps_lock));
     }
-    let subproc_ptr = Box::into_raw(subproc);
     // SAFETY: local subproc list mutation is serialized by `subprocs_lock`.
     unsafe {
         mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock));

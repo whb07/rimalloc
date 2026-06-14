@@ -2066,13 +2066,31 @@ int main(void) {
   result_bool("aligned_recalloc_overflow_null", mi_aligned_recalloc(NULL, overflow_count, 2, 32) == NULL);
 
   size_t block_size = 0;
+  void* us = mi_umalloc_small(32, &block_size);
+  result_bool("umalloc_small_block_size", us != NULL && block_size >= mi_usable_size(us) && mi_usable_size(us) >= 32);
+  mi_free(us);
+
+  block_size = 0;
+  void* um = mi_umalloc(333, &block_size);
+  result_bool("umalloc_block_size", um != NULL && block_size >= mi_usable_size(um) && mi_usable_size(um) >= 333);
+  mi_free(um);
+
+  block_size = 0;
+  unsigned char* uc = (unsigned char*)mi_ucalloc(7, 33, &block_size);
+  result_bool("ucalloc_block_size_zeroed", uc != NULL && block_size >= mi_usable_size(uc) && mi_usable_size(uc) >= 231 && bytes_equal(uc, 0, 231));
+  mi_free(uc);
+
+  block_size = 123;
+  result_bool("ucalloc_overflow_null_preserves_block_size", mi_ucalloc(overflow_count, 2, &block_size) == NULL && block_size == 123);
+
+  block_size = 0;
   void* up = mi_umalloc_aligned(96, 32, &block_size);
-  result_bool("umalloc_aligned_block_size", is_aligned_at(up, 32, 0) && block_size >= 96);
+  result_bool("umalloc_aligned_block_size", is_aligned_at(up, 32, 0) && block_size >= mi_usable_size(up) && mi_usable_size(up) >= 96);
   mi_free(up);
 
   block_size = 0;
   unsigned char* uzp = (unsigned char*)mi_uzalloc_aligned(96, 32, &block_size);
-  result_bool("uzalloc_aligned_block_size_zeroed", is_aligned_at(uzp, 32, 0) && block_size >= 96 && bytes_equal(uzp, 0, 96));
+  result_bool("uzalloc_aligned_block_size_zeroed", is_aligned_at(uzp, 32, 0) && block_size >= mi_usable_size(uzp) && mi_usable_size(uzp) >= 96 && bytes_equal(uzp, 0, 96));
   mi_free(uzp);
 
   void* newp = mi_heap_alloc_new_n(heap, 4, 16);

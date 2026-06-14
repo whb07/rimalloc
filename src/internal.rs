@@ -44,8 +44,8 @@ pub const _Atomic: () = ();
 
 pub const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
 pub const MI_SECURE: usize = 0;
-pub const MI_TRACK_ASAN: usize = 0;
-pub const MI_TRACK_ENABLED: usize = 0;
+pub const MI_TRACK_ASAN: usize = crate::track::MI_TRACK_ASAN;
+pub const MI_TRACK_ENABLED: usize = crate::track::MI_TRACK_ENABLED;
 pub const MI_TRACK_ENABLED_FULL: usize = 0;
 pub const MI_GUARDED: usize = 0;
 pub const MI_PAGE_META_IS_SEPARATED: usize = if MI_PAGE_MAP_FLAT != 0 { 0 } else { 1 };

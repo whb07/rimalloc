@@ -2400,6 +2400,12 @@ int main(void) {
   ar = (unsigned char*)mi_realloc_aligned(NULL, 24, 3);
   result_bool("realloc_aligned_non_power_two_alignment_accepted", ar != NULL);
   mi_free(ar);
+  ar = (unsigned char*)mi_malloc_aligned(64, 32);
+  if (ar != NULL) fill_sequence(ar, 64);
+  void* ar_failed = mi_realloc_aligned(ar, overflow_count, 32);
+  result_bool("realloc_aligned_failure_null", ar_failed == NULL);
+  result_bool("realloc_aligned_failure_original_owned", ar != NULL && mi_check_owned(ar) && has_sequence_prefix(ar, 64));
+  mi_free(ar);
 
   ar = (unsigned char*)mi_realloc_aligned_at(NULL, 24, 32, 8);
   result_bool("realloc_aligned_at_null", is_aligned_at(ar, 32, 8));
@@ -2412,6 +2418,12 @@ int main(void) {
   ar = (unsigned char*)mi_realloc_aligned_at(NULL, 24, 3, 0);
   result_bool("realloc_aligned_at_non_power_two_alignment_accepted", ar != NULL);
   mi_free(ar);
+  ar = (unsigned char*)mi_malloc_aligned_at(64, 32, 8);
+  if (ar != NULL) fill_sequence(ar, 64);
+  ar_failed = mi_realloc_aligned_at(ar, overflow_count, 32, 8);
+  result_bool("realloc_aligned_at_failure_null", ar_failed == NULL);
+  result_bool("realloc_aligned_at_failure_original_owned", ar != NULL && mi_check_owned(ar) && has_sequence_prefix(ar, 64));
+  mi_free(ar);
 
   unsigned char* rz = (unsigned char*)mi_rezalloc_aligned(NULL, 24, 32);
   result_bool("rezalloc_aligned_null_zeroed", is_aligned_at(rz, 32, 0) && bytes_equal(rz, 0, 24));
@@ -2422,6 +2434,12 @@ int main(void) {
   result_bool("rezalloc_aligned_shrink_preserve", is_aligned_at(rz, 32, 0) && has_sequence_prefix(rz, 16));
   mi_free(rz);
   result_bool("rezalloc_aligned_overflow_null", mi_rezalloc_aligned(NULL, overflow_count, 32) == NULL);
+  rz = (unsigned char*)mi_malloc_aligned(64, 32);
+  if (rz != NULL) fill_sequence(rz, 64);
+  void* rz_failed = mi_rezalloc_aligned(rz, overflow_count, 32);
+  result_bool("rezalloc_aligned_failure_null", rz_failed == NULL);
+  result_bool("rezalloc_aligned_failure_original_owned", rz != NULL && mi_check_owned(rz) && has_sequence_prefix(rz, 64));
+  mi_free(rz);
 
   rz = (unsigned char*)mi_rezalloc_aligned_at(NULL, 24, 32, 16);
   result_bool("rezalloc_aligned_at_null_zeroed", is_aligned_at(rz, 32, 16) && bytes_equal(rz, 0, 24));
@@ -2430,6 +2448,12 @@ int main(void) {
   result_bool("rezalloc_aligned_at_grow_zeroed", is_aligned_at(rz, 32, 16) && has_sequence_prefix(rz, 24) && bytes_equal(rz + 24, 0, 24));
   mi_free(rz);
   result_bool("rezalloc_aligned_at_overflow_null", mi_rezalloc_aligned_at(NULL, overflow_count, 32, 16) == NULL);
+  rz = (unsigned char*)mi_malloc_aligned_at(64, 32, 16);
+  if (rz != NULL) fill_sequence(rz, 64);
+  rz_failed = mi_rezalloc_aligned_at(rz, overflow_count, 32, 16);
+  result_bool("rezalloc_aligned_at_failure_null", rz_failed == NULL);
+  result_bool("rezalloc_aligned_at_failure_original_owned", rz != NULL && mi_check_owned(rz) && has_sequence_prefix(rz, 64));
+  mi_free(rz);
 
   unsigned char* rc = (unsigned char*)mi_recalloc_aligned(NULL, 3, 8, 32);
   result_bool("recalloc_aligned_null_zeroed", is_aligned_at(rc, 32, 0) && bytes_equal(rc, 0, 24));
@@ -2446,6 +2470,18 @@ int main(void) {
   mi_free(rc);
   result_bool("recalloc_aligned_overflow_null", mi_recalloc_aligned(NULL, overflow_count, 2, 32) == NULL);
   result_bool("recalloc_aligned_at_overflow_null", mi_recalloc_aligned_at(NULL, overflow_count, 2, 32, 24) == NULL);
+  rc = (unsigned char*)mi_malloc_aligned(64, 32);
+  if (rc != NULL) fill_sequence(rc, 64);
+  void* rc_failed = mi_recalloc_aligned(rc, overflow_count, 2, 32);
+  result_bool("recalloc_aligned_failure_null", rc_failed == NULL);
+  result_bool("recalloc_aligned_failure_original_owned", rc != NULL && mi_check_owned(rc) && has_sequence_prefix(rc, 64));
+  mi_free(rc);
+  rc = (unsigned char*)mi_malloc_aligned_at(64, 32, 24);
+  if (rc != NULL) fill_sequence(rc, 64);
+  rc_failed = mi_recalloc_aligned_at(rc, overflow_count, 2, 32, 24);
+  result_bool("recalloc_aligned_at_failure_null", rc_failed == NULL);
+  result_bool("recalloc_aligned_at_failure_original_owned", rc != NULL && mi_check_owned(rc) && has_sequence_prefix(rc, 64));
+  mi_free(rc);
 
   unsigned char* hr = heap == NULL ? NULL : (unsigned char*)mi_heap_realloc_aligned(heap, NULL, 24, 32);
   result_bool("heap_realloc_aligned_null", is_aligned_at(hr, 32, 0) && mi_heap_contains(heap, hr));

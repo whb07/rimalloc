@@ -2459,9 +2459,6 @@ unsafe fn mi_arenas_page_alloc_fresh(
             unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
             return ptr::null_mut();
         }
-        if is_zero {
-            memid.initially_zero = true;
-        }
     }
     if !memid.initially_zero && !page_meta_is_separate {
         unsafe { crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>()) };

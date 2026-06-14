@@ -4545,6 +4545,88 @@ int main(void) {
 }
 """
 
+LAZY_COMMIT_RELEASE_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/mman.h>
+
+struct commit_result {
+  size_t commit_calls;
+  int zero_state_seen;
+};
+
+static bool commit_claims_zero_callback(bool commit, void* start, size_t size, bool* is_zero, void* user_arg) {
+  struct commit_result* result = (struct commit_result*)user_arg;
+  if (result != NULL && commit) result->commit_calls++;
+  if (result != NULL && is_zero != NULL) {
+    result->zero_state_seen = 1;
+    *is_zero = true;
+  }
+  (void)start;
+  (void)size;
+  return true;
+}
+
+static void* map_aligned_arena_memory(size_t size) {
+  size_t alignment = mi_arena_min_alignment();
+  void* mapping = mmap(NULL, size + alignment, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (mapping == MAP_FAILED) return MAP_FAILED;
+  return (void*)(((uintptr_t)mapping + alignment - 1) & ~(uintptr_t)(alignment - 1));
+}
+
+static int bytes_equal(const unsigned char* p, unsigned char value, size_t size) {
+  for (size_t i = 0; i < size; i++) {
+    if (p[i] != value) return 0;
+  }
+  return 1;
+}
+
+int main(void) {
+  long original = mi_option_get(mi_option_page_commit_on_demand);
+  mi_option_set(mi_option_page_commit_on_demand, 1);
+
+  const size_t size = mi_arena_min_size();
+  void* mem = map_aligned_arena_memory(size);
+  if (mem != MAP_FAILED) memset(mem, 0xA5, size);
+
+  struct commit_result result = { 0, 0 };
+  mi_arena_id_t arena = NULL;
+  int managed = mem != MAP_FAILED && mi_manage_memory(
+    mem,
+    size,
+    false,
+    false,
+    false,
+    -1,
+    true,
+    commit_claims_zero_callback,
+    &result,
+    &arena);
+
+  mi_heap_t* heap = managed ? mi_heap_new_in_arena(arena) : NULL;
+  const size_t request = 16 * 1024;
+  void* p = heap == NULL ? NULL : mi_heap_zalloc(heap, request);
+  int contained = p != NULL && mi_heap_contains(heap, p) && mi_arena_contains(arena, p);
+  int zeroed = p != NULL && bytes_equal((const unsigned char*)p, 0, request);
+
+  mi_free(p);
+  if (heap != NULL) mi_heap_delete(heap);
+  mi_option_set(mi_option_page_commit_on_demand, original);
+
+  printf("@@LAZY_COMMIT_RELEASE managed=%d heap=%d contained=%d callback=%d zeroed=%d\n",
+         managed,
+         heap != NULL,
+         contained,
+         result.zero_state_seen,
+         zeroed);
+  return managed && heap != NULL && contained && result.zero_state_seen && zeroed ? 0 : 1;
+}
+"""
+
 STRESS_RELEASE_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -6410,6 +6492,7 @@ def main() -> int:
     numa_count_capture = BUILD_DIR / "numa-count-capture.c"
     arena_fallback_capture = BUILD_DIR / "arena-fallback-capture.c"
     free_hint_release_capture = BUILD_DIR / "free-hint-release-capture.c"
+    lazy_commit_release_capture = BUILD_DIR / "lazy-commit-release-capture.c"
     stress_release_capture = BUILD_DIR / "stress-release-capture.c"
     page_policy_capture = BUILD_DIR / "page-policy-capture.c"
     randomized_capture = BUILD_DIR / "randomized-capture.c"
@@ -6429,6 +6512,7 @@ def main() -> int:
     numa_count_capture.write_text(NUMA_COUNT_CAPTURE_C)
     arena_fallback_capture.write_text(ARENA_FALLBACK_CAPTURE_C)
     free_hint_release_capture.write_text(FREE_HINT_RELEASE_CAPTURE_C)
+    lazy_commit_release_capture.write_text(LAZY_COMMIT_RELEASE_CAPTURE_C)
     stress_release_capture.write_text(STRESS_RELEASE_CAPTURE_C)
     page_policy_capture.write_text(PAGE_POLICY_CAPTURE_C)
     randomized_capture.write_text(RANDOMIZED_CAPTURE_C)
@@ -6465,6 +6549,8 @@ def main() -> int:
     rust_arena_fallback_bin = BUILD_DIR / "arena-fallback-rust"
     c_free_hint_release_bin = BUILD_DIR / "free-hint-release-c"
     rust_free_hint_release_bin = BUILD_DIR / "free-hint-release-rust"
+    c_lazy_commit_release_bin = BUILD_DIR / "lazy-commit-release-c"
+    rust_lazy_commit_release_bin = BUILD_DIR / "lazy-commit-release-rust"
     c_stress_release_bin = BUILD_DIR / "stress-release-c"
     rust_stress_release_bin = BUILD_DIR / "stress-release-rust"
     c_page_policy_bin = BUILD_DIR / "page-policy-c"
@@ -6515,6 +6601,13 @@ def main() -> int:
         ["-DNDEBUG"],
     )
     compile_binary(cc, rust_free_hint_release_bin, [free_hint_release_capture, rust_release_lib], ["-DNDEBUG"])
+    compile_binary(
+        cc,
+        c_lazy_commit_release_bin,
+        [ROOT / "mimalloc-3.3.2/src/static.c", lazy_commit_release_capture],
+        ["-DNDEBUG"],
+    )
+    compile_binary(cc, rust_lazy_commit_release_bin, [lazy_commit_release_capture, rust_release_lib], ["-DNDEBUG"])
     compile_binary(
         cc,
         c_stress_release_bin,
@@ -6641,6 +6734,16 @@ def main() -> int:
         print(rust_free_hint_release, file=sys.stderr)
         return 1
 
+    c_lazy_commit_release = run(c_lazy_commit_release_bin)
+    rust_lazy_commit_release = run(rust_lazy_commit_release_bin)
+    if c_lazy_commit_release != rust_lazy_commit_release:
+        print("lazy commit release parity mismatch", file=sys.stderr)
+        print("--- C mimalloc ---", file=sys.stderr)
+        print(c_lazy_commit_release, file=sys.stderr)
+        print("--- Rust mimalloc ---", file=sys.stderr)
+        print(rust_lazy_commit_release, file=sys.stderr)
+        return 1
+
     c_stress_release = run(c_stress_release_bin)
     rust_stress_release = run(rust_stress_release_bin)
     if c_stress_release != rust_stress_release:
@@ -6703,6 +6806,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc NUMA node count behavior matches")
     print("ok: C and Rust mimalloc arena fallback behavior matches")
     print("ok: C and Rust mimalloc release free-hint behavior matches")
+    print("ok: C and Rust mimalloc release lazy-commit zeroing behavior matches")
     print("ok: C and Rust mimalloc release stress behavior matches")
     print("ok: C and Rust mimalloc page policy behavior matches")
     print("ok: C and Rust mimalloc seeded randomized allocation behavior matches")

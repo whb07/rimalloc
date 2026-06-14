@@ -25,7 +25,7 @@ override/interposition parity.
 
 | Area | Affected APIs | Target/mode | User-visible behavior | Reason | Containment |
 |---|---|---|---|---|---|
-| C++ bad-allocation throwing from Rust | `mi_new`, `mi_new_n`, `mi_heap_alloc_new`, `mi_heap_alloc_new_n`, C++ global `operator new` overrides | Rust artifact linked into C++ callers on Unix | Successful allocations and installed `std::new_handler` callbacks are supported; if no handler can satisfy an allocation, Rust aborts instead of throwing `std::bad_alloc` from Rust across the C ABI. | C mimalloc only throws `std::bad_alloc` when that implementation is compiled as C++; the Rust implementation cannot safely originate a C++ exception across an `extern "C"` Rust boundary. | `scripts/check-behavioral-parity.py` covers successful `mi_new` allocation/free compatibility and installed-new-handler invocation. The remaining exception behavior keeps the `mi_new` and C++ override TODO items open. |
+| C++ bad-allocation throwing from Rust | `mi_new`, `mi_new_n`, `mi_heap_alloc_new`, `mi_heap_alloc_new_n`, C++ global `operator new` overrides | Rust artifact linked into C++ callers on Unix | Successful allocations and installed `std::new_handler` callbacks are supported; if no handler can satisfy an allocation, Rust aborts instead of throwing `std::bad_alloc` from Rust across the C ABI. | C mimalloc only throws `std::bad_alloc` when that implementation is compiled as C++; the Rust implementation cannot safely originate a C++ exception across an `extern "C"` Rust boundary. | `scripts/check-behavioral-parity.py` covers successful `mi_new` allocation/free compatibility and installed-new-handler invocation. `scripts/check-cxx-bad-alloc-divergence.py` verifies the remaining exception-path divergence directly. The remaining exception behavior keeps the `mi_new` and C++ override TODO items open. |
 
 ## Rust-Only Public Export Safety Contracts
 
@@ -127,6 +127,7 @@ scripts/check-public-symbols.py
 scripts/check-public-symbols.py --missing-only
 scripts/check-c-link-public-api.py
 scripts/check-behavioral-parity.py
+scripts/check-cxx-bad-alloc-divergence.py
 scripts/check-secure-mode-parity.py
 scripts/check-guarded-mode-parity.py
 scripts/check-valgrind-tracking-parity.py

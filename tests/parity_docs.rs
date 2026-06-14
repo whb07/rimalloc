@@ -22,6 +22,10 @@ fn parity_matrix_documents_current_supported_rows() {
     assert!(PARITY_DOC.contains("MI_GUARDED=0"));
     assert!(PARITY_DOC.contains("WASI"));
     assert!(PARITY_DOC.contains("Emscripten"));
+    assert!(PARITY_DOC.contains("ASAN"));
+    assert!(PARITY_DOC.contains("TSAN"));
+    assert!(PARITY_DOC.contains("UBSAN"));
+    assert!(PARITY_DOC.contains("Windows ETW"));
 }
 
 #[test]

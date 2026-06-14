@@ -396,7 +396,7 @@ unsafe fn unix_detect_physical_memory(page_size: usize, physical_memory_in_kib: 
     }
 }
 
-#[inline]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     if config.is_null() {
         return;

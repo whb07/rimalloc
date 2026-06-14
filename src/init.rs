@@ -142,6 +142,7 @@ pub const fn MI_STATS_NULL() -> mi_stats_t {
 #[allow(dead_code)]
 static mut subprocs_lock: mi_lock_t = mi_lock_t::new();
 static SUBPROC_MAIN_INIT: Once = Once::new();
+static PROCESS_INIT: Once = Once::new();
 static OPTIONS_POST_INIT_STATE: AtomicUsize = AtomicUsize::new(0);
 static PROCESS_DONE: AtomicBool = AtomicBool::new(false);
 static SUBPROC_TOTAL_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -1711,9 +1712,22 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
 /// # Safety
 /// Performs one-time process-global mimalloc initialization for the bounded init/runtime scaffold.
 pub unsafe extern "C" fn _mi_auto_process_init() {
-    if !unsafe { _mi_process_is_initialized } {
+    PROCESS_INIT.call_once(|| unsafe {
         mi_subproc_main_init();
-    }
+        crate::stats::_mi_stats_init();
+        crate::os::_mi_os_init();
+        mi_heap_main_init();
+        let _ = crate::page_map::_mi_page_map_init();
+        if !crate::prim::_mi_thread_is_initialized() && !_mi_thread_init_theap_default().is_null() {
+            let heap = mi_heap_main();
+            if !heap.is_null() {
+                crate::internal::__mi_stat_increase(
+                    &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads,
+                    1,
+                );
+            }
+        }
+    });
     mi_heap_main_init();
     mi_mark_main_thread();
     mi_tls_slots_init();
@@ -1769,5 +1783,15 @@ pub unsafe extern "C" fn mi_process_done() {
         }
         mi_tls_slots_done();
         _mi_allocator_done();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn auto_process_init_initializes_large_page_config() {
+        unsafe { super::_mi_auto_process_init() };
+        assert!(unsafe { crate::os::_mi_os_canuse_large_page(1 << 30, 2 << 20) });
     }
 }

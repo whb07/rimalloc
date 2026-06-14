@@ -82,7 +82,7 @@ fn parity_docs_record_cxx_bad_alloc_divergence() {
     assert!(PARITY_DOC.contains("`extern \"C\"` Rust boundary"));
     assert!(PARITY_DOC.contains("scripts/check-cxx-bad-alloc-divergence.py"));
     assert!(PARITY_DOC.contains("scripts/check-cxx-operator-new-parity.py"));
-    assert!(PARITY_DOC.contains("keeps the `mi_new` TODO item open"));
+    assert!(PARITY_DOC.contains("intentional C ABI exception-path divergence"));
 }
 
 #[test]

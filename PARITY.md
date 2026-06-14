@@ -10,13 +10,14 @@ The current claimed parity matrix is intentionally narrow. Later validations in
 
 | Row | OS | Architecture | Pointer width | Endianness | libc/CRT | Rust profile | mimalloc mode |
 |---:|---|---|---:|---|---|---|---|
-| linux-x86_64-gnu-default-debug | Linux | x86_64 | 64 | little | glibc | dev | default allocator mode: `MI_DEBUG=0`, `MI_SECURE=0`, `MI_GUARDED=0`, tracking disabled |
-| linux-x86_64-gnu-default-release | Linux | x86_64 | 64 | little | glibc | release | default allocator mode: `MI_DEBUG=0`, `MI_SECURE=0`, `MI_GUARDED=0`, tracking disabled |
+| linux-x86_64-gnu-default-debug | Linux | x86_64 | 64 | little | glibc | dev | default debug allocator mode: `MI_DEBUG=2`, `MI_SECURE=0`, Rust guarded allocation disabled, padding and encoded free lists enabled, tracking disabled |
+| linux-x86_64-gnu-default-release | Linux | x86_64 | 64 | little | glibc | release | default release allocator mode: `MI_DEBUG=0`, `MI_SECURE=0`, `MI_GUARDED=0`, padding and encoded free lists disabled, tracking disabled |
 
 Unsupported until added here with evidence: Windows, macOS, WASI,
-Emscripten, non-x86_64 architectures, big-endian targets, debug mode, secure
-mode, guarded mode, Valgrind tracking, sanitizer builds (ASAN/TSAN/UBSAN),
-Windows ETW/event tracking, and non-Linux allocator override/interposition parity.
+Emscripten, non-x86_64 architectures, big-endian targets, non-default debug
+levels, secure mode, guarded allocation mode, Valgrind tracking, sanitizer
+builds (ASAN/TSAN/UBSAN), Windows ETW/event tracking, and non-Linux allocator
+override/interposition parity.
 
 ## Intentional Non-Parity Decisions
 

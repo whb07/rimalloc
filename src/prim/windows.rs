@@ -1362,7 +1362,7 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
     }
 
     let mut params = [MI_MEM_EXTENDED_PARAMETER::default(); 3];
-    if unsafe { pNtAllocateVirtualMemoryEx }.is_some()
+    if let Some(nt_allocate_virtual_memory_ex) = unsafe { pNtAllocateVirtualMemoryEx }
         && MI_HUGE_PAGES_AVAILABLE.load(Ordering::Acquire) != 0
     {
         params[0].Type.bits =
@@ -1378,7 +1378,7 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
         let mut psize = size;
         let mut base = hint_addr;
         let err = unsafe {
-            pNtAllocateVirtualMemoryEx.unwrap()(
+            nt_allocate_virtual_memory_ex(
                 GetCurrentProcess(),
                 &mut base,
                 &mut psize,

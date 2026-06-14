@@ -472,7 +472,7 @@ pub unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
         let theap = mi_page_theap(page);
         __mi_stat_counter_increase(&mut (*theap).stats.pages_retire, 1);
         let bsize = mi_page_block_size(page);
-        (*page).retire_expire = if bsize <= MI_SMALL_SIZE_MAX {
+        (*page).retire_expire = if bsize <= MI_SMALL_MAX_OBJ_SIZE {
             MI_RETIRE_CYCLES
         } else {
             MI_RETIRE_CYCLES / 4
@@ -1295,7 +1295,7 @@ unsafe fn mi_page_queue_find_free_ex(
 ) -> *mut mi_page_t {
     let mut count = 0usize;
     let mut candidate_limit: c_long = 0;
-    let mut page_full_retain = if (*pq).block_size > MI_SMALL_SIZE_MAX {
+    let mut page_full_retain = if (*pq).block_size > MI_SMALL_MAX_OBJ_SIZE {
         0
     } else {
         (*theap).page_full_retain

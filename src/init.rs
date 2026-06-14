@@ -766,6 +766,8 @@ pub unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
         return;
     }
 
+    crate::threadlocal::_mi_thread_locals_thread_done();
+
     let tld = unsafe { (*default_theap).tld };
     let heap = unsafe { _mi_subproc_heap_main((*tld).subproc) };
     if !heap.is_null() {
@@ -956,8 +958,7 @@ fn mi_tld_alloc() -> *mut mi_tld_t {
         unsafe {
             let mut memid = mi_memid_t::default();
             let tld =
-                crate::internal::_mi_os_zalloc(size_of::<mi_tld_t>(), ptr::addr_of_mut!(memid))
-                    .cast::<mi_tld_t>();
+                _mi_meta_zalloc(size_of::<mi_tld_t>(), ptr::addr_of_mut!(memid)).cast::<mi_tld_t>();
             if tld.is_null() {
                 _mi_error_message(
                     crate::types::ENOMEM,
@@ -996,7 +997,7 @@ fn mi_tld_free(tld: *mut mi_tld_t) {
             (*subproc).thread_count.fetch_sub(1, Ordering::Relaxed);
         }
         if !ptr::eq(tld, ptr::addr_of_mut!(tld_main)) {
-            crate::internal::_mi_os_free(tld.cast::<c_void>(), size_of::<mi_tld_t>(), (*tld).memid);
+            _mi_meta_free(tld.cast::<c_void>(), size_of::<mi_tld_t>(), (*tld).memid);
         }
     }
 }

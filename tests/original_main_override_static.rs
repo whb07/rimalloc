@@ -5,8 +5,9 @@ use std::ffi::CString;
 use mechanical_mimalloc::bits::{MI_INTPTR_SIZE, MI_SIZE_BITS, mi_clz};
 use mechanical_mimalloc::internal::_mi_wsize_from_size;
 use mechanical_mimalloc::mimalloc;
+use mechanical_mimalloc::options::{self, mi_option_t};
 use mechanical_mimalloc::page;
-use mechanical_mimalloc::stats::MI_BIN_HUGE;
+use mechanical_mimalloc::stats::{MI_BIN_HUGE, MI_STAT_VERSION, mi_stats_t};
 use mechanical_mimalloc::types::{mi_arena_id_t, mi_heap_area_t, mi_heap_t};
 
 const HUGE_ALLOC_SIZE: usize = 67_108_872;
@@ -16,6 +17,20 @@ const LARGE_WSIZE_MAX: usize = (4 * 1024 * 1024) / MI_INTPTR_SIZE;
 struct VisitState {
     areas: usize,
     blocks: usize,
+}
+
+fn initialized_stats() -> mi_stats_t {
+    mi_stats_t {
+        size: core::mem::size_of::<mi_stats_t>(),
+        version: MI_STAT_VERSION,
+        ..Default::default()
+    }
+}
+
+unsafe fn current_stats() -> mi_stats_t {
+    let mut stats = initialized_stats();
+    assert!(unsafe { mimalloc::mi_stats_get(&mut stats) });
+    stats
 }
 
 unsafe fn alloc_huge() {
@@ -131,6 +146,41 @@ unsafe fn test_large_pages() {
     assert!(arena_id.is_null());
 }
 
+unsafe fn test_internal_arena_purge_does_not_recommit() {
+    let original_purge_delay = options::mi_option_get(mi_option_t::mi_option_purge_delay);
+    let original_purge_decommits = options::mi_option_get(mi_option_t::mi_option_purge_decommits);
+
+    options::mi_option_set(mi_option_t::mi_option_purge_delay, 0);
+    options::mi_option_set(mi_option_t::mi_option_purge_decommits, 1);
+
+    let size = 8 * 1024 * 1024;
+    let p = unsafe { mimalloc::mi_malloc(size) }.cast::<u8>();
+    assert!(!p.is_null());
+    for offset in (0..size).step_by(4096) {
+        unsafe { p.add(offset).write(0xA5) };
+    }
+
+    let before_free = unsafe { current_stats() };
+    unsafe { mimalloc::mi_free(p.cast()) };
+    unsafe { mimalloc::mi_collect(true) };
+    let after_collect = unsafe { current_stats() };
+
+    options::mi_option_set(mi_option_t::mi_option_purge_delay, original_purge_delay);
+    options::mi_option_set(
+        mi_option_t::mi_option_purge_decommits,
+        original_purge_decommits,
+    );
+
+    assert!(
+        after_collect.purge_calls.total > before_free.purge_calls.total,
+        "forced collection should purge the freed internal arena page"
+    );
+    assert_eq!(
+        after_collect.commit_calls.total, before_free.commit_calls.total,
+        "internal arena purges must not be routed through the commit callback"
+    );
+}
+
 fn _mi_bin4(size: usize) -> u8 {
     let wsize = _mi_wsize_from_size(size);
     if wsize <= 1 {
@@ -233,6 +283,11 @@ fn manage_os_memory_characterization() {
 #[test]
 fn large_pages_characterization() {
     unsafe { test_large_pages() };
+}
+
+#[test]
+fn internal_arena_purge_does_not_recommit() {
+    unsafe { test_internal_arena_purge_does_not_recommit() };
 }
 
 #[test]

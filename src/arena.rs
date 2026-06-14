@@ -170,7 +170,7 @@ struct MiArenaPrefix {
     is_exclusive: bool,
     _padding: [u8; 7],
     purge_expire: AtomicI64,
-    commit_fun: mi_commit_fun_t,
+    commit_fun: Option<mi_commit_fun_t>,
     commit_fun_arg: *mut c_void,
     total_size: usize,
     parent: *mut mi_arena_t,
@@ -803,17 +803,21 @@ unsafe fn mi_arena_commit(
     is_zero: *mut bool,
     already_committed: usize,
 ) -> bool {
-    if !arena.is_null() && unsafe { ((*arena.cast::<MiArenaPrefix>()).commit_fun as usize) != 0 } {
-        unsafe {
-            ((*arena.cast::<MiArenaPrefix>()).commit_fun)(
-                true,
-                start,
-                size,
-                is_zero,
-                (*arena.cast::<MiArenaPrefix>()).commit_fun_arg,
-            )
+    if !arena.is_null() {
+        let commit_fun = unsafe { (*arena.cast::<MiArenaPrefix>()).commit_fun };
+        if let Some(commit_fun) = commit_fun {
+            return unsafe {
+                commit_fun(
+                    true,
+                    start,
+                    size,
+                    is_zero,
+                    (*arena.cast::<MiArenaPrefix>()).commit_fun_arg,
+                )
+            };
         }
-    } else if already_committed > 0 {
+    }
+    if already_committed > 0 {
         unsafe { _mi_os_commit_ex(start, size, is_zero, already_committed) }
     } else {
         unsafe { _mi_os_commit(start, size, is_zero) }
@@ -1579,7 +1583,7 @@ unsafe fn mi_arena_initialize(
     numa_node: c_int,
     exclusive: bool,
     memid: mi_memid_t,
-    commit_fun: mi_commit_fun_t,
+    commit_fun: Option<mi_commit_fun_t>,
     commit_fun_arg: *mut c_void,
     arena_id: *mut mi_arena_id_t,
 ) -> *mut mi_arena_t {
@@ -1620,7 +1624,7 @@ unsafe fn mi_arena_initialize(
         if !memid.is_pinned {
             commit_size -= unsafe { crate::os::_mi_os_secure_guard_page_size() };
         }
-        let ok = if (commit_fun as usize) != 0 {
+        let ok = if let Some(commit_fun) = commit_fun {
             unsafe {
                 commit_fun(
                     true,
@@ -2193,7 +2197,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
         mi_forall_suitable_arenas(heap, req_arena, tseq, true, any_numa, true, |arena| {
             let arena_pages = mi_heap_arena_pages(heap, arena);
             if arena_pages.is_null() {
-                return false;
+                return true;
             }
             let mut slice_index = 0usize;
             let bitmap = (*arena_pages).pages_abandoned[bin];
@@ -2240,9 +2244,9 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                 crate::mi_assert_internal!(mi_page_block_size(page) == block_size);
                 crate::mi_assert_internal!(!mi_page_is_full_local(page));
                 result = page;
-                true
-            } else {
                 false
+            } else {
+                true
             }
         })
     };
@@ -3146,7 +3150,7 @@ unsafe fn mi_arena_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count
             size,
             all_committed,
             mi_size_of_slices(already_committed),
-            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).commit_fun),
+            (*arena.cast::<MiArenaPrefix>()).commit_fun,
             (*arena.cast::<MiArenaPrefix>()).commit_fun_arg,
         )
     };
@@ -3399,7 +3403,7 @@ unsafe fn mi_reserve_os_memory_ex2(
             -1,
             exclusive,
             memid,
-            mi_commit_null,
+            None,
             ptr::null_mut(),
             arena_id,
         )
@@ -3490,7 +3494,7 @@ unsafe fn mi_manage_os_memory_ex2(
     numa_node: c_int,
     exclusive: bool,
     mut memid: mi_memid_t,
-    commit_fun: mi_commit_fun_t,
+    commit_fun: Option<mi_commit_fun_t>,
     commit_fun_arg: *mut c_void,
     arena_id: *mut mi_arena_id_t,
 ) -> bool {
@@ -3610,7 +3614,7 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
             numa_node,
             exclusive,
             memid,
-            mi_commit_null,
+            None,
             ptr::null_mut(),
             arena_id,
         )
@@ -3648,7 +3652,7 @@ pub unsafe extern "C" fn mi_manage_memory(
             numa_node,
             exclusive,
             memid,
-            commit_fun.unwrap_or(mi_commit_null),
+            commit_fun,
             commit_fun_arg,
             arena_id,
         )
@@ -3927,16 +3931,6 @@ unsafe fn mi_debug_show_chunks(
     bit_set_count
 }
 
-unsafe extern "C" fn mi_commit_null(
-    _commit: bool,
-    start: *mut c_void,
-    size: usize,
-    is_zero: *mut bool,
-    _user_arg: *mut c_void,
-) -> bool {
-    unsafe { _mi_os_commit(start, size, is_zero) }
-}
-
 unsafe fn mi_debug_show_arenas_ex(heap: *mut mi_heap_t, show_pages: bool, narrow: bool) {
     let subproc = unsafe { (*heap.cast::<MiHeapPrefix>()).subproc };
     let max_arenas = unsafe { mi_arenas_get_count(subproc) };
@@ -4066,7 +4060,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
             numa_node,
             exclusive,
             memid,
-            mi_commit_null,
+            None,
             ptr::null_mut(),
             arena_id,
         )

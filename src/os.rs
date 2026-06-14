@@ -103,7 +103,7 @@ struct MiArenaCommitPrefix {
     is_exclusive: bool,
     _padding: [u8; 7],
     purge_expire: AtomicI64,
-    commit_fun: mi_commit_fun_t,
+    commit_fun: Option<mi_commit_fun_t>,
     commit_fun_arg: *mut c_void,
     total_size: usize,
     parent: *mut mi_arena_t,
@@ -328,18 +328,19 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
     }
     if MI_SECURE > 0 && !memid.is_pinned {
         let arena = unsafe { memid.mem.arena.arena };
-        if !arena.is_null()
-            && unsafe { ((*arena.cast::<MiArenaCommitPrefix>()).commit_fun as usize) != 0 }
-        {
-            return unsafe {
-                ((*arena.cast::<MiArenaCommitPrefix>()).commit_fun)(
-                    false,
-                    addr,
-                    _mi_os_secure_guard_page_size(),
-                    core::ptr::null_mut(),
-                    (*arena.cast::<MiArenaCommitPrefix>()).commit_fun_arg,
-                )
-            };
+        if !arena.is_null() {
+            let commit_fun = unsafe { (*arena.cast::<MiArenaCommitPrefix>()).commit_fun };
+            if let Some(commit_fun) = commit_fun {
+                return unsafe {
+                    commit_fun(
+                        false,
+                        addr,
+                        _mi_os_secure_guard_page_size(),
+                        core::ptr::null_mut(),
+                        (*arena.cast::<MiArenaCommitPrefix>()).commit_fun_arg,
+                    )
+                };
+            }
         }
         return false;
     }
@@ -372,18 +373,19 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
     }
     if MI_SECURE > 0 && !memid.is_pinned {
         let arena = unsafe { memid.mem.arena.arena };
-        if !arena.is_null()
-            && unsafe { ((*arena.cast::<MiArenaCommitPrefix>()).commit_fun as usize) != 0 }
-        {
-            return unsafe {
-                ((*arena.cast::<MiArenaCommitPrefix>()).commit_fun)(
-                    true,
-                    addr,
-                    _mi_os_secure_guard_page_size(),
-                    core::ptr::null_mut(),
-                    (*arena.cast::<MiArenaCommitPrefix>()).commit_fun_arg,
-                )
-            };
+        if !arena.is_null() {
+            let commit_fun = unsafe { (*arena.cast::<MiArenaCommitPrefix>()).commit_fun };
+            if let Some(commit_fun) = commit_fun {
+                return unsafe {
+                    commit_fun(
+                        true,
+                        addr,
+                        _mi_os_secure_guard_page_size(),
+                        core::ptr::null_mut(),
+                        (*arena.cast::<MiArenaCommitPrefix>()).commit_fun_arg,
+                    )
+                };
+            }
         }
         return unsafe {
             _mi_os_commit(addr, _mi_os_secure_guard_page_size(), core::ptr::null_mut())
@@ -553,7 +555,7 @@ pub unsafe extern "C" fn _mi_os_purge_ex(
     size: usize,
     allow_reset: bool,
     stat_size: usize,
-    commit_fun: *mut mi_commit_fun_t,
+    commit_fun: Option<mi_commit_fun_t>,
     commit_fun_arg: *mut c_void,
 ) -> bool {
     if mi_option_get(mi_option_t::mi_option_purge_delay) < 0 {
@@ -566,8 +568,8 @@ pub unsafe extern "C" fn _mi_os_purge_ex(
         __mi_stat_counter_increase(&mut stats.purged, size);
     }
 
-    if !commit_fun.is_null() {
-        unsafe { (*commit_fun)(false, p, size, core::ptr::null_mut(), commit_fun_arg) }
+    if let Some(commit_fun) = commit_fun {
+        unsafe { commit_fun(false, p, size, core::ptr::null_mut(), commit_fun_arg) }
     } else if mi_option_is_enabled(mi_option_t::mi_option_purge_decommits)
         && !unsafe { _mi_preloading() }
     {
@@ -585,16 +587,7 @@ pub unsafe extern "C" fn _mi_os_purge_ex(
 /// # Safety
 /// `p..p+size` must designate a valid virtual memory range for the active OS primitive layer.
 pub unsafe extern "C" fn _mi_os_purge(p: *mut c_void, size: usize) -> bool {
-    unsafe {
-        _mi_os_purge_ex(
-            p,
-            size,
-            true,
-            size,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-        )
-    }
+    unsafe { _mi_os_purge_ex(p, size, true, size, None, core::ptr::null_mut()) }
 }
 
 #[inline]

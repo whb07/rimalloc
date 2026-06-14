@@ -297,7 +297,7 @@ pub struct mi_arena_s {
     pub is_exclusive: bool,
     pub _padding: [u8; 7],
     pub purge_expire: AtomicI64,
-    pub commit_fun: mi_commit_fun_t,
+    pub commit_fun: Option<mi_commit_fun_t>,
     pub commit_fun_arg: *mut c_void,
     pub total_size: usize,
     pub parent: *mut mi_arena_t,

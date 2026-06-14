@@ -1993,6 +1993,9 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
                 }
                 true
             });
+            if found {
+                break;
+            }
             if ibin == MI_CBIN_NONE {
                 break;
             }
@@ -2002,7 +2005,7 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
                 mi_chunkbin_inc(ibin)
             };
         }
-        true
+        !found
     });
     found
 }

@@ -589,7 +589,7 @@ unsafe extern "C" {
         size: usize,
         allow_reset: bool,
         stats_size: usize,
-        commit_fun: *mut mi_commit_fun_t,
+        commit_fun: Option<mi_commit_fun_t>,
         commit_fun_arg: *mut c_void,
     ) -> bool;
     pub fn _mi_os_get_aligned_hint(try_alignment: usize, size: usize) -> *mut c_void;

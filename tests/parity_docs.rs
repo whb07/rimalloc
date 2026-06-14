@@ -31,6 +31,9 @@ fn parity_matrix_documents_current_supported_rows() {
     assert!(PARITY_DOC.contains("padding and encoded free lists disabled"));
     assert!(PARITY_DOC.contains("WASI"));
     assert!(PARITY_DOC.contains("Emscripten"));
+    assert!(PARITY_DOC.contains("Windows"));
+    assert!(PARITY_DOC.contains("macOS"));
+    assert!(PARITY_DOC.contains("non-Linux allocator"));
     assert!(PARITY_DOC.contains("ASAN"));
     assert!(PARITY_DOC.contains("TSAN"));
     assert!(PARITY_DOC.contains("UBSAN"));

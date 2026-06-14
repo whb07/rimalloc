@@ -1195,6 +1195,9 @@ static void options_print_with_stderr_suppressed(void) {
 
 int main(void) {
   mi_option_set_default(mi_option_os_tag, 1234);
+  void* preinit = mi_malloc(33);
+  result_bool("preinit_malloc_owned", preinit != NULL && mi_check_owned(preinit) && mi_usable_size(preinit) >= 33);
+  mi_free(preinit);
   mi_process_init();
   result_long("option_preinit_default_survives_process_init", mi_option_get(mi_option_os_tag));
   result_long("option_preinit_default_get", mi_option_get(mi_option_os_tag));
@@ -3781,11 +3784,20 @@ void _mi_auto_process_done(void);
 static char output_buf[16384];
 static size_t output_len = 0;
 static size_t output_callbacks = 0;
+static size_t output_alloc_callbacks = 0;
+static int output_alloc_ok = 1;
 
 static void capture_output(const char* msg, void* arg) {
   (void)arg;
   if (msg == NULL || msg[0] == 0) return;
   output_callbacks++;
+  void* p = mi_malloc(23);
+  if (p == NULL || !mi_check_owned(p) || mi_usable_size(p) < 23) output_alloc_ok = 0;
+  if (p != NULL) {
+    memset(p, 0x5A, 23);
+    output_alloc_callbacks++;
+    mi_free(p);
+  }
   size_t len = strlen(msg);
   size_t room = sizeof(output_buf) - output_len - 1;
   if (len > room) len = room;
@@ -3810,12 +3822,14 @@ int main(void) {
 
   int len = snprintf(line,
                      sizeof(line),
-                     "@@PROCESS_LIFECYCLE callbacks=%zu stats=%d process=%d option=%d len=%zu\n",
+                     "@@PROCESS_LIFECYCLE callbacks=%zu stats=%d process=%d option=%d len=%zu alloc=%zu alloc_ok=%d\n",
                      output_callbacks,
                      strstr(output_buf, "heap ") != NULL ? 1 : 0,
                      strstr(output_buf, "process") != NULL ? 1 : 0,
                      strstr(output_buf, "option '") != NULL ? 1 : 0,
-                     output_len);
+                     output_len,
+                     output_alloc_callbacks,
+                     output_alloc_ok);
   if (len > 0) (void)write(1, line, (size_t)len);
   return p == NULL ? 1 : 0;
 }
@@ -5595,7 +5609,7 @@ def validate_throttle_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> No
 
 def parse_process_lifecycle_capture(output: str) -> dict[str, int]:
     fields = output.strip().split()
-    if len(fields) != 6 or fields[0] != "@@PROCESS_LIFECYCLE":
+    if len(fields) != 8 or fields[0] != "@@PROCESS_LIFECYCLE":
         raise AssertionError(f"unexpected process lifecycle output: {output!r}")
     values: dict[str, int] = {}
     for field in fields[1:]:
@@ -5623,6 +5637,11 @@ def validate_process_lifecycle_capture(c_bin: pathlib.Path, rust_bin: pathlib.Pa
         compared = ("stats", "process", "option")
         if tuple(c_counts[key] for key in compared) != tuple(rust_counts[key] for key in compared):
             raise AssertionError(f"{label} process lifecycle mismatch: C={c_counts} Rust={rust_counts}")
+        for name, counts in (("C", c_counts), ("Rust", rust_counts)):
+            if counts["callbacks"] > 0 and (
+                counts["alloc"] != counts["callbacks"] or counts["alloc_ok"] != 1
+            ):
+                raise AssertionError(f"{label} {name} lifecycle output allocation failed: {counts}")
 
 
 def parse_numa_affinity_capture(output: str) -> dict[str, int]:

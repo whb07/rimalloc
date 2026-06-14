@@ -547,16 +547,6 @@ pub unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_sub
     }
 }
 
-unsafe fn mi_subproc_is_reclaimable(subproc: *mut MiSubprocPrefix) -> bool {
-    unsafe {
-        (*subproc).heap_main.is_null()
-            && (*subproc).heaps.is_null()
-            && (*subproc).arena_count.load(Ordering::Acquire) == 0
-            && (*subproc).heap_count.load(Ordering::Acquire) == 0
-            && (*subproc).thread_count.load(Ordering::Acquire) == 0
-    }
-}
-
 unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
     let subproc = unsafe { mi_subproc_prefix(subproc) };
     // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.
@@ -629,13 +619,22 @@ unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs
         unsafe { mi_lock_release(ptr::addr_of_mut!(subprocs_lock)) };
     }
 
-    unsafe {
-        (*subproc_prefix).heaps = ptr::null_mut();
-        (*subproc_prefix).heap_main = ptr::null_mut();
-        (*subproc_prefix).thread_count.store(0, Ordering::Relaxed);
-        (*subproc_prefix).heap_count.store(0, Ordering::Relaxed);
-        (*subproc_prefix).arena_count.store(0, Ordering::Relaxed);
+    loop {
+        unsafe { mi_lock_acquire(ptr::addr_of_mut!((*subproc_prefix).heaps_lock)) };
+        let heap = unsafe { (*subproc_prefix).heaps };
+        unsafe { mi_lock_release(ptr::addr_of_mut!((*subproc_prefix).heaps_lock)) };
+        if heap.is_null() {
+            break;
+        }
+        if !ptr::eq(heap, unsafe { mi_subproc_heap_main_raw(subproc) }) {
+            unsafe { mi_heap_destroy(heap) };
+        } else {
+            unsafe { _mi_heap_force_destroy(heap) };
+            break;
+        }
     }
+
+    unsafe { _mi_arenas_unsafe_destroy_all(subproc) };
 
     if is_main {
         unsafe { crate::page_map::_mi_page_map_unsafe_destroy(subproc) };
@@ -931,6 +930,9 @@ unsafe extern "C" {
         acquire_heap_theaps_lock: bool,
         acquire_tld_theaps_lock: bool,
     ) -> bool;
+    fn mi_heap_destroy(heap: *mut mi_heap_t);
+    fn _mi_heap_force_destroy(heap: *mut mi_heap_t);
+    fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t);
 }
 
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
@@ -1552,16 +1554,12 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
 
 #[unsafe(no_mangle)]
 /// # Safety
-/// `subproc_id` must identify a subproc created by this crate; only empty bounded subprocs are reclaimed.
+/// `subproc_id` must identify a subproc created by this crate.
 pub unsafe extern "C" fn mi_subproc_destroy(subproc_id: mi_subproc_id_t) {
     mi_subproc_main_init();
     // SAFETY: raw ID comes from the C ABI surface.
     let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
     if subproc.is_null() || core::ptr::eq(subproc, unsafe { _mi_subproc_main() }) {
-        return;
-    }
-    let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
-    if !unsafe { mi_subproc_is_reclaimable(subproc_prefix) } {
         return;
     }
     unsafe { mi_subproc_unsafe_destroy(subproc, true) };

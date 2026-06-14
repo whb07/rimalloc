@@ -641,11 +641,17 @@ pub unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size:
 #[cfg(not(target_pointer_width = "32"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
+    if p.is_null() {
+        return ptr::null_mut();
+    }
     if p >= unsafe { mi_page_map_max_address } {
         return ptr::null_mut();
     }
     let mut sub_idx = 0usize;
     let idx = unsafe { _mi_page_map_index(p, &mut sub_idx) };
+    if !mi_page_map_is_committed(idx, ptr::null_mut()) {
+        return ptr::null_mut();
+    }
     let sub = unsafe { _mi_page_map_at(idx) };
     if sub.is_null() {
         return ptr::null_mut();

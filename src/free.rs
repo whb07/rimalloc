@@ -23,10 +23,10 @@ use crate::internal::{
     MI_ENCODE_FREELIST, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK,
     MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded,
     mi_block_set_next, mi_is_in_same_page, mi_page_all_free, mi_page_block_size,
-    mi_page_has_interior_pointers, mi_page_is_abandoned_mapped, mi_page_is_full,
-    mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_queue, mi_page_start,
-    mi_page_thread_free, mi_page_usable_block_size, mi_page_xthread_id, mi_ptr_encode_canary,
-    mi_tf_block, mi_tf_create, mi_tf_is_owned, mi_theap_is_initialized,
+    mi_page_contains_address, mi_page_has_interior_pointers, mi_page_is_abandoned_mapped,
+    mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_queue,
+    mi_page_start, mi_page_thread_free, mi_page_usable_block_size, mi_page_xthread_id,
+    mi_ptr_encode_canary, mi_tf_block, mi_tf_create, mi_tf_is_owned, mi_theap_is_initialized,
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
@@ -433,7 +433,7 @@ pub unsafe extern "C" fn _mi_free_generic(page: *mut mi_page_t, is_local: bool, 
 }
 
 unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page_t {
-    if MI_DEBUG != 0 {
+    if MI_DEBUG != 0 || cfg!(feature = "secure") {
         if !p.is_null()
             && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
             && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
@@ -445,7 +445,10 @@ unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page
             );
             return ptr::null_mut();
         }
-        let page = _mi_safe_ptr_page(p);
+        let mut page = _mi_safe_ptr_page(p);
+        if !page.is_null() && !mi_page_contains_address(page, p) {
+            page = ptr::null_mut();
+        }
         if !p.is_null() && page.is_null() {
             let msg = std::ffi::CStr::from_ptr(msg).to_string_lossy();
             _mi_error_message_fmt(EINVAL, format_args!("{msg}: invalid pointer: {p:p}\n"));

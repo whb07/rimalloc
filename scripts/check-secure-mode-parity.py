@@ -64,6 +64,20 @@ static int double_free_reports_error(void) {
   return 0;
 }
 
+static int invalid_free_reports_error(void) {
+  uintptr_t local = 0;
+  mi_free(&local);
+  return 0;
+}
+
+static int padding_overrun_reports_error(void) {
+  unsigned char* p = (unsigned char*)mi_malloc(16);
+  if (p == NULL) return 35;
+  p[16] = 0xA5;
+  mi_free(p);
+  return 0;
+}
+
 static int corrupt_free_list_aborts(void) {
   void* p = mi_malloc(64);
   void* q = mi_malloc(64);
@@ -80,9 +94,12 @@ static int corrupt_free_list_aborts(void) {
 
 int main(int argc, char** argv) {
   if (argc != 2) return 2;
+  mi_process_init();
   if (strcmp(argv[1], "encoded-next") == 0) return encoded_next_is_not_raw_null();
   if (strcmp(argv[1], "randomized-order") == 0) return allocation_order_is_randomized();
   if (strcmp(argv[1], "double-free") == 0) return double_free_reports_error();
+  if (strcmp(argv[1], "invalid-free") == 0) return invalid_free_reports_error();
+  if (strcmp(argv[1], "padding-overrun") == 0) return padding_overrun_reports_error();
   if (strcmp(argv[1], "corrupt-free-list") == 0) return corrupt_free_list_aborts();
   fprintf(stderr, "unknown case: %s\n", argv[1]);
   return 3;
@@ -104,6 +121,16 @@ CASES = {
         "status": 0,
         "stdout": None,
         "stderr": "double free detected",
+    },
+    "invalid-free": {
+        "status": 0,
+        "stdout": None,
+        "stderr": "invalid pointer",
+    },
+    "padding-overrun": {
+        "status": -6,
+        "stdout": None,
+        "stderr": "buffer overflow",
     },
     "corrupt-free-list": {
         "status": -6,
@@ -248,7 +275,7 @@ def main() -> int:
     compile_probe(cc, c_debug_bin, [c_mimalloc_object(cc, secure=False)], secure=False)
     compile_probe(cc, rust_debug_bin, [rust_staticlib([], "debug")], secure=False)
 
-    for case in ["encoded-next", "double-free", "corrupt-free-list"]:
+    for case in ["encoded-next", "double-free", "invalid-free", "padding-overrun", "corrupt-free-list"]:
         c_result = run_case(c_debug_bin, case)
         rust_result = run_case(rust_debug_bin, case)
         verify_case("C debug", case, c_result)

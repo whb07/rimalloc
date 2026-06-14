@@ -451,6 +451,20 @@ struct heap_abandoned_result {
   int allocated;
 };
 
+#define STRESS_THREADS 8
+#define STRESS_SLOTS 64
+#define STRESS_INCOMING 16
+#define STRESS_ROUNDS 512
+#define STRESS_WAVES 3
+
+struct stress_worker_arg {
+  void* incoming[STRESS_INCOMING];
+  size_t incoming_count;
+  size_t id;
+  int use_threadpool;
+  int ok;
+};
+
 struct theap_wrong_thread_result {
   mi_theap_t* theap;
   int op;
@@ -560,6 +574,96 @@ static void* heap_abandoned_worker(void* arg) {
                        mi_heap_contains(result->heap, result->a) &&
                        mi_heap_contains(result->heap, result->b) &&
                        mi_heap_contains(result->heap, result->c));
+  mi_thread_done();
+  return NULL;
+}
+
+static void* stress_worker(void* arg) {
+  struct stress_worker_arg* result = (struct stress_worker_arg*)arg;
+  void* slots[STRESS_SLOTS];
+  memset(slots, 0, sizeof(slots));
+  result->ok = 1;
+
+  mi_thread_init();
+  if (result->use_threadpool) {
+    mi_thread_set_in_threadpool();
+  }
+
+  for (size_t i = 0; i < result->incoming_count; i++) {
+    if (result->incoming[i] == NULL || !mi_is_in_heap_region(result->incoming[i])) {
+      result->ok = 0;
+    }
+    mi_free(result->incoming[i]);
+    result->incoming[i] = NULL;
+  }
+
+  for (size_t round = 0; round < STRESS_ROUNDS; round++) {
+    size_t slot = (round * 17 + result->id * 5) % STRESS_SLOTS;
+    if (slots[slot] != NULL) {
+      if ((round % 3) == 0) {
+        size_t new_size = 1 + ((round * 29 + result->id * 13) % 4096);
+        void* resized = mi_realloc(slots[slot], new_size);
+        if (resized == NULL || !mi_check_owned(resized) || mi_usable_size(resized) < new_size) {
+          result->ok = 0;
+          mi_free(resized);
+          slots[slot] = NULL;
+        }
+        else {
+          slots[slot] = resized;
+        }
+      }
+      else {
+        mi_free(slots[slot]);
+        slots[slot] = NULL;
+      }
+    }
+    else {
+      size_t size = 1 + ((round * 37 + result->id * 19) % 8192);
+      void* p = NULL;
+      switch (round % 5) {
+        case 0:
+          p = mi_malloc(size);
+          break;
+        case 1:
+          p = mi_zalloc(size);
+          break;
+        case 2: {
+          size_t alignment = (size_t)16 << ((round + result->id) % 3);
+          p = mi_malloc_aligned(size, alignment);
+          if (p != NULL && (((uintptr_t)p % alignment) != 0)) {
+            result->ok = 0;
+          }
+          break;
+        }
+        case 3:
+          p = mi_realloc(NULL, size);
+          break;
+        default: {
+          size_t count = 1 + (round % 7);
+          size_t elem_size = 1 + (size / count);
+          size = count * elem_size;
+          p = mi_mallocn(count, elem_size);
+          break;
+        }
+      }
+      if (p == NULL || !mi_check_owned(p) || mi_usable_size(p) < size) {
+        result->ok = 0;
+        mi_free(p);
+      }
+      else {
+        slots[slot] = p;
+      }
+    }
+
+    if ((round % 97) == 0) {
+      mi_collect(false);
+    }
+  }
+
+  for (size_t i = 0; i < STRESS_SLOTS; i++) {
+    mi_free(slots[i]);
+  }
+  mi_collect(true);
   mi_thread_done();
   return NULL;
 }
@@ -1038,6 +1142,69 @@ int main(void) {
   result_bool("thread_init_alloc_owned", thread_joined && thread_result.init_alloc_owned);
   result_bool("threadpool_alloc_owned", thread_joined && thread_result.threadpool_alloc_owned);
   result_bool("thread_after_done_alloc_owned", thread_joined && thread_result.after_done_alloc_owned);
+
+  mi_stats_t stress_before;
+  mi_stats_t stress_after;
+  mi_stats_t stress_final;
+  mi_stats_init(&stress_before);
+  mi_stats_init(&stress_after);
+  mi_stats_init(&stress_final);
+  result_bool("stress_before_ok", mi_stats_get(&stress_before));
+  int stress_all_ok = 1;
+  for (size_t wave = 0; wave < STRESS_WAVES; wave++) {
+    pthread_t stress_threads[STRESS_THREADS];
+    struct stress_worker_arg stress_args[STRESS_THREADS];
+    size_t stress_started = 0;
+    memset(stress_threads, 0, sizeof(stress_threads));
+    memset(stress_args, 0, sizeof(stress_args));
+    for (size_t t = 0; t < STRESS_THREADS; t++) {
+      stress_args[t].id = t + (wave * STRESS_THREADS);
+      stress_args[t].incoming_count = STRESS_INCOMING;
+      stress_args[t].use_threadpool = ((t + wave) % 2) == 0;
+      stress_args[t].ok = 0;
+      for (size_t i = 0; i < STRESS_INCOMING; i++) {
+        size_t size = 1 + (((wave + 1) * (t + 3) * (i + 5)) % 2048);
+        stress_args[t].incoming[i] = mi_malloc(size);
+        if (stress_args[t].incoming[i] == NULL || !mi_check_owned(stress_args[t].incoming[i])) {
+          stress_all_ok = 0;
+        }
+      }
+      if (pthread_create(&stress_threads[t], NULL, stress_worker, &stress_args[t]) == 0) {
+        stress_started++;
+      }
+      else {
+        stress_all_ok = 0;
+        for (size_t i = 0; i < stress_args[t].incoming_count; i++) {
+          mi_free(stress_args[t].incoming[i]);
+          stress_args[t].incoming[i] = NULL;
+        }
+      }
+    }
+    result_bool("stress_wave_threads_started", stress_started == STRESS_THREADS);
+    for (size_t t = 0; t < stress_started; t++) {
+      if (pthread_join(stress_threads[t], NULL) != 0 || !stress_args[t].ok) {
+        stress_all_ok = 0;
+      }
+    }
+    result_bool("stress_wave_workers_ok", stress_all_ok);
+    mi_collect(true);
+  }
+  result_bool("stress_after_ok", mi_stats_get(&stress_after));
+  mi_collect(true);
+  result_bool("stress_final_ok", mi_stats_get(&stress_final));
+  result_bool("stress_workers_ok", stress_all_ok);
+  result_bool("stress_current_nonnegative",
+              stats_alloc_current(&stress_after) >= 0 &&
+              stats_alloc_current(&stress_final) >= 0);
+  result_bool("stress_peak_consistent",
+              stats_alloc_peak(&stress_after) >= stats_alloc_current(&stress_after) &&
+              stats_alloc_peak(&stress_final) >= stats_alloc_current(&stress_final));
+  result_bool("stress_total_monotonic",
+              stats_alloc_total(&stress_after) >= stats_alloc_total(&stress_before) &&
+              stats_alloc_total(&stress_final) >= stats_alloc_total(&stress_after));
+  result_bool("stress_current_not_increased_after_collect",
+              stats_alloc_current(&stress_final) <= stats_alloc_current(&stress_after));
+
   result_bool("fork_alloc_parent_child_status", fork_allocation_case_status() == 0);
 
   result_bool("option_alias_large_os_pages", mi_option_large_os_pages == mi_option_allow_large_os_pages);
@@ -3752,6 +3919,161 @@ int main(void) {
 }
 """
 
+STRESS_RELEASE_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+#include <mimalloc-stats.h>
+
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#define RELEASE_STRESS_THREADS 8
+#define RELEASE_STRESS_SLOTS 48
+#define RELEASE_STRESS_INCOMING 8
+#define RELEASE_STRESS_ROUNDS 384
+#define RELEASE_STRESS_WAVES 3
+
+static int64_t stats_alloc_current(const mi_stats_t* stats) {
+  return stats->malloc_normal.current + stats->malloc_huge.current;
+}
+
+static int64_t stats_alloc_peak(const mi_stats_t* stats) {
+  return stats->malloc_normal.peak + stats->malloc_huge.peak;
+}
+
+static int64_t stats_alloc_total(const mi_stats_t* stats) {
+  return stats->malloc_normal.total + stats->malloc_huge.total;
+}
+
+struct release_stress_arg {
+  void* incoming[RELEASE_STRESS_INCOMING];
+  size_t id;
+  int use_threadpool;
+  int ok;
+};
+
+static void* release_stress_worker(void* arg) {
+  struct release_stress_arg* result = (struct release_stress_arg*)arg;
+  void* slots[RELEASE_STRESS_SLOTS];
+  memset(slots, 0, sizeof(slots));
+  result->ok = 1;
+
+  mi_thread_init();
+  if (result->use_threadpool) mi_thread_set_in_threadpool();
+
+  for (size_t i = 0; i < RELEASE_STRESS_INCOMING; i++) {
+    if (result->incoming[i] == NULL || !mi_is_in_heap_region(result->incoming[i])) result->ok = 0;
+    mi_free(result->incoming[i]);
+    result->incoming[i] = NULL;
+  }
+
+  for (size_t round = 0; round < RELEASE_STRESS_ROUNDS; round++) {
+    size_t slot = (round * 11 + result->id * 7) % RELEASE_STRESS_SLOTS;
+    if (slots[slot] != NULL) {
+      if ((round % 4) == 0) {
+        size_t new_size = 1 + ((round * 23 + result->id * 17) % 4096);
+        void* resized = mi_realloc(slots[slot], new_size);
+        if (resized == NULL || !mi_check_owned(resized) || mi_usable_size(resized) < new_size) {
+          result->ok = 0;
+          mi_free(resized);
+          slots[slot] = NULL;
+        }
+        else {
+          slots[slot] = resized;
+        }
+      }
+      else {
+        mi_free(slots[slot]);
+        slots[slot] = NULL;
+      }
+    }
+    else {
+      size_t size = 1 + ((round * 31 + result->id * 13) % 8192);
+      void* p = NULL;
+      if ((round % 4) == 0) {
+        p = mi_malloc(size);
+      }
+      else if ((round % 4) == 1) {
+        p = mi_zalloc(size);
+      }
+      else if ((round % 4) == 2) {
+        size_t alignment = (size_t)16 << ((round + result->id) % 3);
+        p = mi_malloc_aligned(size, alignment);
+        if (p != NULL && (((uintptr_t)p % alignment) != 0)) result->ok = 0;
+      }
+      else {
+        size_t count = 1 + (round % 5);
+        size_t elem_size = 1 + (size / count);
+        size = count * elem_size;
+        p = mi_mallocn(count, elem_size);
+      }
+      if (p == NULL || !mi_check_owned(p) || mi_usable_size(p) < size) {
+        result->ok = 0;
+        mi_free(p);
+      }
+      else {
+        slots[slot] = p;
+      }
+    }
+    if ((round % 89) == 0) mi_collect(false);
+  }
+
+  for (size_t i = 0; i < RELEASE_STRESS_SLOTS; i++) mi_free(slots[i]);
+  mi_collect(true);
+  mi_thread_done();
+  return NULL;
+}
+
+int main(void) {
+  mi_stats_t before;
+  mi_stats_t after;
+  mi_stats_init(&before);
+  mi_stats_init(&after);
+  int before_ok = mi_stats_get(&before) ? 1 : 0;
+  int all_started = 1;
+  int all_workers = 1;
+
+  for (size_t wave = 0; wave < RELEASE_STRESS_WAVES; wave++) {
+    pthread_t threads[RELEASE_STRESS_THREADS];
+    struct release_stress_arg args[RELEASE_STRESS_THREADS];
+    size_t started = 0;
+    memset(threads, 0, sizeof(threads));
+    memset(args, 0, sizeof(args));
+    for (size_t t = 0; t < RELEASE_STRESS_THREADS; t++) {
+      args[t].id = t + (wave * RELEASE_STRESS_THREADS);
+      args[t].use_threadpool = ((t + wave) % 2) == 0;
+      for (size_t i = 0; i < RELEASE_STRESS_INCOMING; i++) {
+        args[t].incoming[i] = mi_malloc(1 + (((wave + 1) * (t + 2) * (i + 3)) % 1024));
+        if (args[t].incoming[i] == NULL || !mi_check_owned(args[t].incoming[i])) all_workers = 0;
+      }
+      if (pthread_create(&threads[t], NULL, release_stress_worker, &args[t]) == 0) {
+        started++;
+      }
+      else {
+        all_started = 0;
+        all_workers = 0;
+        for (size_t i = 0; i < RELEASE_STRESS_INCOMING; i++) mi_free(args[t].incoming[i]);
+      }
+    }
+    if (started != RELEASE_STRESS_THREADS) all_started = 0;
+    for (size_t t = 0; t < started; t++) {
+      if (pthread_join(threads[t], NULL) != 0 || !args[t].ok) all_workers = 0;
+    }
+    mi_collect(true);
+  }
+
+  int after_ok = mi_stats_get(&after) ? 1 : 0;
+  int stats_ok = before_ok && after_ok &&
+                 stats_alloc_current(&after) >= 0 &&
+                 stats_alloc_peak(&after) >= stats_alloc_current(&after) &&
+                 stats_alloc_total(&after) >= stats_alloc_total(&before);
+  printf("@@STRESS_RELEASE started=%d workers=%d stats=%d\n", all_started, all_workers, stats_ok);
+  return (all_started && all_workers && stats_ok ? 0 : 1);
+}
+"""
+
 HUGE_OS_PAGES_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -4894,6 +5216,7 @@ def main() -> int:
     numa_affinity_capture = BUILD_DIR / "numa-affinity-capture.c"
     arena_fallback_capture = BUILD_DIR / "arena-fallback-capture.c"
     free_hint_release_capture = BUILD_DIR / "free-hint-release-capture.c"
+    stress_release_capture = BUILD_DIR / "stress-release-capture.c"
     huge_os_pages_capture = BUILD_DIR / "huge-os-pages-capture.c"
     redirect_static_capture = BUILD_DIR / "redirect-static-capture.c"
     redirect_dynamic_capture = BUILD_DIR / "redirect-dynamic-capture.c"
@@ -4909,6 +5232,7 @@ def main() -> int:
     numa_affinity_capture.write_text(NUMA_AFFINITY_CAPTURE_C)
     arena_fallback_capture.write_text(ARENA_FALLBACK_CAPTURE_C)
     free_hint_release_capture.write_text(FREE_HINT_RELEASE_CAPTURE_C)
+    stress_release_capture.write_text(STRESS_RELEASE_CAPTURE_C)
     huge_os_pages_capture.write_text(HUGE_OS_PAGES_CAPTURE_C)
     redirect_static_capture.write_text(REDIRECT_STATIC_CAPTURE_C)
     redirect_dynamic_capture.write_text(REDIRECT_DYNAMIC_CAPTURE_C)
@@ -4940,6 +5264,8 @@ def main() -> int:
     rust_arena_fallback_bin = BUILD_DIR / "arena-fallback-rust"
     c_free_hint_release_bin = BUILD_DIR / "free-hint-release-c"
     rust_free_hint_release_bin = BUILD_DIR / "free-hint-release-rust"
+    c_stress_release_bin = BUILD_DIR / "stress-release-c"
+    rust_stress_release_bin = BUILD_DIR / "stress-release-rust"
     c_huge_os_pages_bin = BUILD_DIR / "huge-os-pages-c"
     rust_huge_os_pages_bin = BUILD_DIR / "huge-os-pages-rust"
     c_redirect_static_bin = BUILD_DIR / "redirect-static-c"
@@ -4982,6 +5308,13 @@ def main() -> int:
         ["-DNDEBUG"],
     )
     compile_binary(cc, rust_free_hint_release_bin, [free_hint_release_capture, rust_release_lib], ["-DNDEBUG"])
+    compile_binary(
+        cc,
+        c_stress_release_bin,
+        [ROOT / "mimalloc-3.3.2/src/static.c", stress_release_capture],
+        ["-DNDEBUG"],
+    )
+    compile_binary(cc, rust_stress_release_bin, [stress_release_capture, rust_release_lib], ["-DNDEBUG"])
     compile_binary(cc, c_huge_os_pages_bin, [ROOT / "mimalloc-3.3.2/src/static.c", huge_os_pages_capture])
     compile_binary(cc, rust_huge_os_pages_bin, [huge_os_pages_capture, rust_lib])
     compile_binary(
@@ -5091,6 +5424,16 @@ def main() -> int:
         print(rust_free_hint_release, file=sys.stderr)
         return 1
 
+    c_stress_release = run(c_stress_release_bin)
+    rust_stress_release = run(rust_stress_release_bin)
+    if c_stress_release != rust_stress_release:
+        print("stress release parity mismatch", file=sys.stderr)
+        print("--- C mimalloc ---", file=sys.stderr)
+        print(c_stress_release, file=sys.stderr)
+        print("--- Rust mimalloc ---", file=sys.stderr)
+        print(rust_stress_release, file=sys.stderr)
+        return 1
+
     c_huge_os_pages = run(c_huge_os_pages_bin)
     rust_huge_os_pages = run(rust_huge_os_pages_bin)
     if c_huge_os_pages != rust_huge_os_pages:
@@ -5126,6 +5469,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc NUMA affinity behavior matches")
     print("ok: C and Rust mimalloc arena fallback behavior matches")
     print("ok: C and Rust mimalloc release free-hint behavior matches")
+    print("ok: C and Rust mimalloc release stress behavior matches")
     print("ok: C and Rust mimalloc huge OS page fallback behavior matches")
     print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")
     print(c_output, end="")

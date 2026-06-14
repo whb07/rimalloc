@@ -63,6 +63,20 @@ The header constants currently verified from the baseline are:
 Any change to these vendored headers must be reviewed as a baseline change
 before Rust public API parity items can be considered complete.
 
+## Known Unresolved Baseline Mismatches
+
+These entries are not accepted Rust non-parity decisions. They are open parity
+blockers where the vendored public headers declare a symbol but the vendored C
+static implementation used by the repository's link checks does not provide a
+linkable definition, or where the C baseline cannot currently exercise the
+declared surface directly.
+
+| Affected APIs | Baseline observation | TODO impact |
+|---|---|---|
+| `mi_stats_merge`, `mi_collect_reduce` | `mimalloc-3.3.2/include/mimalloc.h` declares both deprecated APIs, but compiling `mimalloc-3.3.2/src/static.c` does not produce linkable definitions for them. | TODO items for these APIs remain open until the C baseline is reconciled or the Rust behavior is otherwise proven against an authoritative C implementation. |
+| `mi_theap_set_default` | The Rust artifact exports the API, but the vendored C static baseline used for direct link parity does not provide a linkable public definition. | The theap default-switching TODOs remain open until the C baseline can directly link and compare the behavior. |
+| `mi_uzalloc_small` | The Rust artifact exports the API, but the vendored C static baseline used for direct link parity does not provide a linkable public definition. | The usable-size allocation-family TODO remains open until the C baseline can directly link and compare the behavior. |
+
 ## Signoff Command Set
 
 Run this sequence from the repository root before declaring a parity checkpoint

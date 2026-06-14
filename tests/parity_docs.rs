@@ -105,6 +105,30 @@ fn parity_docs_record_rust_only_export_safety_contracts() {
 }
 
 #[test]
+fn parity_docs_record_unresolved_baseline_mismatches() {
+    assert!(PARITY_DOC.contains("Known Unresolved Baseline Mismatches"));
+    assert!(PARITY_DOC.contains("not accepted Rust non-parity decisions"));
+    assert!(PARITY_DOC.contains("vendored public headers declare a symbol"));
+    assert!(PARITY_DOC.contains("linkable definition"));
+
+    for api in [
+        "mi_stats_merge",
+        "mi_collect_reduce",
+        "mi_theap_set_default",
+        "mi_uzalloc_small",
+    ] {
+        assert!(
+            PARITY_DOC.contains(api),
+            "missing unresolved baseline mismatch for {api}"
+        );
+    }
+
+    assert!(PARITY_DOC.contains("TODO items for these APIs remain open"));
+    assert!(PARITY_DOC.contains("theap default-switching TODOs remain open"));
+    assert!(PARITY_DOC.contains("allocation-family TODO remains open"));
+}
+
+#[test]
 fn parity_signoff_documents_required_commands() {
     for command in [
         "cargo fmt --check",

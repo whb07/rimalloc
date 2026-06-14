@@ -39,6 +39,12 @@ static size_t registered_output_a = 0;
 static size_t registered_output_b = 0;
 static size_t registered_error_a = 0;
 static size_t registered_error_b = 0;
+static size_t deferred_calls = 0;
+static size_t deferred_force_true = 0;
+static size_t deferred_force_false = 0;
+static int deferred_arg_seen = 0;
+static int deferred_heartbeat_monotonic = 1;
+static unsigned long long deferred_last_heartbeat = 0;
 static size_t arena_output_callbacks = 0;
 static int arena_output_seen_arena = 0;
 static int arena_output_seen_chunks = 0;
@@ -145,6 +151,15 @@ static void registered_error_callback_b(int err, void* arg) {
   if (err != 0 && arg == (void*)0xE22B) {
     registered_error_b++;
   }
+}
+
+static void registered_deferred_callback(bool force, unsigned long long heartbeat, void* arg) {
+  deferred_calls++;
+  if (force) deferred_force_true++;
+  else deferred_force_false++;
+  if (arg == (void*)0xDEF) deferred_arg_seen = 1;
+  if (heartbeat <= deferred_last_heartbeat) deferred_heartbeat_monotonic = 0;
+  deferred_last_heartbeat = heartbeat;
 }
 
 static void arena_output_callback(const char* msg, void* arg) {
@@ -889,6 +904,25 @@ int main(void) {
   err_alloc = mi_calloc(overflow_count, 2);
   (void)err_alloc;
   result_bool("register_error_clear", registered_error_b == error_after_clear);
+
+  deferred_calls = 0;
+  deferred_force_true = 0;
+  deferred_force_false = 0;
+  deferred_arg_seen = 0;
+  deferred_heartbeat_monotonic = 1;
+  deferred_last_heartbeat = 0;
+  mi_register_deferred_free(registered_deferred_callback, (void*)0xDEF);
+  mi_collect(false);
+  mi_collect(true);
+  result_bool("deferred_free_called", deferred_calls >= 2);
+  result_bool("deferred_free_force_false", deferred_force_false > 0);
+  result_bool("deferred_free_force_true", deferred_force_true > 0);
+  result_bool("deferred_free_arg", deferred_arg_seen);
+  result_bool("deferred_free_heartbeat", deferred_heartbeat_monotonic && deferred_last_heartbeat >= deferred_calls);
+  mi_register_deferred_free(NULL, NULL);
+  size_t deferred_after_clear = deferred_calls;
+  mi_collect(true);
+  result_bool("deferred_free_clear", deferred_calls == deferred_after_clear);
 
   errno = 0;
   void* p = mi_malloc(17);

@@ -145,7 +145,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Match error callback behavior. Validation: tests trigger OOM, invalid free/debug errors, invalid options, and arena failures, then compare error codes, callback args, output limits, and fallback output against C mimalloc.
 - [x] Match warning/error throttling through `mi_option_max_errors` and `mi_option_max_warnings`. Validation: tests intentionally trigger repeated warnings/errors and compare emitted count and suppression behavior with C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match verbose, show-errors, show-stats, and destroy-on-exit behavior. Validation: subprocess tests compare process exit output, cleanup, stats printing, and teardown side effects against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
-- [ ] Match deferred free callback registration and invocation. Validation: tests register callbacks, drive heartbeat/force conditions, verify callback timing and arguments, and compare with C mimalloc.
+- [x] Match deferred free callback registration and invocation. Validation: tests register callbacks, drive heartbeat/force conditions, verify callback timing and arguments, and compare with C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 
 ## Statistics and JSON
 

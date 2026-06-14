@@ -2285,6 +2285,9 @@ int main(void) {
   mi_free(heap_collect_live_a);
   mi_free(heap_collect_live_b);
 
+  mi_stats_t_decl(heap_page_stats_start);
+  bool heap_page_stats_start_ok = heap != NULL && mi_heap_stats_get(heap, &heap_page_stats_start);
+  result_bool("heap_page_stats_start_success", heap_page_stats_start_ok);
   void* heap_retire_blocks[96];
   size_t heap_retire_allocated = 0;
   for (size_t i = 0; i < 96; i++) {
@@ -2292,12 +2295,39 @@ int main(void) {
     if (heap_retire_blocks[i] != NULL && mi_heap_contains(heap, heap_retire_blocks[i])) heap_retire_allocated++;
   }
   result_bool("heap_collect_retire_allocated", heap_retire_allocated == 96);
+  mi_stats_t_decl(heap_page_stats_allocated);
+  bool heap_page_stats_allocated_ok = heap != NULL && mi_heap_stats_get(heap, &heap_page_stats_allocated);
+  result_bool("heap_page_stats_allocated_success", heap_page_stats_allocated_ok);
+  long heap_page_extended_delta =
+    (long)(heap_page_stats_allocated.pages_extended.total - heap_page_stats_start.pages_extended.total);
+  long heap_page_current_delta =
+    (long)(heap_page_stats_allocated.pages.current - heap_page_stats_start.pages.current);
+  result_long("heap_page_stats_extended_total_delta", heap_page_stats_start_ok && heap_page_stats_allocated_ok ? heap_page_extended_delta : 0);
+  result_long("heap_page_stats_pages_current_delta", heap_page_stats_start_ok && heap_page_stats_allocated_ok ? heap_page_current_delta : 0);
+  result_bool("heap_page_stats_extended_delta",
+              heap_page_stats_start_ok && heap_page_stats_allocated_ok &&
+              heap_page_stats_allocated.pages_extended.total > heap_page_stats_start.pages_extended.total);
+  result_bool("heap_page_stats_pages_current_increased",
+              heap_page_stats_start_ok && heap_page_stats_allocated_ok &&
+              heap_page_stats_allocated.pages.current >= heap_page_stats_start.pages.current);
   for (size_t i = 0; i < heap_retire_allocated; i++) {
     mi_free(heap_retire_blocks[i]);
   }
   mi_stats_t_decl(heap_collect_stats_before);
   bool heap_collect_stats_before_ok = heap != NULL && mi_heap_stats_get(heap, &heap_collect_stats_before);
   result_bool("heap_collect_stats_before_success", heap_collect_stats_before_ok);
+  long heap_page_retire_delta =
+    (long)(heap_collect_stats_before.pages_retire.total - heap_page_stats_allocated.pages_retire.total);
+  long heap_page_current_after_free_delta =
+    (long)(heap_collect_stats_before.pages.current - heap_page_stats_allocated.pages.current);
+  result_long("heap_page_stats_retire_total_delta", heap_page_stats_allocated_ok && heap_collect_stats_before_ok ? heap_page_retire_delta : 0);
+  result_long("heap_page_stats_pages_current_after_free_delta", heap_page_stats_allocated_ok && heap_collect_stats_before_ok ? heap_page_current_after_free_delta : 0);
+  result_bool("heap_page_stats_retire_delta",
+              heap_page_stats_allocated_ok && heap_collect_stats_before_ok &&
+              heap_collect_stats_before.pages_retire.total > heap_page_stats_allocated.pages_retire.total);
+  result_bool("heap_page_stats_pages_current_after_free",
+              heap_page_stats_allocated_ok && heap_collect_stats_before_ok &&
+              heap_collect_stats_before.pages.current <= heap_page_stats_allocated.pages.current);
   mi_heap_collect(heap, false);
   mi_heap_collect(heap, true);
   mi_stats_t_decl(heap_collect_stats_after);
@@ -2308,6 +2338,15 @@ int main(void) {
   result_bool("heap_collect_stats_malloc_peak_consistent", heap_collect_stats_after_ok && heap_collect_stats_after.malloc_normal.peak >= heap_collect_stats_after.malloc_normal.current);
   void* heap_retire_reuse = heap == NULL ? NULL : mi_heap_malloc(heap, 1024);
   result_bool("heap_collect_retire_reuse", heap_retire_reuse != NULL && mi_heap_contains(heap, heap_retire_reuse));
+  mi_stats_t_decl(heap_collect_stats_reuse);
+  bool heap_collect_stats_reuse_ok = heap != NULL && mi_heap_stats_get(heap, &heap_collect_stats_reuse);
+  result_bool("heap_collect_stats_reuse_success", heap_collect_stats_reuse_ok);
+  long heap_page_reuse_current_delta =
+    (long)(heap_collect_stats_reuse.malloc_normal.current - heap_collect_stats_after.malloc_normal.current);
+  result_long("heap_page_stats_reuse_current_delta", heap_collect_stats_after_ok && heap_collect_stats_reuse_ok ? heap_page_reuse_current_delta : 0);
+  result_bool("heap_page_stats_reuse_current_increased",
+              heap_collect_stats_after_ok && heap_collect_stats_reuse_ok &&
+              heap_collect_stats_reuse.malloc_normal.current >= heap_collect_stats_after.malloc_normal.current);
   mi_free(heap_retire_reuse);
 
   void* visit_a = heap == NULL ? NULL : mi_heap_malloc(heap, 80);

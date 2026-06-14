@@ -2397,6 +2397,60 @@ int main(void) {
 }
 """
 
+ENV_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+static char output_buf[8192];
+static size_t output_len = 0;
+static size_t output_callbacks = 0;
+
+static void capture_output(const char* msg, void* arg) {
+  (void)arg;
+  if (msg == NULL) return;
+  output_callbacks++;
+  size_t len = strlen(msg);
+  size_t room = sizeof(output_buf) - output_len - 1;
+  if (len > room) len = room;
+  memcpy(output_buf + output_len, msg, len);
+  output_len += len;
+  output_buf[output_len] = 0;
+}
+
+int main(void) {
+  char line[256];
+  mi_register_output(capture_output, NULL);
+  for (int i = 0; i < _mi_option_last; i++) {
+    mi_option_t option = (mi_option_t)i;
+    long value = mi_option_get(option);
+    size_t size = mi_option_get_size(option);
+    int enabled = mi_option_is_enabled(option) ? 1 : 0;
+    int len = snprintf(line,
+                       sizeof(line),
+                       "@@OPTION %d %ld %zu %d\n",
+                       i,
+                       value,
+                       size,
+                       enabled);
+    if (len > 0) (void)write(1, line, (size_t)len);
+  }
+  int len = snprintf(line,
+                     sizeof(line),
+                     "@@OUTPUT callbacks=%zu deprecated=%d invalid=%d verbose=%d len=%zu\n",
+                     output_callbacks,
+                     strstr(output_buf, "deprecated") != NULL ? 1 : 0,
+                     strstr(output_buf, "invalid value") != NULL ? 1 : 0,
+                     strstr(output_buf, "option '") != NULL ? 1 : 0,
+                     output_len);
+  if (len > 0) (void)write(1, line, (size_t)len);
+  return 0;
+}
+"""
+
 
 def rust_staticlib() -> pathlib.Path:
     subprocess.run(
@@ -2452,6 +2506,33 @@ def run(binary: pathlib.Path) -> str:
     return completed.stdout
 
 
+def run_with_env(binary: pathlib.Path, env_updates: dict[str, str], label: str) -> str:
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": os.environ.get("HOME", ""),
+        "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
+    }
+    env.update(env_updates)
+    try:
+        completed = subprocess.run(
+            [str(binary)],
+            cwd=ROOT,
+            env=env,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired as err:
+        stdout = (err.stdout or b"").decode(errors="replace") if isinstance(err.stdout, bytes) else (err.stdout or "")
+        stderr = (err.stderr or b"").decode(errors="replace") if isinstance(err.stderr, bytes) else (err.stderr or "")
+        raise AssertionError(
+            f"{label} timed out for {binary.name} with env {env_updates}; stdout={stdout!r}; stderr={stderr!r}"
+        ) from err
+    return completed.stdout
+
+
 STAT_COUNT_KEYS = {
     "pages",
     "reserved",
@@ -2503,6 +2584,81 @@ PROCESS_KEYS = {
     "rss_peak",
     "commit_current",
     "commit_peak",
+}
+
+OPTION_NAMES = (
+    "show_errors",
+    "show_stats",
+    "verbose",
+    "deprecated_eager_commit",
+    "arena_eager_commit",
+    "purge_decommits",
+    "allow_large_os_pages",
+    "reserve_huge_os_pages",
+    "reserve_huge_os_pages_at",
+    "reserve_os_memory",
+    "deprecated_segment_cache",
+    "deprecated_page_reset",
+    "deprecated_abandoned_page_purge",
+    "deprecated_segment_reset",
+    "deprecated_eager_commit_delay",
+    "purge_delay",
+    "use_numa_nodes",
+    "disallow_os_alloc",
+    "os_tag",
+    "max_errors",
+    "max_warnings",
+    "deprecated_max_segment_reclaim",
+    "destroy_on_exit",
+    "arena_reserve",
+    "arena_purge_mult",
+    "deprecated_purge_extend_delay",
+    "disallow_arena_alloc",
+    "retry_on_oom",
+    "visit_abandoned",
+    "guarded_min",
+    "guarded_max",
+    "guarded_precise",
+    "guarded_sample_rate",
+    "guarded_sample_seed",
+    "generic_collect",
+    "page_reclaim_on_free",
+    "page_full_retain",
+    "page_max_candidates",
+    "max_vabits",
+    "pagemap_commit",
+    "page_commit_on_demand",
+    "page_max_reclaim",
+    "page_cross_thread_max_reclaim",
+    "allow_thp",
+    "minimal_purge_size",
+    "arena_max_object_size",
+    "arena_is_numa_local",
+)
+
+LEGACY_OPTION_NAMES = {
+    "eager_region_commit": "arena_eager_commit",
+    "reset_decommits": "purge_decommits",
+    "large_os_pages": "allow_large_os_pages",
+    "reset_delay": "purge_delay",
+    "limit_os_alloc": "disallow_os_alloc",
+    "decommit_extend_delay": "deprecated_purge_extend_delay",
+    "abandoned_reclaim_on_free": "page_reclaim_on_free",
+}
+
+ENV_CANONICAL_VALUES = {
+    "arena_eager_commit": "2",
+    "allow_large_os_pages": "0",
+    "reserve_huge_os_pages": "0",
+    "reserve_huge_os_pages_at": "-1",
+    "reserve_os_memory": "0",
+    "disallow_os_alloc": "0",
+    "destroy_on_exit": "0",
+    "arena_reserve": "0",
+    "disallow_arena_alloc": "0",
+    "guarded_sample_rate": "0",
+    "allow_thp": "0",
+    "arena_is_numa_local": "0",
 }
 
 TOP_KEYS = (
@@ -2708,6 +2864,66 @@ def validate_process_capture(c_info: dict[str, dict[str, int]], rust_info: dict[
                 raise AssertionError(f"{phase}.{key} differs beyond RSS/commit tolerance: C={c_phase[key]} Rust={rust_phase[key]}")
 
 
+def parse_env_capture(output: str) -> tuple[dict[int, tuple[int, int, int]], dict[str, int]]:
+    options: dict[int, tuple[int, int, int]] = {}
+    output_flags: dict[str, int] | None = None
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) == 5 and fields[0] == "@@OPTION":
+            options[int(fields[1])] = (int(fields[2]), int(fields[3]), int(fields[4]))
+        elif len(fields) == 6 and fields[0] == "@@OUTPUT":
+            output_flags = {}
+            for field in fields[1:]:
+                key, value = field.split("=", 1)
+                output_flags[key] = int(value)
+        else:
+            raise AssertionError(f"unexpected env capture line: {line!r}")
+    if set(options) != set(range(len(OPTION_NAMES))):
+        raise AssertionError(f"unexpected env option indexes: {sorted(options)}")
+    if output_flags is None:
+        raise AssertionError("missing env output flags")
+    return options, output_flags
+
+
+def env_case_matrix() -> list[tuple[str, dict[str, str]]]:
+    cases: list[tuple[str, dict[str, str]]] = []
+    for name in OPTION_NAMES:
+        cases.append((f"canonical_{name}", {f"mimalloc_{name}": ENV_CANONICAL_VALUES.get(name, "7")}))
+    for legacy, canonical in LEGACY_OPTION_NAMES.items():
+        cases.append((f"legacy_{legacy}", {f"mimalloc_{legacy}": ENV_CANONICAL_VALUES.get(canonical, "11")}))
+    for raw in ("", "1", "TRUE", "true", "YES", "on"):
+        cases.append((f"bool_true_{raw or 'empty'}", {"mimalloc_verbose": raw}))
+    for raw in ("0", "FALSE", "false", "NO", "off"):
+        cases.append((f"bool_false_{raw}", {"mimalloc_verbose": raw}))
+    for raw in ("4097", "3K", "3KB", "3KiB", "2M", "2MiB", "1G", "1GiB", "1T", "-9"):
+        cases.append((f"size_suffix_{raw}", {"mimalloc_reserve_os_memory": raw}))
+    cases.extend(
+        [
+            ("invalid_verbose", {"mimalloc_verbose": "bogus"}),
+            ("invalid_size", {"mimalloc_reserve_os_memory": "12XB"}),
+            ("uppercase_name", {"MIMALLOC_VERBOSE": "5"}),
+            ("mixedcase_name", {"MiMaLlOc_VeRbOsE": "6"}),
+            ("duplicate_case_first_lower", {"mimalloc_verbose": "3", "MIMALLOC_VERBOSE": "4"}),
+            ("duplicate_case_first_upper", {"MIMALLOC_VERBOSE": "4", "mimalloc_verbose": "3"}),
+        ]
+    )
+    return cases
+
+
+def validate_env_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
+    for label, env in env_case_matrix():
+        c_output = run_with_env(c_bin, env, label)
+        rust_output = run_with_env(rust_bin, env, label)
+        c_options, c_flags = parse_env_capture(c_output)
+        rust_options, rust_flags = parse_env_capture(rust_output)
+        if c_options != rust_options:
+            raise AssertionError(f"{label} option mismatch:\nC={c_output}\nRust={rust_output}")
+        if label.startswith("legacy_") and c_flags["deprecated"] != rust_flags["deprecated"]:
+            raise AssertionError(f"{label} deprecated warning mismatch: C={c_flags} Rust={rust_flags}")
+        if label.startswith("invalid_") and c_flags["invalid"] != rust_flags["invalid"]:
+            raise AssertionError(f"{label} invalid warning mismatch: C={c_flags} Rust={rust_flags}")
+
+
 def main() -> int:
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
@@ -2717,9 +2933,11 @@ def main() -> int:
     scenario = BUILD_DIR / "behavioral-parity.c"
     json_capture = BUILD_DIR / "json-capture.c"
     process_capture = BUILD_DIR / "process-capture.c"
+    env_capture = BUILD_DIR / "env-capture.c"
     scenario.write_text(SCENARIO_C)
     json_capture.write_text(JSON_CAPTURE_C)
     process_capture.write_text(PROCESS_CAPTURE_C)
+    env_capture.write_text(ENV_CAPTURE_C)
 
     rust_lib = rust_staticlib()
     c_bin = BUILD_DIR / "behavioral-parity-c"
@@ -2728,6 +2946,8 @@ def main() -> int:
     rust_json_bin = BUILD_DIR / "json-capture-rust"
     c_process_bin = BUILD_DIR / "process-capture-c"
     rust_process_bin = BUILD_DIR / "process-capture-rust"
+    c_env_bin = BUILD_DIR / "env-capture-c"
+    rust_env_bin = BUILD_DIR / "env-capture-rust"
 
     compile_binary(cc, c_bin, [ROOT / "mimalloc-3.3.2/src/static.c", scenario])
     compile_binary(cc, rust_bin, [scenario, rust_lib])
@@ -2735,6 +2955,8 @@ def main() -> int:
     compile_binary(cc, rust_json_bin, [json_capture, rust_lib], ["-DRUST_HELPER_CAPTURE"])
     compile_binary(cc, c_process_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_capture])
     compile_binary(cc, rust_process_bin, [process_capture, rust_lib])
+    compile_binary(cc, c_env_bin, [ROOT / "mimalloc-3.3.2/src/static.c", env_capture])
+    compile_binary(cc, rust_env_bin, [env_capture, rust_lib])
 
     c_output = run(c_bin)
     rust_output = run(rust_bin)
@@ -2760,9 +2982,16 @@ def main() -> int:
         print(f"process info parity mismatch: {err}", file=sys.stderr)
         return 1
 
+    try:
+        validate_env_capture(c_env_bin, rust_env_bin)
+    except AssertionError as err:
+        print(f"environment option parity mismatch: {err}", file=sys.stderr)
+        return 1
+
     print("ok: C and Rust mimalloc behavior smoke outputs match")
     print("ok: C and Rust mimalloc JSON schemas parse and match")
     print("ok: C and Rust mimalloc process info is within tolerance")
+    print("ok: C and Rust mimalloc environment option parsing matches")
     print(c_output, end="")
     return 0
 

@@ -881,45 +881,58 @@ fn option_from_index(i: usize) -> mi_option_t {
 }
 
 fn parse_option_value(raw: &str, size_in_kib: bool) -> Option<c_long> {
-    let upper = raw.to_ascii_uppercase();
-    if upper.is_empty() || matches!(upper.as_str(), "1" | "TRUE" | "YES" | "ON") {
+    if raw.is_empty()
+        || raw == "1"
+        || raw.eq_ignore_ascii_case("TRUE")
+        || raw.eq_ignore_ascii_case("YES")
+        || raw.eq_ignore_ascii_case("ON")
+    {
         return Some(1);
     }
-    if matches!(upper.as_str(), "0" | "FALSE" | "NO" | "OFF") {
+    if raw == "0"
+        || raw.eq_ignore_ascii_case("FALSE")
+        || raw.eq_ignore_ascii_case("NO")
+        || raw.eq_ignore_ascii_case("OFF")
+    {
         return Some(0);
     }
 
-    let (mut value, mut rest) = parse_long_prefix(&upper)?;
+    let (mut value, mut rest) = parse_long_prefix(raw)?;
     if size_in_kib {
         let mut size = if value < 0 { 0usize } else { value as usize };
         let mut overflow = false;
-        if let Some(next) = rest.strip_prefix('K') {
-            rest = next;
-        } else if let Some(next) = rest.strip_prefix('M') {
+        let suffix = rest.as_bytes().first().map(|b| b.to_ascii_uppercase());
+        if suffix == Some(b'K') {
+            rest = &rest[1..];
+        } else if suffix == Some(b'M') {
             overflow = size.checked_mul(MI_KiB).is_none();
             if !overflow {
                 size *= MI_KiB;
             }
-            rest = next;
-        } else if let Some(next) = rest.strip_prefix('G') {
+            rest = &rest[1..];
+        } else if suffix == Some(b'G') {
             overflow = size.checked_mul(MI_MiB).is_none();
             if !overflow {
                 size *= MI_MiB;
             }
-            rest = next;
-        } else if let Some(next) = rest.strip_prefix('T') {
+            rest = &rest[1..];
+        } else if suffix == Some(b'T') {
             overflow = size.checked_mul(MI_GiB).is_none();
             if !overflow {
                 size *= MI_GiB;
             }
-            rest = next;
+            rest = &rest[1..];
         } else {
             size = size.div_ceil(MI_KiB);
         }
-        if let Some(next) = rest.strip_prefix("IB") {
-            rest = next;
-        } else if let Some(next) = rest.strip_prefix('B') {
-            rest = next;
+        if rest.len() >= 2 && rest[..2].eq_ignore_ascii_case("IB") {
+            rest = &rest[2..];
+        } else if rest
+            .as_bytes()
+            .first()
+            .is_some_and(|b| b.eq_ignore_ascii_case(&b'B'))
+        {
+            rest = &rest[1..];
         }
         let max_kib = MI_MAX_ALLOC_SIZE / MI_KiB;
         if overflow || size > max_kib {
@@ -1069,7 +1082,10 @@ pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
 
     if needs_init {
         let mut desc = {
-            let table = lock_unpoisoned(&OPTIONS);
+            let mut table = lock_unpoisoned(&OPTIONS);
+            if table[idx].init == mi_option_init_t::MI_OPTION_UNINIT {
+                table[idx].init = mi_option_init_t::MI_OPTION_DEFAULTED;
+            }
             table[idx]
         };
         mi_option_init(&mut desc);

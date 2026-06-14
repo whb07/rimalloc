@@ -4386,6 +4386,135 @@ int main(void) {
 }
 """
 
+PAGE_POLICY_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+#include <mimalloc-stats.h>
+
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#define POLICY_ALLOC_COUNT 4096
+#define POLICY_REFILL_COUNT 128
+
+struct abandoned_policy_result {
+  mi_heap_t* heap;
+  void* a;
+  void* b;
+  int allocated;
+};
+
+static void* abandoned_policy_worker(void* arg) {
+  struct abandoned_policy_result* result = (struct abandoned_policy_result*)arg;
+  mi_thread_init();
+  result->a = mi_heap_malloc(result->heap, 80);
+  result->b = mi_heap_malloc(result->heap, 80);
+  result->allocated =
+    result->a != NULL && result->b != NULL &&
+    mi_heap_contains(result->heap, result->a) &&
+    mi_heap_contains(result->heap, result->b);
+  mi_thread_done();
+  return NULL;
+}
+
+static long counter_delta_total(const mi_stat_counter_t* after, const mi_stat_counter_t* before) {
+  return (long)(after->total - before->total);
+}
+
+int main(void) {
+  mi_heap_t* heap = mi_heap_new();
+  if (heap == NULL) {
+    printf("@@PAGE_POLICY heap=0\n");
+    return 1;
+  }
+
+  void* ptrs[POLICY_ALLOC_COUNT];
+  memset(ptrs, 0, sizeof(ptrs));
+  mi_stats_t before_initial;
+  mi_stats_t after_initial;
+  mi_stats_init(&before_initial);
+  mi_stats_init(&after_initial);
+  int before_initial_ok = mi_heap_stats_get(heap, &before_initial) ? 1 : 0;
+  int alloc_ok = 1;
+  for (size_t i = 0; i < POLICY_ALLOC_COUNT; i++) {
+    ptrs[i] = mi_heap_malloc(heap, 80);
+    if (ptrs[i] == NULL || !mi_heap_contains(heap, ptrs[i])) alloc_ok = 0;
+  }
+  int after_initial_ok = mi_heap_stats_get(heap, &after_initial) ? 1 : 0;
+  long initial_searches_delta = before_initial_ok && after_initial_ok
+    ? counter_delta_total(&after_initial.page_searches, &before_initial.page_searches)
+    : -1;
+  long initial_searches_count_delta = before_initial_ok && after_initial_ok
+    ? counter_delta_total(&after_initial.page_searches_count, &before_initial.page_searches_count)
+    : -1;
+  for (size_t i = 1; i < POLICY_ALLOC_COUNT; i += 2) {
+    mi_free(ptrs[i]);
+    ptrs[i] = NULL;
+  }
+
+  mi_stats_t before_search;
+  mi_stats_t after_search;
+  mi_stats_init(&before_search);
+  mi_stats_init(&after_search);
+  int before_search_ok = mi_heap_stats_get(heap, &before_search) ? 1 : 0;
+  for (size_t i = 0; i < POLICY_REFILL_COUNT; i++) {
+    void* p = mi_heap_malloc(heap, 80);
+    if (p == NULL || !mi_heap_contains(heap, p)) alloc_ok = 0;
+    mi_free(p);
+  }
+  int after_search_ok = mi_heap_stats_get(heap, &after_search) ? 1 : 0;
+  long page_searches_delta = before_search_ok && after_search_ok
+    ? counter_delta_total(&after_search.page_searches, &before_search.page_searches)
+    : -1;
+  long page_searches_count_delta = before_search_ok && after_search_ok
+    ? counter_delta_total(&after_search.page_searches_count, &before_search.page_searches_count)
+    : -1;
+
+  for (size_t i = 0; i < POLICY_ALLOC_COUNT; i++) {
+    mi_free(ptrs[i]);
+  }
+  mi_heap_collect(heap, true);
+
+  struct abandoned_policy_result abandoned = { heap, NULL, NULL, 0 };
+  pthread_t thread;
+  int started = pthread_create(&thread, NULL, abandoned_policy_worker, &abandoned) == 0;
+  int joined = started && pthread_join(thread, NULL) == 0;
+  mi_stats_t before_reclaim;
+  mi_stats_t after_reclaim;
+  mi_stats_init(&before_reclaim);
+  mi_stats_init(&after_reclaim);
+  int before_reclaim_ok = mi_heap_stats_get(heap, &before_reclaim) ? 1 : 0;
+  int owned_before_free = abandoned.a != NULL && mi_check_owned(abandoned.a);
+  mi_free(abandoned.a);
+  abandoned.a = NULL;
+  int after_reclaim_ok = mi_heap_stats_get(heap, &after_reclaim) ? 1 : 0;
+  long reclaim_free_delta = before_reclaim_ok && after_reclaim_ok
+    ? counter_delta_total(&after_reclaim.pages_reclaim_on_free, &before_reclaim.pages_reclaim_on_free)
+    : -1;
+  int owned_after_free = abandoned.b != NULL && mi_check_owned(abandoned.b);
+  mi_free(abandoned.b);
+  mi_heap_delete(heap);
+
+  printf("@@PAGE_POLICY heap=1 alloc=%d initial_ok=%d initial_searches=%ld initial_search_count=%ld search_ok=%d searches=%ld search_count=%ld abandoned=%d joined=%d owned_before=%d reclaim_free=%ld owned_after=%d\n",
+         alloc_ok,
+         before_initial_ok && after_initial_ok,
+         initial_searches_delta,
+         initial_searches_count_delta,
+         before_search_ok && after_search_ok,
+         page_searches_delta,
+         page_searches_count_delta,
+         abandoned.allocated,
+         joined,
+         owned_before_free,
+         reclaim_free_delta,
+         owned_after_free);
+  return alloc_ok && before_initial_ok && after_initial_ok && before_search_ok && after_search_ok && abandoned.allocated && joined &&
+         before_reclaim_ok && after_reclaim_ok ? 0 : 1;
+}
+"""
+
 RANDOMIZED_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -5896,6 +6025,55 @@ def validate_arena_fallback_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path)
                 raise AssertionError(f"{name} unformatted error output: C={c_values} Rust={rust_values}")
 
 
+def parse_page_policy_capture(output: str) -> dict[str, int]:
+    fields = output.strip().split()
+    if len(fields) != 14 or fields[0] != "@@PAGE_POLICY":
+        raise AssertionError(f"unexpected page policy output: {output!r}")
+    values: dict[str, int] = {}
+    for field in fields[1:]:
+        key, value = field.split("=", 1)
+        values[key] = int(value)
+    return values
+
+
+def validate_page_policy_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
+    cases = [
+        ("default", {}),
+        (
+            "eager_reclaim",
+            {
+                "mimalloc_page_reclaim_on_free": "1",
+                "mimalloc_page_max_reclaim": "8",
+                "mimalloc_page_cross_thread_max_reclaim": "8",
+            },
+        ),
+        (
+            "retain_none_single_candidate",
+            {
+                "mimalloc_page_full_retain": "0",
+                "mimalloc_page_max_candidates": "1",
+            },
+        ),
+        (
+            "retain_more_many_candidates",
+            {
+                "mimalloc_page_full_retain": "8",
+                "mimalloc_page_max_candidates": "8",
+            },
+        ),
+    ]
+    for label, env in cases:
+        c_values = parse_page_policy_capture(run_with_env(c_bin, env, f"{label}_c"))
+        rust_values = parse_page_policy_capture(run_with_env(rust_bin, env, f"{label}_rust"))
+        compared = ("initial_searches", "initial_search_count", "searches", "search_count", "reclaim_free")
+        if tuple(c_values[key] for key in compared) != tuple(rust_values[key] for key in compared):
+            raise AssertionError(f"{label} page policy mismatch: C={c_values} Rust={rust_values}")
+        for name, values in (("C", c_values), ("Rust", rust_values)):
+            required_true = ("heap", "alloc", "initial_ok", "search_ok", "abandoned", "joined", "owned_before", "owned_after")
+            if any(values[key] != 1 for key in required_true):
+                raise AssertionError(f"{label} {name} page policy invariant failed: {values}")
+
+
 def main() -> int:
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
@@ -5919,6 +6097,7 @@ def main() -> int:
     arena_fallback_capture = BUILD_DIR / "arena-fallback-capture.c"
     free_hint_release_capture = BUILD_DIR / "free-hint-release-capture.c"
     stress_release_capture = BUILD_DIR / "stress-release-capture.c"
+    page_policy_capture = BUILD_DIR / "page-policy-capture.c"
     randomized_capture = BUILD_DIR / "randomized-capture.c"
     huge_os_pages_capture = BUILD_DIR / "huge-os-pages-capture.c"
     redirect_static_capture = BUILD_DIR / "redirect-static-capture.c"
@@ -5937,6 +6116,7 @@ def main() -> int:
     arena_fallback_capture.write_text(ARENA_FALLBACK_CAPTURE_C)
     free_hint_release_capture.write_text(FREE_HINT_RELEASE_CAPTURE_C)
     stress_release_capture.write_text(STRESS_RELEASE_CAPTURE_C)
+    page_policy_capture.write_text(PAGE_POLICY_CAPTURE_C)
     randomized_capture.write_text(RANDOMIZED_CAPTURE_C)
     huge_os_pages_capture.write_text(HUGE_OS_PAGES_CAPTURE_C)
     redirect_static_capture.write_text(REDIRECT_STATIC_CAPTURE_C)
@@ -5973,6 +6153,8 @@ def main() -> int:
     rust_free_hint_release_bin = BUILD_DIR / "free-hint-release-rust"
     c_stress_release_bin = BUILD_DIR / "stress-release-c"
     rust_stress_release_bin = BUILD_DIR / "stress-release-rust"
+    c_page_policy_bin = BUILD_DIR / "page-policy-c"
+    rust_page_policy_bin = BUILD_DIR / "page-policy-rust"
     c_randomized_bin = BUILD_DIR / "randomized-c"
     rust_randomized_bin = BUILD_DIR / "randomized-rust"
     c_huge_os_pages_bin = BUILD_DIR / "huge-os-pages-c"
@@ -6026,6 +6208,8 @@ def main() -> int:
         ["-DNDEBUG"],
     )
     compile_binary(cc, rust_stress_release_bin, [stress_release_capture, rust_release_lib], ["-DNDEBUG"])
+    compile_binary(cc, c_page_policy_bin, [ROOT / "mimalloc-3.3.2/src/static.c", page_policy_capture])
+    compile_binary(cc, rust_page_policy_bin, [page_policy_capture, rust_lib])
     compile_binary(cc, c_randomized_bin, [ROOT / "mimalloc-3.3.2/src/static.c", randomized_capture])
     compile_binary(cc, rust_randomized_bin, [randomized_capture, rust_lib])
     compile_binary(cc, c_huge_os_pages_bin, [ROOT / "mimalloc-3.3.2/src/static.c", huge_os_pages_capture])
@@ -6153,6 +6337,12 @@ def main() -> int:
         print(rust_stress_release, file=sys.stderr)
         return 1
 
+    try:
+        validate_page_policy_capture(c_page_policy_bin, rust_page_policy_bin)
+    except AssertionError as err:
+        print(f"page policy parity mismatch: {err}", file=sys.stderr)
+        return 1
+
     c_randomized = run(c_randomized_bin)
     rust_randomized = run(rust_randomized_bin)
     if c_randomized != rust_randomized:
@@ -6200,6 +6390,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc arena fallback behavior matches")
     print("ok: C and Rust mimalloc release free-hint behavior matches")
     print("ok: C and Rust mimalloc release stress behavior matches")
+    print("ok: C and Rust mimalloc page policy behavior matches")
     print("ok: C and Rust mimalloc seeded randomized allocation behavior matches")
     print("ok: C and Rust mimalloc huge OS page fallback behavior matches")
     print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")

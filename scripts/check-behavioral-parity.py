@@ -5657,8 +5657,20 @@ def validate_arena_fallback_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path)
     cases = {
         "arena_only": {"ptr": "1", "in_arena": "1", "errno": "0", "errors": "0"},
         "os_fallback": {"ptr": "1", "in_arena": "0", "errno": "0", "errors": "0"},
-        "all_disabled": {"ptr": "0", "in_arena": "0", "errno": "12"},
-        "exclusive_arena_disabled": {"ptr": "0", "in_arena": "0", "errno": "12"},
+        "all_disabled": {
+            "ptr": "0",
+            "in_arena": "0",
+            "errno": "12",
+            "errors": "2",
+            "last_error": "14",
+        },
+        "exclusive_arena_disabled": {
+            "ptr": "0",
+            "in_arena": "0",
+            "errno": "12",
+            "errors": "2",
+            "last_error": "14",
+        },
     }
     for name, expected in cases.items():
         c_status, c_stdout, _ = run_args_status(c_bin, [name])

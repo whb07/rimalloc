@@ -384,7 +384,7 @@ pub unsafe extern "C" fn _mi_heap_visit_blocks(
     let mut ok = true;
     unsafe {
         mi_forall_arenas(heap, ptr::null_mut(), 0, |arena| {
-            let arena_pages = mi_heap_ensure_arena_pages(heap, arena);
+            let arena_pages = mi_heap_arena_pages(heap, arena);
             if ok && !arena_pages.is_null() {
                 if abandoned_only {
                     for bin in 0..MI_BIN_COUNT {

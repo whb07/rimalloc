@@ -2402,6 +2402,17 @@ int main(void) {
   result_bool("arena_contains_end_false", arena_area != NULL && !mi_arena_contains(arena_id, (char*)arena_area + arena_size));
   int arena_stack_value = 0;
   result_bool("arena_contains_stack_false", !mi_arena_contains(arena_id, &arena_stack_value));
+  mi_heap_t* arena_heap = arena_id != NULL ? mi_heap_new_in_arena(arena_id) : NULL;
+  void* arena_heap_alloc = arena_heap == NULL ? NULL : mi_heap_malloc(arena_heap, 1024);
+  result_bool("heap_new_in_arena_alloc_contained", arena_heap_alloc != NULL && mi_heap_contains(arena_heap, arena_heap_alloc) && mi_arena_contains(arena_id, arena_heap_alloc));
+  void* arena_normal_alloc = mi_malloc(1024);
+  result_bool("heap_new_in_arena_normal_isolated", arena_normal_alloc != NULL && !mi_arena_contains(arena_id, arena_normal_alloc));
+  void* arena_heap_oversize = arena_heap == NULL ? NULL : mi_heap_malloc(arena_heap, arena_size + mi_arena_min_size());
+  result_bool("heap_new_in_arena_oversize_fails", arena_heap_oversize == NULL);
+  mi_free(arena_heap_oversize);
+  mi_free(arena_normal_alloc);
+  mi_free(arena_heap_alloc);
+  if (arena_heap != NULL) mi_heap_delete(arena_heap);
 
   long managed_original_purge_delay = mi_option_get(mi_option_purge_delay);
   long managed_original_purge_decommits = mi_option_get(mi_option_purge_decommits);

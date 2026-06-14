@@ -107,7 +107,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Match huge OS page reservation APIs `mi_reserve_huge_os_pages`, `mi_reserve_huge_os_pages_at`, `mi_reserve_huge_os_pages_at_ex`, and `mi_reserve_huge_os_pages_interleave`. Validation: privileged environments compare reservation counts and NUMA placement with C mimalloc, while unprivileged environments compare failure codes and diagnostics.
 - [x] Match arena inspection APIs `mi_arena_area`, `mi_arena_contains`, `mi_arena_min_alignment`, and `mi_arena_min_size`. Validation: tests compare returned area pointer/size, containment, alignment, minimum size, and invalid arena handling against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match arena debug output APIs `mi_debug_show_arenas` and `mi_arenas_print`. Validation: output callback or captured output tests verify presence and structure of arena diagnostics without requiring byte-identical addresses. Guarded by `scripts/check-behavioral-parity.py`.
-- [ ] Match exclusive arena allocation through `mi_heap_new_in_arena`. Validation: tests allocate from a specific arena, verify containment, enforce isolation from normal arenas, and compare failure behavior against C mimalloc.
+- [x] Match exclusive arena allocation through `mi_heap_new_in_arena`. Validation: tests allocate from a specific arena, verify containment, enforce isolation from normal arenas, and compare failure behavior against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [ ] Match arena fallback rules when arena allocation or OS allocation is disallowed. Validation: option-driven tests compare allocation success/failure, retry behavior, and error output with C mimalloc.
 
 ## Pages, Chunks, and Internal Algorithms

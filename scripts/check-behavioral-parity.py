@@ -2600,6 +2600,65 @@ int main(void) {
 }
 """
 
+CXX_OVERRIDE_CAPTURE = r"""
+#include <mimalloc.h>
+
+#include <new>
+#include <stdint.h>
+#include <stdio.h>
+
+struct alignas(64) AlignedBlock {
+  unsigned char bytes[64];
+};
+
+static int pointer_aligned(void* p, size_t alignment) {
+  return p != NULL && (((uintptr_t)p % alignment) == 0);
+}
+
+int main(void) {
+  int* scalar = new int(42);
+  int scalar_owned = (scalar != NULL && *scalar == 42 && mi_check_owned(scalar));
+  delete scalar;
+
+  int* array = new int[8];
+  int array_owned = (array != NULL && mi_check_owned(array));
+  delete[] array;
+
+  char* nothrow_array = new (std::nothrow) char[33];
+  int nothrow_owned = (nothrow_array != NULL && mi_check_owned(nothrow_array));
+  delete[] nothrow_array;
+
+  AlignedBlock* aligned_object = new AlignedBlock();
+  int aligned_owned = (aligned_object != NULL &&
+                       pointer_aligned(aligned_object, alignof(AlignedBlock)) &&
+                       mi_check_owned(aligned_object));
+  delete aligned_object;
+
+  void* raw_aligned = ::operator new(96, std::align_val_t(64));
+  int raw_aligned_owned = (pointer_aligned(raw_aligned, 64) && mi_check_owned(raw_aligned));
+  ::operator delete(raw_aligned, std::align_val_t(64));
+
+  void* raw_aligned_nothrow = ::operator new[](128, std::align_val_t(64), std::nothrow);
+  int raw_aligned_nothrow_owned = (pointer_aligned(raw_aligned_nothrow, 64) &&
+                                   mi_check_owned(raw_aligned_nothrow));
+  ::operator delete[](raw_aligned_nothrow, std::align_val_t(64), std::nothrow);
+
+  printf("@@CXX_OVERRIDE scalar=%d array=%d nothrow=%d aligned=%d raw_aligned=%d raw_aligned_nothrow=%d\n",
+         scalar_owned,
+         array_owned,
+         nothrow_owned,
+         aligned_owned,
+         raw_aligned_owned,
+         raw_aligned_nothrow_owned);
+  return (scalar_owned == 1 &&
+          array_owned == 1 &&
+          nothrow_owned == 1 &&
+          aligned_owned == 1 &&
+          raw_aligned_owned == 1 &&
+          raw_aligned_nothrow_owned == 1 ? 0 : 1);
+}
+"""
+
 PROCESS_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -3105,6 +3164,7 @@ def compile_cxx_binary(
     cxx: str,
     output: pathlib.Path,
     objects: list[pathlib.Path],
+    cflags: list[str] | None = None,
 ) -> None:
     subprocess.run(
         [
@@ -3114,6 +3174,7 @@ def compile_cxx_binary(
             str(ROOT / "mimalloc-3.3.2/include"),
             "-I",
             str(ROOT / "mimalloc-3.3.2/src"),
+            *(cflags or []),
             *[str(obj) for obj in objects],
             "-pthread",
             "-ldl",
@@ -3455,6 +3516,27 @@ def parse_cxx_new_handler_capture(output: str) -> dict[str, int]:
     return values
 
 
+def parse_cxx_override_capture(output: str) -> dict[str, int]:
+    fields = output.strip().split()
+    if len(fields) != 7 or fields[0] != "@@CXX_OVERRIDE":
+        raise AssertionError(f"unexpected C++ override output: {output!r}")
+    values: dict[str, int] = {}
+    for field in fields[1:]:
+        key, value = field.split("=", 1)
+        values[key] = int(value)
+    expected = {
+        "scalar": 1,
+        "array": 1,
+        "nothrow": 1,
+        "aligned": 1,
+        "raw_aligned": 1,
+        "raw_aligned_nothrow": 1,
+    }
+    if values != expected:
+        raise AssertionError(f"unexpected C++ override values: {values}")
+    return values
+
+
 def parse_redirect_capture(output: str) -> dict[str, int | str]:
     fields = output.strip().split()
     if len(fields) < 5 or fields[0] != "@@REDIRECT":
@@ -3736,6 +3818,7 @@ def main() -> int:
     scenario = BUILD_DIR / "behavioral-parity.c"
     json_capture = BUILD_DIR / "json-capture.c"
     cxx_new_handler_capture = BUILD_DIR / "cxx-new-handler.cpp"
+    cxx_override_capture = BUILD_DIR / "cxx-override.cpp"
     process_capture = BUILD_DIR / "process-capture.c"
     env_capture = BUILD_DIR / "env-capture.c"
     throttle_capture = BUILD_DIR / "throttle-capture.c"
@@ -3745,6 +3828,7 @@ def main() -> int:
     scenario.write_text(SCENARIO_C)
     json_capture.write_text(JSON_CAPTURE_C)
     cxx_new_handler_capture.write_text(CXX_NEW_HANDLER_CAPTURE)
+    cxx_override_capture.write_text(CXX_OVERRIDE_CAPTURE)
     process_capture.write_text(PROCESS_CAPTURE_C)
     env_capture.write_text(ENV_CAPTURE_C)
     throttle_capture.write_text(THROTTLE_CAPTURE_C)
@@ -3760,6 +3844,8 @@ def main() -> int:
     rust_json_bin = BUILD_DIR / "json-capture-rust"
     c_cxx_new_handler_bin = BUILD_DIR / "cxx-new-handler-c"
     rust_cxx_new_handler_bin = BUILD_DIR / "cxx-new-handler-rust"
+    c_cxx_override_bin = BUILD_DIR / "cxx-override-c"
+    rust_cxx_override_bin = BUILD_DIR / "cxx-override-rust"
     c_process_bin = BUILD_DIR / "process-capture-c"
     rust_process_bin = BUILD_DIR / "process-capture-rust"
     c_env_bin = BUILD_DIR / "env-capture-c"
@@ -3780,6 +3866,13 @@ def main() -> int:
     compile_binary(cc, rust_json_bin, [json_capture, rust_lib], ["-DRUST_HELPER_CAPTURE"])
     compile_cxx_binary(cxx, c_cxx_new_handler_bin, [cxx_new_handler_capture, ROOT / "mimalloc-3.3.2/src/static.c"])
     compile_cxx_binary(cxx, rust_cxx_new_handler_bin, [cxx_new_handler_capture, rust_lib])
+    compile_cxx_binary(
+        cxx,
+        c_cxx_override_bin,
+        [cxx_override_capture, ROOT / "mimalloc-3.3.2/src/static.c"],
+        ["-DMI_MALLOC_OVERRIDE"],
+    )
+    compile_cxx_binary(cxx, rust_cxx_override_bin, [cxx_override_capture, rust_lib])
     compile_binary(cc, c_process_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_capture])
     compile_binary(cc, rust_process_bin, [process_capture, rust_lib])
     compile_binary(cc, c_env_bin, [ROOT / "mimalloc-3.3.2/src/static.c", env_capture])
@@ -3832,6 +3925,15 @@ def main() -> int:
         return 1
 
     try:
+        c_cxx_override = parse_cxx_override_capture(run(c_cxx_override_bin))
+        rust_cxx_override = parse_cxx_override_capture(run(rust_cxx_override_bin))
+        if c_cxx_override != rust_cxx_override:
+            raise AssertionError(f"C={c_cxx_override} Rust={rust_cxx_override}")
+    except AssertionError as err:
+        print(f"C++ override parity mismatch: {err}", file=sys.stderr)
+        return 1
+
+    try:
         validate_process_capture(parse_process_capture(run(c_process_bin)), parse_process_capture(run(rust_process_bin)))
     except AssertionError as err:
         print(f"process info parity mismatch: {err}", file=sys.stderr)
@@ -3871,6 +3973,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc behavior smoke outputs match")
     print("ok: C and Rust mimalloc JSON schemas parse and match")
     print("ok: C and Rust mimalloc C++ new-handler behavior matches")
+    print("ok: C and Rust mimalloc C++ override behavior matches")
     print("ok: C and Rust mimalloc process info is within tolerance")
     print("ok: C and Rust mimalloc environment option parsing matches")
     print("ok: C and Rust mimalloc warning/error throttling matches")

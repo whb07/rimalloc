@@ -4074,6 +4074,331 @@ int main(void) {
 }
 """
 
+RANDOMIZED_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+#include <mimalloc-stats.h>
+
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#define RANDOM_SLOTS 160
+#define RANDOM_OPS 8192
+#define RANDOM_SEEDS 5
+#define RANDOM_PATTERN_LIMIT 128
+
+struct random_slot {
+  void* ptr;
+  mi_heap_t* heap;
+  size_t size;
+  size_t pattern;
+  int heap_owned;
+};
+
+static uint64_t random_next(uint64_t* state) {
+  uint64_t x = *state;
+  x ^= x >> 12;
+  x ^= x << 25;
+  x ^= x >> 27;
+  *state = x;
+  return x * 2685821657736338717ULL;
+}
+
+static size_t random_size(uint64_t* state) {
+  // Keep this randomized guard below the page-full retain/reclaim policy; boundary
+  // and page-reclaim behavior are covered by separate targeted parity items.
+  static const size_t interesting[] = {
+    0, 1, 2, 3, 7, 8, 15, 16, 24, 31, 32, 48, 63, 64,
+    65, 80, 127, 128, 129, 255, 256, 257, 511, 512, 513,
+    1023, 1024, 1025, 2047, 2048, 2049, 4095, 4096, 4097,
+    8191, 8192
+  };
+  uint64_t r = random_next(state);
+  if ((r & 3) == 0) return interesting[(r >> 8) % (sizeof(interesting) / sizeof(interesting[0]))];
+  return 1 + (size_t)((r >> 8) % 8192);
+}
+
+static size_t pattern_len(size_t size) {
+  return size < RANDOM_PATTERN_LIMIT ? size : RANDOM_PATTERN_LIMIT;
+}
+
+static unsigned char pattern_byte(size_t seed, size_t op, size_t index) {
+  return (unsigned char)((seed * 131 + op * 17 + index * 7) & 0xFF);
+}
+
+static void fill_pattern(struct random_slot* slot) {
+  unsigned char* bytes = (unsigned char*)slot->ptr;
+  for (size_t i = 0; i < pattern_len(slot->size); i++) {
+    bytes[i] = pattern_byte(slot->pattern, slot->size, i);
+  }
+}
+
+static int verify_pattern(const struct random_slot* slot) {
+  const unsigned char* bytes = (const unsigned char*)slot->ptr;
+  for (size_t i = 0; i < pattern_len(slot->size); i++) {
+    if (bytes[i] != pattern_byte(slot->pattern, slot->size, i)) return 0;
+  }
+  return 1;
+}
+
+static int verify_zeroed(const void* ptr, size_t size) {
+  const unsigned char* bytes = (const unsigned char*)ptr;
+  for (size_t i = 0; i < pattern_len(size); i++) {
+    if (bytes[i] != 0) return 0;
+  }
+  return 1;
+}
+
+static int stats_alloc_current_nonnegative(const mi_stats_t* stats) {
+  return stats->malloc_normal.current >= 0 && stats->malloc_huge.current >= 0;
+}
+
+static int stats_alloc_peak_consistent(const mi_stats_t* stats) {
+  return stats->malloc_normal.peak >= stats->malloc_normal.current &&
+         stats->malloc_huge.peak >= stats->malloc_huge.current;
+}
+
+static int stats_alloc_total_monotonic(const mi_stats_t* before, const mi_stats_t* after) {
+  return after->malloc_normal.total >= before->malloc_normal.total &&
+         after->malloc_huge.total >= before->malloc_huge.total;
+}
+
+static int random_alloc_slot(struct random_slot* slot, mi_heap_t* heap, uint64_t* state, size_t seed, size_t op) {
+  size_t size = random_size(state);
+  size_t kind = (size_t)(random_next(state) % 8);
+  void* ptr = NULL;
+  int heap_owned = 0;
+
+  switch (kind) {
+    case 0:
+      ptr = mi_malloc(size);
+      break;
+    case 1:
+      ptr = mi_zalloc(size);
+      if (ptr != NULL && !verify_zeroed(ptr, size)) return 0;
+      break;
+    case 2:
+      ptr = mi_realloc(NULL, size);
+      break;
+    case 3: {
+      size_t alignment = (size_t)16 << (random_next(state) % 5);
+      ptr = mi_malloc_aligned(size, alignment);
+      if (ptr != NULL && (((uintptr_t)ptr % alignment) != 0)) return 0;
+      break;
+    }
+    case 4: {
+      size_t alignment = (size_t)16 << (random_next(state) % 5);
+      ptr = mi_zalloc_aligned(size, alignment);
+      if (ptr != NULL && (((uintptr_t)ptr % alignment) != 0 || !verify_zeroed(ptr, size))) return 0;
+      break;
+    }
+    case 5: {
+      size_t count = 1 + (size_t)(random_next(state) % 9);
+      size_t elem_size = 1 + (size / count);
+      size = count * elem_size;
+      ptr = mi_mallocn(count, elem_size);
+      break;
+    }
+    case 6:
+      ptr = mi_heap_malloc(heap, size);
+      heap_owned = 1;
+      break;
+    default:
+      ptr = mi_heap_zalloc(heap, size);
+      heap_owned = 1;
+      if (ptr != NULL && !verify_zeroed(ptr, size)) return 0;
+      break;
+  }
+
+  if (ptr == NULL || !mi_check_owned(ptr) || mi_usable_size(ptr) < size) {
+    mi_free(ptr);
+    return 0;
+  }
+  if (heap_owned && !mi_heap_contains(heap, ptr)) {
+    mi_free(ptr);
+    return 0;
+  }
+
+  slot->ptr = ptr;
+  slot->heap = heap_owned ? heap : NULL;
+  slot->size = size;
+  slot->pattern = seed + op;
+  slot->heap_owned = heap_owned;
+  fill_pattern(slot);
+  return 1;
+}
+
+static int random_realloc_slot(struct random_slot* slot, uint64_t* state, size_t seed, size_t op) {
+  if (!verify_pattern(slot)) return 0;
+  size_t old_size = slot->size;
+  size_t new_size = random_size(state);
+  void* resized = slot->heap_owned ? mi_heap_realloc(slot->heap, slot->ptr, new_size) : mi_realloc(slot->ptr, new_size);
+  if (resized == NULL || !mi_check_owned(resized) || mi_usable_size(resized) < new_size) {
+    mi_free(resized);
+    slot->ptr = NULL;
+    return 0;
+  }
+  size_t preserved = old_size < new_size ? old_size : new_size;
+  const unsigned char* bytes = (const unsigned char*)resized;
+  for (size_t i = 0; i < pattern_len(preserved); i++) {
+    if (bytes[i] != pattern_byte(slot->pattern, old_size, i)) {
+      mi_free(resized);
+      slot->ptr = NULL;
+      return 0;
+    }
+  }
+  if (slot->heap_owned && !mi_heap_contains(slot->heap, resized)) {
+    mi_free(resized);
+    slot->ptr = NULL;
+    return 0;
+  }
+  slot->ptr = resized;
+  slot->size = new_size;
+  slot->pattern = seed + op;
+  fill_pattern(slot);
+  return 1;
+}
+
+static int run_random_seed(uint64_t seed, size_t seed_index) {
+  struct random_slot slots[RANDOM_SLOTS];
+  mi_heap_t* heap = mi_heap_new();
+  uint64_t state = seed;
+  mi_stats_t before;
+  mi_stats_t after;
+  mi_stats_t final;
+  memset(slots, 0, sizeof(slots));
+  if (heap == NULL) {
+    fprintf(stderr, "@@RANDOM_FAIL seed=%llu op=heap_new slot=0\n", (unsigned long long)seed);
+    return 0;
+  }
+
+  mi_stats_init(&before);
+  mi_stats_init(&after);
+  mi_stats_init(&final);
+  if (!mi_stats_get(&before)) {
+    fprintf(stderr, "@@RANDOM_FAIL seed=%llu op=stats_before slot=0\n", (unsigned long long)seed);
+    mi_heap_delete(heap);
+    return 0;
+  }
+
+  for (size_t op = 0; op < RANDOM_OPS; op++) {
+    size_t slot_index = (size_t)(random_next(&state) % RANDOM_SLOTS);
+    struct random_slot* slot = &slots[slot_index];
+    size_t action = (size_t)(random_next(&state) % 11);
+    int ok = 1;
+
+#ifdef RANDOM_TRACE
+    fprintf(stderr,
+            "@@RANDOM_BEFORE seed=%llu op=%zu slot=%zu action=%zu live=%d size=%zu heap=%d\n",
+            (unsigned long long)seed,
+            op,
+            slot_index,
+            action,
+            slot->ptr != NULL,
+            slot->size,
+            slot->heap_owned);
+    fflush(stderr);
+#endif
+
+    if (slot->ptr == NULL) {
+      ok = random_alloc_slot(slot, heap, &state, seed_index + 1, op + 1);
+      action = 0;
+    }
+    else if (action <= 4) {
+      ok = verify_pattern(slot);
+      mi_free(slot->ptr);
+      memset(slot, 0, sizeof(*slot));
+    }
+    else if (action <= 8) {
+      ok = random_realloc_slot(slot, &state, seed_index + 1, op + 1);
+    }
+    else {
+      ok = verify_pattern(slot) && mi_check_owned(slot->ptr) &&
+           (!slot->heap_owned || mi_heap_contains(slot->heap, slot->ptr));
+    }
+
+#ifdef RANDOM_TRACE
+    fprintf(stderr,
+            "@@RANDOM_TRACE seed=%llu op=%zu slot=%zu action=%zu live=%d size=%zu heap=%d\n",
+            (unsigned long long)seed,
+            op,
+            slot_index,
+            action,
+            slot->ptr != NULL,
+            slot->size,
+            slot->heap_owned);
+    fflush(stderr);
+#endif
+
+    if (!ok) {
+      fprintf(stderr,
+              "@@RANDOM_FAIL seed=%llu op=%zu slot=%zu action=%zu\n",
+              (unsigned long long)seed,
+              op,
+              slot_index,
+              action);
+      for (size_t i = 0; i < RANDOM_SLOTS; i++) mi_free(slots[i].ptr);
+      mi_heap_delete(heap);
+      return 0;
+    }
+
+    if ((op % 257) == 0) mi_collect(false);
+  }
+
+  for (size_t i = 0; i < RANDOM_SLOTS; i++) {
+    if (slots[i].ptr != NULL && !verify_pattern(&slots[i])) {
+      fprintf(stderr, "@@RANDOM_FAIL seed=%llu op=final slot=%zu\n", (unsigned long long)seed, i);
+      mi_free(slots[i].ptr);
+      slots[i].ptr = NULL;
+      mi_heap_delete(heap);
+      return 0;
+    }
+    mi_free(slots[i].ptr);
+    slots[i].ptr = NULL;
+  }
+  mi_collect(false);
+  if (!mi_stats_get(&after)) {
+    fprintf(stderr, "@@RANDOM_FAIL seed=%llu op=stats_after slot=0\n", (unsigned long long)seed);
+    mi_heap_delete(heap);
+    return 0;
+  }
+  mi_heap_delete(heap);
+  mi_collect(true);
+  if (!mi_stats_get(&final)) {
+    fprintf(stderr, "@@RANDOM_FAIL seed=%llu op=stats_final slot=0\n", (unsigned long long)seed);
+    return 0;
+  }
+
+  if (!stats_alloc_current_nonnegative(&after) ||
+      !stats_alloc_current_nonnegative(&final) ||
+      !stats_alloc_peak_consistent(&after) ||
+      !stats_alloc_peak_consistent(&final) ||
+      !stats_alloc_total_monotonic(&before, &after) ||
+      !stats_alloc_total_monotonic(&after, &final)) {
+    fprintf(stderr, "@@RANDOM_FAIL seed=%llu op=stats_consistency slot=0\n", (unsigned long long)seed);
+    return 0;
+  }
+  return 1;
+}
+
+int main(void) {
+  static const uint64_t seeds[RANDOM_SEEDS] = {
+    0x4d595df4d0f33173ULL,
+    0x9e3779b97f4a7c15ULL,
+    0xbf58476d1ce4e5b9ULL,
+    0x94d049bb133111ebULL,
+    0xd1b54a32d192ed03ULL
+  };
+  int ok = 1;
+  for (size_t i = 0; i < RANDOM_SEEDS; i++) {
+    if (!run_random_seed(seeds[i], i)) ok = 0;
+  }
+  printf("@@RANDOM seeds=%d ops=%d slots=%d ok=%d\n", RANDOM_SEEDS, RANDOM_OPS, RANDOM_SLOTS, ok);
+  return ok ? 0 : 1;
+}
+"""
+
 HUGE_OS_PAGES_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -5217,6 +5542,7 @@ def main() -> int:
     arena_fallback_capture = BUILD_DIR / "arena-fallback-capture.c"
     free_hint_release_capture = BUILD_DIR / "free-hint-release-capture.c"
     stress_release_capture = BUILD_DIR / "stress-release-capture.c"
+    randomized_capture = BUILD_DIR / "randomized-capture.c"
     huge_os_pages_capture = BUILD_DIR / "huge-os-pages-capture.c"
     redirect_static_capture = BUILD_DIR / "redirect-static-capture.c"
     redirect_dynamic_capture = BUILD_DIR / "redirect-dynamic-capture.c"
@@ -5233,6 +5559,7 @@ def main() -> int:
     arena_fallback_capture.write_text(ARENA_FALLBACK_CAPTURE_C)
     free_hint_release_capture.write_text(FREE_HINT_RELEASE_CAPTURE_C)
     stress_release_capture.write_text(STRESS_RELEASE_CAPTURE_C)
+    randomized_capture.write_text(RANDOMIZED_CAPTURE_C)
     huge_os_pages_capture.write_text(HUGE_OS_PAGES_CAPTURE_C)
     redirect_static_capture.write_text(REDIRECT_STATIC_CAPTURE_C)
     redirect_dynamic_capture.write_text(REDIRECT_DYNAMIC_CAPTURE_C)
@@ -5266,6 +5593,8 @@ def main() -> int:
     rust_free_hint_release_bin = BUILD_DIR / "free-hint-release-rust"
     c_stress_release_bin = BUILD_DIR / "stress-release-c"
     rust_stress_release_bin = BUILD_DIR / "stress-release-rust"
+    c_randomized_bin = BUILD_DIR / "randomized-c"
+    rust_randomized_bin = BUILD_DIR / "randomized-rust"
     c_huge_os_pages_bin = BUILD_DIR / "huge-os-pages-c"
     rust_huge_os_pages_bin = BUILD_DIR / "huge-os-pages-rust"
     c_redirect_static_bin = BUILD_DIR / "redirect-static-c"
@@ -5315,6 +5644,8 @@ def main() -> int:
         ["-DNDEBUG"],
     )
     compile_binary(cc, rust_stress_release_bin, [stress_release_capture, rust_release_lib], ["-DNDEBUG"])
+    compile_binary(cc, c_randomized_bin, [ROOT / "mimalloc-3.3.2/src/static.c", randomized_capture])
+    compile_binary(cc, rust_randomized_bin, [randomized_capture, rust_lib])
     compile_binary(cc, c_huge_os_pages_bin, [ROOT / "mimalloc-3.3.2/src/static.c", huge_os_pages_capture])
     compile_binary(cc, rust_huge_os_pages_bin, [huge_os_pages_capture, rust_lib])
     compile_binary(
@@ -5434,6 +5765,16 @@ def main() -> int:
         print(rust_stress_release, file=sys.stderr)
         return 1
 
+    c_randomized = run(c_randomized_bin)
+    rust_randomized = run(rust_randomized_bin)
+    if c_randomized != rust_randomized:
+        print("randomized allocation parity mismatch", file=sys.stderr)
+        print("--- C mimalloc ---", file=sys.stderr)
+        print(c_randomized, file=sys.stderr)
+        print("--- Rust mimalloc ---", file=sys.stderr)
+        print(rust_randomized, file=sys.stderr)
+        return 1
+
     c_huge_os_pages = run(c_huge_os_pages_bin)
     rust_huge_os_pages = run(rust_huge_os_pages_bin)
     if c_huge_os_pages != rust_huge_os_pages:
@@ -5470,6 +5811,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc arena fallback behavior matches")
     print("ok: C and Rust mimalloc release free-hint behavior matches")
     print("ok: C and Rust mimalloc release stress behavior matches")
+    print("ok: C and Rust mimalloc seeded randomized allocation behavior matches")
     print("ok: C and Rust mimalloc huge OS page fallback behavior matches")
     print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")
     print(c_output, end="")

@@ -693,6 +693,7 @@ pub unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page
         // Preserve the original theap pointer so same-theap reclaim-on-free can still work.
         (*page).theap = theap;
         _mi_arenas_page_abandon(page, theap);
+        _mi_arenas_collect(false, false, (*theap).tld);
     }
 }
 

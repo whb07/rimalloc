@@ -12,7 +12,7 @@ use core::cell::UnsafeCell;
 use core::ffi::c_char;
 use core::ptr;
 use core::ptr::addr_of_mut;
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::fmt;
 use std::fmt::Write as _;
 use std::mem::size_of;
@@ -540,11 +540,12 @@ fn ptr_to_mi_output_fun(p: *mut c_void) -> Option<mi_output_fun> {
 
 #[inline]
 fn emit_text(out: Option<mi_output_fun>, arg: *mut c_void, text: &str) {
-    let ctext = CString::new(text).expect("mimalloc output text contained a NUL byte");
+    let mut ctext = StackMessage::new();
+    let _ = ctext.write_str(text);
     unsafe {
         match out {
-            Some(out) => out(ctext.as_ptr(), arg),
-            None => _mi_prim_out_stderr(ctext.as_ptr()),
+            Some(out) => out(ctext.as_c_ptr(), arg),
+            None => _mi_prim_out_stderr(ctext.as_c_ptr()),
         }
     }
 }
@@ -687,10 +688,9 @@ pub(crate) unsafe fn _mi_fputs(
 
 #[allow(dead_code)]
 pub(crate) fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, args: fmt::Arguments<'_>) {
-    let mut text = String::new();
+    let mut text = StackMessage::new();
     if fmt::write(&mut text, args).is_ok() {
-        let ctext = CString::new(text).expect("mimalloc output text contained a NUL byte");
-        unsafe { _mi_fputs(out, arg, ptr::null(), ctext.as_ptr()) };
+        unsafe { _mi_fputs(out, arg, ptr::null(), text.as_c_ptr()) };
     }
 }
 
@@ -757,12 +757,13 @@ fn mi_vfprintf_thread(
         let prefix_len = unsafe { CStr::from_ptr(prefix).to_bytes().len() };
         if prefix_len <= 32 && !_mi_is_main_thread() {
             let prefix_text = unsafe { CStr::from_ptr(prefix).to_string_lossy() };
-            let tprefix = CString::new(format!(
+            let mut tprefix = StackMessage::new();
+            let _ = write!(
+                tprefix,
                 "{prefix_text}thread 0x{:x}: ",
                 _mi_thread_id() as usize
-            ))
-            .expect("mimalloc output prefix contained a NUL byte");
-            mi_vfprintf(out, arg, tprefix.as_ptr(), args);
+            );
+            mi_vfprintf(out, arg, tprefix.as_c_ptr(), args);
             return;
         }
     }

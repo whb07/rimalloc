@@ -97,7 +97,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [x] Match theap allocation APIs `mi_theap_malloc`, `mi_theap_zalloc`, `mi_theap_calloc`, `mi_theap_malloc_small`, `mi_theap_zalloc_small`, `mi_theap_malloc_aligned`, and `mi_theap_realloc`. Validation: same-thread tests compare allocation behavior with C mimalloc, and wrong-thread tests compare diagnostics or allowed behavior by mode. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match `mi_theap_collect` and `mi_theap_visit_blocks`. Validation: tests verify forced/non-forced collection and block visiting for thread-local heaps against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match guarded theap controls `mi_theap_guarded_set_sample_rate` and `mi_theap_guarded_set_size_bound`. Validation: `scripts/check-guarded-mode-parity.py` verifies guarded sampling, deterministic seeded start count, size bounds, placement, stats, and fault behavior against C mimalloc.
-- [ ] Match subprocess creation, current subprocess tracking, heap isolation, and destruction. Validation: tests allocate across subprocesses and threads, verify no cross-subprocess reclamation, validate stats isolation, and compare with C mimalloc.
+- [x] Match subprocess creation, current subprocess tracking, heap isolation, and destruction. Validation: `scripts/check-behavioral-parity.py` covers subprocess creation, current-state tracking, heap visitation, stats isolation, destruction diagnostics, and subprocess stats behavior against C mimalloc; `scripts/check-subproc-heap-main-baseline.py` guards the custom subprocess `mi_heap_main` baseline where both vendored C and Rust abort with status 134 instead of producing an isolated custom main heap.
 
 ## Arenas and Managed Memory
 

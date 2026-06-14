@@ -121,13 +121,13 @@ fn parity_docs_record_rust_only_export_safety_contracts() {
 #[test]
 fn parity_docs_record_unresolved_baseline_mismatches() {
     assert!(PARITY_DOC.contains("Known Unresolved Baseline Mismatches"));
-    assert!(PARITY_DOC.contains("Known Unresolved Behavioral Mismatches"));
-    assert!(PARITY_DOC.contains("not accepted Rust non-parity decisions"));
+    assert!(PARITY_DOC.contains("Intentional Behavioral Compatibility Decisions"));
+    assert!(PARITY_DOC.contains("useful public"));
     assert!(PARITY_DOC.contains("vendored public headers declare a symbol"));
     assert!(PARITY_DOC.contains("linkable definition"));
     assert!(PARITY_DOC.contains("scripts/check-c-baseline-missing-exports.py"));
     assert!(PARITY_DOC.contains("scripts/check-subproc-heap-main-baseline.py"));
-    assert!(PARITY_DOC.contains("custom subprocess main-heap creation"));
+    assert!(PARITY_DOC.contains("custom-main-heap semantics"));
 
     for api in [
         "mi_stats_merge",

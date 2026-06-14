@@ -2438,8 +2438,10 @@ unsafe fn mi_arenas_page_alloc_fresh(
 
     let mut commit_size = 0usize;
     if !memid.initially_committed {
-        // The later page-extend path is not translated yet; commit the full slice span now.
-        commit_size = page_noguard_size;
+        commit_size = _mi_align_up(block_start + block_size, MI_PAGE_MIN_COMMIT_SIZE);
+        if commit_size > page_noguard_size {
+            commit_size = page_noguard_size;
+        }
         let mut is_zero = false;
         if !unsafe {
             mi_arena_commit(
@@ -2457,8 +2459,9 @@ unsafe fn mi_arenas_page_alloc_fresh(
             unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
             return ptr::null_mut();
         }
-        memid.initially_committed = true;
-        memid.initially_zero = is_zero;
+        if is_zero {
+            memid.initially_zero = true;
+        }
     }
     if !memid.initially_zero && !page_meta_is_separate {
         unsafe { crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>()) };

@@ -3505,6 +3505,70 @@ int main(void) {
   result_long("manage_memory_commit_calls_large_delta",
               (long)(managed_stats_after_large.commit_calls.total - managed_stats_after_register.commit_calls.total));
   result_size("manage_memory_commit_calls_after_large", managed_result.commit_calls);
+
+  long page_commit_on_demand_original = mi_option_get(mi_option_page_commit_on_demand);
+  mi_option_set(mi_option_page_commit_on_demand, 1);
+  mi_stats_t page_commit_stats_before;
+  mi_stats_t page_commit_stats_after_register;
+  mi_stats_t page_commit_stats_after_alloc;
+  mi_stats_init(&page_commit_stats_before);
+  mi_stats_init(&page_commit_stats_after_register);
+  mi_stats_init(&page_commit_stats_after_alloc);
+  result_bool("page_commit_on_demand_stats_before_success", mi_stats_get(&page_commit_stats_before));
+
+  size_t page_commit_size = mi_arena_min_size();
+  size_t page_commit_map_size = page_commit_size + mi_arena_min_alignment();
+  void* page_commit_map = mmap(NULL, page_commit_map_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  void* page_commit_mem = page_commit_map == MAP_FAILED ? MAP_FAILED : (void*)(((uintptr_t)page_commit_map + mi_arena_min_alignment() - 1) & ~(uintptr_t)(mi_arena_min_alignment() - 1));
+  struct managed_commit_result page_commit_result = { 0, 0, 0, 0, 0, 0, 1 };
+  mi_arena_id_t page_commit_arena_id = NULL;
+  bool page_commit_managed_ok = page_commit_mem != MAP_FAILED && mi_manage_memory(
+    page_commit_mem,
+    page_commit_size,
+    false,
+    false,
+    false,
+    -1,
+    true,
+    managed_commit_callback,
+    &page_commit_result,
+    &page_commit_arena_id);
+  result_bool("page_commit_on_demand_registered_arena", page_commit_managed_ok && page_commit_arena_id != NULL);
+  result_bool("page_commit_on_demand_stats_after_register_success", mi_stats_get(&page_commit_stats_after_register));
+
+  size_t page_commit_calls_after_register = page_commit_result.commit_calls;
+  size_t page_commit_bytes_after_register = page_commit_result.commit_bytes;
+  mi_heap_t* page_commit_heap = page_commit_managed_ok ? mi_heap_new_in_arena(page_commit_arena_id) : NULL;
+  void* page_commit_blocks[24];
+  size_t page_commit_alloc_count = 0;
+  for (size_t i = 0; i < sizeof(page_commit_blocks) / sizeof(page_commit_blocks[0]); i++) {
+    page_commit_blocks[i] = page_commit_heap == NULL ? NULL : mi_heap_malloc(page_commit_heap, 16 * 1024);
+    if (page_commit_blocks[i] != NULL && mi_arena_contains(page_commit_arena_id, page_commit_blocks[i])) {
+      page_commit_alloc_count++;
+    }
+  }
+  result_bool("page_commit_on_demand_alloc_success",
+              page_commit_alloc_count == sizeof(page_commit_blocks) / sizeof(page_commit_blocks[0]));
+  result_bool("page_commit_on_demand_stats_after_alloc_success", mi_stats_get(&page_commit_stats_after_alloc));
+  result_long("page_commit_on_demand_committed_alloc_delta",
+              (long)(page_commit_stats_after_alloc.committed.total - page_commit_stats_after_register.committed.total));
+  result_long("page_commit_on_demand_commit_calls_alloc_delta",
+              (long)(page_commit_stats_after_alloc.commit_calls.total - page_commit_stats_after_register.commit_calls.total));
+  result_size("page_commit_on_demand_callback_calls_alloc_delta",
+              page_commit_result.commit_calls - page_commit_calls_after_register);
+  result_size("page_commit_on_demand_callback_bytes_alloc_delta",
+              page_commit_result.commit_bytes - page_commit_bytes_after_register);
+  result_bool("page_commit_on_demand_extended_commits",
+              page_commit_result.commit_calls - page_commit_calls_after_register > 1);
+  result_bool("page_commit_on_demand_partial_commit",
+              page_commit_result.commit_bytes - page_commit_bytes_after_register > 0 &&
+              page_commit_result.commit_bytes - page_commit_bytes_after_register < 8 * mi_arena_min_alignment());
+  for (size_t i = 0; i < sizeof(page_commit_blocks) / sizeof(page_commit_blocks[0]); i++) {
+    mi_free(page_commit_blocks[i]);
+  }
+  if (page_commit_heap != NULL) mi_heap_delete(page_commit_heap);
+  mi_option_set(mi_option_page_commit_on_demand, page_commit_on_demand_original);
+
   mi_free(managed_large);
   if (managed_heap != NULL) mi_heap_collect(managed_heap, true);
   mi_collect(true);

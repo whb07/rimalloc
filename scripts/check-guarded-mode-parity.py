@@ -109,6 +109,33 @@ static int guarded_size_bound(void) {
   return (guarded_delta == 1 ? 0 : 34);
 }
 
+static int guarded_generic_allocation(void) {
+  mi_theap_t* theap = mi_theap_get_default();
+  if (theap == NULL) return 50;
+  mi_theap_guarded_set_size_bound(theap, 16, 4096);
+  mi_theap_guarded_set_sample_rate(theap, 1, 1);
+
+  mi_stats_t before;
+  mi_stats_t after;
+  mi_stats_init(&before);
+  mi_stats_init(&after);
+  if (!mi_stats_get(&before)) return 51;
+
+  unsigned char* p = (unsigned char*)mi_zalloc(2048);
+  if (p == NULL) return 52;
+  size_t usable = mi_usable_size(p);
+  int zeroed = usable >= 2048 && bytes_are_zero(p, 2048);
+  long page_size = sysconf(_SC_PAGESIZE);
+  int aligned = (page_size > 0 && (((uintptr_t)p + 2048) % (size_t)page_size) == 0);
+  if (!mi_stats_get(&after)) return 53;
+  long guarded_delta = (long)(after.malloc_guarded_count.total - before.malloc_guarded_count.total);
+
+  printf("generic_guarded_delta=%ld usable=%zu zeroed=%d end_aligned=%d\n",
+         guarded_delta, usable, zeroed, aligned);
+  mi_free(p);
+  return (guarded_delta == 1 && usable >= 2048 && zeroed && aligned ? 0 : 54);
+}
+
 static int guarded_fault(void) {
   mi_theap_t* theap = mi_theap_get_default();
   if (theap == NULL) return 40;
@@ -121,13 +148,27 @@ static int guarded_fault(void) {
   return 42;
 }
 
+static int guarded_generic_fault(void) {
+  mi_theap_t* theap = mi_theap_get_default();
+  if (theap == NULL) return 60;
+  mi_theap_guarded_set_size_bound(theap, 16, 4096);
+  mi_theap_guarded_set_sample_rate(theap, 1, 1);
+  volatile unsigned char* p = (volatile unsigned char*)mi_malloc(2048);
+  if (p == NULL) return 61;
+  p[2048] = 0xA5;
+  mi_free((void*)p);
+  return 62;
+}
+
 int main(int argc, char** argv) {
   if (argc != 2) return 2;
   mi_process_init();
   if (strcmp(argv[1], "allocation") == 0) return guarded_allocation();
   if (strcmp(argv[1], "sampling") == 0) return guarded_sampling();
   if (strcmp(argv[1], "size-bound") == 0) return guarded_size_bound();
+  if (strcmp(argv[1], "generic-allocation") == 0) return guarded_generic_allocation();
   if (strcmp(argv[1], "fault") == 0) return guarded_fault();
+  if (strcmp(argv[1], "generic-fault") == 0) return guarded_generic_fault();
   fprintf(stderr, "unknown case: %s\n", argv[1]);
   return 3;
 }
@@ -146,7 +187,15 @@ CASES = {
         "status": 0,
         "stdout": ["bound_guarded_delta=1"],
     },
+    "generic-allocation": {
+        "status": 0,
+        "stdout": ["generic_guarded_delta=1", "zeroed=1", "end_aligned=1"],
+    },
     "fault": {
+        "status": -11,
+        "stdout": [],
+    },
+    "generic-fault": {
         "status": -11,
         "stdout": [],
     },

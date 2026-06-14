@@ -248,6 +248,15 @@ unsafe fn mi_theap_malloc_generic(
             || (*(*theap).tld).thread_id == _mi_thread_id()
     );
     crate::mi_assert!((huge_alignment & 1) == 0);
+
+    if MI_GUARDED != 0
+        && huge_alignment == 0
+        && !theap.is_null()
+        && mi_unlikely(mi_theap_malloc_use_guarded(theap, size))
+    {
+        return _mi_theap_malloc_guarded(theap, size, zero);
+    }
+
     let Some(padded_size) = size.checked_add(MI_PADDING_SIZE) else {
         _mi_error_message_fmt(
             EOVERFLOW,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the current custom-subprocess heap-main baseline behavior."""
+"""Verify custom-subprocess heap-main abort compatibility with C mimalloc."""
 
 from __future__ import annotations
 
@@ -141,7 +141,7 @@ def main() -> int:
             f"C={c_status} Rust={rust_status} expected={expected}"
         )
 
-    print("ok: C and Rust currently abort on custom subprocess mi_heap_main")
+    print("ok: C and Rust intentionally abort on custom subprocess mi_heap_main")
     return 0
 
 

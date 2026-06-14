@@ -169,7 +169,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [x] Implement Valgrind tracking parity instead of unconditional no-ops. Validation: Valgrind-enabled tests verify defined/undefined/noaccess annotations and leak reports align with C mimalloc. Guarded by `scripts/check-valgrind-tracking-parity.py`.
 - [x] Implement ASAN integration parity instead of unconditional no-ops. Validation: ASAN-enabled tests verify poisoning/unpoisoning, allocator annotations, and error reports align with C mimalloc. Guarded by `scripts/check-asan-tracking-parity.py`.
 - [x] Implement ETW/event tracking parity where Windows support is claimed. Validation: Windows event tests verify allocation/free/heap/stat events are emitted or explicitly match C mimalloc's disabled behavior for the chosen build mode. Windows and ETW/event tracking are outside the current supported parity matrix in `PARITY.md`; guarded by `tests/parity_docs.rs`.
-- [ ] Match assertion, invariant, and diagnostic behavior. Validation: debug test builds exercise representative invariant failures and compare abort/log/callback behavior with C mimalloc.
+- [x] Match assertion, invariant, and diagnostic behavior. Validation: `scripts/check-secure-mode-parity.py` compares C and Rust secure/debug assertion and diagnostic behavior for wrong free hints, invalid/double frees, buffer overruns, and corrupted free lists; `scripts/check-behavioral-parity.py` compares invalid option assertions, wrong-thread theap assertions, warning/error callbacks, and throttling behavior.
 
 ## Override and Interposition Behavior
 

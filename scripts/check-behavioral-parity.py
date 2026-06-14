@@ -1859,6 +1859,51 @@ int main(void) {
   }
   result_size("stats_bin_size_out_of_range", mi_stats_get_bin_size(MI_BIN_HUGE + 1));
 
+  mi_stats_t malloc_stats_before;
+  mi_stats_t malloc_stats_live;
+  mi_stats_t malloc_stats_after;
+  mi_stats_init(&malloc_stats_before);
+  mi_stats_init(&malloc_stats_live);
+  mi_stats_init(&malloc_stats_after);
+  result_bool("malloc_stats_before_ok", mi_stats_get(&malloc_stats_before));
+  size_t malloc_family_sizes[] = { 0, 1, MI_SMALL_SIZE_MAX, MI_SMALL_SIZE_MAX + 1,
+                                   64*1024, 1024*1024, 2*1024*1024, 4*1024*1024 };
+  void* malloc_family_ptrs[sizeof(malloc_family_sizes) / sizeof(malloc_family_sizes[0])];
+  size_t malloc_family_count = sizeof(malloc_family_sizes) / sizeof(malloc_family_sizes[0]);
+  for (size_t i = 0; i < malloc_family_count; i++) {
+    size_t requested = malloc_family_sizes[i];
+    errno = 0;
+    void* mp = mi_malloc(requested);
+    malloc_family_ptrs[i] = mp;
+    result_bool("malloc_family_nonnull", mp != NULL);
+    result_bool("malloc_family_errno_unchanged", errno == 0);
+    result_bool("malloc_family_usable", mp != NULL && mi_usable_size(mp) >= requested);
+    result_bool("malloc_family_size_matches_usable", mp != NULL && mi_malloc_size(mp) == mi_malloc_usable_size(mp));
+    result_indexed_size("malloc_family_usable_size", i, mp == NULL ? 0 : mi_usable_size(mp));
+  }
+  result_bool("malloc_stats_live_ok", mi_stats_get(&malloc_stats_live));
+  result_bool("malloc_stats_live_increased",
+              malloc_stats_live.malloc_normal.current + malloc_stats_live.malloc_huge.current >=
+              malloc_stats_before.malloc_normal.current + malloc_stats_before.malloc_huge.current &&
+              malloc_stats_live.malloc_normal.peak + malloc_stats_live.malloc_huge.peak >=
+              malloc_stats_live.malloc_normal.current + malloc_stats_live.malloc_huge.current &&
+              malloc_stats_live.malloc_normal.total + malloc_stats_live.malloc_huge.total >=
+              malloc_stats_before.malloc_normal.total + malloc_stats_before.malloc_huge.total);
+  for (size_t i = 0; i < malloc_family_count; i++) {
+    mi_free(malloc_family_ptrs[i]);
+  }
+  result_bool("malloc_stats_after_ok", mi_stats_get(&malloc_stats_after));
+  result_bool("malloc_stats_after_decreased",
+              malloc_stats_after.malloc_normal.current + malloc_stats_after.malloc_huge.current <=
+              malloc_stats_live.malloc_normal.current + malloc_stats_live.malloc_huge.current &&
+              malloc_stats_after.malloc_normal.peak + malloc_stats_after.malloc_huge.peak >=
+              malloc_stats_live.malloc_normal.current + malloc_stats_live.malloc_huge.current &&
+              malloc_stats_after.malloc_normal.total + malloc_stats_after.malloc_huge.total >=
+              malloc_stats_live.malloc_normal.total + malloc_stats_live.malloc_huge.total);
+  errno = 0;
+  result_bool("malloc_oom_null", mi_malloc(overflow_count) == NULL);
+  result_size("malloc_oom_errno", (size_t)errno);
+
   size_t size_checks[] = { 0, 1, 8, 16, 17, 32, 33, 64, 65, 128, 129, 256, 257, 512, 513,
                            1024, 1025, MI_SMALL_SIZE_MAX - 1, MI_SMALL_SIZE_MAX,
                            MI_SMALL_SIZE_MAX + 1, 8*1024 - 1, 8*1024, 8*1024 + 1,

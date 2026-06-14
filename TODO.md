@@ -52,7 +52,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## Core Allocation Semantics
 
-- [ ] Match `mi_malloc` for zero-size, small, medium, large, huge, and OOM requests. Validation: C/Rust parity tests compare null/non-null behavior, usable size, alignment, errno, and stats for a representative size sweep including all size-class boundaries.
+- [x] Match `mi_malloc` for zero-size, small, medium, large, huge, and OOM requests. Validation: C/Rust parity tests compare null/non-null behavior, usable size, alignment, errno, and stats for a representative size sweep including all size-class boundaries. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match `mi_calloc` overflow and zero-initialization semantics. Validation: parity tests cover zero count, zero size, count-size overflow, normal allocation, large allocation, and byte-for-byte zeroed memory. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match `mi_zalloc` and `mi_zalloc_small` semantics. Validation: tests verify zeroing, small-size constraints, usable sizes, and behavior around `MI_SMALL_SIZE_MAX` against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [x] Match `mi_malloc_small` and `mi_free_small` fast-path contracts. Validation: tests allocate every small size class, free with `mi_free_small`, reject or diagnose misuse according to C mode behavior, and compare stats and debug behavior. Guarded by `scripts/check-behavioral-parity.py`.

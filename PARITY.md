@@ -80,6 +80,18 @@ declared surface directly.
 | `mi_theap_set_default` | The Rust artifact exports the API, but the vendored `static.c` and CMake static baselines used for direct link parity do not provide a linkable public definition. Guarded by `scripts/check-c-baseline-missing-exports.py`. | The theap default-switching TODOs remain open until the C baseline can directly link and compare the behavior. |
 | `mi_uzalloc_small` | The Rust artifact exports the API, but the vendored `static.c` and CMake static baselines used for direct link parity do not provide a linkable public definition. Guarded by `scripts/check-c-baseline-missing-exports.py`. | The usable-size allocation-family TODO remains open until the C baseline can directly link and compare the behavior. |
 
+## Known Unresolved Behavioral Mismatches
+
+These entries are not accepted Rust non-parity decisions. They are behavior
+paths where the current C baseline and Rust implementation agree on a failing
+status, but the TODO checklist intentionally keeps the desired parity work open
+until the behavior can be made useful and compared against an authoritative C
+baseline.
+
+| Area | Baseline observation | TODO impact |
+|---|---|---|
+| Custom subprocess main heap | After `mi_subproc_new` and `mi_subproc_add_current_thread`, calling `mi_heap_main` in the attached thread aborts with status 134 for both vendored C and Rust. Guarded by `scripts/check-subproc-heap-main-baseline.py`. | The subprocess heap-isolation/destruction TODO remains open until custom subprocess main-heap creation and isolation semantics can be proven against the C baseline. |
+
 ## Vendored C Test Coverage
 
 The vendored `mimalloc-3.3.2/test` sources are covered by Rust integration
@@ -127,6 +139,7 @@ scripts/check-public-symbols.py
 scripts/check-public-symbols.py --missing-only
 scripts/check-c-link-public-api.py
 scripts/check-c-baseline-missing-exports.py
+scripts/check-subproc-heap-main-baseline.py
 scripts/check-behavioral-parity.py
 scripts/check-cxx-bad-alloc-divergence.py
 scripts/check-secure-mode-parity.py

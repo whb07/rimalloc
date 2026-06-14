@@ -120,10 +120,13 @@ fn parity_docs_record_rust_only_export_safety_contracts() {
 #[test]
 fn parity_docs_record_unresolved_baseline_mismatches() {
     assert!(PARITY_DOC.contains("Known Unresolved Baseline Mismatches"));
+    assert!(PARITY_DOC.contains("Known Unresolved Behavioral Mismatches"));
     assert!(PARITY_DOC.contains("not accepted Rust non-parity decisions"));
     assert!(PARITY_DOC.contains("vendored public headers declare a symbol"));
     assert!(PARITY_DOC.contains("linkable definition"));
     assert!(PARITY_DOC.contains("scripts/check-c-baseline-missing-exports.py"));
+    assert!(PARITY_DOC.contains("scripts/check-subproc-heap-main-baseline.py"));
+    assert!(PARITY_DOC.contains("custom subprocess main-heap creation"));
 
     for api in [
         "mi_stats_merge",
@@ -195,6 +198,7 @@ fn parity_signoff_documents_required_commands() {
         "scripts/check-public-symbols.py --missing-only",
         "scripts/check-c-link-public-api.py",
         "scripts/check-c-baseline-missing-exports.py",
+        "scripts/check-subproc-heap-main-baseline.py",
         "scripts/check-behavioral-parity.py",
         "scripts/check-cxx-bad-alloc-divergence.py",
         "scripts/check-secure-mode-parity.py",

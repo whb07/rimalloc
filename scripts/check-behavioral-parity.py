@@ -40,10 +40,13 @@ static size_t registered_output_a = 0;
 static size_t registered_output_b = 0;
 static size_t registered_error_a = 0;
 static size_t registered_error_b = 0;
+static int registered_error_a_last = 0;
+static int registered_error_b_last = 0;
 static size_t reentrant_output_calls = 0;
 static int reentrant_output_alloc_ok = 1;
 static size_t reentrant_error_calls = 0;
 static int reentrant_error_alloc_ok = 1;
+static int reentrant_error_last = 0;
 static size_t reentrant_deferred_calls = 0;
 static int reentrant_deferred_alloc_ok = 1;
 static size_t deferred_calls = 0;
@@ -164,18 +167,21 @@ static void reentrant_output_callback(const char* msg, void* arg) {
 static void registered_error_callback_a(int err, void* arg) {
   if (err != 0 && arg == (void*)0xE11A) {
     registered_error_a++;
+    registered_error_a_last = err;
   }
 }
 
 static void registered_error_callback_b(int err, void* arg) {
   if (err != 0 && arg == (void*)0xE22B) {
     registered_error_b++;
+    registered_error_b_last = err;
   }
 }
 
 static void reentrant_error_callback(int err, void* arg) {
   if (err == 0 || arg != (void*)0xECA11) return;
   reentrant_error_calls++;
+  reentrant_error_last = err;
   if (!callback_alloc_roundtrip(37)) reentrant_error_alloc_ok = 0;
 }
 
@@ -1146,15 +1152,19 @@ int main(void) {
   volatile void* err_alloc = mi_calloc(overflow_count, 2);
   (void)err_alloc;
   result_bool("register_error_a_called", registered_error_a > 0);
+  result_size("register_error_a_code", (size_t)registered_error_a_last);
   mi_register_error(registered_error_callback_b, (void*)0xE22B);
   err_alloc = mi_calloc(overflow_count, 2);
   (void)err_alloc;
   result_bool("register_error_b_called", registered_error_b > 0);
+  result_size("register_error_b_code", (size_t)registered_error_b_last);
   mi_register_error(NULL, NULL);
   size_t error_after_clear = registered_error_b;
+  int error_code_after_clear = registered_error_b_last;
   err_alloc = mi_calloc(overflow_count, 2);
   (void)err_alloc;
   result_bool("register_error_clear", registered_error_b == error_after_clear);
+  result_bool("register_error_clear_code", registered_error_b_last == error_code_after_clear);
 
   reentrant_error_calls = 0;
   reentrant_error_alloc_ok = 1;
@@ -1163,6 +1173,7 @@ int main(void) {
   (void)err_alloc;
   result_bool("error_callback_alloc_called", reentrant_error_calls > 0);
   result_bool("error_callback_alloc_ok", reentrant_error_alloc_ok);
+  result_size("error_callback_code", (size_t)reentrant_error_last);
   mi_register_error(NULL, NULL);
 
   deferred_calls = 0;

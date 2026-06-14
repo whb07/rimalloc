@@ -3240,6 +3240,19 @@ int main(void) {
   mi_option_set(mi_option_purge_delay, 0);
   mi_option_set(mi_option_purge_decommits, 1);
 
+  mi_stats_t managed_stats_before;
+  mi_stats_t managed_stats_after_register;
+  mi_stats_t managed_stats_after_large;
+  mi_stats_t managed_stats_after_collect;
+  mi_stats_t managed_stats_before_fail;
+  mi_stats_t managed_stats_after_fail;
+  mi_stats_init(&managed_stats_before);
+  mi_stats_init(&managed_stats_after_register);
+  mi_stats_init(&managed_stats_after_large);
+  mi_stats_init(&managed_stats_after_collect);
+  mi_stats_init(&managed_stats_before_fail);
+  mi_stats_init(&managed_stats_after_fail);
+  result_bool("manage_memory_stats_before_success", mi_stats_get(&managed_stats_before));
   size_t managed_size = mi_arena_min_size();
   size_t managed_map_size = managed_size + mi_arena_min_alignment();
   void* managed_map = mmap(NULL, managed_map_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -3258,6 +3271,13 @@ int main(void) {
     &managed_result,
     &managed_arena_id);
   result_bool("manage_memory_callback_registered_arena", managed_ok && managed_arena_id != NULL);
+  result_bool("manage_memory_stats_after_register_success", mi_stats_get(&managed_stats_after_register));
+  result_long("manage_memory_reserved_register_delta",
+              (long)(managed_stats_after_register.reserved.total - managed_stats_before.reserved.total));
+  result_long("manage_memory_committed_register_delta",
+              (long)(managed_stats_after_register.committed.total - managed_stats_before.committed.total));
+  result_long("manage_memory_commit_calls_register_delta",
+              (long)(managed_stats_after_register.commit_calls.total - managed_stats_before.commit_calls.total));
   result_bool("manage_memory_callback_invoked", managed_result.commit_calls > 0 && managed_result.commit_bytes > 0);
   result_bool("manage_memory_callback_arg_seen", managed_result.arg_seen);
   result_bool("manage_memory_callback_alloc_called", managed_result.alloc_calls > 0);
@@ -3273,14 +3293,29 @@ int main(void) {
   mi_free(managed_alloc);
   void* managed_large = managed_heap == NULL ? NULL : mi_heap_malloc(managed_heap, 4 * 1024 * 1024);
   result_bool("manage_memory_large_commit_zero_state", managed_large != NULL && mi_arena_contains(managed_arena_id, managed_large) && managed_result.zero_state_seen);
+  result_bool("manage_memory_stats_after_large_success", mi_stats_get(&managed_stats_after_large));
+  result_long("manage_memory_committed_large_delta",
+              (long)(managed_stats_after_large.committed.total - managed_stats_after_register.committed.total));
+  result_long("manage_memory_commit_calls_large_delta",
+              (long)(managed_stats_after_large.commit_calls.total - managed_stats_after_register.commit_calls.total));
   result_size("manage_memory_commit_calls_after_large", managed_result.commit_calls);
   mi_free(managed_large);
   if (managed_heap != NULL) mi_heap_collect(managed_heap, true);
   mi_collect(true);
   result_bool("manage_memory_decommit_callback", managed_result.decommit_calls > 0);
+  result_bool("manage_memory_stats_after_collect_success", mi_stats_get(&managed_stats_after_collect));
+  result_long("manage_memory_purge_calls_collect_delta",
+              (long)(managed_stats_after_collect.purge_calls.total - managed_stats_after_large.purge_calls.total));
+  result_long("manage_memory_purged_collect_delta",
+              (long)(managed_stats_after_collect.purged.total - managed_stats_after_large.purged.total));
+  result_long("manage_memory_reset_calls_collect_delta",
+              (long)(managed_stats_after_collect.reset_calls.total - managed_stats_after_large.reset_calls.total));
+  result_long("manage_memory_reset_collect_delta",
+              (long)(managed_stats_after_collect.reset.total - managed_stats_after_large.reset.total));
   result_size("manage_memory_decommit_calls_after_collect", managed_result.decommit_calls);
   if (managed_heap != NULL) mi_heap_delete(managed_heap);
 
+  result_bool("manage_memory_stats_before_fail_success", mi_stats_get(&managed_stats_before_fail));
   void* fail_map = mmap(NULL, managed_map_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   void* fail_mem = fail_map == MAP_FAILED ? MAP_FAILED : (void*)(((uintptr_t)fail_map + mi_arena_min_alignment() - 1) & ~(uintptr_t)(mi_arena_min_alignment() - 1));
   struct managed_commit_result fail_result = { 0, 0, 0, 0, 0, 0, 1 };
@@ -3297,6 +3332,13 @@ int main(void) {
     &fail_result,
     &fail_arena_id);
   result_bool("manage_memory_failure_rollback", !fail_ok && fail_arena_id == NULL && fail_result.commit_calls > 0 && !mi_arena_contains(fail_arena_id, fail_mem));
+  result_bool("manage_memory_stats_after_fail_success", mi_stats_get(&managed_stats_after_fail));
+  result_long("manage_memory_rollback_count_delta",
+              (long)(managed_stats_after_fail.arena_rollback_count.total - managed_stats_before_fail.arena_rollback_count.total));
+  result_long("manage_memory_reserved_fail_delta",
+              (long)(managed_stats_after_fail.reserved.total - managed_stats_before_fail.reserved.total));
+  result_long("manage_memory_committed_fail_delta",
+              (long)(managed_stats_after_fail.committed.total - managed_stats_before_fail.committed.total));
 
   mi_option_set(mi_option_purge_delay, managed_original_purge_delay);
   mi_option_set(mi_option_purge_decommits, managed_original_purge_decommits);

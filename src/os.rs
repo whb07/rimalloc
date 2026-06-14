@@ -416,9 +416,13 @@ pub unsafe extern "C" fn _mi_os_commit_ex(
     is_zero: *mut bool,
     stat_size: usize,
 ) -> bool {
-    let _ = stat_size;
     if !is_zero.is_null() {
         unsafe { *is_zero = false };
+    }
+    let subproc = unsafe { _mi_subproc() };
+    if !subproc.is_null() {
+        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
+        __mi_stat_counter_increase(&mut stats.commit_calls, 1);
     }
 
     let mut csize = 0;
@@ -438,6 +442,10 @@ pub unsafe extern "C" fn _mi_os_commit_ex(
     }
     if os_is_zero && !is_zero.is_null() {
         unsafe { *is_zero = true };
+    }
+    if !subproc.is_null() {
+        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
+        __mi_stat_increase(&mut stats.committed, stat_size);
     }
     true
 }

@@ -2389,6 +2389,27 @@ int main(void) {
   result_bool("arena_min_alignment_power2", mi_arena_min_alignment() != 0 && (mi_arena_min_alignment() & (mi_arena_min_alignment() - 1)) == 0);
   result_bool("arena_min_size_aligned", mi_arena_min_size() != 0 && (mi_arena_min_size() % mi_arena_min_alignment()) == 0);
 
+  int reserve_basic_err = mi_reserve_os_memory(mi_arena_min_size(), false, false);
+  result_bool("reserve_os_memory_basic_uncommitted", reserve_basic_err == 0);
+
+  mi_arena_id_t reserve_uncommitted_id = NULL;
+  int reserve_uncommitted_err = mi_reserve_os_memory_ex(mi_arena_min_size(), false, false, false, &reserve_uncommitted_id);
+  result_bool("reserve_os_memory_ex_uncommitted_nonexclusive", reserve_uncommitted_err == 0 && reserve_uncommitted_id != NULL);
+  mi_heap_t* reserve_uncommitted_heap = reserve_uncommitted_id != NULL ? mi_heap_new_in_arena(reserve_uncommitted_id) : NULL;
+  void* reserve_uncommitted_alloc = reserve_uncommitted_heap == NULL ? NULL : mi_heap_malloc(reserve_uncommitted_heap, 512);
+  result_bool("reserve_os_memory_ex_uncommitted_alloc", reserve_uncommitted_alloc != NULL && mi_arena_contains(reserve_uncommitted_id, reserve_uncommitted_alloc));
+  mi_free(reserve_uncommitted_alloc);
+  if (reserve_uncommitted_heap != NULL) mi_heap_delete(reserve_uncommitted_heap);
+
+  mi_arena_id_t reserve_large_allowed_id = NULL;
+  int reserve_large_allowed_err = mi_reserve_os_memory_ex(mi_arena_min_size(), true, true, false, &reserve_large_allowed_id);
+  result_bool("reserve_os_memory_ex_large_allowed", reserve_large_allowed_err == 0 && reserve_large_allowed_id != NULL);
+  mi_heap_t* reserve_large_allowed_heap = reserve_large_allowed_id != NULL ? mi_heap_new_in_arena(reserve_large_allowed_id) : NULL;
+  void* reserve_large_allowed_alloc = reserve_large_allowed_heap == NULL ? NULL : mi_heap_malloc(reserve_large_allowed_heap, 512);
+  result_bool("reserve_os_memory_ex_large_allowed_alloc", reserve_large_allowed_alloc != NULL && mi_arena_contains(reserve_large_allowed_id, reserve_large_allowed_alloc));
+  mi_free(reserve_large_allowed_alloc);
+  if (reserve_large_allowed_heap != NULL) mi_heap_delete(reserve_large_allowed_heap);
+
   mi_arena_id_t arena_id = NULL;
   int arena_err = mi_reserve_os_memory_ex(mi_arena_min_size(), true, false, true, &arena_id);
   result_bool("arena_reserve_for_inspection", arena_err == 0 && arena_id != NULL);

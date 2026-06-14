@@ -101,7 +101,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## Arenas and Managed Memory
 
-- [ ] Match `mi_reserve_os_memory` and `mi_reserve_os_memory_ex`. Validation: tests reserve committed/uncommitted, large-page allowed/disallowed, exclusive/non-exclusive memory and compare return values, arena ids, and allocation eligibility with C mimalloc.
+- [x] Match `mi_reserve_os_memory` and `mi_reserve_os_memory_ex`. Validation: tests reserve committed/uncommitted, large-page allowed/disallowed, exclusive/non-exclusive memory and compare return values, arena ids, and allocation eligibility with C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [ ] Match `mi_manage_os_memory` and `mi_manage_os_memory_ex`. Validation: tests hand in caller-owned memory ranges with combinations of committed, pinned, zeroed, NUMA node, and exclusive flags, then verify allocation, purge, and containment behavior against C mimalloc.
 - [x] Match experimental `mi_manage_memory` with commit callback. Validation: callback tests compare commit/decommit call sequences, zero-state propagation, failure rollback, exclusive arena behavior, and arena id results with C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 - [ ] Match huge OS page reservation APIs `mi_reserve_huge_os_pages`, `mi_reserve_huge_os_pages_at`, `mi_reserve_huge_os_pages_at_ex`, and `mi_reserve_huge_os_pages_interleave`. Validation: privileged environments compare reservation counts and NUMA placement with C mimalloc, while unprivileged environments compare failure codes and diagnostics.

@@ -63,6 +63,15 @@ fn c_baseline_documents_required_public_headers_and_versions() {
 }
 
 #[test]
+fn parity_docs_record_cxx_bad_alloc_divergence() {
+    assert!(PARITY_DOC.contains("C++ bad-allocation throwing from Rust"));
+    assert!(PARITY_DOC.contains("mi_new"));
+    assert!(PARITY_DOC.contains("std::bad_alloc"));
+    assert!(PARITY_DOC.contains("`extern \"C\"` Rust boundary"));
+    assert!(PARITY_DOC.contains("keeps the `mi_new` and C++ override TODO items open"));
+}
+
+#[test]
 fn parity_signoff_documents_required_commands() {
     for command in [
         "cargo fmt --check",

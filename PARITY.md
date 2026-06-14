@@ -18,6 +18,12 @@ Emscripten, non-x86_64 architectures, big-endian targets, debug mode, secure
 mode, guarded mode, Valgrind tracking, sanitizer builds (ASAN/TSAN/UBSAN),
 Windows ETW/event tracking, and allocator override/interposition parity.
 
+## Intentional Non-Parity Decisions
+
+| Area | Affected APIs | Target/mode | User-visible behavior | Reason | Containment |
+|---|---|---|---|---|---|
+| C++ bad-allocation throwing from Rust | `mi_new`, `mi_new_n`, `mi_heap_alloc_new`, `mi_heap_alloc_new_n`, C++ global `operator new` overrides | Rust artifact linked into C++ callers on Unix | Successful allocations and installed `std::new_handler` callbacks are supported; if no handler can satisfy an allocation, Rust aborts instead of throwing `std::bad_alloc` from Rust across the C ABI. | C mimalloc only throws `std::bad_alloc` when that implementation is compiled as C++; the Rust implementation cannot safely originate a C++ exception across an `extern "C"` Rust boundary. | `scripts/check-behavioral-parity.py` covers successful `mi_new` allocation/free compatibility and installed-new-handler invocation. The remaining exception behavior keeps the `mi_new` and C++ override TODO items open. |
+
 ## C Baseline
 
 The public API parity source of truth is the vendored mimalloc 3.3.2 C headers:

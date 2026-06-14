@@ -183,7 +183,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## Original Test Coverage Parity
 
-- [ ] Port or directly run the C distribution's public API tests against the Rust artifact. Validation: every relevant C test source under the vendored mimalloc test suite has a Rust-artifact run result, and failures are fixed or documented as unsupported target differences.
+- [x] Port or directly run the C distribution's public API tests against the Rust artifact. Validation: every relevant C test source under the vendored mimalloc test suite has a Rust-artifact run result, and failures are fixed or documented as unsupported target differences. Guarded by `tests/parity_docs.rs` and the `original_*` integration tests.
 - [x] Replace empty or duplicate Rust characterization tests with real assertions. Validation: no test function is empty unless explicitly marked as a compile-only test with a comment explaining the parity purpose. Guarded by `rg` empty-function searches and `cargo test`.
 - [x] Add C-link smoke tests for every public header symbol. Validation: generated or handwritten C code compiles, links, calls every function in safe combinations, and fails the build if any symbol is missing. Guarded by `scripts/check-c-link-public-api.py`.
 - [ ] Add parity tests for every allocation family. Validation: malloc, calloc, realloc, aligned, heap, theap, subprocess, arena, string, env, stats, options, and override APIs each have at least one direct C-vs-Rust comparison test.

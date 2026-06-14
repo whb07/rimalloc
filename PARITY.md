@@ -77,6 +77,30 @@ declared surface directly.
 | `mi_theap_set_default` | The Rust artifact exports the API, but the vendored C static baseline used for direct link parity does not provide a linkable public definition. | The theap default-switching TODOs remain open until the C baseline can directly link and compare the behavior. |
 | `mi_uzalloc_small` | The Rust artifact exports the API, but the vendored C static baseline used for direct link parity does not provide a linkable public definition. | The usable-size allocation-family TODO remains open until the C baseline can directly link and compare the behavior. |
 
+## Vendored C Test Coverage
+
+The vendored `mimalloc-3.3.2/test` sources are covered by Rust integration
+tests where the behavior is meaningful for the current supported matrix. These
+tests run against the Rust artifact with `cargo test`; unsupported rows below
+remain outside the supported matrix until their mode or platform is added above.
+
+| Vendored source | Rust-artifact coverage | Current result |
+|---|---|---|
+| `main.c` | `tests/original_main.rs` | Passing |
+| `main-override.c` | `tests/original_main_override.rs` | Passing for explicit Rust allocator calls; dynamic preload/interposition behavior remains out of matrix. |
+| `main-override.cpp` | `tests/original_main_override.rs` | Passing for translated STL allocator/new-handler coverage except the documented C++ `std::bad_alloc` divergence. |
+| `main-override-static.c` | `tests/original_main_override_static.rs` | Passing for explicit Rust static-override API behavior; linker symbol priority is not a Rust integration-test property. |
+| `main-override-dep.cpp`, `main-override-dep.h` | `tests/original_main_override.rs` | Passing through the translated dependency checks. |
+| `main-static-dep.cpp`, `main-static-dep.h` | `tests/original_main_static_dep.rs` | Passing through the translated constructor/destructor dependency checks. |
+| `test-api.c` | `tests/original_test_api.rs` | Passing for the translated public API subset. |
+| `test-api-fill.c` | `tests/original_test_api_fill.rs` | Passing. |
+| `test-stress.c` | `tests/original_test_stress.rs` | Passing with bounded thread and iteration counts appropriate for integration tests. |
+| `testhelper.h` | `tests/original_testhelper.rs` | Covered as the shared translated harness helper. |
+| `test-wrong.c` | Not ported as a passing integration test. | Unsupported for the current matrix because it intentionally exercises memory misuse diagnostics, which depend on debug/secure behavior still tracked by TODO items 166 and 194. |
+
+`CMakeLists.txt` and `readme.md` describe the upstream test build strategy and
+are not executable test cases for the Rust artifact.
+
 ## Signoff Command Set
 
 Run this sequence from the repository root before declaring a parity checkpoint

@@ -129,6 +129,39 @@ fn parity_docs_record_unresolved_baseline_mismatches() {
 }
 
 #[test]
+fn parity_docs_map_vendored_c_tests_to_rust_artifact_runs() {
+    assert!(PARITY_DOC.contains("Vendored C Test Coverage"));
+    assert!(PARITY_DOC.contains("cargo test"));
+
+    for mapping in [
+        ("main.c", "tests/original_main.rs"),
+        ("main-override.c", "tests/original_main_override.rs"),
+        ("main-override.cpp", "tests/original_main_override.rs"),
+        (
+            "main-override-static.c",
+            "tests/original_main_override_static.rs",
+        ),
+        ("main-override-dep.cpp", "tests/original_main_override.rs"),
+        ("main-override-dep.h", "tests/original_main_override.rs"),
+        ("main-static-dep.cpp", "tests/original_main_static_dep.rs"),
+        ("main-static-dep.h", "tests/original_main_static_dep.rs"),
+        ("test-api.c", "tests/original_test_api.rs"),
+        ("test-api-fill.c", "tests/original_test_api_fill.rs"),
+        ("test-stress.c", "tests/original_test_stress.rs"),
+        ("testhelper.h", "tests/original_testhelper.rs"),
+    ] {
+        assert!(PARITY_DOC.contains(mapping.0), "missing {}", mapping.0);
+        assert!(PARITY_DOC.contains(mapping.1), "missing {}", mapping.1);
+    }
+
+    assert!(PARITY_DOC.contains("test-wrong.c"));
+    assert!(PARITY_DOC.contains("Not ported as a passing integration test"));
+    assert!(PARITY_DOC.contains("TODO items 166 and 194"));
+    assert!(PARITY_DOC.contains("CMakeLists.txt"));
+    assert!(PARITY_DOC.contains("readme.md"));
+}
+
+#[test]
 fn parity_signoff_documents_required_commands() {
     for command in [
         "cargo fmt --check",

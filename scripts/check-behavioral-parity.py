@@ -3151,6 +3151,16 @@ int main(void) {
   result_bool("heap_stats_get_before_merge_peak", heap_stats_before_ok && stats_alloc_peak(&stats_heap_before) >= stats_alloc_current(&stats_heap_before));
   result_bool("heap_stats_get_before_merge_total", heap_stats_before_ok && stats_alloc_total(&stats_heap_before) >= stats_alloc_current(&stats_heap_before));
 
+  stats_output_reset();
+  if (stats_heap != NULL) mi_heap_stats_print_out(stats_heap, stats_output_callback, NULL);
+  result_bool("heap_stats_print_out_callback_nonempty", stats_output_callbacks > 0);
+  result_bool("heap_stats_print_out_structure", stats_output_seen_heap && stats_output_seen_blocks && stats_output_seen_pages);
+
+  stats_output_reset();
+  mi_subproc_heap_stats_print_out(mi_subproc_current(), stats_output_callback, NULL);
+  result_bool("subproc_heap_stats_print_out_callback_nonempty", stats_output_callbacks > 0);
+  result_bool("subproc_heap_stats_print_out_structure", stats_output_seen_heap && stats_output_seen_subproc);
+
   mi_stats_t subproc_exclusive_before;
   mi_stats_init(&subproc_exclusive_before);
   result_bool("subproc_stats_get_exclusive_before_success", mi_subproc_stats_get_exclusive(mi_subproc_current(), &subproc_exclusive_before));

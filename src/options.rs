@@ -25,11 +25,11 @@ use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
 use crate::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
 use crate::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
 use crate::init::{_mi_is_main_thread, _mi_preloading, _mi_thread_id, mi_mark_main_thread};
-use crate::internal::MI_GUARDED;
+use crate::internal::{MI_DEBUG, MI_GUARDED};
 use crate::os::_mi_prim_out_stderr;
 use crate::page::MI_MAX_ALLOC_SIZE;
 use crate::types::{
-    MI_MALLOC_VERSION, mi_error_fun, mi_option_desc_t, mi_option_init_t, mi_output_fun,
+    EFAULT, MI_MALLOC_VERSION, mi_error_fun, mi_option_desc_t, mi_option_init_t, mi_output_fun,
 };
 
 #[repr(i32)]
@@ -1003,7 +1003,9 @@ pub extern "C" fn mi_version() -> i32 {
 
 #[allow(dead_code)]
 pub(crate) fn mi_error_default(err: i32) {
-    let _ = err;
+    if err == EFAULT && (MI_DEBUG > 0 || cfg!(feature = "secure")) {
+        abort();
+    }
 }
 
 #[unsafe(no_mangle)]

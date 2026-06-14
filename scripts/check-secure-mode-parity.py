@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare secure-mode free-list behavior for C and Rust mimalloc."""
+"""Compare secure/debug free-list hardening behavior for C and Rust mimalloc."""
 
 from __future__ import annotations
 
@@ -130,42 +130,38 @@ def run(
     )
 
 
-def rust_staticlib_secure() -> pathlib.Path:
-    target_dir = BUILD_DIR / "rust-target"
+def rust_staticlib(features: list[str], name: str) -> pathlib.Path:
+    target_dir = BUILD_DIR / f"rust-target-{name}"
     deps_dir = target_dir / "debug/deps"
     env = dict(os.environ)
     env["CARGO_TARGET_DIR"] = str(target_dir)
-    run(
-        [
-            "cargo",
-            "rustc",
-            "--features",
-            "secure",
-            "--lib",
-            "--",
-            "--crate-type",
-            "staticlib",
-        ],
-        env=env,
-    )
+    cmd = ["cargo", "rustc"]
+    if features:
+        cmd.extend(["--features", ",".join(features)])
+    cmd.extend(["--lib", "--", "--crate-type", "staticlib"])
+    run(cmd, env=env)
     libs = sorted(
         deps_dir.glob("libmechanical_mimalloc-*.a"),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
     if not libs:
-        raise SystemExit("no Rust secure staticlib artifact found")
+        raise SystemExit(f"no Rust {name} staticlib artifact found")
     return libs[0]
 
 
-def c_mimalloc_object(cc: str) -> pathlib.Path:
-    obj = BUILD_DIR / "mimalloc-static-secure.o"
-    run(
+def c_mimalloc_object(cc: str, secure: bool) -> pathlib.Path:
+    mode = "secure" if secure else "debug"
+    obj = BUILD_DIR / f"mimalloc-static-{mode}.o"
+    cmd = [
+        cc,
+        "-std=c11",
+        "-DMI_MALLOC_OVERRIDE=0",
+    ]
+    if secure:
+        cmd.append("-DMI_SECURE=4")
+    cmd.extend(
         [
-            cc,
-            "-std=c11",
-            "-DMI_MALLOC_OVERRIDE=0",
-            "-DMI_SECURE=4",
             "-DMI_GUARDED=0",
             "-I",
             str(ROOT / "mimalloc-3.3.2/include"),
@@ -177,17 +173,21 @@ def c_mimalloc_object(cc: str) -> pathlib.Path:
             str(obj),
         ]
     )
+    run(cmd)
     return obj
 
 
-def compile_probe(cc: str, output: pathlib.Path, objects: list[pathlib.Path]) -> None:
+def compile_probe(cc: str, output: pathlib.Path, objects: list[pathlib.Path], secure: bool) -> None:
     src = BUILD_DIR / "secure-mode-probe.c"
     src.write_text(PROBE_C)
-    run(
+    cmd = [
+        cc,
+        "-std=c11",
+    ]
+    if secure:
+        cmd.append("-DMI_SECURE=4")
+    cmd.extend(
         [
-            cc,
-            "-std=c11",
-            "-DMI_SECURE=4",
             "-DMI_GUARDED=0",
             "-I",
             str(ROOT / "mimalloc-3.3.2/include"),
@@ -202,6 +202,7 @@ def compile_probe(cc: str, output: pathlib.Path, objects: list[pathlib.Path]) ->
             str(output),
         ]
     )
+    run(cmd)
 
 
 def run_case(binary: pathlib.Path, case: str) -> subprocess.CompletedProcess[str]:
@@ -230,19 +231,31 @@ def main() -> int:
 
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
-    c_bin = BUILD_DIR / "probe-c"
-    rust_bin = BUILD_DIR / "probe-rust"
-    compile_probe(cc, c_bin, [c_mimalloc_object(cc)])
-    compile_probe(cc, rust_bin, [rust_staticlib_secure()])
+    c_secure_bin = BUILD_DIR / "probe-c-secure"
+    rust_secure_bin = BUILD_DIR / "probe-rust-secure"
+    compile_probe(cc, c_secure_bin, [c_mimalloc_object(cc, secure=True)], secure=True)
+    compile_probe(cc, rust_secure_bin, [rust_staticlib(["secure"], "secure")], secure=True)
 
     for case in CASES:
-        c_result = run_case(c_bin, case)
-        rust_result = run_case(rust_bin, case)
-        verify_case("C", case, c_result)
-        verify_case("Rust", case, rust_result)
-        print(f"ok: {case}")
+        c_result = run_case(c_secure_bin, case)
+        rust_result = run_case(rust_secure_bin, case)
+        verify_case("C secure", case, c_result)
+        verify_case("Rust secure", case, rust_result)
+        print(f"ok: secure {case}")
 
-    print("ok: C and Rust secure-mode free-list behavior matches")
+    c_debug_bin = BUILD_DIR / "probe-c-debug"
+    rust_debug_bin = BUILD_DIR / "probe-rust-debug"
+    compile_probe(cc, c_debug_bin, [c_mimalloc_object(cc, secure=False)], secure=False)
+    compile_probe(cc, rust_debug_bin, [rust_staticlib([], "debug")], secure=False)
+
+    for case in ["encoded-next", "double-free", "corrupt-free-list"]:
+        c_result = run_case(c_debug_bin, case)
+        rust_result = run_case(rust_debug_bin, case)
+        verify_case("C debug", case, c_result)
+        verify_case("Rust debug", case, rust_result)
+        print(f"ok: debug {case}")
+
+    print("ok: C and Rust secure/debug free-list hardening behavior matches")
     return 0
 
 

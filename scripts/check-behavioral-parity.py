@@ -56,7 +56,62 @@ static int stats_output_seen_option = 0;
 static int stats_output_seen_debug = 0;
 static int stats_output_seen_secure = 0;
 static int stats_output_seen_tracking = 0;
+static int option_table_seen[_mi_option_last];
+static size_t option_table_callbacks = 0;
+static size_t option_table_seen_count = 0;
+static size_t option_table_kib_count = 0;
+static int option_table_arg_seen = 0;
 static volatile size_t overflow_count = (size_t)-1;
+
+static const char* option_table_names[_mi_option_last] = {
+  "show_errors",
+  "show_stats",
+  "verbose",
+  "deprecated_eager_commit",
+  "arena_eager_commit",
+  "purge_decommits",
+  "allow_large_os_pages",
+  "reserve_huge_os_pages",
+  "reserve_huge_os_pages_at",
+  "reserve_os_memory",
+  "deprecated_segment_cache",
+  "deprecated_page_reset",
+  "deprecated_abandoned_page_purge",
+  "deprecated_segment_reset",
+  "deprecated_eager_commit_delay",
+  "purge_delay",
+  "use_numa_nodes",
+  "disallow_os_alloc",
+  "os_tag",
+  "max_errors",
+  "max_warnings",
+  "deprecated_max_segment_reclaim",
+  "destroy_on_exit",
+  "arena_reserve",
+  "arena_purge_mult",
+  "deprecated_purge_extend_delay",
+  "disallow_arena_alloc",
+  "retry_on_oom",
+  "visit_abandoned",
+  "guarded_min",
+  "guarded_max",
+  "guarded_precise",
+  "guarded_sample_rate",
+  "guarded_sample_seed",
+  "generic_collect",
+  "page_reclaim_on_free",
+  "page_full_retain",
+  "page_max_candidates",
+  "max_vabits",
+  "pagemap_commit",
+  "page_commit_on_demand",
+  "page_max_reclaim",
+  "page_cross_thread_max_reclaim",
+  "allow_thp",
+  "minimal_purge_size",
+  "arena_max_object_size",
+  "arena_is_numa_local"
+};
 
 typedef void* (*system_malloc_fun)(size_t);
 typedef void (*system_free_fun)(void*);
@@ -133,6 +188,25 @@ static void stats_output_callback(const char* msg, void* arg) {
   if (strstr(msg, "mem tracking") != NULL) stats_output_seen_tracking = 1;
 }
 
+static void option_table_output_callback(const char* msg, void* arg) {
+  if (msg == NULL || msg[0] == '\0') return;
+  option_table_callbacks++;
+  if (arg == (void*)0x04710A) option_table_arg_seen = 1;
+  if (strncmp(msg, "option '", 8) != 0) return;
+  if (strstr(msg, "KiB") != NULL) option_table_kib_count++;
+  for (int i = 0; i < _mi_option_last; i++) {
+    char expected[96];
+    snprintf(expected, sizeof(expected), "option '%s':", option_table_names[i]);
+    if (strstr(msg, expected) != NULL) {
+      if (!option_table_seen[i]) {
+        option_table_seen[i] = 1;
+        option_table_seen_count++;
+      }
+      return;
+    }
+  }
+}
+
 static void result_bool(const char* name, int ok) {
   printf("%s=%d\n", name, ok ? 1 : 0);
   if (!ok) failures++;
@@ -174,6 +248,10 @@ static void result_size(const char* name, size_t value) {
 
 static void result_long(const char* name, long value) {
   printf("%s=%ld\n", name, value);
+}
+
+static void result_indexed_long(const char* name, size_t index, long value) {
+  printf("%s[%zu]=%ld\n", name, index, value);
 }
 
 static void result_indexed_size(const char* name, size_t index, size_t value) {
@@ -682,6 +760,29 @@ int main(void) {
   result_bool("thread_init_alloc_owned", thread_joined && thread_result.init_alloc_owned);
   result_bool("threadpool_alloc_owned", thread_joined && thread_result.threadpool_alloc_owned);
   result_bool("thread_after_done_alloc_owned", thread_joined && thread_result.after_done_alloc_owned);
+
+  result_bool("option_alias_large_os_pages", mi_option_large_os_pages == mi_option_allow_large_os_pages);
+  result_bool("option_alias_eager_region_commit", mi_option_eager_region_commit == mi_option_arena_eager_commit);
+  result_bool("option_alias_reset_decommits", mi_option_reset_decommits == mi_option_purge_decommits);
+  result_bool("option_alias_reset_delay", mi_option_reset_delay == mi_option_purge_delay);
+  result_bool("option_alias_limit_os_alloc", mi_option_limit_os_alloc == mi_option_disallow_os_alloc);
+  for (int i = 0; i < _mi_option_last; i++) {
+    mi_option_t option = (mi_option_t)i;
+    long value = mi_option_get(option);
+    result_indexed_long("option_default", (size_t)i, value);
+    result_indexed_size("option_default_size", (size_t)i, mi_option_get_size(option));
+    result_bool("option_enabled_matches_default", mi_option_is_enabled(option) == (value != 0));
+  }
+  memset(option_table_seen, 0, sizeof(option_table_seen));
+  option_table_callbacks = 0;
+  option_table_seen_count = 0;
+  option_table_kib_count = 0;
+  option_table_arg_seen = 0;
+  mi_options_print_out(option_table_output_callback, (void*)0x04710A);
+  result_bool("option_table_output_arg", option_table_arg_seen);
+  result_bool("option_table_output_all_names", option_table_seen_count == (size_t)_mi_option_last);
+  result_bool("option_table_output_kib_options", option_table_kib_count == 4);
+  result_bool("option_table_output_has_extra_lines", option_table_callbacks > option_table_seen_count);
 
   long original_verbose = mi_option_get(mi_option_verbose);
   mi_option_disable(mi_option_verbose);

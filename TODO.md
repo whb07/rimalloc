@@ -137,7 +137,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## Options, Environment, Output, and Errors
 
-- [ ] Match the full `mi_option_t` table, including stable, advanced, deprecated, experimental, and legacy alias options. Validation: tests compare enum values, option names, default values, initialization states, and alias behavior against C mimalloc.
+- [x] Match the full `mi_option_t` table, including stable, advanced, deprecated, experimental, and legacy alias options. Validation: tests compare enum values, option names, default values, initialization states, and alias behavior against C mimalloc. Guarded by `scripts/check-public-abi.py` and `scripts/check-behavioral-parity.py`.
 - [ ] Match environment variable parsing for every option. Validation: subprocess tests set canonical and legacy environment names, decimal/size suffix values, boolean values, invalid values, and duplicate values, then compare resulting options and warnings with C mimalloc.
 - [ ] Match default option initialization order and mutability. Validation: tests compare pre-init default setting, post-init setting, default-vs-current value separation, and process/thread init interactions against C mimalloc.
 - [x] Match `mi_option_get_clamp` and `mi_option_get_size`. Validation: tests cover negative values, KiB-backed options, min/max bounds, and overflow-like large values against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.

@@ -24,6 +24,19 @@ fn lifecycle_theap_and_stats_exports_link_and_smoke() {
         assert!(!default_theap.is_null());
         assert_eq!(mi_theap_set_default(default_theap), default_theap);
 
+        let routed_heap = mi_heap_new();
+        assert!(!routed_heap.is_null());
+        let routed_theap = mi_heap_theap(routed_heap);
+        assert!(!routed_theap.is_null());
+        assert_ne!(routed_theap, default_theap);
+        assert_eq!(mi_theap_set_default(routed_theap), default_theap);
+        let routed = mi_malloc(48);
+        assert!(!routed.is_null());
+        assert!(mi_heap_contains(routed_heap, routed));
+        mi_free(routed);
+        assert_eq!(mi_theap_set_default(default_theap), routed_theap);
+        mi_heap_delete(routed_heap);
+
         let p = mi_theap_malloc_small(default_theap, 32);
         assert!(!p.is_null());
         assert!(mi_usable_size(p) >= 32);

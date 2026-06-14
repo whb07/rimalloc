@@ -12,11 +12,12 @@ The current claimed parity matrix is intentionally narrow. Later validations in
 |---:|---|---|---:|---|---|---|---|
 | linux-x86_64-gnu-default-debug | Linux | x86_64 | 64 | little | glibc | dev | default debug allocator mode: `MI_DEBUG=2`, `MI_SECURE=0`, Rust guarded allocation disabled, padding and encoded free lists enabled, tracking disabled |
 | linux-x86_64-gnu-default-release | Linux | x86_64 | 64 | little | glibc | release | default release allocator mode: `MI_DEBUG=0`, `MI_SECURE=0`, `MI_GUARDED=0`, padding and encoded free lists disabled, tracking disabled |
+| linux-x86_64-gnu-secure-dev | Linux | x86_64 | 64 | little | glibc | dev | secure allocator mode: Rust `secure` feature, `MI_SECURE=4`, Rust guarded allocation disabled, padding and encoded free lists enabled, tracking disabled |
 
 Unsupported until added here with evidence: Windows, macOS, WASI,
 Emscripten, non-x86_64 architectures, big-endian targets, non-default debug
-levels, secure mode, guarded allocation mode, Valgrind tracking, sanitizer
-builds (ASAN/TSAN/UBSAN), Windows ETW/event tracking, and non-Linux allocator
+levels, guarded allocation mode, Valgrind tracking, sanitizer builds
+(ASAN/TSAN/UBSAN), Windows ETW/event tracking, and non-Linux allocator
 override/interposition parity.
 
 ## Intentional Non-Parity Decisions
@@ -111,8 +112,11 @@ complete for the currently supported matrix:
 cargo fmt --check
 cargo check --features track-valgrind
 cargo check --features track-asan
+cargo check --features secure
 cargo clippy --all-targets -- -D warnings
+cargo clippy --features secure --all-targets -- -D warnings
 cargo test
+cargo test --features secure
 cargo test --release
 scripts/check-public-abi.py
 scripts/check-public-symbols.py
@@ -126,5 +130,5 @@ scripts/check-no-allocation-audit.py
 
 Each command must exit successfully. The script checks compare the Rust artifact
 against the vendored C mimalloc 3.3.2 headers and implementation; `cargo test`
-and `cargo test --release` cover the two Rust profiles currently listed in the
-supported parity matrix.
+and `cargo test --release` cover the Rust profiles and secure mode currently
+listed in the supported parity matrix.

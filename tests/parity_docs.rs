@@ -17,9 +17,11 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
 fn parity_matrix_documents_current_supported_rows() {
     assert!(PARITY_DOC.contains("linux-x86_64-gnu-default-debug"));
     assert!(PARITY_DOC.contains("linux-x86_64-gnu-default-release"));
+    assert!(PARITY_DOC.contains("linux-x86_64-gnu-secure-dev"));
     assert!(PARITY_DOC.contains("MI_DEBUG=2"));
     assert!(PARITY_DOC.contains("MI_DEBUG=0"));
     assert!(PARITY_DOC.contains("MI_SECURE=0"));
+    assert!(PARITY_DOC.contains("MI_SECURE=4"));
     assert!(PARITY_DOC.contains("MI_GUARDED=0"));
     assert!(PARITY_DOC.contains("Rust guarded allocation disabled"));
     assert!(PARITY_DOC.contains("padding and encoded free lists enabled"));
@@ -171,8 +173,11 @@ fn parity_signoff_documents_required_commands() {
         "cargo fmt --check",
         "cargo check --features track-valgrind",
         "cargo check --features track-asan",
+        "cargo check --features secure",
         "cargo clippy --all-targets -- -D warnings",
+        "cargo clippy --features secure --all-targets -- -D warnings",
         "cargo test",
+        "cargo test --features secure",
         "cargo test --release",
         "scripts/check-public-abi.py",
         "scripts/check-public-symbols.py",

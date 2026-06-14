@@ -43,7 +43,7 @@ pub const MI_INTERNAL_H: () = ();
 pub const _Atomic: () = ();
 
 pub const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
-pub const MI_SECURE: usize = 0;
+pub const MI_SECURE: usize = if cfg!(feature = "secure") { 4 } else { 0 };
 pub const MI_TRACK_ASAN: usize = crate::track::MI_TRACK_ASAN;
 pub const MI_TRACK_ENABLED: usize = crate::track::MI_TRACK_ENABLED;
 pub const MI_TRACK_ENABLED_FULL: usize = 0;
@@ -1246,9 +1246,9 @@ pub const fn _mi_random_shuffle(mut x: usize) -> usize {
 }
 
 #[inline]
-pub fn mi_is_in_same_page(p: *const c_void, q: *const c_void) -> bool {
-    _mi_align_down(p as usize, MI_ARENA_SLICE_SIZE)
-        == _mi_align_down(q as usize, MI_ARENA_SLICE_SIZE)
+pub unsafe fn mi_is_in_same_page(p: *const c_void, q: *const c_void) -> bool {
+    let page = unsafe { _mi_ptr_page(p) };
+    unsafe { mi_page_contains_address(page, q) }
 }
 
 #[inline]

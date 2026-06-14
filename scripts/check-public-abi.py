@@ -417,6 +417,8 @@ def main() -> int:
         [
             "rustc",
             "--edition=2024",
+            "-C",
+            "panic=abort",
             str(rust_file),
             "--extern",
             f"mechanical_mimalloc={rlib}",

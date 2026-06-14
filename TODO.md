@@ -161,7 +161,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 
 ## Debug, Secure, Guarded, and Tracking Modes
 
-- [ ] Implement a real configuration matrix for `MI_DEBUG`, `MI_SECURE`, `MI_GUARDED`, padding, and tracking instead of hard-coded disabled behavior. Validation: builds for each claimed mode expose the same constants and behavior as the corresponding C mimalloc mode.
+- [x] Implement a real configuration matrix for `MI_DEBUG`, `MI_SECURE`, `MI_GUARDED`, padding, and tracking instead of hard-coded disabled behavior. Validation: `PARITY.md` documents the supported default debug, default release, and secure rows plus unsupported guarded/non-default debug rows; `tests/parity_docs.rs`, `tests/secure_features.rs`, `tests/tracking_features.rs`, `cargo test --features secure`, and feature `cargo check`/`clippy` runs guard the claimed mode constants and behavior.
 - [ ] Match debug fill patterns and padding checks. Validation: tests inspect freshly allocated, freed, reallocated, and overrun-adjacent memory in debug modes and compare diagnostics/fill behavior with C mimalloc.
 - [ ] Match double-free, invalid-free, and heap-corruption detection in debug/secure modes. Validation: negative tests compare detection, error callbacks, abort/continue policy, and output with C mimalloc.
 - [ ] Match secure free-list encoding and pointer cookie behavior. Validation: corruption-injection tests verify encoded free-list checks and failure modes against C mimalloc.

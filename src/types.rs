@@ -14,11 +14,12 @@ pub const MI_MAX_ALIGN_SIZE: usize = 16;
 pub const MI_ARENA_SLICE_SHIFT: usize = crate::bits::MI_SIZE_SHIFT + 13;
 pub const MI_BCHUNK_BITS_SHIFT: usize = crate::bits::MI_SIZE_SHIFT + 6;
 
-const MI_SECURE: usize = 0;
+pub const MI_SECURE: usize = crate::internal::MI_SECURE;
 const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
 pub const MI_STAT: usize = if MI_DEBUG > 0 { 2 } else { 0 };
 const MI_GUARDED: usize = 0;
-pub const MI_PADDING: usize = if MI_DEBUG >= 1
+pub const MI_PADDING: usize = if cfg!(feature = "secure")
+    || MI_DEBUG >= 1
     || crate::track::MI_TRACK_VALGRIND != 0
     || crate::track::MI_TRACK_ASAN != 0
     || crate::track::MI_TRACK_ETW != 0
@@ -27,12 +28,17 @@ pub const MI_PADDING: usize = if MI_DEBUG >= 1
 } else {
     0
 };
-pub const MI_PADDING_CHECK: usize = if MI_PADDING != 0 && MI_DEBUG >= 1 {
+pub const MI_PADDING_CHECK: usize =
+    if MI_PADDING != 0 && (cfg!(feature = "secure") || MI_DEBUG >= 1) {
+        1
+    } else {
+        0
+    };
+pub const MI_ENCODE_FREELIST: usize = if cfg!(feature = "secure") || MI_DEBUG >= 1 {
     1
 } else {
     0
 };
-pub const MI_ENCODE_FREELIST: usize = if MI_DEBUG >= 1 { 1 } else { 0 };
 const MI_PAGE_META_IS_SEPARATED: usize = if crate::bits::MI_PAGE_MAP_FLAT != 0 {
     0
 } else {

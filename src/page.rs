@@ -528,8 +528,10 @@ unsafe fn mi_page_free_list_extend_secure(
     bsize: usize,
     extend: usize,
 ) {
-    crate::mi_assert_internal!((*page).free.is_null());
-    crate::mi_assert_internal!((*page).local_free.is_null());
+    if MI_SECURE < 3 {
+        crate::mi_assert_internal!((*page).free.is_null());
+        crate::mi_assert_internal!((*page).local_free.is_null());
+    }
     crate::mi_assert_internal!((*page).capacity as usize + extend <= (*page).reserved as usize);
     crate::mi_assert_internal!(bsize == mi_page_block_size(page));
     let page_area = mi_page_start(page).cast::<c_void>();
@@ -585,8 +587,10 @@ unsafe fn mi_page_free_list_extend_secure(
 
 #[inline]
 unsafe fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: usize) {
-    crate::mi_assert_internal!((*page).free.is_null());
-    crate::mi_assert_internal!((*page).local_free.is_null());
+    if MI_SECURE < 3 {
+        crate::mi_assert_internal!((*page).free.is_null());
+        crate::mi_assert_internal!((*page).local_free.is_null());
+    }
     crate::mi_assert_internal!((*page).capacity as usize + extend <= (*page).reserved as usize);
     crate::mi_assert_internal!(bsize == mi_page_block_size(page));
     let page_area = mi_page_start(page).cast::<c_void>();
@@ -610,9 +614,14 @@ unsafe fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: u
 #[inline]
 unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
     crate::mi_assert_expensive!(mi_page_is_valid_init(page));
-    crate::mi_assert!((*page).free.is_null());
-    crate::mi_assert!((*page).local_free.is_null());
-    if !(*page).free.is_null() || (*page).capacity >= (*page).reserved {
+    if MI_SECURE < 3 {
+        crate::mi_assert!((*page).free.is_null());
+        crate::mi_assert!((*page).local_free.is_null());
+        if !(*page).free.is_null() {
+            return true;
+        }
+    }
+    if (*page).capacity >= (*page).reserved {
         return true;
     }
 

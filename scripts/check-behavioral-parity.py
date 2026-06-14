@@ -1133,6 +1133,32 @@ static int custom_subproc_destroy_current_status(void) {
   return -3;
 }
 
+static int custom_subproc_heap_main_status(void) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    FILE* devnull = fopen("/dev/null", "w");
+    if (devnull != NULL) {
+      (void)dup2(fileno(devnull), fileno(stderr));
+    }
+
+    mi_subproc_id_t subproc = mi_subproc_new();
+    if (subproc._mi_subproc_id == NULL) _exit(10);
+
+    mi_subproc_add_current_thread(subproc);
+    if (mi_subproc_current()._mi_subproc_id != subproc._mi_subproc_id) _exit(11);
+
+    mi_heap_t* heap = mi_heap_main();
+    _exit(heap == NULL ? 16 : 0);
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static int foreign_size_case_status(int op) {
   fflush(stdout);
   pid_t pid = fork();
@@ -3581,6 +3607,7 @@ int main(void) {
   result_bool("subproc_stats_get_exclusive_rejects_null_output", !mi_subproc_stats_get_exclusive(mi_subproc_current(), NULL));
   result_size("subproc_stats_custom_status", (size_t)custom_subproc_stats_status());
   result_size("subproc_destroy_current_status", (size_t)custom_subproc_destroy_current_status());
+  result_size("subproc_heap_main_custom_status", (size_t)custom_subproc_heap_main_status());
 
   mi_heap_t* stats_heap = mi_heap_new();
   void* stats_heap_block_a = stats_heap == NULL ? NULL : mi_heap_malloc(stats_heap, 2048);

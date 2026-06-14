@@ -1378,27 +1378,14 @@ pub unsafe extern "C" fn _mi_subproc_heap_main(subproc: *mut mi_subproc_t) -> *m
     if subproc.is_null() {
         return ptr::null_mut();
     }
-    let prefix = unsafe { mi_subproc_prefix(subproc) };
     let heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if !heap.is_null() {
         return heap;
     }
-    if ptr::eq(subproc, unsafe { _mi_subproc_main() }) {
-        mi_heap_main_init();
-        unsafe {
-            (*prefix).heaps = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
-            (*prefix).heap_main = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
-            if (*prefix).heap_total_count.load(Ordering::Relaxed) == 0 {
-                (*prefix).heap_total_count.store(1, Ordering::Relaxed);
-            }
-            if (*prefix).heap_count.load(Ordering::Relaxed) == 0 {
-                (*prefix).heap_count.store(1, Ordering::Relaxed);
-            }
-            (*prefix).heap_main
-        }
-    } else {
-        ptr::null_mut()
-    }
+    mi_heap_main_init();
+    let heap = unsafe { mi_subproc_heap_main_raw(subproc) };
+    crate::mi_assert_internal!(!heap.is_null());
+    heap
 }
 
 #[unsafe(no_mangle)]

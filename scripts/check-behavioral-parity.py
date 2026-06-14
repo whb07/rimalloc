@@ -569,6 +569,54 @@ static int fork_allocation_case_status(void) {
   return parent_after_alloc_ok && parent_after_ok ? 0 : 14;
 }
 
+static int generic_collect_case_status(long threshold, size_t expected_deferred_calls) {
+  fflush(stdout);
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    void* ptrs[1500];
+    size_t count = 0;
+    deferred_calls = 0;
+    deferred_force_true = 0;
+    deferred_force_false = 0;
+    deferred_arg_seen = 0;
+    deferred_heartbeat_monotonic = 1;
+    deferred_last_heartbeat = 0;
+    mi_option_set(mi_option_generic_collect, threshold);
+    mi_register_deferred_free(registered_deferred_callback, (void*)0xDEF);
+
+    for (size_t i = 0; i < 1500; i++) {
+      ptrs[count] = mi_malloc(65536 + ((i % 8) * 4096));
+      if (ptrs[count] == NULL) break;
+      count++;
+    }
+    mi_stats_t live_stats;
+    mi_stats_init(&live_stats);
+    int stats_ok = (mi_stats_get(&live_stats) &&
+                    stats_alloc_current(&live_stats) > 0 &&
+                    stats_alloc_peak(&live_stats) >= stats_alloc_current(&live_stats));
+    for (size_t i = 0; i < count; i++) {
+      mi_free(ptrs[i]);
+    }
+    mi_register_deferred_free(NULL, NULL);
+
+    int ok = (count == 1500 &&
+              stats_ok &&
+              deferred_calls == expected_deferred_calls &&
+              deferred_force_false == expected_deferred_calls &&
+              deferred_force_true == 0 &&
+              deferred_arg_seen &&
+              deferred_heartbeat_monotonic &&
+              deferred_last_heartbeat >= deferred_calls);
+    _exit(ok ? 0 : 15);
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) return -2;
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  return -3;
+}
+
 static int heap_lifecycle_case_status(int op) {
   fflush(stdout);
   pid_t pid = fork();
@@ -973,6 +1021,8 @@ int main(void) {
   size_t deferred_after_clear = deferred_calls;
   mi_collect(true);
   result_bool("deferred_free_clear", deferred_calls == deferred_after_clear);
+  result_long("generic_collect_threshold_1000_status", generic_collect_case_status(1000, 2));
+  result_long("generic_collect_threshold_2000_status", generic_collect_case_status(2000, 1));
 
   errno = 0;
   void* p = mi_malloc(17);

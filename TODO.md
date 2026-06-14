@@ -120,7 +120,7 @@ Completion rule: every checkbox in this file must be closed, every intentional d
 - [ ] Match segment/chunk reservation, commit, decommit, reset, purge, and rollback behavior. Validation: memory pressure and stats tests compare committed/reserved/reset/purged counters and rollback counts against C mimalloc.
 - [ ] Match huge-object allocation paths. Validation: tests allocate around huge thresholds, verify page/chunk classification, usable size, stats, alignment, and free behavior against C mimalloc.
 - [ ] Match randomization and encoded free-list behavior for secure/debug modes. Validation: secure-mode tests verify encoded pointers, randomized allocation choices where specified, and corruption detection behavior against C mimalloc.
-- [ ] Match generic collect heartbeat behavior. Validation: tests set `mi_option_generic_collect`, drive allocation counts, and compare collection timing and stats against C mimalloc.
+- [x] Match generic collect heartbeat behavior. Validation: tests set `mi_option_generic_collect`, drive allocation counts, and compare collection timing and stats against C mimalloc. Guarded by `scripts/check-behavioral-parity.py`.
 
 ## OS and Platform Runtime Behavior
 

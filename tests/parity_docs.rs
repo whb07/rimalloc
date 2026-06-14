@@ -169,6 +169,8 @@ fn parity_docs_map_vendored_c_tests_to_rust_artifact_runs() {
 fn parity_signoff_documents_required_commands() {
     for command in [
         "cargo fmt --check",
+        "cargo check --features track-valgrind",
+        "cargo check --features track-asan",
         "cargo clippy --all-targets -- -D warnings",
         "cargo test",
         "cargo test --release",

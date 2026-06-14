@@ -109,6 +109,8 @@ complete for the currently supported matrix:
 
 ```sh
 cargo fmt --check
+cargo check --features track-valgrind
+cargo check --features track-asan
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo test --release

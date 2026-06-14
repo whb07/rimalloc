@@ -3,6 +3,11 @@ name = "mechanical_mimalloc"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+track-valgrind = []
+track-asan = []
+
 [profile.dev]
 panic = "abort"
 

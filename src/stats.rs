@@ -21,7 +21,7 @@ use crate::internal::{_mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
 use crate::mimalloc::{mi_good_size, mi_rezalloc};
 use crate::mimalloc::{mi_heap_main, mi_subproc_current, mi_subproc_visit_heaps};
 use crate::options::{_mi_fprintf, _mi_fputs};
-use crate::os::_mi_prim_process_info;
+use crate::os::{_mi_os_numa_node_count, _mi_prim_process_info};
 use crate::page::{
     _mi_bin_size, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE,
     MI_MEDIUM_PAGE_SIZE, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE,
@@ -997,7 +997,7 @@ unsafe fn _mi_stats_print(
             out,
             arg,
             format_args!("  {:<10}: {:>5}\n", "numa nodes", unsafe {
-                crate::prim::_mi_prim_numa_node_count()
+                _mi_os_numa_node_count()
             }),
         );
         unsafe { mi_process_info_print_out(out, arg) };

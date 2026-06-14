@@ -3763,6 +3763,57 @@ int main(void) {
 }
 """
 
+NUMA_COUNT_CAPTURE_C = r"""
+#define _GNU_SOURCE
+#include <mimalloc.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <sys/mman.h>
+
+static char output_buf[16384];
+static size_t output_len = 0;
+
+static void capture_output(const char* msg, void* arg) {
+  (void)arg;
+  if (msg == NULL) return;
+  size_t len = strlen(msg);
+  size_t room = sizeof(output_buf) - output_len - 1;
+  if (len > room) len = room;
+  memcpy(output_buf + output_len, msg, len);
+  output_len += len;
+  output_buf[output_len] = 0;
+}
+
+static int parse_numa_nodes(void) {
+  const char* marker = strstr(output_buf, "numa nodes");
+  if (marker == NULL) return -1;
+  const char* colon = strchr(marker, ':');
+  if (colon == NULL) return -1;
+  return atoi(colon + 1);
+}
+
+static void* map_aligned_arena_memory(size_t size) {
+  size_t alignment = mi_arena_min_alignment();
+  void* mapping = mmap(NULL, size + alignment, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (mapping == MAP_FAILED) return MAP_FAILED;
+  return (void*)(((uintptr_t)mapping + alignment - 1) & ~(uintptr_t)(alignment - 1));
+}
+
+int main(void) {
+  size_t size = mi_arena_min_size();
+  void* mem = map_aligned_arena_memory(size);
+  mi_arena_id_t arena = NULL;
+  int managed = mem != MAP_FAILED && mi_manage_os_memory_ex(mem, size, true, false, true, -1, false, &arena);
+  mi_stats_print_out(capture_output, NULL);
+  int nodes = parse_numa_nodes();
+  printf("@@NUMA_COUNT managed=%d nodes=%d\n", managed, nodes);
+  return managed && nodes >= 1 ? 0 : 1;
+}
+"""
+
 ARENA_FALLBACK_CAPTURE_C = r"""
 #define _GNU_SOURCE
 #include <mimalloc.h>
@@ -5497,6 +5548,36 @@ def validate_numa_affinity_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) 
             raise AssertionError(f"{label} unexpected values: {c_counts}")
 
 
+def parse_numa_count_capture(output: str) -> int:
+    fields = output.strip().split()
+    if len(fields) != 3 or fields[0] != "@@NUMA_COUNT":
+        raise AssertionError(f"unexpected NUMA count output: {output!r}")
+    managed_key, managed = fields[1].split("=", 1)
+    node_key, nodes = fields[2].split("=", 1)
+    if managed_key != "managed" or node_key != "nodes":
+        raise AssertionError(f"unexpected NUMA count field: {output!r}")
+    if int(managed) != 1:
+        raise AssertionError(f"NUMA count probe did not register arena: {output!r}")
+    return int(nodes)
+
+
+def validate_numa_count_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) -> None:
+    cases: list[tuple[str, dict[str, str], int | None]] = [
+        ("numa_count_detected", {}, None),
+        ("numa_count_forced", {"mimalloc_use_numa_nodes": "4"}, 4),
+        ("numa_count_single_node", {"mimalloc_use_numa_nodes": "1"}, 1),
+    ]
+    for label, env, expected in cases:
+        c_count = parse_numa_count_capture(run_with_env(c_bin, env, f"{label}_c"))
+        rust_count = parse_numa_count_capture(run_with_env(rust_bin, env, f"{label}_rust"))
+        if c_count != rust_count:
+            raise AssertionError(f"{label} mismatch: C={c_count} Rust={rust_count}")
+        if c_count < 1:
+            raise AssertionError(f"{label} invalid node count: {c_count}")
+        if expected is not None and c_count != expected:
+            raise AssertionError(f"{label} unexpected node count: {c_count}")
+
+
 def parse_arena_fallback_capture(output: str) -> dict[str, str]:
     fields = output.strip().split()
     if len(fields) != 11 or fields[0] != "@@ARENA_FALLBACK":
@@ -5556,6 +5637,7 @@ def main() -> int:
     throttle_capture = BUILD_DIR / "throttle-capture.c"
     process_lifecycle = BUILD_DIR / "process-lifecycle.c"
     numa_affinity_capture = BUILD_DIR / "numa-affinity-capture.c"
+    numa_count_capture = BUILD_DIR / "numa-count-capture.c"
     arena_fallback_capture = BUILD_DIR / "arena-fallback-capture.c"
     free_hint_release_capture = BUILD_DIR / "free-hint-release-capture.c"
     stress_release_capture = BUILD_DIR / "stress-release-capture.c"
@@ -5573,6 +5655,7 @@ def main() -> int:
     throttle_capture.write_text(THROTTLE_CAPTURE_C)
     process_lifecycle.write_text(PROCESS_LIFECYCLE_C)
     numa_affinity_capture.write_text(NUMA_AFFINITY_CAPTURE_C)
+    numa_count_capture.write_text(NUMA_COUNT_CAPTURE_C)
     arena_fallback_capture.write_text(ARENA_FALLBACK_CAPTURE_C)
     free_hint_release_capture.write_text(FREE_HINT_RELEASE_CAPTURE_C)
     stress_release_capture.write_text(STRESS_RELEASE_CAPTURE_C)
@@ -5604,6 +5687,8 @@ def main() -> int:
     rust_lifecycle_bin = BUILD_DIR / "process-lifecycle-rust"
     c_numa_affinity_bin = BUILD_DIR / "numa-affinity-c"
     rust_numa_affinity_bin = BUILD_DIR / "numa-affinity-rust"
+    c_numa_count_bin = BUILD_DIR / "numa-count-c"
+    rust_numa_count_bin = BUILD_DIR / "numa-count-rust"
     c_arena_fallback_bin = BUILD_DIR / "arena-fallback-c"
     rust_arena_fallback_bin = BUILD_DIR / "arena-fallback-rust"
     c_free_hint_release_bin = BUILD_DIR / "free-hint-release-c"
@@ -5645,6 +5730,8 @@ def main() -> int:
     compile_binary(cc, rust_lifecycle_bin, [process_lifecycle, rust_lib])
     compile_binary(cc, c_numa_affinity_bin, [ROOT / "mimalloc-3.3.2/src/static.c", numa_affinity_capture])
     compile_binary(cc, rust_numa_affinity_bin, [numa_affinity_capture, rust_lib])
+    compile_binary(cc, c_numa_count_bin, [ROOT / "mimalloc-3.3.2/src/static.c", numa_count_capture])
+    compile_binary(cc, rust_numa_count_bin, [numa_count_capture, rust_lib])
     compile_binary(cc, c_arena_fallback_bin, [ROOT / "mimalloc-3.3.2/src/static.c", arena_fallback_capture])
     compile_binary(cc, rust_arena_fallback_bin, [arena_fallback_capture, rust_lib])
     compile_binary(
@@ -5757,6 +5844,12 @@ def main() -> int:
         return 1
 
     try:
+        validate_numa_count_capture(c_numa_count_bin, rust_numa_count_bin)
+    except AssertionError as err:
+        print(f"NUMA count parity mismatch: {err}", file=sys.stderr)
+        return 1
+
+    try:
         validate_arena_fallback_capture(c_arena_fallback_bin, rust_arena_fallback_bin)
     except AssertionError as err:
         print(f"arena fallback parity mismatch: {err}", file=sys.stderr)
@@ -5825,6 +5918,7 @@ def main() -> int:
     print("ok: C and Rust mimalloc warning/error throttling matches")
     print("ok: C and Rust mimalloc process lifecycle output matches")
     print("ok: C and Rust mimalloc NUMA affinity behavior matches")
+    print("ok: C and Rust mimalloc NUMA node count behavior matches")
     print("ok: C and Rust mimalloc arena fallback behavior matches")
     print("ok: C and Rust mimalloc release free-hint behavior matches")
     print("ok: C and Rust mimalloc release stress behavior matches")

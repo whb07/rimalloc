@@ -13,10 +13,11 @@ The current claimed parity matrix is intentionally narrow. Later validations in
 | linux-x86_64-gnu-default-debug | Linux | x86_64 | 64 | little | glibc | dev | default debug allocator mode: `MI_DEBUG=2`, `MI_SECURE=0`, Rust guarded allocation disabled, padding and encoded free lists enabled, tracking disabled |
 | linux-x86_64-gnu-default-release | Linux | x86_64 | 64 | little | glibc | release | default release allocator mode: `MI_DEBUG=0`, `MI_SECURE=0`, `MI_GUARDED=0`, padding and encoded free lists disabled, tracking disabled |
 | linux-x86_64-gnu-secure-dev | Linux | x86_64 | 64 | little | glibc | dev | secure allocator mode: Rust `secure` feature, `MI_SECURE=4`, Rust guarded allocation disabled, padding and encoded free lists enabled, tracking disabled |
+| linux-x86_64-gnu-guarded-dev | Linux | x86_64 | 64 | little | glibc | dev | guarded allocator mode: Rust `guarded` feature, `MI_GUARDED=1`, guard-page sampling enabled by guarded theap controls, padding and encoded free lists enabled, tracking disabled |
 
 Unsupported until added here with evidence: Windows, macOS, WASI,
 Emscripten, non-x86_64 architectures, big-endian targets, non-default debug
-levels, guarded allocation mode, Valgrind tracking, sanitizer builds
+levels, Valgrind tracking, sanitizer builds
 (ASAN/TSAN/UBSAN), Windows ETW/event tracking, and non-Linux allocator
 override/interposition parity.
 
@@ -113,10 +114,13 @@ cargo fmt --check
 cargo check --features track-valgrind
 cargo check --features track-asan
 cargo check --features secure
+cargo check --features guarded
 cargo clippy --all-targets -- -D warnings
 cargo clippy --features secure --all-targets -- -D warnings
+cargo clippy --features guarded --all-targets -- -D warnings
 cargo test
 cargo test --features secure
+cargo test --features guarded
 cargo test --release
 scripts/check-public-abi.py
 scripts/check-public-symbols.py
@@ -124,12 +128,13 @@ scripts/check-public-symbols.py --missing-only
 scripts/check-c-link-public-api.py
 scripts/check-behavioral-parity.py
 scripts/check-secure-mode-parity.py
+scripts/check-guarded-mode-parity.py
 scripts/check-valgrind-tracking-parity.py
 scripts/check-asan-tracking-parity.py
 scripts/check-no-allocation-audit.py
 ```
 
 Each command must exit successfully. The script checks compare the Rust artifact
-against the vendored C mimalloc 3.3.2 headers and implementation; `cargo test`
-and `cargo test --release` cover the Rust profiles and secure mode currently
-listed in the supported parity matrix.
+against the vendored C mimalloc 3.3.2 headers and implementation; the `cargo test`
+commands cover the Rust profiles, secure mode, and guarded mode currently listed
+in the supported parity matrix.

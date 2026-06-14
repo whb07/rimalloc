@@ -12,11 +12,13 @@ use core::{
 use crate::bits::MI_INTPTR_SIZE;
 use crate::free::_mi_usable_size;
 use crate::internal::{
-    __mi_stat_counter_increase, __mi_stat_increase, _mi_is_aligned, _mi_memcpy, _mi_memzero,
-    _mi_memzero_aligned, _mi_ptr_page, _mi_safe_ptr_page, _mi_strlen, _mi_strnlen,
-    _mi_theap_get_free_small_page, _mi_theap_heap, _mi_thread_id, MI_DEBUG, MI_LARGE_MAX_OBJ_SIZE,
-    MI_PADDING, MI_PADDING_CHECK, mi_block_next, mi_count_size_overflow, mi_likely, mi_page_heap,
-    mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_ptr_encode_canary,
+    __mi_stat_adjust_decrease, __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up,
+    _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size, _mi_ptr_page,
+    _mi_safe_ptr_page, _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page, _mi_theap_heap,
+    _mi_thread_id, MI_BLOCK_TAG_GUARDED, MI_DEBUG, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_PADDING,
+    MI_PADDING_CHECK, mi_block_next, mi_count_size_overflow, mi_likely, mi_page_block_size,
+    mi_page_heap, mi_page_set_has_interior_pointers, mi_page_slice_start, mi_page_start,
+    mi_page_usable_block_size, mi_ptr_encode_canary, mi_theap_is_initialized,
     mi_theap_malloc_use_guarded, mi_unlikely,
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
@@ -24,7 +26,7 @@ use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{_mi_bin, MI_MAX_ALLOC_SIZE, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{
-    MI_TRACK_ENABLED, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
+    MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
 };
 use crate::types::{
     EINVAL, ENOMEM, EOVERFLOW, MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING_SIZE,
@@ -974,8 +976,48 @@ pub unsafe extern "C" fn mi_new_reallocn(
 }
 
 unsafe fn mi_block_ptr_set_guarded(block: *mut mi_block_t, obj_size: usize) -> *mut c_void {
-    let _ = obj_size;
-    block.cast()
+    if MI_GUARDED == 0 {
+        let _ = obj_size;
+        return block.cast();
+    }
+    let page = _mi_ptr_page(block.cast());
+    mi_page_set_has_interior_pointers(page, true);
+    (*block).next = MI_BLOCK_TAG_GUARDED;
+
+    let block_size = mi_page_block_size(page);
+    let os_page_size = _mi_os_page_size();
+    crate::mi_assert_internal!(block_size >= obj_size + os_page_size + size_of::<mi_block_t>());
+    if block_size < obj_size + os_page_size + size_of::<mi_block_t>() {
+        mi_free(block.cast());
+        return ptr::null_mut();
+    }
+
+    let guard_page = block.cast::<u8>().add(block_size - os_page_size);
+    crate::mi_assert_internal!(_mi_is_aligned(block.cast(), os_page_size));
+    crate::mi_assert_internal!(_mi_is_aligned(guard_page.cast(), os_page_size));
+    if !(*page).memid.is_pinned && _mi_is_aligned(guard_page.cast(), os_page_size) {
+        let ok = crate::os::_mi_os_protect(guard_page.cast(), os_page_size);
+        if mi_unlikely(!ok) {
+            crate::options::_mi_warning_message_fmt(format_args!(
+                "failed to set a guard page behind an object (object {block:p} of size {block_size})\n"
+            ));
+        }
+    } else {
+        crate::options::_mi_warning_message_fmt(format_args!(
+            "unable to set a guard page behind an object due to pinned memory (large OS pages?) (object {block:p} of size {block_size})\n"
+        ));
+    }
+
+    let mut offset = block_size - os_page_size - obj_size;
+    crate::mi_assert_internal!(offset > size_of::<mi_block_t>());
+    if offset > crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN {
+        offset = crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN;
+    }
+    let p = block.cast::<u8>().add(offset).cast::<c_void>();
+    crate::mi_assert_internal!(p.cast::<u8>() == guard_page.sub(obj_size));
+    mi_track_align(block.cast(), p, offset, obj_size);
+    mi_track_mem_defined(block.cast(), size_of::<mi_block_t>());
+    p
 }
 
 #[unsafe(no_mangle)]
@@ -984,6 +1026,53 @@ pub unsafe extern "C" fn _mi_theap_malloc_guarded(
     size: usize,
     zero: bool,
 ) -> *mut c_void {
-    let _ = mi_block_ptr_set_guarded as unsafe fn(*mut mi_block_t, usize) -> *mut c_void;
-    _mi_theap_malloc_zero(theap, size, zero, ptr::null_mut())
+    if MI_GUARDED == 0 {
+        let _ = mi_block_ptr_set_guarded as unsafe fn(*mut mi_block_t, usize) -> *mut c_void;
+        return _mi_theap_malloc_zero(theap, size, zero, ptr::null_mut());
+    }
+    if mi_unlikely(size >= MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE) {
+        _mi_error_message_fmt(
+            EOVERFLOW,
+            format_args!("(guarded) allocation request is too large ({size} bytes)\n"),
+        );
+        return ptr::null_mut();
+    }
+
+    let os_page_size = _mi_os_page_size();
+    let obj_size = if mi_option_is_enabled(mi_option_t::mi_option_guarded_precise) {
+        size
+    } else {
+        _mi_align_up(size, MI_MAX_ALIGN_SIZE)
+    };
+    let bsize = _mi_align_up(
+        _mi_align_up(obj_size, MI_MAX_ALIGN_SIZE) + size_of::<mi_block_t>(),
+        MI_MAX_ALIGN_SIZE,
+    );
+    let req_size = _mi_align_up(bsize + os_page_size, os_page_size);
+    let block = _mi_malloc_generic(theap, req_size, 0, ptr::null_mut()).cast::<mi_block_t>();
+    if block.is_null() {
+        return ptr::null_mut();
+    }
+    let p = mi_block_ptr_set_guarded(block, obj_size);
+    if p.is_null() {
+        return p;
+    }
+    if zero {
+        _mi_memzero_aligned(p, obj_size);
+    }
+
+    mi_track_malloc(p, obj_size, zero);
+    let theap = if mi_theap_is_initialized(theap) {
+        theap
+    } else {
+        _mi_theap_default()
+    };
+    if mi_theap_is_initialized(theap) {
+        __mi_stat_counter_increase(&mut (*theap).stats.malloc_guarded_count, 1);
+        if MI_STAT > 1 {
+            __mi_stat_adjust_decrease(&mut (*theap).stats.malloc_requested, req_size);
+            __mi_stat_increase(&mut (*theap).stats.malloc_requested, size);
+        }
+    }
+    p
 }

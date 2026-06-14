@@ -345,6 +345,14 @@ pub static _mi_theap_empty: mi_theap_t = mi_theap_t {
     page_full_retain: 0,
     allow_page_reclaim: false,
     allow_page_abandon: true,
+    #[cfg(feature = "guarded")]
+    guarded_size_min: 0,
+    #[cfg(feature = "guarded")]
+    guarded_size_max: 0,
+    #[cfg(feature = "guarded")]
+    guarded_sample_rate: 0,
+    #[cfg(feature = "guarded")]
+    guarded_sample_count: 1,
     pages_free_direct: MI_SMALL_PAGES_EMPTY(),
     pages: MI_PAGE_QUEUES_EMPTY(),
     memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
@@ -372,6 +380,14 @@ pub static _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
     page_full_retain: 0,
     allow_page_reclaim: false,
     allow_page_abandon: true,
+    #[cfg(feature = "guarded")]
+    guarded_size_min: 0,
+    #[cfg(feature = "guarded")]
+    guarded_size_max: 0,
+    #[cfg(feature = "guarded")]
+    guarded_sample_rate: 0,
+    #[cfg(feature = "guarded")]
+    guarded_sample_count: 1,
     pages_free_direct: MI_SMALL_PAGES_EMPTY(),
     pages: MI_PAGE_QUEUES_EMPTY(),
     memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
@@ -404,6 +420,14 @@ pub static mut theap_main: mi_theap_t = mi_theap_t {
     page_full_retain: 2,
     allow_page_reclaim: true,
     allow_page_abandon: true,
+    #[cfg(feature = "guarded")]
+    guarded_size_min: 0,
+    #[cfg(feature = "guarded")]
+    guarded_size_max: 0,
+    #[cfg(feature = "guarded")]
+    guarded_sample_rate: 0,
+    #[cfg(feature = "guarded")]
+    guarded_sample_count: 1,
     pages_free_direct: MI_SMALL_PAGES_EMPTY(),
     pages: MI_PAGE_QUEUES_EMPTY(),
     memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
@@ -770,26 +794,81 @@ pub extern "C" fn mi_is_redirected() -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn mi_theap_guarded_set_sample_rate(
+pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
     theap: *mut mi_theap_t,
     sample_rate: usize,
     seed: usize,
 ) {
-    let _ = theap;
-    let _ = sample_rate;
-    let _ = seed;
+    #[cfg(feature = "guarded")]
+    unsafe {
+        if theap.is_null() {
+            return;
+        }
+        (*theap).guarded_sample_rate = sample_rate;
+        (*theap).guarded_sample_count = sample_rate;
+        if (*theap).guarded_sample_rate > 1 {
+            let seed = if seed == 0 {
+                crate::internal::_mi_theap_random_next(theap)
+            } else {
+                seed
+            };
+            (*theap).guarded_sample_count = (seed % (*theap).guarded_sample_rate) + 1;
+        }
+    }
+    #[cfg(not(feature = "guarded"))]
+    {
+        let _ = theap;
+        let _ = sample_rate;
+        let _ = seed;
+    }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn mi_theap_guarded_set_size_bound(theap: *mut mi_theap_t, min: usize, max: usize) {
-    let _ = theap;
-    let _ = min;
-    let _ = max;
+pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
+    theap: *mut mi_theap_t,
+    min: usize,
+    max: usize,
+) {
+    #[cfg(feature = "guarded")]
+    unsafe {
+        if theap.is_null() {
+            return;
+        }
+        (*theap).guarded_size_min = min;
+        (*theap).guarded_size_max = if min > max { min } else { max };
+    }
+    #[cfg(not(feature = "guarded"))]
+    {
+        let _ = theap;
+        let _ = min;
+        let _ = max;
+    }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
-    let _ = theap;
+pub unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
+    #[cfg(feature = "guarded")]
+    {
+        unsafe {
+            mi_theap_guarded_set_sample_rate(
+                theap,
+                mi_option_get_clamp(mi_option_t::mi_option_guarded_sample_rate, 0, c_long::MAX)
+                    as usize,
+                mi_option_get(mi_option_t::mi_option_guarded_sample_seed) as usize,
+            )
+        };
+        unsafe {
+            mi_theap_guarded_set_size_bound(
+                theap,
+                mi_option_get_clamp(mi_option_t::mi_option_guarded_min, 0, c_long::MAX) as usize,
+                mi_option_get_clamp(mi_option_t::mi_option_guarded_max, 0, c_long::MAX) as usize,
+            )
+        };
+    }
+    #[cfg(not(feature = "guarded"))]
+    {
+        let _ = theap;
+    }
 }
 
 #[unsafe(no_mangle)]

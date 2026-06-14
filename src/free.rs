@@ -18,15 +18,15 @@ use crate::bits::MI_INTPTR_SIZE;
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_decrease, _mi_align_down_ptr,
     _mi_arena_memid_is_suitable, _mi_is_power_of_two, _mi_memset_aligned, _mi_option_get_fast,
-    _mi_os_page_size, _mi_os_unprotect, _mi_ptr_page, _mi_safe_ptr_page, _mi_theap_heap,
-    _mi_theap_page_reclaim, EAGAIN, EFAULT, EINVAL, MI_BLOCK_TAG_GUARDED, MI_DEBUG,
-    MI_ENCODE_FREELIST, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK,
-    MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded,
-    mi_block_set_next, mi_is_in_same_page, mi_page_all_free, mi_page_block_size,
-    mi_page_contains_address, mi_page_has_interior_pointers, mi_page_is_abandoned_mapped,
-    mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_queue,
-    mi_page_start, mi_page_thread_free, mi_page_usable_block_size, mi_page_xthread_id,
-    mi_ptr_encode_canary, mi_tf_block, mi_tf_create, mi_tf_is_owned, mi_theap_is_initialized,
+    _mi_os_page_size, _mi_ptr_page, _mi_safe_ptr_page, _mi_theap_heap, _mi_theap_page_reclaim,
+    EAGAIN, EFAULT, EINVAL, MI_BLOCK_TAG_GUARDED, MI_DEBUG, MI_ENCODE_FREELIST, MI_GUARDED,
+    MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK, MI_SECURE, MI_TRACK_ENABLED,
+    mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded, mi_block_set_next, mi_is_in_same_page,
+    mi_page_all_free, mi_page_block_size, mi_page_contains_address, mi_page_has_interior_pointers,
+    mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned,
+    mi_page_is_singleton, mi_page_queue, mi_page_start, mi_page_thread_free,
+    mi_page_usable_block_size, mi_page_xthread_id, mi_ptr_encode_canary, mi_tf_block, mi_tf_create,
+    mi_tf_is_owned, mi_theap_is_initialized,
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
@@ -369,7 +369,7 @@ unsafe fn mi_block_unguard(page: *mut mi_page_t, block: *mut mi_block_t, p: *mut
 
     let gpage = block.cast::<u8>().add(bsize - psize).cast::<c_void>();
     crate::mi_assert_internal!((gpage as usize).is_multiple_of(psize));
-    _mi_os_unprotect(gpage, psize);
+    crate::os::_mi_os_unprotect(gpage, psize);
 }
 
 pub unsafe fn mi_block_check_unguard(

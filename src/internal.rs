@@ -47,7 +47,7 @@ pub const MI_SECURE: usize = if cfg!(feature = "secure") { 4 } else { 0 };
 pub const MI_TRACK_ASAN: usize = crate::track::MI_TRACK_ASAN;
 pub const MI_TRACK_ENABLED: usize = crate::track::MI_TRACK_ENABLED;
 pub const MI_TRACK_ENABLED_FULL: usize = 0;
-pub const MI_GUARDED: usize = 0;
+pub const MI_GUARDED: usize = if cfg!(feature = "guarded") { 1 } else { 0 };
 pub const MI_PAGE_META_IS_SEPARATED: usize = if MI_PAGE_MAP_FLAT != 0 { 0 } else { 1 };
 pub const MI_BIG_ENDIAN: usize = if cfg!(target_endian = "big") { 1 } else { 0 };
 pub const __wasi__: usize = if cfg!(target_os = "wasi") { 1 } else { 0 };
@@ -1144,16 +1144,45 @@ pub unsafe fn mi_page_claim_ownership(page: *mut mi_page_t) -> bool {
 
 #[inline]
 pub unsafe fn mi_block_ptr_is_guarded(block: *const mi_block_t, p: *const c_void) -> bool {
-    MI_UNUSED(&block);
-    MI_UNUSED(&p);
-    false
+    if MI_GUARDED == 0 {
+        MI_UNUSED(&block);
+        MI_UNUSED(&p);
+        return false;
+    }
+    let offset = p.cast::<u8>().offset_from(block.cast::<u8>());
+    offset >= size_of::<mi_block_t>() as isize && (*block.cast_mut()).next == MI_BLOCK_TAG_GUARDED
 }
 
 #[inline]
 pub unsafe fn mi_theap_malloc_use_guarded(theap: *mut mi_theap_t, size: usize) -> bool {
-    MI_UNUSED(&theap);
-    MI_UNUSED(&size);
-    false
+    if MI_GUARDED == 0 {
+        MI_UNUSED(&theap);
+        MI_UNUSED(&size);
+        return false;
+    }
+    if theap.is_null() {
+        return false;
+    }
+    #[cfg(feature = "guarded")]
+    {
+        let count = (*theap).guarded_sample_count.wrapping_sub(1);
+        if mi_likely(count != 0) {
+            (*theap).guarded_sample_count = count;
+            false
+        } else if size >= (*theap).guarded_size_min && size <= (*theap).guarded_size_max {
+            (*theap).guarded_sample_count = (*theap).guarded_sample_rate;
+            (*theap).guarded_sample_rate != 0
+        } else {
+            if (*theap).guarded_sample_rate != 0 {
+                (*theap).guarded_sample_count = 1;
+            }
+            false
+        }
+    }
+    #[cfg(not(feature = "guarded"))]
+    {
+        false
+    }
 }
 
 #[inline]

@@ -8,6 +8,7 @@ default = []
 track-valgrind = []
 track-asan = []
 secure = []
+guarded = []
 
 [profile.dev]
 panic = "abort"

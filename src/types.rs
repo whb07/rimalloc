@@ -17,7 +17,7 @@ pub const MI_BCHUNK_BITS_SHIFT: usize = crate::bits::MI_SIZE_SHIFT + 6;
 pub const MI_SECURE: usize = crate::internal::MI_SECURE;
 const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
 pub const MI_STAT: usize = if MI_DEBUG > 0 { 2 } else { 0 };
-const MI_GUARDED: usize = 0;
+pub const MI_GUARDED: usize = crate::internal::MI_GUARDED;
 pub const MI_PADDING: usize = if cfg!(feature = "secure")
     || MI_DEBUG >= 1
     || crate::track::MI_TRACK_VALGRIND != 0
@@ -378,6 +378,14 @@ pub struct mi_theap_s {
     pub page_full_retain: c_long,
     pub allow_page_reclaim: bool,
     pub allow_page_abandon: bool,
+    #[cfg(feature = "guarded")]
+    pub guarded_size_min: usize,
+    #[cfg(feature = "guarded")]
+    pub guarded_size_max: usize,
+    #[cfg(feature = "guarded")]
+    pub guarded_sample_rate: usize,
+    #[cfg(feature = "guarded")]
+    pub guarded_sample_count: usize,
     pub pages_free_direct: [*mut mi_page_t; MI_PAGES_DIRECT],
     pub pages: [mi_page_queue_t; MI_BIN_COUNT],
     pub memid: crate::internal::mi_memid_t,

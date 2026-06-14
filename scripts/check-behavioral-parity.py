@@ -243,6 +243,20 @@ static void stats_output_callback(const char* msg, void* arg) {
   if (strstr(msg, "mem tracking") != NULL) stats_output_seen_tracking = 1;
 }
 
+static bool subproc_visit_count_callback(mi_heap_t* heap, void* arg) {
+  if (heap == NULL || arg == NULL) return false;
+  size_t* count = (size_t*)arg;
+  (*count)++;
+  return true;
+}
+
+static bool subproc_visit_stop_callback(mi_heap_t* heap, void* arg) {
+  if (heap == NULL || arg == NULL) return false;
+  size_t* count = (size_t*)arg;
+  (*count)++;
+  return false;
+}
+
 static void option_table_output_callback(const char* msg, void* arg) {
   if (msg == NULL || msg[0] == '\0') return;
   option_table_callbacks++;
@@ -3196,6 +3210,20 @@ int main(void) {
   void* stats_heap_block_a = stats_heap == NULL ? NULL : mi_heap_malloc(stats_heap, 2048);
   void* stats_heap_block_b = stats_heap == NULL ? NULL : mi_heap_malloc(stats_heap, 4096);
   result_bool("heap_stats_merge_probe_alloc", stats_heap != NULL && stats_heap_block_a != NULL && stats_heap_block_b != NULL);
+
+  size_t subproc_visit_count = 0;
+  result_bool("subproc_visit_heaps_current_success",
+              mi_subproc_visit_heaps(mi_subproc_current(), subproc_visit_count_callback, &subproc_visit_count));
+  result_bool("subproc_visit_heaps_current_nonempty", subproc_visit_count > 0);
+  size_t subproc_visit_stop_count = 0;
+  result_bool("subproc_visit_heaps_stops_on_false",
+              !mi_subproc_visit_heaps(mi_subproc_current(), subproc_visit_stop_callback, &subproc_visit_stop_count) &&
+              subproc_visit_stop_count == 1);
+  mi_subproc_id_t null_subproc = { NULL };
+  size_t subproc_visit_null_count = 0;
+  result_bool("subproc_visit_heaps_rejects_null_subproc",
+              !mi_subproc_visit_heaps(null_subproc, subproc_visit_count_callback, &subproc_visit_null_count) &&
+              subproc_visit_null_count == 0);
 
   mi_stats_t stats_heap_before;
   mi_stats_init(&stats_heap_before);

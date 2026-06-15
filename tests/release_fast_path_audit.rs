@@ -1134,6 +1134,21 @@ fn free_path_internals_are_not_dynamic_exports() {
             &stats_rs,
             "pub unsafe extern \"C\" fn __mi_stat_decrease_mt",
         ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_counter_increase_mt",
+        ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_adjust_increase_mt",
+        ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_adjust_decrease_mt",
+        ),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -1260,6 +1275,17 @@ fn free_path_internals_are_not_dynamic_exports() {
             && stats_rs
                 .contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_decrease_mt"),
         "theap lifecycle should keep C's multithreaded stats update helper boundaries"
+    );
+    assert!(
+        stats_rs
+            .contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_counter_increase_mt")
+            && stats_rs.contains(
+                "#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_adjust_increase_mt"
+            )
+            && stats_rs.contains(
+                "#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_adjust_decrease_mt"
+            ),
+        "multithreaded stats counters and adjusters should keep C's helper boundaries"
     );
     assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")

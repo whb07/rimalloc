@@ -1139,7 +1139,7 @@ unsafe fn mi_arena_try_alloc_at(
             };
             unsafe {
                 __mi_stat_adjust_decrease_mt(
-                    &mut (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed,
+                    ptr::addr_of_mut!((*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed),
                     mi_size_of_slices(already_committed_count),
                 )
             };
@@ -1886,7 +1886,10 @@ unsafe fn mi_arena_reserve(
     let adjust = overcommit && arena_commit;
     if adjust {
         unsafe {
-            __mi_stat_adjust_decrease_mt(&mut (*subproc).stats.committed, arena_reserve);
+            __mi_stat_adjust_decrease_mt(
+                ptr::addr_of_mut!((*subproc).stats.committed),
+                arena_reserve,
+            );
         }
     }
 
@@ -1903,7 +1906,10 @@ unsafe fn mi_arena_reserve(
     if err != 0 {
         if adjust {
             unsafe {
-                __mi_stat_adjust_increase_mt(&mut (*subproc).stats.committed, arena_reserve);
+                __mi_stat_adjust_increase_mt(
+                    ptr::addr_of_mut!((*subproc).stats.committed),
+                    arena_reserve,
+                );
             }
         }
         let small_arena_reserve = 4 * MI_ARENA_MIN_SIZE;
@@ -1911,7 +1917,7 @@ unsafe fn mi_arena_reserve(
             if adjust {
                 unsafe {
                     __mi_stat_adjust_decrease_mt(
-                        &mut (*subproc).stats.committed,
+                        ptr::addr_of_mut!((*subproc).stats.committed),
                         small_arena_reserve,
                     );
                 }
@@ -1929,7 +1935,7 @@ unsafe fn mi_arena_reserve(
             if err != 0 && adjust {
                 unsafe {
                     __mi_stat_adjust_increase_mt(
-                        &mut (*subproc).stats.committed,
+                        ptr::addr_of_mut!((*subproc).stats.committed),
                         small_arena_reserve,
                     );
                 }
@@ -3244,9 +3250,11 @@ unsafe fn mi_arena_try_purge(arena: *mut mi_arena_t, now: mi_msecs_t, force: boo
     };
     unsafe {
         __mi_stat_counter_increase_mt(
-            &mut (*(*arena.cast::<MiArenaPrefix>()).subproc)
-                .stats
-                .arena_purges,
+            ptr::addr_of_mut!(
+                (*(*arena.cast::<MiArenaPrefix>()).subproc)
+                    .stats
+                    .arena_purges
+            ),
             1,
         )
     };

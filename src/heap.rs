@@ -132,7 +132,7 @@ unsafe fn mi_heap_free_theaps(heap: *mut mi_heap_t) {
             break;
         }
 
-        __mi_stat_counter_increase_mt(&mut (*heap).stats.heaps_delete_wait, 1);
+        __mi_stat_counter_increase_mt(ptr::addr_of_mut!((*heap).stats.heaps_delete_wait), 1);
         _mi_prim_thread_yield();
     }
 }

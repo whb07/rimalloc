@@ -1621,10 +1621,12 @@ unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
 
         if !all_freed {
             let subproc = unsafe { mi_subproc_prefix((*tld).subproc) };
-            crate::internal::__mi_stat_counter_increase_mt(
-                unsafe { &mut (*subproc).stats.heaps_delete_wait },
-                1,
-            );
+            unsafe {
+                crate::internal::__mi_stat_counter_increase_mt(
+                    ptr::addr_of_mut!((*subproc).stats.heaps_delete_wait),
+                    1,
+                )
+            };
             unsafe { crate::prim::_mi_prim_thread_yield() };
         } else {
             crate::mi_assert_internal!(unsafe { (*tld).theaps }.is_null());

@@ -346,10 +346,14 @@ fn mi_stat_update(stat: &mut mi_stat_count_t, amount: i64) {
     }
 }
 
-pub fn __mi_stat_counter_increase_mt(stat: &mut mi_stat_counter_t, amount: usize) {
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_counter_increase_mt(
+    stat: *mut mi_stat_counter_t,
+    amount: usize,
+) {
     // SAFETY: `stat.total` is a valid atomic-compatible `i64` storage location.
     unsafe {
-        mi_atomic_addi64_relaxed(&mut stat.total, amount as i64);
+        mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).total), amount as i64);
     }
 }
 
@@ -394,16 +398,18 @@ fn mi_stat_adjust(stat: &mut mi_stat_count_t, amount: i64) {
     stat.total += amount;
 }
 
-pub fn __mi_stat_adjust_increase_mt(stat: &mut mi_stat_count_t, amount: usize) {
-    mi_stat_adjust_mt(stat, amount as i64);
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_adjust_increase_mt(stat: *mut mi_stat_count_t, amount: usize) {
+    mi_stat_adjust_mt(unsafe { &mut *stat }, amount as i64);
 }
 
 pub fn __mi_stat_adjust_increase(stat: &mut mi_stat_count_t, amount: usize) {
     mi_stat_adjust(stat, amount as i64);
 }
 
-pub fn __mi_stat_adjust_decrease_mt(stat: &mut mi_stat_count_t, amount: usize) {
-    mi_stat_adjust_mt(stat, -(amount as i64));
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_adjust_decrease_mt(stat: *mut mi_stat_count_t, amount: usize) {
+    mi_stat_adjust_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
 pub fn __mi_stat_adjust_decrease(stat: &mut mi_stat_count_t, amount: usize) {

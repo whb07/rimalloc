@@ -346,7 +346,10 @@ macro_rules! mi_subproc_stat_decrease {
 macro_rules! mi_heap_stat_adjust_decrease {
     ($heap:expr, $stat:ident, $amount:expr) => {{
         unsafe {
-            $crate::internal::__mi_stat_adjust_decrease_mt(&mut (*$heap).stats.$stat, $amount)
+            $crate::internal::__mi_stat_adjust_decrease_mt(
+                core::ptr::addr_of_mut!((*$heap).stats.$stat),
+                $amount,
+            )
         }
     }};
 }
@@ -355,7 +358,10 @@ macro_rules! mi_heap_stat_adjust_decrease {
 macro_rules! mi_subproc_stat_adjust_decrease {
     ($subproc:expr, $stat:ident, $amount:expr) => {{
         unsafe {
-            $crate::internal::__mi_stat_adjust_decrease_mt(&mut (*$subproc).stats.$stat, $amount)
+            $crate::internal::__mi_stat_adjust_decrease_mt(
+                core::ptr::addr_of_mut!((*$subproc).stats.$stat),
+                $amount,
+            )
         }
     }};
 }
@@ -364,7 +370,10 @@ macro_rules! mi_subproc_stat_adjust_decrease {
 macro_rules! mi_heap_stat_counter_increase {
     ($heap:expr, $stat:ident, $amount:expr) => {{
         unsafe {
-            $crate::internal::__mi_stat_counter_increase_mt(&mut (*$heap).stats.$stat, $amount)
+            $crate::internal::__mi_stat_counter_increase_mt(
+                core::ptr::addr_of_mut!((*$heap).stats.$stat),
+                $amount,
+            )
         }
     }};
 }
@@ -373,7 +382,10 @@ macro_rules! mi_heap_stat_counter_increase {
 macro_rules! mi_subproc_stat_counter_increase {
     ($subproc:expr, $stat:ident, $amount:expr) => {{
         unsafe {
-            $crate::internal::__mi_stat_counter_increase_mt(&mut (*$subproc).stats.$stat, $amount)
+            $crate::internal::__mi_stat_counter_increase_mt(
+                core::ptr::addr_of_mut!((*$subproc).stats.$stat),
+                $amount,
+            )
         }
     }};
 }

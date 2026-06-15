@@ -1233,7 +1233,7 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
     false
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_try_find_and_claim(
     bitmap: *mut mi_bitmap_t,
     tseq: usize,
@@ -1315,7 +1315,7 @@ pub unsafe fn mi_bbitmap_debug_get_bin(
     MI_CBIN_NONE
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usize {
     if bit_count == 0 {
         if !pchunk_count.is_null() {
@@ -1332,7 +1332,7 @@ pub unsafe fn mi_bitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usiz
     (chunk_count + 2) * MI_BCHUNK_SIZE
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_init(
     bitmap: *mut mi_bitmap_t,
     bit_count: usize,
@@ -1385,7 +1385,7 @@ fn mi_bchunks_unsafe_setN(
     }
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_unsafe_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) {
     crate::mi_debug_assert!(n > 0);
     crate::mi_debug_assert!(idx + n <= unsafe { mi_bitmap_max_bits(bitmap) });
@@ -1397,7 +1397,7 @@ pub unsafe fn mi_bitmap_unsafe_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usi
     );
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_setN(
     bitmap: *mut mi_bitmap_t,
     idx: usize,
@@ -1442,7 +1442,7 @@ pub unsafe fn mi_bitmap_setN(
     were_allclear
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_clearN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usize) -> bool {
     crate::mi_debug_assert!(n > 0);
     let maxbits = mi_bitmap_max_bits(bitmap);
@@ -1479,17 +1479,17 @@ pub unsafe fn mi_bitmap_clearN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usiz
     were_allset
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_set(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
     mi_bitmap_setN(bitmap, idx, 1, core::ptr::null_mut())
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
     mi_bitmap_clearN(bitmap, idx, 1)
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_popcountN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usize) -> usize {
     crate::mi_debug_assert!(n > 0);
     let maxbits = mi_bitmap_max_bits(bitmap);
@@ -1517,7 +1517,7 @@ pub unsafe fn mi_bitmap_popcountN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: u
     popcount
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_is_xsetN(
     set: mi_xset_t,
     bitmap: *mut mi_bitmap_t,
@@ -1550,32 +1550,32 @@ pub unsafe fn mi_bitmap_is_xsetN(
     xset
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_is_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) -> bool {
     mi_bitmap_is_xsetN(MI_BIT_SET, bitmap, idx, n)
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_is_clearN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) -> bool {
     mi_bitmap_is_xsetN(MI_BIT_CLEAR, bitmap, idx, n)
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_is_set(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
     mi_bitmap_is_setN(bitmap, idx, 1)
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_is_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
     mi_bitmap_is_clearN(bitmap, idx, 1)
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_is_all_clear(bitmap: *mut mi_bitmap_t) -> bool {
     mi_bitmap_is_xsetN(MI_BIT_CLEAR, bitmap, 0, mi_bitmap_max_bits(bitmap))
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_clear_once_set(bitmap: *mut mi_bitmap_t, idx: usize) {
     crate::mi_debug_assert!(idx < unsafe { mi_bitmap_max_bits(bitmap) });
     let chunk_idx = idx / MI_BCHUNK_BITS;
@@ -1584,7 +1584,7 @@ pub unsafe fn mi_bitmap_clear_once_set(bitmap: *mut mi_bitmap_t, idx: usize) {
     mi_bchunk_clear_once_set(&mut (*bitmap).chunks[chunk_idx], cidx);
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_bsr(bitmap: *mut mi_bitmap_t, idx: *mut usize) -> bool {
     let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
     for i in (0..chunkmap_max).rev() {
@@ -1602,7 +1602,7 @@ pub unsafe fn mi_bitmap_bsr(bitmap: *mut mi_bitmap_t, idx: *mut usize) -> bool {
     false
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bitmap_popcount(bitmap: *mut mi_bitmap_t) -> usize {
     let mut popcount = 0usize;
     let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
@@ -1616,6 +1616,55 @@ pub unsafe fn mi_bitmap_popcount(bitmap: *mut mi_bitmap_t) -> usize {
     }
     popcount
 }
+
+#[used]
+static MI_BITMAP_TRY_FIND_AND_CLAIM_KEEP: unsafe fn(
+    *mut mi_bitmap_t,
+    usize,
+    *mut usize,
+    *mut mi_claim_fun_t,
+    *mut mi_arena_t,
+) -> bool = mi_bitmap_try_find_and_claim;
+#[used]
+static MI_BITMAP_SIZE_KEEP: unsafe fn(usize, *mut usize) -> usize = mi_bitmap_size;
+#[used]
+static MI_BITMAP_INIT_KEEP: unsafe fn(*mut mi_bitmap_t, usize, bool) -> usize = mi_bitmap_init;
+#[used]
+static MI_BITMAP_UNSAFE_SETN_KEEP: unsafe fn(*mut mi_bitmap_t, usize, usize) =
+    mi_bitmap_unsafe_setN;
+#[used]
+static MI_BITMAP_SETN_KEEP: unsafe fn(*mut mi_bitmap_t, usize, usize, *mut usize) -> bool =
+    mi_bitmap_setN;
+#[used]
+static MI_BITMAP_CLEARN_KEEP: unsafe fn(*mut mi_bitmap_t, usize, usize) -> bool = mi_bitmap_clearN;
+#[used]
+static MI_BITMAP_SET_KEEP: unsafe fn(*mut mi_bitmap_t, usize) -> bool = mi_bitmap_set;
+#[used]
+static MI_BITMAP_CLEAR_KEEP: unsafe fn(*mut mi_bitmap_t, usize) -> bool = mi_bitmap_clear;
+#[used]
+static MI_BITMAP_POPCOUNTN_KEEP: unsafe fn(*mut mi_bitmap_t, usize, usize) -> usize =
+    mi_bitmap_popcountN;
+#[used]
+static MI_BITMAP_IS_XSETN_KEEP: unsafe fn(mi_xset_t, *mut mi_bitmap_t, usize, usize) -> bool =
+    mi_bitmap_is_xsetN;
+#[used]
+static MI_BITMAP_IS_SETN_KEEP: unsafe fn(*mut mi_bitmap_t, usize, usize) -> bool =
+    mi_bitmap_is_setN;
+#[used]
+static MI_BITMAP_IS_CLEARN_KEEP: unsafe fn(*mut mi_bitmap_t, usize, usize) -> bool =
+    mi_bitmap_is_clearN;
+#[used]
+static MI_BITMAP_IS_SET_KEEP: unsafe fn(*mut mi_bitmap_t, usize) -> bool = mi_bitmap_is_set;
+#[used]
+static MI_BITMAP_IS_CLEAR_KEEP: unsafe fn(*mut mi_bitmap_t, usize) -> bool = mi_bitmap_is_clear;
+#[used]
+static MI_BITMAP_IS_ALL_CLEAR_KEEP: unsafe fn(*mut mi_bitmap_t) -> bool = mi_bitmap_is_all_clear;
+#[used]
+static MI_BITMAP_CLEAR_ONCE_SET_KEEP: unsafe fn(*mut mi_bitmap_t, usize) = mi_bitmap_clear_once_set;
+#[used]
+static MI_BITMAP_BSR_KEEP: unsafe fn(*mut mi_bitmap_t, *mut usize) -> bool = mi_bitmap_bsr;
+#[used]
+static MI_BITMAP_POPCOUNT_KEEP: unsafe fn(*mut mi_bitmap_t) -> usize = mi_bitmap_popcount;
 
 #[inline(never)]
 pub unsafe extern "C" fn _mi_bitmap_forall_set(

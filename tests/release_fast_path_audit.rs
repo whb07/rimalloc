@@ -1849,6 +1849,49 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("_mi_bitmap_forall_setc_rangesn("),
         "bitmap traversal should keep C's set/range traversal helper boundaries"
     );
+    for marker in [
+        "#[inline(never)]\npub unsafe fn mi_bitmap_try_find_and_claim(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_size(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_init(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_unsafe_setN(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_setN(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_clearN(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_set(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_clear(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_popcountN(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_is_xsetN(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_is_setN(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_is_clearN(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_is_set(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_is_clear(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_is_all_clear(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_clear_once_set(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_bsr(",
+        "#[inline(never)]\npub unsafe fn mi_bitmap_popcount(",
+        "static MI_BITMAP_TRY_FIND_AND_CLAIM_KEEP",
+        "static MI_BITMAP_SIZE_KEEP",
+        "static MI_BITMAP_INIT_KEEP",
+        "static MI_BITMAP_UNSAFE_SETN_KEEP",
+        "static MI_BITMAP_SETN_KEEP",
+        "static MI_BITMAP_CLEARN_KEEP",
+        "static MI_BITMAP_SET_KEEP",
+        "static MI_BITMAP_CLEAR_KEEP",
+        "static MI_BITMAP_POPCOUNTN_KEEP",
+        "static MI_BITMAP_IS_XSETN_KEEP",
+        "static MI_BITMAP_IS_SETN_KEEP",
+        "static MI_BITMAP_IS_CLEARN_KEEP",
+        "static MI_BITMAP_IS_SET_KEEP",
+        "static MI_BITMAP_IS_CLEAR_KEEP",
+        "static MI_BITMAP_IS_ALL_CLEAR_KEEP",
+        "static MI_BITMAP_CLEAR_ONCE_SET_KEEP",
+        "static MI_BITMAP_BSR_KEEP",
+        "static MI_BITMAP_POPCOUNT_KEEP",
+    ] {
+        assert!(
+            bitmap_rs.contains(marker),
+            "regular bitmap helper boundary marker missing: {marker}"
+        );
+    }
     assert!(
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")

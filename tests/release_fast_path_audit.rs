@@ -1452,8 +1452,10 @@ fn free_path_internals_are_not_dynamic_exports() {
         "page release should keep C's local _mi_page_free helper boundary"
     );
     assert!(
-        page_rs
-            .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_free_collect_partly(")
+        page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_free_collect(")
+            && page_rs.contains(
+                "#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_free_collect_partly("
+            )
             && page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_unfull(")
             && page_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_init(")
@@ -1464,10 +1466,16 @@ fn free_path_internals_are_not_dynamic_exports() {
                 .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_queue_append(")
             && page_rs.contains("static MI_PAGE_QUEUE_IS_VALID_KEEP")
             && page_rs.contains("static MI_PAGE_QUEUE_APPEND_KEEP")
+            && page_rs.contains("mi_page_thread_free_collect(page);")
+            && page_rs
+                .contains("crate::mi_assert_internal!(!force || (*page).local_free.is_null());")
             && free_rs.contains("_mi_page_unfull(page);")
+            && free_rs.contains("_mi_page_free_collect(page, false);")
             && free_rs.contains("_mi_page_free_collect_partly(page, mt_free);")
             && arena_rs.contains("crate::page::_mi_page_init(theap, page)")
+            && arena_rs.contains("_mi_page_free_collect(page, false)")
             && arena_rs.contains("_mi_page_stats_bin(page)")
+            && theap_rs.contains("_mi_page_free_collect(page, true)")
             && theap_rs.contains("_mi_page_queue_is_valid("),
         "page lifecycle and page-queue helpers should keep C's local helper boundaries"
     );

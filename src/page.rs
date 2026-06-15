@@ -355,8 +355,8 @@ pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
     true
 }
 
-#[inline]
-pub unsafe fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
+#[inline(never)]
+pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
     crate::mi_assert_internal!(!page.is_null());
 
     mi_page_thread_free_collect(page);

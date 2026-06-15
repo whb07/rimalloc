@@ -1612,3 +1612,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.10s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.27B` instructions and `17.71B` cycles; Rust about `11.89B` instructions and `18.40B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's full page free-collection helper boundary:
+  - C emits `_mi_page_free_collect` as a standalone local helper used by free, arena, page, and heap collection paths, while Rust had the matching source body but release inlined it away.
+  - Marked Rust `_mi_page_free_collect` `#[inline(never)]` with C ABI and extended release audit coverage for the helper boundary, body shape, and representative free/arena/theap callers.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::page::_mi_page_free_collect` and `mechanical_mimalloc::page::_mi_page_free_collect_partly`, with no dynamic `_mi_page_free_collect` export.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.10s`, Rust `2.12s..2.26s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.08B` instructions and `15.53B` cycles; Rust about `10.67B` instructions and `16.22B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

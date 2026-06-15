@@ -35,6 +35,9 @@ use crate::types::{
 #[cfg(windows)]
 use crate::{prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
 
+#[cfg(target_os = "linux")]
+core::arch::global_asm!(".hidden _mi_theap_empty");
+
 pub const MI_TLS_DIRECT_SLOTS: usize = 64;
 pub const MI_TLS_EXPANSION_SLOTS: usize = 1024;
 pub const MI_TLS_DIRECT_FIRST: usize = if MI_SIZE_SIZE == 4 {
@@ -456,45 +459,34 @@ static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
     stats: MI_STATS_NULL(),
 };
 
-#[unsafe(no_mangle)]
-pub static mut _mi_cpu_movsb_max: usize = 0;
+pub(crate) static mut _mi_cpu_movsb_max: usize = 0;
 
-#[unsafe(no_mangle)]
-pub static mut _mi_cpu_stosb_max: usize = 0;
+pub(crate) static mut _mi_cpu_stosb_max: usize = 0;
 
-#[unsafe(no_mangle)]
-pub static mut _mi_theap_default_slot: usize = MI_TLS_INITIAL_SLOT;
+pub(crate) static mut _mi_theap_default_slot: usize = MI_TLS_INITIAL_SLOT;
 
-#[unsafe(no_mangle)]
-pub static mut _mi_theap_default_expansion_slot: usize = 0;
+pub(crate) static mut _mi_theap_default_expansion_slot: usize = 0;
 
-#[unsafe(no_mangle)]
-pub static mut _mi_theap_cached_slot: usize = MI_TLS_INITIAL_SLOT;
+pub(crate) static mut _mi_theap_cached_slot: usize = MI_TLS_INITIAL_SLOT;
 
-#[unsafe(no_mangle)]
-pub static mut _mi_theap_cached_expansion_slot: usize = 0;
+pub(crate) static mut _mi_theap_cached_expansion_slot: usize = 0;
 
-#[unsafe(no_mangle)]
-pub static mut mi_tls_raw_index_default: u32 = TLS_OUT_OF_INDEXES;
+#[cfg(windows)]
+pub(crate) static mut mi_tls_raw_index_default: u32 = TLS_OUT_OF_INDEXES;
 
-#[unsafe(no_mangle)]
-pub static mut mi_tls_raw_index_cached: u32 = TLS_OUT_OF_INDEXES;
+#[cfg(windows)]
+pub(crate) static mut mi_tls_raw_index_cached: u32 = TLS_OUT_OF_INDEXES;
 
-#[unsafe(no_mangle)]
-pub static mut _mi_theap_default_key: mi_thread_local_t = 0;
+pub(crate) static mut _mi_theap_default_key: mi_thread_local_t = 0;
 
-#[unsafe(no_mangle)]
-pub static mut _mi_theap_cached_key: mi_thread_local_t = 0;
+pub(crate) static mut _mi_theap_cached_key: mi_thread_local_t = 0;
 
 #[cfg(not(target_os = "linux"))]
-#[unsafe(no_mangle)]
-pub static mut __mi_theap_main: *mut mi_theap_t = ptr::null_mut();
+pub(crate) static mut __mi_theap_main: *mut mi_theap_t = ptr::null_mut();
 
-#[unsafe(no_mangle)]
-pub static mut _mi_process_is_initialized: bool = false;
+pub(crate) static mut _mi_process_is_initialized: bool = false;
 
-#[unsafe(no_mangle)]
-pub static mut _mi_cpu_has_popcnt: bool = false;
+pub(crate) static mut _mi_cpu_has_popcnt: bool = false;
 
 #[repr(C)]
 struct MiSubprocPrefix {

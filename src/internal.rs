@@ -39,11 +39,11 @@ pub(crate) use crate::heap::{
     _mi_heap_force_destroy, _mi_heap_theap_get_or_init, _mi_heap_theap_get_peek,
 };
 pub(crate) use crate::init::{
-    _mi_auto_process_done, _mi_auto_process_init, _mi_is_heap_main, _mi_is_theap_main,
-    _mi_preloading, _mi_subproc, _mi_subproc_from_id, _mi_subproc_heap_main, _mi_subproc_main,
-    _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_default_set, _mi_theap_empty_get,
-    _mi_theap_guarded_init, _mi_theap_main_safe, _mi_theap_options_init, _mi_thread_done,
-    _mi_thread_id,
+    _mi_auto_process_done, _mi_auto_process_init, _mi_cpu_movsb_max, _mi_cpu_stosb_max,
+    _mi_is_heap_main, _mi_is_theap_main, _mi_preloading, _mi_subproc, _mi_subproc_from_id,
+    _mi_subproc_heap_main, _mi_subproc_main, _mi_theap_cached_set, _mi_theap_default_safe,
+    _mi_theap_default_set, _mi_theap_empty_get, _mi_theap_guarded_init, _mi_theap_main_safe,
+    _mi_theap_options_init, _mi_thread_done, _mi_thread_id,
 };
 pub(crate) use crate::libc::{
     _mi_getenv, _mi_streq, _mi_strlcat, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen,
@@ -499,9 +499,6 @@ pub unsafe fn _mi_memzero_var<T>(x: *mut T) {
 }
 
 unsafe extern "C" {
-    pub static mut _mi_cpu_movsb_max: usize;
-    pub static mut _mi_cpu_stosb_max: usize;
-
     pub fn _mi_snprintf(buf: *mut c_char, buflen: usize, fmt: *const c_char, ...) -> c_int;
 
     pub fn _mi_fputs(

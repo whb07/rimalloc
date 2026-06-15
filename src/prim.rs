@@ -24,7 +24,11 @@ use core::ptr;
 
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
 use crate::heap::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
-use crate::init::_mi_theap_empty;
+use crate::init::{
+    _mi_theap_cached_expansion_slot, _mi_theap_cached_key, _mi_theap_cached_slot,
+    _mi_theap_default_expansion_slot, _mi_theap_default_key, _mi_theap_default_slot,
+    _mi_theap_empty,
+};
 use crate::types::{
     mi_heap_t, mi_msecs_t, mi_page_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
 };
@@ -147,14 +151,6 @@ pub(crate) use windows::{
 };
 
 unsafe extern "C" {
-    pub static mut _mi_process_is_initialized: bool;
-    pub static mut _mi_theap_default_slot: usize;
-    pub static mut _mi_theap_cached_slot: usize;
-    pub static mut _mi_theap_default_expansion_slot: usize;
-    pub static mut _mi_theap_cached_expansion_slot: usize;
-    pub static mut _mi_theap_default_key: mi_thread_local_t;
-    pub static mut _mi_theap_cached_key: mi_thread_local_t;
-
     pub fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut c_void;
 }
 
@@ -165,12 +161,6 @@ unsafe extern "C" {
     fn _mi_tls_theap_cached_get() -> *mut mi_theap_t;
     fn _mi_tls_theap_cached_set(theap: *mut mi_theap_t);
 }
-
-#[unsafe(no_mangle)]
-pub static mut __mi_theap_default: *mut mi_theap_t = ptr::null_mut();
-
-#[unsafe(no_mangle)]
-pub static mut __mi_theap_cached: *mut mi_theap_t = ptr::null_mut();
 
 #[inline]
 pub fn mi_prim_tls_slot(slot: usize) -> *mut c_void {

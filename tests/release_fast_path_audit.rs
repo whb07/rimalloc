@@ -779,8 +779,48 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         init_rs.contains("#[unsafe(no_mangle)]\npub(crate) static _mi_theap_empty")
+            && init_rs.contains("core::arch::global_asm!(\".hidden _mi_theap_empty\")")
             && !init_rs.contains("#[unsafe(no_mangle)]\npub static _mi_theap_empty"),
-        "_mi_theap_empty needs a stable local link name for TLS initialization without becoming a public dynamic ABI symbol"
+        "_mi_theap_empty needs a stable hidden local link name for TLS initialization without becoming a public dynamic ABI symbol"
+    );
+    for internal_static in [
+        "_mi_cpu_movsb_max",
+        "_mi_cpu_stosb_max",
+        "_mi_theap_default_slot",
+        "_mi_theap_default_expansion_slot",
+        "_mi_theap_cached_slot",
+        "_mi_theap_cached_expansion_slot",
+        "mi_tls_raw_index_default",
+        "mi_tls_raw_index_cached",
+        "_mi_theap_default_key",
+        "_mi_theap_cached_key",
+        "__mi_theap_main",
+        "_mi_process_is_initialized",
+        "_mi_cpu_has_popcnt",
+    ] {
+        assert!(
+            !init_rs.contains(&format!(
+                "#[unsafe(no_mangle)]\npub static mut {internal_static}"
+            )),
+            "{internal_static} should stay crate-local instead of a dynamic storage export"
+        );
+    }
+    assert!(
+        !prim_rs.contains("pub static mut __mi_theap_default")
+            && !prim_rs.contains("pub static mut __mi_theap_cached"),
+        "unused fallback TLS globals should not be exported as dynamic storage symbols"
+    );
+    assert!(
+        !internal.contains("pub static mut _mi_cpu_movsb_max")
+            && !internal.contains("pub static mut _mi_cpu_stosb_max")
+            && !prim_rs.contains("pub static mut _mi_process_is_initialized")
+            && !prim_rs.contains("pub static mut _mi_theap_default_slot")
+            && !prim_rs.contains("pub static mut _mi_theap_cached_slot")
+            && !prim_rs.contains("pub static mut _mi_theap_default_expansion_slot")
+            && !prim_rs.contains("pub static mut _mi_theap_cached_expansion_slot")
+            && !prim_rs.contains("pub static mut _mi_theap_default_key")
+            && !prim_rs.contains("pub static mut _mi_theap_cached_key"),
+        "internal storage should be routed through crate paths, not C-linkage extern statics"
     );
     for main_static in [
         "pub static _mi_theap_empty_wrong",

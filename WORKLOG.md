@@ -794,3 +794,31 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Started the internal-storage visibility batch:
+  - Fresh release cdylib inspection still reports exported internal storage symbols: `__mi_theap_default`, `__mi_theap_cached`, `_mi_cpu_has_popcnt`, `_mi_cpu_movsb_max`, `_mi_cpu_stosb_max`, `_mi_process_is_initialized`, `_mi_theap_default_slot`, `_mi_theap_default_expansion_slot`, `_mi_theap_cached_slot`, `_mi_theap_cached_expansion_slot`, `_mi_theap_default_key`, `_mi_theap_cached_key`, `_mi_theap_empty`, `mi_tls_raw_index_default`, and `mi_tls_raw_index_cached`.
+  - Benchmark C mimalloc has no dynamic `_mi_`, `__mi_`, or `mi_tls_raw_index` symbols; its internal equivalents are local symbols.
+  - The Linux direct malloc/new fast path still requires the default TLS cell to start at the empty theap sentinel, so `_mi_theap_empty` needs a stable local link name for the C TLS initializer while remaining absent from the dynamic symbol table.
+- Localized the internal-storage visibility batch:
+  - Converted process, CPU, and TLS metadata storage to crate-local Rust statics and routed Rust users through crate imports instead of C-linkage `extern` storage declarations.
+  - Removed the unused exported `__mi_theap_default` and `__mi_theap_cached` fallback globals.
+  - Kept `_mi_theap_empty` as the stable sentinel link name required by `tls_shim.c`, but marked it ELF hidden so it is local instead of a dynamic export.
+  - Normal release cdylib inspection now reports zero dynamic `_mi_`, `__mi_`, or `mi_tls_raw_index` internal symbols.
+  - Dynamic defined function names stayed at `243`; `R_X86_64_GLOB_DAT` dropped from `81` to `79`; `R_X86_64_RELATIVE` rose from `1,494` to `1,497`; `size -A` total is `663,879` bytes.
+- Focused `cfrac -n=5` after the internal-storage visibility batch:
+  - C: `2.70s..2.77s`, RSS `6080..6280` KiB, reclaims `197..201`.
+  - Rust: `2.69s..2.75s`, RSS `6372..6820` KiB, reclaims `204..207`.
+  - Result: wall time still overlaps; Rust's RSS/reclaim tail remains after the dynamic internal storage surface now matches C.
+- Full established validation passed after the internal-storage visibility batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

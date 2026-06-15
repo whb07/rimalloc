@@ -2,6 +2,27 @@
 
 ## 2026-06-15
 
+- Continuing `mi_heap_main` fast-path parity after `da44b97`:
+  - The remaining Rust `_mi_subproc_heap_main` samples now point at other callers, not the patched `_mi_thread_done` body.
+  - Compared C and Rust release disassembly for `mi_heap_main` and `mi_thread_init`: C's `mi_heap_main` directly reads the raw default-theap TLS cell, falls back to `subproc_main`, and loads `subproc->heap_main`; Rust's `mi_heap_main` still trampolines through `_mi_subproc` and `_mi_subproc_heap_main`, and `mi_thread_init` inherits those calls.
+  - Patching `mi_heap_main` itself to use the direct raw default-theap/subproc heap-main path so both public `mi_heap_main` and its `mi_thread_init` caller share the C-shaped fast path.
+  - Removed the Rust `mi_thread_init` null guard around the thread-stat increment after `mi_heap_main`, matching C's contract that a successful thread-heap initialization has a main heap.
+  - Full validation initially caught a behavioral drift in the custom-subproc probe: Rust returned null from `mi_heap_main` (`subproc_heap_main_custom_status=16`) where C aborts (`134`). Restored the cold-path internal assertion after `mi_heap_main_init()` so custom subproc behavior matches C while keeping the direct hot load.
+  - Artifact check: release `mi_heap_main` now loads the raw default-theap TLS cell, falls back to a direct `subproc_main` address, and loads `subproc->heap_main` directly; release `mi_thread_init` no longer calls `_mi_subproc_heap_main` for its thread-stat increment path.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the validated release cdylib and rechecked direct `./mleak 100`:
+    - C `2.05s, 2.05s, 2.06s`; Rust `2.13s, 2.12s, 2.12s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.73B` instructions / `16.78B` cycles; Rust `11.01B` instructions / `17.13B` cycles.
+  - Follow-up Rust profile still shows `_mi_subproc_heap_main` at `0.12%` self and `mi_thread_init` at `0.03%` self, so the next pass should inspect the remaining helper callers rather than `mi_heap_main`'s trampoline.
 - Continuing `_mi_thread_done` teardown parity after `5e4d4e0`:
   - Fresh `mleak 100` profiling still shows Rust samples in `_mi_subproc_heap_main`.
   - Compared release disassembly and found a concrete call-site drift: C's `_mi_thread_done` directly loads `tld->subproc->heap_main` and only enters the cold main-heap init path on null, while Rust still calls `_mi_subproc_heap_main` through the GOT before the threads-stat decrement.

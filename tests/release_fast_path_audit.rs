@@ -2284,6 +2284,39 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !subproc_body.contains("mi_subproc_main_init()"),
         "_mi_subproc should use C's direct main-subproc fallback on a null raw default theap"
     );
+    let mi_heap_main_start = init_rs
+        .find("pub unsafe extern \"C\" fn mi_heap_main")
+        .expect("find mi_heap_main");
+    let mi_heap_main_end = init_rs[mi_heap_main_start..]
+        .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_is_heap_main")
+        .map(|offset| mi_heap_main_start + offset)
+        .expect("find _mi_is_heap_main marker");
+    let mi_heap_main_body = &init_rs[mi_heap_main_start..mi_heap_main_end];
+    assert!(
+        mi_heap_main_body.contains("crate::prim::_mi_theap_default_raw()")
+            && mi_heap_main_body.contains("unsafe { mi_subproc_main_addr() }")
+            && mi_heap_main_body
+                .contains("let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };")
+            && mi_heap_main_body.contains("mi_heap_main_init();")
+            && mi_heap_main_body.contains("crate::mi_assert_internal!(!heap.is_null());")
+            && !mi_heap_main_body.contains("_mi_subproc()")
+            && !mi_heap_main_body.contains("_mi_subproc_heap_main"),
+        "mi_heap_main should match C's direct raw-default-theap and subproc->heap_main fast path"
+    );
+    let mi_thread_init_start = init_rs
+        .find("pub unsafe extern \"C\" fn mi_thread_init")
+        .expect("find mi_thread_init");
+    let mi_thread_init_end = init_rs[mi_thread_init_start..]
+        .find("#[unsafe(no_mangle)]\n/// # Safety\n/// The returned opaque identifier")
+        .map(|offset| mi_thread_init_start + offset)
+        .expect("find mi_subproc_new marker");
+    let mi_thread_init_body = &init_rs[mi_thread_init_start..mi_thread_init_end];
+    assert!(
+        mi_thread_init_body.contains("let heap = unsafe { mi_heap_main() };")
+            && mi_thread_init_body.contains("__mi_stat_increase_mt(")
+            && !mi_thread_init_body.contains("if !heap.is_null()"),
+        "mi_thread_init should trust mi_heap_main after thread-heap initialization like C"
+    );
     let subproc_heap_main_start = init_rs
         .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_heap_main")
         .expect("find _mi_subproc_heap_main");

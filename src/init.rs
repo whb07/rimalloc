@@ -1612,7 +1612,20 @@ static MI_SUBPROC_HEAP_MAIN_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> *mu
 /// # Safety
 /// Returns the current subproc main heap for the bounded init/runtime scaffold.
 pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
-    unsafe { _mi_subproc_heap_main(_mi_subproc()) }
+    let theap = unsafe { crate::prim::_mi_theap_default_raw() };
+    let subproc = if theap.is_null() {
+        unsafe { mi_subproc_main_addr() }
+    } else {
+        let tld = unsafe { (*theap).tld };
+        unsafe { (*tld).subproc }
+    };
+    let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
+    if heap.is_null() {
+        mi_heap_main_init();
+        heap = unsafe { mi_subproc_heap_main_raw(subproc) };
+        crate::mi_assert_internal!(!heap.is_null());
+    }
+    heap
 }
 
 /// # Safety
@@ -1728,14 +1741,12 @@ pub unsafe extern "C" fn mi_thread_init() {
         return;
     }
     let heap = unsafe { mi_heap_main() };
-    if !heap.is_null() {
-        unsafe {
-            __mi_stat_increase_mt(
-                ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
-                1,
-            )
-        };
-    }
+    unsafe {
+        __mi_stat_increase_mt(
+            ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
+            1,
+        )
+    };
 }
 
 #[unsafe(no_mangle)]

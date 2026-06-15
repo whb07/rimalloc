@@ -50,10 +50,10 @@ const MI_PAGE_MAP_ENTRIES_PER_CBIT: usize = if MI_PAGE_MAP_COUNT < MI_BFIELD_BIT
 };
 
 #[cfg(not(target_pointer_width = "32"))]
-static mut _mi_page_map: *mut mi_submap_t = ptr::null_mut();
+pub(crate) static mut _mi_page_map: *mut mi_submap_t = ptr::null_mut();
 
 #[cfg(target_pointer_width = "32")]
-static mut _mi_page_map: *mut u8 = ptr::null_mut();
+pub(crate) static mut _mi_page_map: *mut u8 = ptr::null_mut();
 
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(always)]

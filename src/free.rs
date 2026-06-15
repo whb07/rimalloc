@@ -483,7 +483,7 @@ pub unsafe fn mi_free_ex(p: *mut c_void, usable: *mut usize, page: *mut mi_page_
 
 #[cold]
 #[inline(never)]
-unsafe fn mi_free_ex_slow(p: *mut c_void, page: *mut mi_page_t, xtid: usize) {
+pub(crate) unsafe extern "C" fn mi_free_ex_slow(p: *mut c_void, page: *mut mi_page_t, xtid: usize) {
     if xtid <= MI_PAGE_FLAG_MASK {
         mi_free_generic_local(page, p);
     } else if (xtid & MI_PAGE_FLAG_MASK) == 0 {

@@ -149,6 +149,64 @@ pub unsafe extern "C" fn mi_cxx_new_array_fast_64(_size: usize) -> *mut c_void {
     );
 }
 
+macro_rules! mi_free_fast_body {
+    () => {
+        core::arch::naked_asm!(
+            "mov rax, qword ptr [rip + {page_map}]",
+            "mov rcx, rdi",
+            "shr rcx, 29",
+            "mov rsi, qword ptr [rax + rcx*8]",
+            "mov ecx, edi",
+            "shr ecx, 13",
+            "and ecx, 0xfff8",
+            "mov rsi, qword ptr [rsi + rcx]",
+            "test rsi, rsi",
+            "je 3f",
+            "mov rax, qword ptr fs:[0]",
+            "mov rdx, qword ptr [rsi]",
+            "xor rdx, rax",
+            "jne 2f",
+            "mov rax, qword ptr [rsi + 0x18]",
+            "mov qword ptr [rdi], rax",
+            "mov qword ptr [rsi + 0x18], rdi",
+            "dec word ptr [rsi + 0x10]",
+            "jne 3f",
+            "cmp byte ptr [rsi + 0x16], 0",
+            "jne 3f",
+            "mov rdi, rsi",
+            "jmp {retire}",
+            "2:",
+            "jmp {slow}",
+            "3:",
+            "ret",
+            page_map = sym crate::page_map::_mi_page_map,
+            retire = sym crate::page::_mi_page_retire,
+            slow = sym crate::free::mi_free_ex_slow,
+        )
+    };
+}
+
+#[cfg(mi_c_malloc_fast)]
+#[unsafe(naked)]
+#[unsafe(export_name = "free")]
+pub unsafe extern "C" fn mi_unix_free_fast(_p: *mut c_void) {
+    mi_free_fast_body!();
+}
+
+#[cfg(all(not(windows), mi_c_malloc_fast))]
+#[unsafe(naked)]
+#[unsafe(export_name = "_ZdlPv")]
+pub unsafe extern "C" fn mi_cxx_delete_fast(_p: *mut c_void) {
+    mi_free_fast_body!();
+}
+
+#[cfg(all(not(windows), mi_c_malloc_fast))]
+#[unsafe(naked)]
+#[unsafe(export_name = "_ZdaPv")]
+pub unsafe extern "C" fn mi_cxx_delete_array_fast(_p: *mut c_void) {
+    mi_free_fast_body!();
+}
+
 #[macro_export]
 macro_rules! MI_FORWARD3 {
     ($fun:path, $x:expr, $y:expr, $z:expr) => {{
@@ -513,13 +571,13 @@ pub unsafe extern "C" fn _aligned_recalloc(
     unsafe { crate::mimalloc::mi_recalloc_aligned(block, count, size, alignment) }
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "_ZdlPv")]
 pub unsafe extern "C" fn mi_cxx_delete(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "_ZdaPv")]
 pub unsafe extern "C" fn mi_cxx_delete_array(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
@@ -874,7 +932,7 @@ pub unsafe fn mi_unix_free(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "free")]
 pub unsafe extern "C" fn mi_unix_free_export(p: *mut c_void) {
     unsafe { mi_unix_free(p) }

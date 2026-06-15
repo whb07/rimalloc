@@ -51,8 +51,12 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains("mi_tls_theap_default@GOTTPOFF")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
             && override_rs.contains("slow = sym crate::page::_mi_malloc_generic")
+            && override_rs.contains("pub unsafe extern \"C\" fn mi_unix_free_fast")
+            && override_rs.contains("page_map = sym crate::page_map::_mi_page_map")
+            && override_rs.contains("slow = sym crate::free::mi_free_ex_slow")
+            && override_rs.contains("retire = sym crate::page::_mi_page_retire")
             && override_rs.contains("jmp mi_new"),
-        "default Linux malloc/new overrides should use direct naked-assembly TLS fast paths"
+        "default Linux malloc/new/free overrides should use direct naked-assembly fast paths"
     );
     assert!(
         alloc_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))")
@@ -63,6 +67,14 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         override_rs.contains("cfg(all(not(windows), not(mi_c_malloc_fast)))")
             && override_rs.contains("export_name = \"malloc\""),
         "Rust malloc override gate must stay paired with the assembly fast override"
+    );
+    assert!(
+        override_rs.contains("#[unsafe(export_name = \"free\")]")
+            && override_rs.contains("mi_unix_free_fast")
+            && override_rs.contains(
+                "cfg(all(not(windows), not(mi_c_malloc_fast)))]\n#[unsafe(export_name = \"free\")]"
+            ),
+        "Unix free export must stay paired with the assembly fast override"
     );
     assert_eq!(offset_of!(mi_page_t, free), 0x08);
     assert_eq!(offset_of!(mi_page_t, used), 0x10);

@@ -374,3 +374,39 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Committed the page stat gating fix as `0303ee4 Gate page detail stats in release`.
+- Post-commit `perf stat -r 5` on `cfrac` with the page stat gating build:
+  - C: `13.269B` cycles, `43.899B` instructions, `6.959B` branches, `9.240M` cache misses, `185` minor faults, `2.795s` elapsed.
+  - Rust: `13.397B` cycles, `43.869B` instructions, `7.048B` branches, `8.929M` cache misses, `194` minor faults, `2.822s` elapsed.
+  - Result: the remaining `cfrac` gap is not higher instruction count or cache misses; Rust still has about `89M` extra branches and slightly more cycles/minor faults.
+- Current profile/disassembly comparison after the stat gating change:
+  - Rust `malloc` and `operator delete[](void*)` still have slightly more samples than C.
+  - Rust free/delete entry points load the page-map base through an extra GOT load and tail-jump the nonlocal case through an indirect relocation slot.
+  - C uses direct RIP-relative page-map access and direct branches to local free slow helpers.
+- In-progress change: add naked Unix `free` and unsized C++ delete entry points under the existing `mi_c_malloc_fast` cfg, using a direct page-map static reference and direct jumps to `_mi_page_retire`/`mi_free_ex_slow`; gate the old Rust wrappers off under that cfg.
+- Implemented the naked release free/delete entry points:
+  - `free`, `_ZdlPv`, and `_ZdaPv` now share the same direct assembly body under `mi_c_malloc_fast`.
+  - The page-map static is crate-visible so the assembly can reference it directly, while the version script still hides it from the dynamic ABI.
+  - `mi_free_ex_slow` is crate-visible `extern "C"` so the assembly can tail-jump to it directly.
+  - Existing Rust wrappers for these export names are gated off under `mi_c_malloc_fast`.
+- Release disassembly check after the free/delete fast path:
+  - `free` and `operator delete[](void*)` load `mechanical_mimalloc::page_map::_mi_page_map` directly with RIP-relative addressing.
+  - Both entry points use direct jumps to `_mi_page_retire` and `mi_free_ex_slow`; the previous GOT page-map load and indirect slow tail jump are gone.
+- Focused validation/build after the free/delete fast path:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+- Focused `cfrac -n=5` after the free/delete fast path:
+  - C: `2.78s..2.79s`, RSS `6244..6516` KiB, reclaims `197..201`.
+  - Rust: `2.72s..2.76s`, RSS `6528..6804` KiB, reclaims `206..209`.
+  - Result: wall time overlapped and Rust was faster in this batch, but RSS/minor faults remain higher.
+- `perf stat -r 5` after the free/delete fast path:
+  - C: `13.320B` cycles, `43.888B` instructions, `6.959B` branches, `9.033M` cache misses, `185` minor faults, `2.755s` elapsed.
+  - Rust: `13.353B` cycles, `43.771B` instructions, `7.048B` branches, `9.244M` cache misses, `193` minor faults, `2.808s` elapsed.
+  - Result: direct free/delete entry points reduced Rust cycles/instructions versus the prior Rust counter run, but the branch-count and minor-fault deltas remain.
+- Full validation after the free/delete fast path failed once in `scripts/check-behavioral-parity.py` after the Rust/unit/clippy/check stages had passed. A direct rerun of the generated `behavioral-parity-c` vs `behavioral-parity-rust` binaries produced no output diff, so this is being treated as a transient behavioral scenario mismatch until the parity script rerun confirms otherwise.
+- `scripts/check-behavioral-parity.py` passed on rerun after the transient failure. The failed full-validation attempt had already completed the Rust formatting, unit/release tests, clippy variants, secure/guarded tests, and tracking checks before reaching the parity script.
+- Final pre-commit checks for the free/delete fast path:
+  - `git diff --check`
+  - Export sanity: dynamic symbols include `free`, `_ZdlPv`, and `_ZdaPv`, but not `_mi_page_map` or `mi_free_ex_slow`.
+  - External `LD_PRELOAD` probe calling `free(NULL)` exited cleanly.

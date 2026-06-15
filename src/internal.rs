@@ -24,7 +24,8 @@ pub(crate) use crate::arena::{
     _mi_arenas_alloc, _mi_arenas_alloc_aligned, _mi_arenas_collect, _mi_arenas_contain,
     _mi_arenas_free, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free,
     _mi_arenas_page_try_reabandon_to_mapped, _mi_arenas_page_unabandon,
-    _mi_arenas_unsafe_destroy_all,
+    _mi_arenas_unsafe_destroy_all, _mi_heap_destroy_pages, _mi_heap_move_pages,
+    _mi_heap_visit_blocks,
 };
 pub use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE};
 pub(crate) use crate::arena_meta::{_mi_meta_free, _mi_meta_is_meta_page, _mi_meta_zalloc};
@@ -33,11 +34,14 @@ pub use crate::bits::{
     MI_ARCH_X64, MI_ARCH_X86, MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB,
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
-pub(crate) use crate::free::_mi_page_ptr_unalign;
+pub(crate) use crate::free::{_mi_padding_shrink, _mi_page_ptr_unalign};
+pub(crate) use crate::heap::{
+    _mi_heap_force_destroy, _mi_heap_theap_get_or_init, _mi_heap_theap_get_peek,
+};
 pub(crate) use crate::init::{
-    _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_default_set, _mi_theap_empty_get,
-    _mi_theap_guarded_init, _mi_theap_main_safe, _mi_theap_options_init, _mi_thread_done,
-    _mi_thread_id,
+    _mi_is_heap_main, _mi_is_theap_main, _mi_theap_cached_set, _mi_theap_default_safe,
+    _mi_theap_default_set, _mi_theap_empty_get, _mi_theap_guarded_init, _mi_theap_main_safe,
+    _mi_theap_options_init, _mi_thread_done, _mi_thread_id,
 };
 pub(crate) use crate::libc::{
     _mi_getenv, _mi_streq, _mi_strlcat, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen,
@@ -66,7 +70,6 @@ pub(crate) use crate::page_map::{
     _mi_page_map_base, _mi_page_map_init, _mi_page_map_register, _mi_page_map_unregister,
     _mi_page_map_unregister_range, _mi_page_map_unsafe_destroy, _mi_safe_ptr_page,
 };
-pub use crate::prim::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
 pub(crate) use crate::random::{
     _mi_random_init, _mi_random_init_weak, _mi_random_next, _mi_random_reinit_if_weak,
     _mi_random_split,
@@ -525,8 +528,6 @@ unsafe extern "C" {
     pub fn _mi_subproc_heap_main(subproc: *mut mi_subproc_t) -> *mut mi_heap_t;
     pub fn _mi_subproc_from_id(subproc_id: mi_subproc_id_t) -> *mut mi_subproc_t;
     pub fn _mi_thread_seq_id() -> usize;
-    pub fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool;
-    pub fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool;
     pub fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool);
 
     pub fn _mi_arena_id_none() -> mi_arena_id_t;
@@ -552,10 +553,6 @@ unsafe extern "C" {
         used: usize,
         blocks: *mut c_void,
     );
-    pub fn _mi_heap_move_pages(heap_from: *mut mi_heap_t, heap_to: *mut mi_heap_t);
-    pub fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t);
-    pub fn _mi_heap_force_destroy(heap: *mut mi_heap_t);
-    pub fn _mi_padding_shrink(page: *mut mi_page_t, block: *mut mi_block_t, min_size: usize);
 }
 
 #[inline]

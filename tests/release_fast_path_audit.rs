@@ -248,6 +248,21 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub unsafe extern \"C\" fn _mi_arenas_unsafe_destroy_all",
         ),
         (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_heap_visit_blocks",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_heap_move_pages",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_heap_destroy_pages",
+        ),
+        (
             "src/arena_meta.rs",
             &arena_meta_rs,
             "pub unsafe extern \"C\" fn _mi_meta_free",
@@ -266,6 +281,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             "src/free.rs",
             &free_rs,
             "pub unsafe extern \"C\" fn _mi_page_ptr_unalign",
+        ),
+        (
+            "src/free.rs",
+            &free_rs,
+            "pub unsafe extern \"C\" fn _mi_padding_shrink",
         ),
         (
             "src/page.rs",
@@ -550,6 +570,31 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub unsafe extern \"C\" fn _mi_theap_empty_get",
         ),
         (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_is_heap_main",
+        ),
+        (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_is_theap_main",
+        ),
+        (
+            "src/heap.rs",
+            &heap_rs,
+            "pub unsafe extern \"C\" fn _mi_heap_force_destroy",
+        ),
+        (
+            "src/heap.rs",
+            &heap_rs,
+            "pub unsafe extern \"C\" fn _mi_heap_theap_get_peek",
+        ),
+        (
+            "src/heap.rs",
+            &heap_rs,
+            "pub unsafe extern \"C\" fn _mi_heap_theap_get_or_init",
+        ),
+        (
             "src/page.rs",
             &page_rs,
             "pub unsafe extern \"C\" fn _mi_theap_collect_retired",
@@ -631,6 +676,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_theap_malloc_zero_ex(")
             && !internal.contains("pub fn _mi_theap_realloc_zero(")
             && !internal.contains("pub fn _mi_theap_create(")
+            && !internal.contains("pub fn _mi_heap_move_pages(")
+            && !internal.contains("pub fn _mi_heap_destroy_pages(")
+            && !internal.contains("pub fn _mi_heap_force_destroy(")
+            && !internal.contains("pub fn _mi_padding_shrink(")
+            && !internal.contains("pub fn _mi_is_heap_main(")
+            && !internal.contains("pub fn _mi_is_theap_main(")
             && !internal.contains("pub static _mi_page_empty:")
             && !internal.contains("pub static _mi_theap_empty:")
             && !internal.contains("pub static _mi_theap_empty_wrong:")
@@ -642,19 +693,23 @@ fn free_path_internals_are_not_dynamic_exports() {
         !alloc_aligned_rs.contains("fn _mi_theap_malloc_guarded(")
             && !alloc_aligned_rs.contains("fn _mi_theap_malloc_zero(")
             && !alloc_aligned_rs.contains("fn _mi_theap_malloc_zero_ex(")
-            && !alloc_aligned_rs.contains("fn _mi_theap_realloc_zero("),
+            && !alloc_aligned_rs.contains("fn _mi_theap_realloc_zero(")
+            && !alloc_aligned_rs.contains("fn _mi_padding_shrink("),
         "aligned allocation internals should call crate-local theap allocation helpers directly"
     );
     assert!(
         !heap_rs.contains("fn _mi_theap_cached_set(")
             && !heap_rs.contains("fn _mi_theap_create(")
-            && !heap_rs.contains("fn _mi_theap_free("),
+            && !heap_rs.contains("fn _mi_theap_free(")
+            && !heap_rs.contains("fn _mi_heap_move_pages(")
+            && !heap_rs.contains("fn _mi_heap_destroy_pages("),
         "heap internals should call crate-local theap helpers directly"
     );
     assert!(
         !init_rs.contains("fn _mi_theap_collect_abandon(")
             && !init_rs.contains("fn _mi_theap_create(")
-            && !init_rs.contains("fn _mi_theap_free("),
+            && !init_rs.contains("fn _mi_theap_free(")
+            && !init_rs.contains("fn _mi_heap_force_destroy("),
         "thread initialization internals should call crate-local theap lifecycle helpers directly"
     );
     assert!(
@@ -662,7 +717,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !prim_rs.contains("pub fn _mi_prim_mem_init(")
             && !prim_rs.contains("pub fn _mi_prim_alloc(")
             && !prim_rs.contains("pub fn _mi_prim_thread_yield(")
-            && !prim_rs.contains("pub fn _mi_theap_empty_get("),
+            && !prim_rs.contains("pub fn _mi_theap_empty_get(")
+            && !prim_rs.contains("pub fn _mi_heap_theap_get_or_init(")
+            && !prim_rs.contains("pub fn _mi_heap_theap_get_peek("),
         "Unix primitive helpers should be routed through crate paths, not extern declarations"
     );
     assert!(

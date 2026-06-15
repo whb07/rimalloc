@@ -23,6 +23,7 @@ use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
+use crate::heap::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
 use crate::init::_mi_theap_empty;
 use crate::types::{
     mi_heap_t, mi_msecs_t, mi_page_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
@@ -154,8 +155,6 @@ unsafe extern "C" {
     pub static mut _mi_theap_default_key: mi_thread_local_t;
     pub static mut _mi_theap_cached_key: mi_thread_local_t;
 
-    pub fn _mi_heap_theap_get_or_init(heap: *const mi_heap_t) -> *mut mi_theap_t;
-    pub fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t;
     pub fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut c_void;
 }
 

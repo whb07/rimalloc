@@ -363,8 +363,7 @@ unsafe extern "C" fn mi_heap_visit_page_at(
 
 /// # Safety
 /// Visits pages and optionally blocks for a heap using the C ABI callback contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_heap_visit_blocks(
+pub(crate) unsafe extern "C" fn _mi_heap_visit_blocks(
     mut heap: *mut mi_heap_t,
     abandoned_only: bool,
     visit_blocks: bool,
@@ -592,8 +591,7 @@ unsafe fn mi_heap_delete_pages(heap: *mut mi_heap_t, heap_target: *mut mi_heap_t
 
 /// # Safety
 /// Moves all pages from one heap to another following the original internal ABI.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_heap_move_pages(
+pub(crate) unsafe extern "C" fn _mi_heap_move_pages(
     heap_from: *mut mi_heap_t,
     mut heap_to: *mut mi_heap_t,
 ) {
@@ -608,8 +606,7 @@ pub unsafe extern "C" fn _mi_heap_move_pages(
 
 /// # Safety
 /// Destroys all pages owned by a non-main heap following the original internal ABI.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t) {
+pub(crate) unsafe extern "C" fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t) {
     if unsafe { _mi_is_heap_main(heap_from) } {
         return;
     }

@@ -16,6 +16,7 @@ use crate::alloc::{
 };
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
+use crate::free::_mi_padding_shrink;
 use crate::init::_mi_theap_empty_get;
 use crate::internal::{
     _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero, _mi_ptr_page,
@@ -27,16 +28,12 @@ use crate::options::_mi_error_message_fmt;
 use crate::page::{MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{mi_track_align, mi_track_malloc};
-use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_page_t, mi_theap_t};
+use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_theap_t};
 
 const MI_MAX_ALIGN_SIZE: usize = 16;
 const MI_PAGE_MAX_START_BLOCK_ALIGN2: usize = 4 * MI_KiB;
 const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = MI_ARENA_SLICE_SIZE;
 const MI_EOVERFLOW: i32 = 75;
-
-unsafe extern "C" {
-    fn _mi_padding_shrink(page: *mut mi_page_t, block: *mut mi_block_t, min_size: usize);
-}
 
 #[inline]
 pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> bool {

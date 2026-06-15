@@ -112,8 +112,7 @@ unsafe fn mi_page_decode_padding(
     ok
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_padding_shrink(
+pub(crate) unsafe extern "C" fn _mi_padding_shrink(
     page: *const mi_page_t,
     block: *const mi_block_t,
     min_size: usize,

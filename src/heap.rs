@@ -7,6 +7,7 @@ use core::ptr;
 use core::sync::atomic::Ordering;
 
 use crate::arena::_mi_arena_from_id;
+use crate::arena::{_mi_heap_destroy_pages, _mi_heap_move_pages};
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
 use crate::init::{
     _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_empty_wrong, mi_heap_main,
@@ -29,11 +30,6 @@ use crate::types::{EFAULT, mi_arena_id_t, mi_heap_t, mi_page_t, mi_theap_t};
 
 #[allow(clippy::manual_dangling_ptr)]
 const MI_THEAP_TLS_BUSY: *mut mi_theap_t = 1usize as *mut mi_theap_t;
-
-unsafe extern "C" {
-    fn _mi_heap_move_pages(heap_from: *mut mi_heap_t, heap_to: *mut mi_heap_t);
-    fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t);
-}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_theap(heap: *mut mi_heap_t) -> *mut mi_theap_t {
@@ -194,8 +190,7 @@ pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
     mi_heap_free(heap);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
+pub(crate) unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
     if heap.is_null() {
         return;
     }
@@ -327,8 +322,7 @@ unsafe fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
 }
 
 #[allow(dead_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
+pub(crate) unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
     if heap.is_null() || _mi_is_heap_main(heap) {
         crate::init::_mi_theap_main_safe()
     } else {
@@ -337,8 +331,9 @@ pub unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut
 }
 
 #[allow(dead_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_heap_theap_get_or_init(heap: *const mi_heap_t) -> *mut mi_theap_t {
+pub(crate) unsafe extern "C" fn _mi_heap_theap_get_or_init(
+    heap: *const mi_heap_t,
+) -> *mut mi_theap_t {
     let mut theap = _mi_heap_theap_get_peek(heap);
     if theap.is_null() {
         theap = mi_heap_init_theap(heap);

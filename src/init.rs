@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 use crate::arena::_mi_arenas_unsafe_destroy_all;
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bits::MI_SIZE_SIZE;
+use crate::heap::_mi_heap_force_destroy;
 use crate::internal::{
     _mi_allocator_done, _mi_error_message, _mi_meta_free, _mi_meta_zalloc, mi_memid_t, mi_memkind_t,
 };
@@ -1029,7 +1030,6 @@ fn mi_tld_free(tld: *mut mi_tld_t) {
 
 unsafe extern "C" {
     fn mi_heap_destroy(heap: *mut mi_heap_t);
-    fn _mi_heap_force_destroy(heap: *mut mi_heap_t);
 }
 
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
@@ -1487,10 +1487,9 @@ pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
     unsafe { _mi_subproc_heap_main(_mi_subproc()) }
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// `heap` must be null or point to a heap prefix compatible with this crate's local scaffold.
-pub unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
+pub(crate) unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
     if heap.is_null() {
         return false;
     }
@@ -1498,10 +1497,9 @@ pub unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
     ptr::eq(unsafe { _mi_subproc_heap_main(subproc) }, heap.cast_mut())
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// `theap` must be null or point to a valid thread-heap structure.
-pub unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
+pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
     unsafe {
         crate::internal::mi_theap_is_initialized(theap)
             && _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))

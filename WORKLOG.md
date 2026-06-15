@@ -726,3 +726,32 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Started the heap/page helper localization batch:
+  - Benchmark C mimalloc exports no underscore `_mi_*` dynamic helper functions, while Rust still exports heap/page/padding helpers.
+  - Target helpers: `_mi_heap_move_pages`, `_mi_heap_destroy_pages`, `_mi_heap_force_destroy`, `_mi_heap_theap_get_peek`, `_mi_heap_theap_get_or_init`, `_mi_is_heap_main`, `_mi_is_theap_main`, `_mi_heap_visit_blocks`, and `_mi_padding_shrink`.
+  - Remaining Rust-to-Rust extern call sites are in `heap.rs`, `init.rs`, `prim.rs`, `alloc_aligned.rs`, and `internal.rs`.
+- Localized the heap/page helper batch:
+  - Replaced heap/page/padding helper extern declarations in `internal.rs` with crate-local imports from the owning modules.
+  - Removed local Rust-to-Rust extern declarations in `heap.rs`, `init.rs`, `prim.rs`, and `alloc_aligned.rs`.
+  - Removed release dynamic exports for `_mi_heap_move_pages`, `_mi_heap_destroy_pages`, `_mi_heap_force_destroy`, `_mi_heap_theap_get_peek`, `_mi_heap_theap_get_or_init`, `_mi_is_heap_main`, `_mi_is_theap_main`, `_mi_heap_visit_blocks`, and `_mi_padding_shrink`.
+  - Normal release cdylib inspection now reports zero global symbols for that target helper set; remaining global `_mi_*` helper exports dropped to 18.
+  - Dynamic defined function names dropped from Rust `270` to `261`; dynamic relocations dropped from `1,595` to `1,592`; `R_X86_64_GLOB_DAT` dropped from `90` to `85`; `R_X86_64_RELATIVE` rose from `1,492` to `1,494`.
+  - `size -A` total is `668,068` bytes.
+- Focused `cfrac -n=5` after the heap/page helper-localization batch:
+  - C: `2.70s..2.77s`, RSS `5820..6280` KiB, reclaims `198..199`.
+  - Rust: `2.71s..2.74s`, RSS `6424..6820` KiB, reclaims `208..210`.
+  - Result: wall time still overlaps; Rust's RSS/reclaim tail remains despite fewer dynamic helper exports.
+- Full established validation passed after the heap/page helper-localization batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

@@ -1247,3 +1247,8 @@
   - Found and fixed a release `mi_page_t` layout drift: C omits `keys[2]` when `MI_PADDING==0 && MI_ENCODE_FREELIST==0`, giving `sizeof(mi_page_t)==120` and `mi_page_info_size()==128`; Rust carried `keys` unconditionally. The Rust `keys` field is now compiled only for secure/debug/tracking builds, and key access goes through cfg-gated helpers.
   - Added layout audit coverage for both profiles: key-carrying builds stay at `sizeof(mi_page_t)==136`, while default release builds stay at `sizeof(mi_page_t)==120` with `theap` at `0x38` and `memid` at `0x60`.
   - Release address probe after the layout fix shows C and Rust first 64-byte allocations both at `arena_base + 0x210040`, confirming the separated page metadata geometry now matches. Focused `glibc-simple` remains slower on Rust, so next work continues from a real performance gap rather than an arena-offset mismatch.
+- Tightened release `free` export parity:
+  - C exports `free` and `mi_free` at the same fast-path address; Rust still exported `free` as the naked fast wrapper but left `mi_free` as the generic Rust function.
+  - Moved the Unix fast `free` body into aligned `global_asm!`, emitted `.set mi_free, free`, and gated the Rust `mi_free` function's `no_mangle` so it only exports when the assembly fast path is disabled.
+  - Focused `glibc-simple` improved but is not solved: before this symbol-layout change Rust was around `1.63s..1.68s`; after it, Rust is `1.57s..1.59s` versus C `1.33s..1.35s`.
+  - Tried the same global-assembly aliasing for `malloc`/`mi_malloc`, but it worsened the focused benchmark (`1.64s..1.67s` plus one `3.00s` outlier), so that experiment was reverted and the previous naked `malloc` wrappers were kept.

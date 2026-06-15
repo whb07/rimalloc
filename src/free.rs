@@ -497,7 +497,7 @@ pub(crate) unsafe extern "C" fn mi_free_ex_slow(p: *mut c_void, page: *mut mi_pa
     }
 }
 
-#[unsafe(no_mangle)]
+#[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free(p: *mut c_void) {
     let page = mi_validate_ptr_page(p, c"mi_free".as_ptr());
     mi_free_ex(p, ptr::null_mut(), page);

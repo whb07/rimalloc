@@ -275,6 +275,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let aligned_rs =
         fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read src/alloc_aligned.rs");
     let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
+    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let override_rs =
         fs::read_to_string(root.join("src/alloc_override.rs")).expect("read src/alloc_override.rs");
 
@@ -317,8 +318,11 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains("mi_tls_theap_default@GOTTPOFF")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
             && override_rs.contains("slow = sym crate::page::_mi_malloc_generic")
-            && override_rs.contains("pub unsafe extern \"C\" fn mi_unix_free_fast")
             && override_rs.contains("core::arch::global_asm!")
+            && override_rs.contains(".globl free")
+            && override_rs.contains(".p2align 4")
+            && override_rs.contains(".size free, .-free")
+            && override_rs.contains(".set mi_free, free")
             && override_rs.contains(".set _ZdlPv, free")
             && override_rs.contains(".set _ZdaPv, free")
             && override_rs.contains("page_map = sym crate::page_map::_mi_page_map")
@@ -350,16 +354,14 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         "release mi_malloc_aligned should load the default heap from direct TLS like C"
     );
     assert!(
-        override_rs.contains("#[unsafe(export_name = \"free\")]")
-            && override_rs.contains("mi_unix_free_fast")
+        override_rs.contains("\"free:\"")
             && override_rs.contains(
                 "\"sub word ptr [rdi + 0x10], 1\",\n            \"mov qword ptr [rdi + 0x18], rsi\",\n            \"je 7f\",\n            \"3:\",\n            \"ret\","
             )
             && override_rs.contains("\"cmp byte ptr [rdi + 0x16], 0\",\n            \"jne 3b\",")
-            && override_rs.contains(
-                "cfg(all(not(windows), not(mi_c_malloc_fast)))]\n#[unsafe(export_name = \"free\")]"
-            ),
-        "Unix free export must keep the C-like assembly fast override and hot local-free branch layout"
+            && override_rs.contains(".set mi_free, free")
+            && free_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))"),
+        "Unix free/mi_free exports must keep the C-like aligned assembly fast override and hot local-free branch layout"
     );
     assert_eq!(offset_of!(mi_page_t, free), 0x08);
     assert_eq!(offset_of!(mi_page_t, used), 0x10);

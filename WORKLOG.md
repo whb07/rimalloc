@@ -2,6 +2,26 @@
 
 ## 2026-06-15
 
+- Continuing stats merge checked-body parity after `81fdbce`:
+  - Fresh artifact comparison showed `_mi_stats_merge_into` still called the general guarded Rust `mi_stats_add` after it had already checked `to`, `from`, and `to == from`. C's release artifact enters a cloned checked body for this path, so Rust was still paying duplicated null checks on the hot stats-merge call.
+  - Split the stats aggregation helper into the guarded C-ABI-shaped `mi_stats_add` wrapper and a private `mi_stats_add_nonnull` body. `_mi_stats_merge_into` and the heap aggregation visitor now call the non-null body after their own checks, while the general helper keeps the null/self-add guard.
+  - Release artifact check: `_mi_stats_merge_into` now calls `mechanical_mimalloc::stats::mi_stats_add_nonnull` directly, then keeps the `_mi_cpu_stosb_max`/`rep stosb` zeroing path from the previous pass. The new body starts without Rust-only null entry tests; the remaining equality branch comes from the inlined per-field self-add guard.
+  - Extended the release audit to require the guarded wrapper, the guard-free `mi_stats_add_nonnull` body, and the direct `_mi_stats_merge_into` call to that body before `_mi_memzero`.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `scripts/check-public-symbols.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `cargo test --quiet`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the release cdylib and rechecked `mleak`:
+    - Harness `mleak100`: C `1.03s, 1.03s, 1.03s`; Rust `1.06s, 1.06s, 1.06s`.
+    - Direct `perf stat -r 3 ./mleak 100`: C `10.44B` instructions / `17.81B` cycles; Rust `10.83B` instructions / `18.28B` cycles.
+    - Allocator-side profile sample: C `mi_stats_add.part.0` `0.02%`; Rust `mi_stats_add_nonnull` `0.30%` in this run, down slightly from the prior Rust stats-add sample but still a visible remaining gap.
+  - This removes the duplicated null entry guard on checked stats-merge callers. The remaining gap is still dominated by extra Rust user-space work, so the next pass should compare the next allocator-side body, with `_mi_theap_init`, bitmap claim helpers, and stats field-update code still showing samples.
 - Continuing stats merge artifact parity after `56ae295`:
   - Fresh profiling still showed `mi_stats_add`/`_mi_stats_merge_into` as the dominant allocator-side stats path. Comparing release artifacts found two concrete Rust-only detours in `_mi_stats_merge_into`: the call to `mi_stats_add` went through a data relocation created by `MI_STATS_ADD_KEEP`, and the subsequent zeroing lowered to an external `memset` jump. C calls the local `mi_stats_add` body directly and zeros through the CPU-thresholded `_mi_memzero`/`rep stos` path.
   - Removed the `MI_STATS_ADD_KEEP` function-pointer keepalive because `mi_stats_add` is already kept alive by direct callers. Changed `_mi_stats_merge_into` to call `mi_stats_add(to, from)` directly and then `_mi_memzero(from, sizeof(mi_stats_t))`.

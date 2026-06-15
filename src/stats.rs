@@ -476,7 +476,12 @@ unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t
     if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {
         return;
     }
+    // SAFETY: null and self-add cases were checked above.
+    unsafe { mi_stats_add_nonnull(stats, src) };
+}
 
+#[inline(never)]
+unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     macro_rules! MI_STAT_COUNT {
         ($field:ident) => {
             unsafe {
@@ -560,7 +565,7 @@ fn mi_stats_add_into(to: &mut mi_stats_t, from: &mi_stats_t) {
     if ptr::eq(to, from) {
         return;
     }
-    unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };
+    unsafe { mi_stats_add_nonnull(to as *mut mi_stats_t, from as *const mi_stats_t) };
 }
 
 fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bool {
@@ -625,7 +630,7 @@ pub unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi
     }
     // SAFETY: caller guarantees valid pointers to `mi_stats_t` values.
     unsafe {
-        mi_stats_add(to, from);
+        mi_stats_add_nonnull(to, from);
         _mi_memzero(from.cast(), size_of::<mi_stats_t>());
     }
 }

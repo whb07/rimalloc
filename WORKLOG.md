@@ -1572,3 +1572,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.03s..2.11s`, Rust `2.12s..2.28s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.63B` cycles; Rust about `11.93B` instructions and `18.30B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's heap theap peek helper boundary:
+  - C emits `_mi_heap_theap_get_peek` as the no-create helper behind `_mi_heap_theap_peek` cache misses, while Rust had inlined the helper body into `_mi_heap_theap_get_or_init` and emitted no local symbol.
+  - Marked Rust `_mi_heap_theap_get_peek` `#[inline(never)]` and extended release audit coverage for its no-create body plus the heap/prim cache-miss callers.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::heap::_mi_heap_theap_get_peek`; `_mi_heap_theap_get_or_init` calls it through a local relocation slot.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.08s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.42B` instructions and `17.81B` cycles; Rust about `11.88B` instructions and `18.26B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

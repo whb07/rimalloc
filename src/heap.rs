@@ -323,6 +323,7 @@ unsafe fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
 }
 
 #[allow(dead_code)]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
     if heap.is_null() || _mi_is_heap_main(heap) {
         crate::init::_mi_theap_main_safe()

@@ -1391,6 +1391,16 @@ fn free_path_internals_are_not_dynamic_exports() {
         "fast option reads should keep C's local _mi_option_get_fast helper boundary on free/page policy paths"
     );
     assert!(
+        heap_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t"
+        ) && heap_rs.contains("if heap.is_null() || _mi_is_heap_main(heap)")
+            && heap_rs.contains("crate::init::_mi_theap_main_safe()")
+            && heap_rs.contains("_mi_thread_local_get((*heap).theap).cast::<mi_theap_t>()")
+            && heap_rs.contains("let mut theap = _mi_heap_theap_get_peek(heap);")
+            && prim_rs.contains("_mi_heap_theap_get_peek(heap)"),
+        "heap/theap cache misses should keep C's local _mi_heap_theap_get_peek no-create helper boundary"
+    );
+    assert!(
         alloc_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
             && page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")

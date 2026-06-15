@@ -1291,3 +1291,11 @@
   - The focused regression passed ten consecutive runs.
   - After rebuilding the release allocator, `MIMALLOC_SHOW_STATS=1 ./glibc-thread 32` reports `threads current: 1` for both C and Rust. Focused iteration samples still show a smaller remaining throughput gap: C about `2.41B..2.42B`, Rust about `2.35B..2.36B`.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.
+- Matched release fast-wrapper code spacing for the threaded glibc benchmark:
+  - After the thread-stat fix, alternated direct `glibc-thread 32` samples still showed C at roughly `2.31B..2.39B` iterations and Rust at roughly `2.26B..2.34B`.
+  - C places `malloc`/`mi_malloc` at `free + 0x5e0`; Rust's global `free` assembly previously left `malloc` at `free + 0x140`.
+  - Added explicit NOP padding after the global `free`/`mi_free` aliases so Rust's exported `malloc` lands at `free + 0x5e0`, matching C's release layout, and added release audit coverage for that spacing.
+  - Alternated direct `glibc-thread 32` samples after the layout change: C `2.376B..2.404B`, Rust `2.353B..2.373B`.
+  - `mimalloc-bench` harness recheck: first `glibc-thread` group C `.431s.. .434s`, Rust `.437s.. .451s` with one low Rust outlier; second group C `.421s.. .427s`, Rust `.421s.. .428s`.
+  - `glibc-simple` remained Rust-favored in the harness: C `1.38s..1.40s`, Rust `1.33s`.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.

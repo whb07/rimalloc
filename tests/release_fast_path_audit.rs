@@ -326,6 +326,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains(".set mi_free, free")
             && override_rs.contains(".set _ZdlPv, free")
             && override_rs.contains(".set _ZdaPv, free")
+            && override_rs.contains(".fill 0x4a0,1,0x90")
             && override_rs.contains("page_map = sym crate::page_map::_mi_page_map")
             && override_rs.contains("retire = sym crate::page::_mi_page_retire")
             && override_rs.contains("collect_mt = sym crate::free::mi_free_try_collect_mt")

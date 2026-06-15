@@ -272,6 +272,7 @@ core::arch::global_asm!(
     ".globl _ZdaPv",
     ".type _ZdaPv,@function",
     ".set _ZdaPv, free",
+    ".fill 0x4a0,1,0x90",
     page_map = sym crate::page_map::_mi_page_map,
     retire = sym crate::page::_mi_page_retire,
     collect_mt = sym crate::free::mi_free_try_collect_mt,

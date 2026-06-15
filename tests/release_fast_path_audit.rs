@@ -2050,6 +2050,21 @@ fn free_path_internals_are_not_dynamic_exports() {
             "bbitmap helper boundary marker missing: {marker}"
         );
     }
+    let bbitmap_find_start = bitmap_rs
+        .find("#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clear(")
+        .expect("find mi_bbitmap_try_find_and_clear");
+    let bbitmap_find_end = bitmap_rs[bbitmap_find_start..]
+        .find("\n}\n\n#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clear8(")
+        .map(|offset| bbitmap_find_start + offset)
+        .expect("find end of mi_bbitmap_try_find_and_clear");
+    let bbitmap_find_body = &bitmap_rs[bbitmap_find_start..bbitmap_find_end];
+    assert!(
+        !bbitmap_find_body.contains("mi_bbitmap_try_find_and_clear_generic(")
+            && bbitmap_find_body.contains("mi_bchunk_try_find_and_clear(chunk, &mut cidx)")
+            && bbitmap_find_body
+                .contains("[(MI_CBIN_SMALL, cmap_small), (MI_CBIN_NONE, cmap_none)]"),
+        "single-slice bbitmap find/clear should keep C's specialized static-inline wrapper shape"
+    );
     for marker in [
         "#[inline(never)]\nfn mi_bchunk_xsetNC(",
         "#[inline(never)]\nfn mi_bchunk_popcountNC(",

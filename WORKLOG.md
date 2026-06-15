@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing bbitmap find/clear specialization after `1fa75ea`:
+  - Fresh profiling showed a Rust-only/shared `mi_bbitmap_try_find_and_clear_generic` sample on `mleak100`. C specializes the single-slice `mi_bbitmap_try_find_and_clear` static-inline path, while Rust was routing that public helper through the shared runtime generic with a callback boundary.
+  - Patched `mi_bbitmap_try_find_and_clear` to keep the C single-slice loop shape directly in the wrapper: cyclic chunkmap selection, SMALL/NONE bin probing for `n == 1`, direct `mi_bchunk_try_find_and_clear(chunk, &mut cidx)`, and the C-style NONE-to-SMALL bin update when the cleared bit is at index zero. The shared generic remains for the 8/NX/NC variants.
+  - Extended the release audit to reject reintroducing the generic call from the single-slice wrapper and require the direct chunk clear plus SMALL/NONE bin order.
+  - Artifact/profile check: the old `mi_bbitmap_try_find_and_clear_generic` allocator-side sample disappeared for this path; the refreshed Rust profile shows `mi_bbitmap_try_find_and_clear` itself around `0.03%`.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo build --release`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `scripts/check-public-symbols.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `cargo test --quiet`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the release cdylib and rechecked `mleak`:
+    - Harness `mleak100`: C `1.30s, 1.31s, 1.30s`; Rust `1.34s, 1.33s, 1.33s`.
+    - Direct `perf stat -r 3 ./mleak 100`: C `10.72B` instructions / `19.43B` cycles; Rust `11.08B` instructions / `19.81B` cycles.
+  - This removes the single-slice bitmap generic/callback artifact. The remaining benchmark gap is still extra Rust user-space work, so the next pass should profile the refreshed artifact and chase the next concrete C/Rust artifact mismatch.
 - Continuing abandoned arena claim parity after `0bdd2cf`:
   - Fresh profiling still showed a Rust-only `mi_arena_try_claim_abandoned` sample. C inlines the abandoned-page lookup inside this bitmap callback; Rust was calling the out-of-line `mi_arena_page_at_slice` helper, adding a prologue/call/return on the abandoned-page claim path.
   - Patched the callback to keep the shared helper boundary for other callers while computing the page pointer inline here. On Linux x86_64 the release build now uses compile-time `MiArenaPrefix::pages_meta` and `mi_page_t` size constants in inline asm so the emitted code branches like C before computing the fallback `arena + slice_index * MI_ARENA_SLICE_SIZE` address.

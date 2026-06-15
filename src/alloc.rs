@@ -353,7 +353,7 @@ pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) ->
     _mi_theap_malloc_zero(theap, size, false, ptr::null_mut())
 }
 
-#[unsafe(no_mangle)]
+#[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
     mi_theap_malloc(_mi_theap_default(), size)
 }

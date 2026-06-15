@@ -96,18 +96,32 @@ fn compile_tls_shim() {
 
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target OS is set by cargo");
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("target arch is set by cargo");
+    let profile = env::var("PROFILE").expect("profile is set by cargo");
 
     println!("cargo:rerun-if-changed=src/track_shim.c");
     println!("cargo:rerun-if-changed=src/cxx_new_shim.cpp");
     println!("cargo:rerun-if-changed=src/tls_shim.c");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_VALGRIND");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_ASAN");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_SECURE");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_GUARDED");
     println!("cargo:rerun-if-env-changed=CXX");
+    println!("cargo:rustc-check-cfg=cfg(mi_c_malloc_fast)");
 
     if target_os != "windows" {
         compile_cxx_new_shim();
     }
     if target_os == "linux" {
+        let default_fast_override = profile == "release"
+            && target_arch == "x86_64"
+            && env::var_os("CARGO_FEATURE_SECURE").is_none()
+            && env::var_os("CARGO_FEATURE_GUARDED").is_none()
+            && env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_none()
+            && env::var_os("CARGO_FEATURE_TRACK_ASAN").is_none();
+        if default_fast_override {
+            println!("cargo:rustc-cfg=mi_c_malloc_fast");
+        }
         compile_tls_shim();
     }
 

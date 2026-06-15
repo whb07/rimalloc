@@ -143,3 +143,53 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Committed the release debug-assert/free fast-path work as `ddf4938`.
+- Fresh `perf stat -r 3` on `glibc-simple` after `ddf4938`:
+  - C: `6.573B` cycles, `23.435B` instructions, `3.56` IPC, `1.353s`.
+  - Rust: `7.252B` cycles, `24.017B` instructions, `3.31` IPC, `1.495s`.
+  - Remaining profile samples pointed at allocation-side TLS lookup: Rust still sampled `_mi_tls_theap_default_get`, while C uses a direct initial-exec `%fs` load in `malloc`.
+- Implemented a release-only default Linux x86_64 malloc fast path:
+  - `build.rs` now emits `mi_c_malloc_fast` only for release, x86_64 Linux, default feature builds.
+  - `src/tls_shim.c` exposes the default thread heap TLS cell as hidden initial-exec TLS so assembly can read it directly.
+  - `src/alloc_override.rs` provides naked exported `malloc` and `mi_malloc` bodies for that cfg. The bodies mirror C mimalloc's small allocation fast path: direct TLS load, direct `pages_free_direct` lookup, free-list pop, and slow jump to `_mi_malloc_generic`.
+  - Rust's normal `malloc`/`mi_malloc` exports stay active for debug, secure, guarded, and tracking builds.
+  - `tests/release_fast_path_audit.rs` now checks the debug-assert gate, the malloc fast-path source gates, and the `mi_page_t`/`mi_theap_t` offsets used by the assembly.
+- Rejected an intermediate C helper wrapper shape because it exported through a Rust jump and regressed `glibc-simple` to `1.60s..1.80s`, even though it improved `glibc-thread`.
+- Validation and inspection so far for the naked malloc fast path:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo test --release --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+  - Rebuilt and copied the benchmark cdylib. `malloc` and `mi_malloc` are dynamic symbols with direct TLS-load bodies and no wrapper jump.
+- Focused mimalloc-bench after the naked malloc fast path:
+  - `glibc-simple`: C `1.34s..1.34s`, Rust `1.30s..1.30s`, improved from Rust `1.45s..1.47s` after `ddf4938`.
+  - `glibc-thread`: C `.414s.. .415s`, Rust `.419s.. .430s`, improved from Rust `.454s.. .456s` after `ddf4938`.
+- Result: the stable glibc-bench small-allocation drift was caused mostly by Rust's out-of-line TLS heap lookup on allocation; the release naked fast path brings the benchmark into the C range locally.
+- Full established validation passed after the naked malloc fast path:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`
+- Tried the extra command `cargo clippy --release --all-targets -- -D warnings`; it fails on existing release-constant `clippy::absurd_extreme_comparisons` diagnostics such as `MI_DEBUG > 0`/`MI_STAT > 0`. I left that broader cleanup out of this fast-path change.
+- Follow-up after the guarded audit import cleanup also passed:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo test --release --quiet --test release_fast_path_audit`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features guarded --quiet`
+  - `git diff --check`
+- Removed the unused temporary C-helper define path after settling on naked Rust exports. Final cleanup validation passed:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo test --release --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `git diff --check`

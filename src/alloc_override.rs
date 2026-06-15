@@ -29,6 +29,66 @@ macro_rules! MI_FORWARD1 {
     }};
 }
 
+#[cfg(mi_c_malloc_fast)]
+#[unsafe(naked)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn malloc(_size: usize) -> *mut c_void {
+    core::arch::naked_asm!(
+        "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+        "mov rsi, rdi",
+        "mov rdi, qword ptr fs:[rax]",
+        "test rdi, rdi",
+        "je 2f",
+        "cmp rsi, 1024",
+        "ja 2f",
+        "lea rax, [rsi + 7]",
+        "shr rax, 3",
+        "mov rdx, qword ptr [rdi + rax*8 + 0x110]",
+        "mov rax, qword ptr [rdx + 0x8]",
+        "test rax, rax",
+        "je 2f",
+        "mov rcx, qword ptr [rax]",
+        "add word ptr [rdx + 0x10], 1",
+        "mov qword ptr [rdx + 0x8], rcx",
+        "mov qword ptr [rax], 0",
+        "ret",
+        "2:",
+        "xor ecx, ecx",
+        "xor edx, edx",
+        "jmp _mi_malloc_generic",
+    );
+}
+
+#[cfg(mi_c_malloc_fast)]
+#[unsafe(naked)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_malloc(_size: usize) -> *mut c_void {
+    core::arch::naked_asm!(
+        "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+        "mov rsi, rdi",
+        "mov rdi, qword ptr fs:[rax]",
+        "test rdi, rdi",
+        "je 2f",
+        "cmp rsi, 1024",
+        "ja 2f",
+        "lea rax, [rsi + 7]",
+        "shr rax, 3",
+        "mov rdx, qword ptr [rdi + rax*8 + 0x110]",
+        "mov rax, qword ptr [rdx + 0x8]",
+        "test rax, rax",
+        "je 2f",
+        "mov rcx, qword ptr [rax]",
+        "add word ptr [rdx + 0x10], 1",
+        "mov qword ptr [rdx + 0x8], rcx",
+        "mov qword ptr [rax], 0",
+        "ret",
+        "2:",
+        "xor ecx, ecx",
+        "xor edx, edx",
+        "jmp _mi_malloc_generic",
+    );
+}
+
 #[macro_export]
 macro_rules! MI_FORWARD3 {
     ($fun:path, $x:expr, $y:expr, $z:expr) => {{
@@ -687,7 +747,7 @@ pub unsafe fn mi_unix_malloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "malloc")]
 pub unsafe extern "C" fn mi_unix_malloc_export(size: usize) -> *mut c_void {
     unsafe { mi_unix_malloc(size) }

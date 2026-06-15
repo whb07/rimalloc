@@ -30,7 +30,8 @@ use crate::options::{
     mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
 };
 use crate::stats::{
-    __mi_stat_increase_mt, _mi_stats_merge_into, mi_stat_count_t, mi_stats_header_init, mi_stats_t,
+    __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into, mi_stat_count_t,
+    mi_stats_header_init, mi_stats_t,
 };
 use crate::theap::{_mi_theap_collect_abandon, _mi_theap_create, _mi_theap_free};
 use crate::types::{
@@ -808,7 +809,7 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     let tld = unsafe { (*default_theap).tld };
     let heap = unsafe { _mi_subproc_heap_main((*tld).subproc) };
     if !heap.is_null() {
-        crate::internal::__mi_stat_decrease(
+        __mi_stat_decrease_mt(
             unsafe { &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads },
             1,
         );
@@ -1599,7 +1600,7 @@ pub unsafe extern "C" fn mi_thread_init() {
     }
     let heap = unsafe { mi_heap_main() };
     if !heap.is_null() {
-        crate::internal::__mi_stat_increase(
+        __mi_stat_increase_mt(
             unsafe { &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads },
             1,
         );
@@ -1742,7 +1743,7 @@ unsafe fn mi_process_init_inner() {
             {
                 let heap = mi_heap_main();
                 if !heap.is_null() {
-                    crate::internal::__mi_stat_increase(
+                    __mi_stat_increase_mt(
                         &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads,
                         1,
                     );

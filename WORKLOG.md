@@ -1267,3 +1267,27 @@
     - `alloc-test1`: C `2.07s..2.08s`, Rust `2.05s..2.07s`.
     - `alloc-testN`: C `2.18s..2.19s`, Rust `2.18s..2.20s`.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.
+- Rechecked the current release benchmark surface after `ddc68eb`:
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the current `cargo build --release`.
+  - `mimalloc-bench` harness pass with `-n=3 glibc rptest cfrac alloc-test larson larson-sized mstress sh6bench sh8bench xmalloc-test cscratch` showed most targets overlapping or Rust-favored.
+  - `glibc-simple`: C `1.34s..1.35s`, Rust `1.30s..1.31s`.
+  - `glibc-thread`: C `.413s.. .415s`, Rust `.418s.. .423s`; small Rust tail, close enough to recheck only if it persists in repeated focused runs.
+  - `rptestN`: C `1.502s..1.551s`, Rust `1.363s..1.472s`.
+  - `cfrac`: C `2.69s..2.74s`, Rust `2.70s..2.74s`.
+  - `alloc-test1`: C `2.07s..2.10s`, Rust `2.07s..2.10s`; RSS/minor faults remain matched.
+  - `alloc-testN`: C `2.18s..2.20s`, Rust `2.18s..2.26s`; one Rust high sample, ranges still overlap.
+  - `larsonN`: C `2.001s..2.105s`, Rust `2.042s..2.086s`; `larsonN-sized`: C `2.071s..2.093s`, Rust `2.049s..2.101s`.
+  - `mstressN`: C `1.60s..1.63s`, Rust `1.62s..1.63s`; RSS ranges overlap.
+  - `sh6benchN`: C `.10s.. .15s`, Rust `.10s`; noisy/short.
+  - `sh8benchN`: C `.23s.. .24s`, Rust `.25s.. .27s`; this is the clearest next candidate but short enough to require direct repeated confirmation.
+  - `xmalloc-testN`: C `.219s.. .221s`, Rust `.211s.. .219s`.
+  - `cache-scratch1`: C `.85s.. .87s`, Rust `.83s.. .86s`; `cache-scratchN`: both `.06s`.
+- Traced current-thread stats drift in `glibc-thread`:
+  - Direct repeated `sh8bench 64` did not confirm the short harness signal: C `0.23s..0.28s`, Rust `0.24s..0.26s`, so no allocator change was made from `sh8benchN`.
+  - Rechecked `glibc-thread` with benchmark-owned iteration counters. Before the stats fix, Rust completed fewer iterations in focused samples and `MIMALLOC_SHOW_STATS=1` sometimes left Rust with elevated current thread stats after all workers joined.
+  - Compared C macros to Rust calls. C's `mi_heap_stat_increase/decrease(heap, threads, 1)` expands to `__mi_stat_increase_mt`/`__mi_stat_decrease_mt` because the main heap stats are shared across worker threads.
+  - Rust used non-atomic `__mi_stat_increase`/`__mi_stat_decrease` for the same shared main-heap `threads` stat in `mi_thread_init`, `_mi_thread_done`, and process init.
+  - Switched those Rust sites to the multithreaded helpers and added `tests/thread_stats_regression.rs`, which spawns joined worker threads and asserts current thread stats return to the pre-spawn baseline.
+  - The focused regression passed ten consecutive runs.
+  - After rebuilding the release allocator, `MIMALLOC_SHOW_STATS=1 ./glibc-thread 32` reports `threads current: 1` for both C and Rust. Focused iteration samples still show a smaller remaining throughput gap: C about `2.41B..2.42B`, Rust about `2.35B..2.36B`.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.

@@ -1124,6 +1124,16 @@ fn free_path_internals_are_not_dynamic_exports() {
             &stats_rs,
             "pub unsafe extern \"C\" fn _mi_stats_merge_into",
         ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_increase_mt",
+        ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_decrease_mt",
+        ),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -1244,6 +1254,12 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into"),
         "heap cleanup should keep C's stats merge call boundary instead of inlining it into _mi_theap_free"
+    );
+    assert!(
+        stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_increase_mt")
+            && stats_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_decrease_mt"),
+        "theap lifecycle should keep C's multithreaded stats update helper boundaries"
     );
     assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")

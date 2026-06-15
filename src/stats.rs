@@ -357,16 +357,18 @@ pub fn __mi_stat_counter_increase(stat: &mut mi_stat_counter_t, amount: usize) {
     stat.total += amount as i64;
 }
 
-pub fn __mi_stat_increase_mt(stat: &mut mi_stat_count_t, amount: usize) {
-    mi_stat_update_mt(stat, amount as i64);
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_increase_mt(stat: *mut mi_stat_count_t, amount: usize) {
+    mi_stat_update_mt(unsafe { &mut *stat }, amount as i64);
 }
 
 pub fn __mi_stat_increase(stat: &mut mi_stat_count_t, amount: usize) {
     mi_stat_update(stat, amount as i64);
 }
 
-pub fn __mi_stat_decrease_mt(stat: &mut mi_stat_count_t, amount: usize) {
-    mi_stat_update_mt(stat, -(amount as i64));
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_decrease_mt(stat: *mut mi_stat_count_t, amount: usize) {
+    mi_stat_update_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
 pub fn __mi_stat_decrease(stat: &mut mi_stat_count_t, amount: usize) {

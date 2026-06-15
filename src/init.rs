@@ -853,10 +853,12 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     let tld = unsafe { (*default_theap).tld };
     let heap = unsafe { _mi_subproc_heap_main((*tld).subproc) };
     if !heap.is_null() {
-        __mi_stat_decrease_mt(
-            unsafe { &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads },
-            1,
-        );
+        unsafe {
+            __mi_stat_decrease_mt(
+                ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
+                1,
+            )
+        };
     }
 
     if unsafe { (*tld).thread_id } != crate::prim::_mi_prim_thread_id() {
@@ -1647,10 +1649,12 @@ pub unsafe extern "C" fn mi_thread_init() {
     }
     let heap = unsafe { mi_heap_main() };
     if !heap.is_null() {
-        __mi_stat_increase_mt(
-            unsafe { &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads },
-            1,
-        );
+        unsafe {
+            __mi_stat_increase_mt(
+                ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
+                1,
+            )
+        };
     }
 }
 

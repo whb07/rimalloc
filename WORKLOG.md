@@ -1419,3 +1419,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.07s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
   - Three-run `perf stat` for the same invocation: C about `11.28B` instructions and `17.75B` cycles; Rust about `11.85B` instructions and `18.22B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, `cargo build --release`, and `git diff --check`.
+- Started matching C's multithreaded stats helper boundaries:
+  - C keeps `__mi_stat_increase_mt` and `__mi_stat_decrease_mt` as standalone local helpers called from theap lifecycle code; Rust had inlined the atomic update loops into `_mi_theap_init` and `_mi_theap_free`.
+  - Changed Rust's multithreaded stat count helpers to `#[inline(never)]` pointer-style C ABI helpers and added release audit coverage requiring the boundaries.
+  - Rebuilt release and confirmed Rust now emits local `__mi_stat_increase_mt` and `__mi_stat_decrease_mt` symbols; `_mi_theap_init` and `_mi_theap_free` call through those helpers instead of embedding the atomic update loop.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.14s`, with matched minor faults around `120.2K`.
+  - Three-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.80B` cycles; Rust about `11.84B` instructions and `18.31B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, `cargo build --release`, and `git diff --check`.

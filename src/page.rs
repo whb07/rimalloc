@@ -476,7 +476,7 @@ pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     if !mi_page_queue_is_special(pq) && ptr::eq((*pq).first, page) && ptr::eq((*pq).last, page) {
         let theap = mi_page_theap(page);
         if MI_STAT > 0 {
-            __mi_stat_counter_increase(&mut (*theap).stats.pages_retire, 1);
+            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);
         }
         let bsize = mi_page_block_size(page);
         (*page).retire_expire = if bsize <= MI_SMALL_MAX_OBJ_SIZE {
@@ -677,7 +677,7 @@ unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> b
     }
 
     if MI_STAT > 0 {
-        __mi_stat_counter_increase(&mut (*theap).stats.pages_extended, 1);
+        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_extended), 1);
     }
 
     if extend < MI_MIN_SLICES || MI_SECURE < 2 {
@@ -687,7 +687,10 @@ unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> b
     }
     (*page).capacity += extend as u16;
     if MI_STAT > 0 {
-        __mi_stat_increase(&mut (*theap).stats.page_committed, extend * bsize);
+        __mi_stat_increase(
+            ptr::addr_of_mut!((*theap).stats.page_committed),
+            extend * bsize,
+        );
     }
 
     if MI_TRACK_ENABLED != 0 {
@@ -1363,8 +1366,8 @@ unsafe fn mi_page_queue_find_free_ex(
         page = next;
     }
 
-    __mi_stat_counter_increase(&mut (*theap).stats.page_searches, count);
-    __mi_stat_counter_increase(&mut (*theap).stats.page_searches_count, 1);
+    __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.page_searches), count);
+    __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.page_searches_count), 1);
 
     if !page_candidate.is_null() {
         page = page_candidate;
@@ -1456,8 +1459,11 @@ unsafe fn mi_huge_page_alloc(
         crate::mi_assert_internal!(mi_page_is_huge(page));
         crate::mi_assert_internal!(mi_page_is_singleton(page));
         if MI_STAT > 0 {
-            __mi_stat_increase(&mut (*theap).stats.malloc_huge, mi_page_block_size(page));
-            __mi_stat_counter_increase(&mut (*theap).stats.malloc_huge_count, 1);
+            __mi_stat_increase(
+                ptr::addr_of_mut!((*theap).stats.malloc_huge),
+                mi_page_block_size(page),
+            );
+            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);
         }
     }
     page

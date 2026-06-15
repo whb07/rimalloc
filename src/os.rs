@@ -401,7 +401,7 @@ pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
     let subproc = unsafe { _mi_subproc() };
     if !subproc.is_null() {
         let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_counter_increase(&mut stats.commit_calls, 1);
+        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.commit_calls), 1);
     }
 
     let mut csize = 0;
@@ -424,7 +424,7 @@ pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
     }
     if !subproc.is_null() {
         let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_increase(&mut stats.committed, stat_size);
+        __mi_stat_increase(ptr::addr_of_mut!(stats.committed), stat_size);
     }
     true
 }
@@ -465,7 +465,7 @@ unsafe fn mi_os_decommit_ex(
         let subproc = unsafe { _mi_subproc() };
         if !subproc.is_null() {
             let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-            __mi_stat_decrease(&mut stats.committed, stat_size);
+            __mi_stat_decrease(ptr::addr_of_mut!(stats.committed), stat_size);
         }
     }
     crate::mi_assert_internal!(err == 0);
@@ -491,8 +491,8 @@ pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
     let subproc = unsafe { _mi_subproc() };
     if !subproc.is_null() {
         let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_counter_increase(&mut stats.reset, csize);
-        __mi_stat_counter_increase(&mut stats.reset_calls, 1);
+        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.reset), csize);
+        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.reset_calls), 1);
     }
 
     if MI_DEBUG > 1 && MI_SECURE == 0 && MI_TRACK_ENABLED == 0 {
@@ -542,8 +542,8 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
     let subproc = unsafe { _mi_subproc() };
     if !subproc.is_null() {
         let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_counter_increase(&mut stats.purge_calls, 1);
-        __mi_stat_counter_increase(&mut stats.purged, size);
+        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.purge_calls), 1);
+        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.purged), size);
     }
 
     if let Some(commit_fun) = commit_fun {
@@ -625,9 +625,9 @@ unsafe fn mi_os_prim_free(
     if !subproc.is_null() {
         let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
         if commit_size > 0 {
-            __mi_stat_decrease(&mut stats.committed, commit_size);
+            __mi_stat_decrease(ptr::addr_of_mut!(stats.committed), commit_size);
         }
-        __mi_stat_decrease(&mut stats.reserved, size);
+        __mi_stat_decrease(ptr::addr_of_mut!(stats.reserved), size);
     }
 }
 
@@ -744,11 +744,11 @@ unsafe fn mi_os_prim_alloc_at(
     let subproc = unsafe { _mi_subproc() };
     if !subproc.is_null() {
         let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_counter_increase(&mut stats.mmap_calls, 1);
+        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.mmap_calls), 1);
         if !p.is_null() {
-            __mi_stat_increase(&mut stats.reserved, size);
+            __mi_stat_increase(ptr::addr_of_mut!(stats.reserved), size);
             if commit {
-                __mi_stat_increase(&mut stats.committed, size);
+                __mi_stat_increase(ptr::addr_of_mut!(stats.committed), size);
             }
         }
     }
@@ -1212,8 +1212,8 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
         let subproc = unsafe { _mi_subproc() };
         if !subproc.is_null() {
             let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-            __mi_stat_increase(&mut stats.committed, MI_HUGE_OS_PAGE_SIZE);
-            __mi_stat_increase(&mut stats.reserved, MI_HUGE_OS_PAGE_SIZE);
+            __mi_stat_increase(ptr::addr_of_mut!(stats.committed), MI_HUGE_OS_PAGE_SIZE);
+            __mi_stat_increase(ptr::addr_of_mut!(stats.reserved), MI_HUGE_OS_PAGE_SIZE);
         }
 
         if max_msecs > 0 {

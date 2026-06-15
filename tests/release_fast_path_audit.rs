@@ -51,8 +51,10 @@ fn huge_allocation_stats_are_release_gated_like_c_mimalloc() {
 
     assert!(
         body.contains(
-            "if MI_STAT > 0 {\n            __mi_stat_increase(&mut (*theap).stats.malloc_huge"
-        ) && body.contains("__mi_stat_counter_increase(&mut (*theap).stats.malloc_huge_count, 1);"),
+            "if MI_STAT > 0 {\n            __mi_stat_increase(\n                ptr::addr_of_mut!((*theap).stats.malloc_huge),"
+        ) && body.contains(
+            "__mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);"
+        ),
         "release huge allocation stats must compile out when MI_STAT == 0, matching C mi_theap_stat_* macros"
     );
 }
@@ -1149,6 +1151,31 @@ fn free_path_internals_are_not_dynamic_exports() {
             &stats_rs,
             "pub unsafe extern \"C\" fn __mi_stat_adjust_decrease_mt",
         ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_increase",
+        ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_decrease",
+        ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_counter_increase",
+        ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_adjust_increase",
+        ),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn __mi_stat_adjust_decrease",
+        ),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -1286,6 +1313,19 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_adjust_decrease_mt"
             ),
         "multithreaded stats counters and adjusters should keep C's helper boundaries"
+    );
+    assert!(
+        stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_increase")
+            && stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_decrease")
+            && stats_rs.contains(
+                "#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_counter_increase"
+            )
+            && stats_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_adjust_increase")
+            && stats_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_adjust_decrease")
+            && stats_rs.contains("static MI_STAT_ADJUST_INCREASE_KEEP"),
+        "thread-local stats counters and adjusters should keep C's helper boundaries"
     );
     assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")
@@ -1431,15 +1471,15 @@ fn release_page_stat_writes_follow_c_mimalloc_gates() {
     for (stat, needle) in [
         (
             "pages_retire",
-            "if MI_STAT > 0 {\n            __mi_stat_counter_increase(&mut (*theap).stats.pages_retire, 1);",
+            "if MI_STAT > 0 {\n            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);",
         ),
         (
             "pages_extended",
-            "if MI_STAT > 0 {\n        __mi_stat_counter_increase(&mut (*theap).stats.pages_extended, 1);",
+            "if MI_STAT > 0 {\n        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_extended), 1);",
         ),
         (
             "page_committed",
-            "if MI_STAT > 0 {\n        __mi_stat_increase(&mut (*theap).stats.page_committed, extend * bsize);",
+            "if MI_STAT > 0 {\n        __mi_stat_increase(\n            ptr::addr_of_mut!((*theap).stats.page_committed),",
         ),
     ] {
         assert!(

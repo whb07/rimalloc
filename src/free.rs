@@ -255,13 +255,16 @@ pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
 
     let bsize = mi_page_usable_block_size(page);
     if bsize <= MI_LARGE_MAX_OBJ_SIZE {
-        __mi_stat_decrease(&mut (*theap).stats.malloc_normal, bsize);
+        __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize);
         if crate::types::MI_STAT > 1 {
-            __mi_stat_decrease(&mut (*theap).stats.malloc_bins[_mi_bin(bsize)], 1);
+            __mi_stat_decrease(
+                ptr::addr_of_mut!((*theap).stats.malloc_bins[_mi_bin(bsize)]),
+                1,
+            );
         }
     } else {
         let bpsize = mi_page_block_size(page);
-        __mi_stat_decrease(&mut (*theap).stats.malloc_huge, bpsize);
+        __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_huge), bpsize);
     }
 }
 
@@ -613,7 +616,7 @@ unsafe fn mi_abandoned_page_try_reclaim(
 
     _mi_arenas_page_unabandon(page, theap);
     _mi_theap_page_reclaim(theap, page);
-    __mi_stat_counter_increase(&mut (*theap).stats.pages_reclaim_on_free, 1);
+    __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reclaim_on_free), 1);
     true
 }
 

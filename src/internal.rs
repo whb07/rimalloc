@@ -319,17 +319,38 @@ macro_rules! _mi_memzero_var {
 
 #[macro_export]
 macro_rules! mi_theap_stat_counter_increase {
-    ($theap:expr, $stat:ident, $amount:expr) => {{ unsafe { $crate::internal::__mi_stat_counter_increase(&mut (*$theap).stats.$stat, $amount) } }};
+    ($theap:expr, $stat:ident, $amount:expr) => {{
+        unsafe {
+            $crate::internal::__mi_stat_counter_increase(
+                core::ptr::addr_of_mut!((*$theap).stats.$stat),
+                $amount,
+            )
+        }
+    }};
 }
 
 #[macro_export]
 macro_rules! mi_theap_stat_decrease {
-    ($theap:expr, $stat:ident, $amount:expr) => {{ unsafe { $crate::internal::__mi_stat_decrease(&mut (*$theap).stats.$stat, $amount) } }};
+    ($theap:expr, $stat:ident, $amount:expr) => {{
+        unsafe {
+            $crate::internal::__mi_stat_decrease(
+                core::ptr::addr_of_mut!((*$theap).stats.$stat),
+                $amount,
+            )
+        }
+    }};
 }
 
 #[macro_export]
 macro_rules! mi_theap_stat_adjust_decrease {
-    ($theap:expr, $stat:ident, $amount:expr) => {{ unsafe { $crate::internal::__mi_stat_adjust_decrease(&mut (*$theap).stats.$stat, $amount) } }};
+    ($theap:expr, $stat:ident, $amount:expr) => {{
+        unsafe {
+            $crate::internal::__mi_stat_adjust_decrease(
+                core::ptr::addr_of_mut!((*$theap).stats.$stat),
+                $amount,
+            )
+        }
+    }};
 }
 
 #[macro_export]

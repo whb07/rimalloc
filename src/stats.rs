@@ -357,8 +357,11 @@ pub unsafe extern "C" fn __mi_stat_counter_increase_mt(
     }
 }
 
-pub fn __mi_stat_counter_increase(stat: &mut mi_stat_counter_t, amount: usize) {
-    stat.total += amount as i64;
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_counter_increase(stat: *mut mi_stat_counter_t, amount: usize) {
+    unsafe {
+        (*stat).total += amount as i64;
+    }
 }
 
 #[inline(never)]
@@ -366,8 +369,9 @@ pub unsafe extern "C" fn __mi_stat_increase_mt(stat: *mut mi_stat_count_t, amoun
     mi_stat_update_mt(unsafe { &mut *stat }, amount as i64);
 }
 
-pub fn __mi_stat_increase(stat: &mut mi_stat_count_t, amount: usize) {
-    mi_stat_update(stat, amount as i64);
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_increase(stat: *mut mi_stat_count_t, amount: usize) {
+    mi_stat_update(unsafe { &mut *stat }, amount as i64);
 }
 
 #[inline(never)]
@@ -375,8 +379,9 @@ pub unsafe extern "C" fn __mi_stat_decrease_mt(stat: *mut mi_stat_count_t, amoun
     mi_stat_update_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
-pub fn __mi_stat_decrease(stat: &mut mi_stat_count_t, amount: usize) {
-    mi_stat_update(stat, -(amount as i64));
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_decrease(stat: *mut mi_stat_count_t, amount: usize) {
+    mi_stat_update(unsafe { &mut *stat }, -(amount as i64));
 }
 
 fn mi_stat_adjust_mt(stat: &mut mi_stat_count_t, amount: i64) {
@@ -403,17 +408,23 @@ pub unsafe extern "C" fn __mi_stat_adjust_increase_mt(stat: *mut mi_stat_count_t
     mi_stat_adjust_mt(unsafe { &mut *stat }, amount as i64);
 }
 
-pub fn __mi_stat_adjust_increase(stat: &mut mi_stat_count_t, amount: usize) {
-    mi_stat_adjust(stat, amount as i64);
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_adjust_increase(stat: *mut mi_stat_count_t, amount: usize) {
+    mi_stat_adjust(unsafe { &mut *stat }, amount as i64);
 }
+
+#[used]
+static MI_STAT_ADJUST_INCREASE_KEEP: unsafe extern "C" fn(*mut mi_stat_count_t, usize) =
+    __mi_stat_adjust_increase;
 
 #[inline(never)]
 pub unsafe extern "C" fn __mi_stat_adjust_decrease_mt(stat: *mut mi_stat_count_t, amount: usize) {
     mi_stat_adjust_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
-pub fn __mi_stat_adjust_decrease(stat: &mut mi_stat_count_t, amount: usize) {
-    mi_stat_adjust(stat, -(amount as i64));
+#[inline(never)]
+pub unsafe extern "C" fn __mi_stat_adjust_decrease(stat: *mut mi_stat_count_t, amount: usize) {
+    mi_stat_adjust(unsafe { &mut *stat }, -(amount as i64));
 }
 
 fn mi_stat_count_add_mt(stat: &mut mi_stat_count_t, src: &mi_stat_count_t) {

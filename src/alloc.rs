@@ -141,12 +141,15 @@ unsafe fn mi_page_malloc_zero(
     mi_track_mem_undefined(block.cast(), bsize);
 
     if MI_STAT > 0 && bsize <= MI_LARGE_MAX_OBJ_SIZE {
-        __mi_stat_increase(&mut (*theap).stats.malloc_normal, bsize);
+        __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize);
         if MI_STAT > 1 {
-            __mi_stat_counter_increase(&mut (*theap).stats.malloc_normal_count, 1);
+            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal_count), 1);
             let bin = _mi_bin(bsize);
-            __mi_stat_increase(&mut (*theap).stats.malloc_bins[bin], 1);
-            __mi_stat_increase(&mut (*theap).stats.malloc_requested, size - MI_PADDING_SIZE);
+            __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_bins[bin]), 1);
+            __mi_stat_increase(
+                ptr::addr_of_mut!((*theap).stats.malloc_requested),
+                size - MI_PADDING_SIZE,
+            );
         }
     }
 
@@ -1067,10 +1070,10 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
         _mi_theap_default()
     };
     if mi_theap_is_initialized(theap) {
-        __mi_stat_counter_increase(&mut (*theap).stats.malloc_guarded_count, 1);
+        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_guarded_count), 1);
         if MI_STAT > 1 {
-            __mi_stat_adjust_decrease(&mut (*theap).stats.malloc_requested, req_size);
-            __mi_stat_increase(&mut (*theap).stats.malloc_requested, size);
+            __mi_stat_adjust_decrease(ptr::addr_of_mut!((*theap).stats.malloc_requested), req_size);
+            __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_requested), size);
         }
     }
     p

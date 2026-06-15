@@ -505,8 +505,8 @@ unsafe extern "C" fn mi_heap_delete_page(
         unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
         if !theap.is_null() {
             unsafe {
-                __mi_stat_decrease(&mut (*theap).stats.page_bins[sbin], 1);
-                __mi_stat_decrease(&mut (*theap).stats.pages, 1);
+                __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.page_bins[sbin]), 1);
+                __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.pages), 1);
             }
         } else {
             let heap = heap as *mut mi_heap_t;
@@ -530,8 +530,8 @@ unsafe extern "C" fn mi_heap_delete_page(
         unsafe { mi_bitmap_set((*arena_pages_target).pages, slice_index) };
         unsafe { (*page).heap = heap_target };
         unsafe {
-            __mi_stat_increase(&mut (*theap_target).stats.page_bins[sbin], 1);
-            __mi_stat_increase(&mut (*theap_target).stats.pages, 1);
+            __mi_stat_increase(ptr::addr_of_mut!((*theap_target).stats.page_bins[sbin]), 1);
+            __mi_stat_increase(ptr::addr_of_mut!((*theap_target).stats.pages), 1);
         }
         unsafe { _mi_arenas_page_abandon(page, theap_target) };
     }
@@ -1544,9 +1544,11 @@ unsafe fn mi_arenas_add(
             } {
                 unsafe {
                     __mi_stat_counter_increase(
-                        &mut (*(*arena.cast::<MiArenaPrefix>()).subproc)
-                            .stats
-                            .arena_count,
+                        ptr::addr_of_mut!(
+                            (*(*arena.cast::<MiArenaPrefix>()).subproc)
+                                .stats
+                                .arena_count
+                        ),
                         1,
                     )
                 };
@@ -2210,7 +2212,10 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                 crate::mi_assert_internal!(mi_heap_has_page(heap, arena, page));
                 (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin].fetch_sub(1, Ordering::Relaxed);
                 (*theap).stats.pages_reclaim_on_alloc.total += 1;
-                crate::internal::__mi_stat_decrease(&mut (*theap).stats.pages_abandoned, 1);
+                crate::internal::__mi_stat_decrease(
+                    ptr::addr_of_mut!((*theap).stats.pages_abandoned),
+                    1,
+                );
                 _mi_page_free_collect(page, false);
                 crate::mi_assert_internal!(mi_bbitmap_is_clearN(
                     (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -2511,9 +2516,9 @@ unsafe fn mi_arenas_page_alloc_fresh(
         return ptr::null_mut();
     }
 
-    unsafe { __mi_stat_increase(&mut (*theap).stats.pages, 1) };
+    unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.pages), 1) };
     let stats_bin = unsafe { _mi_page_stats_bin(page) };
-    unsafe { __mi_stat_increase(&mut (*theap).stats.page_bins[stats_bin], 1) };
+    unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.page_bins[stats_bin]), 1) };
 
     crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
         unsafe { mi_page_slice_start(page) }.cast(),
@@ -2664,11 +2669,13 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
     if !current_theapx.is_null() {
         unsafe {
             crate::internal::__mi_stat_decrease(
-                &mut (*current_theapx).stats.page_bins[stats_bin],
+                ptr::addr_of_mut!((*current_theapx).stats.page_bins[stats_bin]),
                 1,
             )
         };
-        unsafe { crate::internal::__mi_stat_decrease(&mut (*current_theapx).stats.pages, 1) };
+        unsafe {
+            crate::internal::__mi_stat_decrease(ptr::addr_of_mut!((*current_theapx).stats.pages), 1)
+        };
     } else {
         let heap = unsafe { mi_page_heap(page) };
         unsafe {
@@ -2833,7 +2840,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
         unsafe {
             (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin].fetch_add(1, Ordering::Relaxed)
         };
-        unsafe { __mi_stat_increase(&mut (*current_theap).stats.pages_abandoned, 1) };
+        unsafe { __mi_stat_increase(ptr::addr_of_mut!((*current_theap).stats.pages_abandoned), 1) };
     } else {
         if unsafe { (*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA }
             && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
@@ -2857,7 +2864,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
                 ))
             };
         }
-        unsafe { __mi_stat_increase(&mut (*current_theap).stats.pages_abandoned, 1) };
+        unsafe { __mi_stat_increase(ptr::addr_of_mut!((*current_theap).stats.pages_abandoned), 1) };
     }
     unsafe { mi_abandoned_page_unown(page, current_theap) };
 }
@@ -2893,8 +2900,10 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
         return false;
     }
 
-    unsafe { __mi_stat_counter_increase(&mut (*theap).stats.pages_reabandon_full, 1) };
-    unsafe { __mi_stat_adjust_decrease(&mut (*theap).stats.pages_abandoned, 1) };
+    unsafe {
+        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reabandon_full), 1)
+    };
+    unsafe { __mi_stat_adjust_decrease(ptr::addr_of_mut!((*theap).stats.pages_abandoned), 1) };
     unsafe { _mi_arenas_page_abandon(page, theap) };
     true
 }
@@ -2981,7 +2990,12 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     }
 
     if !current_theapx.is_null() {
-        unsafe { __mi_stat_decrease(&mut (*current_theapx).stats.pages_abandoned, 1) };
+        unsafe {
+            __mi_stat_decrease(
+                ptr::addr_of_mut!((*current_theapx).stats.pages_abandoned),
+                1,
+            )
+        };
     } else {
         unsafe { __mi_stat_decrease_mt(&mut (*heap).stats.pages_abandoned, 1) };
     }

@@ -1514,3 +1514,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: the first pass was noisy (`C 2.03s..2.12s`, Rust `2.11s..2.27s`), and a repeat pass returned to C `2.03s..2.04s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.29B` instructions and `17.72B` cycles; Rust about `11.89B` instructions and `18.22B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's clock helper boundaries:
+  - C emits `_mi_clock_now`, `_mi_clock_start`, and `_mi_clock_end` as standalone local helpers used by stats, OS retry timing, and arena purge delay logic; Rust had matching source functions but optimized them away.
+  - Marked the Rust clock helpers `#[inline(never)]` and extended release audit coverage requiring the helper chain plus stats, OS, and arena callers.
+  - Rebuilt release and confirmed Rust now emits local `_mi_clock_end`, `_mi_clock_now`, and `_mi_clock_start` helpers; the focused relocation check showed call slots targeting `_mi_clock_start` (`0x1ffa0`), `_mi_clock_end` (`0x1ff30`), and `_mi_clock_now` (`0x1ff50`).
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.07s`, Rust `2.11s..2.26s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.29B` instructions and `17.68B` cycles; Rust about `11.86B` instructions and `18.30B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

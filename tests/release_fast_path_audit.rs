@@ -1334,6 +1334,19 @@ fn free_path_internals_are_not_dynamic_exports() {
         "bitmap traversal should keep C's set/range traversal helper boundaries"
     );
     assert!(
+        stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
+            && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")
+            && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_end(")
+            && stats_rs.contains("let t0 = _mi_clock_now();")
+            && stats_rs.contains("let diff = _mi_clock_now() - t0;")
+            && stats_rs.contains("_mi_clock_now() - start - CLOCK_DIFF.load")
+            && os_rs.contains("let start_t = _mi_clock_start();")
+            && os_rs.contains("let mut elapsed = _mi_clock_end(start_t);")
+            && arena_rs.contains("let expire = crate::stats::_mi_clock_now() + delay as i64;")
+            && arena_rs.contains("let now = crate::stats::_mi_clock_now();"),
+        "clock helpers should keep C's timing helper boundaries and main callers"
+    );
+    assert!(
         free_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign")
             && free_rs.contains("crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());")

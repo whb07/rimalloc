@@ -556,10 +556,12 @@ fn clock_now_msecs() -> i64 {
     unsafe { _mi_prim_clock_now() }
 }
 
+#[inline(never)]
 pub extern "C" fn _mi_clock_now() -> i64 {
     clock_now_msecs()
 }
 
+#[inline(never)]
 pub extern "C" fn _mi_clock_start() -> i64 {
     let current = CLOCK_DIFF.load(Ordering::Relaxed);
     if current == 0 {
@@ -570,6 +572,7 @@ pub extern "C" fn _mi_clock_start() -> i64 {
     _mi_clock_now()
 }
 
+#[inline(never)]
 pub extern "C" fn _mi_clock_end(start: i64) -> i64 {
     _mi_clock_now() - start - CLOCK_DIFF.load(Ordering::Relaxed)
 }

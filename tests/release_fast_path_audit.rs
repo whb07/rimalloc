@@ -1257,6 +1257,14 @@ fn free_path_internals_are_not_dynamic_exports() {
         "aligned allocation internals should call crate-local theap allocation helpers directly"
     );
     assert!(
+        alloc_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
+            && page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")
+            && alloc_aligned_rs
+                .contains("let p = _mi_page_malloc_zero(theap, page, padsize, zero);"),
+        "page and aligned allocation should keep C's _mi_page_malloc_zero call boundary"
+    );
+    assert!(
         !heap_rs.contains("fn _mi_theap_cached_set(")
             && !heap_rs.contains("fn _mi_theap_create(")
             && !heap_rs.contains("fn _mi_theap_free(")

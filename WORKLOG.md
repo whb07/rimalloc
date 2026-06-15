@@ -1441,3 +1441,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
   - Three-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.74B` cycles; Rust about `11.88B` instructions and `18.21B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, `cargo build --release`, and `git diff --check`.
+- Started matching C's page allocation helper boundary:
+  - C emits `_mi_page_malloc_zero` as a standalone local helper used by page/aligned allocation paths, while Rust had inlined away the wrapper and emitted no matching local symbol.
+  - Marked Rust `_mi_page_malloc_zero` `#[inline(never)]` and extended release audit coverage requiring the page and aligned allocation call sites to keep that boundary.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::alloc::_mi_page_malloc_zero`; page and aligned allocation call/jump sites target that helper.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.69B` cycles; Rust about `11.87B` instructions and `18.36B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `cargo build --release`.

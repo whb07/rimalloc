@@ -1455,3 +1455,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.03s..2.07s`, Rust `2.10s..2.11s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.27B` instructions and `17.99B` cycles; Rust about `11.85B` instructions and `18.61B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's heap page lifecycle helper boundaries:
+  - C emits `_mi_heap_move_pages`, `_mi_heap_destroy_pages`, and `_mi_heap_force_destroy` as standalone local helpers in heap deletion/destruction paths, while Rust had inlined away those wrappers and emitted no matching local symbols.
+  - Marked the Rust helpers `#[inline(never)]` and extended release audit coverage requiring the heap delete/destroy call chain to keep those boundaries.
+  - Rebuilt release and confirmed Rust now emits local `_mi_heap_move_pages`, `_mi_heap_destroy_pages`, and `_mi_heap_force_destroy` helpers; `mi_heap_delete`, `mi_heap_destroy`, and `_mi_heap_force_destroy` branch through the matching helper boundaries.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.15s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.70B` cycles; Rust about `11.88B` instructions and `18.12B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

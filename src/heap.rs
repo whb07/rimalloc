@@ -190,6 +190,7 @@ pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
     mi_heap_free(heap);
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
     if heap.is_null() {
         return;

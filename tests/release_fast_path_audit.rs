@@ -1281,6 +1281,20 @@ fn free_path_internals_are_not_dynamic_exports() {
         "heap internals should call crate-local theap helpers directly"
     );
     assert!(
+        arena_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_move_pages")
+            && arena_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_destroy_pages"
+            )
+            && heap_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_force_destroy"
+            )
+            && heap_rs.contains("_mi_heap_move_pages(heap, mi_heap_main());")
+            && heap_rs.contains("_mi_heap_destroy_pages(heap);")
+            && heap_rs.contains("_mi_heap_force_destroy(heap);"),
+        "heap delete/destroy should keep C's heap page movement and force-destroy helper boundaries"
+    );
+    assert!(
         !init_rs.contains("fn _mi_theap_collect_abandon(")
             && !init_rs.contains("fn _mi_theap_create(")
             && !init_rs.contains("fn _mi_theap_free(")

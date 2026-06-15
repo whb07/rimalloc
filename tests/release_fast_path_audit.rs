@@ -50,7 +50,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains("core::arch::naked_asm!")
             && override_rs.contains("mi_tls_theap_default@GOTTPOFF")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
-            && override_rs.contains("jmp _mi_malloc_generic")
+            && override_rs.contains("slow = sym crate::page::_mi_malloc_generic")
             && override_rs.contains("jmp mi_new"),
         "default Linux malloc/new overrides should use direct naked-assembly TLS fast paths"
     );
@@ -156,5 +156,20 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         !page_rs.contains("#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn _mi_page_retire"),
         "_mi_page_retire should not be a dynamic export"
+    );
+    assert!(
+        !page_rs.contains("#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn _mi_malloc_generic"),
+        "_mi_malloc_generic should not be a dynamic export"
+    );
+}
+
+#[test]
+fn generic_malloc_refill_helper_is_force_inlined() {
+    let page_rs = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/page.rs"))
+        .expect("read src/page.rs");
+
+    assert!(
+        page_rs.contains("#[inline(always)]\nunsafe fn mi_find_page("),
+        "mi_find_page should stay force-inlined into _mi_malloc_generic like C's generic path"
     );
 }

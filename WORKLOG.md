@@ -308,3 +308,36 @@
   - `glibc-thread`: C `.414s.. .415s`, Rust `.421s.. .424s`; small stable Rust tail.
   - `larsonN-sized`: C `1.991s..2.228s`, Rust `2.093s..2.147s`; overlapping.
 - Next target: profile the remaining `glibc-thread` tail, then revisit `cfrac` RSS/reclaim count if `glibc-thread` does not expose an implementation drift.
+- `perf stat -r 5` for `glibc-thread` before the generic slow-path change:
+  - C: `241.15B` cycles, `422.35B` instructions, `53.27B` branches, `1.364B` cache misses, `632` minor faults, `2.00304s` elapsed.
+  - Rust: `245.18B` cycles, `418.17B` instructions, `55.08B` branches, `1.502B` cache misses, `700` minor faults, `2.00332s` elapsed.
+  - The benchmark runs for a fixed elapsed time, so Rust's lower iteration count was the useful signal; counters showed more branches/cache misses and slightly more cycles.
+- `perf report` for `glibc-thread` showed Rust allocator-side samples in out-of-line generic refill work:
+  - C allocator-visible samples: `operator delete[](void*)` `11.39%`, `mi_malloc` `10.74%`, `_mi_malloc_generic` `0.67%`, `mi_bin` `0.27%`, `_mi_page_retire` `0.12%`.
+  - Rust allocator-visible samples: `malloc` `11.25%`, `operator delete[](void*)` `11.18%`, `mi_find_page` `0.74%`, `_mi_malloc_generic` `0.48%`, `_mi_page_retire` `0.21%`, `_mi_malloc_generic@plt` `0.09%`.
+- Changed the generic malloc slow path:
+  - Marked `mi_find_page` as `#[inline(always)]` so it folds into `_mi_malloc_generic`.
+  - Changed release naked malloc fast paths to jump to `_mi_malloc_generic` through a `sym` operand, then made `_mi_malloc_generic` crate-visible instead of a fixed dynamic export.
+  - Added source audit coverage for both choices.
+- Release symbol/disassembly checks after the generic slow-path change:
+  - `_mi_malloc_generic` no longer appears in the dynamic symbol table.
+  - Full symbols show `_mi_malloc_generic` as a local hidden Rust symbol.
+  - `malloc` and `mi_malloc` slow branches now use direct relative jumps to the local `_mi_malloc_generic` body instead of a dynamic symbol/PLT path.
+- Focused `glibc-thread -n=5` after the generic slow-path change:
+  - C: `.413s.. .419s`, RSS `92288..94336` KiB, reclaims `635..839`.
+  - Rust: `.417s.. .419s`, RSS `92728..96708` KiB, reclaims `666..800`.
+  - Result: the small stable Rust tail is no longer visible in this focused run.
+- Post-change Rust profile no longer has `_mi_malloc_generic@plt`; allocator samples are folded into `malloc`, `operator delete[](void*)`, and local `_mi_malloc_generic`.
+- Full established validation passed after the generic slow-path change:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

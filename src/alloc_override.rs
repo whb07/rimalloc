@@ -55,7 +55,8 @@ pub unsafe extern "C" fn malloc(_size: usize) -> *mut c_void {
         "2:",
         "xor ecx, ecx",
         "xor edx, edx",
-        "jmp _mi_malloc_generic",
+        "jmp {slow}",
+        slow = sym crate::page::_mi_malloc_generic,
     );
 }
 
@@ -85,7 +86,8 @@ pub unsafe extern "C" fn mi_malloc(_size: usize) -> *mut c_void {
         "2:",
         "xor ecx, ecx",
         "xor edx, edx",
-        "jmp _mi_malloc_generic",
+        "jmp {slow}",
+        slow = sym crate::page::_mi_malloc_generic,
     );
 }
 

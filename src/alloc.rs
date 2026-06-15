@@ -23,7 +23,7 @@ use crate::internal::{
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
-use crate::page::{_mi_bin, MI_MAX_ALLOC_SIZE, mi_good_size};
+use crate::page::{_mi_bin, _mi_malloc_generic, MI_MAX_ALLOC_SIZE, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{
     MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
@@ -34,12 +34,6 @@ use crate::types::{
 };
 
 unsafe extern "C" {
-    fn _mi_malloc_generic(
-        theap: *mut mi_theap_t,
-        size: usize,
-        zero_huge_alignment: usize,
-        usable: *mut usize,
-    ) -> *mut c_void;
     fn abort() -> !;
 }
 

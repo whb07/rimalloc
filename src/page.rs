@@ -1439,7 +1439,7 @@ unsafe fn mi_huge_page_alloc(
     page
 }
 
-#[inline]
+#[inline(always)]
 unsafe fn mi_find_page(
     theap: *mut mi_theap_t,
     size: usize,
@@ -1469,8 +1469,7 @@ unsafe fn mi_find_page(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_malloc_generic(
+pub(crate) unsafe extern "C" fn _mi_malloc_generic(
     mut theap: *mut mi_theap_t,
     size: usize,
     zero_huge_alignment: usize,

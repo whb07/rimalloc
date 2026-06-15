@@ -306,19 +306,6 @@ fn mi_thread_local_create_expand() -> bool {
     true
 }
 
-fn free_thread_locals(tls: *mut mi_thread_locals_t) {
-    if tls.is_null() || core::ptr::eq(tls, thread_locals_empty_ptr()) {
-        return;
-    }
-    let count = unsafe { (*tls).count };
-    if count == 0 {
-        return;
-    }
-    unsafe {
-        mi_free(tls.cast());
-    }
-}
-
 #[inline(never)]
 pub extern "C" fn _mi_thread_locals_init() {
     if mi_thread_locals_initialized
@@ -412,7 +399,9 @@ static MI_THREAD_LOCAL_GET_KEEP: extern "C" fn(mi_thread_local_t) -> *mut core::
 pub extern "C" fn _mi_thread_locals_thread_done() {
     let tls = thread_locals_ptr();
     if unsafe { !tls.is_null() && (*tls).count > 0 } {
-        free_thread_locals(tls);
+        unsafe {
+            mi_free(tls.cast());
+        }
         set_thread_locals_ptr(thread_locals_empty_ptr());
     }
 }

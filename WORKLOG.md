@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing thread-local teardown parity after `44939ec`:
+  - Compared the next visible Rust profile samples against C/Rust release artifacts. `mi_stats_add` still has code-layout drift from C's pointer helper guards, but `_mi_thread_locals_thread_done` showed a smaller direct mismatch in the thread teardown path.
+  - C checks `tls != NULL && tls->count > 0`, then calls `mi_free(tls)` directly and resets `mi_thread_locals` to the empty singleton. Rust performed the same outer guard but routed through a private `free_thread_locals` helper that rechecked null/empty/count and left an extra empty-singleton compare in release code.
+  - Patching `_mi_thread_locals_thread_done` to call `mi_free(tls.cast())` directly after the count guard, removing the now-unused helper, and extending the release audit to reject reintroducing the helper call.
+  - Artifact check: release `_mi_thread_locals_thread_done` now does the TLS load, null/count guard, direct `mi_free` call, and empty-singleton TLS store; the previous empty-singleton compare before `mi_free` is gone.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `./mleak 100`:
+    - C `2.08s, 2.07s, 2.06s`; Rust `2.12s, 2.12s, 2.12s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.74B` instructions / `16.77B` cycles; Rust `11.01B` instructions / `17.10B` cycles.
+  - Follow-up Rust profile shows `_mi_thread_locals_thread_done` at `0.03%`. The next visible Rust-side samples are `mi_stats_add`, `_mi_theap_init`, `mi_theap_collect_ex`, and page/arena helpers.
 - Continuing main-heap predicate parity after `6408814`:
   - The remaining regular Rust source caller of `_mi_subproc_heap_main` is `_mi_is_heap_main`.
   - Compared release artifacts: C's `_mi_is_heap_main` and `_mi_is_theap_main` inline the `heap->subproc->heap_main` load and only call `mi_heap_main_init` on the cold null-main-heap path. Rust's `_mi_is_heap_main` still called `_mi_subproc_heap_main` through the GOT, and `_mi_is_theap_main` tail-called `_mi_is_heap_main`.

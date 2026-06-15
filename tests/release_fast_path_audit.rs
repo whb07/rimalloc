@@ -2413,6 +2413,24 @@ fn free_path_internals_are_not_dynamic_exports() {
             && threadlocal_rs.contains("_mi_thread_locals_init();"),
         "dynamic thread-local helpers should keep C's local helper boundaries"
     );
+    let thread_locals_thread_done_start = threadlocal_rs
+        .find("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_thread_done")
+        .expect("find _mi_thread_locals_thread_done");
+    let thread_locals_thread_done_end = threadlocal_rs[thread_locals_thread_done_start..]
+        .find("#[used]\nstatic MI_THREAD_LOCALS_THREAD_DONE_KEEP")
+        .map(|offset| thread_locals_thread_done_start + offset)
+        .expect("find _mi_thread_locals_thread_done keep marker");
+    let thread_locals_thread_done_body =
+        &threadlocal_rs[thread_locals_thread_done_start..thread_locals_thread_done_end];
+    assert!(
+        thread_locals_thread_done_body.contains("let tls = thread_locals_ptr();")
+            && thread_locals_thread_done_body.contains("!tls.is_null() && (*tls).count > 0")
+            && thread_locals_thread_done_body.contains("mi_free(tls.cast());")
+            && thread_locals_thread_done_body
+                .contains("set_thread_locals_ptr(thread_locals_empty_ptr());")
+            && !thread_locals_thread_done_body.contains("free_thread_locals("),
+        "_mi_thread_locals_thread_done should match C's direct mi_free after the count guard"
+    );
     assert!(
         init_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_cached_set(")

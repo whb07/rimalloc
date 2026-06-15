@@ -452,7 +452,6 @@ pub unsafe fn _mi_memzero_var<T>(x: *mut T) {
 }
 
 unsafe extern "C" {
-    pub static _mi_page_empty: mi_page_t;
     pub static _mi_theap_empty: mi_theap_t;
     pub static _mi_theap_empty_wrong: mi_theap_t;
     pub static mut _mi_cpu_movsb_max: usize;

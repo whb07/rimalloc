@@ -197,7 +197,6 @@ static mut tld_main: mi_tld_t = mi_tld_t {
     memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
 };
 
-#[unsafe(no_mangle)]
 pub static _mi_page_empty: mi_page_t = mi_page_t {
     xthread_id: 0,
     free: ptr::null_mut(),

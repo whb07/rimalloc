@@ -111,13 +111,13 @@ fn cxx_new_wrappers_export_itanium_abi_symbols() {
 }
 
 #[test]
-fn linux_cdylib_export_script_hides_internal_symbols() {
+fn linux_cdylib_export_script_declares_allocator_symbols() {
     let build_rs = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("build.rs"))
         .expect("read build.rs");
 
     assert!(
         build_rs.contains("cargo:rustc-link-arg=-Wl,--version-script="),
-        "Linux cdylib builds should use a version script so internal symbols are not preemptible"
+        "Linux builds should pass the allocator export script through the link step"
     );
     assert!(
         build_rs.contains("mi_*;") && build_rs.contains("local:\n    *;"),
@@ -143,6 +143,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     let internal = fs::read_to_string(root.join("src/internal.rs")).expect("read src/internal.rs");
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
+    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
 
     for internal_name in [
         "pub static mut _mi_page_map",
@@ -163,8 +164,13 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         !internal.contains("pub static mut _mi_page_map:")
             && !internal.contains("pub fn _mi_page_map_init() -> bool;")
+            && !internal.contains("pub static _mi_page_empty:")
             && internal.contains("pub(crate) use crate::page_map::{"),
         "page-map internals should be imported through crate paths, not extern declarations"
+    );
+    assert!(
+        !init_rs.contains("#[unsafe(no_mangle)]\npub static _mi_page_empty"),
+        "_mi_page_empty should stay crate-local so page-empty tables use relative relocations"
     );
     assert!(
         !free_rs.contains("#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn _mi_free_generic"),

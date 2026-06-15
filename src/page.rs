@@ -22,9 +22,10 @@ use crate::atomic::{
     mi_atomic_store_ptr_release, mi_memory_order_e,
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
+use crate::init::_mi_page_empty;
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up, _mi_error_message,
-    _mi_is_heap_main, _mi_os_commit, _mi_os_good_alloc_size, _mi_os_page_size, _mi_page_empty,
+    _mi_is_heap_main, _mi_os_commit, _mi_os_good_alloc_size, _mi_os_page_size,
     _mi_page_malloc_zero, _mi_ptr_page, _mi_theap_empty_wrong, _mi_theap_heap,
     _mi_theap_random_next, _mi_wsize_from_size, MI_DEBUG, MI_SECURE, mi_block_next,
     mi_block_set_next, mi_mem_is_zero, mi_memkind_t, mi_page_all_free, mi_page_area,

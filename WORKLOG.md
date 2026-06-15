@@ -472,3 +472,39 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Committed the free/delete alias change as `b5f1d0f Alias Unix free delete fast paths`.
+- Tiny preload probe showed the `cfrac` minor-fault delta is mostly startup/load footprint, not allocator workload policy:
+  - C one-allocation probe: `167` minor faults, `4.521M` cycles, `3.376M` instructions.
+  - Rust one-allocation probe: `175` minor faults, `4.586M` cycles, `3.590M` instructions.
+  - `cfrac` after the same build was C `184` vs Rust `193` minor faults, so about eight of the nine extra Rust faults are already present before the benchmark workload.
+- Cdylib load-footprint comparison:
+  - C allocatable total from `size -A`: `257,609` bytes; Rust: `680,345` bytes.
+  - C dynamic relocations: `571`; Rust: `1,629`.
+  - C dynamic defined symbols: `235`; Rust: `369`.
+  - Rust still exports many `_mi_*` internal symbols that are not in the C dynamic symbol table, even though `build.rs` writes a version script. `readelf -d` on the Rust cdylib shows version-need entries but no version definition from the script.
+- Tested `cargo:rustc-cdylib-link-arg` plus a declared cdylib target to force the Linux version script through the cdylib link. The flag reached rustc, but Rust still emitted the `#[no_mangle]` export set through `symbols.o`; the dynamic symbol table stayed at `369` entries. The declared cdylib target also changed artifact discovery and broke the behavioral parity script, so this path was abandoned.
+- `readelf -rW` showed `391` `R_X86_64_64` relocations in Rust, including `387` against `_mi_page_empty`; C has no `R_X86_64_64` relocations and uses `457` `R_X86_64_RELATIVE` relocations instead.
+- In-progress change: make `_mi_page_empty` crate-local at the symbol level by removing `#[no_mangle]` and the stale `internal.rs` extern declaration, preserving existing Rust access through `MI_PAGE_EMPTY()`.
+- Focused validation/build after making `_mi_page_empty` crate-local:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo build --release`
+  - Dynamic symbol check: `_mi_page_empty` no longer appears in `nm -D`.
+  - Relocation shape: `R_X86_64_64` dropped from `391` to `4`; `_mi_page_empty` dynamic relocations dropped from `387` to `0`; total relocations stayed `1,629` because the page-empty table entries are now `R_X86_64_RELATIVE`.
+- Tiny preload probe after the `_mi_page_empty` relocation change:
+  - C: `167` minor faults, `4.500M` cycles, `3.369M` instructions.
+  - Rust: `175` minor faults, `4.583M` cycles, `3.563M` instructions.
+  - Result: startup minor faults did not change; this fixed symbolic relocation/interposition shape but not the page-count delta.
+- Full validation after reverting the abandoned cdylib target experiment and keeping `_mi_page_empty` crate-local:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

@@ -979,12 +979,14 @@ fn mi_heap_main_init() {
 
 #[allow(dead_code)]
 fn mi_tld_alloc() -> *mut mi_tld_t {
-    mi_subproc_main_init();
+    let main_subproc = ptr::addr_of_mut!(subproc_main)
+        .cast::<MiSubprocPrefix>()
+        .cast::<mi_subproc_t>();
     if _mi_is_main_thread() {
         mi_tld_main_init();
         // SAFETY: main-thread bookkeeping mutates only the process-global main subproc counters.
         unsafe {
-            let subproc = mi_subproc_prefix(mi_subproc_main_ptr());
+            let subproc = mi_subproc_prefix(main_subproc);
             (*subproc).thread_count.fetch_add(1, Ordering::Relaxed);
             ptr::addr_of_mut!(tld_main)
         }
@@ -1004,7 +1006,7 @@ fn mi_tld_alloc() -> *mut mi_tld_t {
             (*tld).memid = memid;
             (*tld).theaps = ptr::null_mut();
             mi_lock_init(ptr::addr_of_mut!((*tld).theaps_lock));
-            (*tld).subproc = mi_subproc_main_ptr();
+            (*tld).subproc = main_subproc;
             (*tld).numa_node = crate::prim::_mi_prim_numa_node() as i32;
             (*tld).thread_id = crate::prim::_mi_prim_thread_id();
             let subproc = mi_subproc_prefix((*tld).subproc);

@@ -27,15 +27,16 @@ use crate::bits::{MI_KiB, MI_PAGE_MAP_FLAT, MI_SIZE_BITS};
 #[cfg(target_pointer_width = "32")]
 use crate::internal::_mi_memzero;
 use crate::internal::{
-    _mi_align_up, _mi_divide_up, _mi_error_message, _mi_is_aligned, _mi_memid_create_os,
-    _mi_memid_none, _mi_memzero_aligned, _mi_os_commit, _mi_os_free, _mi_os_free_ex,
-    _mi_os_has_overcommit, _mi_os_virtual_address_bits, _mi_page_map_at, _mi_page_map_index,
-    MI_ARENA_SLICE_SHIFT, MI_PAGE_MAP_COUNT, MI_PAGE_MAP_SUB_COUNT, MI_PAGE_MAP_SUB_SHIFT,
-    mi_memid_mem_t, mi_memid_os_info_t, mi_memid_t, mi_memkind_t, mi_page_area,
-    mi_page_slice_start, mi_slice_count_of_size, mi_submap_t,
+    _mi_align_up, _mi_divide_up, _mi_is_aligned, _mi_memid_create_os, _mi_memid_none,
+    _mi_memzero_aligned, _mi_os_commit, _mi_os_free, _mi_os_free_ex, _mi_os_has_overcommit,
+    _mi_os_virtual_address_bits, _mi_page_map_at, _mi_page_map_index, MI_ARENA_SLICE_SHIFT,
+    MI_PAGE_MAP_COUNT, MI_PAGE_MAP_SUB_COUNT, MI_PAGE_MAP_SUB_SHIFT, mi_memid_mem_t,
+    mi_memid_os_info_t, mi_memid_t, mi_memkind_t, mi_page_area, mi_page_slice_start,
+    mi_slice_count_of_size, mi_submap_t,
 };
 use crate::options::{
-    _mi_warning_message_fmt, mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
+    _mi_error_message_fmt, _mi_warning_message_fmt, mi_option_get_clamp, mi_option_is_enabled,
+    mi_option_t,
 };
 use crate::os::{_mi_os_alloc_aligned, _mi_os_zalloc};
 use crate::page::MI_LARGE_PAGE_SIZE;
@@ -192,13 +193,13 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         unsafe { _mi_os_alloc_aligned(reserve_size, 1, commit, true, &raw mut mi_page_map_memid) }
             .cast::<u8>();
     if base.is_null() {
-        unsafe {
-            _mi_error_message(
-                ENOMEM,
-                c"unable to reserve virtual memory for the page map (%zu KiB)\n".as_ptr(),
-                page_map_size / MI_KiB,
-            );
-        }
+        _mi_error_message_fmt(
+            ENOMEM,
+            format_args!(
+                "unable to reserve virtual memory for the page map ({} KiB)\n",
+                page_map_size / MI_KiB
+            ),
+        );
         return false;
     }
     if unsafe { mi_page_map_memid.initially_committed && !mi_page_map_memid.initially_zero } {
@@ -398,13 +399,13 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         unsafe { _mi_os_alloc_aligned(reserve_size, 1, commit, true, &raw mut mi_page_map_memid) }
             as *mut mi_submap_t;
     if base.is_null() {
-        unsafe {
-            _mi_error_message(
-                ENOMEM,
-                c"unable to reserve virtual memory for the page map (%zu KiB)\n".as_ptr(),
-                page_map_size / MI_KiB,
-            );
-        }
+        _mi_error_message_fmt(
+            ENOMEM,
+            format_args!(
+                "unable to reserve virtual memory for the page map ({} KiB)\n",
+                page_map_size / MI_KiB
+            ),
+        );
         return false;
     }
     unsafe {

@@ -408,16 +408,14 @@ pub unsafe extern "C" fn _mi_is_redirected() -> bool {
     false
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
+pub(crate) unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
     if !message.is_null() {
         unsafe { *message = ptr::null() };
     }
     true
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_allocator_done() {}
+pub(crate) unsafe extern "C" fn _mi_allocator_done() {}
 
 #[cfg(test)]
 mod tests {

@@ -159,6 +159,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
+    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
     let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
     let theap_rs = fs::read_to_string(root.join("src/theap.rs")).expect("read src/theap.rs");
@@ -263,6 +264,21 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub unsafe extern \"C\" fn _mi_heap_destroy_pages",
         ),
         (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arena_id_none",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arena_from_id",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arena_memid_is_suitable",
+        ),
+        (
             "src/arena_meta.rs",
             &arena_meta_rs,
             "pub unsafe extern \"C\" fn _mi_meta_free",
@@ -301,6 +317,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             "src/page.rs",
             &page_rs,
             "pub unsafe extern \"C\" fn _mi_page_init",
+        ),
+        (
+            "src/page.rs",
+            &page_rs,
+            "pub unsafe extern \"C\" fn _mi_deferred_free",
         ),
         (
             "src/libc.rs",
@@ -579,6 +600,14 @@ fn free_path_internals_are_not_dynamic_exports() {
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_is_theap_main",
         ),
+        ("src/init.rs", &init_rs, "fn _mi_subproc_to_id"),
+        ("src/init.rs", &init_rs, "fn _mi_preloading"),
+        ("src/init.rs", &init_rs, "fn _mi_subproc_main"),
+        ("src/init.rs", &init_rs, "fn _mi_subproc"),
+        ("src/init.rs", &init_rs, "fn _mi_subproc_from_id"),
+        ("src/init.rs", &init_rs, "fn _mi_subproc_heap_main"),
+        ("src/init.rs", &init_rs, "fn _mi_auto_process_init"),
+        ("src/init.rs", &init_rs, "fn _mi_auto_process_done"),
         (
             "src/heap.rs",
             &heap_rs,
@@ -634,6 +663,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_random_next",
         ),
+        ("src/prim.rs", &prim_rs, "fn _mi_allocator_init"),
+        ("src/prim.rs", &prim_rs, "fn _mi_allocator_done"),
+        ("src/options.rs", &options_rs, "fn _mi_warning_message"),
+        ("src/options.rs", &options_rs, "fn _mi_error_message"),
+        ("src/options.rs", &options_rs, "fn _mi_option_get_fast"),
+        ("src/options.rs", &options_rs, "fn _mi_assert_fail"),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -682,6 +717,22 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_padding_shrink(")
             && !internal.contains("pub fn _mi_is_heap_main(")
             && !internal.contains("pub fn _mi_is_theap_main(")
+            && !internal.contains("pub fn _mi_warning_message(")
+            && !internal.contains("pub fn _mi_option_get_fast(")
+            && !internal.contains("pub fn _mi_error_message(")
+            && !internal.contains("pub fn _mi_auto_process_init(")
+            && !internal.contains("pub fn _mi_auto_process_done(")
+            && !internal.contains("pub fn _mi_allocator_init(")
+            && !internal.contains("pub fn _mi_allocator_done(")
+            && !internal.contains("pub fn _mi_preloading(")
+            && !internal.contains("pub fn _mi_subproc(")
+            && !internal.contains("pub fn _mi_subproc_main(")
+            && !internal.contains("pub fn _mi_subproc_heap_main(")
+            && !internal.contains("pub fn _mi_subproc_from_id(")
+            && !internal.contains("pub fn _mi_deferred_free(")
+            && !internal.contains("pub fn _mi_arena_id_none(")
+            && !internal.contains("pub fn _mi_arena_from_id(")
+            && !internal.contains("pub fn _mi_arena_memid_is_suitable(")
             && !internal.contains("pub static _mi_page_empty:")
             && !internal.contains("pub static _mi_theap_empty:")
             && !internal.contains("pub static _mi_theap_empty_wrong:")

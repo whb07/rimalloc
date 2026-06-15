@@ -5513,10 +5513,14 @@ int main(int argc, char** argv) {
 
 
 def rust_staticlib() -> pathlib.Path:
+    env = os.environ.copy()
+    rustflags = env.get("RUSTFLAGS", "")
+    env["RUSTFLAGS"] = f"{rustflags} --cfg mi_internal_c_probe".strip()
     subprocess.run(
         ["cargo", "rustc", "--lib", "--", "--crate-type", "staticlib"],
         cwd=ROOT,
         check=True,
+        env=env,
     )
     libs = sorted(
         (ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
@@ -5529,10 +5533,14 @@ def rust_staticlib() -> pathlib.Path:
 
 
 def rust_staticlib_release() -> pathlib.Path:
+    env = os.environ.copy()
+    rustflags = env.get("RUSTFLAGS", "")
+    env["RUSTFLAGS"] = f"{rustflags} --cfg mi_internal_c_probe".strip()
     subprocess.run(
         ["cargo", "rustc", "--release", "--lib", "--", "--crate-type", "staticlib"],
         cwd=ROOT,
         check=True,
+        env=env,
     )
     libs = sorted(
         (ROOT / "target/release/deps").glob("libmechanical_mimalloc-*.a"),

@@ -625,15 +625,13 @@ pub extern "C" fn mi_arena_min_size() -> usize {
 
 /// # Safety
 /// Matches the C internal API and returns the null arena-id sentinel.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arena_id_none() -> mi_arena_id_t {
+pub(crate) unsafe extern "C" fn _mi_arena_id_none() -> mi_arena_id_t {
     ptr::null_mut()
 }
 
 /// # Safety
 /// `id` must be either null or a valid top-level `mi_arena_t*`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t {
+pub(crate) unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t {
     let arena = id.cast::<mi_arena_t>();
     crate::mi_assert_internal!(
         arena.is_null() || unsafe { (*arena.cast::<MiArenaPrefix>()).parent.is_null() }
@@ -672,8 +670,7 @@ unsafe fn mi_arena_is_suitable(arena: *mut mi_arena_t, req_arena: *mut mi_arena_
 
 /// # Safety
 /// `memid` and `request_arena` must follow the internal arena allocation invariants.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arena_memid_is_suitable(
+pub(crate) unsafe extern "C" fn _mi_arena_memid_is_suitable(
     memid: mi_memid_t,
     request_arena: *mut mi_arena_t,
 ) -> bool {
@@ -1781,7 +1778,7 @@ unsafe fn mi_arenas_try_alloc(
     if !p.is_null() {
         return p;
     }
-    if !req_arena.is_null() || unsafe { _mi_preloading() } {
+    if !req_arena.is_null() || _mi_preloading() {
         return ptr::null_mut();
     }
     if mi_option_is_enabled(mi_option_t::mi_option_disallow_os_alloc) {
@@ -2986,9 +2983,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
 
 unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize) {
     let delay = unsafe { mi_arena_purge_delay() };
-    if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned }
-        || delay < 0
-        || unsafe { _mi_preloading() }
+    if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } || delay < 0 || _mi_preloading()
     {
         return;
     }
@@ -3284,7 +3279,7 @@ unsafe fn mi_arenas_try_purge(
     tseq: usize,
 ) {
     let delay = unsafe { mi_arena_purge_delay() };
-    if unsafe { _mi_preloading() } || delay <= 0 {
+    if _mi_preloading() || delay <= 0 {
         return;
     }
 

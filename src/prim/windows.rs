@@ -913,7 +913,7 @@ unsafe extern "C" fn mi_process_attach() -> c_int {
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_allocator_done() {}
+pub(crate) unsafe extern "C" fn _mi_allocator_done() {}
 
 #[inline]
 pub unsafe extern "C" fn _mi_is_redirected() -> bool {
@@ -921,7 +921,7 @@ pub unsafe extern "C" fn _mi_is_redirected() -> bool {
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
+pub(crate) unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
     if !message.is_null() {
         unsafe {
             *message = null();

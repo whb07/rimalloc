@@ -14,15 +14,15 @@
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{size_of, zeroed};
 use core::ptr;
-use std::os::raw::c_long;
 
 pub(crate) use crate::alloc::{
     _mi_page_malloc_zero, _mi_theap_malloc_guarded, _mi_theap_malloc_zero,
     _mi_theap_malloc_zero_ex, _mi_theap_realloc_zero,
 };
 pub(crate) use crate::arena::{
-    _mi_arenas_alloc, _mi_arenas_alloc_aligned, _mi_arenas_collect, _mi_arenas_contain,
-    _mi_arenas_free, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free,
+    _mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable, _mi_arenas_alloc,
+    _mi_arenas_alloc_aligned, _mi_arenas_collect, _mi_arenas_contain, _mi_arenas_free,
+    _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free,
     _mi_arenas_page_try_reabandon_to_mapped, _mi_arenas_page_unabandon,
     _mi_arenas_unsafe_destroy_all, _mi_heap_destroy_pages, _mi_heap_move_pages,
     _mi_heap_visit_blocks,
@@ -39,15 +39,18 @@ pub(crate) use crate::heap::{
     _mi_heap_force_destroy, _mi_heap_theap_get_or_init, _mi_heap_theap_get_peek,
 };
 pub(crate) use crate::init::{
-    _mi_is_heap_main, _mi_is_theap_main, _mi_theap_cached_set, _mi_theap_default_safe,
-    _mi_theap_default_set, _mi_theap_empty_get, _mi_theap_guarded_init, _mi_theap_main_safe,
-    _mi_theap_options_init, _mi_thread_done, _mi_thread_id,
+    _mi_auto_process_done, _mi_auto_process_init, _mi_is_heap_main, _mi_is_theap_main,
+    _mi_preloading, _mi_subproc, _mi_subproc_from_id, _mi_subproc_heap_main, _mi_subproc_main,
+    _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_default_set, _mi_theap_empty_get,
+    _mi_theap_guarded_init, _mi_theap_main_safe, _mi_theap_options_init, _mi_thread_done,
+    _mi_thread_id,
 };
 pub(crate) use crate::libc::{
     _mi_getenv, _mi_streq, _mi_strlcat, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen,
     _mi_strnstr, _mi_toupper, _mi_vsnprintf,
 };
 use crate::options::_mi_error_message_fmt;
+pub(crate) use crate::options::{_mi_error_message, _mi_option_get_fast, _mi_warning_message};
 pub(crate) use crate::os::{
     _mi_os_alloc, _mi_os_canuse_large_page, _mi_os_commit, _mi_os_commit_ex, _mi_os_decommit,
     _mi_os_free, _mi_os_free_ex, _mi_os_get_aligned_hint, _mi_os_good_alloc_size,
@@ -57,7 +60,8 @@ pub(crate) use crate::os::{
     _mi_os_virtual_address_bits, _mi_os_zalloc,
 };
 pub(crate) use crate::page::{
-    _mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire, _mi_theap_collect_retired,
+    _mi_deferred_free, _mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire,
+    _mi_theap_collect_retired,
 };
 pub use crate::page::{
     _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
@@ -70,6 +74,7 @@ pub(crate) use crate::page_map::{
     _mi_page_map_base, _mi_page_map_init, _mi_page_map_register, _mi_page_map_unregister,
     _mi_page_map_unregister_range, _mi_page_map_unsafe_destroy, _mi_safe_ptr_page,
 };
+pub(crate) use crate::prim::{_mi_allocator_done, _mi_allocator_init};
 pub(crate) use crate::random::{
     _mi_random_init, _mi_random_init_weak, _mi_random_next, _mi_random_reinit_if_weak,
     _mi_random_split,
@@ -508,31 +513,15 @@ unsafe extern "C" {
     pub fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, fmt: *const c_char, ...);
     pub fn _mi_raw_message(fmt: *const c_char, ...);
     pub fn _mi_message(fmt: *const c_char, ...);
-    pub fn _mi_warning_message(fmt: *const c_char, ...);
     pub fn _mi_verbose_message(fmt: *const c_char, ...);
     pub fn _mi_trace_message(fmt: *const c_char, ...);
     pub fn _mi_options_init();
     pub fn _mi_options_post_init();
-    pub fn _mi_option_get_fast(option: crate::options::mi_option_t) -> c_long;
-    pub fn _mi_error_message(err: c_int, fmt: *const c_char, ...);
 
-    pub fn _mi_auto_process_init();
-    pub fn _mi_auto_process_done();
     pub fn _mi_is_redirected() -> bool;
-    pub fn _mi_allocator_init(message: *mut *const c_char) -> bool;
-    pub fn _mi_allocator_done();
     pub fn _mi_is_main_thread() -> bool;
-    pub fn _mi_preloading() -> bool;
-    pub fn _mi_subproc() -> *mut mi_subproc_t;
-    pub fn _mi_subproc_main() -> *mut mi_subproc_t;
-    pub fn _mi_subproc_heap_main(subproc: *mut mi_subproc_t) -> *mut mi_heap_t;
-    pub fn _mi_subproc_from_id(subproc_id: mi_subproc_id_t) -> *mut mi_subproc_t;
     pub fn _mi_thread_seq_id() -> usize;
-    pub fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool);
 
-    pub fn _mi_arena_id_none() -> mi_arena_id_t;
-    pub fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t;
-    pub fn _mi_arena_memid_is_suitable(memid: mi_memid_t, request_arena: *mut mi_arena_t) -> bool;
     pub fn _mi_malloc_generic(
         theap: *mut mi_theap_t,
         size: usize,

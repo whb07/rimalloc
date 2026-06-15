@@ -19,6 +19,8 @@ use crate::heap::_mi_heap_force_destroy;
 use crate::internal::{
     _mi_allocator_done, _mi_error_message, _mi_meta_free, _mi_meta_zalloc, mi_memid_t, mi_memkind_t,
 };
+#[cfg(any(windows, target_os = "openbsd", target_os = "android"))]
+use crate::options::_mi_error_message_fmt;
 use crate::options::{
     _mi_options_init, _mi_options_post_init, _mi_warning_message_fmt, mi_option_get,
     mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
@@ -563,10 +565,9 @@ unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
     unsafe { ptr::addr_of!((*(heap.cast::<MiHeapMainPrefix>())).subproc).read_unaligned() }
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
-pub unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_subproc_id_t {
+pub(crate) unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_subproc_id_t {
     mi_subproc_id_t {
         _mi_subproc_id: subproc.cast::<c_void>(),
     }
@@ -813,8 +814,7 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     mi_tld_free(tld);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn _mi_preloading() -> bool {
+pub(crate) extern "C" fn _mi_preloading() -> bool {
     false
 }
 
@@ -1079,10 +1079,9 @@ unsafe fn mi_win_tls_slot_alloc(
         true
     } else {
         unsafe {
-            _mi_error_message(
+            _mi_error_message_fmt(
                 EFAULT,
-                c"returned tls index was too high (%u)\n".as_ptr(),
-                index,
+                format_args!("returned tls index was too high ({})\n", index),
             );
             let _ = TlsFree(index);
             raw_index.write(TLS_OUT_OF_INDEXES);
@@ -1184,10 +1183,12 @@ fn mi_tls_slots_init() {
                 );
             }
             if !ok {
-                _mi_error_message(
+                _mi_error_message_fmt(
                     EFAULT,
-                    c"unable to allocate fast TLS user slot (0x%zx)\n".as_ptr(),
-                    _mi_theap_cached_slot,
+                    format_args!(
+                        "unable to allocate fast TLS user slot (0x{:x})\n",
+                        _mi_theap_cached_slot
+                    ),
                 );
             }
         }
@@ -1199,10 +1200,9 @@ fn mi_tls_slots_init() {
                 err = mi_pthread_key_create(ptr::addr_of_mut!(_mi_theap_cached_key));
             }
             if err != 0 {
-                _mi_error_message(
+                _mi_error_message_fmt(
                     EFAULT,
-                    c"unable to allocate pthread keys (error %d)\n".as_ptr(),
-                    err,
+                    format_args!("unable to allocate pthread keys (error {})\n", err),
                 );
             }
         }
@@ -1285,10 +1285,9 @@ fn mi_cpuid(_regs4: *mut u32, _level: u32, _sublevel: u32) -> bool {
     false
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// Returns a borrowed process-global opaque subproc pointer.
-pub unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
+pub(crate) unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
     unsafe { mi_subproc_main_ptr() }
 }
 
@@ -1425,10 +1424,9 @@ pub(crate) unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
     ptr::addr_of!(_mi_theap_empty).cast_mut()
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// Returns the current subproc without forcing thread-local initialization.
-pub unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
+pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
     let theap = unsafe { crate::prim::_mi_theap_default() };
     if !unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         unsafe { _mi_subproc_main() }
@@ -1442,10 +1440,11 @@ pub unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
     }
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// `subproc_id` must have been produced by this crate's subproc API surface.
-pub unsafe extern "C" fn _mi_subproc_from_id(subproc_id: mi_subproc_id_t) -> *mut mi_subproc_t {
+pub(crate) unsafe extern "C" fn _mi_subproc_from_id(
+    subproc_id: mi_subproc_id_t,
+) -> *mut mi_subproc_t {
     subproc_id._mi_subproc_id.cast::<mi_subproc_t>()
 }
 
@@ -1463,10 +1462,11 @@ pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
     unsafe { _mi_subproc_to_id(_mi_subproc()) }
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// `subproc` must be null or point to a valid local subproc prefix.
-pub unsafe extern "C" fn _mi_subproc_heap_main(subproc: *mut mi_subproc_t) -> *mut mi_heap_t {
+pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
+    subproc: *mut mi_subproc_t,
+) -> *mut mi_heap_t {
     if subproc.is_null() {
         return ptr::null_mut();
     }
@@ -1717,10 +1717,9 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
     }
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// Performs one-time process-global mimalloc initialization for the bounded init/runtime scaffold.
-pub unsafe extern "C" fn _mi_auto_process_init() {
+pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     PROCESS_INIT.call_once(|| unsafe {
         mi_subproc_main_init();
         crate::stats::_mi_stats_init();
@@ -1757,10 +1756,10 @@ pub unsafe extern "C" fn mi_process_init() {
     unsafe { _mi_auto_process_init() };
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// Performs process-global teardown for the bounded init/subproc surface and must not race with concurrent mutation of it.
-pub unsafe extern "C" fn _mi_auto_process_done() {
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
+pub(crate) unsafe extern "C" fn _mi_auto_process_done() {
     if mi_option_get(mi_option_t::mi_option_destroy_on_exit) > 1 {
         return;
     }

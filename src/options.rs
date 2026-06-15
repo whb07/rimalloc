@@ -905,9 +905,9 @@ pub(crate) fn _mi_warning_message_fmt(args: fmt::Arguments<'_>) {
 }
 
 /// # Safety
-/// Matches the exported C helper surface. Extra varargs from C-style callers are ignored here.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
+/// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
+pub(crate) unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
     let args = if fmt.is_null() {
         format_args!("")
     } else {
@@ -928,9 +928,9 @@ pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
 }
 
 /// # Safety
-/// Matches the exported C helper surface. Extra varargs from C-style callers are ignored here.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char) {
+/// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
+pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char) {
     let args = if fmt.is_null() {
         format_args!("")
     } else {
@@ -1179,8 +1179,7 @@ fn mi_option_get_fast_impl(option: mi_option_t) -> c_long {
     option_value_load(idx)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
+pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
     mi_option_get_fast_impl(option)
 }
 
@@ -1380,7 +1379,6 @@ pub extern "C" fn mi_options_print() {
 }
 
 #[cold]
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn _mi_assert_fail(
     assertion: *const c_char,
     fname: *const c_char,

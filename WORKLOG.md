@@ -755,3 +755,42 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Started the remaining function-helper localization batch:
+  - Fresh release cdylib inspection uses the hashed artifact under `target/release/deps`; the root `target/release/libmechanical_mimalloc.so` can be stale after ad-hoc crate-type builds.
+  - Benchmark C mimalloc exports no `_mi_*` dynamic symbols.
+  - Rust still exports function helpers for allocator/process lifecycle, subproc lookup, arena lookup, options/errors, deferred free, and CPU/process globals.
+  - This batch targets normal dynamic function exports only. Data/TLS symbols (`_mi_theap_*`, `_mi_process_is_initialized`, `_mi_cpu_*`) are separate storage/linkage work.
+  - The behavioral parity script statically links C probes that directly call `_mi_warning_message`, `_mi_error_message`, and `_mi_auto_process_done`; those names should remain available only under the script-only `mi_internal_c_probe` cfg, not in the normal release cdylib.
+- Localized the remaining normal function-helper exports:
+  - Replaced allocator/process/subproc/arena/options/deferred-free helper extern declarations in `internal.rs` with crate-local imports from the owning modules.
+  - Removed normal dynamic exports for `_mi_allocator_init`, `_mi_allocator_done`, `_mi_arena_id_none`, `_mi_arena_from_id`, `_mi_arena_memid_is_suitable`, `_mi_auto_process_init`, `_mi_auto_process_done`, `_mi_deferred_free`, `_mi_error_message`, `_mi_option_get_fast`, `_mi_preloading`, `_mi_subproc`, `_mi_subproc_from_id`, `_mi_subproc_heap_main`, `_mi_subproc_main`, `_mi_subproc_to_id`, `_mi_warning_message`, and `_mi_assert_fail`.
+  - Added `mi_internal_c_probe` to the behavioral parity staticlib builds so `_mi_warning_message`, `_mi_error_message`, and `_mi_auto_process_done` remain available only to those static C probes.
+  - Converted remaining Rust varargs-style `_mi_error_message` call sites to `_mi_error_message_fmt`.
+  - Normal release cdylib inspection now reports zero `_mi_*` function exports. The only remaining `_mi_*` dynamic symbols are 11 data/TLS symbols.
+  - Dynamic defined function names dropped from Rust `261` to `243`; `R_X86_64_GLOB_DAT` dropped from `85` to `81`; `R_X86_64_RELATIVE` stayed at `1,494`.
+  - `size -A` total is `663,962` bytes.
+- Focused validation after the remaining function-helper localization batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo test --quiet --test options_exports`
+  - `cargo test --quiet --test ffi_panic_audit`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+- Focused `cfrac -n=5` after the remaining function-helper localization batch:
+  - C: `2.69s..2.72s`, RSS `6072..6280` KiB, reclaims `198..200`.
+  - Rust: `2.69s..2.78s`, RSS `6716..6820` KiB, reclaims `209..211`.
+  - Result: wall time still overlaps; Rust's RSS/reclaim tail remains after normal `_mi_*` function exports reached zero.
+- Full established validation passed after the remaining function-helper localization batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

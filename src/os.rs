@@ -566,9 +566,7 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
 
     if let Some(commit_fun) = commit_fun {
         unsafe { commit_fun(false, p, size, core::ptr::null_mut(), commit_fun_arg) }
-    } else if mi_option_is_enabled(mi_option_t::mi_option_purge_decommits)
-        && !unsafe { _mi_preloading() }
-    {
+    } else if mi_option_is_enabled(mi_option_t::mi_option_purge_decommits) && !_mi_preloading() {
         let mut needs_recommit = true;
         unsafe { mi_os_decommit_ex(p, size, &mut needs_recommit, stat_size) };
         needs_recommit

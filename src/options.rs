@@ -760,7 +760,7 @@ fn mi_add_stderr_output() {
     mi_out_arg.store(ptr::null_mut(), Ordering::Release);
 }
 
-#[inline]
+#[inline(never)]
 fn mi_recurse_enter_prim() -> bool {
     #[cfg(target_os = "linux")]
     unsafe {
@@ -784,6 +784,9 @@ fn mi_recurse_enter_prim() -> bool {
     }
 }
 
+#[used]
+static MI_RECURSE_ENTER_PRIM_KEEP: fn() -> bool = mi_recurse_enter_prim;
+
 #[inline]
 fn mi_recurse_enter() -> bool {
     if cfg!(any(target_vendor = "apple", target_os = "android")) && _mi_preloading() {
@@ -792,7 +795,7 @@ fn mi_recurse_enter() -> bool {
     mi_recurse_enter_prim()
 }
 
-#[inline]
+#[inline(never)]
 fn mi_recurse_exit_prim() {
     #[cfg(target_os = "linux")]
     unsafe {
@@ -803,6 +806,9 @@ fn mi_recurse_exit_prim() {
         recurse.with(|slot| slot.set(false));
     }
 }
+
+#[used]
+static MI_RECURSE_EXIT_PRIM_KEEP: fn() = mi_recurse_exit_prim;
 
 #[inline]
 fn mi_recurse_exit() {

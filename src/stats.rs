@@ -449,10 +449,13 @@ fn mi_stat_counter_add_mt(stat: &mut mi_stat_counter_t, src: &mi_stat_counter_t)
     }
 }
 
-fn mi_stats_add(stats: &mut mi_stats_t, src: &mi_stats_t) {
-    if ptr::eq(stats, src) {
+#[inline(never)]
+unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
+    if ptr::eq(stats.cast_const(), src) {
         return;
     }
+    let stats = unsafe { &mut *stats };
+    let src = unsafe { &*src };
 
     macro_rules! MI_STAT_COUNT {
         ($field:ident) => {
@@ -528,11 +531,14 @@ fn mi_stats_add(stats: &mut mi_stats_t, src: &mi_stats_t) {
     }
 }
 
+#[used]
+static MI_STATS_ADD_KEEP: unsafe extern "C" fn(*mut mi_stats_t, *const mi_stats_t) = mi_stats_add;
+
 fn mi_stats_add_into(to: &mut mi_stats_t, from: &mi_stats_t) {
     if ptr::eq(to, from) {
         return;
     }
-    mi_stats_add(to, from);
+    unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };
 }
 
 fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bool {
@@ -1135,12 +1141,14 @@ pub unsafe extern "C" fn mi_heap_stats_print_out(
     };
 }
 
+#[inline(never)]
 unsafe extern "C" fn mi_heap_print_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
     let vinfo = unsafe { &*(arg.cast::<mi_heap_print_visit_info_t>()) };
     unsafe { mi_heap_stats_print_out(heap, vinfo.out, vinfo.out_arg) };
     true
 }
 
+#[inline(never)]
 unsafe extern "C" fn mi_heap_aggregate_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
     let stats = unsafe { &mut *arg.cast::<mi_stats_t>() };
     let heap_stats = unsafe { mi_heap_get_stats(heap) };
@@ -1148,6 +1156,12 @@ unsafe extern "C" fn mi_heap_aggregate_visitor(heap: *mut mi_heap_t, arg: *mut c
     unsafe { mi_stats_add_into(stats, &*heap_stats) };
     true
 }
+
+#[used]
+static MI_HEAP_PRINT_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_print_visitor;
+
+#[used]
+static MI_HEAP_AGGREGATE_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_aggregate_visitor;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(

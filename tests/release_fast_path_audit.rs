@@ -1667,6 +1667,16 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_stats_init should keep C's local process statistics initialization boundary"
     );
     assert!(
+        stats_rs.contains(
+            "#[inline(never)]\nunsafe extern \"C\" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t)"
+        ) && stats_rs.contains(
+            "static MI_STATS_ADD_KEEP: unsafe extern \"C\" fn(*mut mi_stats_t, *const mi_stats_t) = mi_stats_add;"
+        ) && stats_rs.contains(
+            "unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };"
+        ),
+        "mi_stats_add should keep C's local aggregate helper boundary"
+    );
+    assert!(
         options_rs
             .contains("#[inline(never)]\npub(crate) fn _mi_message(args: fmt::Arguments<'_>)")
             && options_rs.contains(
@@ -1675,6 +1685,18 @@ fn free_path_internals_are_not_dynamic_exports() {
             && options_rs
                 .contains("static MI_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_message;"),
         "_mi_message should keep C's local message helper boundary and mimalloc prefix path"
+    );
+    assert!(
+        options_rs.contains("#[inline(never)]\nfn mi_recurse_enter_prim() -> bool")
+            && options_rs.contains(
+                "static MI_RECURSE_ENTER_PRIM_KEEP: fn() -> bool = mi_recurse_enter_prim;"
+            )
+            && options_rs.contains("#[inline(never)]\nfn mi_recurse_exit_prim()")
+            && options_rs
+                .contains("static MI_RECURSE_EXIT_PRIM_KEEP: fn() = mi_recurse_exit_prim;")
+            && options_rs.contains("mi_recurse_enter_prim()")
+            && options_rs.contains("mi_recurse_exit_prim();"),
+        "option recursion guards should keep C's noinline primitive helper boundaries"
     );
     assert!(
         options_rs
@@ -2247,12 +2269,43 @@ fn free_path_internals_are_not_dynamic_exports() {
         "heap and arena block visitation should share C's theap area block visitor helper"
     );
     assert!(
+        theap_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_theap_area_visitor")
+            && theap_rs.contains(
+                "static MI_THEAP_AREA_VISITOR_KEEP: mi_theap_area_visit_fun = mi_theap_area_visitor;"
+            )
+            && theap_rs.contains("Some(mi_theap_area_visitor)"),
+        "mi_theap_area_visitor should keep C's local theap area visitor callback boundary"
+    );
+    assert!(
         arena_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_page_alloc")
             && arena_rs.contains("static MI_ARENAS_PAGE_ALLOC_KEEP")
             && page_rs
                 .contains("let page = _mi_arenas_page_alloc(theap, block_size, page_alignment);"),
         "arena page allocation should keep C's _mi_arenas_page_alloc local helper boundary"
+    );
+    assert!(
+        stats_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_print_visitor")
+            && stats_rs
+                .contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_aggregate_visitor")
+            && stats_rs.contains("static MI_HEAP_PRINT_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_print_visitor;")
+            && stats_rs.contains(
+                "static MI_HEAP_AGGREGATE_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_aggregate_visitor;"
+            )
+            && stats_rs.contains("Some(mi_heap_print_visitor as mi_heap_visit_fun)")
+            && stats_rs.contains("Some(mi_heap_aggregate_visitor as mi_heap_visit_fun)"),
+        "heap stats visitors should keep C's local callback helper boundaries"
+    );
+    assert!(
+        prim_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn mi_process_attach()")
+            && prim_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn mi_process_detach()")
+            && prim_rs.contains(
+                "pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern \"C\" fn() = mi_process_attach;"
+            )
+            && prim_rs.contains(
+                "pub(crate) static _MI_PROCESS_DETACH_DTOR: unsafe extern \"C\" fn() = mi_process_detach;"
+            ),
+        "ELF process lifecycle hooks should keep C's constructor and destructor helper names"
     );
     assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")

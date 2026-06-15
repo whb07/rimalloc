@@ -257,6 +257,7 @@ unsafe fn mi_theap_visit_areas(
     )
 }
 
+#[inline(never)]
 unsafe extern "C" fn mi_theap_area_visitor(
     theap: *const mi_theap_t,
     xarea: *const mi_theap_area_ex_t,
@@ -283,6 +284,9 @@ unsafe extern "C" fn mi_theap_area_visitor(
         true
     }
 }
+
+#[used]
+static MI_THEAP_AREA_VISITOR_KEEP: mi_theap_area_visit_fun = mi_theap_area_visitor;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_visit_blocks(

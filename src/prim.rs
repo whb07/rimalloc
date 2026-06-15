@@ -467,35 +467,25 @@ pub unsafe fn _mi_page_associated_theap_peek(page: *mut mi_page_t) -> *mut mi_th
     theap
 }
 
-#[inline]
-pub unsafe fn mi_process_attach() {
+#[inline(never)]
+pub unsafe extern "C" fn mi_process_attach() {
     unsafe { crate::internal::_mi_auto_process_init() }
 }
 
-#[inline]
-pub unsafe fn mi_process_detach() {
+#[inline(never)]
+pub unsafe extern "C" fn mi_process_detach() {
     unsafe { crate::internal::_mi_auto_process_done() }
-}
-
-#[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
-unsafe extern "C" fn mi_process_attach_ctor() {
-    unsafe { mi_process_attach() };
-}
-
-#[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
-unsafe extern "C" fn mi_process_detach_dtor() {
-    unsafe { mi_process_detach() };
 }
 
 #[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
 #[used]
 #[unsafe(link_section = ".init_array")]
-pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern "C" fn() = mi_process_attach_ctor;
+pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern "C" fn() = mi_process_attach;
 
 #[cfg(all(target_family = "unix", not(target_vendor = "apple")))]
 #[used]
 #[unsafe(link_section = ".fini_array")]
-pub(crate) static _MI_PROCESS_DETACH_DTOR: unsafe extern "C" fn() = mi_process_detach_dtor;
+pub(crate) static _MI_PROCESS_DETACH_DTOR: unsafe extern "C" fn() = mi_process_detach;
 
 #[cfg(mi_c_malloc_fast)]
 core::arch::global_asm!(
@@ -601,11 +591,11 @@ mod tests {
     fn elf_process_lifecycle_hooks_are_registered() {
         assert_eq!(
             super::_MI_PROCESS_ATTACH_CTOR as usize,
-            super::mi_process_attach_ctor as usize
+            super::mi_process_attach as usize
         );
         assert_eq!(
             super::_MI_PROCESS_DETACH_DTOR as usize,
-            super::mi_process_detach_dtor as usize
+            super::mi_process_detach as usize
         );
     }
 }

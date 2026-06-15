@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing release artifact helper-boundary parity after `8805801`:
+  - The remaining C/Rust local-symbol gap includes stats aggregation visitors, recursion guard primitives, the theap area visitor, and ELF process attach/detach lifecycle hooks.
+  - Started a mechanical parity slice to keep those C-shaped helper boundaries explicit in Rust and to add audit coverage so future optimizer or refactor drift is caught.
+  - Retained the Rust local symbols for `mi_stats_add`, `mi_heap_print_visitor`, `mi_heap_aggregate_visitor`, `mi_theap_area_visitor`, `mi_recurse_enter_prim`, `mi_recurse_exit_prim`, `mi_process_attach`, and `mi_process_detach`.
+  - Kept the ELF constructor/destructor slots pointed at `mi_process_attach` and `mi_process_detach` directly, matching the C helper names instead of using Rust-only wrapper names.
+  - Extended `tests/release_fast_path_audit.rs` to lock these helper boundaries and callback call sites.
+  - Artifact check: `nm -aC target/release/libmechanical_mimalloc.so` shows all eight targeted helpers as local `t` symbols, and `nm -D --defined-only` shows none of them as dynamic exports.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo test --quiet`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `cargo build --release`
+    - `git diff --check`
+  - Focused `mleak 100` benchmark after copying the fresh release cdylib:
+    - C `2.04s..2.07s`, Rust `2.12s..2.13s`.
+    - `perf stat`: C `10.08B` instructions / `15.50B` cycles; Rust `10.70B` instructions / `16.42B` cycles.
 - Rechecked the current C/Rust mimalloc-bench drift with the benchmark cdylib copied from the exact release build artifact.
 - Found the earlier fast `glibc-simple` Rust number came from a stale `target/release/libmechanical_mimalloc.so`; a reproducible Cargo cdylib build of both `HEAD` and `d0767c7` showed Rust `glibc-simple` in the slower `~1.66s..1.70s` range.
 - Release cdylib footprint parity work:

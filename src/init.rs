@@ -25,7 +25,9 @@ use crate::options::{
     _mi_options_init, _mi_options_post_init, _mi_warning_message_fmt, mi_option_get,
     mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
 };
-use crate::stats::{_mi_stats_merge_into, mi_stat_count_t, mi_stats_header_init, mi_stats_t};
+use crate::stats::{
+    __mi_stat_increase_mt, _mi_stats_merge_into, mi_stat_count_t, mi_stats_header_init, mi_stats_t,
+};
 use crate::theap::{_mi_theap_collect_abandon, _mi_theap_create, _mi_theap_free};
 use crate::types::{
     MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_heap_visit_fun,
@@ -594,6 +596,7 @@ fn mi_subproc_main_init() {
             (*main_prefix).heap_main = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
             (*main_prefix).heap_total_count.store(1, Ordering::Relaxed);
             (*main_prefix).heap_count.store(1, Ordering::Relaxed);
+            __mi_stat_increase_mt(&mut (*main_prefix).stats.heaps, 1);
             mi_lock_init(ptr::addr_of_mut!(tld_empty.theaps_lock));
             subprocs = main;
             _mi_process_is_initialized = true;

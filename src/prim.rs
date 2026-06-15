@@ -29,6 +29,7 @@ use crate::init::{
     _mi_theap_default_expansion_slot, _mi_theap_default_key, _mi_theap_default_slot,
     _mi_theap_empty,
 };
+pub(crate) use crate::types::mi_process_info_t;
 use crate::types::{
     mi_heap_t, mi_msecs_t, mi_page_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
 };
@@ -52,19 +53,6 @@ pub struct mi_os_mem_config_t {
     pub has_partial_free: bool,
     pub has_virtual_reserve: bool,
     pub has_transparent_huge_pages: bool,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct mi_process_info_t {
-    pub elapsed: mi_msecs_t,
-    pub utime: mi_msecs_t,
-    pub stime: mi_msecs_t,
-    pub current_rss: usize,
-    pub peak_rss: usize,
-    pub current_commit: usize,
-    pub peak_commit: usize,
-    pub page_faults: usize,
 }
 
 pub const MI_HAS_TLS_SLOT: bool = cfg!(any(windows, target_os = "macos", target_arch = "x86_64"));
@@ -121,32 +109,32 @@ thread_local! {
 pub(crate) use emscripten::{
     _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
     _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
-    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
-    _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
+    _mi_prim_numa_node_count, _mi_prim_process_info, _mi_prim_protect, _mi_prim_reset,
+    _mi_prim_reuse, _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
     _mi_prim_thread_init_auto_done, _mi_prim_thread_is_in_threadpool, _mi_prim_thread_yield,
 };
 #[cfg(all(not(windows), not(target_os = "emscripten"), not(target_os = "wasi")))]
 pub(crate) use unix::{
     _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
     _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
-    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
-    _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
+    _mi_prim_numa_node_count, _mi_prim_process_info, _mi_prim_protect, _mi_prim_reset,
+    _mi_prim_reuse, _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
     _mi_prim_thread_init_auto_done, _mi_prim_thread_is_in_threadpool, _mi_prim_thread_yield,
 };
 #[cfg(target_os = "wasi")]
 pub(crate) use wasi::{
     _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
     _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
-    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
-    _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
+    _mi_prim_numa_node_count, _mi_prim_process_info, _mi_prim_protect, _mi_prim_reset,
+    _mi_prim_reuse, _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
     _mi_prim_thread_init_auto_done, _mi_prim_thread_is_in_threadpool, _mi_prim_thread_yield,
 };
 #[cfg(windows)]
 pub(crate) use windows::{
     _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
     _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
-    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
-    _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
+    _mi_prim_numa_node_count, _mi_prim_process_info, _mi_prim_protect, _mi_prim_reset,
+    _mi_prim_reuse, _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
     _mi_prim_thread_init_auto_done, _mi_prim_thread_is_in_threadpool, _mi_prim_thread_yield,
 };
 

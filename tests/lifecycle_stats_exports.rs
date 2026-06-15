@@ -1,5 +1,6 @@
 use core::ffi::c_void;
 use core::ptr;
+use std::time::{Duration, Instant};
 
 use mechanical_mimalloc::mimalloc::*;
 use mechanical_mimalloc::stats::{MI_STAT_VERSION, mi_stats_t};
@@ -19,6 +20,12 @@ fn lifecycle_theap_and_stats_exports_link_and_smoke() {
         let process_done: unsafe extern "C" fn() = mi_process_done;
         core::hint::black_box(process_done);
         assert!(!mi_is_redirected());
+
+        let mut init_stats = initialized_stats();
+        assert!(mi_stats_get(&mut init_stats));
+        assert_eq!(init_stats.heaps.current, 1);
+        assert_eq!(init_stats.heaps.peak, 1);
+        assert_eq!(init_stats.heaps.total, 1);
 
         let default_theap = mi_theap_get_default();
         assert!(!default_theap.is_null());
@@ -76,5 +83,36 @@ fn lifecycle_theap_and_stats_exports_link_and_smoke() {
             &mut arena_id,
         ));
         assert!(arena_id.is_null());
+    }
+}
+
+#[test]
+fn process_info_reports_cpu_time_after_work() {
+    unsafe {
+        mi_process_init();
+
+        let start = Instant::now();
+        let mut n = 0usize;
+        while start.elapsed() < Duration::from_millis(30) {
+            n = n.wrapping_add(1);
+            core::hint::black_box(n);
+        }
+
+        let mut elapsed = 0usize;
+        let mut user = 0usize;
+        let mut system = 0usize;
+        mi_process_info(
+            &mut elapsed,
+            &mut user,
+            &mut system,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        );
+
+        assert!(elapsed > 0);
+        assert!(user + system > 0);
     }
 }

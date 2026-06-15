@@ -822,3 +822,33 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Follow-up on the remaining `cfrac` RSS/reclaim tail:
+  - Direct `MIMALLOC_SHOW_STATS=1` runs show allocator page state is already aligned for `cfrac`: C and Rust both report pages `19/1.4K/9`, abandoned `5/5/0`, reclaim failed `5`, committed `3.5 MiB`, and one arena.
+  - `/usr/bin/time` still reproduces the bench tail (`C rss 5820 KiB, minor 202`; `Rust rss 6712 KiB, minor 208`), so that tail is tied to shared-object/process footprint rather than allocator page state.
+  - Rust's allocator DSO is larger (`663,879` bytes vs C `257,609`) and has extra dynamic dependencies on `libgcc_s.so.1` and `ld-linux-x86-64.so.2`; a `-C force-unwind-tables=no` experiment reduced file size only to `647,487` bytes and did not remove the unwind dependency.
+  - The same stats run exposed a real aggregate stats mismatch: C reports `heaps current 1` for the main heap at shutdown, while Rust reported `heaps current 0`.
+- Fixed the main heap stats drift:
+  - Matched C's `mi_subproc_main_init` by incrementing `subproc_main.stats.heaps` when installing the process main heap.
+  - Added a lifecycle stats regression that checks `mi_stats_get` reports one current/peak/total heap immediately after `mi_process_init`.
+  - A focused `cfrac` stats rerun now matches C for aggregate heap counts (`heaps 1/1/1`).
+- Fixed the process CPU-time stats drift:
+  - Rust `stats.rs` was importing `_mi_prim_process_info` from `os.rs`, whose placeholder implementation zeroed user time, system time, and page faults.
+  - Routed stats through the platform primitive layer so Unix builds use the real `getrusage` implementation, matching C.
+  - Removed the duplicate primitive `mi_process_info_t` definition by re-exporting the canonical ABI struct from `types.rs`.
+  - Added a runtime regression that burns CPU briefly and requires `mi_process_info` to report nonzero user or system time.
+  - Focused checks passed: `cargo fmt`, `cargo test --quiet --test lifecycle_stats_exports`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Focused `cfrac` stats now match for heap counts and CPU time: C reports `heaps 1/1/1`, user `2.713s`; Rust reports `heaps 1/1/1`, user `2.719s`.
+- Full established validation passed after the stats-accounting fixes:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

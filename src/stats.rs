@@ -21,12 +21,12 @@ use crate::internal::{_mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
 use crate::mimalloc::{mi_good_size, mi_rezalloc};
 use crate::mimalloc::{mi_heap_main, mi_subproc_current, mi_subproc_visit_heaps};
 use crate::options::{_mi_fprintf, _mi_fputs};
-use crate::os::{_mi_os_numa_node_count, _mi_prim_process_info};
+use crate::os::_mi_os_numa_node_count;
 use crate::page::{
     _mi_bin_size, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE,
     MI_MEDIUM_PAGE_SIZE, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE,
 };
-use crate::prim::{_mi_heap_theap_peek, _mi_theap_default};
+use crate::prim::{_mi_heap_theap_peek, _mi_prim_process_info, _mi_theap_default};
 use crate::types::{
     MI_BIN_COUNT, MI_MALLOC_VERSION, mi_heap_t, mi_heap_visit_fun, mi_output_fun, mi_page_t,
     mi_process_info_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,

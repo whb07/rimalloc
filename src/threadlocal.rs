@@ -29,6 +29,7 @@ pub const MI_TLS_IDX_MASK: usize = (1usize << MI_TLS_IDX_BITS) - 1;
 pub const MI_TLS_IDX_MAX: usize = MI_TLS_IDX_MASK;
 pub const MI_TLS_VERSION_MAX: usize = usize::MAX >> MI_TLS_IDX_BITS;
 
+#[cfg(not(target_os = "linux"))]
 static mi_thread_locals_empty: mi_thread_locals_t = mi_thread_locals_t {
     count: 0,
     slots: [mi_tls_slot_t {
@@ -44,8 +45,51 @@ thread_local! {
 
 #[cfg(target_os = "linux")]
 unsafe extern "C" {
+    static mi_thread_locals_empty: mi_thread_locals_t;
     fn _mi_tls_thread_locals_get() -> *mut mi_thread_locals_t;
     fn _mi_tls_thread_locals_set(tls: *mut mi_thread_locals_t);
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+#[inline(always)]
+unsafe fn mi_linux_x64_thread_locals_get() -> *mut mi_thread_locals_t {
+    let tls: *mut mi_thread_locals_t;
+    unsafe {
+        core::arch::asm!(
+            "mov {tls_offset}, qword ptr [rip + mi_thread_locals@GOTTPOFF]",
+            "mov {tls}, qword ptr fs:[{tls_offset}]",
+            tls_offset = lateout(reg) _,
+            tls = lateout(reg) tls,
+            options(nostack, preserves_flags, readonly),
+        );
+    }
+    tls
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+#[inline(always)]
+unsafe fn mi_linux_x64_thread_locals_set(tls: *mut mi_thread_locals_t) {
+    unsafe {
+        core::arch::asm!(
+            "mov {tls_offset}, qword ptr [rip + mi_thread_locals@GOTTPOFF]",
+            "mov qword ptr fs:[{tls_offset}], {tls}",
+            tls_offset = lateout(reg) _,
+            tls = in(reg) tls,
+            options(nostack, preserves_flags),
+        );
+    }
+}
+
+#[inline]
+fn thread_locals_empty_ptr() -> *mut mi_thread_locals_t {
+    #[cfg(target_os = "linux")]
+    {
+        ptr::addr_of!(mi_thread_locals_empty).cast_mut()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        ptr::from_ref(&mi_thread_locals_empty).cast_mut()
+    }
 }
 
 static mi_thread_locals_lock: mi_lock_t = mi_lock_t::new();
@@ -54,21 +98,23 @@ static mi_thread_locals_version: AtomicUsize = AtomicUsize::new(0);
 
 #[inline]
 fn thread_locals_ptr() -> *mut mi_thread_locals_t {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    unsafe {
+        mi_linux_x64_thread_locals_get()
+    }
+    #[cfg(all(
+        target_os = "linux",
+        not(all(target_arch = "x86_64", not(target_env = "musl")))
+    ))]
     {
-        let mut tls = unsafe { _mi_tls_thread_locals_get() };
-        if tls.is_null() {
-            tls = ptr::from_ref(&mi_thread_locals_empty).cast_mut();
-            unsafe { _mi_tls_thread_locals_set(tls) };
-        }
-        tls
+        unsafe { _mi_tls_thread_locals_get() }
     }
     #[cfg(not(target_os = "linux"))]
     {
         mi_thread_locals.with(|slot| {
             let mut tls = slot.get();
             if tls.is_null() {
-                tls = ptr::from_ref(&mi_thread_locals_empty).cast_mut();
+                tls = thread_locals_empty_ptr();
                 slot.set(tls);
             }
             tls
@@ -78,7 +124,14 @@ fn thread_locals_ptr() -> *mut mi_thread_locals_t {
 
 #[inline]
 fn set_thread_locals_ptr(tls: *mut mi_thread_locals_t) {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    unsafe {
+        mi_linux_x64_thread_locals_set(tls);
+    }
+    #[cfg(all(
+        target_os = "linux",
+        not(all(target_arch = "x86_64", not(target_env = "musl")))
+    ))]
     unsafe {
         _mi_tls_thread_locals_set(tls);
     }
@@ -253,7 +306,7 @@ fn mi_thread_local_create_expand() -> bool {
 }
 
 fn free_thread_locals(tls: *mut mi_thread_locals_t) {
-    if tls.is_null() || core::ptr::eq(tls, ptr::from_ref(&mi_thread_locals_empty).cast_mut()) {
+    if tls.is_null() || core::ptr::eq(tls, thread_locals_empty_ptr()) {
         return;
     }
     let count = unsafe { (*tls).count };
@@ -332,7 +385,7 @@ pub extern "C" fn _mi_thread_locals_thread_done() {
     let tls = thread_locals_ptr();
     if unsafe { !tls.is_null() && (*tls).count > 0 } {
         free_thread_locals(tls);
-        set_thread_locals_ptr(ptr::from_ref(&mi_thread_locals_empty).cast_mut());
+        set_thread_locals_ptr(thread_locals_empty_ptr());
     }
 }
 

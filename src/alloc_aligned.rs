@@ -343,7 +343,7 @@ pub unsafe extern "C" fn mi_malloc_aligned(size: usize, alignment: usize) -> *mu
 pub unsafe extern "C" fn mi_malloc_aligned(_size: usize, _alignment: usize) -> *mut c_void {
     core::arch::naked_asm!(
         "endbr64",
-        "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+        "mov rax, qword ptr [rip + __mi_theap_default@GOTTPOFF]",
         "mov rdx, rsi",
         "mov rsi, rdi",
         "mov rdi, qword ptr fs:[rax]",

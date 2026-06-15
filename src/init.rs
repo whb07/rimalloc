@@ -720,9 +720,46 @@ unsafe extern "C" {
     fn _mi_tls_theap_main_set(theap: *mut mi_theap_t);
 }
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+#[inline(always)]
+unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
+    let theap: *mut mi_theap_t;
+    unsafe {
+        core::arch::asm!(
+            "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
+            "mov {theap}, qword ptr fs:[{tls_offset}]",
+            tls_offset = lateout(reg) _,
+            theap = lateout(reg) theap,
+            options(nostack, preserves_flags, readonly),
+        );
+    }
+    theap
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+#[inline(always)]
+unsafe fn mi_linux_x64_theap_main_set(theap: *mut mi_theap_t) {
+    unsafe {
+        core::arch::asm!(
+            "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
+            "mov qword ptr fs:[{tls_offset}], {theap}",
+            tls_offset = lateout(reg) _,
+            theap = in(reg) theap,
+            options(nostack, preserves_flags),
+        );
+    }
+}
+
 #[inline]
 pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    unsafe {
+        mi_linux_x64_theap_main_get()
+    }
+    #[cfg(all(
+        target_os = "linux",
+        not(all(target_arch = "x86_64", not(target_env = "musl")))
+    ))]
     unsafe {
         _mi_tls_theap_main_get()
     }
@@ -734,7 +771,14 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
 
 #[inline]
 pub(crate) fn mi_theap_main_tls_set(theap: *mut mi_theap_t) {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    unsafe {
+        mi_linux_x64_theap_main_set(theap);
+    }
+    #[cfg(all(
+        target_os = "linux",
+        not(all(target_arch = "x86_64", not(target_env = "musl")))
+    ))]
     unsafe {
         _mi_tls_theap_main_set(theap);
     }

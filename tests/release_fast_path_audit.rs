@@ -278,6 +278,10 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let override_rs =
         fs::read_to_string(root.join("src/alloc_override.rs")).expect("read src/alloc_override.rs");
+    let prim_rs = fs::read_to_string(root.join("src/prim.rs")).expect("read src/prim.rs");
+    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
+    let threadlocal_rs =
+        fs::read_to_string(root.join("src/threadlocal.rs")).expect("read src/threadlocal.rs");
 
     assert!(
         cargo_toml.contains("crate-type = [\"rlib\", \"cdylib\"]")
@@ -294,14 +298,38 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         "Linux release cdylibs should avoid linking Rust std panic/backtrace machinery"
     );
     assert!(
-        tls_shim.contains("mi_tls_theap_default")
+        tls_shim.contains("__mi_theap_default")
+            && tls_shim.contains("__mi_theap_cached")
             && tls_shim.contains("tls_model(\"initial-exec\")")
             && tls_shim.contains("visibility(\"hidden\")")
             && tls_shim.contains("= &_mi_theap_empty")
-            && tls_shim.contains("mi_tls_thread_locals")
+            && tls_shim.contains("mi_thread_locals_empty")
+            && tls_shim.contains("mi_thread_locals")
+            && tls_shim.contains("= &mi_thread_locals_empty")
             && tls_shim.contains("_mi_tls_thread_locals_get")
             && tls_shim.contains("_mi_tls_recurse_get"),
         "default Linux allocator fast paths should read hidden initial-exec TLS cells like C"
+    );
+    assert!(
+        prim_rs.contains("fn mi_linux_x64_theap_default_get()")
+            && prim_rs.contains("fn mi_linux_x64_theap_default_set(theap: *mut mi_theap_t)")
+            && prim_rs.contains("fn mi_linux_x64_theap_cached_get()")
+            && prim_rs.contains("fn mi_linux_x64_theap_cached_set(theap: *mut mi_theap_t)")
+            && prim_rs.contains("__mi_theap_default@GOTTPOFF")
+            && prim_rs.contains("__mi_theap_cached@GOTTPOFF")
+            && init_rs.contains("fn mi_linux_x64_theap_main_get()")
+            && init_rs.contains("fn mi_linux_x64_theap_main_set(theap: *mut mi_theap_t)")
+            && init_rs.contains("__mi_theap_main@GOTTPOFF"),
+        "Linux x86_64 heap TLS accessors should inline C-style initial-exec loads and stores"
+    );
+    assert!(
+        threadlocal_rs.contains("fn mi_linux_x64_thread_locals_get()")
+            && threadlocal_rs
+                .contains("fn mi_linux_x64_thread_locals_set(tls: *mut mi_thread_locals_t)")
+            && threadlocal_rs.contains("mi_thread_locals@GOTTPOFF")
+            && threadlocal_rs.contains("static mi_thread_locals_empty: mi_thread_locals_t;")
+            && !tls_shim.contains("static __thread void* mi_tls_thread_locals"),
+        "Linux x86_64 dynamic thread-local storage should use C's mi_thread_locals TLS cell directly"
     );
     assert!(
         build_rs.contains("target_arch == \"x86_64\"")
@@ -314,7 +342,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_array_fast_64")
             && override_rs.contains("core::arch::naked_asm!")
             && override_rs.matches("\"endbr64\"").count() >= 5
-            && override_rs.contains("mi_tls_theap_default@GOTTPOFF")
+            && override_rs.contains("__mi_theap_default@GOTTPOFF")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
             && override_rs.contains("malloc_generic = sym crate::page::_mi_malloc_generic")
             && override_rs.contains("stosb_max = sym crate::init::_mi_cpu_stosb_max")
@@ -397,7 +425,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && aligned_rs.contains("#[cfg(mi_c_malloc_fast)]\n#[unsafe(naked)]")
             && aligned_rs.contains("pub unsafe extern \"C\" fn mi_malloc_aligned")
             && aligned_rs.contains("\"endbr64\"")
-            && aligned_rs.contains("mi_tls_theap_default@GOTTPOFF")
+            && aligned_rs.contains("__mi_theap_default@GOTTPOFF")
             && aligned_rs.contains("target = sym mi_theap_malloc_aligned"),
         "release mi_malloc_aligned should load the default heap from direct TLS like C"
     );

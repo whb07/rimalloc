@@ -35,7 +35,7 @@ macro_rules! MI_FORWARD1 {
 pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
     core::arch::naked_asm!(
         "endbr64",
-        "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+        "mov rax, qword ptr [rip + __mi_theap_default@GOTTPOFF]",
         "mov rsi, rdi",
         "mov rdi, qword ptr fs:[rax]",
         "cmp rsi, 1024",
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
 pub unsafe extern "C" fn mi_cxx_new_array_fast_64(_size: usize) -> *mut c_void {
     core::arch::naked_asm!(
         "endbr64",
-        "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+        "mov rax, qword ptr [rip + __mi_theap_default@GOTTPOFF]",
         "mov rsi, rdi",
         "mov rdi, qword ptr fs:[rax]",
         "cmp rsi, 1024",
@@ -221,7 +221,7 @@ core::arch::global_asm!(
     ".p2align 4",
     "malloc:",
     "endbr64",
-    "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+    "mov rax, qword ptr [rip + __mi_theap_default@GOTTPOFF]",
     "mov rsi, rdi",
     "mov rdi, qword ptr fs:[rax]",
     "cmp rsi, 1024",
@@ -253,7 +253,7 @@ core::arch::global_asm!(
     ".p2align 4",
     "calloc:",
     "endbr64",
-    "mov rdx, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+    "mov rdx, qword ptr [rip + __mi_theap_default@GOTTPOFF]",
     "mov rax, rdi",
     "mov rdi, qword ptr fs:[rdx]",
     "cmp rax, 1",

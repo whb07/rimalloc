@@ -244,3 +244,15 @@
   - C: `162.57B` cycles, `42.49B` instructions, `58.6K` minor faults, `1691` context switches, `1.627s` elapsed.
   - Rust: `162.62B` cycles, `42.52B` instructions, `57.5K` minor faults, `1639` context switches, `1.629s` elapsed.
   - Result: `mstressN` now appears matched on focused counters; the earlier sys/reclaim delta looks like run-to-run variance.
+- One-pass wider `allt` mimalloc-bench scan after `fc582cd`:
+  - Redis and RocksDB did not execute because this local `mimalloc-bench` tree is missing their built binaries.
+  - Clearly close or Rust-favored one-pass cases included `espresso`, `barnes`, `mstressN`, `rptestN`, `gs`, `lua`, `alloc-testN`, `sh6benchN`, `xmalloc-testN`, cache scratch, and `glibc-simple`.
+  - One-pass repeat candidates: `cfrac` (C `2.73s`, Rust `2.78s`), `alloc-test1` (C `2.08s`, Rust `2.10s`), `sh8benchN` (C `.23s`, Rust `.29s`), `glibc-thread` (C `.416s`, Rust `.422s`), and `larsonN-sized` (C `2.109s`, Rust `2.150s`).
+- Repeated the one-pass candidates with `-n=5`:
+  - `cfrac`: C `2.70s..2.74s`, Rust `2.74s..2.82s`; small stable Rust slowdown.
+  - `alloc-test1`: C `2.07s..2.16s`, Rust `2.08s..2.10s`; time-matched, Rust RSS/reclaims slightly higher.
+  - `alloc-testN`: C `2.17s..2.21s`, Rust `2.21s..2.32s`; stable multi-thread Rust slowdown candidate.
+  - `sh8benchN`: C `.23s.. .25s`, Rust `.24s.. .26s`; mostly overlapping after repeats.
+  - `glibc-thread`: C `.415s.. .424s`, Rust `.418s.. .432s`; mostly overlapping with one slower Rust sample.
+  - `larsonN-sized`: C `2.026s..2.152s`, Rust `2.109s..2.164s`; overlapping after C's range widened.
+- Next target: profile `alloc-testN` because the repeated pass shows the clearest allocator-heavy remaining wall-time drift.

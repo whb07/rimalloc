@@ -97,7 +97,7 @@ macro_rules! __has_builtin {
 #[macro_export]
 macro_rules! mi_debug_assert {
     ($expr:expr $(,)?) => {{
-        if !$expr {
+        if $crate::internal::MI_DEBUG > 0 && !$expr {
             $crate::internal::_mi_rust_assert_fail(
                 concat!(stringify!($expr), "\0").as_ptr().cast(),
                 concat!(file!(), "\0").as_ptr().cast(),
@@ -113,16 +113,18 @@ macro_rules! mi_debug_assert {
 #[macro_export]
 macro_rules! mi_debug_assert_eq {
     ($left:expr, $right:expr $(,)?) => {{
-        let left = &$left;
-        let right = &$right;
-        if !(*left == *right) {
-            $crate::internal::_mi_rust_assert_fail(
-                concat!(stringify!($left), " == ", stringify!($right), "\0")
-                    .as_ptr()
-                    .cast(),
-                concat!(file!(), "\0").as_ptr().cast(),
-                line!(),
-            )
+        if $crate::internal::MI_DEBUG > 0 {
+            let left = &$left;
+            let right = &$right;
+            if !(*left == *right) {
+                $crate::internal::_mi_rust_assert_fail(
+                    concat!(stringify!($left), " == ", stringify!($right), "\0")
+                        .as_ptr()
+                        .cast(),
+                    concat!(file!(), "\0").as_ptr().cast(),
+                    line!(),
+                )
+            }
         }
     }};
     ($left:expr, $right:expr, $($arg:tt)+) => {{

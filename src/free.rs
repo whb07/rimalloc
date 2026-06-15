@@ -459,6 +459,7 @@ unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page
     }
 }
 
+#[inline(always)]
 pub unsafe fn mi_free_ex(p: *mut c_void, usable: *mut usize, page: *mut mi_page_t) {
     if page.is_null() {
         return;
@@ -472,7 +473,15 @@ pub unsafe fn mi_free_ex(p: *mut c_void, usable: *mut usize, page: *mut mi_page_
     if xtid == 0 {
         let block = mi_validate_block_from_ptr(page, p);
         mi_free_block_local(page, block, false, true, false);
-    } else if xtid <= MI_PAGE_FLAG_MASK {
+        return;
+    }
+    mi_free_ex_slow(p, page, xtid);
+}
+
+#[cold]
+#[inline(never)]
+unsafe fn mi_free_ex_slow(p: *mut c_void, page: *mut mi_page_t, xtid: usize) {
+    if xtid <= MI_PAGE_FLAG_MASK {
         mi_free_generic_local(page, p);
     } else if (xtid & MI_PAGE_FLAG_MASK) == 0 {
         let block = mi_validate_block_from_ptr(page, p);

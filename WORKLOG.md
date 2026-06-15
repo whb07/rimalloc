@@ -102,3 +102,44 @@
   - `cargo check --features track-valgrind --quiet`
   - `cargo check --features track-asan --quiet`
   - `git diff --check`
+- Committed the random helper and pthread auto-done work as `6b26f73`.
+- Broader local mimalloc-bench pass with C/Rust external allocators at `-j=32`:
+  - Now-close cases include `alloc-testN` (`2.37s` C, `2.35s` Rust), `larsonN-sized` (`2.065s` C, `2.136s` Rust), `mstressN` (`1.62s` both), `xmalloc-testN` (`0.217s` C, `0.219s` Rust), cache tests, `malloc-large`, `mleak`, `barnes`, `cfrac`, and `espresso`.
+  - Single-run possible gaps were `rptestN`, `glibc-simple`, `glibc-thread`, and `sh8benchN`.
+- Repeated focused pass (`-n=3`) for candidate gaps:
+  - `rptestN` varied enough that Rust was within the C range (`C 1.411s..1.664s`, Rust `1.423s..1.479s`).
+  - `glibc-simple` remained slower in Rust (`C 1.34s..1.36s`, Rust `1.55s..1.56s`).
+  - `glibc-thread` remained slower in Rust (`C .414s.. .418s`, Rust `.486s.. .487s`).
+  - `sh8benchN` is noisy but still worth revisiting after the glibc-bench drift.
+- Next target: profile the stable glibc-bench small-allocation drift, starting with `glibc-simple` because it is single-process and deterministic.
+- Profiled and disassembled the glibc-bench small-allocation drift:
+  - `perf stat` before this change showed Rust `glibc-simple` at `8.462B` cycles, `24.984B` instructions, `2.95` IPC, and `1.783s` elapsed, while C was `6.555B` cycles, `23.432B` instructions, `3.57` IPC, and `1.382s` elapsed.
+  - Symbol inspection showed Rust exported `free`/delete wrappers separately while C aliases the basic free/delete entry points directly.
+  - Disassembly after inlining showed the Rust `mi_free` fast path still retained branches to `_mi_rust_assert_fail` from `mi_debug_assert!` in release builds.
+- Changed the free fast path and release debug assertions:
+  - Marked `mi_free_ex` as `#[inline(always)]` and split its non-local free handling into a cold `mi_free_ex_slow`.
+  - Changed `mi_debug_assert!` and `mi_debug_assert_eq!` so assertion expressions are evaluated only when `MI_DEBUG > 0`, matching C mimalloc release behavior.
+  - Added `tests/release_fast_path_audit.rs` to keep the release debug-assert gate from regressing.
+- Validation and inspection for the fast-path change:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo test --quiet lifecycle_theap_and_stats_exports_link_and_smoke`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+  - Rebuilt and copied the benchmark cdylib. `free`, `_ZdlPv`, and `_ZdaPv` now share one tiny exported entry, and `mi_free` no longer contains `_mi_rust_assert_fail` branches in the release fast path.
+- Focused mimalloc-bench after the fast-path change:
+  - `glibc-simple`: C `1.34s..1.35s`, Rust `1.45s..1.47s`, improved from Rust `1.55s..1.56s`.
+  - `glibc-thread`: C `.414s.. .416s`, Rust `.454s.. .456s`, improved from Rust `.486s.. .487s`.
+- Result: release debug assertion gating and free fast-path shape removed a measurable part of the glibc-bench gap, but a stable small-allocation delta remains.
+- Full validation passed after the fast-path benchmark confirmation:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

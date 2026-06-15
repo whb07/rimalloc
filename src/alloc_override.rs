@@ -186,18 +186,14 @@ pub unsafe extern "C" fn mi_unix_free_fast(_p: *mut c_void) {
 }
 
 #[cfg(all(not(windows), mi_c_malloc_fast))]
-#[unsafe(naked)]
-#[unsafe(export_name = "_ZdlPv")]
-pub unsafe extern "C" fn mi_cxx_delete_fast(_p: *mut c_void) {
-    mi_free_fast_body!();
-}
-
-#[cfg(all(not(windows), mi_c_malloc_fast))]
-#[unsafe(naked)]
-#[unsafe(export_name = "_ZdaPv")]
-pub unsafe extern "C" fn mi_cxx_delete_array_fast(_p: *mut c_void) {
-    mi_free_fast_body!();
-}
+core::arch::global_asm!(
+    ".globl _ZdlPv",
+    ".type _ZdlPv,@function",
+    ".set _ZdlPv, free",
+    ".globl _ZdaPv",
+    ".type _ZdaPv,@function",
+    ".set _ZdaPv, free",
+);
 
 #[macro_export]
 macro_rules! MI_FORWARD3 {

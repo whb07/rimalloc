@@ -444,3 +444,31 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Committed the TLS allocation fast-path parity fix as `3b2a327 Match C TLS allocation fast path`.
+- Next concrete C/Rust ABI-shape mismatch: C exports `free`, `_ZdlPv`, and `_ZdaPv` at the same address, while the Rust fast-path build emitted three duplicate naked function bodies:
+  - C: `free`, `_ZdlPv`, and `_ZdaPv` all at `0x8800`.
+  - Rust before change: `_ZdaPv 0x4e328`, `_ZdlPv 0x4e384`, `free 0x4e478`.
+- In-progress change: keep one canonical naked `free` fast body and define `_ZdlPv`/`_ZdaPv` as ELF assembler aliases to `free`, matching C's unsized delete/free entry-point layout.
+- Focused validation/build after the free/delete alias change:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+  - Dynamic symbol check now matches C's address layout: Rust `free`, `_ZdlPv`, and `_ZdaPv` all at `0x4e3c0`.
+  - External `LD_PRELOAD` smoke test allocating/freeing 16 bytes and calling `free(NULL)` exited cleanly.
+- Matched `cfrac` perf stat after the free/delete alias change:
+  - C: `13.333B` cycles, `43.891B` instructions, `6.959B` branches, `33.006M` branch misses, `8.808M` cache misses, `184` minor faults, `2.743s` elapsed.
+  - Rust: `13.358B` cycles, `43.593B` instructions, `6.956B` branches, `33.067M` branch misses, `8.884M` cache misses, `193` minor faults, `2.759s` elapsed.
+  - Result: branch parity remains fixed; the remaining signal is still the minor-fault/RSS difference plus a small cycle tail.
+- Full established validation passed after the free/delete alias change:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

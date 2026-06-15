@@ -328,8 +328,7 @@ pub unsafe fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
     ((*tv).tv_sec as mi_msecs_t * 1000) + ((*tv).tv_usec as mi_msecs_t / 1000)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
+pub(crate) unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
     if size == 0 {
         return 0;
     }
@@ -396,8 +395,7 @@ unsafe fn unix_detect_physical_memory(page_size: usize, physical_memory_in_kib: 
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
+pub(crate) unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     if config.is_null() {
         return;
     }
@@ -566,8 +564,7 @@ unsafe fn unix_mmap(
     p
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_alloc(
+pub(crate) unsafe extern "C" fn _mi_prim_alloc(
     hint_addr: *mut c_void,
     size: usize,
     try_alignment: usize,
@@ -606,8 +603,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
 #[inline]
 unsafe fn unix_mprotect_hint(_err: c_int) {}
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_commit(
+pub(crate) unsafe extern "C" fn _mi_prim_commit(
     start: *mut c_void,
     size: usize,
     is_zero: *mut bool,
@@ -626,15 +622,13 @@ pub unsafe extern "C" fn _mi_prim_commit(
     err
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) -> c_int {
+pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) -> c_int {
     let _ = start;
     let _ = size;
     0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_decommit(
+pub(crate) unsafe extern "C" fn _mi_prim_decommit(
     start: *mut c_void,
     size: usize,
     needs_recommit: *mut bool,
@@ -651,8 +645,7 @@ pub unsafe extern "C" fn _mi_prim_decommit(
     err
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_int {
+pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_int {
     static ADVICE: AtomicI32 = AtomicI32::new(MADV_FREE);
     let mut advice = ADVICE.load(Ordering::Relaxed);
     if advice == 0 {
@@ -669,8 +662,11 @@ pub unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_in
     err
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_protect(start: *mut c_void, size: usize, protect: bool) -> c_int {
+pub(crate) unsafe extern "C" fn _mi_prim_protect(
+    start: *mut c_void,
+    size: usize,
+    protect: bool,
+) -> c_int {
     let prot = if protect {
         PROT_NONE
     } else {
@@ -711,8 +707,7 @@ pub unsafe extern "C" fn mi_prim_mbind(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
+pub(crate) unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     hint_addr: *mut c_void,
     size: usize,
     numa_node: c_int,
@@ -781,8 +776,7 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
+pub(crate) unsafe extern "C" fn _mi_prim_numa_node() -> usize {
     #[cfg(target_os = "linux")]
     {
         #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
@@ -803,8 +797,7 @@ pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
     0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
+pub(crate) unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     #[cfg(target_os = "linux")]
     {
         let mut node: usize = 0;
@@ -827,7 +820,7 @@ pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
+pub(crate) unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
     #[cfg(any(
         target_os = "linux",
         target_os = "android",
@@ -881,7 +874,7 @@ pub unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
+pub(crate) unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
     if pinfo.is_null() {
         return;
     }
@@ -896,7 +889,7 @@ pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
+pub(crate) unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
     if msg.is_null() {
         return;
     }
@@ -918,8 +911,7 @@ pub unsafe extern "C" fn mi_get_environ() -> *mut *mut c_char {
     environ
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_getenv(
+pub(crate) unsafe extern "C" fn _mi_prim_getenv(
     name: *const c_char,
     result: *mut c_char,
     result_size: usize,
@@ -975,7 +967,7 @@ pub unsafe extern "C" fn _mi_prim_getenv(
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: usize) -> bool {
+pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: usize) -> bool {
     if buf_len == 0 {
         return true;
     }
@@ -1061,32 +1053,27 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
+pub(crate) unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     crate::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
     let _ = pthread_key_create(&raw mut _mi_heap_default_key, Some(mi_pthread_done));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
+pub(crate) unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
     if _mi_heap_default_key != PTHREAD_KEY_INVALID {
         let _ = pthread_key_delete(_mi_heap_default_key);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
+pub(crate) unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
     if _mi_heap_default_key != PTHREAD_KEY_INVALID {
         let _ = pthread_setspecific(_mi_heap_default_key, theap.cast::<c_void>());
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
+pub(crate) unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
     false
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_prim_thread_yield() {
+pub(crate) unsafe extern "C" fn _mi_prim_thread_yield() {
     let _ = sleep(0);
 }

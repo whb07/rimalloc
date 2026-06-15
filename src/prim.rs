@@ -112,44 +112,40 @@ thread_local! {
     static TLS_THEAP_CACHED: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
-unsafe extern "C" {
-    pub fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t);
-    pub fn _mi_prim_free(addr: *mut c_void, size: usize) -> i32;
-    pub fn _mi_prim_alloc(
-        hint_addr: *mut c_void,
-        size: usize,
-        try_alignment: usize,
-        commit: bool,
-        allow_large: bool,
-        is_large: *mut bool,
-        is_zero: *mut bool,
-        addr: *mut *mut c_void,
-    ) -> i32;
-    pub fn _mi_prim_commit(addr: *mut c_void, size: usize, is_zero: *mut bool) -> i32;
-    pub fn _mi_prim_decommit(addr: *mut c_void, size: usize, needs_recommit: *mut bool) -> i32;
-    pub fn _mi_prim_reset(addr: *mut c_void, size: usize) -> i32;
-    pub fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> i32;
-    pub fn _mi_prim_protect(addr: *mut c_void, size: usize, protect: bool) -> i32;
-    pub fn _mi_prim_alloc_huge_os_pages(
-        hint_addr: *mut c_void,
-        size: usize,
-        numa_node: i32,
-        is_zero: *mut bool,
-        addr: *mut *mut c_void,
-    ) -> i32;
-    pub fn _mi_prim_numa_node() -> usize;
-    pub fn _mi_prim_numa_node_count() -> usize;
-    pub fn _mi_prim_clock_now() -> mi_msecs_t;
-    pub fn _mi_prim_process_info(pinfo: *mut mi_process_info_t);
-    pub fn _mi_prim_out_stderr(msg: *const c_char);
-    pub fn _mi_prim_getenv(name: *const c_char, result: *mut c_char, result_size: usize) -> bool;
-    pub fn _mi_prim_random_buf(buf: *mut c_void, buf_len: usize) -> bool;
-    pub fn _mi_prim_thread_init_auto_done();
-    pub fn _mi_prim_thread_done_auto_done();
-    pub fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t);
-    pub fn _mi_prim_thread_is_in_threadpool() -> bool;
-    pub fn _mi_prim_thread_yield();
+#[cfg(target_os = "emscripten")]
+pub(crate) use emscripten::{
+    _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
+    _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
+    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
+    _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
+    _mi_prim_thread_init_auto_done, _mi_prim_thread_is_in_threadpool, _mi_prim_thread_yield,
+};
+#[cfg(all(not(windows), not(target_os = "emscripten"), not(target_os = "wasi")))]
+pub(crate) use unix::{
+    _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
+    _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
+    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
+    _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
+    _mi_prim_thread_init_auto_done, _mi_prim_thread_is_in_threadpool, _mi_prim_thread_yield,
+};
+#[cfg(target_os = "wasi")]
+pub(crate) use wasi::{
+    _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
+    _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
+    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
+    _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
+    _mi_prim_thread_init_auto_done, _mi_prim_thread_is_in_threadpool, _mi_prim_thread_yield,
+};
+#[cfg(windows)]
+pub(crate) use windows::{
+    _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
+    _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
+    _mi_prim_numa_node_count, _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse,
+    _mi_prim_thread_associate_default_theap, _mi_prim_thread_done_auto_done,
+    _mi_prim_thread_init_auto_done, _mi_prim_thread_is_in_threadpool, _mi_prim_thread_yield,
+};
 
+unsafe extern "C" {
     pub static mut _mi_process_is_initialized: bool;
     pub static mut _mi_theap_default_slot: usize;
     pub static mut _mi_theap_cached_slot: usize;

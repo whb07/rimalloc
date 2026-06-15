@@ -149,6 +149,9 @@ fn free_path_internals_are_not_dynamic_exports() {
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
+    let prim_rs = fs::read_to_string(root.join("src/prim.rs")).expect("read src/prim.rs");
+    let prim_unix_rs =
+        fs::read_to_string(root.join("src/prim/unix.rs")).expect("read src/prim/unix.rs");
 
     for internal_name in [
         "pub static mut _mi_page_map",
@@ -293,6 +296,91 @@ fn free_path_internals_are_not_dynamic_exports() {
             &libc_rs,
             "pub unsafe extern \"C\" fn _mi_strnlen",
         ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_free",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_mem_init",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_alloc",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_commit",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_reuse",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_decommit",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_reset",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_protect",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_alloc_huge_os_pages",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_numa_node",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_numa_node_count",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_getenv",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_thread_init_auto_done",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_thread_done_auto_done",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_thread_associate_default_theap",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_thread_is_in_threadpool",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub unsafe extern \"C\" fn _mi_prim_thread_yield",
+        ),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -315,6 +403,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub static _mi_theap_empty_wrong:")
             && internal.contains("pub(crate) use crate::page_map::{"),
         "page-map internals should be imported through crate paths, not extern declarations"
+    );
+    assert!(
+        prim_rs.contains("pub(crate) use unix::{")
+            && !prim_rs.contains("pub fn _mi_prim_mem_init(")
+            && !prim_rs.contains("pub fn _mi_prim_alloc(")
+            && !prim_rs.contains("pub fn _mi_prim_thread_yield("),
+        "Unix primitive helpers should be routed through crate paths, not extern declarations"
     );
     assert!(
         !init_rs.contains("#[unsafe(no_mangle)]\npub static _mi_page_empty"),

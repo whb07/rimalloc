@@ -66,3 +66,39 @@
   - `mstressN`: C `1.61s`, Rust `2.46s`; Rust RSS `14615320` KiB and sys `23.22s`.
   - `xmalloc-testN`: C `0.220s`, Rust `0.218s`.
 - Result: option locking is no longer the dominant remaining issue; the major gap is still high RSS/sys behavior in multi-threaded arena/page lifecycle paths.
+- Follow-up syscall profiling for `larson-sized`:
+  - C uses about `2845` `getrandom` calls during thread churn.
+  - Rust was doing about `2611` `openat`, `read`, and `close` calls against `/dev/urandom`, plus `getcpu`, because `src/random.rs` had a private `/dev/urandom` reader instead of using the Unix primitive random path.
+- Changed `src/random.rs` to delegate secure random bytes to the Unix primitive random helper, matching the primitive layer that uses direct random syscalls on Linux and keeps `/dev/urandom` as fallback.
+- Focused validation for the random helper change:
+  - `cargo fmt --check`
+  - `cargo test --quiet random`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+- Rebuilt and copied the benchmark cdylib. `strace -f -c` for Rust `larson-sized` no longer shows per-thread `/dev/urandom` open/read/close churn; it now shows `getrandom` during thread churn, with only startup loader file calls remaining.
+- `MIMALLOC_SHOW_STATS=1` on `mstress` exposed the next parity issue:
+  - C exits with thread heaps reclaimed (`theaps current 0`, `threads current 1`) and about `1.0 GiB` current commit.
+  - Rust kept benchmark worker thread heaps live (`theaps current 775`, `threads current 775`) with about `17.4 GiB` current commit, which explains the high RSS/sys behavior.
+- Found the thread cleanup cause: Rust process teardown called `_mi_prim_thread_done_auto_done`, but process init never called `_mi_prim_thread_init_auto_done`, so pthread TLS destructors were not installed for automatic worker-thread `_mi_thread_done`.
+- Changed `_mi_auto_process_init` to initialize the primitive auto-done hook before establishing the default thread heap.
+- Focused validation after the auto-done hook change:
+  - `cargo fmt --check`
+  - `cargo test --quiet lifecycle_theap_and_stats_exports_link_and_smoke`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo test --quiet`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+- Rebuilt and copied the benchmark cdylib. Rust `mstress` stats now show automatic worker cleanup (`theaps current 0`, `threads current 1`) and current commit around `960 MiB`, instead of retained worker heaps and `17.4 GiB`.
+- Focused mimalloc-bench after the random helper and auto-done hook changes:
+  - `larsonN-sized`: C `5.485s`, Rust `5.554s`; C RSS `227328` KiB, Rust RSS `235428` KiB; C sys `0.66s`, Rust sys `0.67s`.
+  - `mstressN`: C `4.39s`, Rust `4.67s`; C RSS `1010408` KiB, Rust RSS `976692` KiB; C sys `1.77s`, Rust sys `2.31s`.
+- Result: the severe multi-threaded RSS/sys-time gap was caused by missing automatic pthread cleanup for thread heaps. Remaining work is broader benchmark parity and the smaller residual `mstress` sys/minor-fault delta.
+- `scripts/check-behavioral-parity.py` passed after the random helper and auto-done hook changes.
+- Full validation after the benchmark confirmation:
+  - `cargo test --release --quiet`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `git diff --check`

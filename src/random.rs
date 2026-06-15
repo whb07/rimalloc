@@ -150,14 +150,7 @@ fn _mi_prim_random_buf(buf: *mut u8, buf_len: usize) -> bool {
     crate::mi_debug_assert!(!buf.is_null());
     #[cfg(unix)]
     {
-        use std::fs::File;
-        use std::io::Read;
-
-        let slice = unsafe { core::slice::from_raw_parts_mut(buf, buf_len) };
-        match File::open("/dev/urandom") {
-            Ok(mut file) => file.read_exact(slice).is_ok(),
-            Err(_) => false,
-        }
+        unsafe { crate::prim::unix::_mi_prim_random_buf(buf.cast(), buf_len) }
     }
     #[cfg(not(unix))]
     {

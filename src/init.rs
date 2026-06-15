@@ -1748,6 +1748,7 @@ pub unsafe extern "C" fn _mi_auto_process_init() {
         crate::os::_mi_os_init();
         mi_heap_main_init();
         let _ = crate::page_map::_mi_page_map_init();
+        crate::prim::_mi_prim_thread_init_auto_done();
         if !crate::prim::_mi_thread_is_initialized() && !_mi_thread_init_theap_default().is_null() {
             let heap = mi_heap_main();
             if !heap.is_null() {

@@ -1,7 +1,11 @@
 use std::fs;
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+use std::mem::align_of;
 use std::mem::{offset_of, size_of};
 use std::path::Path;
 
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+use mechanical_mimalloc::atomic::mi_lock_t;
 use mechanical_mimalloc::types::mi_page_t;
 #[cfg(not(feature = "guarded"))]
 use mechanical_mimalloc::types::mi_theap_t;
@@ -135,6 +139,7 @@ fn stderr_output_routes_through_platform_primitive() {
 fn options_state_uses_internal_locks_like_c() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
+    let atomic_rs = fs::read_to_string(root.join("src/atomic.rs")).expect("read src/atomic.rs");
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
@@ -216,6 +221,34 @@ fn options_state_uses_internal_locks_like_c() {
             && options_rs.contains("mi_lock_release(addr_of_mut!(mi_error_handler_lock))")
             && options_rs.contains("#[link_name = \"abort\"]"),
         "options state should use mimalloc's internal lock and C abort primitives"
+    );
+    #[cfg(all(target_os = "linux", not(debug_assertions)))]
+    {
+        assert_eq!(
+            size_of::<mi_lock_t>(),
+            40,
+            "Linux mi_lock_t should match the pthread_mutex_t-backed C layout"
+        );
+        assert_eq!(
+            align_of::<mi_lock_t>(),
+            align_of::<usize>(),
+            "Linux mi_lock_t should keep pthread mutex alignment"
+        );
+    }
+    assert!(
+        atomic_rs.contains(
+            "#[cfg(all(target_os = \"linux\", not(debug_assertions)))]\n#[link(name = \"pthread\")]"
+        )
+            && atomic_rs.contains("fn pthread_mutex_trylock(mutex: *mut pthread_mutex_t)")
+            && atomic_rs.contains("fn pthread_mutex_lock(mutex: *mut pthread_mutex_t)")
+            && atomic_rs.contains("fn pthread_mutex_unlock(mutex: *mut pthread_mutex_t)")
+            && atomic_rs.contains("fn pthread_mutex_destroy(mutex: *mut pthread_mutex_t)")
+            && atomic_rs.contains("pthread_mutex_trylock(ptr::addr_of_mut!((*lock).mutex)) == 0")
+            && atomic_rs.contains("pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex))")
+            && atomic_rs.contains("pthread_mutex_unlock(ptr::addr_of_mut!((*lock).mutex))")
+            && atomic_rs.contains("pthread_mutex_destroy(ptr::addr_of_mut!((*lock).mutex))")
+            && atomic_rs.contains("#[cfg(not(all(target_os = \"linux\", not(debug_assertions))))]\npub unsafe extern \"C\" fn mi_lock_acquire"),
+        "optimized Linux locks should use the C MI_USE_PTHREADS pthread_mutex_t branch, with the atomic fallback kept for debug/test binaries"
     );
     assert!(
         !options_rs
@@ -336,6 +369,12 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && threadlocal_rs.contains("static mi_thread_locals_empty: mi_thread_locals_t;")
             && !tls_shim.contains("static __thread void* mi_tls_thread_locals"),
         "Linux x86_64 dynamic thread-local storage should use C's mi_thread_locals TLS cell directly"
+    );
+    assert!(
+        threadlocal_rs.contains(
+            "if mi_thread_locals_free.load(Ordering::Acquire).is_null() {\n        return;\n    }"
+        ),
+        "dynamic thread-local cleanup should skip the lock path when no dynamic TLS slots were allocated"
     );
     assert!(
         build_rs.contains("target_arch == \"x86_64\"")
@@ -1167,6 +1206,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !init_rs.contains("fn _mi_theap_free(")
             && !init_rs.contains("fn _mi_heap_force_destroy("),
         "thread initialization internals should call crate-local theap lifecycle helpers directly"
+    );
+    assert!(
+        theap_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_collect_abandon"
+        ) && theap_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_free"),
+        "thread teardown should keep C's heap collect/free call boundaries instead of inlining them into _mi_thread_done"
     );
     assert!(
         init_rs.contains("#[inline(always)]\nunsafe fn _mi_thread_init_theap_default()"),

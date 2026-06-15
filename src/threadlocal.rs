@@ -327,6 +327,9 @@ pub extern "C" fn _mi_thread_locals_init() {
 }
 
 pub extern "C" fn _mi_thread_locals_done() {
+    if mi_thread_locals_free.load(Ordering::Acquire).is_null() {
+        return;
+    }
     unsafe {
         mi_lock_acquire(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
     }

@@ -430,6 +430,7 @@ unsafe fn mi_theap_collect_ex(theap: *mut mi_theap_t, mut collect: mi_collect_t)
     mi_theap_merge_stats(theap);
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_collect_abandon(theap: *mut mi_theap_t) {
     mi_theap_collect_ex(theap, mi_collect_t::MI_ABANDON);
 }
@@ -618,6 +619,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_free(
     theap: *mut mi_theap_t,
     acquire_heap_theaps_lock: bool,

@@ -7,7 +7,12 @@
     unsafe_op_in_unsafe_fn
 )]
 
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+use core::ffi::c_int;
+#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
 use core::hint::spin_loop;
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+use core::ptr;
 use core::ptr::read_volatile;
 use core::sync::atomic::{AtomicI64, AtomicIsize, AtomicUsize, Ordering, fence};
 
@@ -40,15 +45,29 @@ pub type mi_memory_order = mi_memory_order_e;
 #[repr(C)]
 #[derive(Debug)]
 pub struct mi_lock_s {
-    pub mutex: AtomicUsize,
+    pub mutex: pthread_mutex_t,
 }
 
 pub type mi_lock_t = mi_lock_s;
 
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct pthread_mutex_t {
+    __data: [usize; 5],
+}
+
+#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
+#[repr(C)]
+#[derive(Debug)]
+pub struct pthread_mutex_t {
+    mutex: AtomicUsize,
+}
+
 impl mi_lock_s {
     pub const fn new() -> Self {
         Self {
-            mutex: AtomicUsize::new(0),
+            mutex: pthread_mutex_t::new(),
         }
     }
 }
@@ -62,6 +81,45 @@ impl Default for mi_lock_s {
 pub static MI_LOCK_INITIALIZER: mi_lock_t = mi_lock_s::new();
 
 pub type mi_atomic_guard_t = AtomicUsize;
+
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+impl pthread_mutex_t {
+    pub const fn new() -> Self {
+        Self { __data: [0; 5] }
+    }
+}
+
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+impl Default for pthread_mutex_t {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
+impl pthread_mutex_t {
+    pub const fn new() -> Self {
+        Self {
+            mutex: AtomicUsize::new(0),
+        }
+    }
+}
+
+#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
+impl Default for pthread_mutex_t {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+#[link(name = "pthread")]
+unsafe extern "C" {
+    fn pthread_mutex_trylock(mutex: *mut pthread_mutex_t) -> c_int;
+    fn pthread_mutex_lock(mutex: *mut pthread_mutex_t) -> c_int;
+    fn pthread_mutex_unlock(mutex: *mut pthread_mutex_t) -> c_int;
+    fn pthread_mutex_destroy(mutex: *mut pthread_mutex_t) -> c_int;
+}
 
 pub struct mi_atomic_guard_scope_t {
     guard: *mut mi_atomic_guard_t,
@@ -582,28 +640,67 @@ pub unsafe extern "C" fn mi_atomic_subi(p: *mut isize, sub: isize) -> isize {
     atomic_isize(p).fetch_sub(sub, Ordering::AcqRel)
 }
 
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
+    pthread_mutex_trylock(ptr::addr_of_mut!((*lock).mutex)) == 0
+}
+
+#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
 pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
     let expected = 0;
     (*lock)
+        .mutex
         .mutex
         .compare_exchange(expected, 1, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
 }
 
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
+    let err = pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex));
+    if err != 0 {
+        crate::options::_mi_error_message(
+            err,
+            c"internal error: lock cannot be acquired\n".as_ptr(),
+        );
+    }
+}
+
+#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
 pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
     while !mi_lock_try_acquire(lock) {
         spin_loop();
     }
 }
 
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
 pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
-    (*lock).mutex.store(0, Ordering::Release);
+    pthread_mutex_unlock(ptr::addr_of_mut!((*lock).mutex));
 }
 
+#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
+pub unsafe extern "C" fn mi_lock_release(lock: *mut mi_lock_t) {
+    (*lock).mutex.mutex.store(0, Ordering::Release);
+}
+
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
+    if !lock.is_null() {
+        (*lock).mutex = pthread_mutex_t::new();
+    }
+}
+
+#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
 pub unsafe extern "C" fn mi_lock_init(lock: *mut mi_lock_t) {
     mi_lock_release(lock);
 }
 
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
+    pthread_mutex_destroy(ptr::addr_of_mut!((*lock).mutex));
+}
+
+#[cfg(not(all(target_os = "linux", not(debug_assertions))))]
 pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
     let _ = lock;
 }

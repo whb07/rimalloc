@@ -392,6 +392,7 @@ unsafe fn unix_detect_physical_memory(page_size: usize, physical_memory_in_kib: 
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     if config.is_null() {
         return;
@@ -621,6 +622,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_commit(
     err
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) -> c_int {
     let _ = start;
     let _ = size;
@@ -709,6 +711,7 @@ pub unsafe extern "C" fn mi_prim_mbind(
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     hint_addr: *mut c_void,
     size: usize,
@@ -827,6 +830,7 @@ fn mi_prim_numa_node_path(node: usize, buf: &mut [c_char; 128]) -> *const c_char
     buf.as_ptr()
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     #[cfg(target_os = "linux")]
     {
@@ -847,7 +851,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     }
 }
 
-#[inline]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
     #[cfg(any(
         target_os = "linux",
@@ -901,7 +905,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
     }
 }
 
-#[inline]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
     if pinfo.is_null() {
         return;
@@ -916,7 +920,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_inf
     (*pinfo).peak_rss = (usage.ru_maxrss as usize).saturating_mul(1024);
 }
 
-#[inline]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
     if msg.is_null() {
         return;
@@ -1004,7 +1008,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_getenv(
     true
 }
 
-#[inline]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: usize) -> bool {
     if buf_len == 0 {
         return true;
@@ -1091,27 +1095,69 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     crate::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
     let _ = pthread_key_create(&raw mut _mi_heap_default_key, Some(mi_pthread_done));
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
     if _mi_heap_default_key != PTHREAD_KEY_INVALID {
         let _ = pthread_key_delete(_mi_heap_default_key);
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
     if _mi_heap_default_key != PTHREAD_KEY_INVALID {
         let _ = pthread_setspecific(_mi_heap_default_key, theap.cast::<c_void>());
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
     false
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_yield() {
     let _ = sleep(0);
 }
+
+#[used]
+static MI_PRIM_MEM_INIT_KEEP: unsafe extern "C" fn(*mut mi_os_mem_config_t) = _mi_prim_mem_init;
+#[used]
+static MI_PRIM_REUSE_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> c_int = _mi_prim_reuse;
+#[used]
+static MI_PRIM_ALLOC_HUGE_OS_PAGES_KEEP: unsafe extern "C" fn(
+    *mut c_void,
+    usize,
+    c_int,
+    *mut bool,
+    *mut *mut c_void,
+) -> c_int = _mi_prim_alloc_huge_os_pages;
+#[used]
+static MI_PRIM_NUMA_NODE_COUNT_KEEP: unsafe extern "C" fn() -> usize = _mi_prim_numa_node_count;
+#[used]
+static MI_PRIM_CLOCK_NOW_KEEP: unsafe extern "C" fn() -> mi_msecs_t = _mi_prim_clock_now;
+#[used]
+static MI_PRIM_PROCESS_INFO_KEEP: unsafe extern "C" fn(*mut mi_process_info_t) =
+    _mi_prim_process_info;
+#[used]
+static MI_PRIM_OUT_STDERR_KEEP: unsafe extern "C" fn(*const c_char) = _mi_prim_out_stderr;
+#[used]
+static MI_PRIM_RANDOM_BUF_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> bool =
+    _mi_prim_random_buf;
+#[used]
+static MI_PRIM_THREAD_INIT_AUTO_DONE_KEEP: unsafe extern "C" fn() = _mi_prim_thread_init_auto_done;
+#[used]
+static MI_PRIM_THREAD_DONE_AUTO_DONE_KEEP: unsafe extern "C" fn() = _mi_prim_thread_done_auto_done;
+#[used]
+static MI_PRIM_THREAD_ASSOCIATE_DEFAULT_THEAP_KEEP: unsafe extern "C" fn(*mut mi_theap_t) =
+    _mi_prim_thread_associate_default_theap;
+#[used]
+static MI_PRIM_THREAD_IS_IN_THREADPOOL_KEEP: unsafe extern "C" fn() -> bool =
+    _mi_prim_thread_is_in_threadpool;
+#[used]
+static MI_PRIM_THREAD_YIELD_KEEP: unsafe extern "C" fn() = _mi_prim_thread_yield;

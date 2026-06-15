@@ -1681,3 +1681,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.11s..2.11s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.07B` instructions and `15.58B` cycles; Rust about `10.66B` instructions and `16.07B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's Unix primitive helper boundary set:
+  - C emits the Unix `_mi_prim_*` helpers for memory configuration, reuse, huge OS pages, NUMA count, clocks, process info, stderr output, random buffers, and pthread lifecycle hooks as standalone local functions.
+  - Rust had mechanical source equivalents, but release still inlined or dropped this set, leaving the local helper symbol set behind C.
+  - Marked the Rust Unix primitive helpers `#[inline(never)]`, retained them through local `#[used]` function-pointer anchors, and extended release audit coverage for the crate-local helper markers and anchors.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::prim::unix::_mi_prim_mem_init`, `_mi_prim_reuse`, `_mi_prim_alloc_huge_os_pages`, `_mi_prim_numa_node_count`, `_mi_prim_clock_now`, `_mi_prim_process_info`, `_mi_prim_out_stderr`, `_mi_prim_random_buf`, and the pthread auto-done helpers, with no dynamic exports for the set.
+  - The next local-symbol gap now starts at `_mi_prim_alloc`, `_mi_prim_commit`, `_mi_prim_protect`, and `_mi_prim_reset`, followed by random/libc/stats/subproc helpers.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.21s` with one noisy high run, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.05B` instructions and `15.50B` cycles; Rust about `10.68B` instructions and `16.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

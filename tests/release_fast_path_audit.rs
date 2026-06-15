@@ -902,7 +902,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_mem_init",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_mem_init",
         ),
         (
             "src/prim/unix.rs",
@@ -917,7 +917,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_reuse",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_reuse",
         ),
         (
             "src/prim/unix.rs",
@@ -937,7 +937,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_alloc_huge_os_pages",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_alloc_huge_os_pages",
         ),
         (
             "src/prim/unix.rs",
@@ -947,7 +947,27 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_numa_node_count",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_numa_node_count",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_clock_now",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_process_info",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_out_stderr",
+        ),
+        (
+            "src/prim/unix.rs",
+            &prim_unix_rs,
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_random_buf",
         ),
         (
             "src/prim/unix.rs",
@@ -962,27 +982,27 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_thread_init_auto_done",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_init_auto_done",
         ),
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_thread_done_auto_done",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_done_auto_done",
         ),
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_thread_associate_default_theap",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_associate_default_theap",
         ),
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_thread_is_in_threadpool",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_is_in_threadpool",
         ),
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_thread_yield",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_yield",
         ),
         (
             "src/os.rs",
@@ -1486,6 +1506,39 @@ fn free_path_internals_are_not_dynamic_exports() {
             ),
         "_mi_popcount_generic should keep C's local noinline generic popcount boundary"
     );
+    for marker in [
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_mem_init(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_reuse(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_alloc_huge_os_pages(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_numa_node_count(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_clock_now(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_process_info(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_out_stderr(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_random_buf(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_thread_init_auto_done(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_thread_done_auto_done(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_thread_associate_default_theap(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_thread_is_in_threadpool(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_thread_yield(",
+        "static MI_PRIM_MEM_INIT_KEEP",
+        "static MI_PRIM_REUSE_KEEP",
+        "static MI_PRIM_ALLOC_HUGE_OS_PAGES_KEEP",
+        "static MI_PRIM_NUMA_NODE_COUNT_KEEP",
+        "static MI_PRIM_CLOCK_NOW_KEEP",
+        "static MI_PRIM_PROCESS_INFO_KEEP",
+        "static MI_PRIM_OUT_STDERR_KEEP",
+        "static MI_PRIM_RANDOM_BUF_KEEP",
+        "static MI_PRIM_THREAD_INIT_AUTO_DONE_KEEP",
+        "static MI_PRIM_THREAD_DONE_AUTO_DONE_KEEP",
+        "static MI_PRIM_THREAD_ASSOCIATE_DEFAULT_THEAP_KEEP",
+        "static MI_PRIM_THREAD_IS_IN_THREADPOOL_KEEP",
+        "static MI_PRIM_THREAD_YIELD_KEEP",
+    ] {
+        assert!(
+            prim_unix_rs.contains(marker),
+            "Unix primitive helper boundary marker missing: {marker}"
+        );
+    }
     assert!(
         options_rs
             .contains("#[inline(never)]\npub(crate) fn _mi_message(args: fmt::Arguments<'_>)")

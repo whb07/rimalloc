@@ -627,12 +627,14 @@ pub extern "C" fn mi_arena_min_size() -> usize {
 
 /// # Safety
 /// Matches the C internal API and returns the null arena-id sentinel.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arena_id_none() -> mi_arena_id_t {
     ptr::null_mut()
 }
 
 /// # Safety
 /// `id` must be either null or a valid top-level `mi_arena_t*`.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t {
     let arena = id.cast::<mi_arena_t>();
     crate::mi_assert_internal!(
@@ -640,6 +642,13 @@ pub(crate) unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_
     );
     arena
 }
+
+#[used]
+static MI_ARENA_ID_NONE_KEEP: unsafe extern "C" fn() -> mi_arena_id_t = _mi_arena_id_none;
+
+#[used]
+static MI_ARENA_FROM_ID_KEEP: unsafe extern "C" fn(mi_arena_id_t) -> *mut mi_arena_t =
+    _mi_arena_from_id;
 
 /// # Safety
 /// `arena` must be null or a valid top-level `mi_arena_t*`.
@@ -672,6 +681,7 @@ unsafe fn mi_arena_is_suitable(arena: *mut mi_arena_t, req_arena: *mut mi_arena_
 
 /// # Safety
 /// `memid` and `request_arena` must follow the internal arena allocation invariants.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arena_memid_is_suitable(
     memid: mi_memid_t,
     request_arena: *mut mi_arena_t,

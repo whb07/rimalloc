@@ -1485,3 +1485,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.66B` cycles; Rust about `11.88B` instructions and `18.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's arena id helper boundaries:
+  - C emits `_mi_arena_id_none`, `_mi_arena_from_id`, and `_mi_arena_memid_is_suitable` as standalone local helpers, while Rust had matching source functions that were inlined away in release.
+  - Marked the Rust helpers `#[inline(never)]` and extended release audit coverage requiring arena id conversion and memid suitability call relationships to keep those C boundaries.
+  - Added local `#[used]` function-pointer anchors for the trivial `_mi_arena_id_none` and `_mi_arena_from_id` helpers; C emits both even when optimized Rust can fold their current call sites away.
+  - Rebuilt release and confirmed Rust now emits local `_mi_arena_id_none`, `_mi_arena_from_id`, and `_mi_arena_memid_is_suitable`, matching C's local helper set.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.03s..2.05s`, Rust `2.11s..2.16s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.67B` cycles; Rust about `11.89B` instructions and `18.25B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

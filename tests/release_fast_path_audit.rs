@@ -1357,6 +1357,21 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena allocation, containment, and unsafe destroy helpers should keep C's local call boundaries"
     );
     assert!(
+        arena_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arena_id_none")
+            && arena_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arena_from_id")
+            && arena_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arena_memid_is_suitable"
+            )
+            && arena_rs.contains("static MI_ARENA_ID_NONE_KEEP")
+            && arena_rs.contains("static MI_ARENA_FROM_ID_KEEP")
+            && arena_rs.contains("unsafe { _mi_arena_id_none() }")
+            && arena_rs.contains("let arena = unsafe { _mi_arena_from_id(arena_id) };")
+            && heap_rs.contains("(*heap).exclusive_arena = _mi_arena_from_id(exclusive_arena_id);")
+            && free_rs.contains("_mi_arena_memid_is_suitable("),
+        "arena id conversion and memid suitability helpers should keep C's local call boundaries"
+    );
+    assert!(
         !init_rs.contains("fn _mi_theap_collect_abandon(")
             && !init_rs.contains("fn _mi_theap_create(")
             && !init_rs.contains("fn _mi_theap_free(")

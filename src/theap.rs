@@ -552,6 +552,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_init(
     mi_lock_release(ptr::addr_of_mut!((*heap).theaps_lock));
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_create(
     heap: *mut mi_heap_t,
     tld: *mut mi_tld_t,
@@ -732,6 +733,12 @@ pub(crate) unsafe extern "C" fn _mi_theap_delete(
 #[used]
 static MI_THEAP_RANDOM_NEXT_KEEP: unsafe extern "C" fn(*mut mi_theap_t) -> usize =
     _mi_theap_random_next;
+
+#[used]
+static MI_THEAP_CREATE_KEEP: unsafe extern "C" fn(
+    *mut mi_heap_t,
+    *mut mi_tld_t,
+) -> *mut mi_theap_t = _mi_theap_create;
 
 #[used]
 static MI_THEAP_DELETE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, bool) = _mi_theap_delete;

@@ -884,12 +884,30 @@ unsafe fn mi_try_new_handler(nothrow: bool) -> bool {
 }
 
 #[inline(never)]
-unsafe fn mi_theap_try_new(theap: *mut mi_theap_t, size: usize, nothrow: bool) -> *mut c_void {
+unsafe extern "C" fn mi_theap_try_new(
+    theap: *mut mi_theap_t,
+    size: usize,
+    nothrow: bool,
+) -> *mut c_void {
     let mut p: *mut c_void = ptr::null_mut();
     while p.is_null() && mi_try_new_handler(nothrow) {
         p = mi_theap_malloc(theap, size);
     }
     p
+}
+
+#[inline(never)]
+unsafe extern "C" fn mi_try_new(size: usize, nothrow: bool) -> *mut c_void {
+    mi_theap_try_new(_mi_theap_default(), size, nothrow)
+}
+
+#[inline(never)]
+unsafe extern "C" fn mi_heap_try_new(
+    heap: *mut mi_heap_t,
+    size: usize,
+    nothrow: bool,
+) -> *mut c_void {
+    mi_theap_try_new(_mi_heap_theap(heap), size, nothrow)
 }
 
 unsafe fn mi_theap_alloc_new(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
@@ -910,7 +928,7 @@ pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
 pub unsafe extern "C" fn mi_heap_alloc_new(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     let p = mi_heap_malloc(heap, size);
     if mi_unlikely(p.is_null()) {
-        mi_theap_try_new(_mi_heap_theap(heap), size, false)
+        mi_heap_try_new(heap, size, false)
     } else {
         p
     }
@@ -944,7 +962,7 @@ pub unsafe extern "C" fn mi_heap_alloc_new_n(
 pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
     let p = mi_malloc(size);
     if mi_unlikely(p.is_null()) {
-        mi_theap_try_new(_mi_theap_default(), size, true)
+        mi_try_new(size, true)
     } else {
         p
     }
@@ -997,6 +1015,17 @@ pub unsafe extern "C" fn mi_new_reallocn(
         mi_new_realloc(p, total)
     }
 }
+
+#[used]
+static MI_THEAP_TRY_NEW_KEEP: unsafe extern "C" fn(*mut mi_theap_t, usize, bool) -> *mut c_void =
+    mi_theap_try_new;
+
+#[used]
+static MI_TRY_NEW_KEEP: unsafe extern "C" fn(usize, bool) -> *mut c_void = mi_try_new;
+
+#[used]
+static MI_HEAP_TRY_NEW_KEEP: unsafe extern "C" fn(*mut mi_heap_t, usize, bool) -> *mut c_void =
+    mi_heap_try_new;
 
 unsafe fn mi_block_ptr_set_guarded(block: *mut mi_block_t, obj_size: usize) -> *mut c_void {
     if MI_GUARDED == 0 {

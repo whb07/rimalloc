@@ -279,7 +279,8 @@ pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
 }
 
 #[allow(dead_code)]
-unsafe fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
+#[inline(never)]
+unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let heap = heap.cast_mut();
     crate::mi_assert_internal!(!heap.is_null());
 
@@ -346,3 +347,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_theap_get_or_init(
     _mi_theap_cached_set(theap);
     theap
 }
+
+#[used]
+static MI_HEAP_INIT_THEAP_KEEP: unsafe extern "C" fn(*const mi_heap_t) -> *mut mi_theap_t =
+    mi_heap_init_theap;

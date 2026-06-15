@@ -965,3 +965,25 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued bounded-formatting parity:
+  - Found `mi_vsnprintf_args` rendered Rust `fmt::Arguments` through a heap-allocated `String` before copying into the fixed caller buffer. C's `_mi_vsnprintf` writes directly into the bounded output buffer.
+  - Replaced the intermediate `String` with a small `fmt::Write` adapter that copies directly into the caller buffer, truncates to `bufsize - 1`, and always NUL-terminates.
+  - Added source audit coverage rejecting the old `String::new`/`rendered.as_bytes` bounded snprintf path and requiring the direct fixed-buffer writer.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Rebuilt `target/bench-allocators/libmimalloc-rust.so`; `RELACOUNT` stayed at `1490`. Broader `alloc::fmt::format`/`CString` symbols remain from exported stats/options paths.
+  - Direct `cfrac` after the bounded-formatting cleanup: C `2.71s..2.81s`, RSS `5820..6280` KiB, minor `203`; Rust `2.70s..2.75s`, RSS `6716..6772` KiB, minor `210..211`.
+  - Result: runtime allocation in the Rust-side bounded snprintf path is fixed, but the remaining `cfrac` RSS/minor-fault tail persists.
+- Full established validation passed after the bounded-formatting cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

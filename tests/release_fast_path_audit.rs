@@ -65,6 +65,7 @@ fn stderr_output_routes_through_platform_primitive() {
 fn options_state_uses_internal_locks_like_c() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
+    let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
     let prim_rs = fs::read_to_string(root.join("src/prim.rs")).expect("read src/prim.rs");
     let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
@@ -97,6 +98,15 @@ fn options_state_uses_internal_locks_like_c() {
             && stats_rs.contains("_mi_heap_theap_peek, _mi_prim_clock_now")
             && stats_rs.contains("unsafe { _mi_prim_clock_now() }"),
         "process/TLS initialization and clocks should use mimalloc's internal primitives"
+    );
+    assert!(
+        !libc_rs.contains("let mut rendered = String::new()")
+            && !libc_rs.contains("rendered.as_bytes()")
+            && libc_rs.contains("struct FixedBuffer")
+            && libc_rs.contains("impl fmt::Write for FixedBuffer")
+            && libc_rs.contains("ptr::copy_nonoverlapping(s.as_ptr(), self.ptr.add(self.used), n)")
+            && libc_rs.contains("*out.ptr.add(out.used) = 0;"),
+        "Rust-side bounded snprintf formatting should write directly into the caller buffer"
     );
     assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")

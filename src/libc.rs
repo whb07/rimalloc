@@ -414,19 +414,41 @@ pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arg
         return 0;
     }
 
-    let mut rendered = String::new();
-    if fmt::write(&mut rendered, args).is_err() {
-        rendered.clear();
+    struct FixedBuffer {
+        ptr: *mut u8,
+        cap: usize,
+        used: usize,
     }
 
-    let bytes = rendered.as_bytes();
-    let n = min(bytes.len(), bufsize - 1);
-    // SAFETY: `buf` is valid for `bufsize` bytes by caller contract, and `n < bufsize`.
-    unsafe {
-        ptr::copy_nonoverlapping(bytes.as_ptr(), as_bytes_mut_ptr(buf), n);
-        *as_bytes_mut_ptr(buf).add(n) = 0;
+    impl fmt::Write for FixedBuffer {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            let available = self.cap.saturating_sub(self.used);
+            let n = min(s.len(), available);
+            if n > 0 {
+                // SAFETY: `ptr` is valid for `cap` bytes by construction, and
+                // `n` is clamped to the remaining space.
+                unsafe {
+                    ptr::copy_nonoverlapping(s.as_ptr(), self.ptr.add(self.used), n);
+                }
+                self.used += n;
+            }
+            Ok(())
+        }
     }
-    n as i32
+
+    let mut out = FixedBuffer {
+        ptr: as_bytes_mut_ptr(buf),
+        cap: bufsize - 1,
+        used: 0,
+    };
+    let _ = fmt::write(&mut out, args);
+
+    // SAFETY: `buf` is valid for `bufsize` bytes by caller contract, and
+    // `out.used <= bufsize - 1`.
+    unsafe {
+        *out.ptr.add(out.used) = 0;
+    }
+    out.used as i32
 }
 
 pub(crate) unsafe extern "C" fn _mi_vsnprintf(

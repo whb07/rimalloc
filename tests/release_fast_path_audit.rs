@@ -1269,6 +1269,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             &stats_rs,
             "pub unsafe extern \"C\" fn __mi_stat_adjust_decrease",
         ),
+        ("src/options.rs", &options_rs, "pub(crate) fn _mi_message"),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -1469,6 +1470,16 @@ fn free_path_internals_are_not_dynamic_exports() {
             && prim_unix_rs.contains("s = getenv(buf.as_ptr());")
             && options_rs.contains("crate::libc::_mi_getenv("),
         "_mi_getenv and _mi_prim_getenv should keep C's environment helper boundaries and option parser dependency"
+    );
+    assert!(
+        options_rs
+            .contains("#[inline(never)]\npub(crate) fn _mi_message(args: fmt::Arguments<'_>)")
+            && options_rs.contains(
+                "mi_vfprintf_thread(None, ptr::null_mut(), c\"mimalloc: \".as_ptr(), args);"
+            )
+            && options_rs
+                .contains("static MI_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_message;"),
+        "_mi_message should keep C's local message helper boundary and mimalloc prefix path"
     );
     assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_free(")

@@ -1649,3 +1649,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.10s`, Rust `2.12s..2.25s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.04B` instructions and `15.51B` cycles; Rust about `10.64B` instructions and `16.12B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's `_mi_message` helper boundary:
+  - C emits `_mi_message` as a standalone local message helper that routes through `mi_vfprintf_thread` with the `mimalloc: ` prefix.
+  - Rust had the corresponding message helper, but no current Rust caller kept it emitted in release.
+  - Marked Rust `_mi_message` `#[inline(never)]`, retained it through a local `#[used]` function-pointer anchor, and extended release audit coverage for the prefix path and retention anchor.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::options::_mi_message`, with no dynamic `_mi_message` export.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.13s..2.28s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.08B` instructions and `15.61B` cycles; Rust about `10.65B` instructions and `16.19B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

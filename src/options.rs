@@ -657,18 +657,6 @@ fn ptr_to_mi_output_fun(p: *mut c_void) -> Option<mi_output_fun> {
     }
 }
 
-#[inline]
-fn emit_text(out: Option<mi_output_fun>, arg: *mut c_void, text: &str) {
-    let mut ctext = StackMessage::new();
-    let _ = ctext.write_str(text);
-    unsafe {
-        match out {
-            Some(out) => out(ctext.as_c_ptr(), arg),
-            None => _mi_prim_out_stderr(ctext.as_c_ptr()),
-        }
-    }
-}
-
 unsafe extern "C" fn mi_out_stderr(msg: *const c_char, arg: *mut c_void) {
     let _ = arg;
     if !msg.is_null() && unsafe { *msg } != 0 {
@@ -1363,21 +1351,22 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
     let vermajor = MI_MALLOC_VERSION / 10000;
     let verminor = (MI_MALLOC_VERSION % 10000) / 100;
     let verpatch = MI_MALLOC_VERSION % 100;
-    emit_text(
+    _mi_fprintf(
         Some(out),
         arg,
-        &format!("v{vermajor}.{verminor}.{verpatch} (Rust translation)\n"),
+        format_args!("v{vermajor}.{verminor}.{verpatch} (Rust translation)\n"),
     );
 
     for i in 0..MI_OPTION_COUNT {
         let option = option_from_index(i);
         let value = mi_option_get(option);
         let desc = with_options_table(|table| table[i]);
-        let name = unsafe { CStr::from_ptr(desc.name).to_string_lossy().into_owned() };
-        emit_text(
+        // SAFETY: option names are static ASCII strings from the translated option table.
+        let name = unsafe { core::str::from_utf8_unchecked(CStr::from_ptr(desc.name).to_bytes()) };
+        _mi_fprintf(
             Some(out),
             arg,
-            &format!(
+            format_args!(
                 "option '{name}': {value} {}\n",
                 if option_has_size_in_kib(option) {
                     "KiB"
@@ -1388,20 +1377,20 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
         );
     }
 
-    emit_text(
+    _mi_fprintf(
         Some(out),
         arg,
-        &format!(
+        format_args!(
             "debug level : {}\n",
             if cfg!(debug_assertions) { 2 } else { 0 }
         ),
     );
-    emit_text(Some(out), arg, "secure level: 0\n");
-    emit_text(Some(out), arg, "mem tracking: false\n");
+    _mi_fprintf(Some(out), arg, format_args!("secure level: 0\n"));
+    _mi_fprintf(Some(out), arg, format_args!("mem tracking: false\n"));
     if mi_option_get(mi_option_t::mi_option_guarded_sample_rate) != 0 {
-        emit_text(Some(out), arg, "guarded build: enabled\n");
+        _mi_fprintf(Some(out), arg, format_args!("guarded build: enabled\n"));
     } else {
-        emit_text(Some(out), arg, "guarded build: disabled\n");
+        _mi_fprintf(Some(out), arg, format_args!("guarded build: disabled\n"));
     }
 }
 

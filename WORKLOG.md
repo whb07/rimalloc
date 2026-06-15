@@ -1034,3 +1034,25 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued options-output formatting parity:
+  - Found `mi_options_print_out` still emitted through a Rust-only `emit_text` helper fed by `format!`, and converted static option names through `to_string_lossy().into_owned()`. C prints this path directly through `_mi_fprintf`.
+  - Removed the helper, routed each line through `_mi_fprintf(..., format_args!(...))`, and borrowed the static ASCII option names from `CStr::to_bytes()` instead of allocating owned Rust strings.
+  - Extended the release fast-path audit to reject the old option-print `format!`/owned-name path and require direct `format_args!` formatting.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Rebuilt `target/bench-allocators/libmimalloc-rust.so`; `RELACOUNT` stayed at `1490`, and the largest-symbol profile still shows the broad Rust backtrace/demangle/gimli runtime plus `mi_stats_get_json_from`.
+  - Direct `cfrac` after the options-print cleanup: C `2.70s..2.73s`, RSS `6072..6280` KiB, minor `202..203`; Rust `2.72s..2.74s`, RSS `6764..6788` KiB, minor `210..211`.
+  - Result: options table printing no longer builds heap strings for version/name/line output, but the remaining `cfrac` RSS/minor-fault tail persists.
+- Full established validation passed after the options-print cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

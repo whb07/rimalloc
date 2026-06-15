@@ -145,6 +145,22 @@ fn options_state_uses_internal_locks_like_c() {
             && options_rs.contains("#[link_name = \"abort\"]"),
         "options state should use mimalloc's internal lock and C abort primitives"
     );
+    assert!(
+        !options_rs
+            .contains("&format!(\"v{vermajor}.{verminor}.{verpatch} (Rust translation)\\n\")")
+            && !options_rs.contains("CStr::from_ptr(desc.name).to_string_lossy().into_owned()")
+            && !options_rs
+                .contains("&format!(\n                \"option '{name}': {value} {}\\n\"")
+            && !options_rs.contains("&format!(\n            \"debug level : {}\\n\"")
+            && options_rs.contains(
+                "format_args!(\"v{vermajor}.{verminor}.{verpatch} (Rust translation)\\n\")"
+            )
+            && options_rs.contains("CStr::from_ptr(desc.name).to_bytes()")
+            && options_rs
+                .contains("format_args!(\n                \"option '{name}': {value} {}\\n\"")
+            && options_rs.contains("format_args!(\n            \"debug level : {}\\n\""),
+        "options printing should use direct fixed-buffer fprintf formatting like C"
+    );
 }
 
 #[test]

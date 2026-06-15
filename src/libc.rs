@@ -39,8 +39,7 @@ fn as_bytes_mut_ptr(p: *mut c_char) -> *mut u8 {
     p as *mut u8
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn _mi_toupper(c: c_char) -> c_char {
+pub(crate) extern "C" fn _mi_toupper(c: c_char) -> c_char {
     let b = c as u8;
     if b.is_ascii_lowercase() {
         (b - b'a' + b'A') as c_char
@@ -49,8 +48,7 @@ pub extern "C" fn _mi_toupper(c: c_char) -> c_char {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> i32 {
+pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> i32 {
     if s.is_null() || t.is_null() || n == 0 {
         return 0;
     }
@@ -70,7 +68,7 @@ pub unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usi
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) -> bool {
+pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) -> bool {
     if s.is_null() && t.is_null() {
         return true;
     }
@@ -91,8 +89,11 @@ pub unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) -> bool {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_strlcpy(dest: *mut c_char, src: *const c_char, dest_size: usize) {
+pub(crate) unsafe extern "C" fn _mi_strlcpy(
+    dest: *mut c_char,
+    src: *const c_char,
+    dest_size: usize,
+) {
     if dest.is_null() || src.is_null() || dest_size == 0 {
         return;
     }
@@ -102,8 +103,11 @@ pub unsafe extern "C" fn _mi_strlcpy(dest: *mut c_char, src: *const c_char, dest
     *as_bytes_mut_ptr(dest).add(n) = 0;
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_strlcat(dest: *mut c_char, src: *const c_char, dest_size: usize) {
+pub(crate) unsafe extern "C" fn _mi_strlcat(
+    dest: *mut c_char,
+    src: *const c_char,
+    dest_size: usize,
+) {
     if dest.is_null() || src.is_null() || dest_size == 0 {
         return;
     }
@@ -120,8 +124,7 @@ pub unsafe extern "C" fn _mi_strlcat(dest: *mut c_char, src: *const c_char, dest
     _mi_strlcpy(dest.add(len), src, dest_size - len);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize {
+pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize {
     if s.is_null() {
         return 0;
     }
@@ -132,13 +135,12 @@ pub unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize 
     len
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
+pub(crate) unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
     _mi_strnlen(s, usize::MAX)
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_strnstr(
+pub(crate) unsafe extern "C" fn _mi_strnstr(
     s: *mut c_char,
     max_len: usize,
     pat: *const c_char,
@@ -172,7 +174,7 @@ pub unsafe extern "C" fn _mi_strnstr(
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_getenv(
+pub(crate) unsafe extern "C" fn _mi_getenv(
     name: *const c_char,
     result: *mut c_char,
     result_size: usize,
@@ -427,8 +429,7 @@ pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arg
     n as i32
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_vsnprintf(
+pub(crate) unsafe extern "C" fn _mi_vsnprintf(
     buf: *mut c_char,
     bufsize: usize,
     fmt: *const c_char,

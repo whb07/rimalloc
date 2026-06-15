@@ -3719,7 +3719,7 @@ unsafe fn mi_debug_show_page_bfield(
                 c = b'f';
             }
             if !unsafe { mi_page_is_abandoned(page) } {
-                c = unsafe { _mi_toupper(c as i8) as u8 };
+                c = _mi_toupper(c as i8) as u8;
             }
             let commit_usage = unsafe { mi_page_commit_usage(page) };
             if commit_usage < 25 {

@@ -31,6 +31,10 @@ pub use crate::bits::{
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
 pub(crate) use crate::free::_mi_page_ptr_unalign;
+pub(crate) use crate::libc::{
+    _mi_getenv, _mi_streq, _mi_strlcat, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen,
+    _mi_strnstr, _mi_toupper, _mi_vsnprintf,
+};
 use crate::options::_mi_error_message_fmt;
 pub(crate) use crate::page::{_mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire};
 pub use crate::page::{
@@ -464,22 +468,7 @@ unsafe extern "C" {
     pub static mut _mi_cpu_movsb_max: usize;
     pub static mut _mi_cpu_stosb_max: usize;
 
-    pub fn _mi_vsnprintf(
-        buf: *mut c_char,
-        bufsize: usize,
-        fmt: *const c_char,
-        args: *mut c_void,
-    ) -> c_int;
     pub fn _mi_snprintf(buf: *mut c_char, buflen: usize, fmt: *const c_char, ...) -> c_int;
-    pub fn _mi_toupper(c: c_char) -> c_char;
-    pub fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> c_int;
-    pub fn _mi_strlcpy(dest: *mut c_char, src: *const c_char, dest_size: usize);
-    pub fn _mi_strlcat(dest: *mut c_char, src: *const c_char, dest_size: usize);
-    pub fn _mi_strlen(s: *const c_char) -> usize;
-    pub fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize;
-    pub fn _mi_strnstr(s: *mut c_char, max_len: usize, pat: *const c_char) -> *mut c_char;
-    pub fn _mi_streq(s: *const c_char, t: *const c_char) -> bool;
-    pub fn _mi_getenv(name: *const c_char, result: *mut c_char, result_size: usize) -> bool;
 
     pub fn _mi_fputs(
         out: Option<mi_output_fun>,

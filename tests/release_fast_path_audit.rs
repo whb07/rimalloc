@@ -146,6 +146,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     let arena_meta_rs =
         fs::read_to_string(root.join("src/arena_meta.rs")).expect("read src/arena_meta.rs");
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
+    let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
 
@@ -261,6 +262,37 @@ fn free_path_internals_are_not_dynamic_exports() {
             &page_rs,
             "pub unsafe extern \"C\" fn _mi_page_init",
         ),
+        (
+            "src/libc.rs",
+            &libc_rs,
+            "pub unsafe extern \"C\" fn _mi_vsnprintf",
+        ),
+        ("src/libc.rs", &libc_rs, "pub extern \"C\" fn _mi_toupper"),
+        (
+            "src/libc.rs",
+            &libc_rs,
+            "pub unsafe extern \"C\" fn _mi_strnicmp",
+        ),
+        (
+            "src/libc.rs",
+            &libc_rs,
+            "pub unsafe extern \"C\" fn _mi_strlcpy",
+        ),
+        (
+            "src/libc.rs",
+            &libc_rs,
+            "pub unsafe extern \"C\" fn _mi_strlcat",
+        ),
+        (
+            "src/libc.rs",
+            &libc_rs,
+            "pub unsafe extern \"C\" fn _mi_strlen",
+        ),
+        (
+            "src/libc.rs",
+            &libc_rs,
+            "pub unsafe extern \"C\" fn _mi_strnlen",
+        ),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -276,6 +308,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_meta_zalloc(")
             && !internal.contains("pub fn _mi_page_free(")
             && !internal.contains("pub fn _mi_page_malloc_zero(")
+            && !internal.contains("pub fn _mi_vsnprintf(")
+            && !internal.contains("pub fn _mi_strlcpy(")
             && !internal.contains("pub static _mi_page_empty:")
             && !internal.contains("pub static _mi_theap_empty:")
             && !internal.contains("pub static _mi_theap_empty_wrong:")

@@ -574,3 +574,34 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Localized the next libc helper batch by replacing `internal.rs` extern declarations with crate-local re-exports:
+  - Libc helpers: `_mi_vsnprintf`, `_mi_toupper`, `_mi_strnicmp`, `_mi_strlcpy`, `_mi_strlcat`, `_mi_strlen`, `_mi_strnlen`.
+  - Also routed already-inline helpers `_mi_getenv`, `_mi_streq`, and `_mi_strnstr` through crate-local imports instead of stale extern declarations.
+  - Added release audit coverage so these helpers stay crate-local instead of returning as `#[no_mangle]` dynamic exports.
+- Tried including `_mi_random_init`, `_mi_random_split`, and `_mi_random_next` in the same localization batch, but reverted that part before commit:
+  - The full parity gate reproduced a main smoke-output mismatch in `page_commit_on_demand_committed_alloc_delta` (`C=524288`, `Rust=458752`) after the random helper localization.
+  - Direct reruns of the built smoke binaries could match afterward, which points at random/layout sensitivity in that fixture; the random helpers need a separate pass with a targeted regression strategy instead of being mixed into this symbol-cleanup commit.
+- Focused validation/build after localizing the libc helper batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+  - Dynamic defined symbols dropped from Rust `346` to `339`.
+  - Dynamic relocations dropped from Rust `1,613` to `1,612`; `R_X86_64_GLOB_DAT` dropped from `108` to `107`.
+  - `size -A` total stayed at Rust `676,251` bytes.
+- Focused `cfrac -n=5` after the libc helper-localization batch:
+  - C: `2.71s..2.72s`, RSS `5816..6536` KiB, reclaims `198..202`.
+  - Rust: `2.69s..2.76s`, RSS `6560..6756` KiB, reclaims `207..209`.
+  - Result: no wall-time regression; RSS/reclaim tail remains, so further parity work should continue on the remaining Rust-only load footprint and implementation drift.
+- Full established validation passed after the libc helper-localization batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

@@ -1738,10 +1738,6 @@ fn free_path_internals_are_not_dynamic_exports() {
         stats_rs.contains(
             "#[inline(never)]\nunsafe extern \"C\" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t)"
         ) && stats_rs.contains(
-            "static MI_STATS_ADD_KEEP: unsafe extern \"C\" fn(*mut mi_stats_t, *const mi_stats_t) = mi_stats_add;"
-        ) && stats_rs.contains(
-            "unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };"
-        ) && stats_rs.contains(
             "if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src)"
         ) && stats_rs.contains(
             "mi_stat_count_add_mt(\n                    ptr::addr_of_mut!((*stats).$field),\n                    ptr::addr_of!((*src).$field),"
@@ -1758,8 +1754,23 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !stats_rs.contains("iter_mut().zip(src.page_bins.iter())")
             && !stats_rs.contains("._stat_reserved\n        .iter_mut()\n        .zip(src._stat_reserved.iter())")
             && !stats_rs.contains("._stat_counter_reserved\n        .iter_mut()\n        .zip(src._stat_counter_reserved.iter())")
-            && !stats_rs.contains("stats.chunk_bins.iter_mut().zip(src.chunk_bins.iter())"),
-        "mi_stats_add should keep C's raw-pointer aggregate helper boundary, release bin-stat gates, and leave reserved extension arrays untouched"
+            && !stats_rs.contains("stats.chunk_bins.iter_mut().zip(src.chunk_bins.iter())")
+            && !stats_rs.contains("static MI_STATS_ADD_KEEP"),
+        "mi_stats_add should keep C's raw-pointer aggregate helper boundary without a data-relocation keepalive, release bin-stat gates, and leave reserved extension arrays untouched"
+    );
+    let stats_merge_start = stats_rs
+        .find("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into(")
+        .expect("find _mi_stats_merge_into");
+    let stats_merge_end = stats_rs[stats_merge_start..]
+        .find("\n}\n\n#[repr(C)]")
+        .map(|offset| stats_merge_start + offset)
+        .expect("find end of _mi_stats_merge_into");
+    let stats_merge_body = &stats_rs[stats_merge_start..stats_merge_end];
+    assert!(
+        stats_merge_body.contains("mi_stats_add(to, from);")
+            && stats_merge_body.contains("_mi_memzero(from.cast(), size_of::<mi_stats_t>());")
+            && !stats_merge_body.contains("mi_stats_add_into("),
+        "_mi_stats_merge_into should match C's direct mi_stats_add plus memzero sequence"
     );
     assert!(
         options_rs
@@ -2737,6 +2748,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !init_rs.contains("#[unsafe(no_mangle)]\npub static mut _mi_cpu_movsb_max")
             && !init_rs.contains("#[unsafe(no_mangle)]\npub static mut _mi_cpu_stosb_max"),
         "CPU copy thresholds should use stable hidden C names like C without becoming public dynamic ABI symbols"
+    );
+    assert!(
+        internal.contains("\"rep stosb\"")
+            && internal.contains("pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize)")
+            && internal.contains("if n <= mi_cpu_stosb_max() {\n            mi_rep_stosb(dst, val as u8, n);\n            return;\n        }"),
+        "_mi_memset should keep C's CPU-thresholded rep stosb shape instead of always lowering to external memset"
     );
     for internal_static in [
         "_mi_cpu_movsb_max",

@@ -16,7 +16,7 @@ use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed, mi_lock_t,
 };
 use crate::init::_mi_subproc_main;
-use crate::internal::{_mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
+use crate::internal::{_mi_memzero, _mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
 use crate::mimalloc::{mi_good_size, mi_rezalloc};
 use crate::mimalloc::{mi_heap_main, mi_subproc_current, mi_subproc_visit_heaps};
 use crate::options::{_mi_fprintf, _mi_fputs};
@@ -556,9 +556,6 @@ unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t
     }
 }
 
-#[used]
-static MI_STATS_ADD_KEEP: unsafe extern "C" fn(*mut mi_stats_t, *const mi_stats_t) = mi_stats_add;
-
 fn mi_stats_add_into(to: &mut mi_stats_t, from: &mi_stats_t) {
     if ptr::eq(to, from) {
         return;
@@ -628,8 +625,8 @@ pub unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi
     }
     // SAFETY: caller guarantees valid pointers to `mi_stats_t` values.
     unsafe {
-        mi_stats_add_into(&mut *to, &*from);
-        ptr::write_bytes(from, 0, 1);
+        mi_stats_add(to, from);
+        _mi_memzero(from.cast(), size_of::<mi_stats_t>());
     }
 }
 

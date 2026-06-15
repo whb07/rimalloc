@@ -2,6 +2,26 @@
 
 ## 2026-06-15
 
+- Continuing stats merge artifact parity after `56ae295`:
+  - Fresh profiling still showed `mi_stats_add`/`_mi_stats_merge_into` as the dominant allocator-side stats path. Comparing release artifacts found two concrete Rust-only detours in `_mi_stats_merge_into`: the call to `mi_stats_add` went through a data relocation created by `MI_STATS_ADD_KEEP`, and the subsequent zeroing lowered to an external `memset` jump. C calls the local `mi_stats_add` body directly and zeros through the CPU-thresholded `_mi_memzero`/`rep stos` path.
+  - Removed the `MI_STATS_ADD_KEEP` function-pointer keepalive because `mi_stats_add` is already kept alive by direct callers. Changed `_mi_stats_merge_into` to call `mi_stats_add(to, from)` directly and then `_mi_memzero(from, sizeof(mi_stats_t))`.
+  - Patched the internal memset helper to match the C artifact shape on x86_64: added a hidden-symbol `_mi_cpu_stosb_max` accessor, made `mi_rep_stosb` emit actual `rep stosb`, and made `_mi_memset` use that path when the CPU threshold allows it.
+  - Artifact check: release `_mi_stats_merge_into` now calls `mechanical_mimalloc::stats::mi_stats_add` directly, loads `_mi_cpu_stosb_max`, compares it against `sizeof(mi_stats_t) - 1`, and uses inline `rep stosb` for the fast zeroing path. The previous indirect call through the relocation slot and unconditional `memset` jump are gone from the common path.
+  - Extended the release audit to reject a `MI_STATS_ADD_KEEP` data-relocation keepalive, require the direct `mi_stats_add` plus `_mi_memzero` sequence in `_mi_stats_merge_into`, and require the CPU-thresholded `rep stosb` shape in `_mi_memset`.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `scripts/check-public-symbols.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `cargo test --quiet`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the release cdylib and rechecked `mleak`:
+    - Harness `mleak100`: C `1.30s, 1.30s, 1.29s`; Rust `1.34s, 1.35s, 1.34s`.
+    - Direct `perf stat -r 3 ./mleak 100`: C `10.74B` instructions / `19.61B` cycles; Rust `11.10B` instructions / `20.02B` cycles.
+  - This removes the stats-merge indirect call and external memset detours. The remaining gap is still extra Rust user-space work, so the next pass should profile the refreshed artifact and compare the next concrete helper body.
 - Continuing bbitmap find/clear specialization after `1fa75ea`:
   - Fresh profiling showed a Rust-only/shared `mi_bbitmap_try_find_and_clear_generic` sample on `mleak100`. C specializes the single-slice `mi_bbitmap_try_find_and_clear` static-inline path, while Rust was routing that public helper through the shared runtime generic with a callback boundary.
   - Patched `mi_bbitmap_try_find_and_clear` to keep the C single-slice loop shape directly in the wrapper: cyclic chunkmap selection, SMALL/NONE bin probing for `n == 1`, direct `mi_bchunk_try_find_and_clear(chunk, &mut cidx)`, and the C-style NONE-to-SMALL bin update when the cleared bit is at index zero. The shared generic remains for the 8/NX/NC variants.

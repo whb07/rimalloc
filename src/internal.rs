@@ -1089,7 +1089,20 @@ pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
 
 #[inline]
 pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
-    ptr::write_bytes(dst.cast::<u8>(), val, n);
+    #[cfg(target_arch = "x86_64")]
+    {
+        core::arch::asm!(
+            "rep stosb",
+            inout("rdi") dst => _,
+            inout("rcx") n => _,
+            in("al") val,
+            options(nostack, preserves_flags),
+        );
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        ptr::write_bytes(dst.cast::<u8>(), val, n);
+    }
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -1353,6 +1366,26 @@ unsafe fn mi_cpu_movsb_max() -> usize {
 }
 
 #[inline]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+unsafe fn mi_cpu_stosb_max() -> usize {
+    let max: usize;
+    unsafe {
+        core::arch::asm!(
+            "mov {max}, qword ptr [rip + _mi_cpu_stosb_max]",
+            max = lateout(reg) max,
+            options(nostack, readonly, preserves_flags)
+        );
+    }
+    max
+}
+
+#[inline]
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+unsafe fn mi_cpu_stosb_max() -> usize {
+    crate::init::_mi_cpu_stosb_max
+}
+
+#[inline]
 pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
     #[cfg(target_arch = "x86_64")]
     {
@@ -1366,6 +1399,13 @@ pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
 
 #[inline]
 pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if n <= mi_cpu_stosb_max() {
+            mi_rep_stosb(dst, val as u8, n);
+            return;
+        }
+    }
     ptr::write_bytes(dst, val as u8, n);
 }
 

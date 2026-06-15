@@ -1415,6 +1415,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
 
 /// # Safety
 /// `theap` must be valid for the current thread or the empty sentinel.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
     let prev = unsafe { crate::prim::_mi_theap_cached() };
     if ptr::eq(prev, theap) {
@@ -1448,6 +1449,9 @@ pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
     }
 }
 
+#[used]
+static MI_THEAP_CACHED_SET_KEEP: unsafe extern "C" fn(*mut mi_theap_t) = _mi_theap_cached_set;
+
 #[unsafe(no_mangle)]
 /// # Safety
 /// Marks the current thread-local data as belonging to a threadpool thread.
@@ -1460,6 +1464,7 @@ pub unsafe extern "C" fn mi_thread_set_in_threadpool() {
 
 /// # Safety
 /// Returns the current thread default theap, initializing thread state when needed.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
     let theap = unsafe { crate::prim::_mi_theap_default() };
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
@@ -1471,8 +1476,13 @@ pub(crate) unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
     theap
 }
 
+#[used]
+static MI_THEAP_DEFAULT_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t =
+    _mi_theap_default_safe;
+
 /// # Safety
 /// Returns the process main theap, ensuring the default path initialized it first.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     let mut theap = mi_theap_main_tls_peek();
     if theap.is_null() {
@@ -1493,11 +1503,18 @@ pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     theap
 }
 
+#[used]
+static MI_THEAP_MAIN_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_theap_main_safe;
+
 /// # Safety
 /// Returns the process-global empty theap sentinel.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
     ptr::addr_of!(_mi_theap_empty).cast_mut()
 }
+
+#[used]
+static MI_THEAP_EMPTY_GET_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_theap_empty_get;
 
 /// # Safety
 /// Returns the current subproc without forcing thread-local initialization.

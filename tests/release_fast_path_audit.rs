@@ -1988,6 +1988,24 @@ fn free_path_internals_are_not_dynamic_exports() {
         "dynamic thread-local helpers should keep C's local helper boundaries"
     );
     assert!(
+        init_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_cached_set(")
+            && init_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_default_safe("
+            )
+            && init_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_main_safe("
+            )
+            && init_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_empty_get("
+            )
+            && init_rs.contains("static MI_THEAP_CACHED_SET_KEEP")
+            && init_rs.contains("static MI_THEAP_DEFAULT_SAFE_KEEP")
+            && init_rs.contains("static MI_THEAP_MAIN_SAFE_KEEP")
+            && init_rs.contains("static MI_THEAP_EMPTY_GET_KEEP"),
+        "thread-heap accessors should keep C's local helper boundaries"
+    );
+    assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")
             && theap_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_decref")

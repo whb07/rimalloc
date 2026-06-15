@@ -9,11 +9,13 @@
 use core::ffi::{c_long, c_void};
 use core::mem::{MaybeUninit, size_of};
 use core::ptr;
-use std::sync::Once;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::arena::_mi_arenas_unsafe_destroy_all;
-use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
+use crate::atomic::{
+    mi_atomic_do_once_enter, mi_atomic_once_s, mi_atomic_once_t, mi_lock_acquire, mi_lock_done,
+    mi_lock_init, mi_lock_release, mi_lock_t,
+};
 use crate::bits::MI_SIZE_SIZE;
 use crate::heap::_mi_heap_force_destroy;
 use crate::internal::{
@@ -151,8 +153,8 @@ pub const fn MI_STATS_NULL() -> mi_stats_t {
 
 #[allow(dead_code)]
 static mut subprocs_lock: mi_lock_t = mi_lock_t::new();
-static SUBPROC_MAIN_INIT: Once = Once::new();
-static PROCESS_INIT: Once = Once::new();
+static SUBPROC_MAIN_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
+static PROCESS_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
 static OPTIONS_POST_INIT_STATE: AtomicUsize = AtomicUsize::new(0);
 static PROCESS_DONE: AtomicBool = AtomicBool::new(false);
 static SUBPROC_TOTAL_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -582,7 +584,9 @@ unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
 }
 
 fn mi_subproc_main_init() {
-    SUBPROC_MAIN_INIT.call_once(|| {
+    if let Some(_once) =
+        unsafe { mi_atomic_do_once_enter(ptr::addr_of!(SUBPROC_MAIN_INIT).cast_mut()) }
+    {
         // SAFETY: one-time process initialization for local subproc scaffolding.
         unsafe {
             _mi_options_init();
@@ -601,7 +605,7 @@ fn mi_subproc_main_init() {
             subprocs = main;
             _mi_process_is_initialized = true;
         }
-    });
+    }
 }
 
 unsafe fn mi_subproc_main_ptr() -> *mut mi_subproc_t {
@@ -1160,8 +1164,10 @@ unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
 
 #[allow(dead_code)]
 fn mi_tls_slots_init() {
-    static TLS_SLOTS_INIT: Once = Once::new();
-    TLS_SLOTS_INIT.call_once(|| {
+    static TLS_SLOTS_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
+    if let Some(_once) =
+        unsafe { mi_atomic_do_once_enter(ptr::addr_of!(TLS_SLOTS_INIT).cast_mut()) }
+    {
         #[cfg(windows)]
         // SAFETY: one-time initialization of process-global TLS slot metadata.
         unsafe {
@@ -1201,7 +1207,7 @@ fn mi_tls_slots_init() {
                 );
             }
         }
-    });
+    }
 }
 
 #[allow(dead_code)]
@@ -1715,23 +1721,28 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
 /// # Safety
 /// Performs one-time process-global mimalloc initialization for the bounded init/runtime scaffold.
 pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
-    PROCESS_INIT.call_once(|| unsafe {
-        mi_subproc_main_init();
-        crate::stats::_mi_stats_init();
-        crate::os::_mi_os_init();
-        mi_heap_main_init();
-        let _ = crate::page_map::_mi_page_map_init();
-        crate::prim::_mi_prim_thread_init_auto_done();
-        if !crate::prim::_mi_thread_is_initialized() && !_mi_thread_init_theap_default().is_null() {
-            let heap = mi_heap_main();
-            if !heap.is_null() {
-                crate::internal::__mi_stat_increase(
-                    &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads,
-                    1,
-                );
+    if let Some(_once) = unsafe { mi_atomic_do_once_enter(ptr::addr_of!(PROCESS_INIT).cast_mut()) }
+    {
+        unsafe {
+            mi_subproc_main_init();
+            crate::stats::_mi_stats_init();
+            crate::os::_mi_os_init();
+            mi_heap_main_init();
+            let _ = crate::page_map::_mi_page_map_init();
+            crate::prim::_mi_prim_thread_init_auto_done();
+            if !crate::prim::_mi_thread_is_initialized()
+                && !_mi_thread_init_theap_default().is_null()
+            {
+                let heap = mi_heap_main();
+                if !heap.is_null() {
+                    crate::internal::__mi_stat_increase(
+                        &mut (*(heap.cast::<MiHeapMainPrefix>())).stats.threads,
+                        1,
+                    );
+                }
             }
         }
-    });
+    }
     mi_heap_main_init();
     mi_mark_main_thread();
     mi_tls_slots_init();

@@ -9,9 +9,7 @@
 
 use core::ffi::{c_char, c_void};
 use core::{mem::size_of, ptr};
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
-use std::time::Instant;
 
 use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed, mi_lock_t,
@@ -26,7 +24,9 @@ use crate::page::{
     _mi_bin_size, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE,
     MI_MEDIUM_PAGE_SIZE, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE,
 };
-use crate::prim::{_mi_heap_theap_peek, _mi_prim_process_info, _mi_theap_default};
+use crate::prim::{
+    _mi_heap_theap_peek, _mi_prim_clock_now, _mi_prim_process_info, _mi_theap_default,
+};
 use crate::types::{
     MI_BIN_COUNT, MI_MALLOC_VERSION, mi_heap_t, mi_heap_visit_fun, mi_output_fun, mi_page_t,
     mi_process_info_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
@@ -202,7 +202,6 @@ pub const MI_CBIN_NONE: mi_chunkbin_t = mi_chunkbin_e::MI_CBIN_NONE;
 pub const MI_CBIN_COUNT: mi_chunkbin_t = mi_chunkbin_e::MI_CBIN_COUNT;
 
 const MI_CHUNKBIN_COUNT: usize = mi_chunkbin_e::MI_CBIN_COUNT as usize;
-static CLOCK_ORIGIN: OnceLock<Instant> = OnceLock::new();
 static CLOCK_DIFF: AtomicI64 = AtomicI64::new(0);
 static PROCESS_START: AtomicI64 = AtomicI64::new(0);
 
@@ -534,8 +533,7 @@ fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bo
 }
 
 fn clock_now_msecs() -> i64 {
-    let start = CLOCK_ORIGIN.get_or_init(Instant::now);
-    start.elapsed().as_millis() as i64
+    unsafe { _mi_prim_clock_now() }
 }
 
 pub extern "C" fn _mi_clock_now() -> i64 {

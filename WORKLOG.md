@@ -920,3 +920,26 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued the startup/load-footprint parity pass by replacing Rust init/clock helpers with mimalloc primitives:
+  - `init.rs` used `std::sync::Once` for process, subproc, and TLS-slot initialization even though the port already had C's `mi_atomic_once_t` translated in `atomic.rs`.
+  - Switched those initialization guards to `mi_atomic_once_t`/`mi_atomic_do_once_enter`, matching C's `mi_atomic_do_once` pattern and preserving recursive-init behavior through `_mi_atomic_once_enter`.
+  - `random.rs` and `stats.rs` used `OnceLock<Instant>` for weak random seeding and process elapsed-time accounting. C routes both through `_mi_prim_clock_now`.
+  - Re-exported the Unix primitive clock through `prim.rs` and routed random/stats timing through it.
+  - Added source audit coverage rejecting `std::sync::Once`, `.call_once(`, `OnceLock`, and `Instant` in the allocator init/clock paths, and requiring the internal once/clock primitives.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Release DSO still contains `std::sync::once`, `OnceLock`, and `Instant` symbols through the broader Rust panic/backtrace runtime; source-level allocator init/clock paths no longer reference them. Rebuilt `RELACOUNT` remains `1490`; total section size remains `680,348` bytes.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and reran direct `cfrac` with the harness argument `17545186520507317056371138836327483792789528`: C `2.70s..2.74s`, RSS `5820..6280` KiB, minor `119..120`; Rust `2.69s..2.74s`, RSS `6572..6764` KiB, minor `129..130`.
+- Full established validation passed after the internal once/clock primitive change:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

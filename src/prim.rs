@@ -116,8 +116,8 @@ pub(crate) use emscripten::{
 };
 #[cfg(all(not(windows), not(target_os = "emscripten"), not(target_os = "wasi")))]
 pub(crate) use unix::{
-    _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
-    _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
+    _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_clock_now, _mi_prim_commit,
+    _mi_prim_decommit, _mi_prim_free, _mi_prim_getenv, _mi_prim_mem_init, _mi_prim_numa_node,
     _mi_prim_numa_node_count, _mi_prim_out_stderr, _mi_prim_process_info, _mi_prim_protect,
     _mi_prim_reset, _mi_prim_reuse, _mi_prim_thread_associate_default_theap,
     _mi_prim_thread_done_auto_done, _mi_prim_thread_init_auto_done,

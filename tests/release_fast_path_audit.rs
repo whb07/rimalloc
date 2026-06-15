@@ -60,8 +60,11 @@ fn stderr_output_routes_through_platform_primitive() {
 #[test]
 fn options_state_uses_internal_locks_like_c() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
+    let prim_rs = fs::read_to_string(root.join("src/prim.rs")).expect("read src/prim.rs");
     let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
+    let stats_rs = fs::read_to_string(root.join("src/stats.rs")).expect("read src/stats.rs");
 
     assert!(
         !options_rs.contains("std::sync::{Mutex")
@@ -71,6 +74,25 @@ fn options_state_uses_internal_locks_like_c() {
             && !options_rs.contains("eprintln!")
             && !random_rs.contains("eprintln!"),
         "options/random state should not pull in std mutex/abort/stdio machinery"
+    );
+    assert!(
+        !init_rs.contains("std::sync::Once")
+            && !init_rs.contains(".call_once(")
+            && !random_rs.contains("OnceLock")
+            && !random_rs.contains("Instant")
+            && !stats_rs.contains("OnceLock")
+            && !stats_rs.contains("Instant")
+            && init_rs.contains("static SUBPROC_MAIN_INIT: mi_atomic_once_t")
+            && init_rs.contains("static PROCESS_INIT: mi_atomic_once_t")
+            && init_rs.contains("static TLS_SLOTS_INIT: mi_atomic_once_t")
+            && init_rs.contains("mi_atomic_do_once_enter(ptr::addr_of!(SUBPROC_MAIN_INIT)")
+            && init_rs.contains("mi_atomic_do_once_enter(ptr::addr_of!(PROCESS_INIT)")
+            && init_rs.contains("mi_atomic_do_once_enter(ptr::addr_of!(TLS_SLOTS_INIT)")
+            && prim_rs.contains("_mi_prim_alloc_huge_os_pages, _mi_prim_clock_now")
+            && random_rs.contains("unsafe { crate::prim::_mi_prim_clock_now() }")
+            && stats_rs.contains("_mi_heap_theap_peek, _mi_prim_clock_now")
+            && stats_rs.contains("unsafe { _mi_prim_clock_now() }"),
+        "process/TLS initialization and clocks should use mimalloc's internal primitives"
     );
     assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")

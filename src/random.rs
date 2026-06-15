@@ -8,9 +8,6 @@
     unsafe_op_in_unsafe_fn
 )]
 
-use std::sync::OnceLock;
-use std::time::Instant;
-
 use crate::bits::mi_rotl32;
 use crate::types::{mi_msecs_t, mi_random_ctx_t};
 
@@ -137,9 +134,7 @@ pub(crate) fn _mi_random_shuffle(mut x: usize) -> usize {
 
 #[inline]
 fn _mi_prim_clock_now() -> mi_msecs_t {
-    static START: OnceLock<Instant> = OnceLock::new();
-    let start = START.get_or_init(Instant::now);
-    start.elapsed().as_millis() as mi_msecs_t
+    unsafe { crate::prim::_mi_prim_clock_now() }
 }
 
 #[inline]

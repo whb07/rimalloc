@@ -1764,3 +1764,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.09s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.09B` instructions and `15.68B` cycles; Rust about `10.70B` instructions and `16.71B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's theap allocation helper boundary pair:
+  - C declares `_mi_theap_malloc_zero_ex` as a force-inline allocation helper and still retains an external definition by taking its address in `alloc.c`; C emits `_mi_theap_malloc_zero` as the standalone wrapper over the extended helper.
+  - Rust had matching C-ABI helper bodies, but release dropped both locals after inlining through the public allocation and aligned-allocation paths.
+  - Marked Rust `_mi_theap_malloc_zero_ex` `#[inline(always)]`, `_mi_theap_malloc_zero` `#[inline(never)]`, retained both through local `#[used]` function-pointer anchors, and extended release audit coverage for the helper markers and anchors.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::alloc::_mi_theap_malloc_zero` and `_mi_theap_malloc_zero_ex`, with no dynamic exports for the pair.
+  - The next local-symbol gap now starts at `_mi_prim_alloc`, `_mi_prim_commit`, `_mi_prim_protect`, `_mi_prim_reset`, `_mi_theap_area_visit_blocks`, `_mi_theap_page_reclaim`, and message/libc helpers.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.06B` instructions and `15.50B` cycles; Rust about `10.70B` instructions and `16.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

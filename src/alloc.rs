@@ -320,6 +320,7 @@ unsafe fn mi_theap_malloc_zero_nonnull(
     }
 }
 
+#[inline(always)]
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     theap: *mut mi_theap_t,
     size: usize,
@@ -335,6 +336,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
     theap: *mut mi_theap_t,
     size: usize,
@@ -343,6 +345,23 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
 ) -> *mut c_void {
     _mi_theap_malloc_zero_ex(theap, size, zero, 0, usable)
 }
+
+#[used]
+static MI_THEAP_MALLOC_ZERO_EX_KEEP: unsafe extern "C" fn(
+    *mut mi_theap_t,
+    usize,
+    bool,
+    usize,
+    *mut usize,
+) -> *mut c_void = _mi_theap_malloc_zero_ex;
+
+#[used]
+static MI_THEAP_MALLOC_ZERO_KEEP: unsafe extern "C" fn(
+    *mut mi_theap_t,
+    usize,
+    bool,
+    *mut usize,
+) -> *mut c_void = _mi_theap_malloc_zero;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {

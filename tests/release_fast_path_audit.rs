@@ -2011,6 +2011,15 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_thread_id should keep C's local helper boundary"
     );
     assert!(
+        alloc_rs.contains(
+            "#[inline(always)]\npub(crate) unsafe extern \"C\" fn _mi_theap_malloc_zero_ex"
+        ) && alloc_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_malloc_zero")
+            && alloc_rs.contains("static MI_THEAP_MALLOC_ZERO_EX_KEEP")
+            && alloc_rs.contains("static MI_THEAP_MALLOC_ZERO_KEEP"),
+        "_mi_theap_malloc_zero_ex should keep C's force-inline body and both allocation helpers should retain local definitions"
+    );
+    assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")
             && theap_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_decref")

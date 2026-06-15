@@ -1381,6 +1381,16 @@ fn free_path_internals_are_not_dynamic_exports() {
         "bin lookup helpers should keep C's mi_bin/_mi_bin/_mi_bin_size boundaries and empty-theap table dependency"
     );
     assert!(
+        options_rs.contains(
+            "#[inline(never)]\npub(crate) extern \"C\" fn _mi_option_get_fast(option: mi_option_t) -> c_long"
+        ) && options_rs.contains("mi_option_get_fast_impl(option)")
+            && options_rs.contains("option_value_load(idx)")
+            && free_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_reclaim_on_free)")
+            && free_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_cross_thread_max_reclaim)")
+            && page_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_max_candidates)"),
+        "fast option reads should keep C's local _mi_option_get_fast helper boundary on free/page policy paths"
+    );
+    assert!(
         alloc_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
             && page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")

@@ -1285,6 +1285,7 @@ fn mi_option_get_fast_impl(option: mi_option_t) -> c_long {
     option_value_load(idx)
 }
 
+#[inline(never)]
 pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
     mi_option_get_fast_impl(option)
 }

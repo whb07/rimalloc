@@ -1565,3 +1565,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.08s`, Rust `2.12s..2.26s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.32B` instructions and `17.78B` cycles; Rust about `11.90B` instructions and `18.24B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's fast option getter helper boundary:
+  - C emits `_mi_option_get_fast` as a standalone local helper used by free/page policy hot paths, while Rust had the matching wrapper but release inlined it away.
+  - Marked the Rust `_mi_option_get_fast` wrapper `#[inline(never)]` and extended release audit coverage for the helper body plus free/page policy callers.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::options::_mi_option_get_fast`; `mi_free_try_collect_mt` and page queue candidate selection call through it.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.03s..2.11s`, Rust `2.12s..2.28s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.63B` cycles; Rust about `11.93B` instructions and `18.30B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

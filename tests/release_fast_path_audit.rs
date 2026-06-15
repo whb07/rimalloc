@@ -1797,6 +1797,15 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_free_generic should not be a dynamic export"
     );
     assert!(
+        free_rs.contains("#[inline(never)]")
+            && free_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_free_generic(")
+            && free_rs.contains("if is_local {\n        mi_free_generic_local(page, p);")
+            && free_rs.contains("} else {\n        mi_free_generic_mt(page, p);")
+            && free_rs.contains("static MI_FREE_GENERIC_KEEP")
+            && free_rs.contains("    _mi_free_generic;"),
+        "_mi_free_generic should keep C's local runtime-integration dispatch boundary"
+    );
+    assert!(
         !page_rs.contains("#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn _mi_page_retire"),
         "_mi_page_retire should not be a dynamic export"
     );

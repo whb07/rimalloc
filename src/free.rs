@@ -441,6 +441,7 @@ pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut
     mi_free_block_mt(page, block, was_guarded);
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_free_generic(
     page: *mut mi_page_t,
     is_local: bool,
@@ -452,6 +453,10 @@ pub(crate) unsafe extern "C" fn _mi_free_generic(
         mi_free_generic_mt(page, p);
     }
 }
+
+#[used]
+static MI_FREE_GENERIC_KEEP: unsafe extern "C" fn(*mut mi_page_t, bool, *mut c_void) =
+    _mi_free_generic;
 
 unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const c_char) -> *mut mi_page_t {
     if MI_DEBUG != 0 || cfg!(feature = "secure") {

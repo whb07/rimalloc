@@ -1634,3 +1634,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.05s`, Rust `2.10s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.09B` instructions and `15.60B` cycles; Rust about `10.67B` instructions and `16.18B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's `_mi_free_generic` runtime-integration helper boundary:
+  - C emits `_mi_free_generic` as a standalone local noinline wrapper that dispatches to `mi_free_generic_local` or `mi_free_generic_mt`; Rust had the same source wrapper but release dropped it because the fast free path jumps directly to the local/mt helpers.
+  - Marked Rust `_mi_free_generic` `#[inline(never)]`, retained it through a local `#[used]` function-pointer anchor, and extended release audit coverage for the dispatch body plus the retention anchor.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::free::_mi_free_generic`, `mi_free_generic_local`, and `mi_free_generic_mt`, with no dynamic `_mi_free_generic` export.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.08B` instructions and `15.62B` cycles; Rust about `10.66B` instructions and `16.27B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

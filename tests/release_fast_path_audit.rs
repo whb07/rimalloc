@@ -1915,9 +1915,23 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")
+            && init_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_to_id")
+            && init_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_main")
+            && init_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_from_id"
+            )
+            && init_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_heap_main"
+            )
             && init_rs.contains("crate::prim::_mi_theap_default_raw()")
+            && init_rs.contains("static MI_SUBPROC_TO_ID_KEEP")
+            && init_rs.contains("static MI_SUBPROC_MAIN_KEEP")
+            && init_rs.contains("static MI_SUBPROC_FROM_ID_KEEP")
+            && init_rs.contains("static MI_SUBPROC_HEAP_MAIN_KEEP")
             && prim_rs.contains("pub unsafe fn _mi_theap_default_raw()"),
-        "_mi_subproc should stay as C's small local helper and inspect the raw default TLS cell"
+        "subproc helpers should stay as C's small local helper boundaries and inspect the raw default TLS cell"
     );
     assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")

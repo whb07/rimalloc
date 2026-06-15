@@ -574,11 +574,16 @@ unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
 
 /// # Safety
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_subproc_id_t {
     mi_subproc_id_t {
         _mi_subproc_id: subproc.cast::<c_void>(),
     }
 }
+
+#[used]
+static MI_SUBPROC_TO_ID_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> mi_subproc_id_t =
+    _mi_subproc_to_id;
 
 unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
     let subproc = unsafe { mi_subproc_prefix(subproc) };
@@ -1353,9 +1358,13 @@ fn mi_cpuid(_regs4: *mut u32, _level: u32, _sublevel: u32) -> bool {
 
 /// # Safety
 /// Returns a borrowed process-global opaque subproc pointer.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
     unsafe { mi_subproc_main_ptr() }
 }
+
+#[used]
+static MI_SUBPROC_MAIN_KEEP: unsafe extern "C" fn() -> *mut mi_subproc_t = _mi_subproc_main;
 
 /// # Safety
 /// `theap` must be a valid default theap for the current thread.
@@ -1504,11 +1513,16 @@ pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
 
 /// # Safety
 /// `subproc_id` must have been produced by this crate's subproc API surface.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_from_id(
     subproc_id: mi_subproc_id_t,
 ) -> *mut mi_subproc_t {
     subproc_id._mi_subproc_id.cast::<mi_subproc_t>()
 }
+
+#[used]
+static MI_SUBPROC_FROM_ID_KEEP: unsafe extern "C" fn(mi_subproc_id_t) -> *mut mi_subproc_t =
+    _mi_subproc_from_id;
 
 #[unsafe(no_mangle)]
 /// # Safety
@@ -1526,6 +1540,7 @@ pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
 
 /// # Safety
 /// `subproc` must be null or point to a valid local subproc prefix.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     subproc: *mut mi_subproc_t,
 ) -> *mut mi_heap_t {
@@ -1541,6 +1556,10 @@ pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     crate::mi_assert_internal!(!heap.is_null());
     heap
 }
+
+#[used]
+static MI_SUBPROC_HEAP_MAIN_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> *mut mi_heap_t =
+    _mi_subproc_heap_main;
 
 #[unsafe(no_mangle)]
 /// # Safety

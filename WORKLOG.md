@@ -1714,3 +1714,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.20s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.06B` instructions and `15.52B` cycles; Rust about `10.65B` instructions and `16.12B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's subproc helper boundary set:
+  - C emits `_mi_subproc_to_id`, `_mi_subproc_main`, `_mi_subproc`, `_mi_subproc_from_id`, and `_mi_subproc_heap_main` as standalone local helpers around subproc lookup and main-heap discovery.
+  - Rust already preserved `_mi_subproc`, but release dropped the other tiny wrappers after inlining through public subproc APIs and stats paths.
+  - Marked the dropped subproc wrappers `#[inline(never)]`, retained them through local `#[used]` function-pointer anchors, and extended release audit coverage for the helper markers and anchors.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::init::_mi_subproc`, `_mi_subproc_main`, `_mi_subproc_to_id`, `_mi_subproc_from_id`, and `_mi_subproc_heap_main`, with no dynamic exports for the set.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.11s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.07B` instructions and `15.57B` cycles; Rust about `10.69B` instructions and `16.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

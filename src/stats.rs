@@ -564,6 +564,7 @@ pub extern "C" fn _mi_stats_init() {
 
 /// # Safety
 /// `to` and `from` must point to valid writable `mi_stats_t` values.
+#[inline(never)]
 pub unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi_stats_t) {
     if to.is_null() || from.is_null() || core::ptr::eq(to, from) {
         return;

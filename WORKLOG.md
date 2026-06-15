@@ -1378,3 +1378,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak100`: C `1.02s..1.03s`, Rust `1.04s..1.06s`, with matched minor faults. The tail remains small but persistent.
   - Five-run `perf stat`: C about `5.83B` instructions and `9.95B` cycles; Rust about `6.18B` instructions and `10.20B` cycles. This narrows source/codegen drift in teardown but the remaining instruction gap still needs another trace.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.
+- Matched C's stats-merge call boundary inside heap teardown:
+  - C `_mi_theap_free` calls `_mi_stats_merge_into` as a separate local helper, while Rust had inlined the stats merge and memset into `_mi_theap_free`.
+  - Marked Rust `_mi_stats_merge_into` `#[inline(never)]` and added release audit coverage to keep the helper crate-local while preserving the call boundary.
+  - Rebuilt release and confirmed `_mi_stats_merge_into` is emitted as a separate local symbol and `_mi_theap_free` calls it.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak100`: C `1.02s..1.03s`, Rust `1.05s..1.06s`, with matched minor faults.
+  - Five-run `perf stat`: C about `5.82B` instructions and `10.01B` cycles; Rust about `6.18B` instructions and `10.21B` cycles. The remaining gap persists, so the next trace should continue through the rest of `_mi_theap_free` and thread cleanup codegen.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo clippy --all-targets -- -D warnings`, `cargo test --quiet`, `cargo build --release`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

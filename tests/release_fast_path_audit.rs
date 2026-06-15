@@ -606,6 +606,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
     let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
+    let stats_rs = fs::read_to_string(root.join("src/stats.rs")).expect("read src/stats.rs");
     let theap_rs = fs::read_to_string(root.join("src/theap.rs")).expect("read src/theap.rs");
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
     let alloc_aligned_rs =
@@ -1113,6 +1114,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         ("src/options.rs", &options_rs, "fn _mi_error_message"),
         ("src/options.rs", &options_rs, "fn _mi_option_get_fast"),
         ("src/options.rs", &options_rs, "fn _mi_assert_fail"),
+        (
+            "src/stats.rs",
+            &stats_rs,
+            "pub unsafe extern \"C\" fn _mi_stats_merge_into",
+        ),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -1213,6 +1219,10 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && theap_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_free"),
         "thread teardown should keep C's heap collect/free call boundaries instead of inlining them into _mi_thread_done"
+    );
+    assert!(
+        stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into"),
+        "heap cleanup should keep C's stats merge call boundary instead of inlining it into _mi_theap_free"
     );
     assert!(
         init_rs.contains("#[inline(always)]\nunsafe fn _mi_thread_init_theap_default()"),

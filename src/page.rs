@@ -1438,8 +1438,10 @@ unsafe fn mi_huge_page_alloc(
         crate::mi_assert_internal!(mi_page_immediate_available(page));
         crate::mi_assert_internal!(mi_page_is_huge(page));
         crate::mi_assert_internal!(mi_page_is_singleton(page));
-        __mi_stat_increase(&mut (*theap).stats.malloc_huge, mi_page_block_size(page));
-        __mi_stat_counter_increase(&mut (*theap).stats.malloc_huge_count, 1);
+        if MI_STAT > 0 {
+            __mi_stat_increase(&mut (*theap).stats.malloc_huge, mi_page_block_size(page));
+            __mi_stat_counter_increase(&mut (*theap).stats.malloc_huge_count, 1);
+        }
     }
     page
 }

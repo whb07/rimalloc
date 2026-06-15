@@ -33,6 +33,27 @@ fn debug_assert_macros_are_release_gated_like_c_mimalloc() {
 }
 
 #[test]
+fn huge_allocation_stats_are_release_gated_like_c_mimalloc() {
+    let page_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/page.rs");
+    let source = fs::read_to_string(page_rs).expect("read src/page.rs");
+    let start = source
+        .find("unsafe fn mi_huge_page_alloc")
+        .expect("find mi_huge_page_alloc");
+    let end = source[start..]
+        .find("\n}\n\n#[inline(always)]")
+        .map(|offset| start + offset)
+        .expect("find end of mi_huge_page_alloc");
+    let body = &source[start..end];
+
+    assert!(
+        body.contains(
+            "if MI_STAT > 0 {\n            __mi_stat_increase(&mut (*theap).stats.malloc_huge"
+        ) && body.contains("__mi_stat_counter_increase(&mut (*theap).stats.malloc_huge_count, 1);"),
+        "release huge allocation stats must compile out when MI_STAT == 0, matching C mi_theap_stat_* macros"
+    );
+}
+
+#[test]
 fn stderr_output_routes_through_platform_primitive() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");

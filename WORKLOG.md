@@ -1208,3 +1208,22 @@
   - `cargo build --release`
   - `git diff --check`
   - `cargo test --release --quiet` remains blocked before tests run by the known release `no_std` plus prebuilt `core` unwind limitation.
+- Rechecked current mimalloc-bench parity after the aligned-allocation wrapper commit:
+  - Rebuilt the release cdylib and refreshed `target/bench-allocators/libmimalloc-rust.so`.
+  - Fresh `-n=5` sweep over `glibc`, `rptest`, `cfrac`, `alloc-test`, `larson`, `larson-sized`, and `mstress` showed most targets overlapping or Rust-favored.
+  - `alloc-testN` had a harness-only Rust high tail (`2.18s, 2.18s, 2.43s, 2.53s, 2.53s` versus C `2.18s..2.26s`), so it was profiled directly as `alloc-test 16`.
+  - Direct `perf stat -r 7` did not reproduce the tail: C averaged `2.21678s`, Rust averaged `2.20797s`, with Rust retiring fewer instructions (`203.3B` versus C `209.6B`) and similar branch misses/cache misses.
+  - Result: no allocator code change was made from the `alloc-testN` harness tail; next work should target a reproducible wall-time/RSS/minor-fault signal.
+- Fixed release huge-allocation stat accounting:
+  - `MIMALLOC_SHOW_STATS=1 ./alloc-test 1` showed Rust printing a live `4.0 MiB` huge allocation in release stats while C omitted the `blocks` section. Both builds had the same allocator commit (`12.1 MiB`), so this was a stats accounting drift.
+  - C's `mi_theap_stat_*` macros compile out when `MI_STAT=0`; Rust's `mi_huge_page_alloc` still called `__mi_stat_increase` and `__mi_stat_counter_increase` unconditionally.
+  - Gated the Rust huge allocation stat updates with `MI_STAT > 0`, matching the existing free-side release gate and C macro behavior.
+  - Added release fast-path audit coverage to keep the huge-allocation stat updates release-gated.
+  - Rebuilt `target/bench-allocators/libmimalloc-rust.so`; `MIMALLOC_SHOW_STATS=1 ./alloc-test 1` no longer prints a release `blocks` section, matching C.
+  - Direct `alloc-test 1` time/minor faults remain matched; the remaining RSS gap is a separate arena-layout signal. `pmap` shows the gap in the 1 GiB arena mapping (`12288 KiB` resident for C versus `14336 KiB` resident for Rust), not in the shared object mapping.
+- Focused validation after the huge stat gate:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo build --release`
+  - `cargo test --quiet`
+  - `cargo clippy --all-targets -- -D warnings`

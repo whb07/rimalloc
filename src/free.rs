@@ -58,6 +58,7 @@ unsafe fn mi_list_contains(
     false
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_ptr_unalign(
     page: *const mi_page_t,
     p: *const c_void,

@@ -1448,3 +1448,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.69B` cycles; Rust about `11.87B` instructions and `18.36B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `cargo build --release`.
+- Started matching C's aligned free pointer helper boundary:
+  - C emits `_mi_page_ptr_unalign` as a standalone local helper used by generic free and usable-size paths, while Rust had inlined away the wrapper and emitted no matching local symbol.
+  - Marked Rust `_mi_page_ptr_unalign` `#[inline(never)]` and extended release audit coverage requiring the free and usable-size paths to keep that boundary.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::free::_mi_page_ptr_unalign`; generic free helpers call it through a relative relocation slot.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.03s..2.07s`, Rust `2.10s..2.11s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.27B` instructions and `17.99B` cycles; Rust about `11.85B` instructions and `18.61B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

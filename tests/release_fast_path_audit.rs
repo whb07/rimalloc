@@ -1265,6 +1265,14 @@ fn free_path_internals_are_not_dynamic_exports() {
         "page and aligned allocation should keep C's _mi_page_malloc_zero call boundary"
     );
     assert!(
+        free_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign")
+            && free_rs.contains("crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());")
+            && free_rs.contains("let block = if mi_page_has_interior_pointers(page) {")
+            && free_rs.contains("let block = _mi_page_ptr_unalign(page, p);"),
+        "free and usable-size paths should keep C's _mi_page_ptr_unalign call boundary"
+    );
+    assert!(
         !heap_rs.contains("fn _mi_theap_cached_set(")
             && !heap_rs.contains("fn _mi_theap_create(")
             && !heap_rs.contains("fn _mi_theap_free(")

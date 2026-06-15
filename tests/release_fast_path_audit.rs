@@ -367,6 +367,31 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains("export_name = \"malloc\""),
         "Rust malloc override gate must stay paired with the assembly fast override"
     );
+    for export_name in [
+        "reallocf",
+        "malloc_good_size",
+        "vfree",
+        "_aligned_malloc",
+        "__libc_realloc",
+        "__libc_cfree",
+        "__libc_valloc",
+        "__libc_pvalloc",
+        "__libc_memalign",
+        "__posix_memalign",
+    ] {
+        assert!(
+            override_rs.contains(&format!("export_name = \"{export_name}\"")),
+            "Rust Unix/Linux override surface should export {export_name} like C mimalloc"
+        );
+    }
+    assert!(
+        override_rs.contains(".weak reallocarr")
+            && override_rs.contains(".set reallocarr, mi_reallocarr")
+            && override_rs.contains("export_name = \"__libc_malloc\"")
+            && override_rs.contains("export_name = \"__libc_calloc\"")
+            && override_rs.contains("export_name = \"__libc_free\""),
+        "Rust override surface should keep C's libc aliases and weak reallocarr compatibility"
+    );
     assert!(
         aligned_rs.contains("#[cfg(not(mi_c_malloc_fast))]\n#[unsafe(no_mangle)]")
             && aligned_rs.contains("#[cfg(mi_c_malloc_fast)]\n#[unsafe(naked)]")

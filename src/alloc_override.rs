@@ -1064,6 +1064,12 @@ pub unsafe fn mi_unix_reallocf(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_reallocf(p, newsize) }
 }
 
+#[cfg(not(windows))]
+#[unsafe(export_name = "reallocf")]
+pub unsafe extern "C" fn mi_unix_reallocf_export(p: *mut c_void, newsize: usize) -> *mut c_void {
+    unsafe { mi_unix_reallocf(p, newsize) }
+}
+
 #[inline]
 pub unsafe fn mi_unix_malloc_size(p: *const c_void) -> usize {
     unsafe { crate::mimalloc::mi_usable_size(p) }
@@ -1078,6 +1084,17 @@ pub unsafe extern "C" fn mi_unix_malloc_size_export(p: *const c_void) -> usize {
 #[inline]
 pub unsafe fn mi_unix_malloc_usable_size(p: *const c_void) -> usize {
     unsafe { crate::mimalloc::mi_usable_size(p) }
+}
+
+#[inline]
+pub unsafe fn mi_unix_malloc_good_size(size: usize) -> usize {
+    crate::mimalloc::mi_malloc_good_size(size)
+}
+
+#[cfg(not(windows))]
+#[unsafe(export_name = "malloc_good_size")]
+pub unsafe extern "C" fn mi_unix_malloc_good_size_export(size: usize) -> usize {
+    unsafe { mi_unix_malloc_good_size(size) }
 }
 
 #[cfg(not(windows))]
@@ -1100,6 +1117,12 @@ pub unsafe extern "C" fn mi_unix_valloc_export(size: usize) -> *mut c_void {
 #[inline]
 pub unsafe fn mi_unix_vfree(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
+}
+
+#[cfg(not(windows))]
+#[unsafe(export_name = "vfree")]
+pub unsafe extern "C" fn mi_unix_vfree_export(p: *mut c_void) {
+    unsafe { mi_unix_vfree(p) }
 }
 
 #[inline]
@@ -1169,6 +1192,15 @@ pub unsafe fn mi_unix_aligned_malloc(size: usize, alignment: usize) -> *mut c_vo
     unsafe { crate::mimalloc::mi_malloc_aligned(size, alignment) }
 }
 
+#[cfg(not(windows))]
+#[unsafe(export_name = "_aligned_malloc")]
+pub unsafe extern "C" fn mi_unix_aligned_malloc_export(
+    size: usize,
+    alignment: usize,
+) -> *mut c_void {
+    unsafe { mi_unix_aligned_malloc(size, alignment) }
+}
+
 #[inline]
 pub unsafe fn mi_unix_reallocarray(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_reallocarray(p, count, size) }
@@ -1189,9 +1221,22 @@ pub unsafe fn mi_unix_reallocarr(ptrp: *mut *mut c_void, count: usize, size: usi
     unsafe { crate::mimalloc::mi_reallocarr(ptrp, count, size) }
 }
 
+#[cfg(target_os = "linux")]
+core::arch::global_asm!(
+    ".weak reallocarr",
+    ".type reallocarr,@function",
+    ".set reallocarr, mi_reallocarr",
+);
+
 #[inline]
 pub unsafe fn mi_wasi_libc_malloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
+}
+
+#[cfg(all(target_os = "wasi", not(mi_c_malloc_fast)))]
+#[unsafe(export_name = "__libc_malloc")]
+pub unsafe extern "C" fn mi_wasi_libc_malloc_export(size: usize) -> *mut c_void {
+    unsafe { mi_wasi_libc_malloc(size) }
 }
 
 #[inline]
@@ -1199,9 +1244,21 @@ pub unsafe fn mi_wasi_libc_calloc(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
 }
 
+#[cfg(all(target_os = "wasi", not(mi_c_malloc_fast)))]
+#[unsafe(export_name = "__libc_calloc")]
+pub unsafe extern "C" fn mi_wasi_libc_calloc_export(count: usize, size: usize) -> *mut c_void {
+    unsafe { mi_wasi_libc_calloc(count, size) }
+}
+
 #[inline]
 pub unsafe fn mi_wasi_libc_realloc(p: *mut c_void, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_realloc(p, size) }
+}
+
+#[cfg(target_os = "wasi")]
+#[unsafe(export_name = "__libc_realloc")]
+pub unsafe extern "C" fn mi_wasi_libc_realloc_export(p: *mut c_void, size: usize) -> *mut c_void {
+    unsafe { mi_wasi_libc_realloc(p, size) }
 }
 
 #[inline]
@@ -1209,9 +1266,24 @@ pub unsafe fn mi_wasi_libc_free(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+#[cfg(all(target_os = "wasi", not(mi_c_malloc_fast)))]
+#[unsafe(export_name = "__libc_free")]
+pub unsafe extern "C" fn mi_wasi_libc_free_export(p: *mut c_void) {
+    unsafe { mi_wasi_libc_free(p) }
+}
+
 #[inline]
 pub unsafe fn mi_wasi_libc_memalign(alignment: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_memalign(alignment, size) }
+}
+
+#[cfg(target_os = "wasi")]
+#[unsafe(export_name = "__libc_memalign")]
+pub unsafe extern "C" fn mi_wasi_libc_memalign_export(
+    alignment: usize,
+    size: usize,
+) -> *mut c_void {
+    unsafe { mi_wasi_libc_memalign(alignment, size) }
 }
 
 #[inline]
@@ -1219,9 +1291,21 @@ pub unsafe fn mi_linux_libc_malloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
 }
 
+#[cfg(all(target_os = "linux", not(mi_c_malloc_fast)))]
+#[unsafe(export_name = "__libc_malloc")]
+pub unsafe extern "C" fn mi_linux_libc_malloc_export(size: usize) -> *mut c_void {
+    unsafe { mi_linux_libc_malloc(size) }
+}
+
 #[inline]
 pub unsafe fn mi_linux_libc_calloc(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
+}
+
+#[cfg(all(target_os = "linux", not(mi_c_malloc_fast)))]
+#[unsafe(export_name = "__libc_calloc")]
+pub unsafe extern "C" fn mi_linux_libc_calloc_export(count: usize, size: usize) -> *mut c_void {
+    unsafe { mi_linux_libc_calloc(count, size) }
 }
 
 #[inline]
@@ -1229,9 +1313,21 @@ pub unsafe fn mi_linux_libc_realloc(p: *mut c_void, size: usize) -> *mut c_void 
     unsafe { crate::mimalloc::mi_realloc(p, size) }
 }
 
+#[cfg(target_os = "linux")]
+#[unsafe(export_name = "__libc_realloc")]
+pub unsafe extern "C" fn mi_linux_libc_realloc_export(p: *mut c_void, size: usize) -> *mut c_void {
+    unsafe { mi_linux_libc_realloc(p, size) }
+}
+
 #[inline]
 pub unsafe fn mi_linux_libc_free(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
+}
+
+#[cfg(all(target_os = "linux", not(mi_c_malloc_fast)))]
+#[unsafe(export_name = "__libc_free")]
+pub unsafe extern "C" fn mi_linux_libc_free_export(p: *mut c_void) {
+    unsafe { mi_linux_libc_free(p) }
 }
 
 #[inline]
@@ -1239,9 +1335,21 @@ pub unsafe fn mi_linux_libc_cfree(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+#[cfg(target_os = "linux")]
+#[unsafe(export_name = "__libc_cfree")]
+pub unsafe extern "C" fn mi_linux_libc_cfree_export(p: *mut c_void) {
+    unsafe { mi_linux_libc_cfree(p) }
+}
+
 #[inline]
 pub unsafe fn mi_linux_libc_valloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_valloc(size) }
+}
+
+#[cfg(target_os = "linux")]
+#[unsafe(export_name = "__libc_valloc")]
+pub unsafe extern "C" fn mi_linux_libc_valloc_export(size: usize) -> *mut c_void {
+    unsafe { mi_linux_libc_valloc(size) }
 }
 
 #[inline]
@@ -1249,12 +1357,37 @@ pub unsafe fn mi_linux_libc_pvalloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_pvalloc(size) }
 }
 
+#[cfg(target_os = "linux")]
+#[unsafe(export_name = "__libc_pvalloc")]
+pub unsafe extern "C" fn mi_linux_libc_pvalloc_export(size: usize) -> *mut c_void {
+    unsafe { mi_linux_libc_pvalloc(size) }
+}
+
 #[inline]
 pub unsafe fn mi_linux_libc_memalign(alignment: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_memalign(alignment, size) }
 }
 
+#[cfg(target_os = "linux")]
+#[unsafe(export_name = "__libc_memalign")]
+pub unsafe extern "C" fn mi_linux_libc_memalign_export(
+    alignment: usize,
+    size: usize,
+) -> *mut c_void {
+    unsafe { mi_linux_libc_memalign(alignment, size) }
+}
+
 #[inline]
 pub unsafe fn mi_linux_posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> c_int {
     unsafe { crate::mimalloc::mi_posix_memalign(p, alignment, size) }
+}
+
+#[cfg(target_os = "linux")]
+#[unsafe(export_name = "__posix_memalign")]
+pub unsafe extern "C" fn mi_linux_posix_memalign_export(
+    p: *mut *mut c_void,
+    alignment: usize,
+    size: usize,
+) -> c_int {
+    unsafe { mi_linux_posix_memalign(p, alignment, size) }
 }

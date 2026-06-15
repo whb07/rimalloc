@@ -1067,7 +1067,7 @@ fn mi_bitmap_chunkmap_set(bitmap: &mut mi_bitmap_t, chunk_idx: usize) {
     mi_bchunk_set(&mut bitmap.chunkmap, chunk_idx, None);
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bitmap_chunkmap_try_clear(bitmap: &mut mi_bitmap_t, chunk_idx: usize) -> bool {
     crate::mi_debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
     if !mi_bchunk_all_are_clear_relaxed(&bitmap.chunks[chunk_idx]) {
@@ -2277,6 +2277,9 @@ static MI_BCHUNK_TRY_FIND_AND_CLEARNX_KEEP: fn(&mut mi_bchunk_t, usize, &mut usi
 #[used]
 static MI_BCHUNK_TRY_FIND_AND_CLEARNC_KEEP: fn(&mut mi_bchunk_t, usize, &mut usize) -> bool =
     mi_bchunk_try_find_and_clearNC;
+#[used]
+static MI_BITMAP_CHUNKMAP_TRY_CLEAR_KEEP: fn(&mut mi_bitmap_t, usize) -> bool =
+    mi_bitmap_chunkmap_try_clear;
 #[used]
 static MI_BBITMAP_SET_CHUNK_BIN_KEEP: fn(&mut mi_bbitmap_t, usize, mi_chunkbin_t) =
     mi_bbitmap_set_chunk_bin;

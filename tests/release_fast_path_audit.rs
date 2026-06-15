@@ -1933,6 +1933,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         "#[inline(never)]\nfn mi_bchunk_try_find_and_clear8(",
         "#[inline(never)]\nfn mi_bchunk_try_find_and_clearNX(",
         "#[inline(never)]\nfn mi_bchunk_try_find_and_clearNC(",
+        "#[inline(never)]\nfn mi_bitmap_chunkmap_try_clear(",
         "#[inline(never)]\nfn mi_bbitmap_set_chunk_bin(",
         "#[inline(never)]\nfn mi_bbitmap_chunkmap_try_clear(",
         "static MI_BCHUNK_XSETNC_KEEP",
@@ -1942,12 +1943,30 @@ fn free_path_internals_are_not_dynamic_exports() {
         "static MI_BCHUNK_TRY_FIND_AND_CLEAR8_KEEP",
         "static MI_BCHUNK_TRY_FIND_AND_CLEARNX_KEEP",
         "static MI_BCHUNK_TRY_FIND_AND_CLEARNC_KEEP",
+        "static MI_BITMAP_CHUNKMAP_TRY_CLEAR_KEEP",
         "static MI_BBITMAP_SET_CHUNK_BIN_KEEP",
         "static MI_BBITMAP_CHUNKMAP_TRY_CLEAR_KEEP",
     ] {
         assert!(
             bitmap_rs.contains(marker),
             "bchunk bitmap helper boundary marker missing: {marker}"
+        );
+    }
+    for marker in [
+        "#[inline(never)]\nunsafe fn mi_arena_slice_start(",
+        "#[inline(never)]\nunsafe fn mi_arena_page_at_slice(",
+        "#[inline(never)]\nunsafe fn mi_arenas_page_singleton_alloc(",
+        "#[inline(never)]\nunsafe fn mi_arena_purge(",
+        "#[inline(never)]\nunsafe fn mi_debug_show_chunks(",
+        "static MI_ARENA_SLICE_START_KEEP",
+        "static MI_ARENA_PAGE_AT_SLICE_KEEP",
+        "static MI_ARENAS_PAGE_SINGLETON_ALLOC_KEEP",
+        "static MI_ARENA_PURGE_KEEP",
+        "static MI_DEBUG_SHOW_CHUNKS_KEEP",
+    ] {
+        assert!(
+            arena_rs.contains(marker),
+            "arena helper boundary marker missing: {marker}"
         );
     }
     assert!(

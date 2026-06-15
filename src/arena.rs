@@ -733,6 +733,7 @@ unsafe fn mi_arena_start(arena: *mut mi_arena_t) -> *mut u8 {
 }
 
 #[allow(dead_code)]
+#[inline(never)]
 unsafe fn mi_arena_slice_start(arena: *mut mi_arena_t, slice_index: usize) -> *mut u8 {
     crate::mi_assert_internal!(
         slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
@@ -741,6 +742,7 @@ unsafe fn mi_arena_slice_start(arena: *mut mi_arena_t, slice_index: usize) -> *m
 }
 
 #[allow(dead_code)]
+#[inline(never)]
 unsafe fn mi_arena_page_at_slice(arena: *mut mi_arena_t, slice_index: usize) -> *mut mi_page_t {
     crate::mi_assert_internal!(
         slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
@@ -2475,6 +2477,7 @@ unsafe fn mi_arenas_page_regular_alloc(
     page
 }
 
+#[inline(never)]
 unsafe fn mi_arenas_page_singleton_alloc(
     theap: *mut mi_theap_t,
     block_size: usize,
@@ -3038,6 +3041,7 @@ unsafe fn mi_arena_purge_delay() -> c_long {
         * mi_option_get(mi_option_t::mi_option_arena_purge_mult)
 }
 
+#[inline(never)]
 unsafe fn mi_arena_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize) -> bool {
     crate::mi_assert_internal!(!unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned });
     crate::mi_assert_internal!(unsafe {
@@ -3727,6 +3731,7 @@ unsafe fn mi_debug_show_page_bfield(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[inline(never)]
 unsafe fn mi_debug_show_chunks(
     header1: &str,
     header2: &str,
@@ -4072,3 +4077,33 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages(
     }
     err
 }
+
+type MiDebugShowChunksFunT = unsafe fn(
+    &str,
+    &str,
+    &str,
+    usize,
+    usize,
+    *mut mi_bchunk_t,
+    *mut mi_bchunkmap_t,
+    bool,
+    *mut mi_arena_t,
+    bool,
+) -> usize;
+
+#[used]
+static MI_ARENA_SLICE_START_KEEP: unsafe fn(*mut mi_arena_t, usize) -> *mut u8 =
+    mi_arena_slice_start;
+#[used]
+static MI_ARENA_PAGE_AT_SLICE_KEEP: unsafe fn(*mut mi_arena_t, usize) -> *mut mi_page_t =
+    mi_arena_page_at_slice;
+#[used]
+static MI_ARENAS_PAGE_SINGLETON_ALLOC_KEEP: unsafe fn(
+    *mut mi_theap_t,
+    usize,
+    usize,
+) -> *mut mi_page_t = mi_arenas_page_singleton_alloc;
+#[used]
+static MI_ARENA_PURGE_KEEP: unsafe fn(*mut mi_arena_t, usize, usize) -> bool = mi_arena_purge;
+#[used]
+static MI_DEBUG_SHOW_CHUNKS_KEEP: MiDebugShowChunksFunT = mi_debug_show_chunks;

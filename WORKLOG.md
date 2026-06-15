@@ -410,3 +410,37 @@
   - `git diff --check`
   - Export sanity: dynamic symbols include `free`, `_ZdlPv`, and `_ZdaPv`, but not `_mi_page_map` or `mi_free_ex_slow`.
   - External `LD_PRELOAD` probe calling `free(NULL)` exited cleanly.
+- Committed the free/delete fast path as `66b02a1 Add direct Unix free fast paths`.
+- Post-commit `cfrac` profiles after the direct free/delete entry points:
+  - Flat allocator samples: C `operator delete[](void*) 4.49%`, `mi_malloc 3.57%`, `_mi_malloc_generic 0.35%`; Rust `free 4.24%`, `malloc 3.73%`, local `_mi_malloc_generic 0.67%`.
+  - Result: the free-side sample gap is no longer the leading difference; Rust still spends more samples in the generic malloc refill path.
+- Matched post-commit `perf stat -r 7` on `cfrac`:
+  - C: `13.237B` cycles, `43.892B` instructions, `6.959B` branches, `33.050M` branch misses, `8.737M` cache misses, `185` minor faults, `2.748s` elapsed.
+  - Rust: `13.395B` cycles, `43.775B` instructions, `7.048B` branches, `33.010M` branch misses, `8.653M` cache misses, `193` minor faults, `2.758s` elapsed.
+  - Result: the residual signal is still about `89M` extra branches plus minor faults, not branch misses, instructions, or cache misses.
+- Found a branch-count parity drift in the allocation fast path:
+  - C initializes the Linux TLS default theap to `_mi_theap_empty` and its `malloc` fast path does not test the loaded TLS pointer for null before the size/free-list checks.
+  - Rust initialized `mi_tls_theap_default` to `NULL` in `tls_shim.c`, so the naked allocation fast paths carried an extra `test rdi, rdi; je slow` branch on every fast allocation.
+- In-progress change: initialize Rust's Linux TLS default/cached theap slots to `_mi_theap_empty` like C and remove the per-allocation null-theap branch from `malloc`, `mi_malloc`, `_Znwm`, and `_Znam`; source audit now checks both properties.
+- Focused validation/build after the TLS allocation fast-path change:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+  - Rebuilt benchmark cdylib and confirmed `malloc` no longer has `test rdi, rdi; je slow` before the size check.
+  - External `LD_PRELOAD` smoke test allocating/freeing 16 bytes and calling `free(NULL)` exited cleanly.
+- Focused Rust `cfrac perf stat -r 7` after removing the allocation null-theap branch:
+  - Rust: `13.323B` cycles, `43.592B` instructions, `6.956B` branches, `33.134M` branch misses, `8.678M` cache misses, `192` minor faults, `2.741s` elapsed.
+  - Result: branch count now matches C's prior `6.959B` instead of being about `89M` higher; the remaining minor-fault/RSS difference is separate.
+- Full established validation passed after the TLS allocation fast-path change:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

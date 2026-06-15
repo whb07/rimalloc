@@ -1,7 +1,9 @@
 #include <stddef.h>
 
-__thread void* mi_tls_theap_default __attribute__((tls_model("initial-exec"), visibility("hidden"))) = NULL;
-static __thread void* mi_tls_theap_cached __attribute__((tls_model("initial-exec"))) = NULL;
+extern void _mi_theap_empty;
+
+__thread void* mi_tls_theap_default __attribute__((tls_model("initial-exec"), visibility("hidden"))) = &_mi_theap_empty;
+static __thread void* mi_tls_theap_cached __attribute__((tls_model("initial-exec"))) = &_mi_theap_empty;
 __thread void* __mi_theap_main __attribute__((tls_model("initial-exec"), visibility("hidden"))) = NULL;
 
 void* _mi_tls_theap_default_get(void) {

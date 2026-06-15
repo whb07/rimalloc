@@ -33,8 +33,9 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     assert!(
         tls_shim.contains("mi_tls_theap_default")
             && tls_shim.contains("tls_model(\"initial-exec\")")
-            && tls_shim.contains("visibility(\"hidden\")"),
-        "default Linux malloc assembly should read the hidden initial-exec TLS heap"
+            && tls_shim.contains("visibility(\"hidden\")")
+            && tls_shim.contains("= &_mi_theap_empty"),
+        "default Linux malloc assembly should read the hidden initial-exec TLS heap initialized like C"
     );
     assert!(
         build_rs.contains("target_arch == \"x86_64\"")
@@ -49,6 +50,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_array_fast_64")
             && override_rs.contains("core::arch::naked_asm!")
             && override_rs.contains("mi_tls_theap_default@GOTTPOFF")
+            && !override_rs.contains("\"test rdi, rdi\"")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
             && override_rs.contains("slow = sym crate::page::_mi_malloc_generic")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_unix_free_fast")

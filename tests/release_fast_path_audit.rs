@@ -1273,6 +1273,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/stats.rs",
             &stats_rs,
+            "pub extern \"C\" fn _mi_stats_init",
+        ),
+        (
+            "src/stats.rs",
+            &stats_rs,
             "pub unsafe extern \"C\" fn __mi_stat_counter_increase_mt",
         ),
         (
@@ -1607,6 +1612,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         options_rs.contains("#[inline(never)]\npub(crate) fn _mi_raw_message(")
             && options_rs.contains("static MI_RAW_MESSAGE_KEEP"),
         "_mi_raw_message should keep C's local raw-message helper boundary"
+    );
+    assert!(
+        stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_stats_init(")
+            && stats_rs.contains("static MI_STATS_INIT_KEEP: extern \"C\" fn() = _mi_stats_init;"),
+        "_mi_stats_init should keep C's local process statistics initialization boundary"
     );
     assert!(
         options_rs

@@ -1706,3 +1706,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.05s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.08B` instructions and `15.75B` cycles; Rust about `10.66B` instructions and `16.16B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's `_mi_stats_init` helper boundary:
+  - C emits `_mi_stats_init` as the standalone local process-statistics initializer called from process initialization.
+  - Rust had the same C-ABI helper body, but release dropped the local symbol after inlining the small process-start compare/exchange path.
+  - Marked Rust `_mi_stats_init` `#[inline(never)]`, retained it through a local `#[used]` function-pointer anchor, and extended release audit coverage for the helper marker and anchor.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::stats::_mi_stats_init`, with no dynamic `_mi_stats_init` export.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.20s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.06B` instructions and `15.52B` cycles; Rust about `10.65B` instructions and `16.12B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

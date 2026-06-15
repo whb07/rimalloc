@@ -577,12 +577,16 @@ pub extern "C" fn _mi_clock_end(start: i64) -> i64 {
     _mi_clock_now() - start - CLOCK_DIFF.load(Ordering::Relaxed)
 }
 
+#[inline(never)]
 pub extern "C" fn _mi_stats_init() {
     if PROCESS_START.load(Ordering::Relaxed) == 0 {
         let start = _mi_clock_start();
         let _ = PROCESS_START.compare_exchange(0, start, Ordering::Relaxed, Ordering::Relaxed);
     }
 }
+
+#[used]
+static MI_STATS_INIT_KEEP: extern "C" fn() = _mi_stats_init;
 
 /// # Safety
 /// `to` and `from` must point to valid writable `mi_stats_t` values.

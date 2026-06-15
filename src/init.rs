@@ -882,15 +882,18 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     crate::threadlocal::_mi_thread_locals_thread_done();
 
     let tld = unsafe { (*default_theap).tld };
-    let heap = unsafe { _mi_subproc_heap_main((*tld).subproc) };
-    if !heap.is_null() {
-        unsafe {
-            __mi_stat_decrease_mt(
-                ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
-                1,
-            )
-        };
+    let subproc = unsafe { (*tld).subproc };
+    let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
+    if heap.is_null() {
+        mi_heap_main_init();
+        heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     }
+    unsafe {
+        __mi_stat_decrease_mt(
+            ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
+            1,
+        )
+    };
 
     if unsafe { (*tld).thread_id } != crate::prim::_mi_prim_thread_id() {
         return;

@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing `_mi_thread_done` teardown parity after `5e4d4e0`:
+  - Fresh `mleak 100` profiling still shows Rust samples in `_mi_subproc_heap_main`.
+  - Compared release disassembly and found a concrete call-site drift: C's `_mi_thread_done` directly loads `tld->subproc->heap_main` and only enters the cold main-heap init path on null, while Rust still calls `_mi_subproc_heap_main` through the GOT before the threads-stat decrement.
+  - Patching `_mi_thread_done` to use the raw subproc heap-main load directly at that call-site and adding release audit coverage so the teardown path stays aligned with C's inline fast path.
+  - Artifact check: release `_mi_thread_done` now directly emits `mov 0x550(...), %rdi; test; jne` before the threads-stat decrement, with only a direct cold call to `mi_heap_main_init`; there is no `_mi_subproc_heap_main` call in the teardown body.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the validated release cdylib and rechecked direct `./mleak 100`:
+    - C `2.04s, 2.04s, 2.04s`; Rust `2.10s, 2.12s, 2.10s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.72B` instructions / `16.64B` cycles; Rust `11.02B` instructions / `17.23B` cycles.
+  - Follow-up Rust-only profile after this slice still shows `_mi_subproc_heap_main` at `0.11%` self and `_mi_thread_done` at `0.04%` self, so the next pass needs to inspect the remaining helper call sites rather than this teardown body.
 - Continuing main subproc helper parity after `24db257`:
   - Fresh `mleak 100` perf still shows small Rust allocator-side samples in `_mi_theap_init`, `mi_stats_add`, `_mi_subproc_heap_main`, and thread-local teardown; no single dominant path remains.
   - Found a concrete helper drift in release artifacts: C's `_mi_subproc_main` is just `lea &subproc_main; ret`, and `_mi_subproc` falls back to that address directly when the raw default theap TLS cell is null. Rust's helpers still route through `mi_subproc_main_init()`, pulling atomic-once/options/lock initialization into the lightweight pointer path.

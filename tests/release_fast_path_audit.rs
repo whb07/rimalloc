@@ -2298,6 +2298,24 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !subproc_heap_main_body.contains("ptr::null_mut()"),
         "_mi_subproc_heap_main should match C's valid-subproc contract without a Rust-only null fast-path branch"
     );
+    let thread_done_start = init_rs
+        .find("pub(crate) unsafe extern \"C\" fn _mi_thread_done")
+        .expect("find _mi_thread_done");
+    let thread_done_end = init_rs[thread_done_start..]
+        .find("#[inline(never)]\npub(crate) extern \"C\" fn _mi_preloading")
+        .map(|offset| thread_done_start + offset)
+        .expect("find _mi_preloading marker");
+    let thread_done_body = &init_rs[thread_done_start..thread_done_end];
+    assert!(
+        thread_done_body.contains("let subproc = unsafe { (*tld).subproc };")
+            && thread_done_body
+                .contains("let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };")
+            && thread_done_body.contains("mi_heap_main_init();")
+            && thread_done_body.contains("heap = unsafe { mi_subproc_heap_main_raw(subproc) };")
+            && !thread_done_body.contains("_mi_subproc_heap_main((*tld).subproc)")
+            && !thread_done_body.contains("let heap = unsafe { _mi_subproc_heap_main"),
+        "_mi_thread_done should match C's inline subproc->heap_main load instead of calling _mi_subproc_heap_main"
+    );
     assert!(
         threadlocal_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_init(")
             && threadlocal_rs.contains("static mut mi_thread_locals_lock: mi_lock_t")

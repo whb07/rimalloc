@@ -316,7 +316,7 @@ pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
     if bin > MI_BIN_HUGE {
         return 0;
     }
-    bin_block_size(bin)
+    _mi_bin_size(bin)
 }
 
 fn mi_stat_update_mt(stat: &mut mi_stat_count_t, amount: i64) {

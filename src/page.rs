@@ -22,7 +22,7 @@ use crate::atomic::{
     mi_atomic_store_ptr_release, mi_memory_order_e,
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
-use crate::init::{_mi_page_empty, _mi_theap_empty_wrong};
+use crate::init::{_mi_page_empty, _mi_theap_empty, _mi_theap_empty_wrong};
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up, _mi_error_message,
     _mi_is_heap_main, _mi_os_commit, _mi_os_good_alloc_size, _mi_os_page_size,
@@ -38,7 +38,7 @@ use crate::internal::{
 use crate::options::{
     _mi_error_message_fmt, _mi_option_get_fast, mi_option_get_clamp, mi_option_t,
 };
-use crate::stats::{MI_BIN_HUGE, bin_block_size};
+use crate::stats::MI_BIN_HUGE;
 use crate::track::{
     MI_TRACK_ENABLED, mi_track_mem_defined, mi_track_mem_noaccess, mi_track_mem_undefined,
 };
@@ -83,6 +83,7 @@ fn align_up(size: usize, alignment: usize) -> usize {
     (size + alignment - 1) & !(alignment - 1)
 }
 
+#[inline(never)]
 pub extern "C" fn mi_bin(size: usize) -> usize {
     let mut wsize = size.div_ceil(size_of::<usize>());
     if MI_ALIGN4W {
@@ -112,13 +113,15 @@ pub extern "C" fn mi_bin(size: usize) -> usize {
     bin
 }
 
+#[inline(never)]
 pub extern "C" fn _mi_bin(size: usize) -> usize {
     mi_bin(size)
 }
 
+#[inline(never)]
 pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
     crate::mi_debug_assert!(bin <= MI_BIN_HUGE);
-    bin_block_size(bin)
+    unsafe { (*ptr::addr_of!(_mi_theap_empty).cast::<mi_theap_t>()).pages[bin].block_size }
 }
 
 #[unsafe(no_mangle)]

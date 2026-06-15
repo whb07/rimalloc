@@ -1556,3 +1556,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.11s`, Rust `2.11s..2.26s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.72B` cycles; Rust about `11.88B` instructions and `18.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's bin lookup helper boundaries:
+  - C emits static `mi_bin`, wrapper `_mi_bin`, and `_mi_bin_size`; Rust had matching source functions but release emitted no local helper symbols.
+  - Found a mechanical drift in `_mi_bin_size`: C reads `_mi_theap_empty.pages[bin].block_size`, while Rust used a separate stats word-size table. The values should match, but the dependency and emitted code shape differ.
+  - Marked Rust `mi_bin`, `_mi_bin`, and `_mi_bin_size` `#[inline(never)]`, changed `_mi_bin_size` to read `_mi_theap_empty.pages[bin].block_size`, and routed `mi_stats_get_bin_size` through `_mi_bin_size`.
+  - Extended the release audit to require the C helper boundaries and empty-theap table dependency so this drift is caught before it reappears.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::page::mi_bin`, `mechanical_mimalloc::page::_mi_bin`, and `mechanical_mimalloc::page::_mi_bin_size`; there are no dynamic `mi_bin`/`_mi_bin` exports.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.08s`, Rust `2.12s..2.26s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.32B` instructions and `17.78B` cycles; Rust about `11.90B` instructions and `18.24B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

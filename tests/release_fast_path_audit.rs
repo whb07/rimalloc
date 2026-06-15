@@ -2006,6 +2006,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         "thread-heap accessors should keep C's local helper boundaries"
     );
     assert!(
+        init_rs.contains("#[inline(never)]\npub(crate) extern \"C\" fn _mi_thread_id(")
+            && init_rs.contains("static MI_THREAD_ID_KEEP"),
+        "_mi_thread_id should keep C's local helper boundary"
+    );
+    assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")
             && theap_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_decref")

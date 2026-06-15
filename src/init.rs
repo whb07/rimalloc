@@ -820,9 +820,13 @@ pub(crate) fn mi_mark_main_thread() {
     let _ = MAIN_THREAD_ID.compare_exchange(0, tid, Ordering::AcqRel, Ordering::Acquire);
 }
 
+#[inline(never)]
 pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
     current_thread_id()
 }
+
+#[used]
+static MI_THREAD_ID_KEEP: extern "C" fn() -> mi_threadid_t = _mi_thread_id;
 
 #[inline(never)]
 pub extern "C" fn _mi_is_main_thread() -> bool {

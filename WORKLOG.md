@@ -1755,3 +1755,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.09s`, Rust `2.11s..2.26s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.07B` instructions and `15.65B` cycles; Rust about `10.66B` instructions and `16.26B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's `_mi_thread_id` helper boundary:
+  - C emits `_mi_thread_id` as the standalone local current-thread-id helper used by assertions, stats prefixes, arena checks, and heap ownership paths.
+  - Rust had the same C-ABI wrapper over the primitive thread-id lookup, but release dropped the local helper after inlining it into call sites.
+  - Marked Rust `_mi_thread_id` `#[inline(never)]`, retained it through a local `#[used]` function-pointer anchor, and extended release audit coverage for the helper marker and anchor.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::init::_mi_thread_id`, with no dynamic `_mi_thread_id` export.
+  - The next local-symbol gap now starts at `_mi_prim_alloc`, `_mi_prim_commit`, `_mi_prim_protect`, `_mi_prim_reset`, `_mi_theap_area_visit_blocks`, `_mi_theap_malloc_zero`, `_mi_theap_malloc_zero_ex`, `_mi_theap_page_reclaim`, and message/libc helpers.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.09s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.09B` instructions and `15.68B` cycles; Rust about `10.70B` instructions and `16.71B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

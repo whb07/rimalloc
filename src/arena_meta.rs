@@ -221,6 +221,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
     let mut mpage = mi_meta_pages.load(Ordering::Acquire);
     while !mpage.is_null() {
@@ -231,3 +232,6 @@ pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
     }
     false
 }
+
+#[used]
+static MI_META_IS_META_PAGE_KEEP: unsafe extern "C" fn(*mut c_void) -> bool = _mi_meta_is_meta_page;

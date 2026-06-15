@@ -707,6 +707,15 @@ fn free_path_internals_are_not_dynamic_exports() {
             && theap_rs.contains("_mi_is_heap_main(_mi_theap_heap(theap).cast_const())"),
         "main heap/theap predicates should keep C's local helper boundaries and major callers"
     );
+    assert!(
+        arena_meta_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_meta_is_meta_page(")
+            && arena_meta_rs.contains("static MI_META_IS_META_PAGE_KEEP")
+            && arena_meta_rs.contains("mi_meta_pages.load(Ordering::Acquire)")
+            && arena_meta_rs.contains("mpage = mi_meta_page_next(mpage);")
+            && arena_rs.contains("} else if unsafe { _mi_meta_is_meta_page(start) }"),
+        "meta page debug classification should keep C's _mi_meta_is_meta_page helper boundary"
+    );
 
     for (source_name, source, internal_name) in [
         (

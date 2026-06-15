@@ -1535,3 +1535,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.03s..2.06s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.70B` cycles; Rust about `11.89B` instructions and `18.22B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's meta page classification helper boundary:
+  - C emits `_mi_meta_is_meta_page` as a standalone local helper for arena debug output; Rust had the matching helper body but release emitted no local symbol.
+  - Marked the Rust helper `#[inline(never)]`, added a local function-pointer anchor for the debug-only helper, and extended release audit coverage for the helper body plus arena debug classification caller.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::arena_meta::_mi_meta_is_meta_page` at `0000000000013830`.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.06s..2.22s`, Rust `2.11s..2.18s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.29B` instructions and `17.72B` cycles; Rust about `11.88B` instructions and `18.18B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

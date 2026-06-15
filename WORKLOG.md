@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing thread-lifecycle parity after `d1bd03a`:
+  - Fresh profile after the inline main-thread branch change removed the Rust-only `_mi_is_main_thread` symbol sample, but artifact inspection still showed a lifecycle predicate drift: Rust read a separate `MAIN_THREAD_ID` atomic, while C reads `tld_main.thread_id` directly and treats zero as "main thread not recorded yet".
+  - Removed the Rust-only `MAIN_THREAD_ID`/`mi_mark_main_thread` state and changed the inline/exported main-thread predicate to read `tld_main.thread_id`, matching C's `_mi_is_main_thread`.
+  - Updated options/process initialization to stop marking a separate main thread during `_mi_options_init` and `_mi_auto_process_init`; `mi_tld_main_init` remains the place that records the main thread id, as in C.
+  - Extended `tests/release_fast_path_audit.rs` to reject the old `MAIN_THREAD_ID`/`mi_mark_main_thread` path and require `tld_main.thread_id` in the lifecycle predicate.
+  - Artifact check: release `mi_thread_init` and the local `_mi_is_main_thread` helper now load `tld_main.thread_id` directly, matching the C artifact shape.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Focused `mleak 100` benchmark after copying the fresh release cdylib:
+    - C `2.03s..2.04s`; Rust `2.10s..2.11s`.
+    - `perf stat`: C `10.26B` instructions / `15.89B` cycles; Rust `10.56B` instructions / `16.36B` cycles.
 - Continuing thread-lifecycle parity after `5db47f0`:
   - Fresh user-space perf on `mleak 100` still shows a small Rust allocator-side thread-init tail. A concrete drift is that release C inlines the `_mi_is_main_thread` predicate into the static `_mi_thread_init_theap_default`/`mi_tld_alloc` path, while Rust preserved the helper call in those inlined initialization branches.
   - Added an always-inline `mi_is_main_thread_fast` predicate body and routed `mi_tld_alloc` plus `_mi_thread_init_theap_default` through it while keeping the crate-internal/exported `_mi_is_main_thread` helper boundary intact for parity with C's named helper.

@@ -1511,9 +1511,11 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         init_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_is_main_thread() -> bool")
             && init_rs.contains("#[inline(always)]\nfn mi_is_main_thread_fast() -> bool")
-            && init_rs.contains("let main_tid = MAIN_THREAD_ID.load(Ordering::Acquire);")
+            && init_rs.contains("let main_tid = unsafe { tld_main.thread_id };")
             && init_rs.contains("main_tid == 0 || main_tid == current_thread_id()")
             && init_rs.contains("pub extern \"C\" fn _mi_is_main_thread() -> bool {\n    mi_is_main_thread_fast()\n}")
+            && !init_rs.contains("static MAIN_THREAD_ID")
+            && !init_rs.contains("mi_mark_main_thread")
             && init_rs.contains("#[inline(never)]\npub(crate) extern \"C\" fn _mi_preloading() -> bool")
             && init_rs.contains("OS_PRELOADING.load(Ordering::Relaxed)")
             && prim_rs.contains("#[cfg(mi_c_malloc_fast)]\ncore::arch::global_asm!(")

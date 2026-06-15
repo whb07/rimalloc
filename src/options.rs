@@ -21,7 +21,7 @@ use core::sync::atomic::{AtomicIsize, AtomicPtr, AtomicU8, AtomicUsize, Ordering
 use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
 use crate::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
 use crate::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
-use crate::init::{_mi_is_main_thread, _mi_preloading, _mi_thread_id, mi_mark_main_thread};
+use crate::init::{_mi_is_main_thread, _mi_preloading, _mi_thread_id};
 use crate::internal::{MI_DEBUG, MI_GUARDED};
 use crate::libc::_mi_strnlen;
 use crate::page::MI_MAX_ALLOC_SIZE;
@@ -1572,7 +1572,6 @@ pub unsafe extern "C" fn _mi_assert_fail(
 
 #[inline(never)]
 pub(crate) extern "C" fn _mi_options_init() {
-    mi_mark_main_thread();
     for i in 0..MI_OPTION_COUNT {
         let option = option_from_index(i);
         let _ = mi_option_get(option);

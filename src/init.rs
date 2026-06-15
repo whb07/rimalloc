@@ -709,7 +709,6 @@ unsafe fn mi_subprocs_unsafe_destroy_all() {
     }
 }
 
-static MAIN_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(8);
 
@@ -814,12 +813,6 @@ fn current_thread_id() -> mi_threadid_t {
     crate::prim::_mi_prim_thread_id()
 }
 
-#[allow(dead_code)]
-pub(crate) fn mi_mark_main_thread() {
-    let tid = current_thread_id();
-    let _ = MAIN_THREAD_ID.compare_exchange(0, tid, Ordering::AcqRel, Ordering::Acquire);
-}
-
 #[inline(never)]
 pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
     current_thread_id()
@@ -830,7 +823,7 @@ static MI_THREAD_ID_KEEP: extern "C" fn() -> mi_threadid_t = _mi_thread_id;
 
 #[inline(always)]
 fn mi_is_main_thread_fast() -> bool {
-    let main_tid = MAIN_THREAD_ID.load(Ordering::Acquire);
+    let main_tid = unsafe { tld_main.thread_id };
     main_tid == 0 || main_tid == current_thread_id()
 }
 
@@ -1877,7 +1870,6 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     OS_PRELOADING.store(false, Ordering::Relaxed);
     unsafe { mi_process_init_inner() };
     mi_heap_main_init();
-    mi_mark_main_thread();
     mi_tls_slots_init();
     if OPTIONS_POST_INIT_STATE
         .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)

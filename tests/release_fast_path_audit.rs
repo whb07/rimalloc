@@ -2212,10 +2212,13 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         page_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_page_free_list_extend")
+            && page_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_page_extend_free")
             && page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn mi_page_fresh_alloc")
             && page_rs.contains("static MI_PAGE_FREE_LIST_EXTEND_KEEP")
+            && page_rs.contains("static MI_PAGE_EXTEND_FREE_KEEP")
             && page_rs.contains("static MI_PAGE_FRESH_ALLOC_KEEP")
             && page_rs.contains("mi_page_free_list_extend(page, bsize, extend);")
+            && page_rs.contains("if !mi_page_extend_free(theap, page)")
             && page_rs.contains("let page = mi_page_fresh_alloc(theap, pq, (*pq).block_size, 0);")
             && page_rs
                 .contains("let page = mi_page_fresh_alloc(theap, pq, block_size, page_alignment);"),
@@ -2242,6 +2245,14 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && !arena_rs.contains("unsafe fn mi_theap_area_visit_blocks("),
         "heap and arena block visitation should share C's theap area block visitor helper"
+    );
+    assert!(
+        arena_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_page_alloc")
+            && arena_rs.contains("static MI_ARENAS_PAGE_ALLOC_KEEP")
+            && page_rs
+                .contains("let page = _mi_arenas_page_alloc(theap, block_size, page_alignment);"),
+        "arena page allocation should keep C's _mi_arenas_page_alloc local helper boundary"
     );
     assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")

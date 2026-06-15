@@ -2506,6 +2506,7 @@ unsafe fn mi_arenas_page_singleton_alloc(
 
 /// # Safety
 /// Internal arena page allocator matching the C ABI.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
     theap: *mut mi_theap_t,
     block_size: usize,
@@ -4103,6 +4104,12 @@ static MI_ARENAS_PAGE_SINGLETON_ALLOC_KEEP: unsafe fn(
     usize,
     usize,
 ) -> *mut mi_page_t = mi_arenas_page_singleton_alloc;
+#[used]
+static MI_ARENAS_PAGE_ALLOC_KEEP: unsafe extern "C" fn(
+    *mut mi_theap_t,
+    usize,
+    usize,
+) -> *mut mi_page_t = _mi_arenas_page_alloc;
 #[used]
 static MI_ARENA_PURGE_KEEP: unsafe fn(*mut mi_arena_t, usize, usize) -> bool = mi_arena_purge;
 #[used]

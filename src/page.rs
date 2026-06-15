@@ -625,8 +625,8 @@ unsafe extern "C" fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize
 static MI_PAGE_FREE_LIST_EXTEND_KEEP: unsafe extern "C" fn(*mut mi_page_t, usize, usize) =
     mi_page_free_list_extend;
 
-#[inline]
-unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
+#[inline(never)]
+unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
     crate::mi_assert_expensive!(mi_page_is_valid_init(page));
     if MI_SECURE < 3 {
         crate::mi_assert!((*page).free.is_null());
@@ -710,6 +710,10 @@ unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> b
     crate::mi_assert_expensive!(mi_page_is_valid_init(page));
     true
 }
+
+#[used]
+static MI_PAGE_EXTEND_FREE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) -> bool =
+    mi_page_extend_free;
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {

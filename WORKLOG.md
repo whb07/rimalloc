@@ -641,3 +641,34 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Localized the random helper batch by replacing the remaining `internal.rs` random extern declarations with crate-local re-exports:
+  - Random helpers: `_mi_random_init`, `_mi_random_init_weak`, `_mi_random_reinit_if_weak`, `_mi_random_split`, `_mi_random_next`.
+  - Theap random helper: `_mi_theap_random_next`.
+  - `_mi_os_random_weak` is now a private `random.rs` helper because the benchmark C allocator does not export it and no Rust module needs it through `internal.rs`.
+  - Added release audit coverage so these helpers stay crate-local instead of returning as `#[no_mangle]` dynamic exports.
+- Focused validation/build after localizing the random helper batch:
+  - `cargo fmt --check`
+  - `cargo check --quiet`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+  - Random dynamic symbols are gone from the Rust cdylib: `_mi_random_init`, `_mi_random_next`, `_mi_random_split`, and `_mi_theap_random_next`.
+  - Dynamic defined names dropped from Rust `323` to `319` with the current `readelf --dyn-syms` count method.
+  - Dynamic relocations dropped from Rust `1,607` to `1,603`; `R_X86_64_GLOB_DAT` dropped from `101` to `99`; `R_X86_64_RELATIVE` dropped from `1,493` to `1,491`.
+  - `size -A` total is `672,164` bytes.
+- Focused `cfrac -n=5` after the random helper-localization batch:
+  - C: `2.73s..2.78s`, RSS `5816..6280` KiB, reclaims `197..202`.
+  - Rust: `2.72s..2.82s`, RSS `6468..6800` KiB, reclaims `209..212`.
+  - Result: wall time still overlaps; Rust's RSS/reclaim tail remains, so the next parity pass should continue reducing load footprint and then re-check allocator behavior if the footprint tail stops moving.
+- Full established validation passed after the random helper-localization batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

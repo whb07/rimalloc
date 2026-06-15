@@ -184,8 +184,7 @@ fn mi_random_init_ex(ctx: &mut mi_random_ctx_t, use_weak: bool) {
     chacha_init(ctx, &key, nonce);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_random_split(
+pub(crate) unsafe extern "C" fn _mi_random_split(
     ctx: *mut mi_random_ctx_t,
     ctx_new: *mut mi_random_ctx_t,
 ) {
@@ -200,8 +199,7 @@ pub unsafe extern "C" fn _mi_random_split(
     );
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize {
+pub(crate) unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize {
     let ctx = &mut *ctx;
     crate::mi_debug_assert!(mi_random_is_initialized(ctx));
     loop {
@@ -216,7 +214,7 @@ pub unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize {
 }
 
 #[inline]
-pub extern "C" fn _mi_os_random_weak(extra_seed: usize) -> usize {
+fn _mi_os_random_weak(extra_seed: usize) -> usize {
     let mut x = (_mi_os_random_weak as usize) ^ extra_seed;
     x ^= _mi_prim_clock_now() as usize;
     let max = ((x ^ (x >> 17)) & 0x0F) + 1;
@@ -229,18 +227,17 @@ pub extern "C" fn _mi_os_random_weak(extra_seed: usize) -> usize {
     x
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_random_init(ctx: *mut mi_random_ctx_t) {
+pub(crate) unsafe extern "C" fn _mi_random_init(ctx: *mut mi_random_ctx_t) {
     mi_random_init_ex(&mut *ctx, false);
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t) {
+pub(crate) unsafe extern "C" fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t) {
     mi_random_init_ex(&mut *ctx, true);
 }
 
 #[inline]
-pub unsafe extern "C" fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ctx_t) {
+pub(crate) unsafe extern "C" fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ctx_t) {
     if (*ctx).weak {
         _mi_random_init(ctx);
     }

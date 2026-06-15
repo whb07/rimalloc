@@ -148,6 +148,8 @@ fn free_path_internals_are_not_dynamic_exports() {
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
+    let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
+    let theap_rs = fs::read_to_string(root.join("src/theap.rs")).expect("read src/theap.rs");
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
     let prim_rs = fs::read_to_string(root.join("src/prim.rs")).expect("read src/prim.rs");
     let prim_unix_rs =
@@ -381,6 +383,36 @@ fn free_path_internals_are_not_dynamic_exports() {
             &prim_unix_rs,
             "pub unsafe extern \"C\" fn _mi_prim_thread_yield",
         ),
+        (
+            "src/random.rs",
+            &random_rs,
+            "pub unsafe extern \"C\" fn _mi_random_split",
+        ),
+        (
+            "src/random.rs",
+            &random_rs,
+            "pub unsafe extern \"C\" fn _mi_random_next",
+        ),
+        (
+            "src/random.rs",
+            &random_rs,
+            "pub unsafe extern \"C\" fn _mi_random_init",
+        ),
+        (
+            "src/random.rs",
+            &random_rs,
+            "pub unsafe extern \"C\" fn _mi_random_init_weak",
+        ),
+        (
+            "src/random.rs",
+            &random_rs,
+            "pub unsafe extern \"C\" fn _mi_random_reinit_if_weak",
+        ),
+        (
+            "src/theap.rs",
+            &theap_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_random_next",
+        ),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -398,6 +430,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_page_malloc_zero(")
             && !internal.contains("pub fn _mi_vsnprintf(")
             && !internal.contains("pub fn _mi_strlcpy(")
+            && !internal.contains("pub fn _mi_random_init(")
+            && !internal.contains("pub fn _mi_random_next(")
+            && !internal.contains("pub fn _mi_theap_random_next(")
             && !internal.contains("pub static _mi_page_empty:")
             && !internal.contains("pub static _mi_theap_empty:")
             && !internal.contains("pub static _mi_theap_empty_wrong:")

@@ -570,8 +570,7 @@ pub unsafe extern "C" fn _mi_theap_create(
     theap
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) -> usize {
+pub(crate) unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) -> usize {
     _mi_random_next(ptr::addr_of_mut!((*theap).random))
 }
 

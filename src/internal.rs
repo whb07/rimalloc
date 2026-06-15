@@ -49,11 +49,16 @@ pub(crate) use crate::page_map::{
     _mi_page_map_unregister_range, _mi_page_map_unsafe_destroy, _mi_safe_ptr_page,
 };
 pub use crate::prim::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
+pub(crate) use crate::random::{
+    _mi_random_init, _mi_random_init_weak, _mi_random_next, _mi_random_reinit_if_weak,
+    _mi_random_split,
+};
 pub use crate::stats::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
     __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
     __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
 };
+pub(crate) use crate::theap::_mi_theap_random_next;
 pub use crate::types::*;
 
 pub const MI_INTERNAL_H: () = ();
@@ -486,14 +491,6 @@ unsafe extern "C" {
     pub fn _mi_options_post_init();
     pub fn _mi_option_get_fast(option: crate::options::mi_option_t) -> c_long;
     pub fn _mi_error_message(err: c_int, fmt: *const c_char, ...);
-
-    pub fn _mi_random_init(ctx: *mut mi_random_ctx_t);
-    pub fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t);
-    pub fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ctx_t);
-    pub fn _mi_random_split(ctx: *mut mi_random_ctx_t, new_ctx: *mut mi_random_ctx_t);
-    pub fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize;
-    pub fn _mi_theap_random_next(theap: *mut mi_theap_t) -> usize;
-    pub fn _mi_os_random_weak(extra_seed: usize) -> usize;
 
     pub fn _mi_auto_process_init();
     pub fn _mi_auto_process_done();

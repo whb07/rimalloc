@@ -1401,6 +1401,26 @@ fn free_path_internals_are_not_dynamic_exports() {
         "heap/theap cache misses should keep C's local _mi_heap_theap_get_peek no-create helper boundary"
     );
     assert!(
+        page_rs
+            .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_free_collect_partly(")
+            && page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_unfull(")
+            && page_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_init(")
+            && page_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_queue_is_valid(")
+            && page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_stats_bin(")
+            && page_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_queue_append(")
+            && page_rs.contains("static MI_PAGE_QUEUE_IS_VALID_KEEP")
+            && page_rs.contains("static MI_PAGE_QUEUE_APPEND_KEEP")
+            && free_rs.contains("_mi_page_unfull(page);")
+            && free_rs.contains("_mi_page_free_collect_partly(page, mt_free);")
+            && arena_rs.contains("crate::page::_mi_page_init(theap, page)")
+            && arena_rs.contains("_mi_page_stats_bin(page)")
+            && theap_rs.contains("_mi_page_queue_is_valid("),
+        "page lifecycle and page-queue helpers should keep C's local helper boundaries"
+    );
+    assert!(
         alloc_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
             && page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")

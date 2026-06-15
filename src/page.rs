@@ -385,8 +385,8 @@ pub unsafe fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
     crate::mi_assert_internal!(!force || (*page).local_free.is_null());
 }
 
-#[inline]
-pub unsafe fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
+#[inline(never)]
+pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
     if head.is_null() {
         return;
     }
@@ -412,8 +412,8 @@ pub unsafe fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_b
     }
 }
 
-#[inline]
-pub unsafe fn _mi_page_unfull(page: *mut mi_page_t) {
+#[inline(never)]
+pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
     crate::mi_assert_internal!(!page.is_null());
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
     crate::mi_assert_internal!(mi_page_is_in_full(page));
@@ -759,6 +759,7 @@ pub unsafe fn mi_page_fresh_alloc(
     page
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_init(
     theap: *mut mi_theap_t,
     page: *mut mi_page_t,
@@ -958,7 +959,11 @@ pub unsafe fn mi_theap_contains_queue(
     queue >= start && queue <= end
 }
 
-pub unsafe fn _mi_page_queue_is_valid(theap: *mut mi_theap_t, pq: *const mi_page_queue_t) -> bool {
+#[inline(never)]
+pub unsafe extern "C" fn _mi_page_queue_is_valid(
+    theap: *mut mi_theap_t,
+    pq: *const mi_page_queue_t,
+) -> bool {
     crate::MI_UNUSED_RELEASE!(theap);
     if pq.is_null() {
         return false;
@@ -993,6 +998,12 @@ pub unsafe fn _mi_page_queue_is_valid(theap: *mut mi_theap_t, pq: *const mi_page
     true
 }
 
+#[used]
+static MI_PAGE_QUEUE_IS_VALID_KEEP: unsafe extern "C" fn(
+    *mut mi_theap_t,
+    *const mi_page_queue_t,
+) -> bool = _mi_page_queue_is_valid;
+
 #[inline]
 pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
     let bin = if mi_page_is_in_full(page) {
@@ -1006,7 +1017,8 @@ pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
     bin
 }
 
-pub unsafe fn _mi_page_stats_bin(page: *const mi_page_t) -> usize {
+#[inline(never)]
+pub unsafe extern "C" fn _mi_page_stats_bin(page: *const mi_page_t) -> usize {
     let bin = if mi_page_is_huge(page) {
         MI_BIN_HUGE
     } else {
@@ -1277,7 +1289,8 @@ pub unsafe fn mi_page_queue_enqueue_from_full(
     mi_page_queue_enqueue_from_ex(to, from, true, page);
 }
 
-pub unsafe fn _mi_page_queue_append(
+#[inline(never)]
+pub unsafe extern "C" fn _mi_page_queue_append(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
     append: *mut mi_page_queue_t,
@@ -1314,6 +1327,13 @@ pub unsafe fn _mi_page_queue_append(
 
     count
 }
+
+#[used]
+static MI_PAGE_QUEUE_APPEND_KEEP: unsafe extern "C" fn(
+    *mut mi_theap_t,
+    *mut mi_page_queue_t,
+    *mut mi_page_queue_t,
+) -> usize = _mi_page_queue_append;
 
 #[inline]
 unsafe fn mi_page_queue_find_free_ex(

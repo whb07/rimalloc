@@ -2,6 +2,26 @@
 
 ## 2026-06-15
 
+- Continuing main-heap predicate parity after `6408814`:
+  - The remaining regular Rust source caller of `_mi_subproc_heap_main` is `_mi_is_heap_main`.
+  - Compared release artifacts: C's `_mi_is_heap_main` and `_mi_is_theap_main` inline the `heap->subproc->heap_main` load and only call `mi_heap_main_init` on the cold null-main-heap path. Rust's `_mi_is_heap_main` still called `_mi_subproc_heap_main` through the GOT, and `_mi_is_theap_main` tail-called `_mi_is_heap_main`.
+  - Patching both predicates to use direct raw subproc heap-main loads so hot main-heap checks no longer route through `_mi_subproc_heap_main`.
+  - Fixed the audit after a false-positive string check on `main_heap.is_null()`; the guard now rejects only an input-heap null branch while allowing C's cold heap-main-null path.
+  - Artifact check: release `_mi_is_heap_main` now loads `heap->subproc`, then `subproc->heap_main` at `0x550`, and only calls `mi_heap_main_init` on the cold null-main-heap path. Release `_mi_is_theap_main` keeps the nullable-theap guard and inlines the same raw heap-main comparison instead of tail-calling `_mi_is_heap_main`.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the validated release cdylib and rechecked direct `./mleak 100`:
+    - C `2.03s, 2.09s, 2.05s`; Rust `2.10s, 2.11s, 2.15s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.72B` instructions / `17.16B` cycles; Rust `11.02B` instructions / `17.31B` cycles.
+  - Follow-up Rust profile no longer shows `_mi_subproc_heap_main` in the allocator top list; `_mi_is_heap_main` is at `0.00%`. The next visible Rust-side samples are `mi_stats_add`, `_mi_theap_init`, `_mi_thread_locals_thread_done`, `mi_theap_collect_ex`, and page/arena helpers.
 - Continuing `mi_heap_main` fast-path parity after `da44b97`:
   - The remaining Rust `_mi_subproc_heap_main` samples now point at other callers, not the patched `_mi_thread_done` body.
   - Compared C and Rust release disassembly for `mi_heap_main` and `mi_thread_init`: C's `mi_heap_main` directly reads the raw default-theap TLS cell, falls back to `subproc_main`, and loads `subproc->heap_main`; Rust's `mi_heap_main` still trampolines through `_mi_subproc` and `_mi_subproc_heap_main`, and `mi_thread_init` inherits those calls.

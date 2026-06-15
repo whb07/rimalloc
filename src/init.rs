@@ -1629,24 +1629,33 @@ pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
 }
 
 /// # Safety
-/// `heap` must be null or point to a heap prefix compatible with this crate's local scaffold.
+/// `heap` must point to a heap prefix compatible with this crate's local scaffold.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
-    if heap.is_null() {
-        return false;
-    }
     let subproc = unsafe { mi_heap_subproc_raw(heap) };
-    ptr::eq(unsafe { _mi_subproc_heap_main(subproc) }, heap.cast_mut())
+    let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
+    if main_heap.is_null() {
+        mi_heap_main_init();
+        main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
+    }
+    ptr::eq(main_heap, heap.cast_mut())
 }
 
 /// # Safety
 /// `theap` must be null or point to a valid thread-heap structure.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
-    unsafe {
-        crate::internal::mi_theap_is_initialized(theap)
-            && _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))
+    if !unsafe { crate::internal::mi_theap_is_initialized(theap) } {
+        return false;
     }
+    let heap = unsafe { crate::internal::_mi_theap_heap(theap) };
+    let subproc = unsafe { mi_heap_subproc_raw(heap) };
+    let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
+    if main_heap.is_null() {
+        mi_heap_main_init();
+        main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };
+    }
+    ptr::eq(main_heap, heap)
 }
 
 #[used]

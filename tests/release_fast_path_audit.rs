@@ -728,7 +728,6 @@ fn free_path_internals_are_not_dynamic_exports() {
             && init_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_is_theap_main(")
             && init_rs.contains("static MI_IS_THEAP_MAIN_KEEP")
-            && init_rs.contains("&& _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))")
             && heap_rs.contains("if _mi_is_heap_main(heap) {")
             && heap_rs.contains("if !_mi_is_heap_main(heap) {")
             && page_rs.contains("(*page).heap = if _mi_is_heap_main(heap) {")
@@ -2302,6 +2301,45 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !mi_heap_main_body.contains("_mi_subproc()")
             && !mi_heap_main_body.contains("_mi_subproc_heap_main"),
         "mi_heap_main should match C's direct raw-default-theap and subproc->heap_main fast path"
+    );
+    let is_heap_main_start = init_rs
+        .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_is_heap_main")
+        .expect("find _mi_is_heap_main");
+    let is_heap_main_end = init_rs[is_heap_main_start..]
+        .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_is_theap_main")
+        .map(|offset| is_heap_main_start + offset)
+        .expect("find _mi_is_theap_main marker");
+    let is_heap_main_body = &init_rs[is_heap_main_start..is_heap_main_end];
+    assert!(
+        is_heap_main_body.contains("let subproc = unsafe { mi_heap_subproc_raw(heap) };")
+            && is_heap_main_body
+                .contains("let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };")
+            && is_heap_main_body.contains("mi_heap_main_init();")
+            && is_heap_main_body
+                .contains("main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };")
+            && !is_heap_main_body.contains("_mi_subproc_heap_main")
+            && !is_heap_main_body.contains("if heap.is_null()"),
+        "_mi_is_heap_main should match C's valid-heap contract and inline subproc->heap_main load"
+    );
+    let is_theap_main_start = init_rs
+        .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_is_theap_main")
+        .expect("find _mi_is_theap_main");
+    let is_theap_main_end = init_rs[is_theap_main_start..]
+        .find("#[used]\nstatic MI_IS_THEAP_MAIN_KEEP")
+        .map(|offset| is_theap_main_start + offset)
+        .expect("find MI_IS_THEAP_MAIN_KEEP marker");
+    let is_theap_main_body = &init_rs[is_theap_main_start..is_theap_main_end];
+    assert!(
+        is_theap_main_body.contains("crate::internal::mi_theap_is_initialized(theap)")
+            && is_theap_main_body
+                .contains("let heap = unsafe { crate::internal::_mi_theap_heap(theap) };")
+            && is_theap_main_body.contains("let subproc = unsafe { mi_heap_subproc_raw(heap) };")
+            && is_theap_main_body
+                .contains("let mut main_heap = unsafe { mi_subproc_heap_main_raw(subproc) };")
+            && is_theap_main_body.contains("mi_heap_main_init();")
+            && !is_theap_main_body.contains("_mi_is_heap_main")
+            && !is_theap_main_body.contains("_mi_subproc_heap_main"),
+        "_mi_is_theap_main should match C's nullable-theap guard and inline subproc->heap_main load"
     );
     let mi_thread_init_start = init_rs
         .find("pub unsafe extern \"C\" fn mi_thread_init")

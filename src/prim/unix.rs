@@ -562,6 +562,7 @@ unsafe fn unix_mmap(
     p
 }
 
+#[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_alloc(
     hint_addr: *mut c_void,
@@ -602,6 +603,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc(
 #[inline]
 unsafe fn unix_mprotect_hint(_err: c_int) {}
 
+#[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_commit(
     start: *mut c_void,
@@ -647,6 +649,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_decommit(
     err
 }
 
+#[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_int {
     static ADVICE: AtomicI32 = AtomicI32::new(MADV_FREE);
@@ -665,6 +668,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) 
     err
 }
 
+#[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_protect(
     start: *mut c_void,
@@ -1127,6 +1131,25 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_yield() {
 
 #[used]
 static MI_PRIM_MEM_INIT_KEEP: unsafe extern "C" fn(*mut mi_os_mem_config_t) = _mi_prim_mem_init;
+#[used]
+static MI_PRIM_ALLOC_KEEP: unsafe extern "C" fn(
+    *mut c_void,
+    usize,
+    usize,
+    bool,
+    bool,
+    *mut bool,
+    *mut bool,
+    *mut *mut c_void,
+) -> c_int = _mi_prim_alloc;
+#[used]
+static MI_PRIM_COMMIT_KEEP: unsafe extern "C" fn(*mut c_void, usize, *mut bool) -> c_int =
+    _mi_prim_commit;
+#[used]
+static MI_PRIM_RESET_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> c_int = _mi_prim_reset;
+#[used]
+static MI_PRIM_PROTECT_KEEP: unsafe extern "C" fn(*mut c_void, usize, bool) -> c_int =
+    _mi_prim_protect;
 #[used]
 static MI_PRIM_REUSE_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> c_int = _mi_prim_reuse;
 #[used]

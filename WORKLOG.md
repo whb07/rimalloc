@@ -1791,3 +1791,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.03s..2.04s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.07B` instructions and `15.56B` cycles; Rust about `10.69B` instructions and `16.41B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's Unix primitive allocation/commit boundary set:
+  - C emits `_mi_prim_alloc`, `_mi_prim_commit`, `_mi_prim_reset`, and `_mi_prim_protect` as standalone Unix primitive helpers called through the OS memory layer.
+  - Rust had matching helper bodies, but release emitted them as raw global `_mi_prim_*` dynamic symbols instead of retained crate-local Rust symbols.
+  - Marked the four Rust Unix primitive helpers `#[inline(never)]`, retained them through local `#[used]` function-pointer anchors, and tightened release audit coverage for the helper markers, anchors, and no-mangle guard strings.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::prim::unix::_mi_prim_alloc`, `_mi_prim_commit`, `_mi_prim_reset`, and `_mi_prim_protect`, with no dynamic exports for the set.
+  - The next local-symbol gap now starts at message/libc helpers, then arena/bitmap helpers.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from a normal final `cargo build --release` artifact and rechecked direct `mleak 100`: C `2.10s..2.21s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.09B` instructions and `15.64B` cycles; Rust about `10.67B` instructions and `16.26B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, release local/dynamic symbol check, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, final normal `cargo build --release`, and `git diff --check`.

@@ -921,12 +921,12 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_alloc",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_alloc",
         ),
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_commit",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_commit",
         ),
         (
             "src/prim/unix.rs",
@@ -941,12 +941,12 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_reset",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_reset",
         ),
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_protect",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_protect",
         ),
         (
             "src/prim/unix.rs",
@@ -1569,6 +1569,10 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     for marker in [
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_mem_init(",
+        "#[inline(never)]\n#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]\npub(crate) unsafe extern \"C\" fn _mi_prim_alloc(",
+        "#[inline(never)]\n#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]\npub(crate) unsafe extern \"C\" fn _mi_prim_commit(",
+        "#[inline(never)]\n#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]\npub(crate) unsafe extern \"C\" fn _mi_prim_reset(",
+        "#[inline(never)]\n#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]\npub(crate) unsafe extern \"C\" fn _mi_prim_protect(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_reuse(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_alloc_huge_os_pages(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_numa_node_count(",
@@ -1582,6 +1586,10 @@ fn free_path_internals_are_not_dynamic_exports() {
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_thread_is_in_threadpool(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_thread_yield(",
         "static MI_PRIM_MEM_INIT_KEEP",
+        "static MI_PRIM_ALLOC_KEEP",
+        "static MI_PRIM_COMMIT_KEEP",
+        "static MI_PRIM_RESET_KEEP",
+        "static MI_PRIM_PROTECT_KEEP",
         "static MI_PRIM_REUSE_KEEP",
         "static MI_PRIM_ALLOC_HUGE_OS_PAGES_KEEP",
         "static MI_PRIM_NUMA_NODE_COUNT_KEEP",

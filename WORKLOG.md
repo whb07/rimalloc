@@ -1410,3 +1410,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
   - Three-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.81B` cycles; Rust about `12.00B` instructions and `18.52B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, `cargo build --release`, and `git diff --check`.
+- Started matching C's aligned memcpy helper path:
+  - C `_mi_theap_init` copies `_mi_theap_empty` through `_mi_memcpy_aligned`, which routes to the inline `_mi_memcpy` helper and can use `rep movsb` based on `_mi_cpu_movsb_max`; Rust had used direct `ptr::copy_nonoverlapping`, which codegen lowered to a `memcpy` call.
+  - Added the x86_64 `_mi_memcpy` `rep movsb` branch and changed `_mi_theap_init` to call `_mi_memcpy_aligned` for the empty-template copy.
+  - Added release audit coverage for the `_mi_memcpy_aligned` call and the `rep movsb` branch.
+  - Tightened the x86_64 aligned fallback to use `rep movsq` when the byte count is word-multiple, matching C's constant-size `_mi_theap_empty` copy codegen.
+  - Rebuilt release and confirmed `_mi_theap_init` now branches on `_mi_cpu_movsb_max` and uses `rep movsq`/`rep movsb` directly, with no `memcpy` call in the empty-template copy block.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.07s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
+  - Three-run `perf stat` for the same invocation: C about `11.28B` instructions and `17.75B` cycles; Rust about `11.85B` instructions and `18.22B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, `cargo build --release`, and `git diff --check`.

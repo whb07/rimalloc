@@ -1047,14 +1047,39 @@ pub unsafe fn mi_theap_malloc_use_guarded(theap: *mut mi_theap_t, size: usize) -
     }
 }
 
-#[inline]
+#[inline(always)]
 pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
-    ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
+    #[cfg(target_arch = "x86_64")]
+    {
+        core::arch::asm!(
+            "rep movsb",
+            inout("rdi") dst => _,
+            inout("rcx") n => _,
+            inout("rsi") src => _,
+            options(nostack, preserves_flags),
+        );
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
+    }
 }
 
 #[inline]
 pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
     ptr::write_bytes(dst.cast::<u8>(), val, n);
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+unsafe fn mi_rep_movsq(dst: *mut c_void, src: *const c_void, count: usize) {
+    core::arch::asm!(
+        "rep movsq",
+        inout("rdi") dst => _,
+        inout("rcx") count => _,
+        inout("rsi") src => _,
+        options(nostack, preserves_flags),
+    );
 }
 
 #[inline]
@@ -1287,6 +1312,13 @@ pub unsafe fn mi_block_set_next(
 
 #[inline]
 pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if n <= _mi_cpu_movsb_max {
+            mi_rep_movsb(dst, src, n);
+            return;
+        }
+    }
     ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
 }
 
@@ -1297,6 +1329,13 @@ pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
 
 #[inline]
 pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if n > _mi_cpu_movsb_max && n.is_multiple_of(size_of::<usize>()) {
+            mi_rep_movsq(dst, src, n / size_of::<usize>());
+            return;
+        }
+    }
     _mi_memcpy(dst, src, n);
 }
 

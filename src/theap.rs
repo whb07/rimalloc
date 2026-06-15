@@ -17,10 +17,10 @@ use crate::atomic::{
 use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::internal::{
     __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_align_up, _mi_arenas_alloc, _mi_arenas_free,
-    _mi_deferred_free, _mi_divide_up, _mi_error_message, _mi_is_heap_main, _mi_meta_free,
-    _mi_meta_zalloc, _mi_random_init, _mi_random_next, _mi_random_split, _mi_subproc,
-    _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_memid_t, mi_memkind_t,
-    mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_heap, mi_page_start,
+    _mi_deferred_free, _mi_divide_up, _mi_error_message, _mi_is_heap_main, _mi_memcpy_aligned,
+    _mi_meta_free, _mi_meta_zalloc, _mi_random_init, _mi_random_next, _mi_random_split,
+    _mi_subproc, _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_memid_t,
+    mi_memkind_t, mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_heap, mi_page_start,
     mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::mimalloc::mi_free;
@@ -487,7 +487,11 @@ pub(crate) unsafe extern "C" fn _mi_theap_init(
     crate::mi_assert_internal!(!heap.is_null());
 
     let memid = (*theap).memid;
-    ptr::copy_nonoverlapping(__mi_theap_empty().cast_const(), theap, 1);
+    _mi_memcpy_aligned(
+        theap.cast(),
+        __mi_theap_empty().cast_const().cast(),
+        size_of::<mi_theap_t>(),
+    );
     (*theap).memid = memid;
     (*theap).refcount = 1;
     (*theap).tld = tld;

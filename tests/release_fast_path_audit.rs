@@ -1232,6 +1232,16 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_theap_create should keep C's _mi_theap_init call boundary"
     );
     assert!(
+        theap_rs.contains("_mi_memcpy_aligned(\n        theap.cast(),")
+            && internal.contains("if n <= _mi_cpu_movsb_max")
+            && internal.contains("\"rep movsb\"")
+            && internal
+                .contains("if n > _mi_cpu_movsb_max && n.is_multiple_of(size_of::<usize>())")
+            && internal.contains("\"rep movsq\"")
+            && internal.contains("pub unsafe fn _mi_memcpy_aligned"),
+        "_mi_theap_init should copy the empty template through C's _mi_memcpy_aligned path"
+    );
+    assert!(
         stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into"),
         "heap cleanup should keep C's stats merge call boundary instead of inlining it into _mi_theap_free"
     );

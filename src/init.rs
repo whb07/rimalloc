@@ -1022,6 +1022,7 @@ fn mi_heap_main_init() {
 }
 
 #[allow(dead_code)]
+#[inline(always)]
 fn mi_tld_alloc() -> *mut mi_tld_t {
     let main_subproc = ptr::addr_of_mut!(subproc_main)
         .cast::<MiSubprocPrefix>()

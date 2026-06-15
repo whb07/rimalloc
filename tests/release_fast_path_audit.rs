@@ -1167,7 +1167,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         "thread default-heap initialization should stay inlined like C's static helper"
     );
     let tld_alloc_start = init_rs
-        .find("fn mi_tld_alloc()")
+        .find("#[inline(always)]\nfn mi_tld_alloc()")
         .expect("find mi_tld_alloc");
     let tld_alloc_end = init_rs[tld_alloc_start..]
         .find("\n}\n\n#[inline(never)]")

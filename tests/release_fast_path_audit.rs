@@ -2211,6 +2211,28 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_theap_page_reclaim should keep C's local abandoned-page reclaim helper boundary"
     );
     assert!(
+        page_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_page_free_list_extend")
+            && page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn mi_page_fresh_alloc")
+            && page_rs.contains("static MI_PAGE_FREE_LIST_EXTEND_KEEP")
+            && page_rs.contains("static MI_PAGE_FRESH_ALLOC_KEEP")
+            && page_rs.contains("mi_page_free_list_extend(page, bsize, extend);")
+            && page_rs.contains("let page = mi_page_fresh_alloc(theap, pq, (*pq).block_size, 0);")
+            && page_rs
+                .contains("let page = mi_page_fresh_alloc(theap, pq, block_size, page_alignment);"),
+        "fresh-page allocation and page free-list extension should keep C's local helper boundaries"
+    );
+    assert!(
+        free_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_abandoned_page_try_reclaim")
+            && free_rs.contains(
+                "#[inline(never)]\npub unsafe extern \"C\" fn mi_page_usable_aligned_size_of"
+            )
+            && free_rs.contains("static MI_ABANDONED_PAGE_TRY_RECLAIM_KEEP")
+            && free_rs.contains("static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP")
+            && free_rs.contains("&& mi_abandoned_page_try_reclaim(page, reclaim_on_free)")
+            && free_rs.contains("mi_page_usable_aligned_size_of(page, p)"),
+        "abandoned-page reclaim and aligned usable-size helpers should keep C's local helper boundaries"
+    );
+    assert!(
         theap_rs.contains(
             "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_area_visit_blocks"
         ) && theap_rs.contains("static MI_THEAP_AREA_VISIT_BLOCKS_KEEP")
@@ -2245,8 +2267,12 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         heap_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_init_theap")
             && heap_rs.contains("static MI_HEAP_INIT_THEAP_KEEP")
+            && heap_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_theap_get_or_init"
+            )
+            && heap_rs.contains("static MI_HEAP_THEAP_GET_OR_INIT_KEEP")
             && heap_rs.contains("theap = mi_heap_init_theap(heap);"),
-        "heap theap initialization should keep C's local noinline helper boundary"
+        "heap theap initialization should keep C's local helper boundaries"
     );
     assert!(
         init_rs

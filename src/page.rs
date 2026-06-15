@@ -595,8 +595,8 @@ unsafe fn mi_page_free_list_extend_secure(
     (*page).free = free_start;
 }
 
-#[inline]
-unsafe fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: usize) {
+#[inline(never)]
+unsafe extern "C" fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: usize) {
     if MI_SECURE < 3 {
         crate::mi_assert_internal!((*page).free.is_null());
         crate::mi_assert_internal!((*page).local_free.is_null());
@@ -620,6 +620,10 @@ unsafe fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: u
     mi_block_set_next(page, last, (*page).free);
     (*page).free = start;
 }
+
+#[used]
+static MI_PAGE_FREE_LIST_EXTEND_KEEP: unsafe extern "C" fn(*mut mi_page_t, usize, usize) =
+    mi_page_free_list_extend;
 
 #[inline]
 unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
@@ -723,8 +727,8 @@ pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut 
     }
 }
 
-#[inline]
-pub unsafe fn mi_page_fresh_alloc(
+#[inline(never)]
+pub unsafe extern "C" fn mi_page_fresh_alloc(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
     block_size: usize,
@@ -760,6 +764,14 @@ pub unsafe fn mi_page_fresh_alloc(
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
     page
 }
+
+#[used]
+static MI_PAGE_FRESH_ALLOC_KEEP: unsafe extern "C" fn(
+    *mut mi_theap_t,
+    *mut mi_page_queue_t,
+    usize,
+    usize,
+) -> *mut mi_page_t = mi_page_fresh_alloc;
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_init(

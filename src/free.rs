@@ -593,7 +593,8 @@ unsafe fn mi_page_queue_len_is_atmost(
     (*pq).count <= atmost as usize
 }
 
-unsafe fn mi_abandoned_page_try_reclaim(
+#[inline(never)]
+unsafe extern "C" fn mi_abandoned_page_try_reclaim(
     page: *mut mi_page_t,
     reclaim_on_free: core::ffi::c_long,
 ) -> bool {
@@ -681,7 +682,11 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
     mi_abandoned_page_unown_from_free(page, mt_free);
 }
 
-pub unsafe fn mi_page_usable_aligned_size_of(page: *const mi_page_t, p: *const c_void) -> usize {
+#[inline(never)]
+pub unsafe extern "C" fn mi_page_usable_aligned_size_of(
+    page: *const mi_page_t,
+    p: *const c_void,
+) -> usize {
     let block = _mi_page_ptr_unalign(page, p);
     let is_guarded = mi_block_ptr_is_guarded(block, p.cast_mut());
     let size = mi_page_usable_size_of(page, block, is_guarded);
@@ -700,6 +705,18 @@ pub unsafe fn _mi_usable_size(p: *const c_void, page: *const mi_page_t) -> usize
         mi_page_usable_aligned_size_of(page, p)
     }
 }
+
+#[used]
+static MI_ABANDONED_PAGE_TRY_RECLAIM_KEEP: unsafe extern "C" fn(
+    *mut mi_page_t,
+    core::ffi::c_long,
+) -> bool = mi_abandoned_page_try_reclaim;
+
+#[used]
+static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP: unsafe extern "C" fn(
+    *const mi_page_t,
+    *const c_void,
+) -> usize = mi_page_usable_aligned_size_of;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_usable_size(p: *const c_void) -> usize {

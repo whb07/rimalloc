@@ -64,6 +64,8 @@ fn stderr_output_routes_through_platform_primitive() {
 #[test]
 fn options_state_uses_internal_locks_like_c() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
+    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
@@ -183,6 +185,13 @@ fn options_state_uses_internal_locks_like_c() {
             )
             && options_rs.contains("mi_show_error_message_raw(fmt);"),
         "C warning/error message shims should route raw C strings without lossy Rust decoding"
+    );
+    assert!(
+        !alloc_rs.contains("CStr::from_ptr(msg).to_string_lossy()")
+            && !free_rs.contains("CStr::from_ptr(msg).to_string_lossy()")
+            && alloc_rs.contains("core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes())")
+            && free_rs.contains("core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes())"),
+        "pointer validation messages should borrow static C message names without lossy Rust decoding"
     );
 }
 

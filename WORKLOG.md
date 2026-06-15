@@ -1101,3 +1101,28 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+
+## 2026-06-15
+
+- Continued pointer-validation message parity:
+  - Found `mi_validate_ptr_page` in both allocation and free paths still decoded static C message names with `CStr::to_string_lossy()`. C passes those `%s` arguments as static byte strings.
+  - Changed both helpers to accept `*const c_char` and borrow the message name bytes with `CStr::to_bytes()`/`from_utf8_unchecked`, preserving the existing fixed-buffer `_mi_error_message_fmt` route without allocating owned Rust strings.
+  - Extended the release fast-path audit to reject the old pointer-validation `to_string_lossy()` path and require the borrowed static C message-name path.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and `cargo rustc --release --lib -- --crate-type cdylib`.
+  - Rebuilt `target/bench-allocators/libmimalloc-rust.so`; `RELACOUNT` stayed at `1490`.
+  - Direct `cfrac` after the pointer-validation cleanup: C `2.70s..2.72s`, RSS `6264..6564` KiB, minor `201..203`; Rust `2.69s..2.73s`, RSS `6716..7036` KiB, minor `210..212`.
+  - Result: pointer-validation messages no longer use Rust lossy string conversion, but the remaining `cfrac` RSS/minor-fault tail persists.
+- Full established validation passed after the pointer-validation cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

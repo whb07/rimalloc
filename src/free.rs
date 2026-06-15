@@ -7,7 +7,7 @@
     unsafe_op_in_unsafe_fn
 )]
 
-use core::ffi::c_void;
+use core::ffi::{CStr, c_char, c_void};
 use core::{cmp, ptr};
 
 use crate::arena::{
@@ -433,13 +433,13 @@ pub(crate) unsafe extern "C" fn _mi_free_generic(
     }
 }
 
-unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page_t {
+unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const c_char) -> *mut mi_page_t {
     if MI_DEBUG != 0 || cfg!(feature = "secure") {
         if !p.is_null()
             && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
             && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
         {
-            let msg = std::ffi::CStr::from_ptr(msg).to_string_lossy();
+            let msg = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
             _mi_error_message_fmt(
                 EINVAL,
                 format_args!("{msg}: invalid (unaligned) pointer: {p:p}\n"),
@@ -451,7 +451,7 @@ unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page
             page = ptr::null_mut();
         }
         if !p.is_null() && page.is_null() {
-            let msg = std::ffi::CStr::from_ptr(msg).to_string_lossy();
+            let msg = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
             _mi_error_message_fmt(EINVAL, format_args!("{msg}: invalid pointer: {p:p}\n"));
         }
         page

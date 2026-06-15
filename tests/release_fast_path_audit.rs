@@ -668,6 +668,18 @@ fn free_path_internals_are_not_dynamic_exports() {
             && init_rs.contains("_mi_page_map_unsafe_destroy(subproc)"),
         "page-map init, register, unregister, range-unregister, and unsafe-destroy helpers should keep C's local call boundaries"
     );
+    assert!(
+        page_map
+            .matches("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_safe_ptr_page(")
+            .count()
+            == 2
+            && alloc_rs.contains("let page = _mi_safe_ptr_page(p);")
+            && free_rs.contains("let mut page = _mi_safe_ptr_page(p);")
+            && heap_rs.contains("let page: *mut mi_page_t = _mi_safe_ptr_page(p);")
+            && heap_rs.contains("let page = _mi_safe_ptr_page(p);")
+            && arena_rs.contains("let page = unsafe { _mi_safe_ptr_page(start) };"),
+        "safe pointer page lookup should keep C's _mi_safe_ptr_page local call boundary"
+    );
 
     for (source_name, source, internal_name) in [
         (

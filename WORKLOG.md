@@ -1478,3 +1478,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.29B` instructions and `18.00B` cycles; Rust about `11.89B` instructions and `18.35B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's safe pointer page lookup boundary:
+  - C emits `_mi_safe_ptr_page` as a standalone local helper used by free, ownership, heap lookup, and arena range paths, while Rust had inlined it away.
+  - Marked the Rust `_mi_safe_ptr_page` helper `#[inline(never)]` on both page-map implementations and extended release audit coverage requiring the main lookup call sites to keep that C boundary.
+  - Rebuilt release and confirmed Rust now emits local `_mi_safe_ptr_page`; release ownership, heap lookup, arena debug, heap-region, and size-check paths call through it.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.66B` cycles; Rust about `11.88B` instructions and `18.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

@@ -306,6 +306,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
 }
 
 #[cfg(target_pointer_width = "32")]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
     if p >= unsafe { mi_page_map_max_address } {
         return ptr::null_mut();
@@ -653,6 +654,7 @@ static MI_PAGE_MAP_UNREGISTER_RANGE_KEEP: unsafe extern "C" fn(*mut c_void, usiz
     _mi_page_map_unregister_range;
 
 #[cfg(not(target_pointer_width = "32"))]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
     if p.is_null() {
         return ptr::null_mut();

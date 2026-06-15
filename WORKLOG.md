@@ -2,6 +2,26 @@
 
 ## 2026-06-15
 
+- Continuing `_mi_theap_init` parity after `5ba34d6`:
+  - Fresh profile showed a small Rust-only sample in `mechanical_mimalloc::theap::_mi_theap_init`, so I compared C and Rust release disassembly for the thread-heap initialization path.
+  - Found concrete codegen drift: Rust retained random helper function-pointer anchors and public crate stats helper re-exports, which made `_mi_theap_init` call `_mi_random_init`, `_mi_random_split`, `_mi_theap_random_next`, and `__mi_stat_increase_mt` through local relocation slots. C's release artifact calls `_mi_random_init`, `_mi_random_split`, `_mi_random_next`, and `__mi_stat_increase_mt` directly.
+  - Removed the random helper retention function pointers, made the internal `__mi_stat_*` helper family crate-local, and changed `_mi_theap_init` cookie generation to call `_mi_random_next(&theap->random)` directly while keeping the standalone `_mi_theap_random_next` helper for other call sites.
+  - Extended `tests/release_fast_path_audit.rs` to reject the old random retention anchors, require crate-local stats helper re-exports, and lock `_mi_theap_init` to the direct cookie random-next call shape.
+  - Artifact check: release `_mi_theap_init` now directly calls `mechanical_mimalloc::random::_mi_random_split`, `mechanical_mimalloc::random::_mi_random_init`, `mechanical_mimalloc::random::_mi_random_next`, and `mechanical_mimalloc::stats::__mi_stat_increase_mt`; the local `_mi_theap_random_next` helper symbol is still present for other users.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the validated release cdylib and rechecked `mleak`:
+    - Harness `mleak100` (`./mleak 50`) with `-n=3`: C `1.02s, 1.02s, 1.02s`; Rust `1.05s, 1.05s, 1.06s`; minor faults matched around `60.2K`.
+    - Direct `./mleak 100`: C `2.06s, 2.10s, 2.06s`; Rust `2.11s, 2.11s, 2.21s`; minor faults matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.75B` instructions / `16.79B` cycles; Rust `11.05B` instructions / `17.22B` cycles.
 - Continuing stats-merge parity after `481e29c`:
   - Fresh profile still shows Rust spending more samples in `mechanical_mimalloc::stats::mi_stats_add` than C's `mi_stats_add.part.0`.
   - Found another concrete merge drift: C's `mi_stats_add` expands `MI_STAT_FIELDS()` and the gated bin arrays only; the `_stat_reserved` and `_stat_counter_reserved` extension arrays are present in `mi_stats_t` but are not merged. Rust was still merging both reserved arrays.

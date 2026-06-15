@@ -242,18 +242,3 @@ pub(crate) unsafe extern "C" fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ct
         _mi_random_init(ctx);
     }
 }
-
-#[used]
-static MI_OS_RANDOM_WEAK_KEEP: extern "C" fn(usize) -> usize = _mi_os_random_weak;
-#[used]
-static MI_RANDOM_SPLIT_KEEP: unsafe extern "C" fn(*mut mi_random_ctx_t, *mut mi_random_ctx_t) =
-    _mi_random_split;
-#[used]
-static MI_RANDOM_NEXT_KEEP: unsafe extern "C" fn(*mut mi_random_ctx_t) -> usize = _mi_random_next;
-#[used]
-static MI_RANDOM_INIT_KEEP: unsafe extern "C" fn(*mut mi_random_ctx_t) = _mi_random_init;
-#[used]
-static MI_RANDOM_INIT_WEAK_KEEP: unsafe extern "C" fn(*mut mi_random_ctx_t) = _mi_random_init_weak;
-#[used]
-static MI_RANDOM_REINIT_IF_WEAK_KEEP: unsafe extern "C" fn(*mut mi_random_ctx_t) =
-    _mi_random_reinit_if_weak;

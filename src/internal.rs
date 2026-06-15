@@ -84,7 +84,7 @@ pub(crate) use crate::random::{
     _mi_os_random_weak, _mi_random_init, _mi_random_init_weak, _mi_random_next,
     _mi_random_reinit_if_weak, _mi_random_split,
 };
-pub use crate::stats::{
+pub(crate) use crate::stats::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
     __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
     __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,

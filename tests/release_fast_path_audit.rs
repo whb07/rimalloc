@@ -1314,12 +1314,12 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_increase_mt",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_increase_mt",
         ),
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_decrease_mt",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_decrease_mt",
         ),
         (
             "src/stats.rs",
@@ -1329,42 +1329,42 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_counter_increase_mt",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_counter_increase_mt",
         ),
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_adjust_increase_mt",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_adjust_increase_mt",
         ),
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_adjust_decrease_mt",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_adjust_decrease_mt",
         ),
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_increase",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_increase",
         ),
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_decrease",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_decrease",
         ),
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_counter_increase",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_counter_increase",
         ),
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_adjust_increase",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_adjust_increase",
         ),
         (
             "src/stats.rs",
             &stats_rs,
-            "pub unsafe extern \"C\" fn __mi_stat_adjust_decrease",
+            "pub(crate) unsafe extern \"C\" fn __mi_stat_adjust_decrease",
         ),
         (
             "src/options.rs",
@@ -1639,18 +1639,21 @@ fn free_path_internals_are_not_dynamic_exports() {
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_init(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_init_weak(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_reinit_if_weak(",
-        "static MI_OS_RANDOM_WEAK_KEEP",
-        "static MI_RANDOM_SPLIT_KEEP",
-        "static MI_RANDOM_NEXT_KEEP",
-        "static MI_RANDOM_INIT_KEEP",
-        "static MI_RANDOM_INIT_WEAK_KEEP",
-        "static MI_RANDOM_REINIT_IF_WEAK_KEEP",
     ] {
         assert!(
             random_rs.contains(marker),
             "random helper boundary marker missing: {marker}"
         );
     }
+    assert!(
+        !random_rs.contains("static MI_OS_RANDOM_WEAK_KEEP")
+            && !random_rs.contains("static MI_RANDOM_SPLIT_KEEP")
+            && !random_rs.contains("static MI_RANDOM_NEXT_KEEP")
+            && !random_rs.contains("static MI_RANDOM_INIT_KEEP")
+            && !random_rs.contains("static MI_RANDOM_INIT_WEAK_KEEP")
+            && !random_rs.contains("static MI_RANDOM_REINIT_IF_WEAK_KEEP"),
+        "random helper retention function pointers should stay absent; they force indirect calls in the release cdylib"
+    );
     for marker in [
         "#[inline(never)]\npub(crate) extern \"C\" fn _mi_toupper(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnicmp(",
@@ -2164,39 +2167,61 @@ fn free_path_internals_are_not_dynamic_exports() {
             && internal.contains("pub unsafe fn _mi_memcpy_aligned"),
         "_mi_theap_init should copy the empty template through C's _mi_memcpy_aligned path"
     );
+    let theap_init_start = theap_rs
+        .find("pub(crate) unsafe extern \"C\" fn _mi_theap_init")
+        .expect("find _mi_theap_init");
+    let theap_init_end = theap_rs[theap_init_start..]
+        .find("pub(crate) unsafe extern \"C\" fn _mi_theap_random_next")
+        .map(|offset| theap_init_start + offset)
+        .expect("find _mi_theap_random_next after _mi_theap_init");
+    let theap_init_body = &theap_rs[theap_init_start..theap_init_end];
+    assert!(
+        theap_init_body
+            .contains("(*theap).cookie = _mi_random_next(ptr::addr_of_mut!((*theap).random)) | 1;")
+            && !theap_init_body.contains("_mi_theap_random_next(theap)"),
+        "_mi_theap_init should match C's optimized artifact by calling _mi_random_next directly for the cookie"
+    );
     assert!(
         stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into"),
         "heap cleanup should keep C's stats merge call boundary instead of inlining it into _mi_theap_free"
     );
     assert!(
-        stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_increase_mt")
-            && stats_rs
-                .contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_decrease_mt"),
-        "theap lifecycle should keep C's multithreaded stats update helper boundaries"
+        stats_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_increase_mt")
+            && stats_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_decrease_mt"
+            ),
+        "theap lifecycle should keep C's multithreaded stats update helper boundaries as crate-local calls"
     );
     assert!(
-        stats_rs
-            .contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_counter_increase_mt")
-            && stats_rs.contains(
-                "#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_adjust_increase_mt"
-            )
-            && stats_rs.contains(
-                "#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_adjust_decrease_mt"
-            ),
+        stats_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_counter_increase_mt"
+        ) && stats_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_adjust_increase_mt"
+        ) && stats_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_adjust_decrease_mt"
+        ),
         "multithreaded stats counters and adjusters should keep C's helper boundaries"
     );
     assert!(
-        stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_increase")
-            && stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_decrease")
+        stats_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_increase")
+            && stats_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_decrease")
             && stats_rs.contains(
-                "#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_counter_increase"
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_counter_increase"
             )
-            && stats_rs
-                .contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_adjust_increase")
-            && stats_rs
-                .contains("#[inline(never)]\npub unsafe extern \"C\" fn __mi_stat_adjust_decrease")
+            && stats_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_adjust_increase"
+            )
+            && stats_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn __mi_stat_adjust_decrease"
+            )
             && stats_rs.contains("static MI_STAT_ADJUST_INCREASE_KEEP"),
         "thread-local stats counters and adjusters should keep C's helper boundaries"
+    );
+    assert!(
+        internal.contains("pub(crate) use crate::stats::{"),
+        "internal stats helper re-exports should stay crate-local so hot call sites are direct local calls"
     );
     assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")
@@ -2386,10 +2411,10 @@ fn free_path_internals_are_not_dynamic_exports() {
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_delete")
             && theap_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_create")
-            && theap_rs.contains("static MI_THEAP_RANDOM_NEXT_KEEP")
+            && !theap_rs.contains("static MI_THEAP_RANDOM_NEXT_KEEP")
             && theap_rs.contains("static MI_THEAP_CREATE_KEEP")
             && theap_rs.contains("static MI_THEAP_DELETE_KEEP"),
-        "theap random/create/delete helpers should keep C's local helper boundaries"
+        "theap random/create/delete helpers should keep C's local helper boundaries without a random-next function pointer anchor"
     );
     assert!(
         heap_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_init_theap")

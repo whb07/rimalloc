@@ -16,9 +16,8 @@ use crate::atomic::{
 };
 use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::internal::{
-    __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_align_up, _mi_arenas_alloc, _mi_arenas_free,
-    _mi_deferred_free, _mi_divide_up, _mi_error_message, _mi_is_heap_main, _mi_memcpy_aligned,
-    _mi_meta_free, _mi_meta_zalloc, _mi_random_init, _mi_random_next, _mi_random_split,
+    _mi_align_up, _mi_arenas_alloc, _mi_arenas_free, _mi_deferred_free, _mi_divide_up,
+    _mi_error_message, _mi_is_heap_main, _mi_memcpy_aligned, _mi_meta_free, _mi_meta_zalloc,
     _mi_subproc, _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_memid_t,
     mi_memkind_t, mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_heap, mi_page_start,
     mi_page_usable_block_size, mi_theap_is_initialized,
@@ -29,7 +28,8 @@ use crate::page::{
     _mi_page_queue_is_valid, _mi_theap_collect_retired, mi_page_theap,
 };
 use crate::prim::{__mi_theap_empty, _mi_theap_default};
-use crate::stats::_mi_stats_merge_into;
+use crate::random::{_mi_random_init, _mi_random_next, _mi_random_split};
+use crate::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
 use crate::types::{
     ENOMEM, MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_BIN_FULL, MI_SMALL_PAGE_SIZE,
     mi_block_visit_fun, mi_heap_area_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_theap_t,
@@ -541,7 +541,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_init(
             ptr::addr_of_mut!((*theap).random),
         );
     }
-    (*theap).cookie = _mi_theap_random_next(theap) | 1;
+    (*theap).cookie = _mi_random_next(ptr::addr_of_mut!((*theap).random)) | 1;
     _mi_theap_guarded_init(theap);
     __mi_stat_increase_mt(&mut (*_mi_subproc()).stats.theaps, 1);
 
@@ -733,10 +733,6 @@ pub(crate) unsafe extern "C" fn _mi_theap_delete(
     crate::mi_assert_internal!((*theap).page_count == 0);
     _mi_theap_free(theap, true, acquire_tld_theaps_lock);
 }
-
-#[used]
-static MI_THEAP_RANDOM_NEXT_KEEP: unsafe extern "C" fn(*mut mi_theap_t) -> usize =
-    _mi_theap_random_next;
 
 #[used]
 static MI_THEAP_CREATE_KEEP: unsafe extern "C" fn(

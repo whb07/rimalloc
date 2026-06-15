@@ -94,6 +94,41 @@ fn compile_tls_shim() {
     println!("cargo:rustc-link-lib=static=mechanical_mimalloc_tls_shim");
 }
 
+fn link_linux_cdylib_exports() {
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set by cargo"));
+    let version_script = out_dir.join("mimalloc.exports");
+    let exports = r#"{
+  global:
+    _Zda*;
+    _Zdl*;
+    _Zna*;
+    _Znw*;
+    __libc_*;
+    __posix_memalign*;
+    _aligned_malloc*;
+    aligned_alloc*;
+    calloc*;
+    cfree*;
+    free*;
+    malloc*;
+    memalign*;
+    posix_memalign*;
+    pvalloc*;
+    realloc*;
+    valloc*;
+    mi_*;
+  local:
+    *;
+};
+"#;
+
+    std::fs::write(&version_script, exports).expect("failed to write Linux export script");
+    println!(
+        "cargo:rustc-link-arg=-Wl,--version-script={}",
+        version_script.display()
+    );
+}
+
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target OS is set by cargo");
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("target arch is set by cargo");
@@ -113,6 +148,7 @@ fn main() {
         compile_cxx_new_shim();
     }
     if target_os == "linux" {
+        link_linux_cdylib_exports();
         let default_fast_override = profile == "release"
             && target_arch == "x86_64"
             && env::var_os("CARGO_FEATURE_SECURE").is_none()

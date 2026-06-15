@@ -256,3 +256,55 @@
   - `glibc-thread`: C `.415s.. .424s`, Rust `.418s.. .432s`; mostly overlapping with one slower Rust sample.
   - `larsonN-sized`: C `2.026s..2.152s`, Rust `2.109s..2.164s`; overlapping after C's range widened.
 - Next target: profile `alloc-testN` because the repeated pass shows the clearest allocator-heavy remaining wall-time drift.
+- Focused `perf stat -r 5` on `alloc-testN` did not reproduce the repeated bench-script slowdown:
+  - C: `151.18B` cycles, `209.59B` instructions, `354.0M` cache misses, `409` minor faults, `2.3666s` elapsed.
+  - Rust: `149.73B` cycles, `204.99B` instructions, `300.2M` cache misses, `421` minor faults, `2.2323s` elapsed.
+  - Result: `alloc-testN` looks matched on focused counters, so it is not the current target.
+- Focused `perf stat -r 5` on `cfrac` confirmed a small stable Rust slowdown:
+  - C: `13.3156B` cycles, `43.8914B` instructions, `6.9587B` branches, `8.816M` cache misses, `184` minor faults, `2.7587s` elapsed.
+  - Rust: `13.3693B` cycles, `43.9342B` instructions, `7.0606B` branches, `8.874M` cache misses, `195` minor faults, `2.7930s` elapsed.
+- `perf report` for `cfrac` shows allocator samples skewing more toward Rust delete/free-side work:
+  - C allocator-visible samples include `operator delete[](void*)` `4.69%`, `mi_malloc` `3.26%`, `free@plt` `0.58%`, and `_mi_malloc_generic` `0.33%`.
+  - Rust allocator-visible samples include `operator delete[](void*)` `5.14%`, `malloc` `2.76%`, `free@plt` `0.88%`, `_mi_malloc_generic` `0.49%`, and `mi_find_page` `0.25%`.
+- Symbol/disassembly comparison exposed a C/Rust visibility drift:
+  - C keeps `_mi_page_map`, `_mi_page_retire`, `_mi_malloc_generic`, `_mi_free_generic`, and `_mi_page_map_*` as local symbols.
+  - Rust exports those internal symbols globally in the dynamic symbol table.
+  - Rust's free path loads `_mi_page_map` through an extra global/GOT indirection, while C's local `_mi_page_map` access is a direct RIP-relative load.
+- Next change: make Linux cdylib exports match the C surface by keeping public allocator ABI names global and hiding internal `_mi_*` implementation names through a version script, then re-check symbols, free-path disassembly, and `cfrac`.
+- Implemented Linux export/internal visibility cleanup:
+  - `build.rs` now emits a Linux linker version script for the existing shared-library build so public allocator ABI names remain exported while unmatched implementation symbols are local.
+  - The C++ export pattern was narrowed from broad `_Z*` to operator-specific `_Zda*`, `_Zdl*`, `_Zna*`, and `_Znw*`; broad `_Z*` also matched Rust-mangled `_ZN...` symbols and kept internals dynamic.
+  - Page-map helpers, `_mi_safe_ptr_page`, `_mi_page_retire`, and `_mi_free_generic` are now crate-visible implementation details instead of fixed dynamic exports.
+  - Added `release_fast_path_audit` coverage for the version-script export surface and the free-path internals.
+- Release symbol inspection after the visibility cleanup:
+  - `_mi_page_map`, `_mi_page_map_*`, `_mi_safe_ptr_page`, `_mi_page_retire`, and `_mi_free_generic` no longer appear as dynamic exports.
+  - `_mi_malloc_generic` still appears as a fixed dynamic symbol because the release naked malloc/new slow path currently jumps to that name.
+  - Full symbol inspection shows the touched page-map/free internals are local; the page-map base cell is local.
+- Free-path disassembly after the cleanup:
+  - `free`/`operator delete[](void*)` still uses a GOT load for the page-map base in compiler-generated Rust code, so this change does not fully match C's direct RIP-relative page-map load.
+  - The slow `_mi_page_retire` jump now targets a local hidden Rust symbol.
+- Focused `cfrac -n=5` after the cleanup:
+  - C: `2.70s..2.74s`, RSS `6268..6280` KiB, reclaims `199..202`.
+  - Rust: `2.70s..2.76s`, RSS `6724..6772` KiB, reclaims `208..209`.
+  - Result: the previous stable `cfrac` wall-time gap is no longer clear after repeats, but Rust still has slightly higher RSS/reclaim counts.
+- Full established validation passed after the visibility cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`
+- Focused candidate sweep after validation (`-n=3`):
+  - `cfrac`: C `2.69s..2.72s`, Rust `2.73s..2.77s`; small Rust tail remains in this run, with Rust reclaims `206..210` vs C `198..199`.
+  - `alloc-test1`: C `2.06s..2.08s`, Rust `2.07s..2.11s`; time close, Rust RSS still higher.
+  - `alloc-testN`: C `2.22s..2.58s`, Rust `2.18s..2.44s`; overlapping/noisy.
+  - `sh8benchN`: C `.24s.. .27s`, Rust `.25s.. .26s`; overlapping.
+  - `glibc-thread`: C `.414s.. .415s`, Rust `.421s.. .424s`; small stable Rust tail.
+  - `larsonN-sized`: C `1.991s..2.228s`, Rust `2.093s..2.147s`; overlapping.
+- Next target: profile the remaining `glibc-thread` tail, then revisit `cfrac` RSS/reclaim count if `glibc-thread` does not expose an implementation drift.

@@ -423,8 +423,11 @@ pub unsafe fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
     mi_free_block_mt(page, block, was_guarded);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_free_generic(page: *mut mi_page_t, is_local: bool, p: *mut c_void) {
+pub(crate) unsafe extern "C" fn _mi_free_generic(
+    page: *mut mi_page_t,
+    is_local: bool,
+    p: *mut c_void,
+) {
     if is_local {
         mi_free_generic_local(page, p);
     } else {

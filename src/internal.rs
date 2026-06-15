@@ -23,6 +23,7 @@ pub use crate::bits::{
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
 use crate::options::_mi_error_message_fmt;
+pub(crate) use crate::page::_mi_page_retire;
 pub use crate::page::{
     _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
     _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, _mi_theap_page_reclaim,
@@ -30,7 +31,10 @@ pub use crate::page::{
     MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE, mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge,
     mi_page_is_in_full, mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
 };
-pub use crate::page_map::{_mi_page_map_unregister, _mi_safe_ptr_page};
+pub(crate) use crate::page_map::{
+    _mi_page_map_base, _mi_page_map_init, _mi_page_map_register, _mi_page_map_unregister,
+    _mi_page_map_unregister_range, _mi_page_map_unsafe_destroy, _mi_safe_ptr_page,
+};
 pub use crate::prim::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
 pub use crate::stats::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,
@@ -451,10 +455,6 @@ unsafe extern "C" {
     pub static _mi_page_empty: mi_page_t;
     pub static _mi_theap_empty: mi_theap_t;
     pub static _mi_theap_empty_wrong: mi_theap_t;
-    #[cfg(target_pointer_width = "32")]
-    pub static mut _mi_page_map: *mut u8;
-    #[cfg(not(target_pointer_width = "32"))]
-    pub static mut _mi_page_map: *mut mi_submap_t;
     pub static mut _mi_cpu_movsb_max: usize;
     pub static mut _mi_cpu_stosb_max: usize;
 
@@ -639,16 +639,12 @@ unsafe extern "C" {
     pub fn _mi_meta_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;
     pub fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t);
     pub fn _mi_meta_is_meta_page(p: *mut c_void) -> bool;
-    pub fn _mi_page_map_init() -> bool;
-    pub fn _mi_page_map_register(page: *mut mi_page_t) -> bool;
-    pub fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t);
     pub fn _mi_malloc_generic(
         theap: *mut mi_theap_t,
         size: usize,
         zero_huge_alignment: usize,
         usable: *mut usize,
     ) -> *mut c_void;
-    pub fn _mi_page_retire(page: *mut mi_page_t);
     pub fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t);
     pub fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t);
     pub fn _mi_page_init(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool;
@@ -678,7 +674,6 @@ unsafe extern "C" {
     ) -> *mut c_void;
     pub fn _mi_page_ptr_unalign(page: *const mi_page_t, p: *const c_void) -> *mut mi_block_t;
     pub fn _mi_padding_shrink(page: *mut mi_page_t, block: *mut mi_block_t, min_size: usize);
-    pub fn _mi_page_map_unregister_range(start: *mut c_void, size: usize);
 }
 
 #[inline]
@@ -829,14 +824,14 @@ pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize
 #[cfg(not(target_pointer_width = "32"))]
 #[inline]
 pub unsafe fn _mi_page_map_at(idx: usize) -> mi_submap_t {
-    crate::atomic::mi_atomic_load_ptr_acquire(_mi_page_map.add(idx))
+    crate::atomic::mi_atomic_load_ptr_acquire(_mi_page_map_base().add(idx))
 }
 
 #[cfg(target_pointer_width = "32")]
 #[inline]
 pub unsafe fn _mi_ptr_page_ex(p: *const c_void, valid: *mut bool) -> *mut mi_page_t {
     let idx = _mi_page_map_index(p);
-    let ofs = *_mi_page_map.add(idx) as usize;
+    let ofs = *_mi_page_map_base().add(idx) as usize;
     if !valid.is_null() {
         *valid = ofs != 0;
     }

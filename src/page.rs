@@ -456,8 +456,7 @@ pub unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_qu
 
 const MI_RETIRE_CYCLES: u8 = 16;
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
+pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     crate::mi_assert_internal!(!page.is_null());
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
     crate::mi_assert_internal!(mi_page_all_free(page));

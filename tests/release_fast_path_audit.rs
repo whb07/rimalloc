@@ -92,3 +92,69 @@ fn cxx_new_wrappers_export_itanium_abi_symbols() {
         "aligned C++ operator new wrappers must export Itanium ABI symbols"
     );
 }
+
+#[test]
+fn linux_cdylib_export_script_hides_internal_symbols() {
+    let build_rs = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("build.rs"))
+        .expect("read build.rs");
+
+    assert!(
+        build_rs.contains("cargo:rustc-link-arg=-Wl,--version-script="),
+        "Linux cdylib builds should use a version script so internal symbols are not preemptible"
+    );
+    assert!(
+        build_rs.contains("mi_*;") && build_rs.contains("local:\n    *;"),
+        "version script should export public mi_* APIs while hiding unmatched internals"
+    );
+    assert!(
+        !build_rs.contains("_Z*;")
+            && build_rs.contains("_Zda*;")
+            && build_rs.contains("_Zdl*;")
+            && build_rs.contains("_Zna*;")
+            && build_rs.contains("_Znw*;")
+            && build_rs.contains("malloc*;")
+            && build_rs.contains("free*;")
+            && build_rs.contains("realloc*;"),
+        "version script must keep allocator and C++ ABI override names exported"
+    );
+}
+
+#[test]
+fn free_path_internals_are_not_dynamic_exports() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let page_map = fs::read_to_string(root.join("src/page_map.rs")).expect("read src/page_map.rs");
+    let internal = fs::read_to_string(root.join("src/internal.rs")).expect("read src/internal.rs");
+    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
+    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
+
+    for internal_name in [
+        "pub static mut _mi_page_map",
+        "pub unsafe extern \"C\" fn _mi_page_map_init",
+        "pub unsafe extern \"C\" fn _mi_page_map_register",
+        "pub unsafe extern \"C\" fn _mi_page_map_unregister",
+        "pub unsafe extern \"C\" fn _mi_page_map_unregister_range",
+        "pub unsafe extern \"C\" fn _mi_page_map_unsafe_destroy",
+        "pub unsafe extern \"C\" fn _mi_safe_ptr_page",
+    ] {
+        let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
+        assert!(
+            !page_map.contains(&no_mangle_export),
+            "{internal_name} should stay crate-internal instead of a dynamic export"
+        );
+    }
+
+    assert!(
+        !internal.contains("pub static mut _mi_page_map:")
+            && !internal.contains("pub fn _mi_page_map_init() -> bool;")
+            && internal.contains("pub(crate) use crate::page_map::{"),
+        "page-map internals should be imported through crate paths, not extern declarations"
+    );
+    assert!(
+        !free_rs.contains("#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn _mi_free_generic"),
+        "_mi_free_generic should not be a dynamic export"
+    );
+    assert!(
+        !page_rs.contains("#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn _mi_page_retire"),
+        "_mi_page_retire should not be a dynamic export"
+    );
+}

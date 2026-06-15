@@ -1462,3 +1462,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.15s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.70B` cycles; Rust about `11.88B` instructions and `18.12B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's arena helper boundaries:
+  - C emits `_mi_arenas_alloc`, `_mi_arenas_contain`, and `_mi_arenas_unsafe_destroy_all` as standalone local helpers, while Rust had source wrappers that were inlined away or dropped in release.
+  - Marked the Rust helpers `#[inline(never)]` and extended release audit coverage requiring the arena allocation, containment, and unsafe-destroy call relationships to keep those C boundaries.
+  - Added a local `#[used]` function-pointer anchor for `_mi_arenas_contain`; C emits that helper even when optimized Rust currently has no release caller.
+  - Rebuilt release and confirmed Rust now emits local `_mi_arenas_alloc`, `_mi_arenas_contain`, `_mi_arenas_alloc_aligned`, and `_mi_arenas_unsafe_destroy_all`; `_mi_theap_create` calls `_mi_arenas_alloc`, subprocess teardown calls `_mi_arenas_unsafe_destroy_all`, and `_mi_arenas_alloc` jumps to `_mi_arenas_alloc_aligned`.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.32B` instructions and `17.78B` cycles; Rust about `11.90B` instructions and `18.22B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

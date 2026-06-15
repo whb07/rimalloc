@@ -909,9 +909,13 @@ unsafe fn mi_arenas_contain_ex(p: *const c_void, parent: *mut mi_arena_t) -> boo
 
 /// # Safety
 /// `p` may be any pointer value.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_contain(p: *const c_void) -> bool {
     unsafe { mi_arenas_contain_ex(p, ptr::null_mut()) }
 }
+
+#[used]
+static MI_ARENAS_CONTAIN_KEEP: unsafe extern "C" fn(*const c_void) -> bool = _mi_arenas_contain;
 
 /// # Safety
 /// `arena_id` must be null or a valid top-level arena id; `p` may be any pointer value.
@@ -1491,6 +1495,7 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: *mut mi_subproc_t) {
 /// # Safety
 /// Caller must ensure `subproc` is valid and destruction is only used in the same narrow cases
 /// as the original C implementation.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t) {
     unsafe { mi_arenas_unsafe_destroy(subproc) };
 }
@@ -2039,6 +2044,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
 
 /// # Safety
 /// Internal arena allocator wrapper following the C ABI.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
     heap: *mut mi_heap_t,
     size: usize,

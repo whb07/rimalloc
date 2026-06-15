@@ -1295,6 +1295,21 @@ fn free_path_internals_are_not_dynamic_exports() {
         "heap delete/destroy should keep C's heap page movement and force-destroy helper boundaries"
     );
     assert!(
+        arena_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_alloc")
+            && arena_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_contain")
+            && arena_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_unsafe_destroy_all"
+            )
+            && arena_rs.contains("_mi_arenas_alloc_aligned(")
+            && arena_rs.contains("mi_arenas_contain_ex(p, ptr::null_mut())")
+            && arena_rs.contains("static MI_ARENAS_CONTAIN_KEEP")
+            && arena_rs.contains("mi_arenas_unsafe_destroy(subproc)")
+            && theap_rs.contains("let theap = _mi_arenas_alloc(")
+            && init_rs.contains("_mi_arenas_unsafe_destroy_all(subproc)"),
+        "arena allocation, containment, and unsafe destroy helpers should keep C's local call boundaries"
+    );
+    assert!(
         !init_rs.contains("fn _mi_theap_collect_abandon(")
             && !init_rs.contains("fn _mi_theap_create(")
             && !init_rs.contains("fn _mi_theap_free(")

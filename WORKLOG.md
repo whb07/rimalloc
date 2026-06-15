@@ -943,3 +943,25 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued Unix primitive startup parity:
+  - Found `_mi_prim_numa_node_count` still used Rust `format!` plus `CString` to probe `/sys/devices/system/node/nodeN`, while C uses a fixed stack buffer and `access(2)`.
+  - Replaced the Rust allocation/formatting path with a stack `c_char` buffer and decimal append helper, keeping NUMA node counting allocation-free like C.
+  - Extended the release fast-path audit to reject the old `CString`/`format!` NUMA path and require the stack-buffer helper.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Rebuilt `target/bench-allocators/libmimalloc-rust.so`; `RELACOUNT` stayed at `1490`, and the broader Rust runtime still contributes `CString`/`format` symbols from other paths.
+  - Direct `cfrac` with the harness argument after the NUMA primitive cleanup: C `2.69s..2.76s`, RSS `5804..6276` KiB, minor `200..202`; Rust `2.69s..2.72s`, RSS `6456..6780` KiB, minor `209..212`.
+  - Result: this fixes a real primitive-layer allocation drift, but the remaining `cfrac` RSS/minor-fault tail persists.
+- Full established validation passed after the Unix NUMA primitive cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

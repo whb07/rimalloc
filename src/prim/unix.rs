@@ -18,7 +18,6 @@ use core::ffi::{c_uint, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;
 use core::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
-use std::ffi::CString;
 
 use crate::arena::MI_ARENA_SLICE_ALIGN;
 use crate::bits::{MI_GiB, MI_MiB};
@@ -800,16 +799,42 @@ pub(crate) unsafe extern "C" fn _mi_prim_numa_node() -> usize {
     0
 }
 
+fn mi_prim_numa_node_path(node: usize, buf: &mut [c_char; 128]) -> *const c_char {
+    let prefix = b"/sys/devices/system/node/node";
+    let mut pos = 0usize;
+    while pos < prefix.len() {
+        buf[pos] = prefix[pos] as c_char;
+        pos += 1;
+    }
+
+    let mut n = node + 1;
+    let mut digits = [0u8; 20];
+    let mut digit_count = 0usize;
+    loop {
+        digits[digit_count] = b'0' + (n % 10) as u8;
+        digit_count += 1;
+        n /= 10;
+        if n == 0 {
+            break;
+        }
+    }
+    while digit_count > 0 {
+        digit_count -= 1;
+        buf[pos] = digits[digit_count] as c_char;
+        pos += 1;
+    }
+    buf[pos] = 0;
+    buf.as_ptr()
+}
+
 pub(crate) unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     #[cfg(target_os = "linux")]
     {
         let mut node: usize = 0;
+        let mut buf = [0 as c_char; 128];
         while node < 256 {
-            let path = format!("/sys/devices/system/node/node{}", node + 1);
-            let Ok(path) = CString::new(path) else {
-                break;
-            };
-            if access(path.as_ptr(), R_OK) != 0 {
+            let path = mi_prim_numa_node_path(node, &mut buf);
+            if access(path, R_OK) != 0 {
                 break;
             }
             node += 1;

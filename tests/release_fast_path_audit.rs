@@ -49,11 +49,15 @@ fn stderr_output_routes_through_platform_primitive() {
             && unix_rs.contains("let n = write(")
             && unix_rs.contains("2,\n            bytes.as_ptr().add(written)")
             && !unix_rs.contains("use std::io")
+            && !unix_rs.contains("use std::ffi::CString")
+            && !unix_rs.contains("format!(\"/sys/devices/system/node/node{}\"")
+            && unix_rs.contains("fn mi_prim_numa_node_path(node: usize, buf: &mut [c_char; 128])")
+            && unix_rs.contains("let mut buf = [0 as c_char; 128];")
             && !unix_rs.contains("stderr().lock()")
             && !os_rs.contains("fn _mi_prim_out_stderr")
             && !os_rs.contains("fn _mi_prim_process_info")
             && !os_rs.contains("use std::io"),
-        "Unix stderr primitive should use direct write(2), matching the C primitive path"
+        "Unix primitive startup/output paths should use stack buffers and direct syscalls, matching C"
     );
 }
 

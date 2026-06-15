@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing C++ `operator new` fast-wrapper parity after `9aedb54`:
+  - Fresh `mleak 100` profiling was noisy, but artifact comparison exposed a concrete wrapper drift: C aliases plain `operator new(unsigned long)` and `operator new[](unsigned long)` to the same body, and that body's slow path jumps directly to local `mi_theap_try_new` with the already-loaded default theap. Rust had duplicated the plain array wrapper and slow-pathed through exported `mi_new`, repeating the default-theap lookup.
+  - Patched the Rust C++ fast wrapper so `_Znwm` sets `nothrow=false` and jumps directly to `crate::alloc::mi_theap_try_new`; made that helper crate-visible for the naked asm symbol reference; replaced the duplicate `_Znam` body with a `.set _Znam, _Znwm` global-asm alias.
+  - Extended the release fast-path audit to require the alias, the local retry-helper jump, and the absence of the old `jmp mi_new` slow path.
+  - Artifact check: release `nm -D --demangle` now shows plain `operator new` and `operator new[]` at the same address (`0x16554` in the checked artifact). Release `objdump` shows the slow path as `xor %edx,%edx` followed by a direct jump to `mechanical_mimalloc::alloc::mi_theap_try_new`.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `scripts/check-public-symbols.py`
+    - `cargo test --quiet`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the release cdylib and rechecked direct `./mleak 100`:
+    - C `2.04s, 2.05s, 2.05s`; Rust `2.10s, 2.11s, 2.11s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.08B` instructions / `15.62B` cycles; Rust `10.45B` instructions / `16.07B` cycles.
+  - This removes the C++ plain-new wrapper duplication and exported-API retry detour. The remaining benchmark gap still shows as extra Rust instructions/cycles, so the next pass should compare the next hot allocator artifact surface rather than this wrapper.
 - Continuing `_mi_theap_init` artifact parity after `84de526`:
   - Compared C/Rust source and release disassembly for `_mi_theap_init`. The cookie path was already artifact-matched: C source calls `_mi_theap_random_next(theap)`, but the release artifact inlines that wrapper and calls `_mi_random_next(&theap->random)` directly, matching Rust's direct call.
   - Found a concrete refcount mismatch: C's `mi_theap_t.refcount` is `_Atomic(size_t)`, so `theap->refcount = 1` emits a sequentially consistent atomic store (`xchg` on x86_64). Rust's layout-compatible `usize` field was initialized with a plain store.

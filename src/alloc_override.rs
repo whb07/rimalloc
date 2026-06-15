@@ -52,38 +52,14 @@ pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
         "mov qword ptr [rax], 0",
         "ret",
         "2:",
-        "mov rdi, rsi",
-        "jmp mi_new",
+        "xor edx, edx",
+        "jmp {try_new}",
+        try_new = sym crate::alloc::mi_theap_try_new,
     );
 }
 
 #[cfg(mi_c_malloc_fast)]
-#[unsafe(naked)]
-#[unsafe(export_name = "_Znam")]
-pub unsafe extern "C" fn mi_cxx_new_array_fast_64(_size: usize) -> *mut c_void {
-    core::arch::naked_asm!(
-        "endbr64",
-        "mov rax, qword ptr [rip + __mi_theap_default@GOTTPOFF]",
-        "mov rsi, rdi",
-        "mov rdi, qword ptr fs:[rax]",
-        "cmp rsi, 1024",
-        "ja 2f",
-        "lea rax, [rsi + 7]",
-        "shr rax, 3",
-        "mov rdx, qword ptr [rdi + rax*8 + 0x110]",
-        "mov rax, qword ptr [rdx + 0x8]",
-        "test rax, rax",
-        "je 2f",
-        "mov rcx, qword ptr [rax]",
-        "add word ptr [rdx + 0x10], 1",
-        "mov qword ptr [rdx + 0x8], rcx",
-        "mov qword ptr [rax], 0",
-        "ret",
-        "2:",
-        "mov rdi, rsi",
-        "jmp mi_new",
-    );
-}
+core::arch::global_asm!(".globl _Znam", ".type _Znam,@function", ".set _Znam, _Znwm",);
 
 macro_rules! mi_free_fast_body {
     () => {

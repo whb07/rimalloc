@@ -884,7 +884,7 @@ unsafe fn mi_try_new_handler(nothrow: bool) -> bool {
 }
 
 #[inline(never)]
-unsafe extern "C" fn mi_theap_try_new(
+pub(crate) unsafe extern "C" fn mi_theap_try_new(
     theap: *mut mi_theap_t,
     size: usize,
     nothrow: bool,

@@ -410,9 +410,13 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     assert!(
         override_rs.contains("#[unsafe(naked)]")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
-            && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_array_fast_64")
+            && !override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_array_fast_64")
             && override_rs.contains("core::arch::naked_asm!")
-            && override_rs.matches("\"endbr64\"").count() >= 5
+            && override_rs.contains(".set _Znam, _Znwm")
+            && override_rs.contains("try_new = sym crate::alloc::mi_theap_try_new")
+            && override_rs.contains("\"xor edx, edx\"")
+            && !override_rs.contains("\"jmp mi_new\"")
+            && override_rs.matches("\"endbr64\"").count() >= 4
             && override_rs.contains("__mi_theap_default@GOTTPOFF")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
             && override_rs.contains("malloc_generic = sym crate::page::_mi_malloc_generic")
@@ -446,7 +450,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains("generic_mt = sym crate::free::mi_free_generic_mt")
             && override_rs.contains("\"cmp rdx, 3\"")
             && override_rs.contains("\"lock cmpxchg qword ptr [rdx], rcx\"")
-            && override_rs.contains("jmp mi_new"),
+            && override_rs.contains("\"jmp {try_new}\""),
         "default Linux malloc/new/free overrides should use direct naked-assembly fast paths"
     );
     assert!(
@@ -2480,7 +2484,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_theap_malloc_zero_ex should keep C's force-inline body and both allocation helpers should retain local definitions"
     );
     assert!(
-        alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_theap_try_new")
+        alloc_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn mi_theap_try_new")
             && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_try_new")
             && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_try_new")
             && alloc_rs.contains(

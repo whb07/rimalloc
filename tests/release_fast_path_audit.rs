@@ -1401,6 +1401,16 @@ fn free_path_internals_are_not_dynamic_exports() {
         "heap/theap cache misses should keep C's local _mi_heap_theap_get_peek no-create helper boundary"
     );
     assert!(
+        page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_free(")
+            && page_rs.contains("mi_page_queue_remove(pq, page);")
+            && page_rs.contains("mi_page_set_theap(page, ptr::null_mut());")
+            && page_rs.contains("_mi_arenas_page_free(page, theap);")
+            && page_rs.contains("_mi_arenas_collect(false, false, (*theap).tld);")
+            && page_rs.contains("_mi_page_free(page, pq);")
+            && theap_rs.contains("_mi_page_free(page, pq);"),
+        "page release should keep C's local _mi_page_free helper boundary"
+    );
+    assert!(
         page_rs
             .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_free_collect_partly(")
             && page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_unfull(")

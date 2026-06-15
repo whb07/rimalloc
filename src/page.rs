@@ -447,6 +447,7 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     crate::mi_assert_internal!(!page.is_null());
     crate::mi_assert_expensive!(_mi_page_is_valid(page));

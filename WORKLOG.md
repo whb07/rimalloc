@@ -1587,3 +1587,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.27B` instructions and `17.72B` cycles; Rust about `11.86B` instructions and `18.19B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's page release helper boundary:
+  - C emits `_mi_page_free` as a standalone local helper called from page retire/free paths, while Rust had the matching body but release inlined it away.
+  - Marked Rust `_mi_page_free` `#[inline(never)]` and extended release audit coverage for the helper body plus the page/theap callers.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::page::_mi_page_free`, with no dynamic `_mi_page_free` export.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.29B` instructions and `17.68B` cycles; Rust about `11.90B` instructions and `18.44B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

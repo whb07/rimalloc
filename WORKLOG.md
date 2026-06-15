@@ -852,3 +852,30 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Started the next startup/load-footprint parity pass:
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the current release cdylib before measuring.
+  - Direct `cfrac` timing still shows wall-time overlap but a Rust RSS/minor-fault tail: C `2.72s..2.75s`, RSS `6088..6280` KiB, minor `203..204`; Rust `2.72s..2.79s`, RSS `6552..6756` KiB, minor `208..212`.
+  - Current ELF shape: C has one dynamic dependency (`libc.so.6`) and `457` relative relocations; Rust has `libgcc_s.so.1`, `libc.so.6`, and `ld-linux-x86-64.so.2`, plus `1497` relative relocations before this batch.
+  - The largest Rust-only code remains standard-library panic/backtrace/demangling machinery (`addr2line`, `gimli`, `rustc_demangle`, `miniz_oxide`, and `_Unwind_*` references). Stable Rust rejected `-C panic=immediate-abort`; `-C force-unwind-tables=no` and `--as-needed` did not remove the unwind dependency. Cargo profile LTO experiments reduced file size and relative relocations but did not remove the `cfrac` RSS/minor-fault tail.
+- Fixed another placeholder primitive routing drift:
+  - `options.rs` was using the generic `os.rs` `_mi_prim_out_stderr` placeholder for default stderr output instead of the platform primitive layer.
+  - Routed it through `prim::_mi_prim_out_stderr`, matching the C primitive layering.
+  - Replaced the Unix primitive stderr implementation with a direct `write(2, ...)` loop and switched Unix errno reads from `std::io::Error::last_os_error` to `__errno_location`.
+  - Added a source audit regression that requires default stderr output to route through the platform primitive and requires the Unix primitive to avoid the `std::io` stderr path.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Release cdylib `R_X86_64_RELATIVE` count dropped from `1497` to `1493`. The broader Rust panic/backtrace runtime remains linked (`writev`, `_Unwind_*`, `dl_iterate_phdr`, `open64`, `readlink`, and weak `statx` are still present).
+  - Focused direct `cfrac` after the primitive-output change: C `2.70s..2.77s`, RSS `6104..6276` KiB, minor `201..202`; Rust `2.74s..2.81s`, RSS `6712..6768` KiB, minor `210..213`.
+- Full established validation passed after the primitive-output routing change:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

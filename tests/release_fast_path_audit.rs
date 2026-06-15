@@ -33,6 +33,27 @@ fn debug_assert_macros_are_release_gated_like_c_mimalloc() {
 }
 
 #[test]
+fn stderr_output_routes_through_platform_primitive() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
+    let unix_rs = fs::read_to_string(root.join("src/prim/unix.rs")).expect("read src/prim/unix.rs");
+
+    assert!(
+        options_rs.contains("use crate::prim::_mi_prim_out_stderr;")
+            && !options_rs.contains("use crate::os::_mi_prim_out_stderr;"),
+        "default stderr output should route through the platform primitive layer"
+    );
+    assert!(
+        unix_rs.contains("fn write(fd: c_int, buf: *const c_void, count: usize) -> ssize_t;")
+            && unix_rs.contains("let n = write(")
+            && unix_rs.contains("2,\n            bytes.as_ptr().add(written)")
+            && !unix_rs.contains("use std::io")
+            && !unix_rs.contains("stderr().lock()"),
+        "Unix stderr primitive should use direct write(2), matching the C primitive path"
+    );
+}
+
+#[test]
 fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let tls_shim = fs::read_to_string(root.join("src/tls_shim.c")).expect("read src/tls_shim.c");

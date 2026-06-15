@@ -26,8 +26,8 @@ use crate::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
 use crate::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
 use crate::init::{_mi_is_main_thread, _mi_preloading, _mi_thread_id, mi_mark_main_thread};
 use crate::internal::{MI_DEBUG, MI_GUARDED};
-use crate::os::_mi_prim_out_stderr;
 use crate::page::MI_MAX_ALLOC_SIZE;
+use crate::prim::_mi_prim_out_stderr;
 use crate::types::{
     EFAULT, MI_MALLOC_VERSION, mi_error_fun, mi_option_desc_t, mi_option_init_t, mi_output_fun,
 };

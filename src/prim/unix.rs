@@ -12,14 +12,13 @@
     unsafe_op_in_unsafe_fn
 )]
 
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_long};
 use core::ffi::{c_uint, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;
 use core::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
-use std::ffi::CStr;
 use std::ffi::CString;
-use std::io::{self, Write};
 
 use crate::arena::MI_ARENA_SLICE_ALIGN;
 use crate::bits::{MI_GiB, MI_MiB};
@@ -190,9 +189,11 @@ pub struct rusage {
 
 #[cfg(unix)]
 unsafe extern "C" {
+    fn __errno_location() -> *mut c_int;
     fn getenv(name: *const c_char) -> *const c_char;
     fn open(path: *const c_char, oflag: c_int, ...) -> c_int;
     fn read(fd: c_int, buf: *mut c_void, count: usize) -> ssize_t;
+    fn write(fd: c_int, buf: *const c_void, count: usize) -> ssize_t;
     fn close(fd: c_int) -> c_int;
     fn sleep(seconds: c_uint) -> c_uint;
     fn munmap(addr: *mut c_void, len: usize) -> c_int;
@@ -297,7 +298,7 @@ const SYS_Getrandom: c_long = -1;
 
 #[inline]
 fn mi_last_errno() -> c_int {
-    io::Error::last_os_error().raw_os_error().unwrap_or(0)
+    unsafe { *__errno_location() }
 }
 
 #[inline]
@@ -334,11 +335,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) ->
         return 0;
     }
     let err = munmap(addr, size) == -1;
-    if err {
-        std::io::Error::last_os_error().raw_os_error().unwrap_or(0)
-    } else {
-        0
-    }
+    if err { mi_last_errno() } else { 0 }
 }
 
 #[inline]
@@ -900,9 +897,18 @@ pub(crate) unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
         return;
     }
     let bytes = CStr::from_ptr(msg).to_bytes();
-    let mut stderr = io::stderr().lock();
-    let _ = stderr.write_all(bytes);
-    let _ = stderr.flush();
+    let mut written = 0usize;
+    while written < bytes.len() {
+        let n = write(
+            2,
+            bytes.as_ptr().add(written).cast::<c_void>(),
+            bytes.len() - written,
+        );
+        if n <= 0 {
+            return;
+        }
+        written += n as usize;
+    }
 }
 
 #[cfg(target_os = "macos")]

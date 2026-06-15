@@ -173,3 +173,29 @@ fn generic_malloc_refill_helper_is_force_inlined() {
         "mi_find_page should stay force-inlined into _mi_malloc_generic like C's generic path"
     );
 }
+
+#[test]
+fn release_page_stat_writes_follow_c_mimalloc_gates() {
+    let page_rs = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/page.rs"))
+        .expect("read src/page.rs");
+
+    for (stat, needle) in [
+        (
+            "pages_retire",
+            "if MI_STAT > 0 {\n            __mi_stat_counter_increase(&mut (*theap).stats.pages_retire, 1);",
+        ),
+        (
+            "pages_extended",
+            "if MI_STAT > 0 {\n        __mi_stat_counter_increase(&mut (*theap).stats.pages_extended, 1);",
+        ),
+        (
+            "page_committed",
+            "if MI_STAT > 0 {\n        __mi_stat_increase(&mut (*theap).stats.page_committed, extend * bsize);",
+        ),
+    ] {
+        assert!(
+            page_rs.contains(needle),
+            "{stat} updates should stay behind MI_STAT > 0 like C mimalloc"
+        );
+    }
+}

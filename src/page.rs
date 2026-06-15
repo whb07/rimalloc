@@ -43,7 +43,7 @@ use crate::track::{
 };
 use crate::types::{
     ENOMEM, EOVERFLOW, MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_LARGE_MAX_OBJ_WSIZE,
-    MI_PAGE_FLAG_MASK, MI_PAGE_IN_FULL_QUEUE, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX,
+    MI_PAGE_FLAG_MASK, MI_PAGE_IN_FULL_QUEUE, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_STAT,
     MI_THREADID_ABANDONED, MI_THREADID_ABANDONED_MAPPED, mi_block_t, mi_deferred_free_fun,
     mi_page_flags_t, mi_page_queue_t, mi_page_t, mi_theap_t,
 };
@@ -469,7 +469,9 @@ pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     let pq = mi_page_queue_of(page);
     if !mi_page_queue_is_special(pq) && ptr::eq((*pq).first, page) && ptr::eq((*pq).last, page) {
         let theap = mi_page_theap(page);
-        __mi_stat_counter_increase(&mut (*theap).stats.pages_retire, 1);
+        if MI_STAT > 0 {
+            __mi_stat_counter_increase(&mut (*theap).stats.pages_retire, 1);
+        }
         let bsize = mi_page_block_size(page);
         (*page).retire_expire = if bsize <= MI_SMALL_MAX_OBJ_SIZE {
             MI_RETIRE_CYCLES
@@ -669,7 +671,9 @@ unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> b
         }
     }
 
-    __mi_stat_counter_increase(&mut (*theap).stats.pages_extended, 1);
+    if MI_STAT > 0 {
+        __mi_stat_counter_increase(&mut (*theap).stats.pages_extended, 1);
+    }
 
     if extend < MI_MIN_SLICES || MI_SECURE < 2 {
         mi_page_free_list_extend(page, bsize, extend);
@@ -677,7 +681,9 @@ unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> b
         mi_page_free_list_extend_secure(theap, page, bsize, extend);
     }
     (*page).capacity += extend as u16;
-    __mi_stat_increase(&mut (*theap).stats.page_committed, extend * bsize);
+    if MI_STAT > 0 {
+        __mi_stat_increase(&mut (*theap).stats.page_committed, extend * bsize);
+    }
 
     if MI_TRACK_ENABLED != 0 {
         let mut page_size = 0usize;

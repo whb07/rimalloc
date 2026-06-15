@@ -341,3 +341,36 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Post-commit focused `cfrac -n=5` still shows a small Rust tail and higher RSS/page reclaims:
+  - C: `2.68s..2.71s`, RSS `6224..6280` KiB, reclaims `198..200`.
+  - Rust: `2.73s..2.80s`, RSS `6528..6788` KiB, reclaims `206..208`.
+- Next target: compare C/Rust allocator behavior in the `cfrac` free/page-map and reclaim-related paths; the generic malloc slow-path fix did not remove this signal.
+- `MIMALLOC_SHOW_STATS=1` on `cfrac` showed Rust still updating release page detail counters that C compiles out:
+  - C: `touched 0`, `extended 0`, `retire 0`.
+  - Rust: `touched 6.4 MiB`, `extended 1.6K`, `retire 1.6K`.
+- Found C parity drift in `src/page.rs`: C guards `pages_retire`, `pages_extended`, and `page_committed` updates with `#if MI_STAT>0`, while Rust was calling the stat helpers unconditionally even though release `MI_STAT` is `0`.
+- Changed the Rust page retire/extend paths to guard those writes with `if MI_STAT > 0`, and added source-audit coverage for the C gating.
+- Focused validation/build after the page stat gating change:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+- Rechecked `MIMALLOC_SHOW_STATS=1` on `cfrac`; the page detail counters now match C's release behavior:
+  - C: `touched 0`, `extended 0`, `retire 0`.
+  - Rust: `touched 0`, `extended 0`, `retire 0`.
+- Focused `cfrac -n=5` after the page stat gating change:
+  - C: `2.68s..2.74s`, RSS `6256..6280` KiB, reclaims `198..201`.
+  - Rust: `2.70s..2.79s`, RSS `6528..6780` KiB, reclaims `207..208`.
+  - Result: the stats parity bug is fixed, but the `cfrac` wall-time/RSS/minor-fault gap mostly remains.
+- Full established validation passed after the page stat gating change:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

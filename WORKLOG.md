@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing free-size/aligned public wrapper parity after `d26e514`:
+  - Fresh Rust/C profile comparison still had `operator delete[](void*)` as the largest allocator-side sample, and the symbol table showed a concrete exported-wrapper drift in nearby C++ delete/free-hint variants. C keeps `mi_free_size`, `mi_free_aligned`, and `mi_free_size_aligned` as tiny separate forwarding stubs; Rust's release artifact had folded `mi_free_size` together with the aligned-free body, so sized C++ delete symbols resolved to the aligned-free implementation shape.
+  - Patched the Linux fast release build to define C-shaped global-asm wrappers: `mi_free_size` jumps to `mi_free`, `mi_free_aligned` jumps to `mi_free`, and `mi_free_size_aligned` jumps to `mi_free_size`. The existing Rust bodies remain exported for non-fast builds via `cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))`.
+  - Extended the release fast-path audit to require the forwarding stubs and the no-mangle gate so the public ABI shape cannot regress back into merged Rust bodies.
+  - Artifact check: release `nm -D --demangle` now shows separate addresses for `mi_free`, `mi_free_size`, `mi_free_size_aligned`, and `mi_free_aligned`; `objdump` shows `mi_free_size` and `mi_free_aligned` jumping to `mi_free@plt`, while `mi_free_size_aligned` jumps to `mi_free_size@plt`. Sized C++ delete now jumps through `mi_free_size` instead of sharing the aligned-free body.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo build --release`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `scripts/check-public-symbols.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `cargo test --quiet`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the release cdylib and rechecked direct `./mleak 100`:
+    - C `2.36s, 2.34s, 2.15s`; Rust `2.12s, 2.12s, 2.29s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.44B` instructions / `17.75B` cycles; Rust `10.78B` instructions / `18.09B` cycles.
+  - This aligns the public free-size/aligned forwarding wrapper surface with C. The remaining gap is still extra Rust instructions/cycles, so the next pass should compare the next hot allocator body after this wrapper surface.
 - Continuing C++ `operator new` fast-wrapper parity after `9aedb54`:
   - Fresh `mleak 100` profiling was noisy, but artifact comparison exposed a concrete wrapper drift: C aliases plain `operator new(unsigned long)` and `operator new[](unsigned long)` to the same body, and that body's slow path jumps directly to local `mi_theap_try_new` with the already-loaded default theap. Rust had duplicated the plain array wrapper and slow-pathed through exported `mi_new`, repeating the default-theap lookup.
   - Patched the Rust C++ fast wrapper so `_Znwm` sets `nothrow=false` and jumps directly to `crate::alloc::mi_theap_try_new`; made that helper crate-visible for the naked asm symbol reference; replaced the duplicate `_Znam` body with a `.set _Znam, _Znwm` global-asm alias.

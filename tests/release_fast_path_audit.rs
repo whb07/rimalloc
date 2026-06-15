@@ -516,6 +516,22 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && free_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))"),
         "Unix free/mi_free exports must keep the C-like aligned assembly fast override and hot local-free branch layout"
     );
+    assert!(
+        free_rs.contains("#[cfg(mi_c_malloc_fast)]\ncore::arch::global_asm!(")
+            && free_rs.contains("\".globl mi_free_size\"")
+            && free_rs.contains("\"mi_free_size:\"")
+            && free_rs.contains("\"jmp mi_free\"")
+            && free_rs.contains("\".globl mi_free_size_aligned\"")
+            && free_rs.contains("\"mi_free_size_aligned:\"")
+            && free_rs.contains("\"jmp mi_free_size\"")
+            && free_rs.contains("\".globl mi_free_aligned\"")
+            && free_rs.contains("\"mi_free_aligned:\"")
+            && free_rs
+                .matches("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))")
+                .count()
+                >= 4,
+        "release free-size/aligned public variants should remain C-shaped forwarding stubs in the fast build"
+    );
     assert_eq!(offset_of!(mi_page_t, free), 0x08);
     assert_eq!(offset_of!(mi_page_t, used), 0x10);
     assert_eq!(offset_of!(mi_page_t, local_free), 0x18);

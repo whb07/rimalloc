@@ -53,6 +53,31 @@ core::arch::global_asm!(
     ".size _mi_padding_shrink, .-_mi_padding_shrink",
 );
 
+#[cfg(mi_c_malloc_fast)]
+core::arch::global_asm!(
+    ".globl mi_free_size",
+    ".type mi_free_size,@function",
+    ".p2align 4",
+    "mi_free_size:",
+    "endbr64",
+    "jmp mi_free",
+    ".size mi_free_size, .-mi_free_size",
+    ".globl mi_free_size_aligned",
+    ".type mi_free_size_aligned,@function",
+    ".p2align 4",
+    "mi_free_size_aligned:",
+    "endbr64",
+    "jmp mi_free_size",
+    ".size mi_free_size_aligned, .-mi_free_size_aligned",
+    ".globl mi_free_aligned",
+    ".type mi_free_aligned,@function",
+    ".p2align 4",
+    "mi_free_aligned:",
+    "endbr64",
+    "jmp mi_free",
+    ".size mi_free_aligned, .-mi_free_aligned",
+);
+
 unsafe fn mi_list_contains(
     page: *const mi_page_t,
     mut list: *const mi_block_t,
@@ -724,7 +749,7 @@ pub unsafe extern "C" fn mi_usable_size(p: *const c_void) -> usize {
     _mi_usable_size(p, page)
 }
 
-#[unsafe(no_mangle)]
+#[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
     let _ = size;
     if MI_DEBUG != 0 {
@@ -735,13 +760,13 @@ pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
     mi_free(p);
 }
 
-#[unsafe(no_mangle)]
+#[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size_aligned(p: *mut c_void, size: usize, alignment: usize) {
     crate::mi_assert!(alignment != 0 && (p as usize).is_multiple_of(alignment));
     mi_free_size(p, size);
 }
 
-#[unsafe(no_mangle)]
+#[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_aligned(p: *mut c_void, alignment: usize) {
     crate::mi_assert!(alignment != 0 && (p as usize).is_multiple_of(alignment));
     mi_free(p);

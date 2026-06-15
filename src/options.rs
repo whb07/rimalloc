@@ -1460,7 +1460,9 @@ pub(crate) fn _mi_options_init() {
         && mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)
     {
         mi_option_disable(mi_option_t::mi_option_allow_large_os_pages);
-        eprintln!("option 'allow_large_os_pages' is disabled to allow for guarded objects");
+        _mi_warning_message_fmt(format_args!(
+            "option 'allow_large_os_pages' is disabled to allow for guarded objects\n"
+        ));
     }
 }
 

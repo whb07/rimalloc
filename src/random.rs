@@ -165,7 +165,9 @@ fn mi_random_init_ex(ctx: &mut mi_random_ctx_t, use_weak: bool) {
     let mut key = [0u8; 32];
     if use_weak || !_mi_prim_random_buf(key.as_mut_ptr(), key.len()) {
         if !use_weak {
-            eprintln!("unable to use secure randomness");
+            crate::options::_mi_warning_message_fmt(format_args!(
+                "unable to use secure randomness\n"
+            ));
         }
         let mut x = _mi_os_random_weak(0);
         for i in (0..32).step_by(4) {

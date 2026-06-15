@@ -36,6 +36,7 @@ fn debug_assert_macros_are_release_gated_like_c_mimalloc() {
 fn stderr_output_routes_through_platform_primitive() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
+    let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
     let unix_rs = fs::read_to_string(root.join("src/prim/unix.rs")).expect("read src/prim/unix.rs");
 
     assert!(
@@ -48,7 +49,10 @@ fn stderr_output_routes_through_platform_primitive() {
             && unix_rs.contains("let n = write(")
             && unix_rs.contains("2,\n            bytes.as_ptr().add(written)")
             && !unix_rs.contains("use std::io")
-            && !unix_rs.contains("stderr().lock()"),
+            && !unix_rs.contains("stderr().lock()")
+            && !os_rs.contains("fn _mi_prim_out_stderr")
+            && !os_rs.contains("fn _mi_prim_process_info")
+            && !os_rs.contains("use std::io"),
         "Unix stderr primitive should use direct write(2), matching the C primitive path"
     );
 }
@@ -57,13 +61,16 @@ fn stderr_output_routes_through_platform_primitive() {
 fn options_state_uses_internal_locks_like_c() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
+    let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
 
     assert!(
         !options_rs.contains("std::sync::{Mutex")
             && !options_rs.contains("Mutex<")
             && !options_rs.contains("MutexGuard")
-            && !options_rs.contains("std::process::abort"),
-        "options state should not pull in std mutex/abort machinery"
+            && !options_rs.contains("std::process::abort")
+            && !options_rs.contains("eprintln!")
+            && !random_rs.contains("eprintln!"),
+        "options/random state should not pull in std mutex/abort/stdio machinery"
     );
     assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")

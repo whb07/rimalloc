@@ -900,3 +900,23 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued primitive/output parity cleanup:
+  - Removed duplicate `_mi_prim_out_stderr` and `_mi_prim_process_info` placeholders from `os.rs`; primitive stderr and process-info ownership now stays in the platform primitive layer.
+  - Replaced the remaining Rust `eprintln!` warning call sites in `random.rs` and `options.rs` with mimalloc's `_mi_warning_message_fmt` path, matching the C calls in `random.c` and `options.c`.
+  - Extended the release fast-path audit to reject the duplicate `os.rs` primitive placeholders, `std::io` in `os.rs`, and `eprintln!` warning paths in `options.rs`/`random.rs`.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Release cdylib remains dependent on the Rust panic/backtrace runtime (`libgcc_s.so.1`, `_Unwind_*`, `std::backtrace`, and `std::io::stdio::_eprint` still present). This batch keeps output behavior aligned but does not remove the broader panic-runtime footprint. Current rebuilt `RELACOUNT` is `1490`; total section size is `680,348` bytes.
+- Full established validation passed after the primitive/output cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

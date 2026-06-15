@@ -7,10 +7,8 @@
     clippy::missing_safety_doc
 )]
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_void;
 use core::ptr;
-use std::ffi::CStr;
-use std::io::{self, Write};
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 use crate::arena::MI_ARENA_SLICE_SIZE;
@@ -33,7 +31,7 @@ use crate::prim::{
     _mi_prim_protect, _mi_prim_reset, _mi_prim_reuse, _mi_theap_default,
 };
 use crate::stats::{_mi_clock_end, _mi_clock_start, mi_stats_t};
-use crate::types::{mi_arena_t, mi_heap_t, mi_page_t, mi_process_info_t, mi_subproc_t};
+use crate::types::{mi_arena_t, mi_heap_t, mi_page_t, mi_subproc_t};
 
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_4_GIB: usize = 4 * MI_MiB;
 pub const MI_DEFAULT_PHYSICAL_MEMORY_IN_KIB_32_GIB: usize = 32 * MI_MiB;
@@ -112,31 +110,6 @@ struct MiArenaCommitPrefix {
     slices_dirty: *mut c_void,
     slices_purge: *mut c_void,
     pages_meta: *mut mi_page_t,
-}
-
-#[inline]
-pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
-    if msg.is_null() {
-        return;
-    }
-    let bytes = CStr::from_ptr(msg).to_bytes();
-    let mut stderr = io::stderr().lock();
-    let _ = stderr.write_all(bytes);
-    let _ = stderr.flush();
-}
-
-#[inline]
-pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
-    if pinfo.is_null() {
-        return;
-    }
-    // Leave any values already filled by higher layers intact; only provide the
-    // primitive defaults that are currently available in the Rust port.
-    unsafe {
-        (*pinfo).utime = 0;
-        (*pinfo).stime = 0;
-        (*pinfo).page_faults = 0;
-    }
 }
 
 pub(crate) unsafe extern "C" fn _mi_os_has_overcommit() -> bool {

@@ -1072,27 +1072,32 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/random.rs",
             &random_rs,
-            "pub unsafe extern \"C\" fn _mi_random_split",
+            "pub(crate) extern \"C\" fn _mi_os_random_weak",
         ),
         (
             "src/random.rs",
             &random_rs,
-            "pub unsafe extern \"C\" fn _mi_random_next",
+            "pub(crate) unsafe extern \"C\" fn _mi_random_split",
         ),
         (
             "src/random.rs",
             &random_rs,
-            "pub unsafe extern \"C\" fn _mi_random_init",
+            "pub(crate) unsafe extern \"C\" fn _mi_random_next",
         ),
         (
             "src/random.rs",
             &random_rs,
-            "pub unsafe extern \"C\" fn _mi_random_init_weak",
+            "pub(crate) unsafe extern \"C\" fn _mi_random_init",
         ),
         (
             "src/random.rs",
             &random_rs,
-            "pub unsafe extern \"C\" fn _mi_random_reinit_if_weak",
+            "pub(crate) unsafe extern \"C\" fn _mi_random_init_weak",
+        ),
+        (
+            "src/random.rs",
+            &random_rs,
+            "pub(crate) unsafe extern \"C\" fn _mi_random_reinit_if_weak",
         ),
         (
             "src/alloc.rs",
@@ -1313,6 +1318,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_page_malloc_zero(")
             && !internal.contains("pub fn _mi_vsnprintf(")
             && !internal.contains("pub fn _mi_strlcpy(")
+            && !internal.contains("pub fn _mi_os_random_weak(")
             && !internal.contains("pub fn _mi_random_init(")
             && !internal.contains("pub fn _mi_random_next(")
             && !internal.contains("pub fn _mi_theap_random_next(")
@@ -1537,6 +1543,25 @@ fn free_path_internals_are_not_dynamic_exports() {
         assert!(
             prim_unix_rs.contains(marker),
             "Unix primitive helper boundary marker missing: {marker}"
+        );
+    }
+    for marker in [
+        "#[inline(never)]\npub(crate) extern \"C\" fn _mi_os_random_weak(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_split(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_next(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_init(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_init_weak(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_reinit_if_weak(",
+        "static MI_OS_RANDOM_WEAK_KEEP",
+        "static MI_RANDOM_SPLIT_KEEP",
+        "static MI_RANDOM_NEXT_KEEP",
+        "static MI_RANDOM_INIT_KEEP",
+        "static MI_RANDOM_INIT_WEAK_KEEP",
+        "static MI_RANDOM_REINIT_IF_WEAK_KEEP",
+    ] {
+        assert!(
+            random_rs.contains(marker),
+            "random helper boundary marker missing: {marker}"
         );
     }
     assert!(

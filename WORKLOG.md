@@ -1690,3 +1690,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.21s` with one noisy high run, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.05B` instructions and `15.50B` cycles; Rust about `10.68B` instructions and `16.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's random helper boundary set:
+  - C declares `_mi_os_random_weak` in `internal.h` and emits it with `_mi_random_split`, `_mi_random_next`, `_mi_random_init`, `_mi_random_init_weak`, and `_mi_random_reinit_if_weak` as standalone local functions from `random.c`.
+  - Rust already emitted `_mi_random_init` and a Rust-ABI `_mi_os_random_weak`, but release dropped the other random interface helpers.
+  - Marked the random helpers `#[inline(never)]`, made `_mi_os_random_weak` a crate-local C-ABI helper, retained the set through local `#[used]` function-pointer anchors, and extended release audit coverage for the helper markers and anchors.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::random::_mi_os_random_weak`, `_mi_random_split`, `_mi_random_next`, `_mi_random_init`, `_mi_random_init_weak`, and `_mi_random_reinit_if_weak`, with no dynamic exports for the set.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.14s..2.27s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.06B` instructions and `15.60B` cycles; Rust about `10.67B` instructions and `16.24B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

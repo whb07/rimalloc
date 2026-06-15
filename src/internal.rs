@@ -78,8 +78,8 @@ pub(crate) use crate::page_map::{
 };
 pub(crate) use crate::prim::{_mi_allocator_done, _mi_allocator_init};
 pub(crate) use crate::random::{
-    _mi_random_init, _mi_random_init_weak, _mi_random_next, _mi_random_reinit_if_weak,
-    _mi_random_split,
+    _mi_os_random_weak, _mi_random_init, _mi_random_init_weak, _mi_random_next,
+    _mi_random_reinit_if_weak, _mi_random_split,
 };
 pub use crate::stats::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase,

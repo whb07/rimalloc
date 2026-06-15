@@ -34,7 +34,9 @@ pub use crate::bits::{
     MI_ARCH_X64, MI_ARCH_X86, MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB,
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
-pub(crate) use crate::free::{_mi_padding_shrink, _mi_page_ptr_unalign};
+#[cfg(not(mi_c_malloc_fast))]
+pub(crate) use crate::free::_mi_padding_shrink;
+pub(crate) use crate::free::_mi_page_ptr_unalign;
 pub(crate) use crate::heap::{
     _mi_heap_force_destroy, _mi_heap_theap_get_or_init, _mi_heap_theap_get_peek,
 };

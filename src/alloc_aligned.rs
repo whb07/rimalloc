@@ -16,6 +16,7 @@ use crate::alloc::{
 };
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
+#[cfg(not(mi_c_malloc_fast))]
 use crate::free::_mi_padding_shrink;
 use crate::init::_mi_theap_empty_get;
 use crate::internal::{
@@ -34,6 +35,32 @@ const MI_MAX_ALIGN_SIZE: usize = 16;
 const MI_PAGE_MAX_START_BLOCK_ALIGN2: usize = 4 * MI_KiB;
 const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = MI_ARENA_SLICE_SIZE;
 const MI_EOVERFLOW: i32 = 75;
+
+#[cfg(mi_c_malloc_fast)]
+#[inline(always)]
+unsafe fn mi_padding_shrink_call(
+    page: *const crate::types::mi_page_t,
+    block: *const mi_block_t,
+    min_size: usize,
+) {
+    core::arch::asm!(
+        "call _mi_padding_shrink",
+        in("rdi") page,
+        in("rsi") block,
+        in("rdx") min_size,
+        clobber_abi("C"),
+    );
+}
+
+#[cfg(not(mi_c_malloc_fast))]
+#[inline(always)]
+unsafe fn mi_padding_shrink_call(
+    page: *const crate::types::mi_page_t,
+    block: *const mi_block_t,
+    min_size: usize,
+) {
+    _mi_padding_shrink(page, block, min_size);
+}
 
 #[inline]
 pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> bool {
@@ -153,7 +180,7 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
             let block = p.cast::<mi_block_t>();
             (*block).next = MI_BLOCK_TAG_ALIGNED;
         }
-        _mi_padding_shrink(page, p.cast::<mi_block_t>(), adjust + size);
+        mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size);
     }
 
     crate::mi_assert_internal!(mi_page_usable_block_size(page) >= adjust + size);

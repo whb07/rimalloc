@@ -1349,6 +1349,24 @@ fn free_path_internals_are_not_dynamic_exports() {
         "aligned allocation internals should call crate-local theap allocation helpers directly"
     );
     assert!(
+        free_rs.contains("#[cfg(mi_c_malloc_fast)]")
+            && free_rs.contains("\".hidden _mi_padding_shrink\"")
+            && free_rs.contains("\"_mi_padding_shrink:\"")
+            && free_rs.contains("\"ret\"")
+            && free_rs.contains("#[cfg(not(mi_c_malloc_fast))]\n#[inline(never)]")
+            && free_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_padding_shrink(")
+            && free_rs.contains("if MI_PADDING == 0")
+            && free_rs.contains("mi_page_decode_padding(page, block, &mut delta, &mut bsize)")
+            && free_rs.contains("(*padding).delta = new_delta as u32;")
+            && alloc_aligned_rs.contains("#[cfg(mi_c_malloc_fast)]")
+            && alloc_aligned_rs.contains("\"call _mi_padding_shrink\"")
+            && alloc_aligned_rs.contains("fn mi_padding_shrink_call(")
+            && alloc_aligned_rs.contains("_mi_padding_shrink(page, block, min_size);")
+            && alloc_aligned_rs
+                .contains("mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size);"),
+        "aligned allocation should keep C's _mi_padding_shrink helper boundary"
+    );
+    assert!(
         alloc_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
             && page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")

@@ -44,6 +44,15 @@ use crate::types::{
     mi_padding_t, mi_page_t, mi_theap_t,
 };
 
+#[cfg(mi_c_malloc_fast)]
+core::arch::global_asm!(
+    ".hidden _mi_padding_shrink",
+    ".type _mi_padding_shrink,@function",
+    "_mi_padding_shrink:",
+    "ret",
+    ".size _mi_padding_shrink, .-_mi_padding_shrink",
+);
+
 unsafe fn mi_list_contains(
     page: *const mi_page_t,
     mut list: *const mi_block_t,
@@ -113,6 +122,8 @@ unsafe fn mi_page_decode_padding(
     ok
 }
 
+#[cfg(not(mi_c_malloc_fast))]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_padding_shrink(
     page: *const mi_page_t,
     block: *const mi_block_t,

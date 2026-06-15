@@ -1549,3 +1549,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.10s..2.16s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.63B` cycles; Rust about `11.90B` instructions and `18.27B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's padding shrink helper boundary:
+  - C emits `_mi_padding_shrink` as a standalone local helper in `free.c`; this release build's body is the `MI_PADDING == 0` no-op, and aligned realloc still calls through the helper.
+  - Added the same hidden local `ret` helper for the fast release build, routed aligned allocation through an explicit C ABI call to it, kept the existing Rust body as the non-fast fallback, and gated the internal re-export accordingly.
+  - Rebuilt release and confirmed Rust now emits local `_mi_padding_shrink` at `000000000001346c`, with no dynamic `_mi_padding_shrink` export, and aligned allocation calls it directly.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.11s`, Rust `2.11s..2.26s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.72B` cycles; Rust about `11.88B` instructions and `18.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

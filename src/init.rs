@@ -1518,6 +1518,7 @@ pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> b
 }
 
 #[allow(dead_code)]
+#[inline(always)]
 unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
     let mut theap = unsafe { crate::prim::_mi_theap_default() };
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {

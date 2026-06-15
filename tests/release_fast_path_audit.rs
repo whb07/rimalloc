@@ -1110,6 +1110,10 @@ fn free_path_internals_are_not_dynamic_exports() {
         "thread initialization internals should call crate-local theap lifecycle helpers directly"
     );
     assert!(
+        init_rs.contains("#[inline(always)]\nunsafe fn _mi_thread_init_theap_default()"),
+        "thread default-heap initialization should stay inlined like C's static helper"
+    );
+    assert!(
         prim_rs.contains("pub(crate) use unix::{")
             && !prim_rs.contains("pub fn _mi_prim_mem_init(")
             && !prim_rs.contains("pub fn _mi_prim_alloc(")

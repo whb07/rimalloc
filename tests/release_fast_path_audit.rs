@@ -1586,6 +1586,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         );
     }
     for marker in [
+        "#[inline(never)]\npub(crate) extern \"C\" fn _mi_toupper(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnicmp(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_streq(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strlcpy(",
@@ -1594,6 +1595,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strlen(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnstr(",
         "#[inline(never)]\npub(crate) fn _mi_snprintf(",
+        "static MI_TOUPPER_KEEP",
         "static MI_STRNICMP_KEEP",
         "static MI_STREQ_KEEP",
         "static MI_STRLCPY_KEEP",

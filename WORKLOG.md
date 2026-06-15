@@ -1722,3 +1722,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.11s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.07B` instructions and `15.57B` cycles; Rust about `10.69B` instructions and `16.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's `_mi_toupper` helper boundary:
+  - C emits `_mi_toupper` as a standalone local libc helper used by case-insensitive option and arena parsing paths.
+  - Rust had the translated helper body, but release dropped the local symbol after inlining it into the string and arena parsers.
+  - Marked Rust `_mi_toupper` `#[inline(never)]`, retained it through a local `#[used]` function-pointer anchor, and added it to the libc helper boundary audit marker set.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::libc::_mi_toupper`, with no dynamic `_mi_toupper` export.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.06B` instructions and `15.56B` cycles; Rust about `10.66B` instructions and `16.26B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

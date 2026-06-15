@@ -39,6 +39,7 @@ fn as_bytes_mut_ptr(p: *mut c_char) -> *mut u8 {
     p as *mut u8
 }
 
+#[inline(never)]
 pub(crate) extern "C" fn _mi_toupper(c: c_char) -> c_char {
     let b = c as u8;
     if b.is_ascii_lowercase() {
@@ -47,6 +48,9 @@ pub(crate) extern "C" fn _mi_toupper(c: c_char) -> c_char {
         c
     }
 }
+
+#[used]
+static MI_TOUPPER_KEEP: extern "C" fn(c_char) -> c_char = _mi_toupper;
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> i32 {

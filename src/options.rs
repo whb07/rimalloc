@@ -969,6 +969,7 @@ static MI_RAW_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_raw_message;
 #[used]
 static MI_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_message;
 
+#[inline(never)]
 pub(crate) fn _mi_trace_message(args: fmt::Arguments<'_>) {
     if mi_option_get(mi_option_t::mi_option_verbose) <= 1 {
         return;
@@ -976,12 +977,18 @@ pub(crate) fn _mi_trace_message(args: fmt::Arguments<'_>) {
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
 }
 
+#[inline(never)]
 pub(crate) fn _mi_verbose_message(args: fmt::Arguments<'_>) {
     if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
         return;
     }
     mi_vfprintf(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
 }
+
+#[used]
+static MI_TRACE_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_trace_message;
+#[used]
+static MI_VERBOSE_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_verbose_message;
 
 #[allow(dead_code)]
 fn mi_show_error_message(args: fmt::Arguments<'_>) {

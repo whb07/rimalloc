@@ -52,7 +52,10 @@ pub(crate) use crate::libc::{
     _mi_strnstr, _mi_toupper, _mi_vsnprintf,
 };
 use crate::options::_mi_error_message_fmt;
-pub(crate) use crate::options::{_mi_error_message, _mi_option_get_fast, _mi_warning_message};
+pub(crate) use crate::options::{
+    _mi_error_message, _mi_option_get_fast, _mi_trace_message, _mi_verbose_message,
+    _mi_warning_message,
+};
 pub(crate) use crate::os::{
     _mi_os_alloc, _mi_os_canuse_large_page, _mi_os_commit, _mi_os_commit_ex, _mi_os_decommit,
     _mi_os_free, _mi_os_free_ex, _mi_os_get_aligned_hint, _mi_os_good_alloc_size,
@@ -189,7 +192,7 @@ macro_rules! mi_debug_assert_eq {
 macro_rules! mi_trace_message {
     ($($arg:tt)*) => {{
         if $crate::internal::MI_DEBUG > 0 {
-            unsafe { $crate::internal::_mi_trace_message($($arg)*) }
+            $crate::internal::_mi_trace_message(format_args!($($arg)*))
         }
     }};
 }
@@ -545,8 +548,6 @@ unsafe extern "C" {
     pub fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, fmt: *const c_char, ...);
     pub fn _mi_raw_message(fmt: *const c_char, ...);
     pub fn _mi_message(fmt: *const c_char, ...);
-    pub fn _mi_verbose_message(fmt: *const c_char, ...);
-    pub fn _mi_trace_message(fmt: *const c_char, ...);
     pub fn _mi_options_init();
     pub fn _mi_options_post_init();
 

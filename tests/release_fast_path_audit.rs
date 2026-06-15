@@ -1406,6 +1406,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_is_heap_main(")
             && !internal.contains("pub fn _mi_is_theap_main(")
             && !internal.contains("pub fn _mi_warning_message(")
+            && !internal.contains("pub fn _mi_verbose_message(")
+            && !internal.contains("pub fn _mi_trace_message(")
             && !internal.contains("pub fn _mi_option_get_fast(")
             && !internal.contains("pub fn _mi_error_message(")
             && !internal.contains("pub fn _mi_auto_process_init(")
@@ -1671,6 +1673,23 @@ fn free_path_internals_are_not_dynamic_exports() {
             && options_rs
                 .contains("static MI_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_message;"),
         "_mi_message should keep C's local message helper boundary and mimalloc prefix path"
+    );
+    assert!(
+        options_rs
+            .contains("#[inline(never)]\npub(crate) fn _mi_trace_message(args: fmt::Arguments<'_>)")
+            && options_rs.contains("mi_option_get(mi_option_t::mi_option_verbose) <= 1")
+            && options_rs.contains(
+                "static MI_TRACE_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_trace_message;"
+            )
+            && options_rs.contains(
+                "#[inline(never)]\npub(crate) fn _mi_verbose_message(args: fmt::Arguments<'_>)"
+            )
+            && options_rs.contains("!mi_option_is_enabled(mi_option_t::mi_option_verbose)")
+            && options_rs.contains(
+                "static MI_VERBOSE_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_verbose_message;"
+            )
+            && internal.contains("crate::internal::_mi_trace_message(format_args!($($arg)*))"),
+        "_mi_trace_message and _mi_verbose_message should keep C's local message helper boundaries without stale extern declarations"
     );
     assert!(
         os_rs.contains(

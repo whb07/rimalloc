@@ -603,6 +603,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     let arena_meta_rs =
         fs::read_to_string(root.join("src/arena_meta.rs")).expect("read src/arena_meta.rs");
     let atomic_rs = fs::read_to_string(root.join("src/atomic.rs")).expect("read src/atomic.rs");
+    let bitmap_rs = fs::read_to_string(root.join("src/bitmap.rs")).expect("read src/bitmap.rs");
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
@@ -1318,6 +1319,19 @@ fn free_path_internals_are_not_dynamic_exports() {
                 .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_atomic_once_release")
             && atomic_rs.contains("_mi_atomic_once_release(self.once);"),
         "atomic once should keep C's enter/release helper boundaries"
+    );
+    assert!(
+        bitmap_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_bitmap_forall_set(")
+            && bitmap_rs.contains(
+                "#[inline(never)]\npub unsafe extern \"C\" fn _mi_bitmap_forall_setc_ranges("
+            )
+            && bitmap_rs.contains(
+                "#[inline(never)]\npub unsafe extern \"C\" fn _mi_bitmap_forall_setc_rangesn("
+            )
+            && bitmap_rs
+                .contains("return _mi_bitmap_forall_setc_ranges(bitmap, visit, arena, arg);")
+            && arena_rs.contains("_mi_bitmap_forall_setc_rangesn("),
+        "bitmap traversal should keep C's set/range traversal helper boundaries"
     );
     assert!(
         free_rs

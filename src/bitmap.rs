@@ -1617,8 +1617,8 @@ pub unsafe fn mi_bitmap_popcount(bitmap: *mut mi_bitmap_t) -> usize {
     popcount
 }
 
-#[inline]
-pub unsafe fn _mi_bitmap_forall_set(
+#[inline(never)]
+pub unsafe extern "C" fn _mi_bitmap_forall_set(
     bitmap: *mut mi_bitmap_t,
     visit: mi_forall_set_fun_t,
     arena: *mut mi_arena_t,
@@ -1646,8 +1646,8 @@ pub unsafe fn _mi_bitmap_forall_set(
     true
 }
 
-#[inline]
-pub unsafe fn _mi_bitmap_forall_setc_ranges(
+#[inline(never)]
+pub unsafe extern "C" fn _mi_bitmap_forall_setc_ranges(
     bitmap: *mut mi_bitmap_t,
     visit: mi_forall_set_fun_t,
     arena: *mut mi_arena_t,
@@ -1690,8 +1690,8 @@ pub unsafe fn _mi_bitmap_forall_setc_ranges(
     true
 }
 
-#[inline]
-pub unsafe fn _mi_bitmap_forall_setc_rangesn(
+#[inline(never)]
+pub unsafe extern "C" fn _mi_bitmap_forall_setc_rangesn(
     bitmap: *mut mi_bitmap_t,
     rngslices: usize,
     visit: mi_forall_set_fun_t,

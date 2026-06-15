@@ -1746,3 +1746,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.06B` instructions and `15.58B` cycles; Rust about `10.66B` instructions and `16.28B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's theap random/delete helper boundaries:
+  - C emits `_mi_theap_random_next` and `_mi_theap_delete` as standalone local helpers around per-theap entropy and heap metadata teardown.
+  - Rust had matching C-ABI helper bodies, but release dropped these locals after inlining through initialization, page, and delete paths.
+  - Marked the Rust helpers `#[inline(never)]`, retained them through local `#[used]` function-pointer anchors, and extended release audit coverage for the helper markers and anchors.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::theap::_mi_theap_delete` and `_mi_theap_random_next`, with no dynamic exports for the pair.
+  - The next local-symbol gap now starts at `_mi_prim_alloc`, `_mi_prim_commit`, `_mi_prim_protect`, `_mi_prim_reset`, `_mi_theap_area_visit_blocks`, `_mi_theap_malloc_zero`, `_mi_theap_malloc_zero_ex`, `_mi_theap_page_reclaim`, `_mi_thread_id`, and message/libc helpers.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.09s`, Rust `2.11s..2.26s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.07B` instructions and `15.65B` cycles; Rust about `10.66B` instructions and `16.26B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

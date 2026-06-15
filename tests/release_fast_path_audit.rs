@@ -2015,6 +2015,15 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_theap_free should inline C's decref tail while preserving the standalone _mi_theap_decref helper for other call sites"
     );
     assert!(
+        theap_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_random_next")
+            && theap_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_delete")
+            && theap_rs.contains("static MI_THEAP_RANDOM_NEXT_KEEP")
+            && theap_rs.contains("static MI_THEAP_DELETE_KEEP"),
+        "theap random and delete helpers should keep C's local helper boundaries"
+    );
+    assert!(
         init_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_options_init")
             && init_rs.contains(

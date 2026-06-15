@@ -1056,3 +1056,25 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued message-formatting parity:
+  - Found `mi_vfprintf_thread` still decoded the C prefix with `CStr::to_string_lossy()` before building the thread prefix. C checks `_mi_strnlen(prefix,33) <= 32`, copies bytes into a fixed `char tprefix[64]`, and appends the thread id with `_mi_snprintf`.
+  - Added byte-copy support to the fixed `StackMessage` buffer, switched the branch to `_mi_strnlen(prefix, 33)`, and copied the prefix bytes directly before appending `thread 0x...`.
+  - Extended the release fast-path audit to reject the old lossy prefix formatting and require the C-style bounded byte-copy path.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Rebuilt `target/bench-allocators/libmimalloc-rust.so`; `RELACOUNT` stayed at `1490`.
+  - Direct `cfrac` after the message-prefix cleanup: C `2.71s..2.78s`, RSS `6088..6280` KiB, minor `202`; Rust `2.73s..2.75s`, RSS `6720..6820` KiB, minor `208..213`.
+  - Result: non-main-thread message prefixes now avoid Rust lossy string conversion and copy bytes like C, but the remaining `cfrac` RSS/minor-fault tail persists.
+- Full established validation passed after the message-prefix cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

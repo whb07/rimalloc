@@ -161,6 +161,18 @@ fn options_state_uses_internal_locks_like_c() {
             && options_rs.contains("format_args!(\n            \"debug level : {}\\n\""),
         "options printing should use direct fixed-buffer fprintf formatting like C"
     );
+    assert!(
+        !options_rs
+            .contains("let prefix_text = unsafe { CStr::from_ptr(prefix).to_string_lossy() };")
+            && !options_rs.contains("\"{prefix_text}thread 0x{:x}: \"")
+            && options_rs.contains("fn write_bytes(&mut self, bytes: &[u8])")
+            && options_rs.contains("_mi_strnlen(prefix, 33)")
+            && options_rs.contains("core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len)")
+            && options_rs.contains("tprefix.write_bytes(prefix_bytes);")
+            && options_rs
+                .contains("write!(tprefix, \"thread 0x{:x}: \", _mi_thread_id() as usize)"),
+        "message thread prefixes should use C-style bounded stack byte copying"
+    );
 }
 
 #[test]

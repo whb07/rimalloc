@@ -22,6 +22,7 @@ use crate::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
 use crate::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
 use crate::init::{_mi_is_main_thread, _mi_preloading, _mi_thread_id, mi_mark_main_thread};
 use crate::internal::{MI_DEBUG, MI_GUARDED};
+use crate::libc::_mi_strnlen;
 use crate::page::MI_MAX_ALLOC_SIZE;
 use crate::prim::_mi_prim_out_stderr;
 use crate::types::{
@@ -818,18 +819,22 @@ impl StackMessage {
         self.bytes[self.len] = 0;
         self.bytes.as_ptr().cast()
     }
+
+    fn write_bytes(&mut self, bytes: &[u8]) {
+        let capacity = self.bytes.len() - 1;
+        if self.len >= capacity {
+            return;
+        }
+        let available = capacity - self.len;
+        let copy = bytes.len().min(available);
+        self.bytes[self.len..self.len + copy].copy_from_slice(&bytes[..copy]);
+        self.len += copy;
+    }
 }
 
 impl fmt::Write for StackMessage {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        let capacity = self.bytes.len() - 1;
-        if self.len >= capacity {
-            return Ok(());
-        }
-        let available = capacity - self.len;
-        let copy = s.len().min(available);
-        self.bytes[self.len..self.len + copy].copy_from_slice(&s.as_bytes()[..copy]);
-        self.len += copy;
+        self.write_bytes(s.as_bytes());
         Ok(())
     }
 }
@@ -861,15 +866,13 @@ fn mi_vfprintf_thread(
     args: fmt::Arguments<'_>,
 ) {
     if !prefix.is_null() {
-        let prefix_len = unsafe { CStr::from_ptr(prefix).to_bytes().len() };
+        let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
         if prefix_len <= 32 && !_mi_is_main_thread() {
-            let prefix_text = unsafe { CStr::from_ptr(prefix).to_string_lossy() };
             let mut tprefix = StackMessage::new();
-            let _ = write!(
-                tprefix,
-                "{prefix_text}thread 0x{:x}: ",
-                _mi_thread_id() as usize
-            );
+            let prefix_bytes =
+                unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
+            tprefix.write_bytes(prefix_bytes);
+            let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
             mi_vfprintf(out, arg, tprefix.as_c_ptr(), args);
             return;
         }

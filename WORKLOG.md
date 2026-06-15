@@ -230,3 +230,13 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Committed the C++ new export/fast-path work as `9cbad72`.
+- Post-commit repeated candidate sweep:
+  - `rptestN`: C `1.555s..1.639s`, Rust `1.317s..1.491s`; Rust favored in this run.
+  - `sh8benchN`: C `.24s.. .28s`, Rust `.25s.. .28s`; overlapping.
+  - `mstressN`: C `1.59s..1.62s`, Rust `1.63s..1.64s`; wall time close, but Rust still shows higher sys time/page reclaims (`2.92s..3.44s` sys vs C `2.41s..2.56s`).
+  - `larsonN`: C `2.102s..2.165s`, Rust `2.080s..2.254s`; overlapping with occasional slower Rust samples.
+  - `larsonN-sized`: C `2.081s..2.110s`, Rust `2.040s..2.163s`; overlapping with occasional slower Rust samples.
+  - `glibc-simple`: C `1.35s..1.36s`, Rust `1.31s..1.33s`; direct TLS malloc remains ahead locally.
+  - `glibc-thread`: C `.418s.. .420s`, Rust `.421s.. .430s`; close, one slower Rust sample.
+- Next target: revisit `mstressN` sys-time/page-reclaim delta, since wall time is now close but kernel work is still higher on Rust in the post-commit sweep.

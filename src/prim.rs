@@ -497,7 +497,23 @@ pub(crate) static _MI_PROCESS_ATTACH_CTOR: unsafe extern "C" fn() = mi_process_a
 #[unsafe(link_section = ".fini_array")]
 pub(crate) static _MI_PROCESS_DETACH_DTOR: unsafe extern "C" fn() = mi_process_detach_dtor;
 
-#[inline]
+#[cfg(mi_c_malloc_fast)]
+core::arch::global_asm!(
+    ".hidden _mi_is_redirected",
+    ".type _mi_is_redirected,@function",
+    "_mi_is_redirected:",
+    "xor eax,eax",
+    "ret",
+    ".size _mi_is_redirected, .-_mi_is_redirected",
+);
+
+#[cfg(mi_c_malloc_fast)]
+unsafe extern "C" {
+    pub(crate) fn _mi_is_redirected() -> bool;
+}
+
+#[cfg(not(mi_c_malloc_fast))]
+#[inline(never)]
 pub unsafe extern "C" fn _mi_is_redirected() -> bool {
     false
 }

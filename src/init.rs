@@ -818,6 +818,7 @@ pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
     current_thread_id()
 }
 
+#[inline(never)]
 pub extern "C" fn _mi_is_main_thread() -> bool {
     let main_tid = MAIN_THREAD_ID.load(Ordering::Acquire);
     main_tid == 0 || main_tid == current_thread_id()
@@ -869,13 +870,14 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     mi_tld_free(tld);
 }
 
+#[inline(never)]
 pub(crate) extern "C" fn _mi_preloading() -> bool {
     OS_PRELOADING.load(Ordering::Relaxed)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_is_redirected() -> bool {
-    false
+    unsafe { crate::prim::_mi_is_redirected() }
 }
 
 #[unsafe(no_mangle)]

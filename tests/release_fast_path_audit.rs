@@ -84,7 +84,8 @@ fn preloading_state_matches_c_mimalloc_lifecycle() {
         "_mi_preloading should default to true until process initialization, matching C"
     );
     assert!(
-        source[preload_fn..].contains("OS_PRELOADING.load(Ordering::Relaxed)")
+        source[..preload_fn].ends_with("#[inline(never)]\n")
+            && source[preload_fn..].contains("OS_PRELOADING.load(Ordering::Relaxed)")
             && !source[preload_fn..preload_fn + 120].contains("false"),
         "_mi_preloading must read process state instead of returning a constant"
     );
@@ -1399,6 +1400,22 @@ fn free_path_internals_are_not_dynamic_exports() {
             && heap_rs.contains("let mut theap = _mi_heap_theap_get_peek(heap);")
             && prim_rs.contains("_mi_heap_theap_get_peek(heap)"),
         "heap/theap cache misses should keep C's local _mi_heap_theap_get_peek no-create helper boundary"
+    );
+    assert!(
+        init_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_is_main_thread() -> bool")
+            && init_rs.contains("let main_tid = MAIN_THREAD_ID.load(Ordering::Acquire);")
+            && init_rs.contains("main_tid == 0 || main_tid == current_thread_id()")
+            && init_rs.contains("#[inline(never)]\npub(crate) extern \"C\" fn _mi_preloading() -> bool")
+            && init_rs.contains("OS_PRELOADING.load(Ordering::Relaxed)")
+            && prim_rs.contains("#[cfg(mi_c_malloc_fast)]\ncore::arch::global_asm!(")
+            && prim_rs.contains("\".hidden _mi_is_redirected\"")
+            && prim_rs.contains("\"_mi_is_redirected:\"")
+            && prim_rs.contains("\"xor eax,eax\"")
+            && prim_rs.contains("pub(crate) fn _mi_is_redirected() -> bool;")
+            && prim_rs.contains("#[cfg(not(mi_c_malloc_fast))]\n#[inline(never)]\npub unsafe extern \"C\" fn _mi_is_redirected() -> bool")
+            && prim_rs.contains("false")
+            && init_rs.contains("pub extern \"C\" fn mi_is_redirected() -> bool {\n    unsafe { crate::prim::_mi_is_redirected() }\n}"),
+        "lifecycle predicates should keep C's _mi_is_main_thread/_mi_preloading/_mi_is_redirected helper boundaries"
     );
     assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_free(")

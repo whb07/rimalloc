@@ -1594,3 +1594,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.29B` instructions and `17.68B` cycles; Rust about `11.90B` instructions and `18.44B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's lifecycle predicate helper boundaries:
+  - C emits `_mi_is_main_thread`, `_mi_preloading`, and `_mi_is_redirected` as standalone local helpers, while Rust had matching source helpers but release emitted none of those local symbols.
+  - Found a mechanical drift in `mi_is_redirected`: C delegates to `_mi_is_redirected()`, while Rust returned `false` directly.
+  - Marked Rust `_mi_is_main_thread` and `_mi_preloading` `#[inline(never)]`, restored `mi_is_redirected` to call `_mi_is_redirected`, and used a hidden local fast-build assembly body for `_mi_is_redirected` so it is retained without becoming a dynamic export.
+  - Extended release audit coverage for the three predicate helper boundaries and the `mi_is_redirected` delegation.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::init::_mi_is_main_thread`, `mechanical_mimalloc::init::_mi_preloading`, and `_mi_is_redirected`; only public `mi_is_redirected` is dynamic.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.10s..2.15s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.29B` instructions and `17.93B` cycles; Rust about `11.89B` instructions and `18.21B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

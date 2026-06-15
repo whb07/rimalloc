@@ -508,3 +508,40 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Refreshed the current release cdylib and copied it to `target/bench-allocators/libmimalloc-rust.so`.
+- Current `cfrac -n=5` against the refreshed bench libraries:
+  - C: `2.71s..2.78s`, RSS `5792..6280` KiB, reclaims `199..200`.
+  - Rust: `2.71s..2.80s`, RSS `6536..6784` KiB, reclaims `207..210`.
+  - Result: wall time is mostly overlapping, but the Rust RSS/page-reclaim tail remains.
+- Current bench-library ELF shape still shows a startup/load-footprint gap:
+  - `size -A` total: C `257,609` bytes; Rust `680,348` bytes.
+  - Dynamic defined symbols: C `235`; Rust `368`.
+  - Dynamic relocations: C `571`; Rust `1,626`.
+  - Rust still exports many `_mi_*` implementation symbols, so the next pass is to keep reducing unnecessary dynamic ABI/relocation surface where it differs from C mimalloc.
+- Localized main heap/theap statics that do not need public dynamic ABI names:
+  - Removed fixed dynamic names from `heap_main`, `theap_main`, and `_mi_theap_empty_wrong`.
+  - Kept `_mi_theap_empty` as a stable crate-visible link symbol because `tls_shim.c` uses it to initialize Linux initial-exec TLS to a valid empty theap, matching C's non-null default-theap fast path.
+  - Added release fast-path audit coverage so these statics do not regress back to public dynamic exports.
+- Focused validation/build after localizing the main heap/theap statics:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+  - Dynamic defined symbols dropped from Rust `368` to `365`.
+  - `R_X86_64_64` relocations dropped from `4` to `2`; the remaining two are `_mi_theap_empty` TLS initializers.
+- Focused `cfrac -n=5` after the static-localization change:
+  - C: `2.68s..2.83s`, RSS `6244..6528` KiB, reclaims `198..201`.
+  - Rust: `2.72s..2.76s`, RSS `6564..6808` KiB, reclaims `205..209`.
+  - Result: no wall-time regression; Rust's RSS/page-reclaim tail remains, so further startup/load-footprint work is still needed.
+- Full established validation passed after the static-localization change:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

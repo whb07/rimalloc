@@ -325,7 +325,7 @@ const MI_RANDOM_CTX_EMPTY: mi_random_ctx_t = mi_random_ctx_t {
 };
 
 #[unsafe(no_mangle)]
-pub static _mi_theap_empty: mi_theap_t = mi_theap_t {
+pub(crate) static _mi_theap_empty: mi_theap_t = mi_theap_t {
     tld: ptr::addr_of!(tld_empty).cast_mut(),
     heap: ptr::null_mut(),
     refcount: 1,
@@ -359,8 +359,7 @@ pub static _mi_theap_empty: mi_theap_t = mi_theap_t {
     stats: MI_STATS_NULL(),
 };
 
-#[unsafe(no_mangle)]
-pub static _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
+pub(crate) static _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
     tld: ptr::addr_of!(tld_empty).cast_mut(),
     heap: ptr::null_mut(),
     refcount: 1,
@@ -394,8 +393,7 @@ pub static _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
     stats: MI_STATS_NULL(),
 };
 
-#[unsafe(no_mangle)]
-pub static mut theap_main: mi_theap_t = mi_theap_t {
+static mut theap_main: mi_theap_t = mi_theap_t {
     tld: ptr::addr_of_mut!(tld_main),
     heap: ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>(),
     refcount: 1,
@@ -434,8 +432,7 @@ pub static mut theap_main: mi_theap_t = mi_theap_t {
     stats: MI_STATS_NULL(),
 };
 
-#[unsafe(no_mangle)]
-pub static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
+static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
     subproc: ptr::null_mut(),
     heap_seq: 0,
     next: ptr::null_mut(),

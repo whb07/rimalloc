@@ -23,6 +23,7 @@ use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
+use crate::init::_mi_theap_empty;
 use crate::types::{
     mi_heap_t, mi_msecs_t, mi_page_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
 };
@@ -112,8 +113,6 @@ thread_local! {
 }
 
 unsafe extern "C" {
-    pub static _mi_theap_empty: mi_theap_t;
-
     pub fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t);
     pub fn _mi_prim_free(addr: *mut c_void, size: usize) -> i32;
     pub fn _mi_prim_alloc(

@@ -165,6 +165,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         !internal.contains("pub static mut _mi_page_map:")
             && !internal.contains("pub fn _mi_page_map_init() -> bool;")
             && !internal.contains("pub static _mi_page_empty:")
+            && !internal.contains("pub static _mi_theap_empty:")
+            && !internal.contains("pub static _mi_theap_empty_wrong:")
             && internal.contains("pub(crate) use crate::page_map::{"),
         "page-map internals should be imported through crate paths, not extern declarations"
     );
@@ -172,6 +174,21 @@ fn free_path_internals_are_not_dynamic_exports() {
         !init_rs.contains("#[unsafe(no_mangle)]\npub static _mi_page_empty"),
         "_mi_page_empty should stay crate-local so page-empty tables use relative relocations"
     );
+    assert!(
+        init_rs.contains("#[unsafe(no_mangle)]\npub(crate) static _mi_theap_empty")
+            && !init_rs.contains("#[unsafe(no_mangle)]\npub static _mi_theap_empty"),
+        "_mi_theap_empty needs a stable local link name for TLS initialization without becoming a public dynamic ABI symbol"
+    );
+    for main_static in [
+        "pub static _mi_theap_empty_wrong",
+        "pub static mut theap_main",
+        "pub static mut heap_main",
+    ] {
+        assert!(
+            !init_rs.contains(main_static),
+            "{main_static} should stay crate-local instead of a dynamic export"
+        );
+    }
     assert!(
         !free_rs.contains("#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn _mi_free_generic"),
         "_mi_free_generic should not be a dynamic export"

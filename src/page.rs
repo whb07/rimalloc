@@ -22,16 +22,16 @@ use crate::atomic::{
     mi_atomic_store_ptr_release, mi_memory_order_e,
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
-use crate::init::_mi_page_empty;
+use crate::init::{_mi_page_empty, _mi_theap_empty_wrong};
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up, _mi_error_message,
     _mi_is_heap_main, _mi_os_commit, _mi_os_good_alloc_size, _mi_os_page_size,
-    _mi_page_malloc_zero, _mi_ptr_page, _mi_theap_empty_wrong, _mi_theap_heap,
-    _mi_theap_random_next, _mi_wsize_from_size, MI_DEBUG, MI_SECURE, mi_block_next,
-    mi_block_set_next, mi_mem_is_zero, mi_memkind_t, mi_page_all_free, mi_page_area,
-    mi_page_block_size, mi_page_committed, mi_page_contains_address, mi_page_flags,
-    mi_page_has_interior_pointers, mi_page_immediate_available, mi_page_is_expandable,
-    mi_page_is_mostly_used, mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers,
+    _mi_page_malloc_zero, _mi_ptr_page, _mi_theap_heap, _mi_theap_random_next, _mi_wsize_from_size,
+    MI_DEBUG, MI_SECURE, mi_block_next, mi_block_set_next, mi_mem_is_zero, mi_memkind_t,
+    mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_committed,
+    mi_page_contains_address, mi_page_flags, mi_page_has_interior_pointers,
+    mi_page_immediate_available, mi_page_is_expandable, mi_page_is_mostly_used,
+    mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers,
     mi_page_slice_offset_of, mi_page_slice_start, mi_page_start, mi_page_thread_free,
     mi_page_usable_block_size, mi_theap_is_initialized,
 };

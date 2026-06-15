@@ -1299,7 +1299,7 @@ fn mi_chunkbin_of(slice_count: usize) -> mi_chunkbin_t {
     }
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_debug_get_bin(
     chunkmap_bins: *const mi_bchunk_t,
     chunk_idx: usize,
@@ -1795,7 +1795,7 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_rangesn(
     true
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usize {
     if bit_count == 0 {
         if !pchunk_count.is_null() {
@@ -1812,7 +1812,7 @@ pub unsafe fn mi_bbitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usi
     (chunk_count + MI_CBIN_COUNT as usize + 1) * MI_BCHUNK_SIZE
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_init(
     bbitmap: *mut mi_bbitmap_t,
     bit_count: usize,
@@ -1830,7 +1830,7 @@ pub unsafe fn mi_bbitmap_init(
     size
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_unsafe_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) {
     crate::mi_debug_assert!(n > 0);
     crate::mi_debug_assert!(idx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
@@ -1842,7 +1842,7 @@ pub unsafe fn mi_bbitmap_unsafe_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: 
     );
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_bsr_inv(bbitmap: *mut mi_bbitmap_t, idx: *mut usize) -> bool {
     let chunk_count = mi_bbitmap_chunk_count(bbitmap);
     let chunkmap_max = chunk_count.div_ceil(MI_BFIELD_BITS);
@@ -1867,7 +1867,7 @@ pub unsafe fn mi_bbitmap_bsr_inv(bbitmap: *mut mi_bbitmap_t, idx: *mut usize) ->
     false
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usize) -> bool {
     crate::mi_debug_assert!(n > 0);
     let maxbits = mi_bbitmap_max_bits(bbitmap);
@@ -1896,7 +1896,7 @@ pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usi
     were_allclear
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_try_clearNC(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
     crate::mi_debug_assert!(n > 0);
     crate::mi_debug_assert!(n <= MI_BCHUNK_BITS);
@@ -1921,7 +1921,7 @@ pub unsafe fn mi_bbitmap_try_clearNC(bbitmap: *mut mi_bbitmap_t, idx: usize, n: 
     cleared
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_is_xsetN(
     set: mi_xset_t,
     bbitmap: *mut mi_bbitmap_t,
@@ -2059,7 +2059,7 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
     found
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clear(
     bbitmap: *mut mi_bbitmap_t,
     tseq: usize,
@@ -2068,7 +2068,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clear(
     mi_bbitmap_try_find_and_clear_generic(bbitmap, tseq, 1, pidx, mi_bchunk_try_find_and_clear_1)
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clear8(
     bbitmap: *mut mi_bbitmap_t,
     tseq: usize,
@@ -2077,7 +2077,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clear8(
     mi_bbitmap_try_find_and_clear_generic(bbitmap, tseq, 8, pidx, mi_bchunk_try_find_and_clear_8)
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clearNX(
     bbitmap: *mut mi_bbitmap_t,
     tseq: usize,
@@ -2088,7 +2088,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearNX(
     mi_bbitmap_try_find_and_clear_generic(bbitmap, tseq, n, pidx, mi_bchunk_try_find_and_clearNX)
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clearNC(
     bbitmap: *mut mi_bbitmap_t,
     tseq: usize,
@@ -2135,7 +2135,7 @@ fn mi_bchunk_try_clearN_(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, n: usize)
     true
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clearN_(
     bbitmap: *mut mi_bbitmap_t,
     tseq: usize,
@@ -2201,3 +2201,55 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN(
     }
     mi_bbitmap_try_find_and_clearN_(bbitmap, tseq, n, pidx)
 }
+
+#[used]
+static MI_BBITMAP_DEBUG_GET_BIN_KEEP: unsafe fn(*const mi_bchunk_t, usize) -> mi_chunkbin_t =
+    mi_bbitmap_debug_get_bin;
+#[used]
+static MI_BBITMAP_SIZE_KEEP: unsafe fn(usize, *mut usize) -> usize = mi_bbitmap_size;
+#[used]
+static MI_BBITMAP_INIT_KEEP: unsafe fn(*mut mi_bbitmap_t, usize, bool) -> usize = mi_bbitmap_init;
+#[used]
+static MI_BBITMAP_UNSAFE_SETN_KEEP: unsafe fn(*mut mi_bbitmap_t, usize, usize) =
+    mi_bbitmap_unsafe_setN;
+#[used]
+static MI_BBITMAP_BSR_INV_KEEP: unsafe fn(*mut mi_bbitmap_t, *mut usize) -> bool =
+    mi_bbitmap_bsr_inv;
+#[used]
+static MI_BBITMAP_SETN_KEEP: unsafe fn(*mut mi_bbitmap_t, usize, usize) -> bool = mi_bbitmap_setN;
+#[used]
+static MI_BBITMAP_TRY_CLEARNC_KEEP: unsafe fn(*mut mi_bbitmap_t, usize, usize) -> bool =
+    mi_bbitmap_try_clearNC;
+#[used]
+static MI_BBITMAP_IS_XSETN_KEEP: unsafe fn(mi_xset_t, *mut mi_bbitmap_t, usize, usize) -> bool =
+    mi_bbitmap_is_xsetN;
+#[used]
+static MI_BBITMAP_TRY_FIND_AND_CLEAR_KEEP: unsafe fn(*mut mi_bbitmap_t, usize, *mut usize) -> bool =
+    mi_bbitmap_try_find_and_clear;
+#[used]
+static MI_BBITMAP_TRY_FIND_AND_CLEAR8_KEEP: unsafe fn(
+    *mut mi_bbitmap_t,
+    usize,
+    *mut usize,
+) -> bool = mi_bbitmap_try_find_and_clear8;
+#[used]
+static MI_BBITMAP_TRY_FIND_AND_CLEARNX_KEEP: unsafe fn(
+    *mut mi_bbitmap_t,
+    usize,
+    usize,
+    *mut usize,
+) -> bool = mi_bbitmap_try_find_and_clearNX;
+#[used]
+static MI_BBITMAP_TRY_FIND_AND_CLEARNC_KEEP: unsafe fn(
+    *mut mi_bbitmap_t,
+    usize,
+    usize,
+    *mut usize,
+) -> bool = mi_bbitmap_try_find_and_clearNC;
+#[used]
+static MI_BBITMAP_TRY_FIND_AND_CLEARN_KEEP: unsafe fn(
+    *mut mi_bbitmap_t,
+    usize,
+    usize,
+    *mut usize,
+) -> bool = mi_bbitmap_try_find_and_clearN_;

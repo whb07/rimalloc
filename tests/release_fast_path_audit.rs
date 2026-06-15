@@ -1892,6 +1892,39 @@ fn free_path_internals_are_not_dynamic_exports() {
             "regular bitmap helper boundary marker missing: {marker}"
         );
     }
+    for marker in [
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_debug_get_bin(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_size(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_init(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_unsafe_setN(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_bsr_inv(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_setN(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_try_clearNC(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_is_xsetN(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clear(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clear8(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clearNX(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clearNC(",
+        "#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clearN_(",
+        "static MI_BBITMAP_DEBUG_GET_BIN_KEEP",
+        "static MI_BBITMAP_SIZE_KEEP",
+        "static MI_BBITMAP_INIT_KEEP",
+        "static MI_BBITMAP_UNSAFE_SETN_KEEP",
+        "static MI_BBITMAP_BSR_INV_KEEP",
+        "static MI_BBITMAP_SETN_KEEP",
+        "static MI_BBITMAP_TRY_CLEARNC_KEEP",
+        "static MI_BBITMAP_IS_XSETN_KEEP",
+        "static MI_BBITMAP_TRY_FIND_AND_CLEAR_KEEP",
+        "static MI_BBITMAP_TRY_FIND_AND_CLEAR8_KEEP",
+        "static MI_BBITMAP_TRY_FIND_AND_CLEARNX_KEEP",
+        "static MI_BBITMAP_TRY_FIND_AND_CLEARNC_KEEP",
+        "static MI_BBITMAP_TRY_FIND_AND_CLEARN_KEEP",
+    ] {
+        assert!(
+            bitmap_rs.contains(marker),
+            "bbitmap helper boundary marker missing: {marker}"
+        );
+    }
     assert!(
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")

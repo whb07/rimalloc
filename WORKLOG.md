@@ -1773,3 +1773,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.06B` instructions and `15.50B` cycles; Rust about `10.70B` instructions and `16.29B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's `_mi_theap_page_reclaim` helper boundary:
+  - C emits `_mi_theap_page_reclaim` as the standalone helper called from free/fresh allocation paths when reclaiming abandoned pages into a theap.
+  - Rust had the same reclaim body, including `mi_page_queue_push_at_end`, but release dropped the local helper after inlining through reclaim call sites.
+  - Made Rust `_mi_theap_page_reclaim` a C-ABI `#[inline(never)]` helper, retained it through a local `#[used]` function-pointer anchor, and extended release audit coverage for the helper marker, anchor, and queue placement call.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::page::_mi_theap_page_reclaim`, with no dynamic `_mi_theap_page_reclaim` export.
+  - The next local-symbol gap now starts at `_mi_prim_alloc`, `_mi_prim_commit`, `_mi_prim_protect`, `_mi_prim_reset`, `_mi_theap_area_visit_blocks`, and message/libc helpers.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.15s`, Rust `2.11s..2.27s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.05B` instructions and `15.61B` cycles; Rust about `10.67B` instructions and `16.11B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

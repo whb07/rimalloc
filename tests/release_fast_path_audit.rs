@@ -2020,6 +2020,12 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_theap_malloc_zero_ex should keep C's force-inline body and both allocation helpers should retain local definitions"
     );
     assert!(
+        page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_theap_page_reclaim")
+            && page_rs.contains("static MI_THEAP_PAGE_RECLAIM_KEEP")
+            && page_rs.contains("mi_page_queue_push_at_end(theap, pq, page);"),
+        "_mi_theap_page_reclaim should keep C's local abandoned-page reclaim helper boundary"
+    );
+    assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")
             && theap_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_decref")

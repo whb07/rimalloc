@@ -836,8 +836,8 @@ pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) ->
     page
 }
 
-#[inline]
-pub unsafe fn _mi_theap_page_reclaim(theap: *mut mi_theap_t, page: *mut mi_page_t) {
+#[inline(never)]
+pub unsafe extern "C" fn _mi_theap_page_reclaim(theap: *mut mi_theap_t, page: *mut mi_page_t) {
     crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
         mi_page_slice_start(page).cast(),
         MI_PAGE_ALIGN,
@@ -852,6 +852,10 @@ pub unsafe fn _mi_theap_page_reclaim(theap: *mut mi_theap_t, page: *mut mi_page_
     mi_page_queue_push_at_end(theap, pq, page);
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
 }
+
+#[used]
+static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) =
+    _mi_theap_page_reclaim;
 
 #[inline]
 pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {

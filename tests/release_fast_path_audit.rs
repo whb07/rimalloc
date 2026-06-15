@@ -602,6 +602,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     let arena_rs = fs::read_to_string(root.join("src/arena.rs")).expect("read src/arena.rs");
     let arena_meta_rs =
         fs::read_to_string(root.join("src/arena_meta.rs")).expect("read src/arena_meta.rs");
+    let atomic_rs = fs::read_to_string(root.join("src/atomic.rs")).expect("read src/atomic.rs");
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
@@ -1310,6 +1311,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && alloc_aligned_rs
                 .contains("let p = _mi_page_malloc_zero(theap, page, padsize, zero);"),
         "page and aligned allocation should keep C's _mi_page_malloc_zero call boundary"
+    );
+    assert!(
+        atomic_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_atomic_once_enter")
+            && atomic_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_atomic_once_release")
+            && atomic_rs.contains("_mi_atomic_once_release(self.once);"),
+        "atomic once should keep C's enter/release helper boundaries"
     );
     assert!(
         free_rs

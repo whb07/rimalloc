@@ -1500,3 +1500,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.03s..2.05s`, Rust `2.09s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.28B` instructions and `17.80B` cycles; Rust about `11.85B` instructions and `18.20B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's atomic once helper boundaries:
+  - C emits `_mi_atomic_once_enter` and `_mi_atomic_once_release` as standalone local helpers; Rust retained `_mi_atomic_once_enter` but inlined/dropped the release helper in optimized builds.
+  - Marked both Rust atomic once helpers `#[inline(never)]` and extended release audit coverage requiring the enter/release helper boundaries and the scope-drop release call.
+  - Rebuilt release and confirmed Rust now emits local `_mi_atomic_once_enter` and `_mi_atomic_once_release`; init/once call sites route through relocation slots targeting those helpers.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.10s..2.16s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.28B` instructions and `17.99B` cycles; Rust about `11.87B` instructions and `18.15B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

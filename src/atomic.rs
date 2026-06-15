@@ -705,6 +705,7 @@ pub unsafe extern "C" fn mi_lock_done(lock: *mut mi_lock_t) {
     let _ = lock;
 }
 
+#[inline(never)]
 pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> bool {
     let once_tid = (*once).tid.load(Ordering::Acquire);
     if once_tid == 1 {
@@ -729,6 +730,7 @@ pub unsafe extern "C" fn _mi_atomic_once_enter(once: *mut mi_atomic_once_t) -> b
     }
 }
 
+#[inline(never)]
 pub unsafe extern "C" fn _mi_atomic_once_release(once: *mut mi_atomic_once_t) {
     if (*once).tid.load(Ordering::Acquire) > 1 {
         (*once).tid.store(1, Ordering::Release);

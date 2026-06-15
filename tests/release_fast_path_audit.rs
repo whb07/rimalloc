@@ -147,6 +147,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         fs::read_to_string(root.join("src/arena_meta.rs")).expect("read src/arena_meta.rs");
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
+    let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
     let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
     let theap_rs = fs::read_to_string(root.join("src/theap.rs")).expect("read src/theap.rs");
@@ -384,6 +385,71 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub unsafe extern \"C\" fn _mi_prim_thread_yield",
         ),
         (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_alloc",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_zalloc",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_free",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_free_ex",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_page_size",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_good_alloc_size",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_has_overcommit",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_has_virtual_reserve",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_virtual_address_bits",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_reuse",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_commit",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_commit_ex",
+        ),
+        (
+            "src/os.rs",
+            &os_rs,
+            "pub unsafe extern \"C\" fn _mi_os_purge_ex",
+        ),
+        (
             "src/random.rs",
             &random_rs,
             "pub unsafe extern \"C\" fn _mi_random_split",
@@ -433,10 +499,15 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_random_init(")
             && !internal.contains("pub fn _mi_random_next(")
             && !internal.contains("pub fn _mi_theap_random_next(")
+            && !internal.contains("pub fn _mi_os_alloc(")
+            && !internal.contains("pub fn _mi_os_page_size(")
+            && !internal.contains("pub fn _mi_os_commit(")
+            && !internal.contains("pub fn _mi_os_purge_ex(")
             && !internal.contains("pub static _mi_page_empty:")
             && !internal.contains("pub static _mi_theap_empty:")
             && !internal.contains("pub static _mi_theap_empty_wrong:")
-            && internal.contains("pub(crate) use crate::page_map::{"),
+            && internal.contains("pub(crate) use crate::page_map::{")
+            && internal.contains("pub(crate) use crate::os::{"),
         "page-map internals should be imported through crate paths, not extern declarations"
     );
     assert!(

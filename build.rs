@@ -143,6 +143,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_GUARDED");
     println!("cargo:rerun-if-env-changed=CXX");
     println!("cargo:rustc-check-cfg=cfg(mi_c_malloc_fast)");
+    println!("cargo:rustc-check-cfg=cfg(mi_internal_c_probe)");
 
     if target_os != "windows" {
         compile_cxx_new_shim();

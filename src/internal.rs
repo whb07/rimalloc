@@ -36,6 +36,14 @@ pub(crate) use crate::libc::{
     _mi_strnstr, _mi_toupper, _mi_vsnprintf,
 };
 use crate::options::_mi_error_message_fmt;
+pub(crate) use crate::os::{
+    _mi_os_alloc, _mi_os_canuse_large_page, _mi_os_commit, _mi_os_commit_ex, _mi_os_decommit,
+    _mi_os_free, _mi_os_free_ex, _mi_os_get_aligned_hint, _mi_os_good_alloc_size,
+    _mi_os_guard_page_size, _mi_os_has_overcommit, _mi_os_has_virtual_reserve, _mi_os_init,
+    _mi_os_large_page_size, _mi_os_minimal_purge_size, _mi_os_page_size, _mi_os_protect,
+    _mi_os_purge, _mi_os_purge_ex, _mi_os_reset, _mi_os_reuse, _mi_os_unprotect,
+    _mi_os_virtual_address_bits, _mi_os_zalloc,
+};
 pub(crate) use crate::page::{_mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire};
 pub use crate::page::{
     _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
@@ -546,49 +554,6 @@ unsafe extern "C" {
         usable_pre: *mut usize,
         usable_post: *mut usize,
     ) -> *mut c_void;
-
-    pub fn _mi_os_init();
-    pub fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;
-    pub fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;
-    pub fn _mi_os_free(p: *mut c_void, size: usize, memid: mi_memid_t);
-    pub fn _mi_os_free_ex(
-        p: *mut c_void,
-        size: usize,
-        still_committed: bool,
-        memid: mi_memid_t,
-        subproc: *mut mi_subproc_t,
-    );
-    pub fn _mi_os_page_size() -> usize;
-    pub fn _mi_os_guard_page_size() -> usize;
-    pub fn _mi_os_good_alloc_size(size: usize) -> usize;
-    pub fn _mi_os_has_overcommit() -> bool;
-    pub fn _mi_os_has_virtual_reserve() -> bool;
-    pub fn _mi_os_virtual_address_bits() -> usize;
-    pub fn _mi_os_minimal_purge_size() -> usize;
-    pub fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool;
-    pub fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool;
-    pub fn _mi_os_reuse(p: *mut c_void, size: usize);
-    pub fn _mi_os_commit(p: *mut c_void, size: usize, is_zero: *mut bool) -> bool;
-    pub fn _mi_os_commit_ex(
-        addr: *mut c_void,
-        size: usize,
-        is_zero: *mut bool,
-        stat_size: usize,
-    ) -> bool;
-    pub fn _mi_os_protect(addr: *mut c_void, size: usize) -> bool;
-    pub fn _mi_os_unprotect(addr: *mut c_void, size: usize) -> bool;
-    pub fn _mi_os_purge(p: *mut c_void, size: usize) -> bool;
-    pub fn _mi_os_purge_ex(
-        p: *mut c_void,
-        size: usize,
-        allow_reset: bool,
-        stats_size: usize,
-        commit_fun: Option<mi_commit_fun_t>,
-        commit_fun_arg: *mut c_void,
-    ) -> bool;
-    pub fn _mi_os_get_aligned_hint(try_alignment: usize, size: usize) -> *mut c_void;
-    pub fn _mi_os_canuse_large_page(size: usize, alignment: usize) -> bool;
-    pub fn _mi_os_large_page_size() -> usize;
 
     pub fn _mi_arena_id_none() -> mi_arena_id_t;
     pub fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t;

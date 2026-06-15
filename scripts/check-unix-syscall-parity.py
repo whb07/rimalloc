@@ -61,13 +61,27 @@ MADVISE_RE = re.compile(r"madvise\([^,]+,\s*[^,]+,\s*(?P<advice>[^)]+)\)")
 
 
 def rust_staticlib() -> pathlib.Path:
+    env = os.environ.copy()
+    rustflags = env.get("RUSTFLAGS", "")
+    env["RUSTFLAGS"] = f"{rustflags} --cfg mi_internal_c_probe".strip()
+    target_dir = BUILD_DIR / "rust-target"
     subprocess.run(
-        ["cargo", "rustc", "--lib", "--", "--crate-type", "staticlib"],
+        [
+            "cargo",
+            "rustc",
+            "--target-dir",
+            str(target_dir),
+            "--lib",
+            "--",
+            "--crate-type",
+            "staticlib",
+        ],
         cwd=ROOT,
+        env=env,
         check=True,
     )
     libs = sorted(
-        (ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
+        (target_dir / "debug/deps").glob("libmechanical_mimalloc-*.a"),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

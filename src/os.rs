@@ -139,18 +139,16 @@ pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_has_overcommit() -> bool {
+pub(crate) unsafe extern "C" fn _mi_os_has_overcommit() -> bool {
     unsafe { (*mi_os_mem_config_ptr()).has_overcommit }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_has_virtual_reserve() -> bool {
+pub(crate) unsafe extern "C" fn _mi_os_has_virtual_reserve() -> bool {
     unsafe { (*mi_os_mem_config_ptr()).has_virtual_reserve }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_page_size() -> usize {
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
+pub(crate) unsafe extern "C" fn _mi_os_page_size() -> usize {
     unsafe { (*mi_os_mem_config_ptr()).page_size }
 }
 
@@ -185,8 +183,7 @@ pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
     gsize
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
+pub(crate) unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
     let vbits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
     crate::mi_debug_assert!(vbits <= MI_MAX_VABITS);
     vbits
@@ -200,8 +197,7 @@ pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize)
         && alignment.is_multiple_of(large_page_size)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
+pub(crate) unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
     let align_size = if size < 512 * MI_KiB {
         unsafe { _mi_os_page_size() }
     } else if size < 2 * MI_MiB {
@@ -411,8 +407,7 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_before(
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_commit_ex(
+pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
     addr: *mut c_void,
     size: usize,
     is_zero: *mut bool,
@@ -454,8 +449,11 @@ pub unsafe extern "C" fn _mi_os_commit_ex(
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_commit(addr: *mut c_void, size: usize, is_zero: *mut bool) -> bool {
+pub(crate) unsafe extern "C" fn _mi_os_commit(
+    addr: *mut c_void,
+    size: usize,
+    is_zero: *mut bool,
+) -> bool {
     unsafe { _mi_os_commit_ex(addr, size, is_zero, size) }
 }
 
@@ -531,8 +529,7 @@ pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
+pub(crate) unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
     let mut csize = 0;
     let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
     if csize == 0 {
@@ -549,8 +546,7 @@ pub unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
 
 /// # Safety
 /// `p..p+size` must designate a valid virtual memory range for the active OS primitive layer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_purge_ex(
+pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
     p: *mut c_void,
     size: usize,
     allow_reset: bool,
@@ -665,8 +661,7 @@ const fn mi_memkind_is_os(memkind: crate::internal::mi_memkind_t) -> bool {
     )
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_free_ex(
+pub(crate) unsafe extern "C" fn _mi_os_free_ex(
     addr: *mut c_void,
     size: usize,
     still_committed: bool,
@@ -705,8 +700,8 @@ pub unsafe extern "C" fn _mi_os_free_ex(
     };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
+pub(crate) unsafe extern "C" fn _mi_os_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
     unsafe { _mi_os_free_ex(p, size, true, memid, core::ptr::null_mut()) };
 }
 
@@ -939,8 +934,8 @@ unsafe fn mi_os_ensure_zero(p: *mut c_void, size: usize, memid: *mut mi_memid_t)
     p
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
+pub(crate) unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
     if !memid.is_null() {
         unsafe {
             *memid = _mi_memid_none();
@@ -964,8 +959,7 @@ pub unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *m
     p
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
+pub(crate) unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
     let p = unsafe { _mi_os_alloc(size, memid) };
     unsafe { mi_os_ensure_zero(p, size, memid) }
 }

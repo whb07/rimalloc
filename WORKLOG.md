@@ -672,3 +672,29 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Started the OS helper localization batch:
+  - Benchmark C mimalloc exports no underscore `_mi_os_*` dynamic helper symbols, while Rust still exported thirteen.
+  - The syscall parity script links a static probe against underscore OS and primitive helpers, so this batch adds a script-only `mi_internal_c_probe` cfg that restores exactly those C probe names only for that staticlib build.
+- Localized the OS helper batch by replacing `internal.rs` extern declarations with crate-local `crate::os` re-exports:
+  - OS helpers removed from the public release cdylib surface: `_mi_os_alloc`, `_mi_os_zalloc`, `_mi_os_free`, `_mi_os_free_ex`, `_mi_os_page_size`, `_mi_os_good_alloc_size`, `_mi_os_has_overcommit`, `_mi_os_has_virtual_reserve`, `_mi_os_virtual_address_bits`, `_mi_os_reuse`, `_mi_os_commit`, `_mi_os_commit_ex`, and `_mi_os_purge_ex`.
+  - Normal release cdylib inspection now reports zero global `_mi_os_*` and zero global `_mi_prim_*` helper functions.
+  - Dynamic defined function names dropped from Rust `319` to `290`; dynamic relocations dropped from `1,603` to `1,599`; `R_X86_64_GLOB_DAT` dropped from `99` to `95`; `R_X86_64_RELATIVE` stayed at `1,491`.
+  - `scripts/check-unix-syscall-parity.py` now passes again with the script-only internal C-probe cfg.
+- Focused `cfrac -n=5` after the OS helper-localization batch:
+  - C: `2.70s..2.74s`, RSS `6256..6560` KiB, reclaims `198..200`.
+  - Rust: `2.72s..2.79s`, RSS `6724..6832` KiB, reclaims `208..211`.
+  - Result: wall time still overlaps; the remaining RSS/reclaim tail is not resolved by this linkage cleanup.
+- Full established validation passed after the OS helper-localization batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

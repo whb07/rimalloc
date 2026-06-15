@@ -328,6 +328,7 @@ pub unsafe fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
     ((*tv).tv_sec as mi_msecs_t * 1000) + ((*tv).tv_usec as mi_msecs_t / 1000)
 }
 
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
     if size == 0 {
         return 0;
@@ -564,6 +565,7 @@ unsafe fn unix_mmap(
     p
 }
 
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_alloc(
     hint_addr: *mut c_void,
     size: usize,
@@ -603,6 +605,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc(
 #[inline]
 unsafe fn unix_mprotect_hint(_err: c_int) {}
 
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_commit(
     start: *mut c_void,
     size: usize,
@@ -628,6 +631,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) 
     0
 }
 
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_decommit(
     start: *mut c_void,
     size: usize,
@@ -645,6 +649,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_decommit(
     err
 }
 
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_int {
     static ADVICE: AtomicI32 = AtomicI32::new(MADV_FREE);
     let mut advice = ADVICE.load(Ordering::Relaxed);
@@ -662,6 +667,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) 
     err
 }
 
+#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_protect(
     start: *mut c_void,
     size: usize,

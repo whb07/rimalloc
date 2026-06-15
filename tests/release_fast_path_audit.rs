@@ -1081,6 +1081,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/theap.rs",
             &theap_rs,
+            "pub(crate) unsafe extern \"C\" fn _mi_theap_init",
+        ),
+        (
+            "src/theap.rs",
+            &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_create",
         ),
         (
@@ -1154,6 +1159,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_theap_main_safe(")
             && !internal.contains("pub fn _mi_theap_collect_retired(")
             && !internal.contains("pub fn _mi_theap_collect_abandon(")
+            && !internal.contains("pub fn _mi_theap_init(")
             && !internal.contains("pub fn _mi_theap_free(")
             && !internal.contains("pub fn _mi_theap_incref(")
             && !internal.contains("pub fn _mi_theap_decref(")
@@ -1219,6 +1225,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && theap_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_free"),
         "thread teardown should keep C's heap collect/free call boundaries instead of inlining them into _mi_thread_done"
+    );
+    assert!(
+        theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_init")
+            && theap_rs.contains("_mi_theap_init(theap, heap, tld);\n    theap"),
+        "_mi_theap_create should keep C's _mi_theap_init call boundary"
     );
     assert!(
         stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into"),

@@ -1393,3 +1393,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
   - Three-run `perf stat` for the same invocation: C about `11.31B` instructions and `17.88B` cycles; Rust about `11.94B` instructions and `18.28B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, `cargo build --release`, and `git diff --check`.
+- Started matching C's theap creation helper boundary:
+  - C keeps `_mi_theap_init` as a standalone local helper and `_mi_theap_create` calls it, while Rust had inlined the full initialization body into `_mi_theap_create`.
+  - Marked Rust `_mi_theap_init` `#[inline(never)]` and crate-local C ABI so release code keeps the same call boundary without adding a dynamic export.
+  - Added release audit coverage requiring `_mi_theap_create` to call `_mi_theap_init`.
+  - Rebuilt release and confirmed `_mi_theap_init` is a local symbol and `_mi_theap_create` calls it directly.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
+  - Three-run `perf stat` for the same invocation: C about `11.29B` instructions and `17.79B` cycles; Rust about `12.00B` instructions and `18.36B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, `cargo build --release`, and `git diff --check`.

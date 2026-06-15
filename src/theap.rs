@@ -477,7 +477,12 @@ pub unsafe extern "C" fn mi_theap_set_default(theap: *mut mi_theap_t) -> *mut mi
     old
 }
 
-unsafe fn _mi_theap_init(theap: *mut mi_theap_t, heap: *mut mi_heap_t, tld: *mut mi_tld_t) {
+#[inline(never)]
+pub(crate) unsafe extern "C" fn _mi_theap_init(
+    theap: *mut mi_theap_t,
+    heap: *mut mi_heap_t,
+    tld: *mut mi_tld_t,
+) {
     crate::mi_assert_internal!(!theap.is_null());
     crate::mi_assert_internal!(!heap.is_null());
 

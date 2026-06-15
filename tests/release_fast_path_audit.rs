@@ -1510,8 +1510,10 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         init_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_is_main_thread() -> bool")
+            && init_rs.contains("#[inline(always)]\nfn mi_is_main_thread_fast() -> bool")
             && init_rs.contains("let main_tid = MAIN_THREAD_ID.load(Ordering::Acquire);")
             && init_rs.contains("main_tid == 0 || main_tid == current_thread_id()")
+            && init_rs.contains("pub extern \"C\" fn _mi_is_main_thread() -> bool {\n    mi_is_main_thread_fast()\n}")
             && init_rs.contains("#[inline(never)]\npub(crate) extern \"C\" fn _mi_preloading() -> bool")
             && init_rs.contains("OS_PRELOADING.load(Ordering::Relaxed)")
             && prim_rs.contains("#[cfg(mi_c_malloc_fast)]\ncore::arch::global_asm!(")
@@ -2407,6 +2409,20 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         init_rs.contains("#[inline(always)]\nunsafe fn _mi_thread_init_theap_default()"),
         "thread default-heap initialization should stay inlined like C's static helper"
+    );
+    let thread_default_start = init_rs
+        .find("#[inline(always)]\nunsafe fn _mi_thread_init_theap_default()")
+        .expect("find _mi_thread_init_theap_default");
+    let thread_default_end = init_rs[thread_default_start..]
+        .find("\n}\n\n#[unsafe(no_mangle)]")
+        .map(|offset| thread_default_start + offset)
+        .expect("find end of _mi_thread_init_theap_default");
+    let thread_default_body = &init_rs[thread_default_start..thread_default_end];
+    assert!(
+        thread_default_body.contains("if mi_is_main_thread_fast() {")
+            && thread_default_body.contains("let tld = mi_tld_alloc_non_main(")
+            && !thread_default_body.contains("_mi_is_main_thread()"),
+        "thread default-heap initialization should inline C's main-thread predicate body and avoid a second main-thread check on the non-main branch"
     );
     assert!(
         init_rs.contains("crate::threadlocal::_mi_thread_locals_init();")

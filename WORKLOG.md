@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing thread-lifecycle parity after `5db47f0`:
+  - Fresh user-space perf on `mleak 100` still shows a small Rust allocator-side thread-init tail. A concrete drift is that release C inlines the `_mi_is_main_thread` predicate into the static `_mi_thread_init_theap_default`/`mi_tld_alloc` path, while Rust preserved the helper call in those inlined initialization branches.
+  - Added an always-inline `mi_is_main_thread_fast` predicate body and routed `mi_tld_alloc` plus `_mi_thread_init_theap_default` through it while keeping the crate-internal/exported `_mi_is_main_thread` helper boundary intact for parity with C's named helper.
+  - Split the non-main TLD allocation body so `_mi_thread_init_theap_default` can branch exactly once on the main-thread predicate, matching the optimized C release path instead of re-checking inside `mi_tld_alloc`.
+  - Extended `tests/release_fast_path_audit.rs` to require the inline predicate body and reject `_mi_is_main_thread()` calls or a second main-thread check inside `_mi_thread_init_theap_default`.
+  - Artifact check: release `mi_thread_init` no longer calls `_mi_is_main_thread` on the default-theap path and no longer repeats the main-thread predicate before non-main TLD allocation; the named `_mi_is_main_thread` helper remains as a local symbol.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Focused `mleak 100` benchmark after copying the fresh release cdylib:
+    - C `2.04s..2.05s`; Rust `2.10s..2.13s`.
+    - `perf stat`: C `10.27B` instructions / `15.90B` cycles; Rust `10.60B` instructions / `16.50B` cycles.
 - Continuing `mleak 100` stats-merge parity after `ed6bf09`:
   - Fresh user-space perf on the current release artifact still shows a Rust allocator-side tail in thread churn: Rust samples hit `mechanical_mimalloc::stats::mi_stats_add` more heavily than C's `mi_stats_add.part.0`, alongside matched page faults.
   - Disassembly found a concrete stats aggregation drift. C `mi_stats_add` only aggregates `malloc_bins` when `MI_STAT > 1`, always aggregates `page_bins`, and does not aggregate `chunk_bins` in this helper. Rust was aggregating `malloc_bins`, `page_bins`, and `chunk_bins` unconditionally, causing extra release thread-stats merge work even though detailed allocation-bin stats compile out.

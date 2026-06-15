@@ -828,10 +828,15 @@ pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
 #[used]
 static MI_THREAD_ID_KEEP: extern "C" fn() -> mi_threadid_t = _mi_thread_id;
 
-#[inline(never)]
-pub extern "C" fn _mi_is_main_thread() -> bool {
+#[inline(always)]
+fn mi_is_main_thread_fast() -> bool {
     let main_tid = MAIN_THREAD_ID.load(Ordering::Acquire);
     main_tid == 0 || main_tid == current_thread_id()
+}
+
+#[inline(never)]
+pub extern "C" fn _mi_is_main_thread() -> bool {
+    mi_is_main_thread_fast()
 }
 
 #[unsafe(no_mangle)]
@@ -1044,7 +1049,7 @@ fn mi_tld_alloc() -> *mut mi_tld_t {
     let main_subproc = ptr::addr_of_mut!(subproc_main)
         .cast::<MiSubprocPrefix>()
         .cast::<mi_subproc_t>();
-    if _mi_is_main_thread() {
+    if mi_is_main_thread_fast() {
         mi_tld_main_init();
         // SAFETY: main-thread bookkeeping mutates only the process-global main subproc counters.
         unsafe {
@@ -1053,32 +1058,38 @@ fn mi_tld_alloc() -> *mut mi_tld_t {
             ptr::addr_of_mut!(tld_main)
         }
     } else {
-        // SAFETY: allocates a fresh zeroed tld block and initializes its local fields.
-        unsafe {
-            let mut memid = mi_memid_t::default();
-            let tld =
-                _mi_meta_zalloc(size_of::<mi_tld_t>(), ptr::addr_of_mut!(memid)).cast::<mi_tld_t>();
-            if tld.is_null() {
-                _mi_error_message(
-                    crate::types::ENOMEM,
-                    c"unable to allocate memory for thread local data\n".as_ptr(),
-                );
-                return ptr::null_mut();
-            }
-            (*tld).memid = memid;
-            (*tld).theaps = ptr::null_mut();
-            mi_lock_init(ptr::addr_of_mut!((*tld).theaps_lock));
-            (*tld).subproc = main_subproc;
-            (*tld).numa_node = crate::prim::_mi_prim_numa_node() as i32;
-            (*tld).thread_id = crate::prim::_mi_prim_thread_id();
-            let subproc = mi_subproc_prefix((*tld).subproc);
-            (*tld).thread_seq = (*subproc)
-                .thread_total_count
-                .fetch_add(1, Ordering::Relaxed);
-            (*tld).is_in_threadpool = crate::prim::_mi_prim_thread_is_in_threadpool();
-            (*subproc).thread_count.fetch_add(1, Ordering::Relaxed);
-            tld
+        mi_tld_alloc_non_main(main_subproc)
+    }
+}
+
+#[allow(dead_code)]
+#[inline(always)]
+fn mi_tld_alloc_non_main(main_subproc: *mut mi_subproc_t) -> *mut mi_tld_t {
+    // SAFETY: allocates a fresh zeroed tld block and initializes its local fields.
+    unsafe {
+        let mut memid = mi_memid_t::default();
+        let tld =
+            _mi_meta_zalloc(size_of::<mi_tld_t>(), ptr::addr_of_mut!(memid)).cast::<mi_tld_t>();
+        if tld.is_null() {
+            _mi_error_message(
+                crate::types::ENOMEM,
+                c"unable to allocate memory for thread local data\n".as_ptr(),
+            );
+            return ptr::null_mut();
         }
+        (*tld).memid = memid;
+        (*tld).theaps = ptr::null_mut();
+        mi_lock_init(ptr::addr_of_mut!((*tld).theaps_lock));
+        (*tld).subproc = main_subproc;
+        (*tld).numa_node = crate::prim::_mi_prim_numa_node() as i32;
+        (*tld).thread_id = crate::prim::_mi_prim_thread_id();
+        let subproc = mi_subproc_prefix((*tld).subproc);
+        (*tld).thread_seq = (*subproc)
+            .thread_total_count
+            .fetch_add(1, Ordering::Relaxed);
+        (*tld).is_in_threadpool = crate::prim::_mi_prim_thread_is_in_threadpool();
+        (*subproc).thread_count.fetch_add(1, Ordering::Relaxed);
+        tld
     }
 }
 
@@ -1620,11 +1631,15 @@ unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
     }
-    if _mi_is_main_thread() {
+    if mi_is_main_thread_fast() {
         mi_heap_main_init();
         theap = ptr::addr_of_mut!(theap_main);
     } else {
-        let tld = mi_tld_alloc();
+        let tld = mi_tld_alloc_non_main(
+            ptr::addr_of_mut!(subproc_main)
+                .cast::<MiSubprocPrefix>()
+                .cast::<mi_subproc_t>(),
+        );
         if tld.is_null() {
             return ptr::null_mut();
         }

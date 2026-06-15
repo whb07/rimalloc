@@ -45,11 +45,14 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         override_rs.contains("#[unsafe(naked)]")
             && override_rs.contains("pub unsafe extern \"C\" fn malloc")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_malloc")
+            && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
+            && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_array_fast_64")
             && override_rs.contains("core::arch::naked_asm!")
             && override_rs.contains("mi_tls_theap_default@GOTTPOFF")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
-            && override_rs.contains("jmp _mi_malloc_generic"),
-        "default Linux malloc override should use the direct naked-assembly TLS fast path"
+            && override_rs.contains("jmp _mi_malloc_generic")
+            && override_rs.contains("jmp mi_new"),
+        "default Linux malloc/new overrides should use direct naked-assembly TLS fast paths"
     );
     assert!(
         alloc_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))")
@@ -65,4 +68,27 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     assert_eq!(offset_of!(mi_page_t, used), 0x10);
     #[cfg(not(feature = "guarded"))]
     assert_eq!(offset_of!(mi_theap_t, pages_free_direct), 0x110);
+}
+
+#[test]
+fn cxx_new_wrappers_export_itanium_abi_symbols() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let override_rs =
+        fs::read_to_string(root.join("src/alloc_override.rs")).expect("read src/alloc_override.rs");
+
+    assert!(
+        override_rs.contains("export_name = \"_Znwm\"")
+            && override_rs.contains("export_name = \"_Znam\"")
+            && override_rs.contains("not(mi_c_malloc_fast)")
+            && override_rs.contains("export_name = \"_ZnwmRKSt9nothrow_t\"")
+            && override_rs.contains("export_name = \"_ZnamRKSt9nothrow_t\""),
+        "64-bit C++ operator new wrappers must export Itanium ABI symbols"
+    );
+    assert!(
+        override_rs.contains("export_name = \"_ZnwmSt11align_val_t\"")
+            && override_rs.contains("export_name = \"_ZnamSt11align_val_t\"")
+            && override_rs.contains("export_name = \"_ZnwmSt11align_val_tRKSt9nothrow_t\"")
+            && override_rs.contains("export_name = \"_ZnamSt11align_val_tRKSt9nothrow_t\""),
+        "aligned C++ operator new wrappers must export Itanium ABI symbols"
+    );
 }

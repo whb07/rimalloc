@@ -89,6 +89,64 @@ pub unsafe extern "C" fn mi_malloc(_size: usize) -> *mut c_void {
     );
 }
 
+#[cfg(mi_c_malloc_fast)]
+#[unsafe(naked)]
+#[unsafe(export_name = "_Znwm")]
+pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
+    core::arch::naked_asm!(
+        "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+        "mov rsi, rdi",
+        "mov rdi, qword ptr fs:[rax]",
+        "test rdi, rdi",
+        "je 2f",
+        "cmp rsi, 1024",
+        "ja 2f",
+        "lea rax, [rsi + 7]",
+        "shr rax, 3",
+        "mov rdx, qword ptr [rdi + rax*8 + 0x110]",
+        "mov rax, qword ptr [rdx + 0x8]",
+        "test rax, rax",
+        "je 2f",
+        "mov rcx, qword ptr [rax]",
+        "add word ptr [rdx + 0x10], 1",
+        "mov qword ptr [rdx + 0x8], rcx",
+        "mov qword ptr [rax], 0",
+        "ret",
+        "2:",
+        "mov rdi, rsi",
+        "jmp mi_new",
+    );
+}
+
+#[cfg(mi_c_malloc_fast)]
+#[unsafe(naked)]
+#[unsafe(export_name = "_Znam")]
+pub unsafe extern "C" fn mi_cxx_new_array_fast_64(_size: usize) -> *mut c_void {
+    core::arch::naked_asm!(
+        "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+        "mov rsi, rdi",
+        "mov rdi, qword ptr fs:[rax]",
+        "test rdi, rdi",
+        "je 2f",
+        "cmp rsi, 1024",
+        "ja 2f",
+        "lea rax, [rsi + 7]",
+        "shr rax, 3",
+        "mov rdx, qword ptr [rdi + rax*8 + 0x110]",
+        "mov rax, qword ptr [rdx + 0x8]",
+        "test rax, rax",
+        "je 2f",
+        "mov rcx, qword ptr [rax]",
+        "add word ptr [rdx + 0x10], 1",
+        "mov qword ptr [rdx + 0x8], rcx",
+        "mov qword ptr [rax], 0",
+        "ret",
+        "2:",
+        "mov rdi, rsi",
+        "jmp mi_new",
+    );
+}
+
 #[macro_export]
 macro_rules! MI_FORWARD3 {
     ($fun:path, $x:expr, $y:expr, $z:expr) => {{
@@ -541,6 +599,10 @@ pub unsafe extern "C" fn mi_cxx_delete_array_aligned_nothrow(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
+#[cfg_attr(
+    all(not(windows), not(mi_c_malloc_fast)),
+    unsafe(export_name = "_Znwm")
+)]
 pub unsafe extern "C" fn mi_cxx_new_64(n: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new(n) }
 }
@@ -549,6 +611,10 @@ pub unsafe extern "C" fn mi_cxx_new_64(n: usize) -> *mut c_void {
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
+#[cfg_attr(
+    all(not(windows), not(mi_c_malloc_fast)),
+    unsafe(export_name = "_Znam")
+)]
 pub unsafe extern "C" fn mi_cxx_new_array_64(n: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new(n) }
 }
@@ -557,6 +623,7 @@ pub unsafe extern "C" fn mi_cxx_new_array_64(n: usize) -> *mut c_void {
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
+#[cfg_attr(not(windows), unsafe(export_name = "_ZnwmRKSt9nothrow_t"))]
 pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
     crate::MI_UNUSED!(tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
@@ -566,6 +633,7 @@ pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
+#[cfg_attr(not(windows), unsafe(export_name = "_ZnamRKSt9nothrow_t"))]
 pub unsafe extern "C" fn mi_cxx_new_array_64_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
     crate::MI_UNUSED!(tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
@@ -575,6 +643,7 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_nothrow(n: usize, tag: mi_nothrow_t
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
+#[cfg_attr(not(windows), unsafe(export_name = "_ZnwmSt11align_val_t"))]
 pub unsafe extern "C" fn mi_cxx_new_64_aligned(n: usize, al: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
@@ -583,6 +652,7 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned(n: usize, al: usize) -> *mut c_vo
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
+#[cfg_attr(not(windows), unsafe(export_name = "_ZnamSt11align_val_t"))]
 pub unsafe extern "C" fn mi_cxx_new_array_64_aligned(n: usize, al: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
@@ -591,6 +661,10 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_aligned(n: usize, al: usize) -> *mu
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
+#[cfg_attr(
+    not(windows),
+    unsafe(export_name = "_ZnwmSt11align_val_tRKSt9nothrow_t")
+)]
 pub unsafe extern "C" fn mi_cxx_new_64_aligned_nothrow(
     n: usize,
     al: usize,
@@ -604,6 +678,10 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned_nothrow(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
+#[cfg_attr(
+    not(windows),
+    unsafe(export_name = "_ZnamSt11align_val_tRKSt9nothrow_t")
+)]
 pub unsafe extern "C" fn mi_cxx_new_array_64_aligned_nothrow(
     n: usize,
     al: usize,
@@ -614,38 +692,48 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_aligned_nothrow(
 }
 
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
+#[cfg_attr(not(windows), unsafe(export_name = "_Znwj"))]
 pub unsafe extern "C" fn mi_cxx_new_32(n: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new(n) }
 }
 
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
+#[cfg_attr(not(windows), unsafe(export_name = "_Znaj"))]
 pub unsafe extern "C" fn mi_cxx_new_array_32(n: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new(n) }
 }
 
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
+#[cfg_attr(not(windows), unsafe(export_name = "_ZnwjRKSt9nothrow_t"))]
 pub unsafe extern "C" fn mi_cxx_new_32_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
     crate::MI_UNUSED!(tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
+#[cfg_attr(not(windows), unsafe(export_name = "_ZnajRKSt9nothrow_t"))]
 pub unsafe extern "C" fn mi_cxx_new_array_32_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
     crate::MI_UNUSED!(tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
+#[cfg_attr(not(windows), unsafe(export_name = "_ZnwjSt11align_val_t"))]
 pub unsafe extern "C" fn mi_cxx_new_32_aligned(n: usize, al: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
+#[cfg_attr(not(windows), unsafe(export_name = "_ZnajSt11align_val_t"))]
 pub unsafe extern "C" fn mi_cxx_new_array_32_aligned(n: usize, al: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
+#[cfg_attr(
+    not(windows),
+    unsafe(export_name = "_ZnwjSt11align_val_tRKSt9nothrow_t")
+)]
 pub unsafe extern "C" fn mi_cxx_new_32_aligned_nothrow(
     n: usize,
     al: usize,
@@ -656,6 +744,10 @@ pub unsafe extern "C" fn mi_cxx_new_32_aligned_nothrow(
 }
 
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
+#[cfg_attr(
+    not(windows),
+    unsafe(export_name = "_ZnajSt11align_val_tRKSt9nothrow_t")
+)]
 pub unsafe extern "C" fn mi_cxx_new_array_32_aligned_nothrow(
     n: usize,
     al: usize,

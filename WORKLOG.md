@@ -193,3 +193,40 @@
   - `cargo rustc --release --lib -- --crate-type cdylib`
   - `cargo clippy --all-targets -- -D warnings`
   - `git diff --check`
+- Committed the release direct-TLS malloc fast path as `dc07835`.
+- Broader repeated mimalloc-bench candidate pass after `dc07835`:
+  - `glibc-simple`: C `1.35s..1.36s`, Rust `1.31s..1.32s`; the small-allocation drift is resolved locally.
+  - `glibc-thread`: C `.419s.. .423s`, Rust `.420s.. .425s`; now within noise.
+  - `mstressN`: C `1.63s..1.64s`, Rust `1.62s..1.64s`; time/RSS are matched.
+  - `rptestN`: C `1.516s..1.653s`, Rust `1.548s..1.709s`; noisy, not yet a clear regression.
+  - `sh8benchN`: C `.23s.. .26s`, Rust `.25s.. .29s`; noisy but still worth watching.
+  - `larsonN`: C `1.991s..2.087s`, Rust `2.151s..2.247s`; stable remaining slowdown.
+  - `larsonN-sized`: C `2.060s..2.176s`, Rust `2.146s..2.218s`; smaller/noisier slowdown.
+- Next target: profile `larsonN` because it is now the clearest remaining benchmark gap after the direct TLS malloc fix.
+- Profiled `larsonN` after `dc07835`:
+  - `perf stat -r 3` showed Rust retired more instructions/branches than C while total sampled cycles were similar; perf elapsed includes Larson's post-run sleep.
+  - Perf samples showed Rust C++ allocation still going through `libstdc++` `operator new`/`operator new[]`, then `malloc@plt`, because the Rust shared library exported delete operators but not the basic C++ new operators.
+- Exported the existing Rust C++ new wrappers with Itanium ABI names and added a release-only direct-TLS fast path for `_Znwm` and `_Znam`.
+  - Source audit now checks the C++ new export names and the direct new fast-path bodies.
+  - Release symbol inspection now shows Rust exports `operator new(unsigned long)` and `operator new[](unsigned long)` directly.
+  - Disassembly shows `operator new[]` now uses the same direct initial-exec TLS freelist path as `malloc`, with slow fallback to `mi_new`.
+- Focused `larson` pass after the C++ new fast path:
+  - `larsonN`: C `2.025s..2.128s`, Rust `2.095s..2.137s`; the previous stable unsized Larson gap is now within observed noise.
+  - `larsonN-sized`: C `1.958s..2.100s`, Rust `2.054s..2.187s`; sized Larson still has a residual slowdown.
+- Next target: profile `larsonN-sized`, likely around the sized C++ delete/free path or remaining queue/free-list differences.
+- Profiled `larsonN-sized` after the C++ new fast path:
+  - Rust and C now both sample primarily in direct `operator new[]`, delete, and page-queue/free-list paths.
+  - Raw symbols show C's `_ZdaPvm` is a tiny jump to `mi_free`, while Rust's `_ZdaPvm` is folded with the inlined free fast path. The remaining difference is smaller and less clearly a missing interposition/export issue.
+- Full established validation passed after the C++ new export/fast-path change:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

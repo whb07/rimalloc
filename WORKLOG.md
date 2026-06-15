@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing abandoned arena claim parity after `0bdd2cf`:
+  - Fresh profiling still showed a Rust-only `mi_arena_try_claim_abandoned` sample. C inlines the abandoned-page lookup inside this bitmap callback; Rust was calling the out-of-line `mi_arena_page_at_slice` helper, adding a prologue/call/return on the abandoned-page claim path.
+  - Patched the callback to keep the shared helper boundary for other callers while computing the page pointer inline here. On Linux x86_64 the release build now uses compile-time `MiArenaPrefix::pages_meta` and `mi_page_t` size constants in inline asm so the emitted code branches like C before computing the fallback `arena + slice_index * MI_ARENA_SLICE_SIZE` address.
+  - Release artifact check: `mi_arena_try_claim_abandoned` now loads `pages_meta`, branches on null, computes either `pages_meta + slice_index * sizeof(mi_page_t)` or the slice-start fallback, then uses `lock btsq` directly. The old call to `mi_arena_page_at_slice` is gone, and the claim no longer expands to a compare-exchange loop.
+  - Extended the release audit to require the callback-local page lookup shape and reject reintroducing the helper call on this path.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo build --release`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `scripts/check-public-symbols.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `cargo test --quiet`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the release cdylib and rechecked `mleak`:
+    - Harness `mleak100`: C `1.02s, 1.03s, 1.02s`; Rust `1.05s, 1.06s, 1.05s`; RSS and minor faults still matched.
+    - Direct `perf stat -r 3 ./mleak 100`: C `10.43B` instructions / `17.77B` cycles; Rust `10.80B` instructions / `18.25B` cycles.
+  - This removes the abandoned-claim helper-call artifact. The remaining gap is still extra Rust user-space work, so the next pass should profile the refreshed artifact and compare the next visible allocator-side sample.
 - Continuing `_mi_theap_init` copy-symbol parity after `ff2808b`:
   - Fresh profiling after the free-wrapper slice showed Rust-side samples in `mi_calloc`, `_mi_theap_init`, and bitmap helpers. The `calloc` hot path was already close, but `_mi_theap_init` still had a concrete artifact mismatch: C loads the empty-theap template and CPU copy threshold through local RIP-relative symbols, while Rust was loading `_mi_theap_empty` and `_mi_cpu_movsb_max` through relocation slots in the release artifact.
   - Patched Linux x86_64 empty-theap address loading to use `lea [rip + _mi_theap_empty]` like the existing `subproc_main` helper. Gave `_mi_cpu_movsb_max`/`_mi_cpu_stosb_max` stable hidden C link names and made the x86 copy helpers load `_mi_cpu_movsb_max` directly from the hidden symbol.

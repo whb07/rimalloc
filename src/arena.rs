@@ -1,7 +1,7 @@
 //! Arena management
 
 use core::ffi::{c_int, c_long, c_void};
-use core::mem::size_of;
+use core::mem::{offset_of, size_of};
 use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
@@ -2026,7 +2026,50 @@ unsafe extern "C" fn mi_arena_try_claim_abandoned(
     arena: *mut mi_arena_t,
     keep_abandoned: *mut bool,
 ) -> bool {
-    let page = unsafe { mi_arena_page_at_slice(arena, slice_index) };
+    crate::mi_assert_internal!(
+        slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
+    );
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    let page = {
+        let index = slice_index;
+        let page_addr: usize;
+        unsafe {
+            core::arch::asm!(
+                "mov {page_addr}, qword ptr [{arena} + {pages_meta_offset}]",
+                "test {page_addr}, {page_addr}",
+                "je 2f",
+                "imul {index}, {index}, {page_size}",
+                "add {page_addr}, {index}",
+                "jmp 3f",
+                "2:",
+                "shl {index}, {slice_shift}",
+                "lea {page_addr}, [{arena} + {index}]",
+                "3:",
+                arena = in(reg) arena,
+                index = inout(reg) index => _,
+                page_addr = out(reg) page_addr,
+                pages_meta_offset = const offset_of!(MiArenaPrefix, pages_meta),
+                page_size = const size_of::<mi_page_t>(),
+                slice_shift = const MI_ARENA_SLICE_SIZE.trailing_zeros(),
+                options(nostack, readonly)
+            );
+        }
+        page_addr as *mut mi_page_t
+    };
+    #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+    let page = {
+        let pages_meta = unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta };
+        if !pages_meta.is_null() {
+            unsafe { pages_meta.add(slice_index) }
+        } else {
+            unsafe {
+                arena
+                    .cast::<u8>()
+                    .add(slice_index * MI_ARENA_SLICE_SIZE)
+                    .cast::<mi_page_t>()
+            }
+        }
+    };
     if !unsafe { mi_page_claim_ownership(page) } {
         unsafe { *keep_abandoned = true };
         false

@@ -2094,6 +2094,20 @@ fn free_path_internals_are_not_dynamic_exports() {
             "arena helper boundary marker missing: {marker}"
         );
     }
+    let claim_start = arena_rs
+        .find("unsafe extern \"C\" fn mi_arena_try_claim_abandoned(")
+        .expect("find mi_arena_try_claim_abandoned");
+    let claim_end = arena_rs[claim_start..]
+        .find("\n}\n\n#[allow(dead_code)]\nunsafe fn mi_heap_ensure_arena_pages(")
+        .map(|offset| claim_start + offset)
+        .expect("find end of mi_arena_try_claim_abandoned");
+    let claim_body = &arena_rs[claim_start..claim_end];
+    assert!(
+        !claim_body.contains("mi_arena_page_at_slice(")
+            && claim_body.contains("pages_meta.add(slice_index)")
+            && claim_body.contains("slice_index * MI_ARENA_SLICE_SIZE"),
+        "abandoned arena page claiming should keep C's inlined page lookup shape"
+    );
     assert!(
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")

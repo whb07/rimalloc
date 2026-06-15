@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing `_mi_theap_init` artifact parity after `84de526`:
+  - Compared C/Rust source and release disassembly for `_mi_theap_init`. The cookie path was already artifact-matched: C source calls `_mi_theap_random_next(theap)`, but the release artifact inlines that wrapper and calls `_mi_random_next(&theap->random)` directly, matching Rust's direct call.
+  - Found a concrete refcount mismatch: C's `mi_theap_t.refcount` is `_Atomic(size_t)`, so `theap->refcount = 1` emits a sequentially consistent atomic store (`xchg` on x86_64). Rust's layout-compatible `usize` field was initialized with a plain store.
+  - Patched `_mi_theap_init` to initialize `refcount` through `mi_atomic_store_explicit(..., mi_memory_order_seq_cst)` and extended the release audit to reject the old plain-store shape.
+  - Artifact check: release `_mi_theap_init` now emits `mov $1, %eax` followed by `xchg %rax, 0x10(%r14)`, matching C's atomic refcount initialization shape. The remaining signed divide artifact difference is LLVM's `shr` after proving `page_full_retain > 0`, while C emits `sar`; this is semantically equivalent under the guard.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo test --quiet`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from a normal final `cargo build --release` artifact and rechecked direct `mleak 100`:
+    - C `2.06s, 2.16s, 2.20s`; Rust `2.19s, 2.11s, 2.10s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.06B` instructions / `15.63B` cycles; Rust `10.44B` instructions / `16.05B` cycles.
+  - This corrects a C atomic contract in `_mi_theap_init`; the remaining benchmark gap still appears as extra Rust user-space work rather than faults.
 - Continuing `mi_stats_add` raw-pointer parity after `5f8cdbe`:
   - The next Rust profile still shows `mi_stats_add` near the top of allocator-side samples. Comparing C/Rust source and release artifacts showed Rust had been constructing `&mut mi_stats_t` / `&mi_stats_t` and iterator references inside `mi_stats_add`, while C's helper is raw-pointer based and explicitly accepts null/same-struct inputs at the aggregate boundary.
   - Patching `mi_stats_add` to keep raw pointer semantics end to end: null/same-struct entry guard, raw field addresses passed to the count/counter merge helpers, and raw pointer bin loops. The reserved arrays and `chunk_bins` remain unmerged to match C.

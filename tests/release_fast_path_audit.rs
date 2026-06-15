@@ -2199,6 +2199,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_theap_init should match C's optimized artifact by calling _mi_random_next directly for the cookie"
     );
     assert!(
+        theap_init_body.contains("mi_atomic_store_explicit(\n        ptr::addr_of_mut!((*theap).refcount),\n        1,\n        mi_memory_order_e::mi_memory_order_seq_cst,\n    );")
+            && !theap_init_body.contains("(*theap).refcount = 1;"),
+        "_mi_theap_init should initialize C's atomic refcount through a seq_cst atomic store"
+    );
+    assert!(
         stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into"),
         "heap cleanup should keep C's stats merge call boundary instead of inlining it into _mi_theap_free"
     );

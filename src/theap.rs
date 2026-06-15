@@ -12,7 +12,7 @@ use core::{ffi::c_void, mem::size_of, ptr};
 use crate::arena::_mi_arenas_collect;
 use crate::atomic::{
     mi_atomic_exchange_ptr_acq_rel, mi_atomic_fetch_sub_explicit, mi_atomic_increment_acq_rel,
-    mi_lock_acquire, mi_lock_release, mi_memory_order_e,
+    mi_atomic_store_explicit, mi_lock_acquire, mi_lock_release, mi_memory_order_e,
 };
 use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::internal::{
@@ -510,7 +510,11 @@ pub(crate) unsafe extern "C" fn _mi_theap_init(
         size_of::<mi_theap_t>(),
     );
     (*theap).memid = memid;
-    (*theap).refcount = 1;
+    mi_atomic_store_explicit(
+        ptr::addr_of_mut!((*theap).refcount),
+        1,
+        mi_memory_order_e::mi_memory_order_seq_cst,
+    );
     (*theap).tld = tld;
     (*theap).heap = heap;
     crate::mi_assert_internal!((*theap).stats.size == size_of::<crate::stats::mi_stats_t>());

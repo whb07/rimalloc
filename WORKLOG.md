@@ -1169,3 +1169,42 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Fixed the stale main-heap random state that caused the renewed `glibc-simple` drift:
+  - Fresh release benchmark before the fix still showed Rust `glibc-simple` slow at `1.64s..1.66s` versus C `1.33s..1.35s`, even though `malloc`/`free` disassembly showed the release naked fast paths were present.
+  - Address probes showed C's first aligned block base varied between processes, while Rust reused the deterministic `0x5c3d4657000` base every run.
+  - `strace -f -e getrandom,openat,read,close` showed C reinitialized the main heap random context during process init, while Rust only randomized worker-thread heaps.
+  - Matched C's `_mi_auto_process_init` tail by calling `crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random))`.
+  - Added release fast-path audit coverage so the process-init weak-random reinit stays present.
+  - Focused post-fix benchmark: `glibc-simple` C `1.33s..1.34s`, Rust `1.29s..1.32s`; `glibc-thread` C `.413s.. .415s`, Rust `.421s.. .427s`; `cfrac` C `2.72s..2.74s`, Rust `2.74s..2.80s`.
+- Repeated the focused and candidate benchmark passes after committing the random fix:
+  - Fresh `-n=5` pass showed `glibc-simple` resolved and Rust-favored (`1.29s..1.30s` vs C `1.33s..1.41s`), `glibc-thread` overlapping/Rust-favored in that run (`.420s.. .422s` vs C `.422s.. .436s`), and `cfrac` overlapping (`2.72s..2.74s` vs C `2.70s..2.75s`).
+  - Broader candidate sweep showed most historical outliers overlapping: `alloc-test1`, `alloc-testN`, `sh8benchN`, `larsonN`, `larsonN-sized`, and `mstressN`.
+  - `rptestN` was the clearest remaining candidate in that sweep: C `1.451s..1.536s`, Rust `1.574s..1.639s`.
+- Profiled and fixed a C/Rust aligned-allocation wrapper drift exposed by `rptestN`:
+  - `perf stat -r 5` on `rptestN` showed Rust with a small cycle tail but similar instructions and fewer branches/cache misses/minor faults than C.
+  - Flat profiles were dominated by benchmark `memset`, but allocator samples skewed toward Rust aligned allocation (`mi_aligned_alloc`, `mi_theap_malloc_zero_aligned_at_generic`, and `_mi_tls_theap_default_get`).
+  - C `mi_malloc_aligned` directly loads the hidden initial-exec default heap TLS cell and tail-jumps to `mi_theap_malloc_aligned`; Rust still called `_mi_theap_default_get` and carried the fallback path.
+  - Added a release `mi_c_malloc_fast` naked `mi_malloc_aligned` wrapper that reads `mi_tls_theap_default@GOTTPOFF` and tail-jumps to `mi_theap_malloc_aligned`, matching C's default-heap wrapper.
+  - Added release fast-path audit coverage for the direct-TLS aligned wrapper.
+  - Disassembly now shows Rust `mi_malloc_aligned` as the expected direct TLS load, argument shuffle, and jump to `mi_theap_malloc_aligned@plt`.
+  - Focused post-change benchmark (`-n=5 rptest glibc cfrac`):
+    - `rptestN`: C `1.251s..1.555s`, Rust `1.342s..1.637s`; now overlapping, though Rust still has a high tail sample.
+    - `glibc-simple`: C `1.33s..1.36s`, Rust `1.29s..1.30s`.
+    - `glibc-thread`: C `.412s.. .423s`, Rust `.422s.. .424s`; small Rust tail remains.
+    - `cfrac`: C `2.72s..2.77s`, Rust `2.75s..2.82s`; wall time close, Rust minor faults were lower than earlier (`193..197`).
+- Validation after the main-random and aligned-wrapper fixes:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo test --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `cargo build --release`
+  - `git diff --check`
+  - `cargo test --release --quiet` remains blocked before tests run by the known release `no_std` plus prebuilt `core` unwind limitation.

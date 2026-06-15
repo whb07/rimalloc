@@ -202,6 +202,8 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let tls_shim = fs::read_to_string(root.join("src/tls_shim.c")).expect("read src/tls_shim.c");
     let build_rs = fs::read_to_string(root.join("build.rs")).expect("read build.rs");
+    let aligned_rs =
+        fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read src/alloc_aligned.rs");
     let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
     let override_rs =
         fs::read_to_string(root.join("src/alloc_override.rs")).expect("read src/alloc_override.rs");
@@ -268,6 +270,14 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         override_rs.contains("cfg(all(not(windows), not(mi_c_malloc_fast)))")
             && override_rs.contains("export_name = \"malloc\""),
         "Rust malloc override gate must stay paired with the assembly fast override"
+    );
+    assert!(
+        aligned_rs.contains("#[cfg(not(mi_c_malloc_fast))]\n#[unsafe(no_mangle)]")
+            && aligned_rs.contains("#[cfg(mi_c_malloc_fast)]\n#[unsafe(naked)]")
+            && aligned_rs.contains("pub unsafe extern \"C\" fn mi_malloc_aligned")
+            && aligned_rs.contains("mi_tls_theap_default@GOTTPOFF")
+            && aligned_rs.contains("target = sym mi_theap_malloc_aligned"),
+        "release mi_malloc_aligned should load the default heap from direct TLS like C"
     );
     assert!(
         override_rs.contains("#[unsafe(export_name = \"free\")]")

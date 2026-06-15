@@ -331,9 +331,24 @@ pub unsafe extern "C" fn mi_malloc_aligned_at(
     mi_theap_malloc_aligned_at(_mi_theap_default(), size, alignment, offset)
 }
 
+#[cfg(not(mi_c_malloc_fast))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_aligned(size: usize, alignment: usize) -> *mut c_void {
     mi_theap_malloc_aligned(_mi_theap_default(), size, alignment)
+}
+
+#[cfg(mi_c_malloc_fast)]
+#[unsafe(naked)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mi_malloc_aligned(_size: usize, _alignment: usize) -> *mut c_void {
+    core::arch::naked_asm!(
+        "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
+        "mov rdx, rsi",
+        "mov rsi, rdi",
+        "mov rdi, qword ptr fs:[rax]",
+        "jmp {target}",
+        target = sym mi_theap_malloc_aligned,
+    );
 }
 
 #[unsafe(no_mangle)]

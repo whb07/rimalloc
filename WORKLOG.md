@@ -1401,3 +1401,12 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
   - Three-run `perf stat` for the same invocation: C about `11.29B` instructions and `17.79B` cycles; Rust about `12.00B` instructions and `18.36B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, `cargo build --release`, and `git diff --check`.
+- Started matching C's theap init sub-helper boundaries:
+  - C keeps `_mi_theap_options_init` and `_mi_theap_guarded_init` as standalone local helpers called from `_mi_theap_init`; Rust had inlined both into `_mi_theap_init`.
+  - Marked Rust `_mi_theap_options_init` and `_mi_theap_guarded_init` `#[inline(never)]` so release code keeps those C call boundaries without dynamic exports.
+  - Added release audit coverage requiring both boundaries.
+  - Added a non-guarded compiler fence to keep the ret-only `_mi_theap_guarded_init` call from being optimized away; C emits and calls the same empty helper in the non-guarded build.
+  - Rebuilt release and confirmed `_mi_theap_options_init` and `_mi_theap_guarded_init` are local symbols and `_mi_theap_init` calls both.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
+  - Three-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.81B` cycles; Rust about `12.00B` instructions and `18.52B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, `cargo build --release`, and `git diff --check`.

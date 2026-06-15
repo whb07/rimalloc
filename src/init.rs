@@ -928,6 +928,7 @@ pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
     #[cfg(feature = "guarded")]
     {
@@ -950,11 +951,13 @@ pub(crate) unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
     #[cfg(not(feature = "guarded"))]
     {
         let _ = theap;
+        core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
     }
 }
 
 /// # Safety
 /// `theap` must be valid when non-null.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
     if theap.is_null() {
         return;

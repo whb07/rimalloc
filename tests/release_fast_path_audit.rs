@@ -1251,6 +1251,15 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_theap_free should inline C's decref tail while preserving the standalone _mi_theap_decref helper for other call sites"
     );
     assert!(
+        init_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_options_init")
+            && init_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_guarded_init"
+            )
+            && init_rs.contains("core::sync::atomic::compiler_fence"),
+        "_mi_theap_init should keep C's options and guarded-init helper call boundaries"
+    );
+    assert!(
         init_rs.contains("#[inline(always)]\nunsafe fn _mi_thread_init_theap_default()"),
         "thread default-heap initialization should stay inlined like C's static helper"
     );

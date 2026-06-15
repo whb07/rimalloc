@@ -955,6 +955,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub(crate) unsafe extern \"C\" fn _mi_prim_getenv",
         ),
         (
+            "src/libc.rs",
+            &libc_rs,
+            "pub(crate) extern \"C\" fn _mi_popcount_generic",
+        ),
+        (
             "src/prim/unix.rs",
             &prim_unix_rs,
             "pub unsafe extern \"C\" fn _mi_prim_thread_init_auto_done",
@@ -1470,6 +1475,16 @@ fn free_path_internals_are_not_dynamic_exports() {
             && prim_unix_rs.contains("s = getenv(buf.as_ptr());")
             && options_rs.contains("crate::libc::_mi_getenv("),
         "_mi_getenv and _mi_prim_getenv should keep C's environment helper boundaries and option parser dependency"
+    );
+    assert!(
+        libc_rs.contains("#[inline(never)]\npub(crate) extern \"C\" fn _mi_popcount_generic(")
+            && libc_rs.contains("if x <= 1 {\n        return x;")
+            && libc_rs.contains("if !x == 0 {\n        return MI_SIZE_BITS;")
+            && libc_rs.contains("mi_popcount_generic64(x as u64)")
+            && libc_rs.contains(
+                "static MI_POPCOUNT_GENERIC_KEEP: extern \"C\" fn(usize) -> usize = _mi_popcount_generic;"
+            ),
+        "_mi_popcount_generic should keep C's local noinline generic popcount boundary"
     );
     assert!(
         options_rs

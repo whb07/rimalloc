@@ -1673,3 +1673,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.07s..2.21s`, Rust `2.13s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.05B` instructions and `15.65B` cycles; Rust about `10.66B` instructions and `16.17B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's `_mi_popcount_generic` helper boundary:
+  - C emits `_mi_popcount_generic` from `libc.c` as a noinline generic fallback even on targets where `mi_popcount` usually uses compiler builtins.
+  - Rust had the mechanical libc fallback body, but release dropped it because the normal bits layer uses native `count_ones()` on this target.
+  - Marked Rust libc `_mi_popcount_generic` `#[inline(never)]`, retained it through a local `#[used]` function-pointer anchor, and extended release audit coverage for the small/all-ones fast paths and 64-bit generic body.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::libc::_mi_popcount_generic`, with no dynamic `_mi_popcount_generic` export.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.11s..2.11s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.07B` instructions and `15.58B` cycles; Rust about `10.66B` instructions and `16.07B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

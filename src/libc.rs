@@ -390,8 +390,8 @@ pub extern "C" fn _mi_clz_generic(x: usize) -> usize {
     }
 }
 
-#[inline]
-pub extern "C" fn _mi_popcount_generic(x: usize) -> usize {
+#[inline(never)]
+pub(crate) extern "C" fn _mi_popcount_generic(x: usize) -> usize {
     if x <= 1 {
         return x;
     }
@@ -407,6 +407,9 @@ pub extern "C" fn _mi_popcount_generic(x: usize) -> usize {
         mi_popcount_generic64(x as u64)
     }
 }
+
+#[used]
+static MI_POPCOUNT_GENERIC_KEEP: extern "C" fn(usize) -> usize = _mi_popcount_generic;
 
 #[allow(dead_code)]
 pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arguments<'_>) -> i32 {

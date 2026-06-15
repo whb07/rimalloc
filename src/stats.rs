@@ -637,8 +637,8 @@ pub struct mi_heap_print_visit_info_s {
 
 pub type mi_heap_print_visit_info_t = mi_heap_print_visit_info_s;
 
-fn amount_buffer_str(buf: &[c_char; 32]) -> &str {
-    // SAFETY: amount buffers are written only from ASCII format fragments and
+fn c_char_buffer_str(buf: &[c_char]) -> &str {
+    // SAFETY: fixed formatting buffers are written only from ASCII format fragments and
     // always NUL-terminated by `mi_vsnprintf_args`.
     unsafe { str::from_utf8_unchecked(CStr::from_ptr(buf.as_ptr()).to_bytes()) }
 }
@@ -706,7 +706,7 @@ fn mi_printf_amount(
 ) {
     let mut buf = [0 as c_char; 32];
     format_amount(&mut buf, n, unit);
-    let rendered = amount_buffer_str(&buf);
+    let rendered = c_char_buffer_str(&buf);
     if fmt.is_null() {
         _mi_fprintf(out, arg, format_args!("{rendered:>12}"));
         return;
@@ -869,8 +869,13 @@ fn mi_stats_print_bins(
             } else {
                 "H"
             };
-            let label = format!("bin{pagekind:>2}  {i:>3}");
-            mi_stat_print(stat, &label, unit as i64, out, arg);
+            let mut label = [0 as c_char; 64];
+            crate::libc::mi_vsnprintf_args(
+                label.as_mut_ptr(),
+                label.len(),
+                format_args!("bin{pagekind:>2}  {i:>3}"),
+            );
+            mi_stat_print(stat, c_char_buffer_str(&label), unit as i64, out, arg);
         }
     }
     if found {
@@ -1459,9 +1464,11 @@ fn mi_json_buf_print_count_bin(
     } else {
         0
     };
-    mi_json_buf_print(
-        hbuf,
-        &format!(
+    let mut buf = [0 as c_char; 128];
+    crate::libc::mi_vsnprintf_args(
+        buf.as_mut_ptr(),
+        buf.len(),
+        format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"block_size\": {binsize}, \"page_size\": {pagesize} }}{}\n",
             stat.total,
             stat.peak,
@@ -1469,6 +1476,7 @@ fn mi_json_buf_print_count_bin(
             if add_comma { "," } else { "" }
         ),
     );
+    mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
 }
 
 fn mi_json_buf_print_count_cbin(
@@ -1486,9 +1494,11 @@ fn mi_json_buf_print_count_cbin(
         mi_chunkbin_e::MI_CBIN_OTHER => "X",
         _ => " ",
     };
-    mi_json_buf_print(
-        hbuf,
-        &format!(
+    let mut buf = [0 as c_char; 128];
+    crate::libc::mi_vsnprintf_args(
+        buf.as_mut_ptr(),
+        buf.len(),
+        format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"bin\": \"{cbin}\" }}{}\n",
             stat.total,
             stat.peak,
@@ -1496,6 +1506,7 @@ fn mi_json_buf_print_count_cbin(
             if add_comma { "," } else { "" }
         ),
     );
+    mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
 }
 
 fn mi_json_buf_print_count(
@@ -1504,9 +1515,11 @@ fn mi_json_buf_print_count(
     stat: &mi_stat_count_t,
     add_comma: bool,
 ) {
-    mi_json_buf_print(
-        hbuf,
-        &format!(
+    let mut buf = [0 as c_char; 128];
+    crate::libc::mi_vsnprintf_args(
+        buf.as_mut_ptr(),
+        buf.len(),
+        format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {} }}{}\n",
             stat.total,
             stat.peak,
@@ -1514,25 +1527,37 @@ fn mi_json_buf_print_count(
             if add_comma { "," } else { "" }
         ),
     );
+    mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
 }
 
 fn mi_json_buf_print_count_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi_stat_count_t) {
-    mi_json_buf_print(hbuf, &format!("  \"{name}\": "));
+    let mut buf = [0 as c_char; 128];
+    crate::libc::mi_vsnprintf_args(buf.as_mut_ptr(), buf.len(), format_args!("  \"{name}\": "));
+    mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
     mi_json_buf_print_count(hbuf, "", stat, true);
 }
 
 fn mi_json_buf_print_value(hbuf: &mut mi_json_buf_t, name: &str, val: i64) {
-    mi_json_buf_print(hbuf, &format!("  \"{name}\": {val},\n"));
+    let mut buf = [0 as c_char; 128];
+    crate::libc::mi_vsnprintf_args(
+        buf.as_mut_ptr(),
+        buf.len(),
+        format_args!("  \"{name}\": {val},\n"),
+    );
+    mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
 }
 
 fn mi_json_buf_print_size(hbuf: &mut mi_json_buf_t, name: &str, val: usize, add_comma: bool) {
-    mi_json_buf_print(
-        hbuf,
-        &format!(
+    let mut buf = [0 as c_char; 128];
+    crate::libc::mi_vsnprintf_args(
+        buf.as_mut_ptr(),
+        buf.len(),
+        format_args!(
             "    \"{name}\": {val}{}\n",
             if add_comma { "," } else { "" }
         ),
     );
+    mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
 }
 
 fn mi_json_buf_print_counter_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi_stat_counter_t) {

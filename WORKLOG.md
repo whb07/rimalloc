@@ -1010,3 +1010,27 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued stats formatting parity:
+  - Found the remaining `src/stats.rs` `format!` allocation sites in the human stats bin label and the JSON output helpers. C uses stack `char buf[64]`/`char buf[128]` buffers with `_mi_snprintf` for those paths.
+  - Replaced the Rust bin-label `String` construction with a fixed `[c_char; 64]` buffer and replaced JSON `&format!(...)` helpers with fixed `[c_char; 128]` buffers through `mi_vsnprintf_args`.
+  - Generalized the C-string buffer view helper so both 32-byte amount buffers and the new 64/128-byte stats buffers are read without allocating.
+  - Extended the release fast-path audit to reject the old stats bin-label and JSON `format!` fragments and require fixed stack buffers.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - `src/stats.rs` now has no `format!`, `&format!`, `String::new`, or `to_string_lossy` hits.
+  - Rebuilt `target/bench-allocators/libmimalloc-rust.so`; `RELACOUNT` stayed at `1490`, and the largest-symbol profile still shows the broad Rust backtrace/demangle/gimli runtime plus `mi_stats_get_json_from`.
+  - Direct `cfrac` after the stats JSON/bin-label cleanup: C `2.70s..2.75s`, RSS `6084..6564` KiB, minor `201..203`; Rust `2.71s..2.74s`, RSS `6496..6736` KiB, minor `209..213`.
+  - Result: stats output construction now follows C's fixed-buffer pattern across this module, but the remaining `cfrac` RSS/minor-fault tail persists.
+- Full established validation passed after the stats JSON/bin-label cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

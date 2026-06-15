@@ -173,6 +173,17 @@ fn options_state_uses_internal_locks_like_c() {
                 .contains("write!(tprefix, \"thread 0x{:x}: \", _mi_thread_id() as usize)"),
         "message thread prefixes should use C-style bounded stack byte copying"
     );
+    assert!(
+        !options_rs.contains("CStr::from_ptr(fmt).to_string_lossy()")
+            && !options_rs.contains("format_args!(\"{}\", CStr::from_ptr(fmt)")
+            && options_rs.contains("fn mi_vfputs_thread(")
+            && options_rs.contains("fn mi_show_error_message_raw(message: *const c_char)")
+            && options_rs.contains(
+                "mi_vfputs_thread(None, ptr::null_mut(), c\"mimalloc: warning: \".as_ptr(), fmt);"
+            )
+            && options_rs.contains("mi_show_error_message_raw(fmt);"),
+        "C warning/error message shims should route raw C strings without lossy Rust decoding"
+    );
 }
 
 #[test]

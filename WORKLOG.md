@@ -1078,3 +1078,26 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued raw message-output parity:
+  - Found the C-facing `_mi_warning_message` and `_mi_error_message` shims still decoded `fmt` through `CStr::to_string_lossy()` and rebuilt it as Rust `format_args!`. C passes the raw `const char* fmt` through the bounded message printer.
+  - Added a raw `mi_vfputs_thread` path that shares the same C-style thread-prefix construction and routes C string messages directly to `_mi_fputs`.
+  - Added `mi_show_error_message_raw` so `_mi_error_message` keeps C's detailed-message gate before invoking the registered error handler/default handler.
+  - Extended the release fast-path audit to reject the old `CStr::from_ptr(fmt).to_string_lossy()` shim path and require the raw warning/error message route.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Rebuilt `target/bench-allocators/libmimalloc-rust.so`; `RELACOUNT` stayed at `1490`.
+  - Direct `cfrac` after the raw C-message cleanup: C `2.70s..2.72s`, RSS `5580..6284` KiB, minor `200..204`; Rust `2.70s..2.78s`, RSS `6536..6764` KiB, minor `210..212`.
+  - Result: the C warning/error shims no longer allocate/decode through Rust lossy strings, but the remaining `cfrac` RSS/minor-fault tail persists.
+- Full established validation passed after the raw C-message cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

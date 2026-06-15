@@ -880,6 +880,31 @@ fn mi_vfprintf_thread(
     mi_vfprintf(out, arg, prefix, args);
 }
 
+#[allow(dead_code)]
+fn mi_vfputs_thread(
+    out: Option<mi_output_fun>,
+    arg: *mut c_void,
+    prefix: *const c_char,
+    message: *const c_char,
+) {
+    if message.is_null() {
+        return;
+    }
+    if !prefix.is_null() {
+        let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
+        if prefix_len <= 32 && !_mi_is_main_thread() {
+            let mut tprefix = StackMessage::new();
+            let prefix_bytes =
+                unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
+            tprefix.write_bytes(prefix_bytes);
+            let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
+            unsafe { _mi_fputs(out, arg, tprefix.as_c_ptr(), message) };
+            return;
+        }
+    }
+    unsafe { _mi_fputs(out, arg, prefix, message) };
+}
+
 pub(crate) fn _mi_raw_message(args: fmt::Arguments<'_>) {
     mi_vfprintf(None, ptr::null_mut(), ptr::null(), args);
 }
@@ -917,6 +942,26 @@ fn mi_show_error_message(args: fmt::Arguments<'_>) {
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: error: ".as_ptr(), args);
 }
 
+#[allow(dead_code)]
+fn mi_show_error_message_raw(message: *const c_char) {
+    if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
+        if !mi_option_is_enabled(mi_option_t::mi_option_show_errors) {
+            return;
+        }
+        let max_errors = mi_max_error_count.load(Ordering::Acquire);
+        let count = error_count.fetch_add(1, Ordering::AcqRel);
+        if max_errors >= 0 && (count as isize) > max_errors {
+            return;
+        }
+    }
+    mi_vfputs_thread(
+        None,
+        ptr::null_mut(),
+        c"mimalloc: error: ".as_ptr(),
+        message,
+    );
+}
+
 pub(crate) fn _mi_warning_message_fmt(args: fmt::Arguments<'_>) {
     if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
         if !mi_option_is_enabled(mi_option_t::mi_option_show_errors) {
@@ -935,12 +980,17 @@ pub(crate) fn _mi_warning_message_fmt(args: fmt::Arguments<'_>) {
 /// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
-    let args = if fmt.is_null() {
-        format_args!("")
-    } else {
-        format_args!("{}", CStr::from_ptr(fmt).to_string_lossy())
-    };
-    _mi_warning_message_fmt(args);
+    if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
+        if !mi_option_is_enabled(mi_option_t::mi_option_show_errors) {
+            return;
+        }
+        let max_warnings = mi_max_warning_count.load(Ordering::Acquire);
+        let count = warning_count.fetch_add(1, Ordering::AcqRel);
+        if max_warnings >= 0 && (count as isize) > max_warnings {
+            return;
+        }
+    }
+    mi_vfputs_thread(None, ptr::null_mut(), c"mimalloc: warning: ".as_ptr(), fmt);
 }
 
 pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
@@ -958,12 +1008,14 @@ pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
 /// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char) {
-    let args = if fmt.is_null() {
-        format_args!("")
+    mi_show_error_message_raw(fmt);
+    let handler = error_handler_load();
+    let arg = mi_error_arg.load(Ordering::Acquire);
+    if let Some(handler) = handler {
+        unsafe { handler(err, arg) };
     } else {
-        format_args!("{}", CStr::from_ptr(fmt).to_string_lossy())
-    };
-    _mi_error_message_fmt(err, args);
+        mi_error_default(err);
+    }
 }
 
 #[inline]

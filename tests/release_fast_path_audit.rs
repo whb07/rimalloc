@@ -1660,12 +1660,17 @@ fn free_path_internals_are_not_dynamic_exports() {
         "heap delete/destroy should keep C's heap page movement and force-destroy helper boundaries"
     );
     assert!(
-        arena_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_alloc")
+        arena_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_alloc_aligned"
+        ) && arena_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_alloc")
             && arena_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_contain")
             && arena_rs.contains(
                 "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_unsafe_destroy_all"
             )
+            && arena_rs.contains("mi_arenas_try_alloc(")
+            && arena_rs.contains("mi_arena_os_alloc_aligned(")
             && arena_rs.contains("_mi_arenas_alloc_aligned(")
             && arena_rs.contains("mi_arenas_contain_ex(p, ptr::null_mut())")
             && arena_rs.contains("static MI_ARENAS_CONTAIN_KEEP")

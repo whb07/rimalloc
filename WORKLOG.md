@@ -1665,3 +1665,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.07B` instructions and `15.61B` cycles; Rust about `10.66B` instructions and `16.18B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's `_mi_arenas_alloc_aligned` helper boundary:
+  - C emits `_mi_arenas_alloc_aligned` as the local aligned arena allocation wrapper that tries arena slices first and falls back to OS allocation.
+  - Rust had the matching source body and callers, but release inlined the wrapper away.
+  - Marked Rust `_mi_arenas_alloc_aligned` `#[inline(never)]` and extended release audit coverage for the aligned wrapper plus its arena-first and OS-fallback calls.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::arena::_mi_arenas_alloc_aligned`.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.07s..2.21s`, Rust `2.13s..2.13s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.05B` instructions and `15.65B` cycles; Rust about `10.66B` instructions and `16.17B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

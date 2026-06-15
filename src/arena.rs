@@ -1985,6 +1985,7 @@ unsafe fn mi_arena_os_alloc_aligned(
 
 /// # Safety
 /// Internal arena allocator wrapper following the C ABI.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
     heap: *mut mi_heap_t,
     size: usize,

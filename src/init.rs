@@ -1548,6 +1548,7 @@ pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
 
 /// # Safety
 /// `heap` must be null or point to a heap prefix compatible with this crate's local scaffold.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool {
     if heap.is_null() {
         return false;
@@ -1558,12 +1559,16 @@ pub(crate) unsafe extern "C" fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool
 
 /// # Safety
 /// `theap` must be null or point to a valid thread-heap structure.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool {
     unsafe {
         crate::internal::mi_theap_is_initialized(theap)
             && _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))
     }
 }
+
+#[used]
+static MI_IS_THEAP_MAIN_KEEP: unsafe extern "C" fn(*const mi_theap_t) -> bool = _mi_is_theap_main;
 
 #[allow(dead_code)]
 #[inline(always)]

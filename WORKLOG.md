@@ -1528,3 +1528,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.14s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.68B` cycles; Rust about `11.87B` instructions and `18.31B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's main heap/theap predicate helper boundaries:
+  - C emits `_mi_is_heap_main` and `_mi_is_theap_main` as standalone local helpers used by init, heap, page, arena, and theap paths; Rust had matching crate-local predicates but release optimized away both symbols.
+  - Marked both Rust predicates `#[inline(never)]`, added a local function-pointer anchor for the folded `_mi_is_theap_main` helper, and extended release audit coverage requiring the predicate chain plus the major call sites.
+  - Rebuilt release and confirmed Rust now emits local `_mi_is_heap_main` and `_mi_is_theap_main` symbols; major heap/page/arena/theap call sites branch through `_mi_is_heap_main`, and `_mi_is_theap_main` remains retained for C's emitted helper set.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.03s..2.06s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.70B` cycles; Rust about `11.89B` instructions and `18.22B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

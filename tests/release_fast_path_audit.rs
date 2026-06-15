@@ -694,6 +694,19 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_heap_area_init("),
         "heap area visitation should keep C's shared _mi_heap_area_init local helper boundary"
     );
+    assert!(
+        init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_is_heap_main(")
+            && init_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_is_theap_main(")
+            && init_rs.contains("static MI_IS_THEAP_MAIN_KEEP")
+            && init_rs.contains("&& _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))")
+            && heap_rs.contains("if _mi_is_heap_main(heap) {")
+            && heap_rs.contains("if !_mi_is_heap_main(heap) {")
+            && page_rs.contains("(*page).heap = if _mi_is_heap_main(heap) {")
+            && arena_rs.contains("if unsafe { _mi_is_heap_main(heap_from) }")
+            && theap_rs.contains("_mi_is_heap_main(_mi_theap_heap(theap).cast_const())"),
+        "main heap/theap predicates should keep C's local helper boundaries and major callers"
+    );
 
     for (source_name, source, internal_name) in [
         (

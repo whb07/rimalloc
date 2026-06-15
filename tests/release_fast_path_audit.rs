@@ -952,7 +952,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/prim/unix.rs",
             &prim_unix_rs,
-            "pub unsafe extern \"C\" fn _mi_prim_getenv",
+            "pub(crate) unsafe extern \"C\" fn _mi_prim_getenv",
         ),
         (
             "src/prim/unix.rs",
@@ -1456,6 +1456,19 @@ fn free_path_internals_are_not_dynamic_exports() {
             && stats_rs.contains("_mi_fputs(buf.out, buf.arg, ptr::null(), buf.buf);")
             && init_rs.contains("unsafe { _mi_fputs(None, ptr::null_mut(), ptr::null(), msg) };"),
         "_mi_fputs should keep C's local helper boundary and stdout/stderr default-output compatibility"
+    );
+    assert!(
+        libc_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_getenv(")
+            && libc_rs.contains("if name.is_null() || result.is_null() || result_size < 64")
+            && libc_rs.contains("crate::prim::_mi_prim_getenv(name, result, result_size)")
+            && prim_unix_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_getenv(")
+            && prim_unix_rs.contains("for i in 0..10000usize")
+            && prim_unix_rs.contains("_mi_strnicmp(name, s, len) == 0")
+            && prim_unix_rs.contains("if _mi_preloading() {\n        return false;")
+            && prim_unix_rs.contains("s = getenv(buf.as_ptr());")
+            && options_rs.contains("crate::libc::_mi_getenv("),
+        "_mi_getenv and _mi_prim_getenv should keep C's environment helper boundaries and option parser dependency"
     );
     assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_free(")

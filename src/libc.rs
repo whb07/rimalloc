@@ -173,7 +173,7 @@ pub(crate) unsafe extern "C" fn _mi_strnstr(
     ptr::null_mut()
 }
 
-#[inline]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_getenv(
     name: *const c_char,
     result: *mut c_char,

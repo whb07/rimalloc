@@ -1641,3 +1641,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.08B` instructions and `15.62B` cycles; Rust about `10.66B` instructions and `16.27B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's environment helper boundaries:
+  - C emits `_mi_getenv` in `libc.c` and `_mi_prim_getenv` in the Unix primitive layer as standalone local helpers used by option parsing.
+  - Rust had matching source helpers but release inlined the wrapper path away, so neither local helper boundary was emitted.
+  - Marked Rust `_mi_getenv` and Unix `_mi_prim_getenv` `#[inline(never)]` and extended release audit coverage for the wrapper validation, primitive delegation, Unix environ/getenv fallback logic, and option parser dependency.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::libc::_mi_getenv` and `mechanical_mimalloc::prim::unix::_mi_prim_getenv`, with no dynamic exports for either helper.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.10s`, Rust `2.12s..2.25s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.04B` instructions and `15.51B` cycles; Rust about `10.64B` instructions and `16.12B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

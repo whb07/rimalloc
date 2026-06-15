@@ -948,6 +948,7 @@ pub unsafe extern "C" fn mi_get_environ() -> *mut *mut c_char {
     environ
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_getenv(
     name: *const c_char,
     result: *mut c_char,

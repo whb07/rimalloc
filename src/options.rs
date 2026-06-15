@@ -1025,6 +1025,7 @@ fn mi_show_error_message_raw(message: *const c_char) {
     );
 }
 
+#[inline(never)]
 pub(crate) fn _mi_warning_message_fmt(args: fmt::Arguments<'_>) {
     if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
         if !mi_option_is_enabled(mi_option_t::mi_option_show_errors) {
@@ -1041,6 +1042,7 @@ pub(crate) fn _mi_warning_message_fmt(args: fmt::Arguments<'_>) {
 
 /// # Safety
 /// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
+#[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
     if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
@@ -1056,6 +1058,7 @@ pub(crate) unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
     mi_vfputs_thread(None, ptr::null_mut(), c"mimalloc: warning: ".as_ptr(), fmt);
 }
 
+#[inline(never)]
 pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
     mi_show_error_message(args);
     let handler = error_handler_load();
@@ -1069,6 +1072,7 @@ pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
 
 /// # Safety
 /// Matches the internal C helper surface for static C probes. Extra varargs are ignored here.
+#[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char) {
     mi_show_error_message_raw(fmt);
@@ -1080,6 +1084,15 @@ pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char
         mi_error_default(err);
     }
 }
+
+#[used]
+static MI_WARNING_MESSAGE_FMT_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_warning_message_fmt;
+#[used]
+static MI_WARNING_MESSAGE_KEEP: unsafe extern "C" fn(*const c_char) = _mi_warning_message;
+#[used]
+static MI_ERROR_MESSAGE_FMT_KEEP: for<'a> fn(c_int, fmt::Arguments<'a>) = _mi_error_message_fmt;
+#[used]
+static MI_ERROR_MESSAGE_KEEP: unsafe extern "C" fn(c_int, *const c_char) = _mi_error_message;
 
 #[inline]
 fn build_mimalloc_env_name(buf: &mut [u8; 65], suffix: &[u8]) -> bool {

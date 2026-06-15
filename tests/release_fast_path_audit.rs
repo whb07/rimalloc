@@ -1692,6 +1692,27 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_trace_message and _mi_verbose_message should keep C's local message helper boundaries without stale extern declarations"
     );
     assert!(
+        options_rs.contains(
+            "#[inline(never)]\npub(crate) fn _mi_warning_message_fmt(args: fmt::Arguments<'_>)"
+        ) && options_rs.contains(
+            "#[inline(never)]\n#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]\npub(crate) unsafe extern \"C\" fn _mi_warning_message(fmt: *const c_char)"
+        ) && options_rs.contains(
+            "static MI_WARNING_MESSAGE_FMT_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_warning_message_fmt;"
+        ) && options_rs.contains(
+            "static MI_WARNING_MESSAGE_KEEP: unsafe extern \"C\" fn(*const c_char) = _mi_warning_message;"
+        ) && options_rs.contains(
+            "#[inline(never)]\npub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>)"
+        ) && options_rs.contains(
+            "#[inline(never)]\n#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]\npub(crate) unsafe extern \"C\" fn _mi_error_message(err: c_int, fmt: *const c_char)"
+        ) && options_rs.contains(
+            "static MI_ERROR_MESSAGE_FMT_KEEP: for<'a> fn(c_int, fmt::Arguments<'a>) = _mi_error_message_fmt;"
+        ) && options_rs.contains(
+            "static MI_ERROR_MESSAGE_KEEP: unsafe extern \"C\" fn(c_int, *const c_char) = _mi_error_message;"
+        ) && !internal.contains("pub fn _mi_warning_message(")
+            && !internal.contains("pub fn _mi_error_message("),
+        "_mi_warning_message and _mi_error_message should keep C's local message helper boundaries without stale extern declarations"
+    );
+    assert!(
         os_rs.contains(
             "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_has_overcommit()"
         ) && os_rs.contains(

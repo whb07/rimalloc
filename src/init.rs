@@ -1564,14 +1564,11 @@ pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
 }
 
 /// # Safety
-/// `subproc` must be null or point to a valid local subproc prefix.
+/// `subproc` must point to a valid local subproc prefix.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     subproc: *mut mi_subproc_t,
 ) -> *mut mi_heap_t {
-    if subproc.is_null() {
-        return ptr::null_mut();
-    }
     let heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if !heap.is_null() {
         return heap;

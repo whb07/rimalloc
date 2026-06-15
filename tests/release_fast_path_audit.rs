@@ -2243,6 +2243,20 @@ fn free_path_internals_are_not_dynamic_exports() {
             && prim_rs.contains("pub unsafe fn _mi_theap_default_raw()"),
         "subproc helpers should stay as C's small local helper boundaries and inspect the raw default TLS cell"
     );
+    let subproc_heap_main_start = init_rs
+        .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_heap_main")
+        .expect("find _mi_subproc_heap_main");
+    let subproc_heap_main_end = init_rs[subproc_heap_main_start..]
+        .find("#[used]\nstatic MI_SUBPROC_HEAP_MAIN_KEEP")
+        .map(|offset| subproc_heap_main_start + offset)
+        .expect("find _mi_subproc_heap_main keep marker");
+    let subproc_heap_main_body = &init_rs[subproc_heap_main_start..subproc_heap_main_end];
+    assert!(
+        subproc_heap_main_body.contains("let heap = unsafe { mi_subproc_heap_main_raw(subproc) };")
+            && !subproc_heap_main_body.contains("subproc.is_null()")
+            && !subproc_heap_main_body.contains("ptr::null_mut()"),
+        "_mi_subproc_heap_main should match C's valid-subproc contract without a Rust-only null fast-path branch"
+    );
     assert!(
         threadlocal_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_init(")
             && threadlocal_rs.contains("static mut mi_thread_locals_lock: mi_lock_t")

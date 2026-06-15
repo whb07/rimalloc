@@ -2,6 +2,24 @@
 
 ## 2026-06-15
 
+- Continuing thread-init helper parity after `fdcb243`:
+  - Fresh `mleak 100` profiling no longer showed `_mi_theap_init` as the main Rust-only tail, but did show Rust samples in `mechanical_mimalloc::init::_mi_subproc_heap_main` that were not visible in the C profile.
+  - Found a concrete source drift: C's `_mi_subproc_heap_main` assumes a valid `mi_subproc_t*` and immediately loads `subproc->heap_main`, while Rust accepted null and branched to `ptr::null_mut()` before the hot load.
+  - Removed the Rust-only null-subproc branch and updated the safety contract to match C's valid-subproc helper. Extended `tests/release_fast_path_audit.rs` to reject a null check or null return inside `_mi_subproc_heap_main`.
+  - Artifact check: release `_mi_subproc_heap_main` now starts with `mov 0x550(%rdi), %rax; test %rax, %rax`, matching C's fast path shape.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the validated release cdylib and rechecked direct `./mleak 100`:
+    - C `2.04s, 2.05s, 2.10s`; Rust `2.10s, 2.11s, 2.11s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.76B` instructions / `17.02B` cycles; Rust `11.02B` instructions / `17.57B` cycles.
 - Continuing `_mi_theap_init` parity after `5ba34d6`:
   - Fresh profile showed a small Rust-only sample in `mechanical_mimalloc::theap::_mi_theap_init`, so I compared C and Rust release disassembly for the thread-heap initialization path.
   - Found concrete codegen drift: Rust retained random helper function-pointer anchors and public crate stats helper re-exports, which made `_mi_theap_init` call `_mi_random_init`, `_mi_random_split`, `_mi_theap_random_next`, and `__mi_stat_increase_mt` through local relocation slots. C's release artifact calls `_mi_random_init`, `_mi_random_split`, `_mi_random_next`, and `__mi_stat_increase_mt` directly.

@@ -2,6 +2,24 @@
 
 ## 2026-06-15
 
+- Continuing `mleak 100` stats-merge parity after `ed6bf09`:
+  - Fresh user-space perf on the current release artifact still shows a Rust allocator-side tail in thread churn: Rust samples hit `mechanical_mimalloc::stats::mi_stats_add` more heavily than C's `mi_stats_add.part.0`, alongside matched page faults.
+  - Disassembly found a concrete stats aggregation drift. C `mi_stats_add` only aggregates `malloc_bins` when `MI_STAT > 1`, always aggregates `page_bins`, and does not aggregate `chunk_bins` in this helper. Rust was aggregating `malloc_bins`, `page_bins`, and `chunk_bins` unconditionally, causing extra release thread-stats merge work even though detailed allocation-bin stats compile out.
+  - Updated Rust `mi_stats_add` to gate `malloc_bins` with `MI_STAT > 1`, keep `page_bins` aggregation, and remove `chunk_bins` aggregation from this helper to match C.
+  - Extended `tests/release_fast_path_audit.rs` to lock the `mi_stats_add` release bin-stat gates and reject the old `chunk_bins` merge loop.
+  - Artifact check: release `mi_stats_add` shrank from about `0xa10` bytes to `0x7c0`; C `mi_stats_add.part.0` is `0x755`. The release disassembly now has the single page-bin loop at offset `0x990` and no unconditional `malloc_bins`/`chunk_bins` loops.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `scripts/check-behavioral-parity.py`
+  - Focused `mleak 100` benchmark after copying the fresh release cdylib:
+    - C `2.03s..2.06s`; Rust `2.09s..2.11s`.
+    - `perf stat`: C `11.48B` instructions / `18.11B` cycles; Rust `11.80B` instructions / `18.60B` cycles.
 - Continuing TLS/layout parity work after `56b5a71`:
   - Focused `mleak 100` profiling still shows Rust doing more thread-lifecycle work than C: C `11.94B` instructions / `18.78B` cycles, Rust `12.52B` instructions / `19.48B` cycles in the refreshed `perf stat` run.
   - ELF inspection found a concrete TLS layout mismatch: C's `PT_TLS` has `memsz 0x21` and a 1-byte local TLS `recurse` flag, while Rust had `memsz 0x28` due to a 4-byte `mi_tls_recurse` shim cell.

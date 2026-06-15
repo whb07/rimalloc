@@ -29,8 +29,8 @@ use crate::prim::{
     _mi_heap_theap_peek, _mi_prim_clock_now, _mi_prim_process_info, _mi_theap_default,
 };
 use crate::types::{
-    MI_BIN_COUNT, MI_MALLOC_VERSION, mi_heap_t, mi_heap_visit_fun, mi_output_fun, mi_page_t,
-    mi_process_info_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
+    MI_BIN_COUNT, MI_MALLOC_VERSION, MI_STAT, mi_heap_t, mi_heap_visit_fun, mi_output_fun,
+    mi_page_t, mi_process_info_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
 };
 
 pub const MI_STAT_VERSION: usize = 5;
@@ -520,13 +520,12 @@ unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t
     {
         mi_stat_counter_add_mt(dst, add);
     }
-    for (dst, add) in stats.malloc_bins.iter_mut().zip(src.malloc_bins.iter()) {
-        mi_stat_count_add_mt(dst, add);
+    if MI_STAT > 1 {
+        for (dst, add) in stats.malloc_bins.iter_mut().zip(src.malloc_bins.iter()) {
+            mi_stat_count_add_mt(dst, add);
+        }
     }
     for (dst, add) in stats.page_bins.iter_mut().zip(src.page_bins.iter()) {
-        mi_stat_count_add_mt(dst, add);
-    }
-    for (dst, add) in stats.chunk_bins.iter_mut().zip(src.chunk_bins.iter()) {
         mi_stat_count_add_mt(dst, add);
     }
 }

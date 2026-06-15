@@ -1702,8 +1702,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             "static MI_STATS_ADD_KEEP: unsafe extern \"C\" fn(*mut mi_stats_t, *const mi_stats_t) = mi_stats_add;"
         ) && stats_rs.contains(
             "unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };"
-        ),
-        "mi_stats_add should keep C's local aggregate helper boundary"
+        ) && stats_rs.contains(
+            "if MI_STAT > 1 {\n        for (dst, add) in stats.malloc_bins.iter_mut().zip(src.malloc_bins.iter())"
+        )
+            && stats_rs.contains("for (dst, add) in stats.page_bins.iter_mut().zip(src.page_bins.iter())")
+            && !stats_rs.contains("stats.chunk_bins.iter_mut().zip(src.chunk_bins.iter())"),
+        "mi_stats_add should keep C's local aggregate helper boundary and release bin-stat gates"
     );
     assert!(
         options_rs

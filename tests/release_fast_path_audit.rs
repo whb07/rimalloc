@@ -307,6 +307,8 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let tls_shim = fs::read_to_string(root.join("src/tls_shim.c")).expect("read src/tls_shim.c");
+    let tls_recurse_shim = fs::read_to_string(root.join("src/tls_recurse_shim.c"))
+        .expect("read src/tls_recurse_shim.c");
     let build_rs = fs::read_to_string(root.join("build.rs")).expect("read build.rs");
     let aligned_rs =
         fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read src/alloc_aligned.rs");
@@ -343,8 +345,19 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && tls_shim.contains("mi_thread_locals")
             && tls_shim.contains("= &mi_thread_locals_empty")
             && tls_shim.contains("_mi_tls_thread_locals_get")
-            && tls_shim.contains("_mi_tls_recurse_get"),
+            && !tls_shim.contains("mi_tls_recurse")
+            && !tls_shim.contains("static __thread unsigned char recurse"),
         "default Linux allocator fast paths should read hidden initial-exec TLS cells like C"
+    );
+    assert!(
+        tls_recurse_shim.contains("static __thread unsigned char recurse")
+            && tls_recurse_shim.contains("tls_model(\"initial-exec\")")
+            && tls_recurse_shim.contains("_mi_tls_recurse_get")
+            && tls_recurse_shim.contains("return recurse != 0;")
+            && tls_recurse_shim.contains("_mi_tls_recurse_set")
+            && tls_recurse_shim.contains("recurse = (value != 0);")
+            && !tls_recurse_shim.contains("int mi_tls_recurse"),
+        "Linux recursion guard TLS should stay byte-sized and isolated after heap TLS like C"
     );
     assert!(
         prim_rs.contains("fn mi_linux_x64_theap_default_get()")
@@ -381,7 +394,10 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     );
     assert!(
         build_rs.contains("target_arch == \"x86_64\"")
-            && build_rs.contains("cargo:rustc-cfg=mi_c_malloc_fast"),
+            && build_rs.contains("cargo:rustc-cfg=mi_c_malloc_fast")
+            && build_rs.contains("src/tls_shim.c")
+            && build_rs.contains("src/tls_recurse_shim.c")
+            && build_rs.contains(".arg(&tls_obj)\n        .arg(&recurse_obj)"),
         "assembly malloc fast override must be limited to the supported target"
     );
     assert!(

@@ -68,24 +68,37 @@ fn compile_cxx_new_shim() {
 
 fn compile_tls_shim() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set by cargo"));
-    let obj = out_dir.join("tls_shim.o");
+    let tls_obj = out_dir.join("tls_shim.o");
+    let recurse_obj = out_dir.join("tls_recurse_shim.o");
     let lib = out_dir.join("libmechanical_mimalloc_tls_shim.a");
 
     let status = Command::new("cc")
         .arg("-c")
         .arg("src/tls_shim.c")
         .arg("-o")
-        .arg(&obj)
+        .arg(&tls_obj)
         .arg("-O3")
         .arg("-fPIC")
         .status()
         .expect("failed to run cc for TLS shim");
     assert!(status.success(), "cc failed to compile TLS shim");
 
+    let status = Command::new("cc")
+        .arg("-c")
+        .arg("src/tls_recurse_shim.c")
+        .arg("-o")
+        .arg(&recurse_obj)
+        .arg("-O3")
+        .arg("-fPIC")
+        .status()
+        .expect("failed to run cc for TLS recurse shim");
+    assert!(status.success(), "cc failed to compile TLS recurse shim");
+
     let status = Command::new("ar")
         .arg("crus")
         .arg(&lib)
-        .arg(&obj)
+        .arg(&tls_obj)
+        .arg(&recurse_obj)
         .status()
         .expect("failed to run ar for TLS shim");
     assert!(status.success(), "ar failed to archive TLS shim");
@@ -137,6 +150,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/track_shim.c");
     println!("cargo:rerun-if-changed=src/cxx_new_shim.cpp");
     println!("cargo:rerun-if-changed=src/tls_shim.c");
+    println!("cargo:rerun-if-changed=src/tls_recurse_shim.c");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_VALGRIND");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_ASAN");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_SECURE");

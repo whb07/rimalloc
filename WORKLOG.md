@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing TLS/layout parity work after `56b5a71`:
+  - Focused `mleak 100` profiling still shows Rust doing more thread-lifecycle work than C: C `11.94B` instructions / `18.78B` cycles, Rust `12.52B` instructions / `19.48B` cycles in the refreshed `perf stat` run.
+  - ELF inspection found a concrete TLS layout mismatch: C's `PT_TLS` has `memsz 0x21` and a 1-byte local TLS `recurse` flag, while Rust had `memsz 0x28` due to a 4-byte `mi_tls_recurse` shim cell.
+  - Updated the TLS shim so the recursion guard is a byte-sized initial-exec TLS flag named `recurse`, matching C's `static mi_decl_thread bool recurse`, while preserving the Rust `_mi_tls_recurse_get/_set` accessor ABI.
+  - The first source-level byte conversion still produced Rust `.tbss 0x10` because GCC placed the local static flag before `__mi_theap_main` in the same object, forcing alignment padding. Split the recursion guard into `src/tls_recurse_shim.c` and archive it after `src/tls_shim.c` so the final link can place heap TLS before the 1-byte flag like C.
+  - Extended `tests/release_fast_path_audit.rs` to reject the old `int mi_tls_recurse` shape, require the byte-sized recursion guard accessors, and lock the C shim archive ordering that preserves the TLS layout.
+  - Artifact check: `readelf -W -l target/release/libmechanical_mimalloc.so` now shows `PT_TLS filesz 0x18 / memsz 0x21`, and `readelf -SW` shows `.tbss 0x9`, matching C. TLS symbols now place `__mi_theap_main` at offset `0x18` and the 1-byte `recurse` flag at `0x20`.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+  - Focused `mleak 100` benchmark after copying the fresh release cdylib:
+    - C `2.05s, 2.05s, 2.05s`; Rust `2.11s, 2.12s, 2.12s`.
+    - `perf stat`: C `11.46B` instructions / `18.07B` cycles; Rust `12.05B` instructions / `18.67B` cycles.
 - Continuing parity work after `0064858`:
   - The refreshed local-symbol gap shows remaining process/OS/format/string helper drift: `_mi_auto_process_init`, `_mi_auto_process_done`, `_mi_os_numa_node_count`, `unix_mmap_prim_aligned`, `mi_out_num`, `mi_json_buf_print_value`, plus C's exported `strdup`/`strndup` override names.
   - Started a mechanical parity slice to retain those helper boundaries and add the missing Unix `strdup`/`strndup` dynamic exports.

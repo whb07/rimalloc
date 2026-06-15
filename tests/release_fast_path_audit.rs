@@ -1716,13 +1716,24 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && stats_rs.contains(
             "unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };"
         ) && stats_rs.contains(
-            "if MI_STAT > 1 {\n        for (dst, add) in stats.malloc_bins.iter_mut().zip(src.malloc_bins.iter())"
+            "if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src)"
+        ) && stats_rs.contains(
+            "mi_stat_count_add_mt(\n                    ptr::addr_of_mut!((*stats).$field),\n                    ptr::addr_of!((*src).$field),"
+        ) && stats_rs.contains(
+            "mi_stat_counter_add_mt(\n                    ptr::addr_of_mut!((*stats).$field),\n                    ptr::addr_of!((*src).$field),"
+        ) && stats_rs.contains(
+            "if MI_STAT > 1 {\n        let stats_malloc_bins ="
         )
-            && stats_rs.contains("for (dst, add) in stats.page_bins.iter_mut().zip(src.page_bins.iter())")
+            && stats_rs.contains("for i in 0..=MI_BIN_HUGE")
+            && stats_rs.contains("let stats_page_bins =")
+            && !stats_rs.contains("&mut stats.$field")
+            && !stats_rs.contains("&src.$field")
+            && !stats_rs.contains("iter_mut().zip(src.malloc_bins.iter())")
+            && !stats_rs.contains("iter_mut().zip(src.page_bins.iter())")
             && !stats_rs.contains("._stat_reserved\n        .iter_mut()\n        .zip(src._stat_reserved.iter())")
             && !stats_rs.contains("._stat_counter_reserved\n        .iter_mut()\n        .zip(src._stat_counter_reserved.iter())")
             && !stats_rs.contains("stats.chunk_bins.iter_mut().zip(src.chunk_bins.iter())"),
-        "mi_stats_add should keep C's local aggregate helper boundary, release bin-stat gates, and leave reserved extension arrays untouched"
+        "mi_stats_add should keep C's raw-pointer aggregate helper boundary, release bin-stat gates, and leave reserved extension arrays untouched"
     );
     assert!(
         options_rs

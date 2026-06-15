@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing `mi_stats_add` raw-pointer parity after `5f8cdbe`:
+  - The next Rust profile still shows `mi_stats_add` near the top of allocator-side samples. Comparing C/Rust source and release artifacts showed Rust had been constructing `&mut mi_stats_t` / `&mi_stats_t` and iterator references inside `mi_stats_add`, while C's helper is raw-pointer based and explicitly accepts null/same-struct inputs at the aggregate boundary.
+  - Patching `mi_stats_add` to keep raw pointer semantics end to end: null/same-struct entry guard, raw field addresses passed to the count/counter merge helpers, and raw pointer bin loops. The reserved arrays and `chunk_bins` remain unmerged to match C.
+  - Extended the release audit to reject the old iterator/reference bin merge shape and require the raw-pointer aggregate shape.
+  - Artifact check: release `mi_stats_add` now has explicit same/null entry guards and remains at the expected local helper boundary, but LLVM still lays out the nonzero atomic-add blocks inline instead of GCC's colder branch layout. Treating that as the next code-layout mismatch if benchmark/profile data still points at stats merge.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `./mleak 100`:
+    - C `2.06s, 2.04s, 2.07s`; Rust `2.11s, 2.12s, 2.11s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.72B` instructions / `16.81B` cycles; Rust `11.07B` instructions / `17.14B` cycles.
+  - Follow-up Rust profile still shows `mi_stats_add` at `0.31%`, followed by `_mi_theap_init`, `mi_theap_collect_ex`, and page/arena helpers. The next stats-specific mismatch is the release code layout for nonzero atomic-add blocks.
 - Continuing thread-local teardown parity after `44939ec`:
   - Compared the next visible Rust profile samples against C/Rust release artifacts. `mi_stats_add` still has code-layout drift from C's pointer helper guards, but `_mi_thread_locals_thread_done` showed a smaller direct mismatch in the thread teardown path.
   - C checks `tls != NULL && tls->count > 0`, then calls `mi_free(tls)` directly and resets `mi_thread_locals` to the empty singleton. Rust performed the same outer guard but routed through a private `free_thread_locals` helper that rechecked null/empty/count and left an extra empty-singleton compare in release code.

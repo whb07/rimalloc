@@ -442,92 +442,117 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease(
     mi_stat_adjust(unsafe { &mut *stat }, -(amount as i64));
 }
 
-fn mi_stat_count_add_mt(stat: &mut mi_stat_count_t, src: &mi_stat_count_t) {
-    if ptr::eq(stat, src) {
+fn mi_stat_count_add_mt(stat: *mut mi_stat_count_t, src: *const mi_stat_count_t) {
+    if ptr::eq(stat.cast_const(), src) {
         return;
     }
     // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
     unsafe {
-        mi_atomic_void_addi64_relaxed(&mut stat.total, &src.total);
-        let prev_current = mi_atomic_addi64_relaxed(&mut stat.current, src.current);
-        mi_atomic_maxi64_relaxed(&mut stat.peak, prev_current + src.peak);
+        mi_atomic_void_addi64_relaxed(
+            ptr::addr_of_mut!((*stat).total),
+            ptr::addr_of!((*src).total),
+        );
+        let prev_current =
+            mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).current), (*src).current);
+        mi_atomic_maxi64_relaxed(ptr::addr_of_mut!((*stat).peak), prev_current + (*src).peak);
     }
 }
 
-fn mi_stat_counter_add_mt(stat: &mut mi_stat_counter_t, src: &mi_stat_counter_t) {
-    if ptr::eq(stat, src) {
+fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_counter_t) {
+    if ptr::eq(stat.cast_const(), src) {
         return;
     }
     // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
     unsafe {
-        mi_atomic_void_addi64_relaxed(&mut stat.total, &src.total);
+        mi_atomic_void_addi64_relaxed(
+            ptr::addr_of_mut!((*stat).total),
+            ptr::addr_of!((*src).total),
+        );
     }
 }
 
 #[inline(never)]
 unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
-    if ptr::eq(stats.cast_const(), src) {
+    if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {
         return;
     }
-    let stats = unsafe { &mut *stats };
-    let src = unsafe { &*src };
 
     macro_rules! MI_STAT_COUNT {
         ($field:ident) => {
-            mi_stat_count_add_mt(&mut stats.$field, &src.$field)
+            unsafe {
+                mi_stat_count_add_mt(
+                    ptr::addr_of_mut!((*stats).$field),
+                    ptr::addr_of!((*src).$field),
+                )
+            }
+        };
+    }
+    macro_rules! MI_STAT_COUNTER {
+        ($field:ident) => {
+            unsafe {
+                mi_stat_counter_add_mt(
+                    ptr::addr_of_mut!((*stats).$field),
+                    ptr::addr_of!((*src).$field),
+                )
+            }
         };
     }
 
     MI_STAT_COUNT!(pages);
     MI_STAT_COUNT!(reserved);
     MI_STAT_COUNT!(committed);
-    mi_stat_counter_add_mt(&mut stats.reset, &src.reset);
-    mi_stat_counter_add_mt(&mut stats.purged, &src.purged);
+    MI_STAT_COUNTER!(reset);
+    MI_STAT_COUNTER!(purged);
     MI_STAT_COUNT!(page_committed);
     MI_STAT_COUNT!(pages_abandoned);
     MI_STAT_COUNT!(threads);
     MI_STAT_COUNT!(malloc_normal);
     MI_STAT_COUNT!(malloc_huge);
     MI_STAT_COUNT!(malloc_requested);
-    mi_stat_counter_add_mt(&mut stats.mmap_calls, &src.mmap_calls);
-    mi_stat_counter_add_mt(&mut stats.commit_calls, &src.commit_calls);
-    mi_stat_counter_add_mt(&mut stats.reset_calls, &src.reset_calls);
-    mi_stat_counter_add_mt(&mut stats.purge_calls, &src.purge_calls);
-    mi_stat_counter_add_mt(&mut stats.arena_count, &src.arena_count);
-    mi_stat_counter_add_mt(&mut stats.malloc_normal_count, &src.malloc_normal_count);
-    mi_stat_counter_add_mt(&mut stats.malloc_huge_count, &src.malloc_huge_count);
-    mi_stat_counter_add_mt(&mut stats.malloc_guarded_count, &src.malloc_guarded_count);
-    mi_stat_counter_add_mt(&mut stats.arena_rollback_count, &src.arena_rollback_count);
-    mi_stat_counter_add_mt(&mut stats.arena_purges, &src.arena_purges);
-    mi_stat_counter_add_mt(&mut stats.pages_extended, &src.pages_extended);
-    mi_stat_counter_add_mt(&mut stats.pages_retire, &src.pages_retire);
-    mi_stat_counter_add_mt(&mut stats.page_searches, &src.page_searches);
-    mi_stat_counter_add_mt(&mut stats.page_searches_count, &src.page_searches_count);
+    MI_STAT_COUNTER!(mmap_calls);
+    MI_STAT_COUNTER!(commit_calls);
+    MI_STAT_COUNTER!(reset_calls);
+    MI_STAT_COUNTER!(purge_calls);
+    MI_STAT_COUNTER!(arena_count);
+    MI_STAT_COUNTER!(malloc_normal_count);
+    MI_STAT_COUNTER!(malloc_huge_count);
+    MI_STAT_COUNTER!(malloc_guarded_count);
+    MI_STAT_COUNTER!(arena_rollback_count);
+    MI_STAT_COUNTER!(arena_purges);
+    MI_STAT_COUNTER!(pages_extended);
+    MI_STAT_COUNTER!(pages_retire);
+    MI_STAT_COUNTER!(page_searches);
+    MI_STAT_COUNTER!(page_searches_count);
     MI_STAT_COUNT!(segments);
     MI_STAT_COUNT!(segments_abandoned);
     MI_STAT_COUNT!(segments_cache);
     MI_STAT_COUNT!(_segments_reserved);
     MI_STAT_COUNT!(heaps);
     MI_STAT_COUNT!(theaps);
-    mi_stat_counter_add_mt(
-        &mut stats.pages_reclaim_on_alloc,
-        &src.pages_reclaim_on_alloc,
-    );
-    mi_stat_counter_add_mt(&mut stats.pages_reclaim_on_free, &src.pages_reclaim_on_free);
-    mi_stat_counter_add_mt(&mut stats.pages_reabandon_full, &src.pages_reabandon_full);
-    mi_stat_counter_add_mt(
-        &mut stats.pages_unabandon_busy_wait,
-        &src.pages_unabandon_busy_wait,
-    );
-    mi_stat_counter_add_mt(&mut stats.heaps_delete_wait, &src.heaps_delete_wait);
+    MI_STAT_COUNTER!(pages_reclaim_on_alloc);
+    MI_STAT_COUNTER!(pages_reclaim_on_free);
+    MI_STAT_COUNTER!(pages_reabandon_full);
+    MI_STAT_COUNTER!(pages_unabandon_busy_wait);
+    MI_STAT_COUNTER!(heaps_delete_wait);
 
     if MI_STAT > 1 {
-        for (dst, add) in stats.malloc_bins.iter_mut().zip(src.malloc_bins.iter()) {
-            mi_stat_count_add_mt(dst, add);
+        let stats_malloc_bins =
+            unsafe { ptr::addr_of_mut!((*stats).malloc_bins).cast::<mi_stat_count_t>() };
+        let src_malloc_bins =
+            unsafe { ptr::addr_of!((*src).malloc_bins).cast::<mi_stat_count_t>() };
+        for i in 0..=MI_BIN_HUGE {
+            mi_stat_count_add_mt(unsafe { stats_malloc_bins.add(i) }, unsafe {
+                src_malloc_bins.add(i)
+            });
         }
     }
-    for (dst, add) in stats.page_bins.iter_mut().zip(src.page_bins.iter()) {
-        mi_stat_count_add_mt(dst, add);
+    let stats_page_bins =
+        unsafe { ptr::addr_of_mut!((*stats).page_bins).cast::<mi_stat_count_t>() };
+    let src_page_bins = unsafe { ptr::addr_of!((*src).page_bins).cast::<mi_stat_count_t>() };
+    for i in 0..=MI_BIN_HUGE {
+        mi_stat_count_add_mt(unsafe { stats_page_bins.add(i) }, unsafe {
+            src_page_bins.add(i)
+        });
     }
 }
 

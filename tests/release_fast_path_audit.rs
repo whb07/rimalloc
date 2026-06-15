@@ -315,6 +315,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_array_fast_64")
             && override_rs.contains("core::arch::naked_asm!")
+            && override_rs.matches("\"endbr64\"").count() >= 5
             && override_rs.contains("mi_tls_theap_default@GOTTPOFF")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
             && override_rs.contains("slow = sym crate::page::_mi_malloc_generic")
@@ -349,6 +350,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         aligned_rs.contains("#[cfg(not(mi_c_malloc_fast))]\n#[unsafe(no_mangle)]")
             && aligned_rs.contains("#[cfg(mi_c_malloc_fast)]\n#[unsafe(naked)]")
             && aligned_rs.contains("pub unsafe extern \"C\" fn mi_malloc_aligned")
+            && aligned_rs.contains("\"endbr64\"")
             && aligned_rs.contains("mi_tls_theap_default@GOTTPOFF")
             && aligned_rs.contains("target = sym mi_theap_malloc_aligned"),
         "release mi_malloc_aligned should load the default heap from direct TLS like C"

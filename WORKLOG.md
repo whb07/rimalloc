@@ -1252,3 +1252,18 @@
   - Moved the Unix fast `free` body into aligned `global_asm!`, emitted `.set mi_free, free`, and gated the Rust `mi_free` function's `no_mangle` so it only exports when the assembly fast path is disabled.
   - Focused `glibc-simple` improved but is not solved: before this symbol-layout change Rust was around `1.63s..1.68s`; after it, Rust is `1.57s..1.59s` versus C `1.33s..1.35s`.
   - Tried the same global-assembly aliasing for `malloc`/`mi_malloc`, but it worsened the focused benchmark (`1.64s..1.67s` plus one `3.00s` outlier), so that experiment was reverted and the previous naked `malloc` wrappers were kept.
+- Matched the release fast-wrapper landing instruction layout:
+  - A temporary split probe that added a mode branch to the benchmark hot loop did not reproduce `glibc-simple`, so it was rejected as performance evidence.
+  - Recompiled an exact standalone copy of `bench-malloc-simple.c`; it reproduced the same focused gap as `mimalloc-bench/out/bench/glibc-simple` (`C 1.34s..1.38s`, `Rust 1.59s..1.60s`).
+  - Compared C/Rust fast wrapper disassembly. C's exported `malloc`, `free`, and `mi_malloc_aligned` entries start with `endbr64` and then the hot body; Rust's naked/global assembly entries entered directly into the hot body.
+  - Added `endbr64` to the Rust release fast entries for `malloc`, `mi_malloc`, C++ `new` wrappers, `free`/`mi_free`, and `mi_malloc_aligned`.
+  - Added release fast-path audit coverage for the landing instruction so future wrapper edits keep this C-like entry shape.
+  - Focused post-change `glibc-simple` pass: C `1.34s..1.35s`, Rust `1.31s..1.32s`.
+  - `mimalloc-bench` harness pass with `-n=3 glibc rptest cfrac alloc-test`:
+    - `glibc-simple`: C `1.34s..1.35s`, Rust `1.30s..1.31s`.
+    - `glibc-thread`: C `.413s.. .424s`, Rust `.425s.. .426s`.
+    - `rptestN`: C `1.432s..1.546s`, Rust `1.449s..1.575s`.
+    - `cfrac`: C `2.69s..2.76s`, Rust `2.70s..2.74s`.
+    - `alloc-test1`: C `2.07s..2.08s`, Rust `2.05s..2.07s`.
+    - `alloc-testN`: C `2.18s..2.19s`, Rust `2.18s..2.20s`.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.

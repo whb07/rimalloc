@@ -34,6 +34,7 @@ macro_rules! MI_FORWARD1 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn malloc(_size: usize) -> *mut c_void {
     core::arch::naked_asm!(
+        "endbr64",
         "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
         "mov rsi, rdi",
         "mov rdi, qword ptr fs:[rax]",
@@ -63,6 +64,7 @@ pub unsafe extern "C" fn malloc(_size: usize) -> *mut c_void {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc(_size: usize) -> *mut c_void {
     core::arch::naked_asm!(
+        "endbr64",
         "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
         "mov rsi, rdi",
         "mov rdi, qword ptr fs:[rax]",
@@ -92,6 +94,7 @@ pub unsafe extern "C" fn mi_malloc(_size: usize) -> *mut c_void {
 #[unsafe(export_name = "_Znwm")]
 pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
     core::arch::naked_asm!(
+        "endbr64",
         "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
         "mov rsi, rdi",
         "mov rdi, qword ptr fs:[rax]",
@@ -119,6 +122,7 @@ pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
 #[unsafe(export_name = "_Znam")]
 pub unsafe extern "C" fn mi_cxx_new_array_fast_64(_size: usize) -> *mut c_void {
     core::arch::naked_asm!(
+        "endbr64",
         "mov rax, qword ptr [rip + mi_tls_theap_default@GOTTPOFF]",
         "mov rsi, rdi",
         "mov rdi, qword ptr fs:[rax]",
@@ -208,6 +212,7 @@ core::arch::global_asm!(
     ".type free,@function",
     ".p2align 4",
     "free:",
+    "endbr64",
     "mov rax, qword ptr [rip + {page_map}]",
     "mov rdx, rdi",
     "mov rsi, rdi",

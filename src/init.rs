@@ -1755,6 +1755,7 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
         _mi_options_post_init();
         OPTIONS_POST_INIT_STATE.store(2, Ordering::Release);
     }
+    unsafe { crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random)) };
 }
 
 #[unsafe(no_mangle)]

@@ -30,6 +30,18 @@
   - `cargo build --release`
 - Validation limitation:
   - `cargo test --release --quiet` currently fails before tests run because the release library is intentionally `no_std`, and Cargo's prebuilt `core` uses unwinding without `-Zbuild-std`. The release cdylib build and benchmark smoke runs still pass.
+- Follow-up on the stale `glibc-simple` regression:
+  - Fresh measurement from the current source still showed Rust `glibc-simple` slow before this fix: C `1.33s..1.35s`, Rust `1.64s..1.66s`.
+  - `malloc`/`free` disassembly showed the release naked fast paths were present and close to C, so the gap was not a missing TLS malloc fast path.
+  - Address probes showed C's aligned allocation hint base changed across processes, while Rust used the same `0x5c3d4657000` first 16-byte block base every run.
+  - `strace -f -e getrandom,openat,read,close` showed C obtained 32 bytes of random data for the main heap before the worker thread, while Rust only obtained random data in the worker thread.
+  - Root cause: C calls `_mi_random_reinit_if_weak(&theap_main.random)` at the end of `_mi_auto_process_init`; Rust was missing that process-init tail and kept deterministic weak main-heap randomness after preloading.
+  - Added the missing Rust call to `crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random))` and extended `tests/release_fast_path_audit.rs` to assert the C process-init random reinit is present.
+  - Post-fix `strace` shows Rust now performs a main-thread 32-byte `getrandom(..., GRND_NONBLOCK)` before the worker thread, and the first block base changes across runs.
+  - Focused mimalloc-bench after the fix:
+    - `glibc-simple`: C `1.33s..1.34s`, Rust `1.29s..1.32s`.
+    - `glibc-thread`: C `.413s.. .415s`, Rust `.421s.. .427s`; small Rust tail remains.
+    - `cfrac`: C `2.72s..2.74s`, Rust `2.74s..2.80s`; small Rust tail/RSS difference remains.
 
 ## 2026-06-14
 

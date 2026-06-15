@@ -287,6 +287,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
 fn aligned_os_hints_are_randomized_like_c_release_builds() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
+    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
 
     assert!(
         os_rs.contains("let mut init = MI_HINT_BASE;")
@@ -298,6 +299,12 @@ fn aligned_os_hints_are_randomized_like_c_release_builds() {
             && os_rs.contains("init += (MI_HINT_ALIGN * ((r >> 17) & 0xFFFFF)) % MI_HINT_AREA;")
             && os_rs.contains("hint.saturating_add(size),\n            init,"),
         "aligned OS allocation hints should randomize the base from the thread heap like C mimalloc"
+    );
+    assert!(
+        init_rs.contains(
+            "crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random))"
+        ),
+        "process initialization should reinitialize a weak main random context like C mimalloc"
     );
 }
 

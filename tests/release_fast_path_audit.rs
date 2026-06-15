@@ -716,6 +716,15 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("} else if unsafe { _mi_meta_is_meta_page(start) }"),
         "meta page debug classification should keep C's _mi_meta_is_meta_page helper boundary"
     );
+    assert!(
+        page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_deferred_free(")
+            && page_rs.contains("(*theap).heartbeat = (*theap).heartbeat.wrapping_add(1);")
+            && page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free))")
+            && page_rs.contains("fun(force, (*theap).heartbeat, arg);")
+            && page_rs.contains("_mi_deferred_free(theap, false);")
+            && theap_rs.contains("_mi_deferred_free(theap, force);"),
+        "deferred free callback dispatch should keep C's _mi_deferred_free helper boundary"
+    );
 
     for (source_name, source, internal_name) in [
         (

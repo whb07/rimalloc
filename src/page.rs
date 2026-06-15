@@ -1421,6 +1421,7 @@ unsafe fn mi_find_free_page(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) ->
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool) {
     (*theap).heartbeat = (*theap).heartbeat.wrapping_add(1);
     let fun_ptr = mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free));

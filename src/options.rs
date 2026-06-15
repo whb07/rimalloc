@@ -169,6 +169,62 @@ macro_rules! mi_stringifyx {
 
 const _MI_STRINGIFYX_SENTINEL: &str = mi_stringifyx!(MI_MALLOC_VERSION);
 
+macro_rules! MI_OPTION_VALUE {
+    ($value:expr) => {
+        AtomicIsize::new($value as isize)
+    };
+}
+
+static OPTION_VALUES: [AtomicIsize; MI_OPTION_COUNT] = [
+    MI_OPTION_VALUE!(MI_DEFAULT_SHOW_ERRORS),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(MI_DEFAULT_VERBOSE),
+    MI_OPTION_VALUE!(1),
+    MI_OPTION_VALUE!(MI_DEFAULT_ARENA_EAGER_COMMIT),
+    MI_OPTION_VALUE!(1),
+    MI_OPTION_VALUE!(MI_DEFAULT_ALLOW_LARGE_OS_PAGES),
+    MI_OPTION_VALUE!(MI_DEFAULT_RESERVE_HUGE_OS_PAGES),
+    MI_OPTION_VALUE!(-1),
+    MI_OPTION_VALUE!(MI_DEFAULT_RESERVE_OS_MEMORY),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(1),
+    MI_OPTION_VALUE!(1000),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(100),
+    MI_OPTION_VALUE!(32),
+    MI_OPTION_VALUE!(32),
+    MI_OPTION_VALUE!(10),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(MI_DEFAULT_ARENA_RESERVE),
+    MI_OPTION_VALUE!(1),
+    MI_OPTION_VALUE!(1),
+    MI_OPTION_VALUE!(MI_DEFAULT_DISALLOW_ARENA_ALLOC),
+    MI_OPTION_VALUE!(400),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(MI_GiB as c_long),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(MI_DEFAULT_GUARDED_SAMPLE_RATE),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(10000),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(2),
+    MI_OPTION_VALUE!(4),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(MI_DEFAULT_PAGEMAP_COMMIT),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(MI_DEFAULT_PAGE_MAX_RECLAIM),
+    MI_OPTION_VALUE!(MI_DEFAULT_PAGE_CROSS_THREAD_MAX_RECLAIM),
+    MI_OPTION_VALUE!(MI_DEFAULT_ALLOW_THP),
+    MI_OPTION_VALUE!(0),
+    MI_OPTION_VALUE!(MI_DEFAULT_ARENA_MAX_OBJECT_SIZE),
+    MI_OPTION_VALUE!(0),
+];
+
 static OPTIONS: Mutex<[mi_option_desc_t; MI_OPTION_COUNT]> = Mutex::new([
     MI_OPTION!(
         MI_DEFAULT_SHOW_ERRORS,
@@ -489,6 +545,16 @@ static mi_error_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 #[inline]
 fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|err| err.into_inner())
+}
+
+#[inline]
+fn option_value_load(idx: usize) -> c_long {
+    OPTION_VALUES[idx].load(Ordering::Relaxed) as c_long
+}
+
+#[inline]
+fn option_value_store(idx: usize, value: c_long) {
+    OPTION_VALUES[idx].store(value as isize, Ordering::Relaxed);
 }
 
 #[inline]
@@ -1090,10 +1156,10 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
 fn mi_option_get_fast_impl(option: mi_option_t) -> c_long {
     let idx = option as usize;
     crate::mi_assert!(idx < MI_OPTION_COUNT);
-    let table = lock_unpoisoned(&OPTIONS);
-    let desc = &table[idx];
-    crate::mi_debug_assert!(desc.option as usize == idx);
-    desc.value
+    if idx >= MI_OPTION_COUNT {
+        return 0;
+    }
+    option_value_load(idx)
 }
 
 #[unsafe(no_mangle)]
@@ -1133,8 +1199,7 @@ pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
         }
     }
 
-    let table = lock_unpoisoned(&OPTIONS);
-    table[idx].value
+    option_value_load(idx)
 }
 
 #[unsafe(no_mangle)]
@@ -1177,6 +1242,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
         let option_kind = table[idx].option;
         table[idx].value = value;
         table[idx].init = mi_option_init_t::MI_OPTION_INITIALIZED;
+        option_value_store(idx, value);
 
         let guarded_min_idx = mi_option_t::mi_option_guarded_min as usize;
         let guarded_max_idx = mi_option_t::mi_option_guarded_max as usize;
@@ -1208,6 +1274,7 @@ pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
     let desc = &mut table[idx];
     if desc.init != mi_option_init_t::MI_OPTION_INITIALIZED {
         desc.value = value;
+        option_value_store(idx, value);
     }
 }
 

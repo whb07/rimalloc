@@ -1,6 +1,7 @@
 use core::ffi::c_void;
 
 use mechanical_mimalloc::mimalloc::*;
+use mechanical_mimalloc::options::_mi_option_get_fast;
 
 #[test]
 fn option_and_callback_exports_link_and_mutate_state() {
@@ -17,12 +18,14 @@ fn option_and_callback_exports_link_and_mutate_state() {
 
         mi_option_set(option, 5);
         assert_eq!(mi_option_get(option), 5);
+        assert_eq!(_mi_option_get_fast(option), 5);
         assert_eq!(mi_option_get_clamp(option, 3, 7), 5);
         assert_eq!(mi_option_get_clamp(option, 6, 7), 6);
         assert_eq!(mi_option_get_size(option), 5);
 
         mi_option_set_enabled(option, false);
         assert_eq!(mi_option_get(option), 0);
+        assert_eq!(_mi_option_get_fast(option), 0);
         mi_option_set_enabled_default(option, true);
         mi_option_set_default(option, original);
         mi_option_set(option, original);
@@ -40,5 +43,6 @@ fn option_and_callback_exports_link_and_mutate_state() {
         core::hint::black_box(print_out);
 
         assert_eq!(mi_option_get(option), original);
+        assert_eq!(_mi_option_get_fast(option), original);
     }
 }

@@ -240,3 +240,7 @@
   - `glibc-simple`: C `1.35s..1.36s`, Rust `1.31s..1.33s`; direct TLS malloc remains ahead locally.
   - `glibc-thread`: C `.418s.. .420s`, Rust `.421s.. .430s`; close, one slower Rust sample.
 - Next target: revisit `mstressN` sys-time/page-reclaim delta, since wall time is now close but kernel work is still higher on Rust in the post-commit sweep.
+- Focused `perf stat -r 3` on `mstressN` after the post-commit sweep did not reproduce the sys/page-reclaim gap:
+  - C: `162.57B` cycles, `42.49B` instructions, `58.6K` minor faults, `1691` context switches, `1.627s` elapsed.
+  - Rust: `162.62B` cycles, `42.52B` instructions, `57.5K` minor faults, `1639` context switches, `1.629s` elapsed.
+  - Result: `mstressN` now appears matched on focused counters; the earlier sys/reclaim delta looks like run-to-run variance.

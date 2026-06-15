@@ -8,7 +8,7 @@
 
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
 use core::cell::Cell;
-use core::ffi::{c_long, c_void};
+use core::ffi::{c_char, c_long, c_void};
 use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
@@ -21,13 +21,14 @@ use crate::atomic::{
 use crate::bits::MI_SIZE_SIZE;
 use crate::heap::_mi_heap_force_destroy;
 use crate::internal::{
-    _mi_allocator_done, _mi_error_message, _mi_meta_free, _mi_meta_zalloc, mi_memid_t, mi_memkind_t,
+    _mi_allocator_done, _mi_allocator_init, _mi_error_message, _mi_meta_free, _mi_meta_zalloc,
+    mi_memid_t, mi_memkind_t,
 };
 #[cfg(any(windows, target_os = "openbsd", target_os = "android"))]
 use crate::options::_mi_error_message_fmt;
 use crate::options::{
-    _mi_options_init, _mi_options_post_init, _mi_warning_message_fmt, mi_option_get,
-    mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
+    _mi_fputs, _mi_options_init, _mi_options_post_init, _mi_verbose_message,
+    _mi_warning_message_fmt, mi_option_get, mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
 };
 use crate::stats::{
     __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into, mi_stat_count_t,
@@ -1827,6 +1828,17 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     {
         _mi_options_post_init();
         OPTIONS_POST_INIT_STATE.store(2, Ordering::Release);
+    }
+    if unsafe { crate::prim::_mi_is_redirected() } {
+        _mi_verbose_message(format_args!("malloc is redirected.\n"));
+    }
+    let mut msg: *const c_char = ptr::null();
+    unsafe { _mi_allocator_init(ptr::addr_of_mut!(msg)) };
+    if !msg.is_null()
+        && (mi_option_is_enabled(mi_option_t::mi_option_verbose)
+            || mi_option_is_enabled(mi_option_t::mi_option_show_errors))
+    {
+        unsafe { _mi_fputs(None, ptr::null_mut(), ptr::null(), msg) };
     }
     unsafe { crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random)) };
 }

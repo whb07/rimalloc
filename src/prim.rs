@@ -518,6 +518,7 @@ pub unsafe extern "C" fn _mi_is_redirected() -> bool {
     false
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) -> bool {
     if !message.is_null() {
         unsafe { *message = ptr::null() };
@@ -525,6 +526,22 @@ pub(crate) unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) 
     true
 }
 
+#[cfg(mi_c_malloc_fast)]
+core::arch::global_asm!(
+    ".hidden _mi_allocator_done",
+    ".type _mi_allocator_done,@function",
+    "_mi_allocator_done:",
+    "ret",
+    ".size _mi_allocator_done, .-_mi_allocator_done",
+);
+
+#[cfg(mi_c_malloc_fast)]
+unsafe extern "C" {
+    pub(crate) fn _mi_allocator_done();
+}
+
+#[cfg(not(mi_c_malloc_fast))]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_allocator_done() {}
 
 #[cfg(test)]

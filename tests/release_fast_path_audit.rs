@@ -1418,6 +1418,30 @@ fn free_path_internals_are_not_dynamic_exports() {
         "lifecycle predicates should keep C's _mi_is_main_thread/_mi_preloading/_mi_is_redirected helper boundaries"
     );
     assert!(
+        prim_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_allocator_init(message: *mut *const c_char) -> bool"
+        ) && prim_rs.contains("unsafe { *message = ptr::null() };")
+            && prim_rs.contains("\".hidden _mi_allocator_done\"")
+            && prim_rs.contains("\"_mi_allocator_done:\"")
+            && prim_rs.contains("pub(crate) fn _mi_allocator_done();")
+            && prim_rs.contains("#[cfg(not(mi_c_malloc_fast))]\n#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_allocator_done()")
+            && options_rs.contains("#[inline(never)]\npub(crate) extern \"C\" fn _mi_options_init()")
+            && options_rs.contains("for i in 0..MI_OPTION_COUNT")
+            && options_rs.contains("mi_max_error_count.store(max_errors as isize, Ordering::Release);")
+            && options_rs.contains("#[inline(never)]\npub(crate) extern \"C\" fn _mi_options_post_init()")
+            && options_rs.contains("mi_add_stderr_output();")
+            && options_rs.contains("mi_options_print();")
+            && init_rs.contains("_mi_options_post_init();")
+            && init_rs.contains("if unsafe { crate::prim::_mi_is_redirected() }")
+            && init_rs.contains("_mi_verbose_message(format_args!(\"malloc is redirected.\\n\"));")
+            && init_rs.contains("let mut msg: *const c_char = ptr::null();")
+            && init_rs.contains("unsafe { _mi_allocator_init(ptr::addr_of_mut!(msg)) };")
+            && init_rs.contains("mi_option_is_enabled(mi_option_t::mi_option_show_errors)")
+            && init_rs.contains("unsafe { _mi_fputs(None, ptr::null_mut(), ptr::null(), msg) };")
+            && init_rs.contains("_mi_allocator_done();"),
+        "process init/done should keep C's allocator/options helper boundaries and redirector hook sequence"
+    );
+    assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_free(")
             && page_rs.contains("mi_page_queue_remove(pq, page);")
             && page_rs.contains("mi_page_set_theap(page, ptr::null_mut());")

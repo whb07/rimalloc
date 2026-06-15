@@ -1515,7 +1515,8 @@ pub unsafe extern "C" fn _mi_assert_fail(
     unsafe { c_abort() };
 }
 
-pub(crate) fn _mi_options_init() {
+#[inline(never)]
+pub(crate) extern "C" fn _mi_options_init() {
     mi_mark_main_thread();
     for i in 0..MI_OPTION_COUNT {
         let option = option_from_index(i);
@@ -1538,7 +1539,8 @@ pub(crate) fn _mi_options_init() {
     }
 }
 
-pub(crate) fn _mi_options_post_init() {
+#[inline(never)]
+pub(crate) extern "C" fn _mi_options_post_init() {
     mi_add_stderr_output();
     if mi_option_is_enabled(mi_option_t::mi_option_verbose) {
         mi_options_print();

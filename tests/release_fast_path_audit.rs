@@ -691,7 +691,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && theap_rs.contains("let bsize = mi_page_block_size(page);")
             && theap_rs.contains("(*area).reserved = (*page).reserved as usize * bsize;")
             && theap_rs.contains("_mi_heap_area_init(ptr::addr_of_mut!(xarea.area), page);")
-            && arena_rs.contains("use crate::theap::_mi_heap_area_init;")
+            && arena_rs.contains("use crate::theap::{")
+            && arena_rs.contains("_mi_heap_area_init")
             && arena_rs.contains("_mi_heap_area_init(ptr::addr_of_mut!(area), page)")
             && !arena_rs.contains("unsafe fn mi_heap_area_init(")
             && !internal.contains("pub fn _mi_heap_area_init("),
@@ -1393,6 +1394,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_theap_free(")
             && !internal.contains("pub fn _mi_theap_incref(")
             && !internal.contains("pub fn _mi_theap_decref(")
+            && !internal.contains("pub fn _mi_theap_area_visit_blocks(")
             && !internal.contains("pub fn _mi_theap_malloc_zero(")
             && !internal.contains("pub fn _mi_theap_malloc_zero_ex(")
             && !internal.contains("pub fn _mi_theap_realloc_zero(")
@@ -2024,6 +2026,17 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("static MI_THEAP_PAGE_RECLAIM_KEEP")
             && page_rs.contains("mi_page_queue_push_at_end(theap, pq, page);"),
         "_mi_theap_page_reclaim should keep C's local abandoned-page reclaim helper boundary"
+    );
+    assert!(
+        theap_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_area_visit_blocks"
+        ) && theap_rs.contains("static MI_THEAP_AREA_VISIT_BLOCKS_KEEP")
+            && theap_rs.contains("mi_get_fast_divisor(bsize, &mut magic, &mut shift);")
+            && arena_rs.contains(
+                "_mi_theap_area_visit_blocks(ptr::addr_of!(area), page, (*vinfo).visitor, (*vinfo).arg)"
+            )
+            && !arena_rs.contains("unsafe fn mi_theap_area_visit_blocks("),
+        "heap and arena block visitation should share C's theap area block visitor helper"
     );
     assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")

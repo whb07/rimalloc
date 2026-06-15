@@ -87,8 +87,8 @@ pub use crate::stats::{
     __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
 };
 pub(crate) use crate::theap::{
-    _mi_theap_collect_abandon, _mi_theap_create, _mi_theap_decref, _mi_theap_delete,
-    _mi_theap_free, _mi_theap_incref, _mi_theap_random_next,
+    _mi_theap_area_visit_blocks, _mi_theap_collect_abandon, _mi_theap_create, _mi_theap_decref,
+    _mi_theap_delete, _mi_theap_free, _mi_theap_incref, _mi_theap_random_next,
 };
 pub use crate::types::*;
 
@@ -560,12 +560,6 @@ unsafe extern "C" {
         zero_huge_alignment: usize,
         usable: *mut usize,
     ) -> *mut c_void;
-    pub fn _mi_theap_area_visit_blocks(
-        theap: *mut mi_theap_t,
-        area: *mut mi_heap_area_t,
-        visitor: mi_block_visit_fun,
-        arg: *mut c_void,
-    ) -> bool;
 }
 
 #[inline]

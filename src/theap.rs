@@ -107,7 +107,8 @@ pub unsafe fn mi_fast_divide(n: usize, magic: u64, shift: usize) -> usize {
     ((hi + n as u64) >> shift) as usize
 }
 
-unsafe fn _mi_theap_area_visit_blocks(
+#[inline(never)]
+pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
     area: *const mi_heap_area_t,
     page: *mut mi_page_t,
     visitor: mi_block_visit_fun,
@@ -212,6 +213,14 @@ unsafe fn _mi_theap_area_visit_blocks(
     }
     true
 }
+
+#[used]
+static MI_THEAP_AREA_VISIT_BLOCKS_KEEP: unsafe extern "C" fn(
+    *const mi_heap_area_t,
+    *mut mi_page_t,
+    mi_block_visit_fun,
+    *mut c_void,
+) -> bool = _mi_theap_area_visit_blocks;
 
 unsafe extern "C" fn mi_theap_visit_areas_page(
     theap: *mut mi_theap_t,

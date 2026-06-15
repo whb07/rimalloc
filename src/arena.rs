@@ -31,13 +31,12 @@ use crate::internal::{
     _mi_divide_up, _mi_is_heap_main, _mi_memid_create, _mi_memid_none, _mi_meta_free,
     _mi_meta_is_meta_page, _mi_os_commit, _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex,
     _mi_os_has_overcommit, _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc,
-    _mi_theap_heap, _mi_thread_id, _mi_toupper, MI_DEBUG, mi_block_next, mi_mem_is_zero,
-    mi_memid_t, mi_memkind_t, mi_mul_overflow, mi_page_all_free, mi_page_area, mi_page_block_size,
-    mi_page_claim_ownership, mi_page_clear_abandoned_mapped, mi_page_committed, mi_page_heap,
-    mi_page_is_abandoned, mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned,
-    mi_page_is_singleton, mi_page_meta_is_separated, mi_page_slice_start, mi_page_start,
-    mi_page_usable_block_size, mi_size_of_slices, mi_slice_count_of_size, mi_tf_block,
-    mi_tf_create, mi_tf_is_owned,
+    _mi_theap_heap, _mi_thread_id, _mi_toupper, MI_DEBUG, mi_mem_is_zero, mi_memid_t, mi_memkind_t,
+    mi_mul_overflow, mi_page_all_free, mi_page_block_size, mi_page_claim_ownership,
+    mi_page_clear_abandoned_mapped, mi_page_committed, mi_page_heap, mi_page_is_abandoned,
+    mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned, mi_page_is_singleton,
+    mi_page_meta_is_separated, mi_page_slice_start, mi_page_start, mi_size_of_slices,
+    mi_slice_count_of_size, mi_tf_block, mi_tf_create, mi_tf_is_owned,
 };
 use crate::mimalloc::{mi_heap_main, mi_heap_theap, mi_heap_zalloc_aligned};
 use crate::options::{mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t};
@@ -53,7 +52,7 @@ use crate::page::{
 use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page};
 use crate::prim::_mi_page_associated_theap_peek;
 use crate::stats::{MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_OTHER, MI_CBIN_SMALL};
-use crate::theap::_mi_heap_area_init;
+use crate::theap::{_mi_heap_area_init, _mi_theap_area_visit_blocks};
 use crate::track::{mi_track_mem_defined, mi_track_mem_undefined};
 use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
@@ -77,7 +76,6 @@ const MI_MAX_ARENAS: usize = 160;
 const MI_ARENA_BIN_COUNT: usize = MI_BIN_COUNT;
 const MI_ARENA_MIN_OBJ_SIZE: usize = MI_ARENA_SLICE_SIZE;
 const MI_ARENA_MAX_SIZE: usize = MI_BITMAP_MAX_BIT_COUNT * MI_ARENA_SLICE_SIZE;
-const MI_MAX_BLOCKS: usize = MI_SMALL_PAGE_SIZE / size_of::<usize>();
 const EAGAIN: c_int = 11;
 const EINVAL: c_int = 22;
 const ENOMEM: c_int = 12;
@@ -219,98 +217,6 @@ struct mi_heap_delete_visit_info_t {
 }
 
 #[allow(dead_code)]
-unsafe fn mi_theap_area_visit_blocks(
-    area: *const mi_heap_area_t,
-    page: *mut mi_page_t,
-    visitor: mi_block_visit_fun,
-    arg: *mut c_void,
-) -> bool {
-    crate::mi_assert_internal!(!area.is_null());
-    crate::mi_assert_internal!(!page.is_null());
-
-    unsafe { _mi_page_free_collect(page, true) };
-    crate::mi_assert_internal!(unsafe { (*page).local_free.is_null() });
-    if unsafe { (*page).used == 0 } {
-        return true;
-    }
-
-    let mut psize = 0usize;
-    let pstart = unsafe { mi_page_area(page, &mut psize) };
-    let heap = unsafe { mi_page_heap(page) };
-    let bsize = unsafe { mi_page_block_size(page) };
-    let ubsize = unsafe { mi_page_usable_block_size(page) };
-
-    if unsafe { (*page).capacity == 1 } {
-        crate::mi_assert_internal!(unsafe { (*page).used == 1 && (*page).free.is_null() });
-        return unsafe { visitor(heap, area, pstart.cast::<c_void>(), ubsize, arg) };
-    }
-
-    if unsafe { (*page).used == (*page).capacity } {
-        let mut block = pstart;
-        for _ in 0..unsafe { (*page).capacity as usize } {
-            if !unsafe { visitor(heap, area, block.cast::<c_void>(), ubsize, arg) } {
-                return false;
-            }
-            block = unsafe { block.add(bsize) };
-        }
-        return true;
-    }
-
-    let mut free_map = [0usize; MI_MAX_BLOCKS / MI_INTPTR_BITS];
-    let bmapsize = _mi_divide_up(unsafe { (*page).capacity as usize }, MI_INTPTR_BITS);
-    if !unsafe { (*page).capacity as usize }.is_multiple_of(MI_INTPTR_BITS) {
-        let shift = unsafe { (*page).capacity as usize % MI_INTPTR_BITS };
-        free_map[bmapsize - 1] = usize::MAX << shift;
-    }
-
-    let mut block = unsafe { (*page).free };
-    while !block.is_null() {
-        crate::mi_assert_internal!(
-            block.cast::<u8>() >= pstart && block.cast::<u8>() < unsafe { pstart.add(psize) }
-        );
-        let offset = block.cast::<u8>() as usize - pstart as usize;
-        crate::mi_assert_internal!(offset.is_multiple_of(bsize));
-        let blockidx = offset / bsize;
-        crate::mi_assert_internal!(blockidx < MI_MAX_BLOCKS);
-        let bitidx = blockidx / MI_INTPTR_BITS;
-        let bit = blockidx - (bitidx * MI_INTPTR_BITS);
-        free_map[bitidx] |= 1usize << bit;
-        block = unsafe { mi_block_next(page, block) };
-    }
-
-    let mut block = pstart;
-    for m in free_map.iter().take(bmapsize) {
-        if *m == 0 {
-            for _ in 0..MI_INTPTR_BITS {
-                if !unsafe { visitor(heap, area, block.cast::<c_void>(), ubsize, arg) } {
-                    return false;
-                }
-                block = unsafe { block.add(bsize) };
-            }
-        } else {
-            let mut used_mask = !*m;
-            while used_mask != 0 {
-                let bitidx = used_mask.trailing_zeros() as usize;
-                if !unsafe {
-                    visitor(
-                        heap,
-                        area,
-                        block.add(bitidx * bsize).cast::<c_void>(),
-                        ubsize,
-                        arg,
-                    )
-                } {
-                    return false;
-                }
-                used_mask &= used_mask - 1;
-            }
-            block = unsafe { block.add(bsize * MI_INTPTR_BITS) };
-        }
-    }
-    true
-}
-
-#[allow(dead_code)]
 unsafe fn mi_heap_visit_page(page: *mut mi_page_t, vinfo: *mut mi_heap_visit_info_t) -> bool {
     let mut area = mi_heap_area_t::default();
     unsafe { _mi_heap_area_init(ptr::addr_of_mut!(area), page) };
@@ -328,7 +234,7 @@ unsafe fn mi_heap_visit_page(page: *mut mi_page_t, vinfo: *mut mi_heap_visit_inf
     }
     if unsafe { (*vinfo).visit_blocks } {
         unsafe {
-            mi_theap_area_visit_blocks(ptr::addr_of!(area), page, (*vinfo).visitor, (*vinfo).arg)
+            _mi_theap_area_visit_blocks(ptr::addr_of!(area), page, (*vinfo).visitor, (*vinfo).arg)
         }
     } else {
         true

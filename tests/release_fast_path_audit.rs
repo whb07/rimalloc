@@ -109,6 +109,21 @@ fn options_state_uses_internal_locks_like_c() {
         "Rust-side bounded snprintf formatting should write directly into the caller buffer"
     );
     assert!(
+        !stats_rs.contains("fn format_amount(mut n: i64, unit: i64) -> String")
+            && !stats_rs.contains("format!(\"{n}   \"")
+            && !stats_rs.contains("format!(\"{n}   {suffix:<3}\"")
+            && !stats_rs.contains("format!(\"{magnitude}i{suffix}\"")
+            && !stats_rs.contains("format!(\"{magnitude}{suffix}\"")
+            && !stats_rs.contains("format!(\"{whole}.{frac1} {unitdesc:<3}\"")
+            && !stats_rs.contains("String::new()")
+            && !stats_rs.contains("to_string_lossy")
+            && stats_rs.contains("fn format_amount(buf: &mut [c_char; 32], mut n: i64, unit: i64)")
+            && stats_rs.contains("let mut buf = [0 as c_char; 32];")
+            && stats_rs.contains("format_amount(&mut buf, n, unit);")
+            && stats_rs.contains("CStr::from_ptr(fmt) }.to_bytes()"),
+        "stats amount formatting should stay on stack buffers like C"
+    );
+    assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")
             && options_rs.contains("static mut mi_error_handler_lock: mi_lock_t")
             && options_rs.contains("mi_lock_acquire(addr_of_mut!(options_lock))")

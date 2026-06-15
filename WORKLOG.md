@@ -987,3 +987,26 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued stats-output formatting parity:
+  - Found `stats.rs::format_amount` still built temporary Rust `String` values with `format!` even though C `mi_printf_amount` writes into a fixed `char buf[32]` using `_mi_snprintf`.
+  - Changed the Rust amount formatter to fill a stack `[c_char; 32]` through `mi_vsnprintf_args`, read the NUL-terminated buffer as ASCII, and compare the optional C format string with `CStr::to_bytes()` instead of `to_string_lossy()`.
+  - Matched the C zero-value spacing by formatting the empty suffix through the same fixed-width suffix field instead of returning the shorter Rust-only `"0   "` string.
+  - Added source audit coverage rejecting the old `String`/`format!`/`to_string_lossy` stats amount path and requiring the stack buffer formatter.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Rebuilt `target/bench-allocators/libmimalloc-rust.so`; `RELACOUNT` stayed at `1490`, and broad Rust `String`/`CString`/`alloc::fmt::format` symbols remain through other runtime/exported paths.
+  - Direct `cfrac` after the stats amount cleanup: C `2.71s..2.75s`, RSS `5820..6280` KiB, minor `203..205`; Rust `2.70s..2.75s`, RSS `6748..6780` KiB, minor `209..212`.
+  - Result: the stats amount formatter no longer allocates through Rust strings, but the remaining `cfrac` RSS/minor-fault tail persists.
+- Full established validation passed after the stats amount formatting cleanup:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

@@ -7,7 +7,8 @@
     clippy::missing_safety_doc
 )]
 
-use core::ffi::{c_char, c_void};
+use core::ffi::{CStr, c_char, c_void};
+use core::str;
 use core::{mem::size_of, ptr};
 use std::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
@@ -636,7 +637,13 @@ pub struct mi_heap_print_visit_info_s {
 
 pub type mi_heap_print_visit_info_t = mi_heap_print_visit_info_s;
 
-fn format_amount(mut n: i64, unit: i64) -> String {
+fn amount_buffer_str(buf: &[c_char; 32]) -> &str {
+    // SAFETY: amount buffers are written only from ASCII format fragments and
+    // always NUL-terminated by `mi_vsnprintf_args`.
+    unsafe { str::from_utf8_unchecked(CStr::from_ptr(buf.as_ptr()).to_bytes()) }
+}
+
+fn format_amount(buf: &mut [c_char; 32], mut n: i64, unit: i64) {
     let suffix = if unit <= 0 { " " } else { "B" };
     let base = if unit == 0 { 1000 } else { 1024 };
     if unit > 0 {
@@ -646,13 +653,14 @@ fn format_amount(mut n: i64, unit: i64) -> String {
     let pos = if n < 0 { n.saturating_neg() } else { n };
     if pos < base {
         if n != 1 || suffix != "B" {
-            if n == 0 {
-                format!("{n}   ")
-            } else {
-                format!("{n}   {suffix:<3}")
-            }
+            let amount_suffix = if n == 0 { "" } else { suffix };
+            crate::libc::mi_vsnprintf_args(
+                buf.as_mut_ptr(),
+                buf.len(),
+                format_args!("{n}   {amount_suffix:<3}"),
+            );
         } else {
-            String::new()
+            buf[0] = 0;
         }
     } else {
         let mut divider = base;
@@ -669,11 +677,23 @@ fn format_amount(mut n: i64, unit: i64) -> String {
         let whole = tens / 10;
         let frac1 = (tens % 10).abs();
         let unitdesc = if base == 1024 {
-            format!("{magnitude}i{suffix}")
+            match magnitude {
+                "K" => "KiB",
+                "M" => "MiB",
+                _ => "GiB",
+            }
         } else {
-            format!("{magnitude}{suffix}")
+            match magnitude {
+                "K" => "K ",
+                "M" => "M ",
+                _ => "G ",
+            }
         };
-        format!("{whole}.{frac1} {unitdesc:<3}")
+        crate::libc::mi_vsnprintf_args(
+            buf.as_mut_ptr(),
+            buf.len(),
+            format_args!("{whole}.{frac1} {unitdesc:<3}"),
+        );
     }
 }
 
@@ -684,14 +704,16 @@ fn mi_printf_amount(
     arg: *mut c_void,
     fmt: *const c_char,
 ) {
-    let rendered = format_amount(n, unit);
+    let mut buf = [0 as c_char; 32];
+    format_amount(&mut buf, n, unit);
+    let rendered = amount_buffer_str(&buf);
     if fmt.is_null() {
         _mi_fprintf(out, arg, format_args!("{rendered:>12}"));
         return;
     }
     // SAFETY: `fmt` is expected to point to a valid NUL-terminated C string.
-    let fmt_str = unsafe { std::ffi::CStr::from_ptr(fmt) }.to_string_lossy();
-    if fmt_str.as_ref() == "%s" {
+    let fmt_bytes = unsafe { CStr::from_ptr(fmt) }.to_bytes();
+    if fmt_bytes == b"%s" {
         _mi_fprintf(out, arg, format_args!("{rendered}"));
     } else {
         _mi_fprintf(out, arg, format_args!("{rendered:>12}"));

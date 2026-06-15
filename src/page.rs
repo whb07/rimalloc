@@ -31,7 +31,7 @@ use crate::internal::{
     mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_committed,
     mi_page_contains_address, mi_page_flags, mi_page_has_interior_pointers,
     mi_page_immediate_available, mi_page_is_expandable, mi_page_is_mostly_used,
-    mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers,
+    mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers, mi_page_set_keys,
     mi_page_slice_offset_of, mi_page_slice_start, mi_page_start, mi_page_thread_free,
     mi_page_usable_block_size, mi_theap_is_initialized,
 };
@@ -253,6 +253,12 @@ pub unsafe fn mi_page_is_valid_init(page: *mut mi_page_t) -> bool {
 #[inline]
 pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
     crate::mi_assert_internal!(mi_page_is_valid_init(page));
+    #[cfg(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    ))]
     if MI_SECURE != 0 {
         crate::mi_assert_internal!((*page).keys[0] != 0);
     }
@@ -768,8 +774,11 @@ pub(crate) unsafe extern "C" fn _mi_page_init(
     crate::mi_assert_internal!(page_size / mi_page_block_size(page) < (1usize << 16));
     crate::mi_assert_internal!((*page).reserved > 0);
 
-    (*page).keys[0] = _mi_theap_random_next(theap);
-    (*page).keys[1] = _mi_theap_random_next(theap);
+    mi_page_set_keys(
+        page,
+        _mi_theap_random_next(theap),
+        _mi_theap_random_next(theap),
+    );
 
     if MI_DEBUG > 2 && (*page).memid.initially_zero {
         mi_track_mem_defined((*page).page_start.cast(), mi_page_committed(page));
@@ -787,8 +796,16 @@ pub(crate) unsafe extern "C" fn _mi_page_init(
     crate::mi_assert_internal!((*page).prev.is_null());
     crate::mi_assert_internal!((*page).retire_expire == 0);
     crate::mi_assert_internal!(!mi_page_has_interior_pointers(page));
-    crate::mi_assert_internal!((*page).keys[0] != 0);
-    crate::mi_assert_internal!((*page).keys[1] != 0);
+    #[cfg(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    ))]
+    {
+        crate::mi_assert_internal!((*page).keys[0] != 0);
+        crate::mi_assert_internal!((*page).keys[1] != 0);
+    }
     crate::mi_assert_expensive!(mi_page_is_valid_init(page));
 
     if !mi_page_extend_free(theap, page) {

@@ -24,7 +24,7 @@ use crate::internal::{
     mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded, mi_block_set_next, mi_is_in_same_page,
     mi_page_all_free, mi_page_block_size, mi_page_contains_address, mi_page_has_interior_pointers,
     mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned,
-    mi_page_is_singleton, mi_page_queue, mi_page_start, mi_page_thread_free,
+    mi_page_is_singleton, mi_page_keys, mi_page_queue, mi_page_start, mi_page_thread_free,
     mi_page_usable_block_size, mi_page_xthread_id, mi_ptr_encode_canary, mi_tf_block, mi_tf_create,
     mi_tf_is_owned, mi_theap_is_initialized,
 };
@@ -102,7 +102,7 @@ unsafe fn mi_page_decode_padding(
     );
     *delta = (*padding).delta as usize;
     let canary = (*padding).canary;
-    let keys = [(*page).keys[0], (*page).keys[1]];
+    let keys = mi_page_keys(page);
     let ok = mi_ptr_encode_canary(page.cast::<c_void>(), block.cast::<c_void>(), &keys) == canary
         && *delta <= *bsize;
     mi_track_mem_noaccess(
@@ -208,7 +208,8 @@ pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_b
         return false;
     }
 
-    let n = mi_block_nextx(page.cast::<c_void>(), block, &(*page).keys);
+    let keys = mi_page_keys(page);
+    let n = mi_block_nextx(page.cast::<c_void>(), block, &keys);
     if ((n as usize) & (MI_INTPTR_SIZE - 1)) == 0
         && (n.is_null() || mi_is_in_same_page(block.cast::<c_void>(), n.cast::<c_void>()))
     {

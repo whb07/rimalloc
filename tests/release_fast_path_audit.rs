@@ -1,5 +1,5 @@
 use std::fs;
-use std::mem::offset_of;
+use std::mem::{offset_of, size_of};
 use std::path::Path;
 
 use mechanical_mimalloc::types::mi_page_t;
@@ -353,12 +353,43 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         override_rs.contains("#[unsafe(export_name = \"free\")]")
             && override_rs.contains("mi_unix_free_fast")
             && override_rs.contains(
+                "\"sub word ptr [rdi + 0x10], 1\",\n            \"mov qword ptr [rdi + 0x18], rsi\",\n            \"je 7f\",\n            \"3:\",\n            \"ret\","
+            )
+            && override_rs.contains("\"cmp byte ptr [rdi + 0x16], 0\",\n            \"jne 3b\",")
+            && override_rs.contains(
                 "cfg(all(not(windows), not(mi_c_malloc_fast)))]\n#[unsafe(export_name = \"free\")]"
             ),
-        "Unix free export must stay paired with the assembly fast override"
+        "Unix free export must keep the C-like assembly fast override and hot local-free branch layout"
     );
     assert_eq!(offset_of!(mi_page_t, free), 0x08);
     assert_eq!(offset_of!(mi_page_t, used), 0x10);
+    assert_eq!(offset_of!(mi_page_t, local_free), 0x18);
+    assert_eq!(offset_of!(mi_page_t, xthread_free), 0x20);
+    assert_eq!(offset_of!(mi_page_t, block_size), 0x28);
+    assert_eq!(offset_of!(mi_page_t, page_start), 0x30);
+    #[cfg(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    ))]
+    {
+        assert_eq!(size_of::<mi_page_t>(), 0x88);
+        assert_eq!(offset_of!(mi_page_t, keys), 0x38);
+        assert_eq!(offset_of!(mi_page_t, theap), 0x48);
+        assert_eq!(offset_of!(mi_page_t, memid), 0x70);
+    }
+    #[cfg(not(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    )))]
+    {
+        assert_eq!(size_of::<mi_page_t>(), 0x78);
+        assert_eq!(offset_of!(mi_page_t, theap), 0x38);
+        assert_eq!(offset_of!(mi_page_t, memid), 0x60);
+    }
     #[cfg(not(feature = "guarded"))]
     assert_eq!(offset_of!(mi_theap_t, pages_free_direct), 0x110);
 }

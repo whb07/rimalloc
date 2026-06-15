@@ -224,6 +224,12 @@ pub static _mi_page_empty: mi_page_t = mi_page_t {
     xthread_free: 0,
     block_size: 0,
     page_start: ptr::null_mut(),
+    #[cfg(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    ))]
     keys: [0, 0],
     theap: ptr::null_mut(),
     heap: ptr::null_mut(),

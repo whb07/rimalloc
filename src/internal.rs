@@ -1173,6 +1173,54 @@ pub fn mi_ptr_encode_canary(null: *const c_void, p: *const c_void, keys: &[usize
 }
 
 #[inline]
+pub unsafe fn mi_page_keys(page: *const mi_page_t) -> [usize; 2] {
+    #[cfg(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    ))]
+    {
+        unsafe { (*page).keys }
+    }
+
+    #[cfg(not(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    )))]
+    {
+        let _ = page;
+        [0, 0]
+    }
+}
+
+#[inline]
+pub unsafe fn mi_page_set_keys(page: *mut mi_page_t, key0: usize, key1: usize) {
+    #[cfg(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    ))]
+    unsafe {
+        (*page).keys[0] = key0;
+        (*page).keys[1] = key1;
+    }
+
+    #[cfg(not(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    )))]
+    {
+        let _ = (page, key0, key1);
+    }
+}
+
+#[inline]
 pub unsafe fn mi_block_nextx(
     null: *const c_void,
     block: *const mi_block_t,
@@ -1208,10 +1256,11 @@ pub unsafe fn mi_block_set_nextx(
 
 #[inline]
 pub unsafe fn mi_block_next(page: *const mi_page_t, block: *const mi_block_t) -> *mut mi_block_t {
+    let keys = unsafe { mi_page_keys(page) };
     if MI_ENCODE_FREELIST == 0 {
-        return unsafe { mi_block_nextx(page.cast(), block, &(*page).keys) };
+        return unsafe { mi_block_nextx(page.cast(), block, &keys) };
     }
-    let mut next = unsafe { mi_block_nextx(page.cast(), block, &(*page).keys) };
+    let mut next = unsafe { mi_block_nextx(page.cast(), block, &keys) };
     if !next.is_null() && !mi_is_in_same_page(block.cast(), next.cast()) {
         _mi_error_message_fmt(
             14,
@@ -1232,7 +1281,8 @@ pub unsafe fn mi_block_set_next(
     block: *mut mi_block_t,
     next: *const mi_block_t,
 ) {
-    unsafe { mi_block_set_nextx(page.cast(), block, next, &(*page).keys) };
+    let keys = unsafe { mi_page_keys(page) };
+    unsafe { mi_block_set_nextx(page.cast(), block, next, &keys) };
 }
 
 #[inline]

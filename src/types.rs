@@ -346,6 +346,12 @@ pub struct mi_page_s {
     pub xthread_free: mi_thread_free_t,
     pub block_size: usize,
     pub page_start: *mut u8,
+    #[cfg(any(
+        feature = "secure",
+        debug_assertions,
+        feature = "track-valgrind",
+        feature = "track-asan"
+    ))]
     pub keys: [usize; 2],
     pub theap: *mut mi_theap_t,
     pub heap: *mut mi_heap_t,

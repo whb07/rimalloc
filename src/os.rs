@@ -1150,6 +1150,7 @@ unsafe fn mi_os_free_huge_os_pages(p: *mut c_void, mut size: usize, subproc: *mu
     }
 }
 
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_numa_node_count() -> i32 {
     let mut count = MI_NUMA_NODE_COUNT.load(Ordering::Acquire);
     if count == 0 {
@@ -1172,6 +1173,9 @@ pub unsafe extern "C" fn _mi_os_numa_node_count() -> i32 {
     crate::mi_assert_internal!(count > 0 && count <= i32::MAX as usize);
     count as i32
 }
+
+#[used]
+static MI_OS_NUMA_NODE_COUNT_KEEP: unsafe extern "C" fn() -> i32 = _mi_os_numa_node_count;
 
 #[inline]
 unsafe fn mi_os_numa_node_get() -> i32 {

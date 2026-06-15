@@ -5523,7 +5523,11 @@ def rust_staticlib() -> pathlib.Path:
         env=env,
     )
     libs = sorted(
-        (ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
+        [
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc.a"),
+            *(ROOT / "target/debug").glob("libmechanical_mimalloc.a"),
+        ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
@@ -5543,7 +5547,11 @@ def rust_staticlib_release() -> pathlib.Path:
         env=env,
     )
     libs = sorted(
-        (ROOT / "target/release/deps").glob("libmechanical_mimalloc-*.a"),
+        [
+            *(ROOT / "target/release/deps").glob("libmechanical_mimalloc-*.a"),
+            *(ROOT / "target/release/deps").glob("libmechanical_mimalloc.a"),
+            *(ROOT / "target/release").glob("libmechanical_mimalloc.a"),
+        ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
@@ -5559,7 +5567,11 @@ def rust_cdylib() -> pathlib.Path:
         check=True,
     )
     libs = sorted(
-        (ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.so"),
+        [
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.so"),
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc.so"),
+            *(ROOT / "target/debug").glob("libmechanical_mimalloc.so"),
+        ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

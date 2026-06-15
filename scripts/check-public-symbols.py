@@ -77,6 +77,14 @@ MALLOC_FAMILY_SYMBOLS = MALLOC_OVERRIDE_SYMBOLS | {
     "malloc_good_size",
 }
 
+STATIC_MALLOC_EXTRA_SYMBOLS = {
+    "__posix_memalign",
+    "malloc_good_size",
+    "reallocf",
+    "strdup",
+    "strndup",
+}
+
 
 def public_header_symbols() -> list[str]:
     decl = re.compile(r"mi_decl(?:_nodiscard)?[^;#]*?\b(mi_[A-Za-z0-9_]+)\s*\(")
@@ -99,7 +107,11 @@ def rust_staticlib() -> pathlib.Path:
         check=True,
     )
     libs = sorted(
-        (ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
+        [
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc.a"),
+            *(ROOT / "target/debug").glob("libmechanical_mimalloc.a"),
+        ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
@@ -121,7 +133,20 @@ def exported_symbols(staticlib: pathlib.Path) -> set[str]:
         parts = line.split()
         if parts:
             symbols.add(parts[-1])
-    return symbols
+
+    readelf = subprocess.run(
+        ["readelf", "-Ws", str(staticlib)],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    )
+    hidden: set[str] = set()
+    for line in readelf.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 8 and parts[4] == "GLOBAL" and parts[5] == "HIDDEN":
+            hidden.add(parts[7])
+    return symbols - hidden
 
 
 def is_relevant_export(symbol: str) -> bool:
@@ -190,7 +215,12 @@ def main() -> int:
     if args.missing_only:
         print(f"ok: {len(expected)} public header symbols exported")
     else:
-        expected_abi = set(expected) | MALLOC_OVERRIDE_SYMBOLS | CXX_OPERATOR_OVERRIDE_SYMBOLS
+        expected_abi = (
+            set(expected)
+            | MALLOC_OVERRIDE_SYMBOLS
+            | STATIC_MALLOC_EXTRA_SYMBOLS
+            | CXX_OPERATOR_OVERRIDE_SYMBOLS
+        )
         missing_abi = sorted(symbol for symbol in expected_abi if symbol not in exported)
         if missing_abi:
             print("missing public ABI symbols:", file=sys.stderr)

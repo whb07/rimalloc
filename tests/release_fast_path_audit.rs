@@ -445,6 +445,8 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     );
     for export_name in [
         "reallocf",
+        "strdup",
+        "strndup",
         "malloc_good_size",
         "vfree",
         "_aligned_malloc",
@@ -1667,6 +1669,17 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_stats_init should keep C's local process statistics initialization boundary"
     );
     assert!(
+        init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_auto_process_init()")
+            && init_rs.contains(
+                "static MI_AUTO_PROCESS_INIT_KEEP: unsafe extern \"C\" fn() = _mi_auto_process_init;"
+            )
+            && init_rs.contains("#[inline(never)]\n#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]\npub(crate) unsafe extern \"C\" fn _mi_auto_process_done()")
+            && init_rs.contains(
+                "static MI_AUTO_PROCESS_DONE_KEEP: unsafe extern \"C\" fn() = _mi_auto_process_done;"
+            ),
+        "_mi_auto_process_init and _mi_auto_process_done should keep C's local lifecycle helper boundaries"
+    );
+    assert!(
         stats_rs.contains(
             "#[inline(never)]\nunsafe extern \"C\" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t)"
         ) && stats_rs.contains(
@@ -1697,6 +1710,24 @@ fn free_path_internals_are_not_dynamic_exports() {
             && options_rs.contains("mi_recurse_enter_prim()")
             && options_rs.contains("mi_recurse_exit_prim();"),
         "option recursion guards should keep C's noinline primitive helper boundaries"
+    );
+    assert!(
+        os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_numa_node_count() -> i32")
+            && os_rs.contains(
+                "static MI_OS_NUMA_NODE_COUNT_KEEP: unsafe extern \"C\" fn() -> i32 = _mi_os_numa_node_count;"
+            )
+            && prim_unix_rs.contains("#[inline(never)]\nunsafe fn unix_mmap_prim_aligned(")
+            && prim_unix_rs.contains("static UNIX_MMAP_PRIM_ALIGNED_KEEP: unsafe fn("),
+        "NUMA count and aligned mmap helpers should keep C's local OS helper boundaries"
+    );
+    assert!(
+        libc_rs.contains("#[inline(never)]\nunsafe fn mi_out_num(")
+            && libc_rs.contains("static MI_OUT_NUM_KEEP: unsafe fn(")
+            && stats_rs.contains("#[inline(never)]\nfn mi_json_buf_print_value(")
+            && stats_rs.contains(
+                "static MI_JSON_BUF_PRINT_VALUE_KEEP: fn(&mut mi_json_buf_t, &str, i64) = mi_json_buf_print_value;"
+            ),
+        "number formatting and JSON scalar output should keep C's local formatting helper boundaries"
     );
     assert!(
         options_rs
@@ -2163,6 +2194,10 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         threadlocal_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_init(")
+            && threadlocal_rs.contains("static mut mi_thread_locals_lock: mi_lock_t")
+            && threadlocal_rs.contains("static mi_thread_locals_initialized: AtomicBool")
+            && threadlocal_rs
+                .contains(".compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)")
             && threadlocal_rs
                 .contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_done(")
             && threadlocal_rs
@@ -2178,7 +2213,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && threadlocal_rs.contains("static MI_THREAD_LOCAL_SET_KEEP")
             && threadlocal_rs.contains("static MI_THREAD_LOCAL_GET_KEEP")
             && threadlocal_rs.contains("static MI_THREAD_LOCALS_THREAD_DONE_KEEP")
-            && threadlocal_rs.contains("static MI_THREAD_LOCAL_FREE_KEEP"),
+            && threadlocal_rs.contains("static MI_THREAD_LOCAL_FREE_KEEP")
+            && threadlocal_rs.contains("pub extern \"C\" fn _mi_thread_local_create()")
+            && threadlocal_rs.contains("_mi_thread_locals_init();"),
         "dynamic thread-local helpers should keep C's local helper boundaries"
     );
     assert!(
@@ -2350,6 +2387,12 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         init_rs.contains("#[inline(always)]\nunsafe fn _mi_thread_init_theap_default()"),
         "thread default-heap initialization should stay inlined like C's static helper"
+    );
+    assert!(
+        init_rs.contains("crate::threadlocal::_mi_thread_locals_init();")
+            && init_rs.find("crate::threadlocal::_mi_thread_locals_init();")
+                < init_rs.find("let _ = crate::page_map::_mi_page_map_init();"),
+        "process initialization should initialize dynamic TLS locks before page-map/TLS key creation"
     );
     let tld_alloc_start = init_rs
         .find("#[inline(always)]\nfn mi_tld_alloc()")

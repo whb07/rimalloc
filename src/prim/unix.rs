@@ -435,7 +435,7 @@ unsafe fn unix_mmap_prim(
     if p == MAP_FAILED { ptr::null_mut() } else { p }
 }
 
-#[inline]
+#[inline(never)]
 unsafe fn unix_mmap_prim_aligned(
     addr: *mut c_void,
     size: usize,
@@ -455,6 +455,16 @@ unsafe fn unix_mmap_prim_aligned(
     }
     unix_mmap_prim(addr, size, protect_flags, flags, fd)
 }
+
+#[used]
+static UNIX_MMAP_PRIM_ALIGNED_KEEP: unsafe fn(
+    *mut c_void,
+    usize,
+    usize,
+    c_int,
+    c_int,
+    c_int,
+) -> *mut c_void = unix_mmap_prim_aligned;
 
 #[inline]
 unsafe fn unix_mmap_fd() -> c_int {

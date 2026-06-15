@@ -1578,6 +1578,7 @@ fn mi_json_buf_print_count_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi
     mi_json_buf_print_count(hbuf, "", stat, true);
 }
 
+#[inline(never)]
 fn mi_json_buf_print_value(hbuf: &mut mi_json_buf_t, name: &str, val: i64) {
     let mut buf = [0 as c_char; 128];
     crate::libc::mi_vsnprintf_args(
@@ -1587,6 +1588,9 @@ fn mi_json_buf_print_value(hbuf: &mut mi_json_buf_t, name: &str, val: i64) {
     );
     mi_json_buf_print(hbuf, c_char_buffer_str(&buf));
 }
+
+#[used]
+static MI_JSON_BUF_PRINT_VALUE_KEEP: fn(&mut mi_json_buf_t, &str, i64) = mi_json_buf_print_value;
 
 fn mi_json_buf_print_size(hbuf: &mut mi_json_buf_t, name: &str, val: usize, add_comma: bool) {
     let mut buf = [0 as c_char; 128];

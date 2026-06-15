@@ -258,7 +258,7 @@ unsafe fn mi_out_alignright(
     }
 }
 
-#[inline]
+#[inline(never)]
 unsafe fn mi_out_num(
     mut x: u128,
     base: usize,
@@ -297,6 +297,9 @@ unsafe fn mi_out_num(
         }
     }
 }
+
+#[used]
+static MI_OUT_NUM_KEEP: unsafe fn(u128, usize, c_char, &mut *mut c_char, *mut c_char) = mi_out_num;
 
 #[inline]
 fn mi_byte_sum32(mut x: u32) -> usize {

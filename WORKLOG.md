@@ -2,6 +2,28 @@
 
 ## 2026-06-15
 
+- Continuing parity work after `0064858`:
+  - The refreshed local-symbol gap shows remaining process/OS/format/string helper drift: `_mi_auto_process_init`, `_mi_auto_process_done`, `_mi_os_numa_node_count`, `unix_mmap_prim_aligned`, `mi_out_num`, `mi_json_buf_print_value`, plus C's exported `strdup`/`strndup` override names.
+  - Started a mechanical parity slice to retain those helper boundaries and add the missing Unix `strdup`/`strndup` dynamic exports.
+  - Retained local helper symbols for `_mi_auto_process_init`, `_mi_auto_process_done`, `_mi_os_numa_node_count`, `unix_mmap_prim_aligned`, `mi_out_num`, and `mi_json_buf_print_value`.
+  - Added Unix dynamic exports for `strdup` and `strndup`, and updated public-symbol validation to handle Cargo's hashed/unhashed staticlib outputs while filtering hidden archive symbols.
+  - Fixed a release static-link crash found by `scripts/check-behavioral-parity.py`: dynamic TLS key creation could lock `mi_thread_locals_lock` before initialization, and the lock was an immutable static that release placed in read-only storage. `_mi_thread_local_create` now initializes the TLS lock idempotently before use, and the lock storage is mutable like the other mimalloc locks.
+  - Extended `tests/release_fast_path_audit.rs` to cover the retained helper boundaries, Unix override exports, process-init TLS initialization order, and mutable dynamic TLS lock storage.
+  - Artifact check: `nm -aC target/release/libmechanical_mimalloc.so` shows the six targeted helpers as local `t` symbols; `nm -D --defined-only` shows `strdup`, `strndup`, `__posix_memalign`, and weak `reallocarr`.
+  - The normalized local-symbol gap is now down to `__popcountdi2`, `get_new_handler`, and C's optimizer-created `mi_heap_try_new.constprop.0`.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `cargo build --release`
+    - `git diff --check`
+  - Focused `mleak 100` benchmark after copying the fresh release cdylib:
+    - C `2.05s..2.06s`, Rust `2.11s..2.12s`.
+    - `perf stat`: C `10.05B` instructions / `15.56B` cycles; Rust `10.67B` instructions / `16.43B` cycles.
 - Continuing release artifact helper-boundary parity after `8805801`:
   - The remaining C/Rust local-symbol gap includes stats aggregation visitors, recursion guard primitives, the theap area visitor, and ELF process attach/detach lifecycle hooks.
   - Started a mechanical parity slice to keep those C-shaped helper boundaries explicit in Rust and to add audit coverage so future optimizer or refactor drift is caught.

@@ -1837,6 +1837,7 @@ unsafe fn mi_process_init_inner() {
             crate::stats::_mi_stats_init();
             crate::os::_mi_os_init();
             mi_heap_main_init();
+            crate::threadlocal::_mi_thread_locals_init();
             let _ = crate::page_map::_mi_page_map_init();
             crate::prim::_mi_prim_thread_init_auto_done();
             if !crate::prim::_mi_thread_is_initialized()
@@ -1856,6 +1857,7 @@ unsafe fn mi_process_init_inner() {
 
 /// # Safety
 /// Performs one-time process-global mimalloc initialization for the bounded init/runtime scaffold.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     OS_PRELOADING.store(false, Ordering::Relaxed);
     unsafe { mi_process_init_inner() };
@@ -1883,6 +1885,9 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
     unsafe { crate::random::_mi_random_reinit_if_weak(ptr::addr_of_mut!(theap_main.random)) };
 }
 
+#[used]
+static MI_AUTO_PROCESS_INIT_KEEP: unsafe extern "C" fn() = _mi_auto_process_init;
+
 #[unsafe(no_mangle)]
 /// # Safety
 /// Public C ABI wrapper for process-global initialization.
@@ -1892,6 +1897,7 @@ pub unsafe extern "C" fn mi_process_init() {
 
 /// # Safety
 /// Performs process-global teardown for the bounded init/subproc surface and must not race with concurrent mutation of it.
+#[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_auto_process_done() {
     if mi_option_get(mi_option_t::mi_option_destroy_on_exit) > 1 {
@@ -1899,6 +1905,9 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_done() {
     }
     unsafe { mi_process_done() };
 }
+
+#[used]
+static MI_AUTO_PROCESS_DONE_KEEP: unsafe extern "C" fn() = _mi_auto_process_done;
 
 #[unsafe(no_mangle)]
 /// # Safety

@@ -1054,9 +1054,21 @@ pub unsafe fn mi_unix_strdup(s: *const c_char) -> *mut c_char {
     unsafe { crate::mimalloc::mi_strdup(s) }
 }
 
+#[cfg(not(windows))]
+#[unsafe(export_name = "strdup")]
+pub unsafe extern "C" fn mi_unix_strdup_export(s: *const c_char) -> *mut c_char {
+    unsafe { mi_unix_strdup(s) }
+}
+
 #[inline]
 pub unsafe fn mi_unix_strndup(s: *const c_char, n: usize) -> *mut c_char {
     unsafe { crate::mimalloc::mi_strndup(s, n) }
+}
+
+#[cfg(not(windows))]
+#[unsafe(export_name = "strndup")]
+pub unsafe extern "C" fn mi_unix_strndup_export(s: *const c_char, n: usize) -> *mut c_char {
+    unsafe { mi_unix_strndup(s, n) }
 }
 
 #[inline]

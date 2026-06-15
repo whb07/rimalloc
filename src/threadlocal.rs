@@ -9,7 +9,7 @@
 
 use core::mem::size_of;
 use core::ptr;
-use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bitmap::{
@@ -92,7 +92,8 @@ fn thread_locals_empty_ptr() -> *mut mi_thread_locals_t {
     }
 }
 
-static mi_thread_locals_lock: mi_lock_t = mi_lock_t::new();
+static mut mi_thread_locals_lock: mi_lock_t = mi_lock_t::new();
+static mi_thread_locals_initialized: AtomicBool = AtomicBool::new(false);
 static mi_thread_locals_free: AtomicPtr<mi_bitmap_t> = AtomicPtr::new(ptr::null_mut());
 static mi_thread_locals_version: AtomicUsize = AtomicUsize::new(0);
 
@@ -320,11 +321,16 @@ fn free_thread_locals(tls: *mut mi_thread_locals_t) {
 
 #[inline(never)]
 pub extern "C" fn _mi_thread_locals_init() {
-    unsafe {
-        mi_lock_init(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
+    if mi_thread_locals_initialized
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        unsafe {
+            mi_lock_init(ptr::addr_of_mut!(mi_thread_locals_lock));
+        }
+        mi_thread_locals_free.store(ptr::null_mut(), Ordering::Relaxed);
+        mi_thread_locals_version.store(0, Ordering::Relaxed);
     }
-    mi_thread_locals_free.store(ptr::null_mut(), Ordering::Relaxed);
-    mi_thread_locals_version.store(0, Ordering::Relaxed);
 }
 
 #[used]
@@ -336,7 +342,7 @@ pub extern "C" fn _mi_thread_locals_done() {
         return;
     }
     unsafe {
-        mi_lock_acquire(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
+        mi_lock_acquire(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
     let slots = mi_thread_locals_free.swap(ptr::null_mut(), Ordering::AcqRel);
     if !slots.is_null() {
@@ -345,8 +351,8 @@ pub extern "C" fn _mi_thread_locals_done() {
         }
     }
     unsafe {
-        mi_lock_release(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
-        mi_lock_done(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
+        mi_lock_release(ptr::addr_of_mut!(mi_thread_locals_lock));
+        mi_lock_done(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
 }
 
@@ -415,15 +421,16 @@ pub extern "C" fn _mi_thread_locals_thread_done() {
 static MI_THREAD_LOCALS_THREAD_DONE_KEEP: extern "C" fn() = _mi_thread_locals_thread_done;
 
 pub extern "C" fn _mi_thread_local_create() -> mi_thread_local_t {
+    _mi_thread_locals_init();
     unsafe {
-        mi_lock_acquire(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
+        mi_lock_acquire(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
     let mut key = mi_thread_local_claim();
     if key == 0 && mi_thread_local_create_expand() {
         key = mi_thread_local_claim();
     }
     unsafe {
-        mi_lock_release(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
+        mi_lock_release(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
     key
 }
@@ -435,7 +442,7 @@ pub extern "C" fn _mi_thread_local_free(key: mi_thread_local_t) {
     }
     let idx = mi_key_index(key);
     unsafe {
-        mi_lock_acquire(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
+        mi_lock_acquire(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
     let slots = mi_thread_locals_free.load(Ordering::Acquire);
     if !slots.is_null() && idx < unsafe { mi_bitmap_max_bits(slots) } {
@@ -444,7 +451,7 @@ pub extern "C" fn _mi_thread_local_free(key: mi_thread_local_t) {
         }
     }
     unsafe {
-        mi_lock_release(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
+        mi_lock_release(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
 }
 

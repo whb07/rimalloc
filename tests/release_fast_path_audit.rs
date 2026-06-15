@@ -1357,6 +1357,15 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena allocation, containment, and unsafe destroy helpers should keep C's local call boundaries"
     );
     assert!(
+        arena_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_page_try_reabandon_to_mapped"
+        )
+            && arena_rs.contains("_mi_page_associated_theap_peek(page)")
+            && arena_rs.contains("_mi_arenas_page_abandon(page, theap)")
+            && free_rs.contains("_mi_arenas_page_try_reabandon_to_mapped(page)"),
+        "free path should keep C's arena page reabandon-to-mapped helper boundary"
+    );
+    assert!(
         arena_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arena_id_none")
             && arena_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arena_from_id")

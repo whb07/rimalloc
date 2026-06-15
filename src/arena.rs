@@ -2889,6 +2889,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
 
 /// # Safety
 /// Called from the free path on pages already associated with an arena.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
     page: *mut mi_page_t,
 ) -> bool {

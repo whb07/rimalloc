@@ -1,5 +1,36 @@
 # WORKLOG
 
+## 2026-06-15
+
+- Rechecked the current C/Rust mimalloc-bench drift with the benchmark cdylib copied from the exact release build artifact.
+- Found the earlier fast `glibc-simple` Rust number came from a stale `target/release/libmechanical_mimalloc.so`; a reproducible Cargo cdylib build of both `HEAD` and `d0767c7` showed Rust `glibc-simple` in the slower `~1.66s..1.70s` range.
+- Release cdylib footprint parity work:
+  - Added an explicit `[lib] crate type = ["rlib", "cdylib"]` so the benchmark `.so` is a first-class Cargo artifact.
+  - Made Linux release builds `no_std` and added a panic handler plus `rust_eh_personality` abort shim so the allocator cdylib does not pull in Rust `std` panic/backtrace machinery.
+  - Moved release Linux TLS uses for thread locals and option recursion to hidden `initial-exec` C TLS cells, matching the existing default/cached thread-heap TLS shim.
+  - Replaced remaining `std` imports in allocator modules with `core` where needed for the `no_std` release artifact.
+- Release artifact inspection after the change:
+  - Rust `.so` no longer exports/links `std::backtrace_rs`, `gimli`, `addr2line`, `rustc_demangle`, or `miniz_oxide` symbols.
+  - Dynamic relocation count dropped to `RELACOUNT 870`; `.text` is `0x2bd8a`.
+  - `readelf -d` shows no `NEEDED` entries for the Rust allocator cdylib.
+- Ported two C fast-path details found during `glibc-simple` tracing:
+  - The naked Linux `free` override now mirrors C's branch classes instead of sending every non-local-zero-flag case to `mi_free_ex_slow`: local flags jump to `mi_free_generic_local`, cross-thread no-flags does the thread-free-list push inline, and cross-thread flags jump to `mi_free_generic_mt`.
+  - `_mi_os_get_aligned_hint` now randomizes the initial aligned hint base in secure/release builds using `_mi_theap_random_next`, and returns no hint if the thread heap is not initialized, matching C mimalloc.
+- Extended `tests/release_fast_path_audit.rs` to cover the release cdylib shape, no-std gate, Linux TLS shims, C-style free fast-path branches, and aligned-hint randomization.
+- Focused benchmark after the release/no-std and free/hint changes:
+  - `cfrac`: C `2.70s..2.72s`, Rust `2.69s..2.74s`; Rust minor faults `193..197` vs C `200..203`.
+  - `glibc-thread`: C `.413s.. .420s`, Rust `.421s.. .423s`.
+  - `glibc-simple`: C `1.34s..1.35s`, Rust `1.65s..1.67s`; still a stable single-thread tiny-allocation gap.
+- `perf` after these changes shows the remaining `glibc-simple` gap mostly as extra cycles/lower IPC in `do_benchmark`'s write loop, with allocator symbol shares close to C. The next target should inspect remaining page/block layout, code placement, or benchmark interaction details rather than std/backtrace footprint.
+- Validation passed:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo test --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo build --release`
+- Validation limitation:
+  - `cargo test --release --quiet` currently fails before tests run because the release library is intentionally `no_std`, and Cargo's prebuilt `core` uses unwinding without `-Zbuild-std`. The release cdylib build and benchmark smoke runs still pass.
+
 ## 2026-06-14
 
 - Baseline after `b8ed598 Use direct free for Unix overrides`: single-thread/cache/general mimalloc-bench cases are close, but multi-threaded cases are still far from C mimalloc.

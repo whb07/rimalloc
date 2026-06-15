@@ -9,7 +9,7 @@
 
 use core::ffi::c_void;
 use core::ptr;
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::atomic::mi_lock_t;
@@ -18,7 +18,7 @@ use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_decrease, __mi_stat_increase, _mi_align_down_ptr,
     _mi_align_up, _mi_align_up_ptr, _mi_is_power_of_two, _mi_memid_create_os, _mi_memid_none,
     _mi_memzero_aligned, _mi_preloading, _mi_subproc, MI_DEBUG, MI_SECURE, MI_TRACK_ENABLED,
-    mi_commit_fun_t, mi_memid_t,
+    mi_commit_fun_t, mi_memid_t, mi_theap_is_initialized,
 };
 use crate::options::{
     _mi_verbose_message, _mi_warning_message_fmt, mi_option_get, mi_option_get_size,
@@ -213,9 +213,18 @@ pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usi
 
     let mut hint = ALIGNED_BASE.fetch_add(size, Ordering::AcqRel);
     if hint == 0 || hint > MI_HINT_MAX {
+        let mut init = MI_HINT_BASE;
+        if cfg!(feature = "secure") || cfg!(not(debug_assertions)) {
+            let theap = unsafe { _mi_theap_default() };
+            if unsafe { !mi_theap_is_initialized(theap) } {
+                return core::ptr::null_mut();
+            }
+            let r = unsafe { crate::theap::_mi_theap_random_next(theap) };
+            init += (MI_HINT_ALIGN * ((r >> 17) & 0xFFFFF)) % MI_HINT_AREA;
+        }
         let _ = ALIGNED_BASE.compare_exchange(
             hint.saturating_add(size),
-            MI_HINT_BASE,
+            init,
             Ordering::AcqRel,
             Ordering::Acquire,
         );

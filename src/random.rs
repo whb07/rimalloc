@@ -188,7 +188,7 @@ pub(crate) unsafe extern "C" fn _mi_random_split(
     let ctx = &mut *ctx;
     let ctx_new = &mut *ctx_new;
     crate::mi_debug_assert!(mi_random_is_initialized(ctx));
-    crate::mi_debug_assert!(!std::ptr::eq(ctx, ctx_new));
+    crate::mi_debug_assert!(!core::ptr::eq(ctx, ctx_new));
     chacha_split(
         ctx,
         ctx_new as *mut mi_random_ctx_t as usize as u64,

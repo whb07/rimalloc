@@ -2,9 +2,9 @@
 
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
+use core::ffi::c_long;
 use core::ffi::{c_char, c_int, c_void};
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize};
-use std::os::raw::c_long;
 
 use crate::atomic::mi_lock_t;
 use crate::stats::mi_stats_t;

@@ -7,7 +7,6 @@
     unsafe_op_in_unsafe_fn
 )]
 
-use core::cell::Cell;
 use core::mem::size_of;
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
@@ -38,8 +37,15 @@ static mi_thread_locals_empty: mi_thread_locals_t = mi_thread_locals_t {
     }],
 };
 
+#[cfg(not(target_os = "linux"))]
 thread_local! {
-    pub static mi_thread_locals: Cell<*mut mi_thread_locals_t> = const { Cell::new(ptr::null_mut()) };
+    pub static mi_thread_locals: core::cell::Cell<*mut mi_thread_locals_t> = const { core::cell::Cell::new(ptr::null_mut()) };
+}
+
+#[cfg(target_os = "linux")]
+unsafe extern "C" {
+    fn _mi_tls_thread_locals_get() -> *mut mi_thread_locals_t;
+    fn _mi_tls_thread_locals_set(tls: *mut mi_thread_locals_t);
 }
 
 static mi_thread_locals_lock: mi_lock_t = mi_lock_t::new();
@@ -48,19 +54,38 @@ static mi_thread_locals_version: AtomicUsize = AtomicUsize::new(0);
 
 #[inline]
 fn thread_locals_ptr() -> *mut mi_thread_locals_t {
-    mi_thread_locals.with(|slot| {
-        let mut tls = slot.get();
+    #[cfg(target_os = "linux")]
+    {
+        let mut tls = unsafe { _mi_tls_thread_locals_get() };
         if tls.is_null() {
             tls = ptr::from_ref(&mi_thread_locals_empty).cast_mut();
-            slot.set(tls);
+            unsafe { _mi_tls_thread_locals_set(tls) };
         }
         tls
-    })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        mi_thread_locals.with(|slot| {
+            let mut tls = slot.get();
+            if tls.is_null() {
+                tls = ptr::from_ref(&mi_thread_locals_empty).cast_mut();
+                slot.set(tls);
+            }
+            tls
+        })
+    }
 }
 
 #[inline]
 fn set_thread_locals_ptr(tls: *mut mi_thread_locals_t) {
-    mi_thread_locals.with(|slot| slot.set(tls));
+    #[cfg(target_os = "linux")]
+    unsafe {
+        _mi_tls_thread_locals_set(tls);
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        mi_thread_locals.with(|slot| slot.set(tls));
+    }
 }
 
 #[inline]

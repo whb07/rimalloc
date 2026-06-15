@@ -1,5 +1,6 @@
 //! Mechanical Rust translation foundation for mimalloc 3.3.2
 
+#![cfg_attr(all(not(test), target_os = "linux", not(debug_assertions)), no_std)]
 #![allow(clippy::nonminimal_bool)]
 
 pub mod abi;
@@ -33,3 +34,21 @@ pub mod theap;
 pub mod threadlocal;
 pub mod track;
 pub mod types;
+
+#[cfg(all(not(test), target_os = "linux", not(debug_assertions)))]
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
+    unsafe { options::_mi_assert_fail(c"panic".as_ptr(), c"rust".as_ptr(), 0, core::ptr::null()) }
+}
+
+#[cfg(all(not(test), target_os = "linux", not(debug_assertions)))]
+unsafe extern "C" {
+    #[link_name = "abort"]
+    fn c_abort() -> !;
+}
+
+#[cfg(all(not(test), target_os = "linux", not(debug_assertions)))]
+#[unsafe(no_mangle)]
+extern "C" fn rust_eh_personality() {
+    unsafe { c_abort() }
+}

@@ -11,9 +11,9 @@ use crate::mimalloc::{
     mi_strdup, mi_usable_size,
 };
 use crate::types::{EINVAL, ENOMEM, EOVERFLOW};
+use core::ffi::CStr;
 use core::ffi::{c_int, c_void};
 use core::{mem::size_of, ptr};
-use std::ffi::CStr;
 
 unsafe extern "C" {
     fn getenv(name: *const i8) -> *const i8;

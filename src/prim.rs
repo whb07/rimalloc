@@ -12,12 +12,18 @@
     unsafe_op_in_unsafe_fn
 )]
 
+#[cfg(target_os = "emscripten")]
 pub mod emscripten;
+#[cfg(target_os = "macos")]
 pub mod osx;
+#[cfg(all(not(windows), not(target_os = "emscripten"), not(target_os = "wasi")))]
 pub mod unix;
+#[cfg(target_os = "wasi")]
 pub mod wasi;
+#[cfg(windows)]
 pub mod windows;
 
+#[cfg(not(target_os = "linux"))]
 use core::cell::Cell;
 use core::ffi::{c_char, c_void};
 use core::ptr;
@@ -29,10 +35,10 @@ use crate::init::{
     _mi_theap_default_expansion_slot, _mi_theap_default_key, _mi_theap_default_slot,
     _mi_theap_empty,
 };
+#[cfg(target_os = "emscripten")]
+pub(crate) use crate::types::mi_msecs_t;
 pub(crate) use crate::types::mi_process_info_t;
-use crate::types::{
-    mi_heap_t, mi_msecs_t, mi_page_t, mi_theap_t, mi_thread_local_t, mi_threadid_t,
-};
+use crate::types::{mi_heap_t, mi_page_t, mi_theap_t, mi_thread_local_t, mi_threadid_t};
 
 pub const MIMALLOC_PRIM_H: () = ();
 pub const MI_USE_SBRK: usize = if cfg!(target_os = "wasi") { 1 } else { 0 };
@@ -96,12 +102,11 @@ pub struct mi_init_done_t;
 
 pub static mi_init_done: mi_init_done_t = mi_init_done_t;
 
+#[cfg(not(target_os = "linux"))]
 thread_local! {
     static TLS_SLOT_DEFAULT: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
     static TLS_SLOT_CACHED: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
-    #[cfg(not(target_os = "linux"))]
     static TLS_THEAP_DEFAULT: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
-    #[cfg(not(target_os = "linux"))]
     static TLS_THEAP_CACHED: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
@@ -156,25 +161,41 @@ unsafe extern "C" {
 
 #[inline]
 pub fn mi_prim_tls_slot(slot: usize) -> *mut c_void {
-    if MI_TLS_MODEL_FIXED_SLOT {
-        match slot {
-            MI_TLS_MODEL_FIXED_SLOT_DEFAULT => TLS_SLOT_DEFAULT.with(Cell::get),
-            MI_TLS_MODEL_FIXED_SLOT_CACHED => TLS_SLOT_CACHED.with(Cell::get),
-            _ => ptr::null_mut(),
+    #[cfg(not(target_os = "linux"))]
+    {
+        if MI_TLS_MODEL_FIXED_SLOT {
+            match slot {
+                MI_TLS_MODEL_FIXED_SLOT_DEFAULT => TLS_SLOT_DEFAULT.with(Cell::get),
+                MI_TLS_MODEL_FIXED_SLOT_CACHED => TLS_SLOT_CACHED.with(Cell::get),
+                _ => ptr::null_mut(),
+            }
+        } else {
+            ptr::null_mut()
         }
-    } else {
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = slot;
         ptr::null_mut()
     }
 }
 
 #[inline]
 pub fn mi_prim_tls_slot_set(slot: usize, value: *mut c_void) {
-    if MI_TLS_MODEL_FIXED_SLOT {
-        match slot {
-            MI_TLS_MODEL_FIXED_SLOT_DEFAULT => TLS_SLOT_DEFAULT.with(|cell| cell.set(value)),
-            MI_TLS_MODEL_FIXED_SLOT_CACHED => TLS_SLOT_CACHED.with(|cell| cell.set(value)),
-            _ => {}
+    #[cfg(not(target_os = "linux"))]
+    {
+        if MI_TLS_MODEL_FIXED_SLOT {
+            match slot {
+                MI_TLS_MODEL_FIXED_SLOT_DEFAULT => TLS_SLOT_DEFAULT.with(|cell| cell.set(value)),
+                MI_TLS_MODEL_FIXED_SLOT_CACHED => TLS_SLOT_CACHED.with(|cell| cell.set(value)),
+                _ => {}
+            }
         }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = slot;
+        let _ = value;
     }
 }
 

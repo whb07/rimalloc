@@ -7,6 +7,7 @@
     unsafe_op_in_unsafe_fn
 )]
 
+#[cfg(not(target_os = "linux"))]
 use core::cell::Cell;
 use core::cell::UnsafeCell;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
@@ -527,8 +528,15 @@ static OPTIONS: LockedOptions = LockedOptions(UnsafeCell::new([
     ),
 ]));
 
+#[cfg(not(target_os = "linux"))]
 thread_local! {
     static recurse: Cell<bool> = const { Cell::new(false) };
+}
+
+#[cfg(target_os = "linux")]
+unsafe extern "C" {
+    fn _mi_tls_recurse_get() -> c_int;
+    fn _mi_tls_recurse_set(recurse: c_int);
 }
 
 struct DelayedOutputBuffer(UnsafeCell<[u8; MI_MAX_DELAY_OUTPUT + 1]>);
@@ -732,14 +740,26 @@ fn mi_add_stderr_output() {
 
 #[inline]
 fn mi_recurse_enter_prim() -> bool {
-    recurse.with(|slot| {
-        if slot.get() {
+    #[cfg(target_os = "linux")]
+    unsafe {
+        if _mi_tls_recurse_get() != 0 {
             false
         } else {
-            slot.set(true);
+            _mi_tls_recurse_set(1);
             true
         }
-    })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        recurse.with(|slot| {
+            if slot.get() {
+                false
+            } else {
+                slot.set(true);
+                true
+            }
+        })
+    }
 }
 
 #[inline]
@@ -752,7 +772,14 @@ fn mi_recurse_enter() -> bool {
 
 #[inline]
 fn mi_recurse_exit_prim() {
-    recurse.with(|slot| slot.set(false));
+    #[cfg(target_os = "linux")]
+    unsafe {
+        _mi_tls_recurse_set(0);
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        recurse.with(|slot| slot.set(false));
+    }
 }
 
 #[inline]

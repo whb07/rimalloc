@@ -8,11 +8,11 @@
     unsafe_op_in_unsafe_fn
 )]
 
+use core::cmp::min;
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_void};
+use core::fmt;
 use core::ptr;
-use std::cmp::min;
-use std::ffi::CStr;
-use std::fmt;
 
 use crate::bits::MI_SIZE_BITS;
 

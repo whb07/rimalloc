@@ -3,6 +3,9 @@ name = "mechanical_mimalloc"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [features]
 default = []
 track-valgrind = []
@@ -15,5 +18,7 @@ panic = "abort"
 
 [profile.release]
 panic = "abort"
+lto = "fat"
+codegen-units = 1
 
 [dependencies]

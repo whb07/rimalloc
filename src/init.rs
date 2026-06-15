@@ -6,10 +6,12 @@
     clippy::missing_safety_doc
 )]
 
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
+use core::cell::Cell;
 use core::ffi::{c_long, c_void};
 use core::mem::{MaybeUninit, size_of};
 use core::ptr;
-use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::arena::_mi_arenas_unsafe_destroy_all;
 use crate::atomic::{
@@ -500,7 +502,7 @@ struct MiSubprocPrefix {
     arena_count: AtomicUsize,
     arenas: [*mut c_void; MI_MAX_ARENAS],
     arena_reserve_lock: mi_lock_t,
-    purge_expire: std::sync::atomic::AtomicI64,
+    purge_expire: core::sync::atomic::AtomicI64,
     heap_main: *mut mi_heap_t,
     heaps: *mut mi_heap_t,
     heaps_lock: mi_lock_t,
@@ -535,7 +537,7 @@ impl MiSubprocPrefix {
             arena_count: AtomicUsize::new(0),
             arenas: [ptr::null_mut(); MI_MAX_ARENAS],
             arena_reserve_lock: mi_lock_t::new(),
-            purge_expire: std::sync::atomic::AtomicI64::new(0),
+            purge_expire: core::sync::atomic::AtomicI64::new(0),
             heap_main: ptr::null_mut(),
             heaps: ptr::null_mut(),
             heaps_lock: mi_lock_t::new(),
@@ -697,11 +699,11 @@ static MAIN_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(8);
 
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
 thread_local! {
-    #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
-    static THREAD_ID: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static THREAD_ID: Cell<usize> = const { Cell::new(0) };
     #[cfg(not(target_os = "linux"))]
-    static THEAP_MAIN: std::cell::Cell<*mut mi_theap_t> = const { std::cell::Cell::new(ptr::null_mut()) };
+    static THEAP_MAIN: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
 #[cfg(target_os = "linux")]
@@ -718,7 +720,7 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        THEAP_MAIN.with(std::cell::Cell::get)
+        THEAP_MAIN.with(Cell::get)
     }
 }
 

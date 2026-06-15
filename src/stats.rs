@@ -9,8 +9,8 @@
 
 use core::ffi::{CStr, c_char, c_void};
 use core::str;
+use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 use core::{mem::size_of, ptr};
-use std::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed, mi_lock_t,
@@ -1242,7 +1242,7 @@ pub unsafe extern "C" fn mi_stats_print(out: *mut c_void) {
         None
     } else {
         // The legacy C API accepts an output callback through a `void*`.
-        Some(unsafe { std::mem::transmute::<*mut c_void, mi_output_fun>(out) })
+        Some(unsafe { core::mem::transmute::<*mut c_void, mi_output_fun>(out) })
     };
     unsafe { mi_stats_print_out(out_fun, ptr::null_mut()) };
 }

@@ -198,6 +198,8 @@ fn options_state_uses_internal_locks_like_c() {
 #[test]
 fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");
+    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let tls_shim = fs::read_to_string(root.join("src/tls_shim.c")).expect("read src/tls_shim.c");
     let build_rs = fs::read_to_string(root.join("build.rs")).expect("read build.rs");
     let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
@@ -205,11 +207,28 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         fs::read_to_string(root.join("src/alloc_override.rs")).expect("read src/alloc_override.rs");
 
     assert!(
+        cargo_toml.contains("crate-type = [\"rlib\", \"cdylib\"]")
+            && cargo_toml.contains("lto = \"fat\"")
+            && cargo_toml.contains("codegen-units = 1"),
+        "release builds should produce the benchmark cdylib directly with one optimized codegen unit"
+    );
+    assert!(
+        lib_rs.contains(
+            "#![cfg_attr(all(not(test), target_os = \"linux\", not(debug_assertions)), no_std)]"
+        ) && lib_rs.contains("#[panic_handler]")
+            && lib_rs.contains("#[link_name = \"abort\"]")
+            && lib_rs.contains("extern \"C\" fn rust_eh_personality()"),
+        "Linux release cdylibs should avoid linking Rust std panic/backtrace machinery"
+    );
+    assert!(
         tls_shim.contains("mi_tls_theap_default")
             && tls_shim.contains("tls_model(\"initial-exec\")")
             && tls_shim.contains("visibility(\"hidden\")")
-            && tls_shim.contains("= &_mi_theap_empty"),
-        "default Linux malloc assembly should read the hidden initial-exec TLS heap initialized like C"
+            && tls_shim.contains("= &_mi_theap_empty")
+            && tls_shim.contains("mi_tls_thread_locals")
+            && tls_shim.contains("_mi_tls_thread_locals_get")
+            && tls_shim.contains("_mi_tls_recurse_get"),
+        "default Linux allocator fast paths should read hidden initial-exec TLS cells like C"
     );
     assert!(
         build_rs.contains("target_arch == \"x86_64\"")
@@ -224,7 +243,6 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_array_fast_64")
             && override_rs.contains("core::arch::naked_asm!")
             && override_rs.contains("mi_tls_theap_default@GOTTPOFF")
-            && !override_rs.contains("\"test rdi, rdi\"")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
             && override_rs.contains("slow = sym crate::page::_mi_malloc_generic")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_unix_free_fast")
@@ -232,8 +250,12 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains(".set _ZdlPv, free")
             && override_rs.contains(".set _ZdaPv, free")
             && override_rs.contains("page_map = sym crate::page_map::_mi_page_map")
-            && override_rs.contains("slow = sym crate::free::mi_free_ex_slow")
             && override_rs.contains("retire = sym crate::page::_mi_page_retire")
+            && override_rs.contains("collect_mt = sym crate::free::mi_free_try_collect_mt")
+            && override_rs.contains("generic_local = sym crate::free::mi_free_generic_local")
+            && override_rs.contains("generic_mt = sym crate::free::mi_free_generic_mt")
+            && override_rs.contains("\"cmp rdx, 3\"")
+            && override_rs.contains("\"lock cmpxchg qword ptr [rdx], rcx\"")
             && override_rs.contains("jmp mi_new"),
         "default Linux malloc/new/free overrides should use direct naked-assembly fast paths"
     );
@@ -259,6 +281,24 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     assert_eq!(offset_of!(mi_page_t, used), 0x10);
     #[cfg(not(feature = "guarded"))]
     assert_eq!(offset_of!(mi_theap_t, pages_free_direct), 0x110);
+}
+
+#[test]
+fn aligned_os_hints_are_randomized_like_c_release_builds() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
+
+    assert!(
+        os_rs.contains("let mut init = MI_HINT_BASE;")
+            && os_rs.contains("if cfg!(feature = \"secure\") || cfg!(not(debug_assertions))")
+            && os_rs.contains("let theap = unsafe { _mi_theap_default() };")
+            && os_rs.contains("if unsafe { !mi_theap_is_initialized(theap) }")
+            && os_rs.contains("return core::ptr::null_mut();")
+            && os_rs.contains("let r = unsafe { crate::theap::_mi_theap_random_next(theap) };")
+            && os_rs.contains("init += (MI_HINT_ALIGN * ((r >> 17) & 0xFFFFF)) % MI_HINT_AREA;")
+            && os_rs.contains("hint.saturating_add(size),\n            init,"),
+        "aligned OS allocation hints should randomize the base from the thread heap like C mimalloc"
+    );
 }
 
 #[test]

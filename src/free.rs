@@ -399,7 +399,9 @@ pub unsafe fn mi_validate_block_from_ptr(
     }
 }
 
-pub unsafe fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
+#[cold]
+#[inline(never)]
+pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
     crate::mi_assert_internal!(!p.is_null() && !page.is_null());
     let block = if mi_page_has_interior_pointers(page) {
         _mi_page_ptr_unalign(page, p)
@@ -410,7 +412,9 @@ pub unsafe fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
     mi_free_block_local(page, block, was_guarded, true, true);
 }
 
-pub unsafe fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
+#[cold]
+#[inline(never)]
+pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
     crate::mi_assert_internal!(!p.is_null() && !page.is_null());
     let block = if mi_page_has_interior_pointers(page) {
         _mi_page_ptr_unalign(page, p)
@@ -612,7 +616,12 @@ unsafe fn mi_abandoned_page_try_reclaim(
     true
 }
 
-unsafe fn mi_free_try_collect_mt(page: *mut mi_page_t, mut mt_free: *mut mi_block_t) {
+#[cold]
+#[inline(never)]
+pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
+    page: *mut mi_page_t,
+    mut mt_free: *mut mi_block_t,
+) {
     crate::mi_assert_internal!(mi_page_is_owned(page));
     crate::mi_assert_internal!(mi_page_is_abandoned(page));
     crate::mi_assert_internal!(!mt_free.is_null());

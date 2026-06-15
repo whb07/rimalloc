@@ -526,7 +526,7 @@ fn mi_bchunk_setNX(
     }
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bchunk_xsetNC(
     set: mi_xset_t,
     chunk: &mut mi_bchunk_t,
@@ -618,7 +618,7 @@ fn mi_bchunk_clearN(
     }
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bchunk_popcountNC(
     chunk: &mi_bchunk_t,
     mut field_idx: usize,
@@ -662,7 +662,7 @@ fn mi_bchunk_popcountN(chunk: &mi_bchunk_t, cidx: usize, n: usize) -> usize {
     }
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bchunk_is_xsetNC(
     set: mi_xset_t,
     chunk: &mi_bchunk_t,
@@ -745,7 +745,7 @@ fn mi_bchunk_try_clearNX(
     }
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bchunk_try_clearNC(
     chunk: &mut mi_bchunk_t,
     cidx: usize,
@@ -894,7 +894,7 @@ fn mi_bchunk_try_find_and_clear8_at(
     false
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bchunk_try_find_and_clear8(chunk: &mut mi_bchunk_t, pidx: &mut usize) -> bool {
     for i in 0..MI_BCHUNK_FIELDS {
         if mi_bchunk_try_find_and_clear8_at(chunk, i, pidx) {
@@ -904,7 +904,7 @@ fn mi_bchunk_try_find_and_clear8(chunk: &mut mi_bchunk_t, pidx: &mut usize) -> b
     false
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bchunk_try_find_and_clearNX(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
     if n == 0 || n > MI_BFIELD_BITS {
         return false;
@@ -954,7 +954,7 @@ fn mi_bchunk_try_find_and_clearNX(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
     false
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bchunk_try_find_and_clearNC(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
     if n == 0 || n > MI_BCHUNK_BITS {
         return false;
@@ -1081,7 +1081,7 @@ fn mi_bitmap_chunkmap_try_clear(bitmap: &mut mi_bitmap_t, chunk_idx: usize) -> b
     true
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bbitmap_set_chunk_bin(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, bin: mi_chunkbin_t) {
     crate::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     let mut ibin = MI_CBIN_SMALL;
@@ -1121,7 +1121,7 @@ fn mi_bbitmap_chunkmap_set(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, check_a
     mi_bbitmap_chunkmap_set_max(bbitmap, chunk_idx);
 }
 
-#[inline]
+#[inline(never)]
 fn mi_bbitmap_chunkmap_try_clear(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize) -> bool {
     crate::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     if !mi_bchunk_all_are_clear_relaxed(&bbitmap.chunks[chunk_idx]) {
@@ -2253,3 +2253,33 @@ static MI_BBITMAP_TRY_FIND_AND_CLEARN_KEEP: unsafe fn(
     usize,
     *mut usize,
 ) -> bool = mi_bbitmap_try_find_and_clearN_;
+
+type mi_bchunk_xsetNC_fun_t =
+    fn(mi_xset_t, &mut mi_bchunk_t, usize, usize, Option<&mut usize>, Option<&mut bool>) -> bool;
+
+#[used]
+static MI_BCHUNK_XSETNC_KEEP: mi_bchunk_xsetNC_fun_t = mi_bchunk_xsetNC;
+#[used]
+static MI_BCHUNK_POPCOUNTNC_KEEP: fn(&mi_bchunk_t, usize, usize, usize) -> usize =
+    mi_bchunk_popcountNC;
+#[used]
+static MI_BCHUNK_IS_XSETNC_KEEP: fn(mi_xset_t, &mi_bchunk_t, usize, usize, usize) -> bool =
+    mi_bchunk_is_xsetNC;
+#[used]
+static MI_BCHUNK_TRY_CLEARNC_KEEP: fn(&mut mi_bchunk_t, usize, usize, Option<&mut bool>) -> bool =
+    mi_bchunk_try_clearNC;
+#[used]
+static MI_BCHUNK_TRY_FIND_AND_CLEAR8_KEEP: fn(&mut mi_bchunk_t, &mut usize) -> bool =
+    mi_bchunk_try_find_and_clear8;
+#[used]
+static MI_BCHUNK_TRY_FIND_AND_CLEARNX_KEEP: fn(&mut mi_bchunk_t, usize, &mut usize) -> bool =
+    mi_bchunk_try_find_and_clearNX;
+#[used]
+static MI_BCHUNK_TRY_FIND_AND_CLEARNC_KEEP: fn(&mut mi_bchunk_t, usize, &mut usize) -> bool =
+    mi_bchunk_try_find_and_clearNC;
+#[used]
+static MI_BBITMAP_SET_CHUNK_BIN_KEEP: fn(&mut mi_bbitmap_t, usize, mi_chunkbin_t) =
+    mi_bbitmap_set_chunk_bin;
+#[used]
+static MI_BBITMAP_CHUNKMAP_TRY_CLEAR_KEEP: fn(&mut mi_bbitmap_t, usize) -> bool =
+    mi_bbitmap_chunkmap_try_clear;

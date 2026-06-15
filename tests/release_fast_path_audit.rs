@@ -1925,6 +1925,31 @@ fn free_path_internals_are_not_dynamic_exports() {
             "bbitmap helper boundary marker missing: {marker}"
         );
     }
+    for marker in [
+        "#[inline(never)]\nfn mi_bchunk_xsetNC(",
+        "#[inline(never)]\nfn mi_bchunk_popcountNC(",
+        "#[inline(never)]\nfn mi_bchunk_is_xsetNC(",
+        "#[inline(never)]\nfn mi_bchunk_try_clearNC(",
+        "#[inline(never)]\nfn mi_bchunk_try_find_and_clear8(",
+        "#[inline(never)]\nfn mi_bchunk_try_find_and_clearNX(",
+        "#[inline(never)]\nfn mi_bchunk_try_find_and_clearNC(",
+        "#[inline(never)]\nfn mi_bbitmap_set_chunk_bin(",
+        "#[inline(never)]\nfn mi_bbitmap_chunkmap_try_clear(",
+        "static MI_BCHUNK_XSETNC_KEEP",
+        "static MI_BCHUNK_POPCOUNTNC_KEEP",
+        "static MI_BCHUNK_IS_XSETNC_KEEP",
+        "static MI_BCHUNK_TRY_CLEARNC_KEEP",
+        "static MI_BCHUNK_TRY_FIND_AND_CLEAR8_KEEP",
+        "static MI_BCHUNK_TRY_FIND_AND_CLEARNX_KEEP",
+        "static MI_BCHUNK_TRY_FIND_AND_CLEARNC_KEEP",
+        "static MI_BBITMAP_SET_CHUNK_BIN_KEEP",
+        "static MI_BBITMAP_CHUNKMAP_TRY_CLEAR_KEEP",
+    ] {
+        assert!(
+            bitmap_rs.contains(marker),
+            "bchunk bitmap helper boundary marker missing: {marker}"
+        );
+    }
     assert!(
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")

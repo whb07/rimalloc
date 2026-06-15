@@ -707,6 +707,7 @@ unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> b
     true
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     _mi_page_free_collect(page, false);
     if mi_page_all_free(page) {

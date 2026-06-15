@@ -112,20 +112,23 @@ struct MiArenaCommitPrefix {
     pages_meta: *mut mi_page_t,
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_has_overcommit() -> bool {
     unsafe { (*mi_os_mem_config_ptr()).has_overcommit }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_has_virtual_reserve() -> bool {
     unsafe { (*mi_os_mem_config_ptr()).has_virtual_reserve }
 }
 
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_page_size() -> usize {
     unsafe { (*mi_os_mem_config_ptr()).page_size }
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_large_page_size() -> usize {
     let large = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
     if large != 0 {
@@ -135,7 +138,7 @@ pub unsafe extern "C" fn _mi_os_large_page_size() -> usize {
     }
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
     let minsize = mi_option_get_size(mi_option_t::mi_option_minimal_purge_size);
     if minsize != 0 {
@@ -149,20 +152,21 @@ pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
     }
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
     let gsize = unsafe { _mi_os_page_size() };
     crate::mi_debug_assert!(gsize <= (MI_ARENA_SLICE_SIZE / 4));
     gsize
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
     let vbits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
     crate::mi_debug_assert!(vbits <= MI_MAX_VABITS);
     vbits
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize) -> bool {
     let large_page_size = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
     large_page_size != 0
@@ -170,6 +174,7 @@ pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize)
         && alignment.is_multiple_of(large_page_size)
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
     let align_size = if size < 512 * MI_KiB {
         unsafe { _mi_os_page_size() }
@@ -189,12 +194,12 @@ pub(crate) unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
     }
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_init() {
     unsafe { _mi_prim_mem_init(core::ptr::addr_of_mut!(mi_os_mem_config)) };
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usize) -> *mut c_void {
     if MI_INTPTR_SIZE < 8 || try_alignment <= unsafe { (*mi_os_mem_config_ptr()).alloc_granularity }
     {
@@ -285,7 +290,7 @@ fn mi_os_page_align_area_conservative(
     mi_os_page_align_areax(true, addr, size, newsize)
 }
 
-#[inline]
+#[inline(never)]
 #[allow(clippy::absurd_extreme_comparisons)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_size() -> usize {
     if MI_SECURE > 0 {
@@ -295,7 +300,7 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_size() -> usize {
     }
 }
 
-#[inline]
+#[inline(never)]
 #[allow(clippy::absurd_extreme_comparisons)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
     addr: *mut c_void,
@@ -325,7 +330,7 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
     true
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_set_before(
     addr: *mut c_void,
     memid: mi_memid_t,
@@ -340,7 +345,7 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_before(
     }
 }
 
-#[inline]
+#[inline(never)]
 #[allow(clippy::absurd_extreme_comparisons)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
     addr: *mut c_void,
@@ -372,7 +377,7 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
     true
 }
 
-#[inline]
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_before(
     addr: *mut c_void,
     memid: mi_memid_t,
@@ -431,6 +436,7 @@ pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_commit(
     addr: *mut c_void,
     size: usize,
@@ -474,6 +480,7 @@ unsafe fn mi_os_decommit_ex(
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool {
     let mut needs_recommit = false;
     unsafe { mi_os_decommit_ex(addr, size, &mut needs_recommit, size) }
@@ -511,6 +518,7 @@ pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_reuse(addr: *mut c_void, size: usize) {
     let mut csize = 0;
     let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
@@ -562,6 +570,7 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
 
 /// # Safety
 /// `p..p+size` must designate a valid virtual memory range for the active OS primitive layer.
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_purge(p: *mut c_void, size: usize) -> bool {
     unsafe { _mi_os_purge_ex(p, size, true, size, None, core::ptr::null_mut()) }
 }
@@ -589,12 +598,14 @@ unsafe fn mi_os_protectx(addr: *mut c_void, size: usize, protect: bool) -> bool 
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_protect(addr: *mut c_void, size: usize) -> bool {
     unsafe { mi_os_protectx(addr, size, true) }
 }
 
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_unprotect(addr: *mut c_void, size: usize) -> bool {
     unsafe { mi_os_protectx(addr, size, false) }
 }
@@ -641,6 +652,7 @@ const fn mi_memkind_is_os(memkind: crate::internal::mi_memkind_t) -> bool {
     )
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_free_ex(
     addr: *mut c_void,
     size: usize,
@@ -681,6 +693,7 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
 }
 
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
     unsafe { _mi_os_free_ex(p, size, true, memid, core::ptr::null_mut()) };
 }
@@ -915,6 +928,7 @@ unsafe fn mi_os_ensure_zero(p: *mut c_void, size: usize, memid: *mut mi_memid_t)
 }
 
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
     if !memid.is_null() {
         unsafe {
@@ -939,11 +953,13 @@ pub(crate) unsafe extern "C" fn _mi_os_alloc(size: usize, memid: *mut mi_memid_t
     p
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void {
     let p = unsafe { _mi_os_alloc(size, memid) };
     unsafe { mi_os_ensure_zero(p, size, memid) }
 }
 
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_alloc_aligned(
     size: usize,
     alignment: usize,
@@ -969,6 +985,44 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned(
     }
     p
 }
+
+#[used]
+static MI_OS_PAGE_SIZE_KEEP: unsafe extern "C" fn() -> usize = _mi_os_page_size;
+#[used]
+static MI_OS_GUARD_PAGE_SIZE_KEEP: unsafe extern "C" fn() -> usize = _mi_os_guard_page_size;
+#[used]
+static MI_OS_SECURE_GUARD_PAGE_SIZE_KEEP: unsafe extern "C" fn() -> usize =
+    _mi_os_secure_guard_page_size;
+#[used]
+static MI_OS_ALLOC_KEEP: unsafe extern "C" fn(usize, *mut mi_memid_t) -> *mut c_void = _mi_os_alloc;
+#[used]
+static MI_OS_FREE_KEEP: unsafe extern "C" fn(*mut c_void, usize, mi_memid_t) = _mi_os_free;
+#[used]
+static MI_OS_REUSE_KEEP: unsafe extern "C" fn(*mut c_void, usize) = _mi_os_reuse;
+#[used]
+static MI_OS_PURGE_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> bool = _mi_os_purge;
+#[used]
+static MI_OS_PROTECT_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> bool = _mi_os_protect;
+#[used]
+static MI_OS_UNPROTECT_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> bool = _mi_os_unprotect;
+#[used]
+static MI_OS_SECURE_GUARD_PAGE_SET_AT_KEEP: unsafe extern "C" fn(*mut c_void, mi_memid_t) -> bool =
+    _mi_os_secure_guard_page_set_at;
+#[used]
+static MI_OS_SECURE_GUARD_PAGE_SET_BEFORE_KEEP: unsafe extern "C" fn(
+    *mut c_void,
+    mi_memid_t,
+) -> bool = _mi_os_secure_guard_page_set_before;
+#[used]
+static MI_OS_SECURE_GUARD_PAGE_RESET_AT_KEEP: unsafe extern "C" fn(
+    *mut c_void,
+    mi_memid_t,
+) -> bool = _mi_os_secure_guard_page_reset_at;
+#[used]
+static MI_OS_SECURE_GUARD_PAGE_RESET_BEFORE_KEEP: unsafe extern "C" fn(
+    *mut c_void,
+    mi_memid_t,
+) -> bool = _mi_os_secure_guard_page_reset_before;
 
 pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     size: usize,
@@ -1133,6 +1187,7 @@ unsafe fn mi_os_numa_node_get() -> i32 {
     numa_node
 }
 
+#[inline(never)]
 pub unsafe extern "C" fn _mi_os_numa_node() -> i32 {
     if MI_NUMA_NODE_COUNT.load(Ordering::Relaxed) == 1 {
         0

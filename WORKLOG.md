@@ -1657,3 +1657,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.13s..2.28s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.08B` instructions and `15.61B` cycles; Rust about `10.65B` instructions and `16.19B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's OS helper boundary set:
+  - C emits the `_mi_os_*` layer helpers as standalone local functions around OS configuration, guard pages, commit/decommit, purge/reuse/protect, allocation, and NUMA helpers.
+  - Rust had source equivalents, but release inlined or dropped many of the wrapper boundaries, leaving the C/Rust local helper symbol set mismatched.
+  - Marked the Rust OS helper wrappers `#[inline(never)]`, added local `#[used]` anchors for wrappers that can still be dropped when unreferenced or compile-time-folded, and extended release audit coverage for the out-of-line helper set plus the retained wrapper anchors.
+  - Rebuilt release and confirmed the C/Rust `_mi_os_*` local helper comparison is empty for the previously missing OS helper set.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.12s..2.13s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.07B` instructions and `15.61B` cycles; Rust about `10.66B` instructions and `16.18B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

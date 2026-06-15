@@ -1482,6 +1482,62 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_message should keep C's local message helper boundary and mimalloc prefix path"
     );
     assert!(
+        os_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_has_overcommit()"
+        ) && os_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_has_virtual_reserve()"
+        ) && os_rs
+            .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_large_page_size()")
+            && os_rs.contains(
+                "#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_minimal_purge_size()"
+            )
+            && os_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_guard_page_size()")
+            && os_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_virtual_address_bits()"
+            )
+            && os_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_canuse_large_page(")
+            && os_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_good_alloc_size("
+            )
+            && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_init()")
+            && os_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_get_aligned_hint(")
+            && os_rs.contains(
+                "#[inline(never)]\n#[allow(clippy::absurd_extreme_comparisons)]\npub unsafe extern \"C\" fn _mi_os_secure_guard_page_size()"
+            )
+            && os_rs.contains(
+                "#[inline(never)]\n#[allow(clippy::absurd_extreme_comparisons)]\npub unsafe extern \"C\" fn _mi_os_secure_guard_page_set_at("
+            )
+            && os_rs.contains(
+                "#[inline(never)]\n#[allow(clippy::absurd_extreme_comparisons)]\npub unsafe extern \"C\" fn _mi_os_secure_guard_page_reset_at("
+            )
+            && os_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_commit(")
+            && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_decommit(")
+            && os_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_reuse(")
+            && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_purge(")
+            && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_protect(")
+            && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_unprotect(")
+            && os_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_free_ex(")
+            && os_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_zalloc(")
+            && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_alloc_aligned(")
+            && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_numa_node()")
+            && os_rs.contains("static MI_OS_PAGE_SIZE_KEEP")
+            && os_rs.contains("static MI_OS_GUARD_PAGE_SIZE_KEEP")
+            && os_rs.contains("static MI_OS_SECURE_GUARD_PAGE_SIZE_KEEP")
+            && os_rs.contains("static MI_OS_ALLOC_KEEP")
+            && os_rs.contains("static MI_OS_FREE_KEEP")
+            && os_rs.contains("static MI_OS_REUSE_KEEP")
+            && os_rs.contains("static MI_OS_PURGE_KEEP")
+            && os_rs.contains("static MI_OS_PROTECT_KEEP")
+            && os_rs.contains("static MI_OS_UNPROTECT_KEEP")
+            && os_rs.contains("static MI_OS_SECURE_GUARD_PAGE_SET_AT_KEEP")
+            && os_rs.contains("static MI_OS_SECURE_GUARD_PAGE_RESET_BEFORE_KEEP"),
+        "OS helper wrappers should keep C's local helper boundaries and retained wrapper set"
+    );
+    assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_free(")
             && page_rs.contains("mi_page_queue_remove(pq, page);")
             && page_rs.contains("mi_page_set_theap(page, ptr::null_mut());")

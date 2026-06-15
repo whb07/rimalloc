@@ -18,7 +18,7 @@ use std::fmt::Write as _;
 use std::mem::size_of;
 use std::os::raw::{c_int, c_long, c_void};
 use std::process::abort;
-use std::sync::atomic::{AtomicIsize, AtomicPtr, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicPtr, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
@@ -224,6 +224,9 @@ static OPTION_VALUES: [AtomicIsize; MI_OPTION_COUNT] = [
     MI_OPTION_VALUE!(MI_DEFAULT_ARENA_MAX_OBJECT_SIZE),
     MI_OPTION_VALUE!(0),
 ];
+
+static OPTION_INITS: [AtomicU8; MI_OPTION_COUNT] =
+    [const { AtomicU8::new(mi_option_init_t::MI_OPTION_UNINIT as u8) }; MI_OPTION_COUNT];
 
 static OPTIONS: Mutex<[mi_option_desc_t; MI_OPTION_COUNT]> = Mutex::new([
     MI_OPTION!(
@@ -555,6 +558,20 @@ fn option_value_load(idx: usize) -> c_long {
 #[inline]
 fn option_value_store(idx: usize, value: c_long) {
     OPTION_VALUES[idx].store(value as isize, Ordering::Relaxed);
+}
+
+#[inline]
+fn option_init_load(idx: usize) -> mi_option_init_t {
+    match OPTION_INITS[idx].load(Ordering::Acquire) {
+        2 => mi_option_init_t::MI_OPTION_INITIALIZED,
+        1 => mi_option_init_t::MI_OPTION_DEFAULTED,
+        _ => mi_option_init_t::MI_OPTION_UNINIT,
+    }
+}
+
+#[inline]
+fn option_init_store(idx: usize, init: mi_option_init_t) {
+    OPTION_INITS[idx].store(init as u8, Ordering::Release);
 }
 
 #[inline]
@@ -1175,26 +1192,22 @@ pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
         return 0;
     }
 
-    let needs_init = {
-        let table = lock_unpoisoned(&OPTIONS);
-        table[idx].init == mi_option_init_t::MI_OPTION_UNINIT
-    };
-
-    if needs_init {
-        let mut desc = {
+    if option_init_load(idx) == mi_option_init_t::MI_OPTION_UNINIT {
+        let desc = {
             let mut table = lock_unpoisoned(&OPTIONS);
             if table[idx].init == mi_option_init_t::MI_OPTION_UNINIT {
                 table[idx].init = mi_option_init_t::MI_OPTION_DEFAULTED;
+                option_init_store(idx, mi_option_init_t::MI_OPTION_DEFAULTED);
+                Some(table[idx])
+            } else {
+                None
             }
-            table[idx]
         };
-        mi_option_init(&mut desc);
-        if desc.init == mi_option_init_t::MI_OPTION_INITIALIZED {
-            mi_option_set(option, desc.value);
-        } else {
-            let mut table = lock_unpoisoned(&OPTIONS);
-            if table[idx].init == mi_option_init_t::MI_OPTION_UNINIT {
-                table[idx].init = mi_option_init_t::MI_OPTION_DEFAULTED;
+
+        if let Some(mut desc) = desc {
+            mi_option_init(&mut desc);
+            if desc.init == mi_option_init_t::MI_OPTION_INITIALIZED {
+                mi_option_set(option, desc.value);
             }
         }
     }
@@ -1243,6 +1256,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
         table[idx].value = value;
         table[idx].init = mi_option_init_t::MI_OPTION_INITIALIZED;
         option_value_store(idx, value);
+        option_init_store(idx, mi_option_init_t::MI_OPTION_INITIALIZED);
 
         let guarded_min_idx = mi_option_t::mi_option_guarded_min as usize;
         let guarded_max_idx = mi_option_t::mi_option_guarded_max as usize;

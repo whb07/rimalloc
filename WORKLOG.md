@@ -37,3 +37,32 @@
   - `mstressN`: C `1.62s`, Rust `2.47s`; Rust RSS still high at `14481724` KiB and sys time `23.05s`.
   - `xmalloc-testN`: C `0.209s`, Rust `0.211s`; time, RSS, user, and sys are now close.
 - Remaining issue: multi-threaded RSS/sys-time overhead remains for `larsonN-sized` and `mstressN`, so the next target is not option-read locking but page/arena reclaim, commit, or purge behavior under threaded pressure.
+- Follow-up profile after `36c6526`:
+  - `perf stat` for `larson-sized` Rust: relative time `5.059s`, `235.4B` instructions, `0.92` IPC, `28,348` context switches, `3.16s` sys.
+  - `perf stat` for `larson-sized` C: relative time `3.055s`, `324.4B` instructions, `0.83` IPC, `26,637` context switches, `0.83s` sys.
+  - `perf report` no longer shows `_mi_option_get_fast` locking, but regular `mi_option_get` still appears with `std::sys::sync::mutex::futex::Mutex::lock_contended` around `1.35%`.
+- Implemented an atomic `OPTION_INITS` mirror:
+  - `mi_option_get` now uses the descriptor mutex only when the option is still `MI_OPTION_UNINIT`.
+  - `mi_option_set` publishes both the value and initialized state atomically.
+  - `mi_option_get_clamp`, `mi_option_get_size`, and `mi_option_is_enabled` benefit through `mi_option_get`.
+- Focused checks passed for the `OPTION_INITS` change:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test options_exports`
+  - `cargo test --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+- Full validation passed for the `OPTION_INITS` change:
+  - `cargo test --release --quiet`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `git diff --check`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `scripts/check-behavioral-parity.py`
+- Rebuilt benchmark cdylib and confirmed `mi_option_get` hot path checks `OPTION_INITS` before the slow mutex initialization branch.
+- Focused mimalloc-bench after `OPTION_INITS`:
+  - `larsonN-sized`: C `2.041s`, Rust `2.566s`; Rust RSS `15200956` KiB and sys `33.51s`.
+  - `mstressN`: C `1.61s`, Rust `2.46s`; Rust RSS `14615320` KiB and sys `23.22s`.
+  - `xmalloc-testN`: C `0.220s`, Rust `0.218s`.
+- Result: option locking is no longer the dominant remaining issue; the major gap is still high RSS/sys behavior in multi-threaded arena/page lifecycle paths.

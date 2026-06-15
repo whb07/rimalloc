@@ -9,17 +9,13 @@
 
 use core::cell::Cell;
 use core::cell::UnsafeCell;
-use core::ffi::c_char;
+use core::ffi::{CStr, c_char, c_int, c_long, c_void};
+use core::fmt;
+use core::fmt::Write as _;
+use core::mem::size_of;
 use core::ptr;
 use core::ptr::addr_of_mut;
-use std::ffi::CStr;
-use std::fmt;
-use std::fmt::Write as _;
-use std::mem::size_of;
-use std::os::raw::{c_int, c_long, c_void};
-use std::process::abort;
-use std::sync::atomic::{AtomicIsize, AtomicPtr, AtomicU8, AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use core::sync::atomic::{AtomicIsize, AtomicPtr, AtomicU8, AtomicUsize, Ordering};
 
 use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
 use crate::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
@@ -31,6 +27,11 @@ use crate::prim::_mi_prim_out_stderr;
 use crate::types::{
     EFAULT, MI_MALLOC_VERSION, mi_error_fun, mi_option_desc_t, mi_option_init_t, mi_output_fun,
 };
+
+unsafe extern "C" {
+    #[link_name = "abort"]
+    fn c_abort() -> !;
+}
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -228,7 +229,12 @@ static OPTION_VALUES: [AtomicIsize; MI_OPTION_COUNT] = [
 static OPTION_INITS: [AtomicU8; MI_OPTION_COUNT] =
     [const { AtomicU8::new(mi_option_init_t::MI_OPTION_UNINIT as u8) }; MI_OPTION_COUNT];
 
-static OPTIONS: Mutex<[mi_option_desc_t; MI_OPTION_COUNT]> = Mutex::new([
+struct LockedOptions(UnsafeCell<[mi_option_desc_t; MI_OPTION_COUNT]>);
+
+unsafe impl Sync for LockedOptions {}
+
+static mut options_lock: mi_lock_t = mi_lock_s::new();
+static OPTIONS: LockedOptions = LockedOptions(UnsafeCell::new([
     MI_OPTION!(
         MI_DEFAULT_SHOW_ERRORS,
         mi_option_init_t::MI_OPTION_UNINIT,
@@ -518,7 +524,7 @@ static OPTIONS: Mutex<[mi_option_desc_t; MI_OPTION_COUNT]> = Mutex::new([
         mi_option_arena_is_numa_local,
         "arena_is_numa_local"
     ),
-]);
+]));
 
 thread_local! {
     static recurse: Cell<bool> = const { Cell::new(false) };
@@ -542,12 +548,42 @@ static mi_max_warning_count: AtomicIsize = AtomicIsize::new(16);
 static error_count: AtomicUsize = AtomicUsize::new(0);
 #[allow(dead_code)]
 static warning_count: AtomicUsize = AtomicUsize::new(0);
-static mi_error_handler: Mutex<Option<mi_error_fun>> = Mutex::new(None);
+
+struct LockedErrorHandler(UnsafeCell<Option<mi_error_fun>>);
+
+unsafe impl Sync for LockedErrorHandler {}
+
+static mut mi_error_handler_lock: mi_lock_t = mi_lock_s::new();
+static mi_error_handler: LockedErrorHandler = LockedErrorHandler(UnsafeCell::new(None));
 static mi_error_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 
 #[inline]
-fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|err| err.into_inner())
+fn with_options_table<R>(f: impl FnOnce(&mut [mi_option_desc_t; MI_OPTION_COUNT]) -> R) -> R {
+    unsafe {
+        mi_lock_acquire(addr_of_mut!(options_lock));
+        let result = f(&mut *OPTIONS.0.get());
+        mi_lock_release(addr_of_mut!(options_lock));
+        result
+    }
+}
+
+#[inline]
+fn error_handler_load() -> Option<mi_error_fun> {
+    unsafe {
+        mi_lock_acquire(addr_of_mut!(mi_error_handler_lock));
+        let handler = *mi_error_handler.0.get();
+        mi_lock_release(addr_of_mut!(mi_error_handler_lock));
+        handler
+    }
+}
+
+#[inline]
+fn error_handler_store(fun: Option<mi_error_fun>) {
+    unsafe {
+        mi_lock_acquire(addr_of_mut!(mi_error_handler_lock));
+        *mi_error_handler.0.get() = fun;
+        mi_lock_release(addr_of_mut!(mi_error_handler_lock));
+    }
 }
 
 #[inline]
@@ -918,7 +954,7 @@ pub(crate) unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
 
 pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
     mi_show_error_message(args);
-    let handler = *lock_unpoisoned(&mi_error_handler);
+    let handler = error_handler_load();
     let arg = mi_error_arg.load(Ordering::Acquire);
     if let Some(handler) = handler {
         unsafe { handler(err, arg) };
@@ -1087,7 +1123,7 @@ pub extern "C" fn mi_version() -> i32 {
 #[allow(dead_code)]
 pub(crate) fn mi_error_default(err: i32) {
     if err == EFAULT && (MI_DEBUG > 0 || cfg!(feature = "secure")) {
-        abort();
+        unsafe { c_abort() };
     }
 }
 
@@ -1105,7 +1141,7 @@ pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_voi
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void) {
-    *lock_unpoisoned(&mi_error_handler) = fun;
+    error_handler_store(fun);
     mi_error_arg.store(arg, Ordering::Release);
 }
 
@@ -1192,8 +1228,7 @@ pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
     }
 
     if option_init_load(idx) == mi_option_init_t::MI_OPTION_UNINIT {
-        let desc = {
-            let mut table = lock_unpoisoned(&OPTIONS);
+        let desc = with_options_table(|table| {
             if table[idx].init == mi_option_init_t::MI_OPTION_UNINIT {
                 table[idx].init = mi_option_init_t::MI_OPTION_DEFAULTED;
                 option_init_store(idx, mi_option_init_t::MI_OPTION_DEFAULTED);
@@ -1201,7 +1236,7 @@ pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
             } else {
                 None
             }
-        };
+        });
 
         if let Some(mut desc) = desc {
             mi_option_init(&mut desc);
@@ -1249,8 +1284,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
         return;
     }
 
-    let recurse_adjust = {
-        let mut table = lock_unpoisoned(&OPTIONS);
+    let recurse_adjust = with_options_table(|table| {
         let option_kind = table[idx].option;
         table[idx].value = value;
         table[idx].init = mi_option_init_t::MI_OPTION_INITIALIZED;
@@ -1269,7 +1303,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
         } else {
             None
         }
-    };
+    });
 
     if let Some((option, value)) = recurse_adjust {
         mi_option_set(option, value);
@@ -1283,12 +1317,13 @@ pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
     if idx >= MI_OPTION_COUNT {
         return;
     }
-    let mut table = lock_unpoisoned(&OPTIONS);
-    let desc = &mut table[idx];
-    if desc.init != mi_option_init_t::MI_OPTION_INITIALIZED {
-        desc.value = value;
-        option_value_store(idx, value);
-    }
+    with_options_table(|table| {
+        let desc = &mut table[idx];
+        if desc.init != mi_option_init_t::MI_OPTION_INITIALIZED {
+            desc.value = value;
+            option_value_store(idx, value);
+        }
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -1337,10 +1372,7 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
     for i in 0..MI_OPTION_COUNT {
         let option = option_from_index(i);
         let value = mi_option_get(option);
-        let desc = {
-            let table = lock_unpoisoned(&OPTIONS);
-            table[i]
-        };
+        let desc = with_options_table(|table| table[i]);
         let name = unsafe { CStr::from_ptr(desc.name).to_string_lossy().into_owned() };
         emit_text(
             Some(out),
@@ -1408,7 +1440,7 @@ pub unsafe extern "C" fn _mi_assert_fail(
             fname, line, func, assertion
         ),
     );
-    abort();
+    unsafe { c_abort() };
 }
 
 pub(crate) fn _mi_options_init() {

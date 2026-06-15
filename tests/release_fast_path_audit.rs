@@ -54,6 +54,30 @@ fn stderr_output_routes_through_platform_primitive() {
 }
 
 #[test]
+fn options_state_uses_internal_locks_like_c() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
+
+    assert!(
+        !options_rs.contains("std::sync::{Mutex")
+            && !options_rs.contains("Mutex<")
+            && !options_rs.contains("MutexGuard")
+            && !options_rs.contains("std::process::abort"),
+        "options state should not pull in std mutex/abort machinery"
+    );
+    assert!(
+        options_rs.contains("static mut options_lock: mi_lock_t")
+            && options_rs.contains("static mut mi_error_handler_lock: mi_lock_t")
+            && options_rs.contains("mi_lock_acquire(addr_of_mut!(options_lock))")
+            && options_rs.contains("mi_lock_release(addr_of_mut!(options_lock))")
+            && options_rs.contains("mi_lock_acquire(addr_of_mut!(mi_error_handler_lock))")
+            && options_rs.contains("mi_lock_release(addr_of_mut!(mi_error_handler_lock))")
+            && options_rs.contains("#[link_name = \"abort\"]"),
+        "options state should use mimalloc's internal lock and C abort primitives"
+    );
+}
+
+#[test]
 fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let tls_shim = fs::read_to_string(root.join("src/tls_shim.c")).expect("read src/tls_shim.c");

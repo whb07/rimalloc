@@ -879,3 +879,24 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Continued the startup/load-footprint parity pass by removing Rust mutex use from allocator option state:
+  - `options.rs` still used two `std::sync::Mutex` values for the option descriptor table and error handler. C mimalloc protects equivalent mutable state with its internal lock primitives.
+  - Replaced those mutexes with `mi_lock_t` plus `UnsafeCell` storage and changed the local abort path to call C `abort` directly instead of `std::process::abort`.
+  - Added a source audit regression that rejects `std::sync::Mutex`/`MutexGuard`/`std::process::abort` in `options.rs` and requires internal `mi_lock_t` guards for option/error-handler state.
+  - Focused validation passed: `cargo fmt`, `cargo test --quiet --test release_fast_path_audit`, `cargo clippy --all-targets -- -D warnings`, and a release cdylib rebuild.
+  - Release cdylib `R_X86_64_RELATIVE` count dropped from `1493` to `1492`; total section size stayed essentially flat (`663,863` bytes) because the larger Rust panic/backtrace runtime is still linked.
+  - Focused direct `cfrac` after the internal-lock change: C `2.71s..2.73s`, RSS `5816..6276` KiB, minor `201..203`; Rust `2.71s..2.73s`, RSS `6720..6776` KiB, minor `211..215`.
+- Full established validation passed after the internal-lock option-state change:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

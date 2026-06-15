@@ -48,6 +48,7 @@ pub(crate) extern "C" fn _mi_toupper(c: c_char) -> c_char {
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> i32 {
     if s.is_null() || t.is_null() || n == 0 {
         return 0;
@@ -67,7 +68,7 @@ pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char,
     0
 }
 
-#[inline]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) -> bool {
     if s.is_null() && t.is_null() {
         return true;
@@ -89,6 +90,7 @@ pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) ->
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlcpy(
     dest: *mut c_char,
     src: *const c_char,
@@ -103,6 +105,7 @@ pub(crate) unsafe extern "C" fn _mi_strlcpy(
     *as_bytes_mut_ptr(dest).add(n) = 0;
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlcat(
     dest: *mut c_char,
     src: *const c_char,
@@ -124,6 +127,7 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
     _mi_strlcpy(dest.add(len), src, dest_size - len);
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize {
     if s.is_null() {
         return 0;
@@ -135,11 +139,12 @@ pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) ->
     len
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
     _mi_strnlen(s, usize::MAX)
 }
 
-#[inline]
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnstr(
     s: *mut c_char,
     max_len: usize,
@@ -483,6 +488,26 @@ pub(crate) unsafe extern "C" fn _mi_vsnprintf(
 }
 
 #[allow(dead_code)]
+#[inline(never)]
 pub(crate) fn _mi_snprintf(buf: *mut c_char, buflen: usize, args: fmt::Arguments<'_>) -> i32 {
     mi_vsnprintf_args(buf, buflen, args)
 }
+
+#[used]
+static MI_STRNICMP_KEEP: unsafe extern "C" fn(*const c_char, *const c_char, usize) -> i32 =
+    _mi_strnicmp;
+#[used]
+static MI_STREQ_KEEP: unsafe extern "C" fn(*const c_char, *const c_char) -> bool = _mi_streq;
+#[used]
+static MI_STRLCPY_KEEP: unsafe extern "C" fn(*mut c_char, *const c_char, usize) = _mi_strlcpy;
+#[used]
+static MI_STRLCAT_KEEP: unsafe extern "C" fn(*mut c_char, *const c_char, usize) = _mi_strlcat;
+#[used]
+static MI_STRNLEN_KEEP: unsafe extern "C" fn(*const c_char, usize) -> usize = _mi_strnlen;
+#[used]
+static MI_STRLEN_KEEP: unsafe extern "C" fn(*const c_char) -> usize = _mi_strlen;
+#[used]
+static MI_STRNSTR_KEEP: unsafe extern "C" fn(*mut c_char, usize, *const c_char) -> *mut c_char =
+    _mi_strnstr;
+#[used]
+static MI_SNPRINTF_KEEP: for<'a> fn(*mut c_char, usize, fmt::Arguments<'a>) -> i32 = _mi_snprintf;

@@ -954,6 +954,7 @@ fn mi_vfputs_thread(
     unsafe { _mi_fputs(out, arg, prefix, message) };
 }
 
+#[inline(never)]
 pub(crate) fn _mi_raw_message(args: fmt::Arguments<'_>) {
     mi_vfprintf(None, ptr::null_mut(), ptr::null(), args);
 }
@@ -963,6 +964,8 @@ pub(crate) fn _mi_message(args: fmt::Arguments<'_>) {
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: ".as_ptr(), args);
 }
 
+#[used]
+static MI_RAW_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_raw_message;
 #[used]
 static MI_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_message;
 

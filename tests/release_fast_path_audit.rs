@@ -863,6 +863,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             &page_rs,
             "pub unsafe extern \"C\" fn _mi_deferred_free",
         ),
+        ("src/libc.rs", &libc_rs, "pub(crate) fn _mi_snprintf"),
         (
             "src/libc.rs",
             &libc_rs,
@@ -872,27 +873,37 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/libc.rs",
             &libc_rs,
-            "pub unsafe extern \"C\" fn _mi_strnicmp",
+            "pub(crate) unsafe extern \"C\" fn _mi_strnicmp",
         ),
         (
             "src/libc.rs",
             &libc_rs,
-            "pub unsafe extern \"C\" fn _mi_strlcpy",
+            "pub(crate) unsafe extern \"C\" fn _mi_streq",
         ),
         (
             "src/libc.rs",
             &libc_rs,
-            "pub unsafe extern \"C\" fn _mi_strlcat",
+            "pub(crate) unsafe extern \"C\" fn _mi_strlcpy",
         ),
         (
             "src/libc.rs",
             &libc_rs,
-            "pub unsafe extern \"C\" fn _mi_strlen",
+            "pub(crate) unsafe extern \"C\" fn _mi_strlcat",
         ),
         (
             "src/libc.rs",
             &libc_rs,
-            "pub unsafe extern \"C\" fn _mi_strnlen",
+            "pub(crate) unsafe extern \"C\" fn _mi_strlen",
+        ),
+        (
+            "src/libc.rs",
+            &libc_rs,
+            "pub(crate) unsafe extern \"C\" fn _mi_strnlen",
+        ),
+        (
+            "src/libc.rs",
+            &libc_rs,
+            "pub(crate) unsafe extern \"C\" fn _mi_strnstr",
         ),
         (
             "src/prim/unix.rs",
@@ -1299,6 +1310,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             &stats_rs,
             "pub unsafe extern \"C\" fn __mi_stat_adjust_decrease",
         ),
+        (
+            "src/options.rs",
+            &options_rs,
+            "pub(crate) fn _mi_raw_message",
+        ),
         ("src/options.rs", &options_rs, "pub(crate) fn _mi_message"),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
@@ -1564,6 +1580,34 @@ fn free_path_internals_are_not_dynamic_exports() {
             "random helper boundary marker missing: {marker}"
         );
     }
+    for marker in [
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnicmp(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_streq(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strlcpy(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strlcat(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnlen(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strlen(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnstr(",
+        "#[inline(never)]\npub(crate) fn _mi_snprintf(",
+        "static MI_STRNICMP_KEEP",
+        "static MI_STREQ_KEEP",
+        "static MI_STRLCPY_KEEP",
+        "static MI_STRLCAT_KEEP",
+        "static MI_STRNLEN_KEEP",
+        "static MI_STRLEN_KEEP",
+        "static MI_STRNSTR_KEEP",
+        "static MI_SNPRINTF_KEEP",
+    ] {
+        assert!(
+            libc_rs.contains(marker),
+            "libc helper boundary marker missing: {marker}"
+        );
+    }
+    assert!(
+        options_rs.contains("#[inline(never)]\npub(crate) fn _mi_raw_message(")
+            && options_rs.contains("static MI_RAW_MESSAGE_KEEP"),
+        "_mi_raw_message should keep C's local raw-message helper boundary"
+    );
     assert!(
         options_rs
             .contains("#[inline(never)]\npub(crate) fn _mi_message(args: fmt::Arguments<'_>)")

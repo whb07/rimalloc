@@ -1698,3 +1698,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.06s`, Rust `2.14s..2.27s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.06B` instructions and `15.60B` cycles; Rust about `10.67B` instructions and `16.24B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's libc and raw-message helper boundaries:
+  - C emits `_mi_raw_message`, `_mi_snprintf`, `_mi_streq`, `_mi_strlcat`, `_mi_strlcpy`, `_mi_strlen`, `_mi_strnicmp`, `_mi_strnlen`, and `_mi_strnstr` as standalone local helpers.
+  - Rust had translated helper bodies, but release dropped this set because callers use Rust formatting and many string helpers inline through option/env/stat paths.
+  - Marked the Rust libc/string helpers and `_mi_raw_message` `#[inline(never)]`, retained them through local `#[used]` anchors, and extended release audit coverage for the helper markers and anchors.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::options::_mi_raw_message`, `mechanical_mimalloc::libc::_mi_snprintf`, `_mi_streq`, `_mi_strlcat`, `_mi_strlcpy`, `_mi_strlen`, `_mi_strnicmp`, `_mi_strnlen`, and `_mi_strnstr`, with no dynamic exports for the set.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.05s..2.05s`, Rust `2.11s..2.12s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.08B` instructions and `15.75B` cycles; Rust about `10.66B` instructions and `16.16B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

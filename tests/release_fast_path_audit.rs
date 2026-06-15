@@ -72,6 +72,9 @@ fn preloading_state_matches_c_mimalloc_lifecycle() {
     let auto_init = source
         .find("pub(crate) unsafe extern \"C\" fn _mi_auto_process_init()")
         .expect("find _mi_auto_process_init");
+    let process_init_inner = source
+        .find("unsafe fn mi_process_init_inner()")
+        .expect("find mi_process_init_inner");
     let process_init = source
         .find("pub unsafe extern \"C\" fn mi_process_init()")
         .expect("find mi_process_init");
@@ -102,6 +105,10 @@ fn preloading_state_matches_c_mimalloc_lifecycle() {
         source[process_init..process_done].contains("mi_process_init_inner()")
             && !source[process_init..process_done].contains("_mi_auto_process_init()"),
         "mi_process_init should not clear preloading; only _mi_auto_process_init should"
+    );
+    assert!(
+        source[process_init_inner..process_init].contains("_mi_process_is_initialized = true;"),
+        "mi_process_init_inner should set process initialization state like C's mi_process_init_once"
     );
     assert!(
         source[process_done..].contains("OS_PRELOADING.store(true, Ordering::Relaxed);"),
@@ -167,10 +174,10 @@ fn options_state_uses_internal_locks_like_c() {
             && !random_rs.contains("Instant")
             && !stats_rs.contains("OnceLock")
             && !stats_rs.contains("Instant")
-            && init_rs.contains("static SUBPROC_MAIN_INIT: mi_atomic_once_t")
             && init_rs.contains("static PROCESS_INIT: mi_atomic_once_t")
             && init_rs.contains("static TLS_SLOTS_INIT: mi_atomic_once_t")
-            && init_rs.contains("mi_atomic_do_once_enter(ptr::addr_of!(SUBPROC_MAIN_INIT)")
+            && !init_rs.contains("static SUBPROC_MAIN_INIT")
+            && !init_rs.contains("MaybeUninit")
             && init_rs.contains("mi_atomic_do_once_enter(ptr::addr_of!(PROCESS_INIT)")
             && init_rs.contains("mi_atomic_do_once_enter(ptr::addr_of!(TLS_SLOTS_INIT)")
             && prim_rs.contains("_mi_prim_alloc_huge_os_pages, _mi_prim_clock_now")
@@ -2235,6 +2242,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && init_rs.contains(
                 "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_heap_main"
             )
+            && init_rs.contains("static mut subproc_main: MiSubprocPrefix")
+            && init_rs.contains("static mut subprocs: *mut mi_subproc_t =")
+            && init_rs.contains("core::arch::global_asm!(\".hidden subproc_main\")")
+            && init_rs.contains("#[cfg_attr(target_os = \"linux\", unsafe(no_mangle))]")
+            && init_rs.contains("unsafe fn mi_subproc_main_addr()")
+            && init_rs.contains("\"lea {main}, [rip + subproc_main]\"")
+            && !init_rs.contains("mi_subproc_main_ptr")
             && init_rs.contains("crate::prim::_mi_theap_default_raw()")
             && init_rs.contains("static MI_SUBPROC_TO_ID_KEEP")
             && init_rs.contains("static MI_SUBPROC_MAIN_KEEP")
@@ -2242,6 +2256,33 @@ fn free_path_internals_are_not_dynamic_exports() {
             && init_rs.contains("static MI_SUBPROC_HEAP_MAIN_KEEP")
             && prim_rs.contains("pub unsafe fn _mi_theap_default_raw()"),
         "subproc helpers should stay as C's small local helper boundaries and inspect the raw default TLS cell"
+    );
+    let subproc_main_start = init_rs
+        .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_main")
+        .expect("find _mi_subproc_main");
+    let subproc_main_end = init_rs[subproc_main_start..]
+        .find("#[used]\nstatic MI_SUBPROC_MAIN_KEEP")
+        .map(|offset| subproc_main_start + offset)
+        .expect("find _mi_subproc_main keep marker");
+    let subproc_main_body = &init_rs[subproc_main_start..subproc_main_end];
+    assert!(
+        subproc_main_body.contains("unsafe { mi_subproc_main_addr() }")
+            && !subproc_main_body.contains("mi_subproc_main_init()"),
+        "_mi_subproc_main should match C's direct &subproc_main helper without process initialization"
+    );
+    let subproc_start = init_rs
+        .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")
+        .expect("find _mi_subproc");
+    let subproc_end = init_rs[subproc_start..]
+        .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_from_id")
+        .map(|offset| subproc_start + offset)
+        .expect("find _mi_subproc_from_id marker");
+    let subproc_body = &init_rs[subproc_start..subproc_end];
+    assert!(
+        subproc_body.contains("unsafe { mi_subproc_main_addr() }")
+            && !subproc_body.contains("_mi_subproc_main()")
+            && !subproc_body.contains("mi_subproc_main_init()"),
+        "_mi_subproc should use C's direct main-subproc fallback on a null raw default theap"
     );
     let subproc_heap_main_start = init_rs
         .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_heap_main")

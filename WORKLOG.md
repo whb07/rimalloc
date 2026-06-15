@@ -2,6 +2,26 @@
 
 ## 2026-06-15
 
+- Continuing main subproc helper parity after `24db257`:
+  - Fresh `mleak 100` perf still shows small Rust allocator-side samples in `_mi_theap_init`, `mi_stats_add`, `_mi_subproc_heap_main`, and thread-local teardown; no single dominant path remains.
+  - Found a concrete helper drift in release artifacts: C's `_mi_subproc_main` is just `lea &subproc_main; ret`, and `_mi_subproc` falls back to that address directly when the raw default theap TLS cell is null. Rust's helpers still route through `mi_subproc_main_init()`, pulling atomic-once/options/lock initialization into the lightweight pointer path.
+  - Reworked the main-subproc scaffold so `subproc_main` and `subprocs` are statically initialized, `_mi_subproc_main` and `_mi_subproc` use a direct main-subproc address helper, and explicit process/main-heap setup remains responsible for initializing the main subproc fields.
+  - Added release audit coverage for the static scaffold, the direct helper bodies, and the Linux hidden link name/inline-asm address helper that makes the optimized artifact use RIP-relative `lea` instead of a relocation-slot load.
+  - Artifact check: release `_mi_subproc_main` is now `lea ... <subproc_main>, %rax; ret`; `_mi_subproc` keeps the raw default-theap TLS load and uses the same direct `subproc_main` fallback on null.
+  - Full validation initially failed behavioral process-lifecycle parity: Rust skipped show-stats shutdown output because `_mi_process_is_initialized` was no longer set by the old lazy subproc initializer. Moved that flag assignment into `mi_process_init_inner`, matching C's `mi_process_init_once`, and added audit coverage for the lifecycle state transition.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the validated release cdylib and rechecked direct `./mleak 100`:
+    - C `2.04s, 2.07s, 2.05s`; Rust `2.12s, 2.12s, 2.11s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.75B` instructions / `16.77B` cycles; Rust `11.02B` instructions / `17.24B` cycles.
 - Continuing thread-init helper parity after `fdcb243`:
   - Fresh `mleak 100` profiling no longer showed `_mi_theap_init` as the main Rust-only tail, but did show Rust samples in `mechanical_mimalloc::init::_mi_subproc_heap_main` that were not visible in the C profile.
   - Found a concrete source drift: C's `_mi_subproc_heap_main` assumes a valid `mi_subproc_t*` and immediately loads `subproc->heap_main`, while Rust accepted null and branched to `ptr::null_mut()` before the hot load.

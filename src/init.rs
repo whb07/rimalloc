@@ -9,7 +9,7 @@
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
 use core::cell::Cell;
 use core::ffi::{c_char, c_long, c_void};
-use core::mem::{MaybeUninit, size_of};
+use core::mem::size_of;
 use core::ptr;
 use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
@@ -45,6 +45,8 @@ use crate::{prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
 
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden _mi_theap_empty");
+#[cfg(target_os = "linux")]
+core::arch::global_asm!(".hidden subproc_main");
 
 pub const MI_TLS_DIRECT_SLOTS: usize = 64;
 pub const MI_TLS_EXPANSION_SLOTS: usize = 1024;
@@ -157,14 +159,33 @@ pub const fn MI_STATS_NULL() -> mi_stats_t {
 
 #[allow(dead_code)]
 static mut subprocs_lock: mi_lock_t = mi_lock_t::new();
-static SUBPROC_MAIN_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
 static PROCESS_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
 static OPTIONS_POST_INIT_STATE: AtomicUsize = AtomicUsize::new(0);
 static PROCESS_DONE: AtomicBool = AtomicBool::new(false);
 static OS_PRELOADING: AtomicBool = AtomicBool::new(true);
 static SUBPROC_TOTAL_COUNT: AtomicUsize = AtomicUsize::new(0);
-static mut subproc_main: MaybeUninit<MiSubprocPrefix> = MaybeUninit::uninit();
-static mut subprocs: *mut mi_subproc_t = ptr::null_mut();
+#[cfg_attr(target_os = "linux", unsafe(no_mangle))]
+static mut subproc_main: MiSubprocPrefix = MiSubprocPrefix {
+    subproc_seq: 0,
+    next: ptr::null_mut(),
+    prev: ptr::null_mut(),
+    arena_count: AtomicUsize::new(0),
+    arenas: [ptr::null_mut(); MI_MAX_ARENAS],
+    arena_reserve_lock: mi_lock_t::new(),
+    purge_expire: core::sync::atomic::AtomicI64::new(0),
+    heap_main: ptr::null_mut(),
+    heaps: ptr::null_mut(),
+    heaps_lock: mi_lock_t::new(),
+    thread_count: AtomicUsize::new(0),
+    thread_total_count: AtomicUsize::new(0),
+    heap_count: AtomicUsize::new(0),
+    heap_total_count: AtomicUsize::new(0),
+    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_NONE),
+    stats: MI_STATS_NULL(),
+};
+static mut subprocs: *mut mi_subproc_t = ptr::addr_of_mut!(subproc_main)
+    .cast::<MiSubprocPrefix>()
+    .cast::<mi_subproc_t>();
 
 #[allow(dead_code)]
 static mut tld_empty: mi_tld_t = mi_tld_t {
@@ -524,17 +545,6 @@ struct MiSubprocPrefix {
 }
 
 impl MiSubprocPrefix {
-    fn new_main() -> Self {
-        let memid = mi_memid_t {
-            memkind: mi_memkind_t::MI_MEM_STATIC,
-            is_pinned: true,
-            initially_committed: true,
-            initially_zero: true,
-            ..mi_memid_t::default()
-        };
-        Self::new_with_memid(0, memid)
-    }
-
     fn new_with_memid(seq: usize, memid: mi_memid_t) -> Self {
         let mut stats = mi_stats_t::default();
         // SAFETY: `stats` points to a valid local `mi_stats_t`.
@@ -599,36 +609,48 @@ unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
     }
 }
 
-fn mi_subproc_main_init() {
-    if let Some(_once) =
-        unsafe { mi_atomic_do_once_enter(ptr::addr_of!(SUBPROC_MAIN_INIT).cast_mut()) }
-    {
-        // SAFETY: one-time process initialization for local subproc scaffolding.
-        unsafe {
-            _mi_options_init();
-            mi_lock_init(ptr::addr_of_mut!(subprocs_lock));
-            ptr::addr_of_mut!(subproc_main).write(MaybeUninit::new(MiSubprocPrefix::new_main()));
-            let main = ptr::addr_of_mut!(subproc_main)
-                .cast::<MiSubprocPrefix>()
-                .cast::<mi_subproc_t>();
-            let main_prefix = mi_subproc_prefix(main);
-            (*main_prefix).heaps = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
-            (*main_prefix).heap_main = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
-            (*main_prefix).heap_total_count.store(1, Ordering::Relaxed);
-            (*main_prefix).heap_count.store(1, Ordering::Relaxed);
-            __mi_stat_increase_mt(&mut (*main_prefix).stats.heaps, 1);
-            mi_lock_init(ptr::addr_of_mut!(tld_empty.theaps_lock));
-            subprocs = main;
-            _mi_process_is_initialized = true;
-        }
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[inline(always)]
+unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
+    let main: *mut mi_subproc_t;
+    unsafe {
+        core::arch::asm!(
+            "lea {main}, [rip + subproc_main]",
+            main = lateout(reg) main,
+            options(nostack, preserves_flags)
+        );
     }
+    main
 }
 
-unsafe fn mi_subproc_main_ptr() -> *mut mi_subproc_t {
-    mi_subproc_main_init();
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+#[inline(always)]
+unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
     ptr::addr_of_mut!(subproc_main)
         .cast::<MiSubprocPrefix>()
         .cast::<mi_subproc_t>()
+}
+
+fn mi_subproc_main_init() {
+    // SAFETY: one-time process initialization for local subproc scaffolding.
+    unsafe {
+        let main = mi_subproc_main_addr();
+        let main_prefix = mi_subproc_prefix(main);
+        if (*main_prefix).memid.memkind != mi_memkind_t::MI_MEM_STATIC {
+            _mi_options_init();
+            (*main_prefix).memid = crate::internal::_mi_memid_create(mi_memkind_t::MI_MEM_STATIC);
+            (*main_prefix).heaps = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
+            (*main_prefix).heap_total_count.store(1, Ordering::Relaxed);
+            (*main_prefix).heap_count.store(1, Ordering::Relaxed);
+            (*main_prefix).heap_main = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
+            __mi_stat_increase_mt(&mut (*main_prefix).stats.heaps, 1);
+            mi_stats_header_init(ptr::addr_of_mut!((*main_prefix).stats));
+            mi_lock_init(ptr::addr_of_mut!((*main_prefix).arena_reserve_lock));
+            mi_lock_init(ptr::addr_of_mut!((*main_prefix).heaps_lock));
+            mi_lock_init(ptr::addr_of_mut!(subprocs_lock));
+            mi_lock_init(ptr::addr_of_mut!(tld_empty.theaps_lock));
+        }
+    }
 }
 
 unsafe fn mi_subproc_unlink_locked(subproc: *mut MiSubprocPrefix) {
@@ -1368,7 +1390,7 @@ fn mi_cpuid(_regs4: *mut u32, _level: u32, _sublevel: u32) -> bool {
 /// Returns a borrowed process-global opaque subproc pointer.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
-    unsafe { mi_subproc_main_ptr() }
+    unsafe { mi_subproc_main_addr() }
 }
 
 #[used]
@@ -1530,7 +1552,7 @@ static MI_THEAP_EMPTY_GET_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_
 pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
     let theap = unsafe { crate::prim::_mi_theap_default_raw() };
     if theap.is_null() {
-        unsafe { _mi_subproc_main() }
+        unsafe { mi_subproc_main_addr() }
     } else {
         unsafe { (*(*theap).tld).subproc }
     }
@@ -1838,6 +1860,7 @@ unsafe fn mi_process_init_inner() {
     if let Some(_once) = unsafe { mi_atomic_do_once_enter(ptr::addr_of!(PROCESS_INIT).cast_mut()) }
     {
         unsafe {
+            _mi_process_is_initialized = true;
             mi_subproc_main_init();
             crate::stats::_mi_stats_init();
             crate::os::_mi_os_init();

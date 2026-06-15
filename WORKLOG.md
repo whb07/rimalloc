@@ -2,6 +2,24 @@
 
 ## 2026-06-15
 
+- Continuing stats-merge parity after `481e29c`:
+  - Fresh profile still shows Rust spending more samples in `mechanical_mimalloc::stats::mi_stats_add` than C's `mi_stats_add.part.0`.
+  - Found another concrete merge drift: C's `mi_stats_add` expands `MI_STAT_FIELDS()` and the gated bin arrays only; the `_stat_reserved` and `_stat_counter_reserved` extension arrays are present in `mi_stats_t` but are not merged. Rust was still merging both reserved arrays.
+  - Removed the reserved-array merge loops from Rust `mi_stats_add` and extended `tests/release_fast_path_audit.rs` to reject those loops while keeping the prior malloc/page/chunk bin gates.
+  - Artifact check: release Rust `mi_stats_add` shrank from `0x7c0` to `0x630`; C `mi_stats_add.part.0` is `0x755`. The release disassembly keeps the expected page-bin loop and no longer contains the reserved-array merge block.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `cargo build --release`
+    - `cargo test --quiet`
+    - `scripts/check-public-symbols.py`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `git diff --check`
+  - Focused `mleak 100` benchmark after copying the fresh release cdylib:
+    - C `2.05s..2.06s`; Rust `2.11s..2.12s`.
+    - `perf stat`: C `10.28B` instructions / `15.94B` cycles; Rust `10.57B` instructions / `16.34B` cycles.
 - Continuing thread-lifecycle parity after `d1bd03a`:
   - Fresh profile after the inline main-thread branch change removed the Rust-only `_mi_is_main_thread` symbol sample, but artifact inspection still showed a lifecycle predicate drift: Rust read a separate `MAIN_THREAD_ID` atomic, while C reads `tld_main.thread_id` directly and treats zero as "main thread not recorded yet".
   - Removed the Rust-only `MAIN_THREAD_ID`/`mi_mark_main_thread` state and changed the inline/exported main-thread predicate to read `tld_main.thread_id`, matching C's `_mi_is_main_thread`.

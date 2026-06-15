@@ -506,20 +506,6 @@ unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t
     );
     mi_stat_counter_add_mt(&mut stats.heaps_delete_wait, &src.heaps_delete_wait);
 
-    for (dst, add) in stats
-        ._stat_reserved
-        .iter_mut()
-        .zip(src._stat_reserved.iter())
-    {
-        mi_stat_count_add_mt(dst, add);
-    }
-    for (dst, add) in stats
-        ._stat_counter_reserved
-        .iter_mut()
-        .zip(src._stat_counter_reserved.iter())
-    {
-        mi_stat_counter_add_mt(dst, add);
-    }
     if MI_STAT > 1 {
         for (dst, add) in stats.malloc_bins.iter_mut().zip(src.malloc_bins.iter()) {
             mi_stat_count_add_mt(dst, add);

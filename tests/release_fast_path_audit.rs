@@ -870,7 +870,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         (
             "src/libc.rs",
             &libc_rs,
-            "pub unsafe extern \"C\" fn _mi_vsnprintf",
+            "pub(crate) unsafe extern \"C\" fn _mi_vsnprintf",
         ),
         ("src/libc.rs", &libc_rs, "pub extern \"C\" fn _mi_toupper"),
         (
@@ -1638,6 +1638,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnlen(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strlen(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnstr(",
+        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_vsnprintf(",
         "#[inline(never)]\npub(crate) fn _mi_snprintf(",
         "static MI_TOUPPER_KEEP",
         "static MI_STRNICMP_KEEP",
@@ -1647,6 +1648,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         "static MI_STRNLEN_KEEP",
         "static MI_STRLEN_KEEP",
         "static MI_STRNSTR_KEEP",
+        "static MI_VSNPRINTF_KEEP",
         "static MI_SNPRINTF_KEEP",
     ] {
         assert!(

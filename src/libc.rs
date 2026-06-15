@@ -463,6 +463,7 @@ pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arg
     out.used as i32
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_vsnprintf(
     buf: *mut c_char,
     bufsize: usize,
@@ -513,5 +514,12 @@ static MI_STRLEN_KEEP: unsafe extern "C" fn(*const c_char) -> usize = _mi_strlen
 #[used]
 static MI_STRNSTR_KEEP: unsafe extern "C" fn(*mut c_char, usize, *const c_char) -> *mut c_char =
     _mi_strnstr;
+#[used]
+static MI_VSNPRINTF_KEEP: unsafe extern "C" fn(
+    *mut c_char,
+    usize,
+    *const c_char,
+    *mut c_void,
+) -> c_int = _mi_vsnprintf;
 #[used]
 static MI_SNPRINTF_KEEP: for<'a> fn(*mut c_char, usize, fmt::Arguments<'a>) -> i32 = _mi_snprintf;

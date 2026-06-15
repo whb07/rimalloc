@@ -10,6 +10,7 @@
 use core::ffi::c_void;
 use core::mem::size_of;
 
+use crate::alloc::_mi_page_malloc_zero;
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
 use crate::internal::{
@@ -51,12 +52,6 @@ unsafe extern "C" {
         zero: bool,
         usable_pre: *mut usize,
         usable_post: *mut usize,
-    ) -> *mut c_void;
-    fn _mi_page_malloc_zero(
-        theap: *mut mi_theap_t,
-        page: *mut mi_page_t,
-        size: usize,
-        zero: bool,
     ) -> *mut c_void;
     fn _mi_padding_shrink(page: *mut mi_page_t, block: *mut mi_block_t, min_size: usize);
 }

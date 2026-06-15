@@ -913,8 +913,7 @@ unsafe fn mi_arenas_contain_ex(p: *const c_void, parent: *mut mi_arena_t) -> boo
 
 /// # Safety
 /// `p` may be any pointer value.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_contain(p: *const c_void) -> bool {
+pub(crate) unsafe extern "C" fn _mi_arenas_contain(p: *const c_void) -> bool {
     unsafe { mi_arenas_contain_ex(p, ptr::null_mut()) }
 }
 
@@ -1496,8 +1495,7 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: *mut mi_subproc_t) {
 /// # Safety
 /// Caller must ensure `subproc` is valid and destruction is only used in the same narrow cases
 /// as the original C implementation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t) {
+pub(crate) unsafe extern "C" fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t) {
     unsafe { mi_arenas_unsafe_destroy(subproc) };
 }
 
@@ -1982,8 +1980,7 @@ unsafe fn mi_arena_os_alloc_aligned(
 
 /// # Safety
 /// Internal arena allocator wrapper following the C ABI.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_alloc_aligned(
+pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
     heap: *mut mi_heap_t,
     size: usize,
     alignment: usize,
@@ -2038,8 +2035,7 @@ pub unsafe extern "C" fn _mi_arenas_alloc_aligned(
 
 /// # Safety
 /// Internal arena allocator wrapper following the C ABI.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_alloc(
+pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
     heap: *mut mi_heap_t,
     size: usize,
     commit: bool,
@@ -2591,8 +2587,7 @@ unsafe fn mi_arenas_page_singleton_alloc(
 
 /// # Safety
 /// Internal arena page allocator matching the C ABI.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_page_alloc(
+pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
     theap: *mut mi_theap_t,
     block_size: usize,
     block_alignment: usize,
@@ -2649,8 +2644,7 @@ pub unsafe extern "C" fn _mi_arenas_page_alloc(
 
 /// # Safety
 /// Internal arena page free path matching the C ABI.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_page_free(
+pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
     page: *mut mi_page_t,
     current_theapx: *mut mi_theap_t,
 ) {
@@ -2775,8 +2769,7 @@ pub unsafe extern "C" fn _mi_arenas_page_free(
 
 /// # Safety
 /// Internal arena abandon path matching the C ABI.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_page_abandon(
+pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
     page: *mut mi_page_t,
     current_theap: *mut mi_theap_t,
 ) {
@@ -2871,8 +2864,9 @@ pub unsafe extern "C" fn _mi_arenas_page_abandon(
 
 /// # Safety
 /// Called from the free path on pages already associated with an arena.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(page: *mut mi_page_t) -> bool {
+pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
+    page: *mut mi_page_t,
+) -> bool {
     crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
@@ -2907,8 +2901,7 @@ pub unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(page: *mut mi_p
 
 /// # Safety
 /// Called from `free` paths while racing with abandoned-page readers.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_page_unabandon(
+pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     page: *mut mi_page_t,
     current_theapx: *mut mi_theap_t,
 ) {
@@ -3045,8 +3038,7 @@ unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, sl
 
 /// # Safety
 /// Internal arena free path matching the C ABI.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
+pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
     if p.is_null() || size == 0 {
         return;
     }
@@ -3365,8 +3357,7 @@ unsafe fn mi_arenas_try_purge(
 
 /// # Safety
 /// Purges scheduled arena ranges for the current thread-local context.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_arenas_collect(
+pub(crate) unsafe extern "C" fn _mi_arenas_collect(
     force_purge: bool,
     visit_all: bool,
     tld: *mut mi_tld_t,

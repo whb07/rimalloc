@@ -438,8 +438,7 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
+pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     crate::mi_assert_internal!(!page.is_null());
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
     crate::mi_assert_internal!(pq == mi_page_queue_of(page));
@@ -696,8 +695,7 @@ unsafe fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> b
     true
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
+pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     _mi_page_free_collect(page, false);
     if mi_page_all_free(page) {
         _mi_page_free(page, pq);
@@ -750,8 +748,10 @@ pub unsafe fn mi_page_fresh_alloc(
     page
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_page_init(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
+pub(crate) unsafe extern "C" fn _mi_page_init(
+    theap: *mut mi_theap_t,
+    page: *mut mi_page_t,
+) -> bool {
     crate::mi_assert!(!page.is_null());
     crate::mi_assert!(!theap.is_null());
 

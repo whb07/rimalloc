@@ -140,8 +140,10 @@ unsafe fn mi_meta_page_zalloc() -> *mut mi_meta_page_t {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_meta_zalloc(size: usize, pmemid: *mut mi_memid_t) -> *mut c_void {
+pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
+    size: usize,
+    pmemid: *mut mi_memid_t,
+) -> *mut c_void {
     crate::mi_assert_internal!(!pmemid.is_null());
     let size = _mi_align_up(size, MI_META_BLOCK_SIZE);
     if size == 0 || size > MI_META_MAX_SIZE {
@@ -187,8 +189,7 @@ pub unsafe extern "C" fn _mi_meta_zalloc(size: usize, pmemid: *mut mi_memid_t) -
     _mi_os_alloc(size, pmemid)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
+pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
     if p.is_null() {
         return;
     }
@@ -220,8 +221,7 @@ pub unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_me
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
+pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
     let mut mpage = mi_meta_pages.load(Ordering::Acquire);
     while !mpage.is_null() {
         if mpage.cast::<c_void>() == p {

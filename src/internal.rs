@@ -16,14 +16,23 @@ use core::mem::{size_of, zeroed};
 use core::ptr;
 use std::os::raw::c_long;
 
+pub(crate) use crate::alloc::_mi_page_malloc_zero;
+pub(crate) use crate::arena::{
+    _mi_arenas_alloc, _mi_arenas_alloc_aligned, _mi_arenas_collect, _mi_arenas_contain,
+    _mi_arenas_free, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free,
+    _mi_arenas_page_try_reabandon_to_mapped, _mi_arenas_page_unabandon,
+    _mi_arenas_unsafe_destroy_all,
+};
 pub use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE};
+pub(crate) use crate::arena_meta::{_mi_meta_free, _mi_meta_is_meta_page, _mi_meta_zalloc};
 use crate::bits::MI_SIZE_SHIFT;
 pub use crate::bits::{
     MI_ARCH_X64, MI_ARCH_X86, MI_GiB, MI_INTPTR_SIZE, MI_KiB, MI_MAX_VABITS, MI_MiB,
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
+pub(crate) use crate::free::_mi_page_ptr_unalign;
 use crate::options::_mi_error_message_fmt;
-pub(crate) use crate::page::_mi_page_retire;
+pub(crate) use crate::page::{_mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire};
 pub use crate::page::{
     _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
     _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, _mi_theap_page_reclaim,
@@ -598,53 +607,12 @@ unsafe extern "C" {
     pub fn _mi_arena_id_none() -> mi_arena_id_t;
     pub fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t;
     pub fn _mi_arena_memid_is_suitable(memid: mi_memid_t, request_arena: *mut mi_arena_t) -> bool;
-    pub fn _mi_arenas_alloc(
-        heap: *mut mi_heap_t,
-        size: usize,
-        commit: bool,
-        allow_pinned: bool,
-        req_arena: *mut mi_arena_t,
-        tseq: usize,
-        numa_node: c_int,
-        memid: *mut mi_memid_t,
-    ) -> *mut c_void;
-    pub fn _mi_arenas_alloc_aligned(
-        heap: *mut mi_heap_t,
-        size: usize,
-        alignment: usize,
-        align_offset: usize,
-        commit: bool,
-        allow_pinned: bool,
-        req_arena: *mut mi_arena_t,
-        tseq: usize,
-        numa_node: c_int,
-        memid: *mut mi_memid_t,
-    ) -> *mut c_void;
-    pub fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_memid_t);
-    pub fn _mi_arenas_page_alloc(
-        theap: *mut mi_theap_t,
-        block_size: usize,
-        page_alignment: usize,
-    ) -> *mut mi_page_t;
-    pub fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t);
-    pub fn _mi_arenas_page_free(page: *mut mi_page_t, current_theapx: *mut mi_theap_t);
-    pub fn _mi_arenas_page_abandon(page: *mut mi_page_t, current_theap: *mut mi_theap_t);
-    pub fn _mi_arenas_page_unabandon(page: *mut mi_page_t, current_theapx: *mut mi_theap_t);
-    pub fn _mi_arenas_page_try_reabandon_to_mapped(page: *mut mi_page_t) -> bool;
-    pub fn _mi_arenas_collect(force_purge: bool, visit_all: bool, tld: *mut mi_tld_t);
-    pub fn _mi_arenas_contain(p: *const c_void) -> bool;
-    pub fn _mi_meta_zalloc(size: usize, memid: *mut mi_memid_t) -> *mut c_void;
-    pub fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t);
-    pub fn _mi_meta_is_meta_page(p: *mut c_void) -> bool;
     pub fn _mi_malloc_generic(
         theap: *mut mi_theap_t,
         size: usize,
         zero_huge_alignment: usize,
         usable: *mut usize,
     ) -> *mut c_void;
-    pub fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t);
-    pub fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t);
-    pub fn _mi_page_init(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool;
     pub fn _mi_theap_create(heap: *mut mi_heap_t, tld: *mut mi_tld_t) -> *mut mi_theap_t;
     pub fn _mi_theap_area_visit_blocks(
         theap: *mut mi_theap_t,
@@ -663,13 +631,6 @@ unsafe extern "C" {
     pub fn _mi_heap_move_pages(heap_from: *mut mi_heap_t, heap_to: *mut mi_heap_t);
     pub fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t);
     pub fn _mi_heap_force_destroy(heap: *mut mi_heap_t);
-    pub fn _mi_page_malloc_zero(
-        theap: *mut mi_theap_t,
-        page: *mut mi_page_t,
-        size: usize,
-        zero: bool,
-    ) -> *mut c_void;
-    pub fn _mi_page_ptr_unalign(page: *const mi_page_t, p: *const c_void) -> *mut mi_block_t;
     pub fn _mi_padding_shrink(page: *mut mi_page_t, block: *mut mi_block_t, min_size: usize);
 }
 

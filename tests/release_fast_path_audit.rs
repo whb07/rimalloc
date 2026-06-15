@@ -141,6 +141,10 @@ fn free_path_internals_are_not_dynamic_exports() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let page_map = fs::read_to_string(root.join("src/page_map.rs")).expect("read src/page_map.rs");
     let internal = fs::read_to_string(root.join("src/internal.rs")).expect("read src/internal.rs");
+    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
+    let arena_rs = fs::read_to_string(root.join("src/arena.rs")).expect("read src/arena.rs");
+    let arena_meta_rs =
+        fs::read_to_string(root.join("src/arena_meta.rs")).expect("read src/arena_meta.rs");
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
@@ -161,9 +165,117 @@ fn free_path_internals_are_not_dynamic_exports() {
         );
     }
 
+    for (source_name, source, internal_name) in [
+        (
+            "src/alloc.rs",
+            &alloc_rs,
+            "pub unsafe extern \"C\" fn _mi_page_malloc_zero",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_alloc",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_alloc_aligned",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_collect",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_contain",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_free",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_page_abandon",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_page_alloc",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_page_free",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_page_try_reabandon_to_mapped",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_page_unabandon",
+        ),
+        (
+            "src/arena.rs",
+            &arena_rs,
+            "pub unsafe extern \"C\" fn _mi_arenas_unsafe_destroy_all",
+        ),
+        (
+            "src/arena_meta.rs",
+            &arena_meta_rs,
+            "pub unsafe extern \"C\" fn _mi_meta_free",
+        ),
+        (
+            "src/arena_meta.rs",
+            &arena_meta_rs,
+            "pub unsafe extern \"C\" fn _mi_meta_is_meta_page",
+        ),
+        (
+            "src/arena_meta.rs",
+            &arena_meta_rs,
+            "pub unsafe extern \"C\" fn _mi_meta_zalloc",
+        ),
+        (
+            "src/free.rs",
+            &free_rs,
+            "pub unsafe extern \"C\" fn _mi_page_ptr_unalign",
+        ),
+        (
+            "src/page.rs",
+            &page_rs,
+            "pub unsafe extern \"C\" fn _mi_page_abandon",
+        ),
+        (
+            "src/page.rs",
+            &page_rs,
+            "pub unsafe extern \"C\" fn _mi_page_free",
+        ),
+        (
+            "src/page.rs",
+            &page_rs,
+            "pub unsafe extern \"C\" fn _mi_page_init",
+        ),
+    ] {
+        let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
+        assert!(
+            !source.contains(&no_mangle_export),
+            "{internal_name} in {source_name} should stay crate-internal instead of a dynamic export"
+        );
+    }
+
     assert!(
         !internal.contains("pub static mut _mi_page_map:")
             && !internal.contains("pub fn _mi_page_map_init() -> bool;")
+            && !internal.contains("pub fn _mi_arenas_alloc(")
+            && !internal.contains("pub fn _mi_meta_zalloc(")
+            && !internal.contains("pub fn _mi_page_free(")
+            && !internal.contains("pub fn _mi_page_malloc_zero(")
             && !internal.contains("pub static _mi_page_empty:")
             && !internal.contains("pub static _mi_theap_empty:")
             && !internal.contains("pub static _mi_theap_empty_wrong:")

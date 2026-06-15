@@ -190,8 +190,7 @@ unsafe fn memset_nonhuge(page: *mut mi_page_t, block: *mut c_void, bsize: usize)
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_page_malloc_zero(
+pub(crate) unsafe extern "C" fn _mi_page_malloc_zero(
     theap: *mut mi_theap_t,
     page: *mut mi_page_t,
     size: usize,

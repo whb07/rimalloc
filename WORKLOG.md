@@ -545,3 +545,32 @@
   - `cargo check --features track-asan --quiet`
   - `scripts/check-behavioral-parity.py`
   - `git diff --check`
+- Localized the next internal helper batch by replacing `internal.rs` extern declarations with crate-local re-exports from the defining modules:
+  - Arena helpers: `_mi_arenas_alloc`, `_mi_arenas_alloc_aligned`, `_mi_arenas_collect`, `_mi_arenas_contain`, `_mi_arenas_free`, `_mi_arenas_page_abandon`, `_mi_arenas_page_alloc`, `_mi_arenas_page_free`, `_mi_arenas_page_try_reabandon_to_mapped`, `_mi_arenas_page_unabandon`, `_mi_arenas_unsafe_destroy_all`.
+  - Meta helpers: `_mi_meta_free`, `_mi_meta_is_meta_page`, `_mi_meta_zalloc`.
+  - Page helpers: `_mi_page_abandon`, `_mi_page_free`, `_mi_page_init`, `_mi_page_malloc_zero`, `_mi_page_ptr_unalign`.
+  - Added release audit coverage that these helpers stay crate-local instead of returning as `#[no_mangle]` dynamic exports.
+- Focused validation/build after localizing the helper batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet --test release_fast_path_audit`
+  - `cargo rustc --release --lib -- --crate-type cdylib`
+  - Dynamic defined symbols dropped from Rust `365` to `346`.
+  - Dynamic relocations dropped from Rust `1,626` to `1,613`; `R_X86_64_GLOB_DAT` dropped from `121` to `108`.
+  - `size -A` total dropped from Rust `680,348` bytes to `676,251` bytes.
+- Focused `cfrac -n=5` after the helper-localization batch:
+  - C: `2.71s..2.78s`, RSS `5800..6540` KiB, reclaims `198..200`.
+  - Rust: `2.71s..2.76s`, RSS `6516..6780` KiB, reclaims `208..211`.
+  - Result: no wall-time regression; RSS/reclaim tail remains, so the next parity pass should keep reducing load footprint and remaining Rust-only dynamic ABI surface.
+- Full established validation passed after the helper-localization batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `git diff --check`

@@ -12,6 +12,7 @@ use core::ptr;
 use std::sync::Once;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
+use crate::arena::_mi_arenas_unsafe_destroy_all;
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bits::MI_SIZE_SIZE;
 use crate::internal::{
@@ -1039,7 +1040,6 @@ unsafe extern "C" {
     ) -> bool;
     fn mi_heap_destroy(heap: *mut mi_heap_t);
     fn _mi_heap_force_destroy(heap: *mut mi_heap_t);
-    fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t);
 }
 
 #[cfg(any(target_os = "openbsd", target_os = "android"))]

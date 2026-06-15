@@ -159,6 +159,7 @@ static SUBPROC_MAIN_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
 static PROCESS_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
 static OPTIONS_POST_INIT_STATE: AtomicUsize = AtomicUsize::new(0);
 static PROCESS_DONE: AtomicBool = AtomicBool::new(false);
+static OS_PRELOADING: AtomicBool = AtomicBool::new(true);
 static SUBPROC_TOTAL_COUNT: AtomicUsize = AtomicUsize::new(0);
 static mut subproc_main: MaybeUninit<MiSubprocPrefix> = MaybeUninit::uninit();
 static mut subprocs: *mut mi_subproc_t = ptr::null_mut();
@@ -816,7 +817,7 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
 }
 
 pub(crate) extern "C" fn _mi_preloading() -> bool {
-    false
+    OS_PRELOADING.load(Ordering::Relaxed)
 }
 
 #[unsafe(no_mangle)]
@@ -1583,7 +1584,7 @@ unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
 /// # Safety
 /// Initializes per-thread mimalloc state for the current thread when it is not already set up.
 pub unsafe extern "C" fn mi_thread_init() {
-    unsafe { crate::internal::_mi_auto_process_init() };
+    unsafe { mi_process_init() };
     if unsafe { crate::prim::_mi_thread_is_initialized() } {
         return;
     }
@@ -1720,9 +1721,7 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
     }
 }
 
-/// # Safety
-/// Performs one-time process-global mimalloc initialization for the bounded init/runtime scaffold.
-pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
+unsafe fn mi_process_init_inner() {
     if let Some(_once) = unsafe { mi_atomic_do_once_enter(ptr::addr_of!(PROCESS_INIT).cast_mut()) }
     {
         unsafe {
@@ -1745,6 +1744,13 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
             }
         }
     }
+}
+
+/// # Safety
+/// Performs one-time process-global mimalloc initialization for the bounded init/runtime scaffold.
+pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
+    OS_PRELOADING.store(false, Ordering::Relaxed);
+    unsafe { mi_process_init_inner() };
     mi_heap_main_init();
     mi_mark_main_thread();
     mi_tls_slots_init();
@@ -1762,7 +1768,7 @@ pub(crate) unsafe extern "C" fn _mi_auto_process_init() {
 /// # Safety
 /// Public C ABI wrapper for process-global initialization.
 pub unsafe extern "C" fn mi_process_init() {
-    unsafe { _mi_auto_process_init() };
+    unsafe { mi_process_init_inner() };
 }
 
 /// # Safety
@@ -1801,6 +1807,7 @@ pub unsafe extern "C" fn mi_process_done() {
         }
         mi_tls_slots_done();
         _mi_allocator_done();
+        OS_PRELOADING.store(true, Ordering::Relaxed);
     }
 }
 

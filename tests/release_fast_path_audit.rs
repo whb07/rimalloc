@@ -54,6 +54,55 @@ fn huge_allocation_stats_are_release_gated_like_c_mimalloc() {
 }
 
 #[test]
+fn preloading_state_matches_c_mimalloc_lifecycle() {
+    let init_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/init.rs");
+    let source = fs::read_to_string(init_rs).expect("read src/init.rs");
+    let preload_fn = source
+        .find("pub(crate) extern \"C\" fn _mi_preloading() -> bool")
+        .expect("find _mi_preloading");
+    let thread_init = source
+        .find("pub unsafe extern \"C\" fn mi_thread_init()")
+        .expect("find mi_thread_init");
+    let auto_init = source
+        .find("pub(crate) unsafe extern \"C\" fn _mi_auto_process_init()")
+        .expect("find _mi_auto_process_init");
+    let process_init = source
+        .find("pub unsafe extern \"C\" fn mi_process_init()")
+        .expect("find mi_process_init");
+    let process_done = source
+        .find("pub unsafe extern \"C\" fn mi_process_done()")
+        .expect("find mi_process_done");
+
+    assert!(
+        source.contains("static OS_PRELOADING: AtomicBool = AtomicBool::new(true);"),
+        "_mi_preloading should default to true until process initialization, matching C"
+    );
+    assert!(
+        source[preload_fn..].contains("OS_PRELOADING.load(Ordering::Relaxed)")
+            && !source[preload_fn..preload_fn + 120].contains("false"),
+        "_mi_preloading must read process state instead of returning a constant"
+    );
+    assert!(
+        source[auto_init..].contains("OS_PRELOADING.store(false, Ordering::Relaxed);"),
+        "_mi_auto_process_init should clear preloading before allocator initialization"
+    );
+    assert!(
+        source[thread_init..auto_init].contains("mi_process_init()")
+            && !source[thread_init..auto_init].contains("_mi_auto_process_init()"),
+        "allocation-triggered thread init should call mi_process_init, not the constructor-only auto init path"
+    );
+    assert!(
+        source[process_init..process_done].contains("mi_process_init_inner()")
+            && !source[process_init..process_done].contains("_mi_auto_process_init()"),
+        "mi_process_init should not clear preloading; only _mi_auto_process_init should"
+    );
+    assert!(
+        source[process_done..].contains("OS_PRELOADING.store(true, Ordering::Relaxed);"),
+        "mi_process_done should restore preloading after allocator teardown"
+    );
+}
+
+#[test]
 fn stderr_output_routes_through_platform_primitive() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");

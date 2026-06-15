@@ -1227,3 +1227,15 @@
   - `cargo build --release`
   - `cargo test --quiet`
   - `cargo clippy --all-targets -- -D warnings`
+- Traced the remaining `alloc-test 1` RSS/arena-layout mismatch:
+  - `gdb` syscall catchpoints confirmed C creates a fixed `524288` byte mapping from `mi_arenas_page_alloc_fresh` during loader/preload allocation, then later reserves the `1 GiB` arena.
+  - The Rust run skipped that preload OS-page fallback and reserved the `1 GiB` arena immediately from `mi_arenas_page_alloc_fresh`.
+  - The arena allocation code paths matched structurally; the state mismatch was `_mi_preloading()`: C keeps `os_preloading=true` until `_mi_auto_process_init` and restores it at `mi_process_done`, while Rust hard-coded `_mi_preloading()` to `false`.
+  - Added Rust `OS_PRELOADING` process state initialized to `true`, cleared at `_mi_auto_process_init`, and restored at `mi_process_done`.
+  - Split the Rust process init path so allocation-triggered `mi_thread_init()` calls `mi_process_init()`/`mi_process_init_inner()` without clearing preloading; only the constructor-only `_mi_auto_process_init()` clears it, matching C.
+  - Added release/source audit coverage to keep `_mi_preloading()` stateful, lifecycle-gated, and separate between the public process init path and the constructor wrapper.
+  - Rebuilt the release cdylib and refreshed `target/bench-allocators/libmimalloc-rust.so`.
+  - Post-fix `strace` for Rust `alloc-test 1` now matches C's startup layout: `2359296` page map, fixed `524288` preload OS page at `0x5c3d4400000`, `65536` page-map range, then the `1 GiB` arena at `0x5c3d4c00000` with `MADV_HUGEPAGE`.
+  - Direct `alloc-test 1` RSS now overlaps C: Rust `16300..16588 KiB`, minor faults `300..304`; C `16168..16580 KiB`, minor faults `303..305`.
+  - `MIMALLOC_SHOW_STATS=1 ./alloc-test 1` now reports the same allocator shape for C and Rust: `mmaps: 4`, `reserved: 1.0 GiB`, `committed: 12.1 MiB`, and peak RSS around `15.5 MiB`.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `git diff --check`, `scripts/check-behavioral-parity.py`, and `scripts/check-unix-syscall-parity.py`.

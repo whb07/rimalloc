@@ -682,6 +682,18 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("let page = unsafe { _mi_safe_ptr_page(start) };"),
         "safe pointer page lookup should keep C's _mi_safe_ptr_page local call boundary"
     );
+    assert!(
+        theap_rs
+            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_area_init(")
+            && theap_rs.contains("let bsize = mi_page_block_size(page);")
+            && theap_rs.contains("(*area).reserved = (*page).reserved as usize * bsize;")
+            && theap_rs.contains("_mi_heap_area_init(ptr::addr_of_mut!(xarea.area), page);")
+            && arena_rs.contains("use crate::theap::_mi_heap_area_init;")
+            && arena_rs.contains("_mi_heap_area_init(ptr::addr_of_mut!(area), page)")
+            && !arena_rs.contains("unsafe fn mi_heap_area_init(")
+            && !internal.contains("pub fn _mi_heap_area_init("),
+        "heap area visitation should keep C's shared _mi_heap_area_init local helper boundary"
+    );
 
     for (source_name, source, internal_name) in [
         (

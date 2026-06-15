@@ -564,14 +564,6 @@ unsafe extern "C" {
         visitor: mi_block_visit_fun,
         arg: *mut c_void,
     ) -> bool;
-    pub fn _mi_heap_area_init(
-        area: *mut mi_heap_area_t,
-        page: *mut mi_page_t,
-        block_size: usize,
-        reserved: usize,
-        used: usize,
-        blocks: *mut c_void,
-    );
 }
 
 #[inline]

@@ -78,7 +78,11 @@ pub struct mi_visit_blocks_args_s {
 
 pub type mi_visit_blocks_args_t = mi_visit_blocks_args_s;
 
-unsafe fn _mi_heap_area_init(area: *mut mi_heap_area_t, page: *mut mi_page_t) {
+#[inline(never)]
+pub(crate) unsafe extern "C" fn _mi_heap_area_init(
+    area: *mut mi_heap_area_t,
+    page: *mut mi_page_t,
+) {
     let bsize = mi_page_block_size(page);
     let ubsize = mi_page_usable_block_size(page);
     (*area).reserved = (*page).reserved as usize * bsize;

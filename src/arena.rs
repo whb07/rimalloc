@@ -53,6 +53,7 @@ use crate::page::{
 use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page};
 use crate::prim::_mi_page_associated_theap_peek;
 use crate::stats::{MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_OTHER, MI_CBIN_SMALL};
+use crate::theap::_mi_heap_area_init;
 use crate::track::{mi_track_mem_defined, mi_track_mem_undefined};
 use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
@@ -218,21 +219,6 @@ struct mi_heap_delete_visit_info_t {
 }
 
 #[allow(dead_code)]
-unsafe fn mi_heap_area_init(area: *mut mi_heap_area_t, page: *mut mi_page_t) {
-    let bsize = unsafe { mi_page_block_size(page) };
-    let ubsize = unsafe { mi_page_usable_block_size(page) };
-    unsafe {
-        (*area).reserved = (*page).reserved as usize * bsize;
-        (*area).committed = (*page).capacity as usize * bsize;
-        (*area).blocks = mi_page_start(page).cast::<c_void>();
-        (*area).used = (*page).used as usize;
-        (*area).block_size = ubsize;
-        (*area).full_block_size = bsize;
-        (*area).reserved1 = page.cast::<c_void>();
-    }
-}
-
-#[allow(dead_code)]
 unsafe fn mi_theap_area_visit_blocks(
     area: *const mi_heap_area_t,
     page: *mut mi_page_t,
@@ -327,7 +313,7 @@ unsafe fn mi_theap_area_visit_blocks(
 #[allow(dead_code)]
 unsafe fn mi_heap_visit_page(page: *mut mi_page_t, vinfo: *mut mi_heap_visit_info_t) -> bool {
     let mut area = mi_heap_area_t::default();
-    unsafe { mi_heap_area_init(ptr::addr_of_mut!(area), page) };
+    unsafe { _mi_heap_area_init(ptr::addr_of_mut!(area), page) };
     crate::mi_assert_internal!(unsafe { (*vinfo).heap == mi_page_heap(page) });
     if !unsafe {
         ((*vinfo).visitor)(

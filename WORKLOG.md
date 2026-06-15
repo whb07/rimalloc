@@ -1521,3 +1521,10 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.07s`, Rust `2.11s..2.26s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.29B` instructions and `17.68B` cycles; Rust about `11.86B` instructions and `18.30B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's shared heap area init helper boundary:
+  - C emits `_mi_heap_area_init` as a standalone helper in `theap.c` and calls it from both theap area visitation and arena heap visitation; Rust had one theap-local helper plus a duplicated arena-local initializer, and release emitted no matching local symbol.
+  - Marked the Rust helper `#[inline(never)]`, routed arena heap visitation through the shared crate-local helper, removed the stale internal extern declaration, and extended release audit coverage for the shared call boundary.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::theap::_mi_heap_area_init`; arena `mi_heap_visit_page` and theap area visitation call through that helper.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.11s..2.14s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.30B` instructions and `17.68B` cycles; Rust about `11.87B` instructions and `18.31B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

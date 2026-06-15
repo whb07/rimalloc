@@ -1299,3 +1299,32 @@
   - `mimalloc-bench` harness recheck: first `glibc-thread` group C `.431s.. .434s`, Rust `.437s.. .451s` with one low Rust outlier; second group C `.421s.. .427s`, Rust `.421s.. .428s`.
   - `glibc-simple` remained Rust-favored in the harness: C `1.38s..1.40s`, Rust `1.33s`.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.
+- Rechecked the current release benchmark surface after `00d4e7d`:
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the current `cargo build --release`.
+  - `mimalloc-bench` harness pass with `-n=5 glibc rptest cfrac alloc-test larson larson-sized mstress sh6bench sh8bench xmalloc-test cscratch malloc-large mleak`.
+  - `glibc-simple`: C `1.34s..1.35s`, Rust `1.29s..1.31s`.
+  - `glibc-thread`: C `.416s.. .420s`, Rust `.421s.. .427s`; still a small Rust tail.
+  - `rptestN`: C `1.238s..1.686s`, Rust `1.220s..1.477s`; noisy and overlapping.
+  - `cfrac`: C `2.72s..2.75s`, Rust `2.73s..2.79s`; overlapping.
+  - `alloc-test1`: C `2.07s..2.09s`, Rust `2.05s..2.07s`; RSS/faults matched. `alloc-testN`: C `2.18s..2.25s`, Rust `2.18s..2.20s`.
+  - `larsonN`: C `2.072s..2.111s`, Rust `1.995s..2.204s`; `larsonN-sized`: C `2.028s..2.148s`, Rust `2.053s..2.111s`.
+  - `mstressN`: C `1.61s..1.63s`, Rust `1.61s..1.63s`.
+  - `sh6benchN`: C `.09s.. .15s`, Rust `.09s.. .13s`; noisy/short. `sh8benchN`: C `.23s.. .24s`, Rust `.24s.. .25s`; noisy/short.
+  - `xmalloc-testN`: C `.212s.. .220s`, Rust `.210s.. .216s`.
+  - `cache-scratch1`: C `.84s.. .85s`, Rust `.83s.. .84s`; `cache-scratchN`: both `.06s`.
+  - `malloc-large`: both `1.16s` with matched RSS/faults.
+  - `mleak10`: both `.10s`; `mleak100`: C `1.03s..1.04s`, Rust `1.06s..1.12s`, the clearest current Rust tail and next trace target.
+- Traced the `mleak100` tail:
+  - `mleak100` creates 50,000 short-lived threads; each thread performs one `calloc(16, sizeof(void*))` and one `free` through a transfer slot.
+  - Direct repeated timing confirmed the harness signal: C `1.03s..1.04s`, Rust `1.06s..1.13s`, with matched minor faults around 60,200.
+  - `MIMALLOC_SHOW_STATS=1` showed broadly matching shape but different abandoned/reclaim details: C `reclaimf 16.4K`, Rust `17.0K`, and Rust reported two purges in the default run.
+  - Disabling purge with `MIMALLOC_PURGE_DELAY=-1` did not remove the tail, so purge timing was rejected as the primary explanation.
+  - Checked the `thread_seq` path because C assigns from `mi_atomic_increment_relaxed`. C's macro is a direct `fetch_add`, so Rust's old-value assignment matches C; only `subproc_seq` adds one in both implementations. No code change was made from that lead.
+  - Found a concrete hot-path mismatch: C exports `calloc`, `mi_calloc`, and `__libc_calloc` at the same address with the small zero-allocation fast path in the entry body. Rust exported `calloc`/`mi_calloc` as a Rust wrapper that called the default-heap helper and jumped to `mi_theap_calloc`.
+  - Added a Linux x86_64 fast `calloc` entry mirroring C's overflow check, small-bin free-list pop, `free_is_zero` branch, `_mi_cpu_stosb_max` threshold, `rep stosb`, and `memset` fallback. `mi_calloc` and `__libc_calloc` now alias that entry when the fast override is enabled.
+  - Gated the Rust `mi_calloc` and Unix `calloc` exports behind `not(mi_c_malloc_fast)` and added release fast-path audit coverage for the new assembly path and aliases.
+  - Moved the Linux fast `malloc`, `mi_malloc`, `calloc`, and libc aliases into the same ordered assembly block as `free` so the symbol layout is explicit. Current release layout matches C's key offsets: `malloc == mi_malloc == __libc_malloc == free + 0x5e0`; `calloc == mi_calloc == __libc_calloc == malloc + 0x60`.
+  - Post-change direct `mleak100` samples: C `1.03s..1.10s`, Rust `1.06s..1.13s`. This reduces the wrapper mismatch but does not eliminate the remaining thread-lifecycle tail.
+  - Post-change glibc sanity samples stayed healthy: `glibc-simple` C `1.34s..1.35s`, Rust `1.33s..1.34s`; `glibc-thread 32` was even at the fixed two-second benchmark duration.
+  - Post-change stats run still shows a small Rust tail (`elapsed` C `1.148s`, Rust `1.178s`), so the next `mleak100` trace should continue past `calloc` into thread teardown/reclaim behavior.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.

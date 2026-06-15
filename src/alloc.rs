@@ -398,7 +398,7 @@ pub unsafe extern "C" fn mi_theap_calloc(
     mi_theap_zalloc(theap, total)
 }
 
-#[unsafe(no_mangle)]
+#[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
     mi_theap_calloc(_mi_theap_default(), count, size)
 }

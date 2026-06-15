@@ -310,23 +310,36 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     );
     assert!(
         override_rs.contains("#[unsafe(naked)]")
-            && override_rs.contains("pub unsafe extern \"C\" fn malloc")
-            && override_rs.contains("pub unsafe extern \"C\" fn mi_malloc")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_array_fast_64")
             && override_rs.contains("core::arch::naked_asm!")
             && override_rs.matches("\"endbr64\"").count() >= 5
             && override_rs.contains("mi_tls_theap_default@GOTTPOFF")
             && override_rs.contains("[rdi + rax*8 + 0x110]")
-            && override_rs.contains("slow = sym crate::page::_mi_malloc_generic")
+            && override_rs.contains("malloc_generic = sym crate::page::_mi_malloc_generic")
+            && override_rs.contains("stosb_max = sym crate::init::_mi_cpu_stosb_max")
+            && override_rs.contains("\"mul rsi\"")
+            && override_rs.contains("\"jo .Lmi_calloc_overflow\"")
+            && override_rs.contains("\"mov edx, 1\"")
+            && override_rs.contains("\"rep stosb\"")
+            && override_rs.contains("\"call memset\"")
             && override_rs.contains("core::arch::global_asm!")
             && override_rs.contains(".globl free")
+            && override_rs.contains("\"malloc:\"")
+            && override_rs.contains("\"calloc:\"")
+            && override_rs.contains(".set mi_malloc, malloc")
+            && override_rs.contains(".set __libc_malloc, malloc")
+            && override_rs.contains(".globl mi_calloc")
+            && override_rs.contains(".set mi_calloc, calloc")
+            && override_rs.contains(".globl __libc_calloc")
+            && override_rs.contains(".set __libc_calloc, calloc")
             && override_rs.contains(".p2align 4")
             && override_rs.contains(".size free, .-free")
             && override_rs.contains(".set mi_free, free")
+            && override_rs.contains(".set __libc_free, free")
             && override_rs.contains(".set _ZdlPv, free")
             && override_rs.contains(".set _ZdaPv, free")
-            && override_rs.contains(".fill 0x4a0,1,0x90")
+            && override_rs.contains(".fill 0x540,1,0x90")
             && override_rs.contains("page_map = sym crate::page_map::_mi_page_map")
             && override_rs.contains("retire = sym crate::page::_mi_page_retire")
             && override_rs.contains("collect_mt = sym crate::free::mi_free_try_collect_mt")
@@ -341,6 +354,13 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         alloc_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_malloc"),
         "Rust mi_malloc export gate must stay paired with the assembly fast override"
+    );
+    assert!(
+        alloc_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))")
+            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_calloc")
+            && override_rs.contains("cfg(all(not(windows), not(mi_c_malloc_fast)))")
+            && override_rs.contains("export_name = \"calloc\""),
+        "Rust calloc/mi_calloc export gates must stay paired with the assembly fast override"
     );
     assert!(
         override_rs.contains("cfg(all(not(windows), not(mi_c_malloc_fast)))")

@@ -1470,3 +1470,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `11.32B` instructions and `17.78B` cycles; Rust about `11.90B` instructions and `18.22B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.
+- Started matching C's page-map helper boundaries:
+  - C emits `_mi_page_map_init`, `_mi_page_map_register`, `_mi_page_map_unregister`, `_mi_page_map_unregister_range`, and `_mi_page_map_unsafe_destroy` as standalone local helpers, while Rust release only retained `_mi_page_map_init`.
+  - Marked the Rust page-map helpers `#[inline(never)]` on both page-map implementations and extended release audit coverage requiring the register, unregister, range-unregister, and unsafe-destroy boundaries to remain crate-local helpers.
+  - Added a local `#[used]` function-pointer anchor for `_mi_page_map_unregister_range`; C emits that helper even though optimized Rust currently has no release caller.
+  - Rebuilt release and confirmed Rust now emits local `_mi_page_map_init`, `_mi_page_map_register`, `_mi_page_map_unregister`, `_mi_page_map_unregister_range`, and `_mi_page_map_unsafe_destroy`; arena page allocation/free and subprocess teardown call through those helpers.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.11s..2.13s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `11.29B` instructions and `18.00B` cycles; Rust about `11.89B` instructions and `18.35B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, and `scripts/check-behavioral-parity.py`.

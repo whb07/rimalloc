@@ -633,6 +633,41 @@ fn free_path_internals_are_not_dynamic_exports() {
             "{internal_name} should stay crate-internal instead of a dynamic export"
         );
     }
+    assert!(
+        page_map
+            .matches("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_map_init(")
+            .count()
+            == 2
+            && page_map
+                .matches(
+                    "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_map_register(",
+                )
+                .count()
+                == 2
+            && page_map
+                .matches(
+                    "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_map_unregister(",
+                )
+                .count()
+                == 2
+            && page_map
+                .matches(
+                    "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_map_unregister_range(",
+                )
+                .count()
+                == 2
+            && page_map
+                .matches(
+                    "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_map_unsafe_destroy(",
+                )
+                .count()
+                == 2
+            && page_map.contains("static MI_PAGE_MAP_UNREGISTER_RANGE_KEEP")
+            && arena_rs.contains("_mi_page_map_register(page)")
+            && arena_rs.contains("_mi_page_map_unregister(page)")
+            && init_rs.contains("_mi_page_map_unsafe_destroy(subproc)"),
+        "page-map init, register, unregister, range-unregister, and unsafe-destroy helpers should keep C's local call boundaries"
+    );
 
     for (source_name, source, internal_name) in [
         (

@@ -614,6 +614,8 @@ fn free_path_internals_are_not_dynamic_exports() {
     let stats_rs = fs::read_to_string(root.join("src/stats.rs")).expect("read src/stats.rs");
     let theap_rs = fs::read_to_string(root.join("src/theap.rs")).expect("read src/theap.rs");
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
+    let threadlocal_rs =
+        fs::read_to_string(root.join("src/threadlocal.rs")).expect("read src/threadlocal.rs");
     let alloc_aligned_rs =
         fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read src/alloc_aligned.rs");
     let heap_rs = fs::read_to_string(root.join("src/heap.rs")).expect("read src/heap.rs");
@@ -1189,6 +1191,36 @@ fn free_path_internals_are_not_dynamic_exports() {
         ("src/init.rs", &init_rs, "fn _mi_subproc_heap_main"),
         ("src/init.rs", &init_rs, "fn _mi_auto_process_init"),
         ("src/init.rs", &init_rs, "fn _mi_auto_process_done"),
+        (
+            "src/threadlocal.rs",
+            &threadlocal_rs,
+            "pub extern \"C\" fn _mi_thread_locals_init",
+        ),
+        (
+            "src/threadlocal.rs",
+            &threadlocal_rs,
+            "pub extern \"C\" fn _mi_thread_locals_done",
+        ),
+        (
+            "src/threadlocal.rs",
+            &threadlocal_rs,
+            "pub extern \"C\" fn _mi_thread_local_set",
+        ),
+        (
+            "src/threadlocal.rs",
+            &threadlocal_rs,
+            "pub extern \"C\" fn _mi_thread_local_get",
+        ),
+        (
+            "src/threadlocal.rs",
+            &threadlocal_rs,
+            "pub extern \"C\" fn _mi_thread_locals_thread_done",
+        ),
+        (
+            "src/threadlocal.rs",
+            &threadlocal_rs,
+            "pub extern \"C\" fn _mi_thread_local_free",
+        ),
         (
             "src/heap.rs",
             &heap_rs,
@@ -1934,6 +1966,26 @@ fn free_path_internals_are_not_dynamic_exports() {
             && init_rs.contains("static MI_SUBPROC_HEAP_MAIN_KEEP")
             && prim_rs.contains("pub unsafe fn _mi_theap_default_raw()"),
         "subproc helpers should stay as C's small local helper boundaries and inspect the raw default TLS cell"
+    );
+    assert!(
+        threadlocal_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_init(")
+            && threadlocal_rs
+                .contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_done(")
+            && threadlocal_rs
+                .contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_local_set(")
+            && threadlocal_rs
+                .contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_local_get(")
+            && threadlocal_rs
+                .contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_thread_done(")
+            && threadlocal_rs
+                .contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_local_free(")
+            && threadlocal_rs.contains("static MI_THREAD_LOCALS_INIT_KEEP")
+            && threadlocal_rs.contains("static MI_THREAD_LOCALS_DONE_KEEP")
+            && threadlocal_rs.contains("static MI_THREAD_LOCAL_SET_KEEP")
+            && threadlocal_rs.contains("static MI_THREAD_LOCAL_GET_KEEP")
+            && threadlocal_rs.contains("static MI_THREAD_LOCALS_THREAD_DONE_KEEP")
+            && threadlocal_rs.contains("static MI_THREAD_LOCAL_FREE_KEEP"),
+        "dynamic thread-local helpers should keep C's local helper boundaries"
     );
     assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")

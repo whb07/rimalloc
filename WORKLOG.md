@@ -1730,3 +1730,11 @@
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.06s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
   - Single-run `perf stat` for the same invocation: C about `10.06B` instructions and `15.56B` cycles; Rust about `10.66B` instructions and `16.26B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.
+- Started matching C's dynamic thread-local helper boundary set:
+  - C emits `_mi_thread_locals_init`, `_mi_thread_locals_done`, `_mi_thread_local_set`, `_mi_thread_local_get`, `_mi_thread_locals_thread_done`, and `_mi_thread_local_free` as standalone local helpers for dynamic TLS slot management.
+  - Rust had matching C-ABI helper bodies, but release dropped the locals after inlining through heap and thread initialization/teardown paths.
+  - Marked the Rust dynamic TLS helpers `#[inline(never)]`, retained them through local `#[used]` function-pointer anchors, and extended release audit coverage for the helper markers and anchors.
+  - Rebuilt release and confirmed Rust now emits local `mechanical_mimalloc::threadlocal::_mi_thread_local_get`, `_mi_thread_local_set`, `_mi_thread_local_free`, `_mi_thread_locals_done`, `_mi_thread_locals_init`, and `_mi_thread_locals_thread_done`, with no dynamic exports for the set.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak 100`: C `2.04s..2.05s`, Rust `2.10s..2.12s`, with matched minor faults around `120.2K`.
+  - Single-run `perf stat` for the same invocation: C about `10.09B` instructions and `15.66B` cycles; Rust about `10.68B` instructions and `16.59B` cycles. The remaining gap still appears as extra Rust user-space work, not faults.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo build --release`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-unix-syscall-parity.py`, `scripts/check-behavioral-parity.py`, and `git diff --check`.

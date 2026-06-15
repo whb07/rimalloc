@@ -318,6 +318,7 @@ fn free_thread_locals(tls: *mut mi_thread_locals_t) {
     }
 }
 
+#[inline(never)]
 pub extern "C" fn _mi_thread_locals_init() {
     unsafe {
         mi_lock_init(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
@@ -326,6 +327,10 @@ pub extern "C" fn _mi_thread_locals_init() {
     mi_thread_locals_version.store(0, Ordering::Relaxed);
 }
 
+#[used]
+static MI_THREAD_LOCALS_INIT_KEEP: extern "C" fn() = _mi_thread_locals_init;
+
+#[inline(never)]
 pub extern "C" fn _mi_thread_locals_done() {
     if mi_thread_locals_free.load(Ordering::Acquire).is_null() {
         return;
@@ -345,6 +350,10 @@ pub extern "C" fn _mi_thread_locals_done() {
     }
 }
 
+#[used]
+static MI_THREAD_LOCALS_DONE_KEEP: extern "C" fn() = _mi_thread_locals_done;
+
+#[inline(never)]
 pub extern "C" fn _mi_thread_local_set(
     key: mi_thread_local_t,
     val: *mut core::ffi::c_void,
@@ -365,6 +374,11 @@ pub extern "C" fn _mi_thread_local_set(
     }
 }
 
+#[used]
+static MI_THREAD_LOCAL_SET_KEEP: extern "C" fn(mi_thread_local_t, *mut core::ffi::c_void) -> bool =
+    _mi_thread_local_set;
+
+#[inline(never)]
 pub extern "C" fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut core::ffi::c_void {
     let tls = thread_locals_ptr();
     crate::mi_debug_assert!(!tls.is_null());
@@ -384,6 +398,11 @@ pub extern "C" fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut core::ffi
     }
 }
 
+#[used]
+static MI_THREAD_LOCAL_GET_KEEP: extern "C" fn(mi_thread_local_t) -> *mut core::ffi::c_void =
+    _mi_thread_local_get;
+
+#[inline(never)]
 pub extern "C" fn _mi_thread_locals_thread_done() {
     let tls = thread_locals_ptr();
     if unsafe { !tls.is_null() && (*tls).count > 0 } {
@@ -391,6 +410,9 @@ pub extern "C" fn _mi_thread_locals_thread_done() {
         set_thread_locals_ptr(thread_locals_empty_ptr());
     }
 }
+
+#[used]
+static MI_THREAD_LOCALS_THREAD_DONE_KEEP: extern "C" fn() = _mi_thread_locals_thread_done;
 
 pub extern "C" fn _mi_thread_local_create() -> mi_thread_local_t {
     unsafe {
@@ -406,6 +428,7 @@ pub extern "C" fn _mi_thread_local_create() -> mi_thread_local_t {
     key
 }
 
+#[inline(never)]
 pub extern "C" fn _mi_thread_local_free(key: mi_thread_local_t) {
     if key == 0 {
         return;
@@ -424,3 +447,6 @@ pub extern "C" fn _mi_thread_local_free(key: mi_thread_local_t) {
         mi_lock_release(&mi_thread_locals_lock as *const mi_lock_t as *mut mi_lock_t);
     }
 }
+
+#[used]
+static MI_THREAD_LOCAL_FREE_KEEP: extern "C" fn(mi_thread_local_t) = _mi_thread_local_free;

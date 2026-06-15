@@ -1362,3 +1362,11 @@
   - Rebuilt release and confirmed `mi_tld_alloc` is gone from the Rust release symbol table; `mi_tld_free` remains out of line, matching C's explicit noinline helper.
   - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak100`: after two noisy high pairs, C returned to `1.03s` and Rust to `1.05s..1.06s`, so the remaining tail still needs a deeper thread cleanup/reclaim codegen comparison.
   - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.
+- Fixed a release direct-TLS setter register-overlap bug found while disassembling `_mi_thread_done`:
+  - The Linux x86_64 inline asm setters used `lateout(reg)` for the TLS offset scratch. In release codegen LLVM could assign that scratch to the same register as the pointer input, producing stores such as `mov %rax,%fs:(%rax)` and writing the TLS offset instead of the intended heap/thread-local pointer.
+  - Changed the heap, main-heap, and dynamic thread-local TLS setters to use `out(reg)` for the offset scratch so it cannot overlap the stored pointer.
+  - Extended the release fast-path audit to require the non-overlapping scratch constraint for these TLS setters.
+  - Rebuilt release and confirmed `_mi_thread_done` now emits distinct registers for the stores, for example `mov %rax,%fs:(%rcx)`.
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` and rechecked direct `mleak100`: C `1.01s..1.03s`, Rust `1.05s..1.06s`, with matched minor faults around `60.2K`.
+  - Five-run `perf stat` still shows the remaining instruction gap: C about `5.65B` instructions and `8.93B` cycles; Rust about `5.99B` instructions and `9.12B` cycles. This fix corrects release TLS stores, but the remaining `mleak100` tail persists.
+  - Validation passed: `cargo fmt --check`, `cargo test --quiet --test release_fast_path_audit`, `cargo test --quiet --test thread_stats_regression`, `cargo test --quiet`, `cargo clippy --all-targets -- -D warnings`, `scripts/check-behavioral-parity.py`, `scripts/check-unix-syscall-parity.py`, `cargo build --release`, and `git diff --check`.

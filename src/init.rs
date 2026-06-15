@@ -743,7 +743,7 @@ unsafe fn mi_linux_x64_theap_main_set(theap: *mut mi_theap_t) {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
             "mov qword ptr fs:[{tls_offset}], {theap}",
-            tls_offset = lateout(reg) _,
+            tls_offset = out(reg) _,
             theap = in(reg) theap,
             options(nostack, preserves_flags),
         );

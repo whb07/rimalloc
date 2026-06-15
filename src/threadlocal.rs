@@ -73,7 +73,7 @@ unsafe fn mi_linux_x64_thread_locals_set(tls: *mut mi_thread_locals_t) {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + mi_thread_locals@GOTTPOFF]",
             "mov qword ptr fs:[{tls_offset}], {tls}",
-            tls_offset = lateout(reg) _,
+            tls_offset = out(reg) _,
             tls = in(reg) tls,
             options(nostack, preserves_flags),
         );

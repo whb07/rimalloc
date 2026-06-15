@@ -323,6 +323,12 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         "Linux x86_64 heap TLS accessors should inline C-style initial-exec loads and stores"
     );
     assert!(
+        prim_rs.matches("tls_offset = out(reg) _").count() >= 2
+            && init_rs.contains("tls_offset = out(reg) _")
+            && threadlocal_rs.contains("tls_offset = out(reg) _"),
+        "Linux x86_64 TLS setters should not let the offset scratch register overlap the stored pointer"
+    );
+    assert!(
         threadlocal_rs.contains("fn mi_linux_x64_thread_locals_get()")
             && threadlocal_rs
                 .contains("fn mi_linux_x64_thread_locals_set(tls: *mut mi_thread_locals_t)")

@@ -35,6 +35,14 @@ unsafe extern "C" {
     fn c_abort() -> !;
 }
 
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+unsafe extern "C" {
+    #[link_name = "stdout"]
+    static mut C_STDOUT: *mut c_void;
+    #[link_name = "stderr"]
+    static mut C_STDERR: *mut c_void;
+}
+
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum mi_option_e {
@@ -658,6 +666,20 @@ fn mi_output_fun_to_ptr(out: mi_output_fun) -> *mut c_void {
 }
 
 #[inline]
+fn mi_output_is_c_file(out: mi_output_fun) -> bool {
+    let p = mi_output_fun_to_ptr(out);
+    #[cfg(all(target_os = "linux", not(target_env = "musl")))]
+    {
+        p == unsafe { C_STDOUT } || p == unsafe { C_STDERR }
+    }
+    #[cfg(not(all(target_os = "linux", not(target_env = "musl"))))]
+    {
+        let _ = p;
+        false
+    }
+}
+
+#[inline]
 fn ptr_to_mi_output_fun(p: *mut c_void) -> Option<mi_output_fun> {
     if p.is_null() {
         None
@@ -791,34 +813,34 @@ fn mi_recurse_exit() {
 }
 
 #[allow(dead_code)]
-pub(crate) unsafe fn _mi_fputs(
+#[inline(never)]
+pub(crate) unsafe extern "C" fn _mi_fputs(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
     prefix: *const c_char,
     message: *const c_char,
 ) {
-    if let Some(out) = out {
+    let use_default = match out {
+        None => true,
+        Some(out) => mi_output_is_c_file(out),
+    };
+    if use_default {
+        if !mi_recurse_enter() {
+            return;
+        }
+        let mut default_arg = ptr::null_mut();
+        let default_out = mi_out_get_default(Some(&mut default_arg));
+        if !prefix.is_null() {
+            unsafe { default_out(prefix, default_arg) };
+        }
+        unsafe { default_out(message, default_arg) };
+        mi_recurse_exit();
+    } else if let Some(out) = out {
         if !prefix.is_null() {
             unsafe { out(prefix, arg) };
         }
-        if !message.is_null() {
-            unsafe { out(message, arg) };
-        }
-        return;
+        unsafe { out(message, arg) };
     }
-
-    if !mi_recurse_enter() {
-        return;
-    }
-    let mut default_arg = ptr::null_mut();
-    let default_out = mi_out_get_default(Some(&mut default_arg));
-    if !prefix.is_null() {
-        unsafe { default_out(prefix, default_arg) };
-    }
-    if !message.is_null() {
-        unsafe { default_out(message, default_arg) };
-    }
-    mi_recurse_exit();
 }
 
 #[allow(dead_code)]

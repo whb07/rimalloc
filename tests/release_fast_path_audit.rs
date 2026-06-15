@@ -1442,6 +1442,22 @@ fn free_path_internals_are_not_dynamic_exports() {
         "process init/done should keep C's allocator/options helper boundaries and redirector hook sequence"
     );
     assert!(
+        options_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_fputs(")
+            && options_rs.contains("#[link_name = \"stdout\"]")
+            && options_rs.contains("#[link_name = \"stderr\"]")
+            && options_rs.contains("fn mi_output_is_c_file(out: mi_output_fun) -> bool")
+            && options_rs.contains("p == unsafe { C_STDOUT } || p == unsafe { C_STDERR }")
+            && options_rs.contains("let use_default = match out {")
+            && options_rs.contains("None => true,")
+            && options_rs.contains("Some(out) => mi_output_is_c_file(out),")
+            && options_rs.contains("let default_out = mi_out_get_default(Some(&mut default_arg));")
+            && options_rs.contains("unsafe { default_out(message, default_arg) };")
+            && options_rs.contains("unsafe { out(message, arg) };")
+            && stats_rs.contains("_mi_fputs(buf.out, buf.arg, ptr::null(), buf.buf);")
+            && init_rs.contains("unsafe { _mi_fputs(None, ptr::null_mut(), ptr::null(), msg) };"),
+        "_mi_fputs should keep C's local helper boundary and stdout/stderr default-output compatibility"
+    );
+    assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_free(")
             && page_rs.contains("mi_page_queue_remove(pq, page);")
             && page_rs.contains("mi_page_set_theap(page, ptr::null_mut());")

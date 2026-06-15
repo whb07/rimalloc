@@ -30,10 +30,11 @@ use core::ptr;
 
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
 use crate::heap::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+use crate::init::_mi_theap_empty;
 use crate::init::{
     _mi_theap_cached_expansion_slot, _mi_theap_cached_key, _mi_theap_cached_slot,
     _mi_theap_default_expansion_slot, _mi_theap_default_key, _mi_theap_default_slot,
-    _mi_theap_empty,
 };
 #[cfg(target_os = "emscripten")]
 pub(crate) use crate::types::mi_msecs_t;
@@ -289,6 +290,19 @@ pub fn _mi_prim_thread_id() -> mi_threadid_t {
 
 #[inline]
 pub unsafe fn __mi_theap_empty() -> *mut mi_theap_t {
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        let empty: *mut mi_theap_t;
+        unsafe {
+            core::arch::asm!(
+                "lea {empty}, [rip + _mi_theap_empty]",
+                empty = lateout(reg) empty,
+                options(nostack, preserves_flags)
+            );
+        }
+        empty
+    }
+    #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
     core::ptr::addr_of!(_mi_theap_empty).cast_mut()
 }
 
@@ -556,8 +570,8 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_theap_tls_shim_stores_empty_sentinel() {
-        let marker = core::ptr::addr_of!(super::_mi_theap_empty).cast_mut();
         unsafe {
+            let marker = super::__mi_theap_empty();
             super::_mi_tls_theap_default_set(marker);
             super::_mi_tls_theap_cached_set(marker);
             assert_eq!(super::_mi_tls_theap_default_get(), marker);

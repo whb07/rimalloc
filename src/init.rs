@@ -46,6 +46,8 @@ use crate::{prim::MI_TLS_EXPANSION_SLOT, types::EFAULT};
 #[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden _mi_theap_empty");
 #[cfg(target_os = "linux")]
+core::arch::global_asm!(".hidden _mi_cpu_movsb_max", ".hidden _mi_cpu_stosb_max");
+#[cfg(target_os = "linux")]
 core::arch::global_asm!(".hidden subproc_main");
 
 pub const MI_TLS_DIRECT_SLOTS: usize = 64;
@@ -495,8 +497,10 @@ static mut heap_main: MiHeapMainPrefix = MiHeapMainPrefix {
     stats: MI_STATS_NULL(),
 };
 
+#[unsafe(no_mangle)]
 pub(crate) static mut _mi_cpu_movsb_max: usize = 0;
 
+#[unsafe(no_mangle)]
 pub(crate) static mut _mi_cpu_stosb_max: usize = 0;
 
 pub(crate) static mut _mi_theap_default_slot: usize = MI_TLS_INITIAL_SLOT;

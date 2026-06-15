@@ -41,11 +41,11 @@ pub(crate) use crate::heap::{
     _mi_heap_force_destroy, _mi_heap_theap_get_or_init, _mi_heap_theap_get_peek,
 };
 pub(crate) use crate::init::{
-    _mi_auto_process_done, _mi_auto_process_init, _mi_cpu_movsb_max, _mi_cpu_stosb_max,
-    _mi_is_heap_main, _mi_is_theap_main, _mi_preloading, _mi_subproc, _mi_subproc_from_id,
-    _mi_subproc_heap_main, _mi_subproc_main, _mi_theap_cached_set, _mi_theap_default_safe,
-    _mi_theap_default_set, _mi_theap_empty_get, _mi_theap_guarded_init, _mi_theap_main_safe,
-    _mi_theap_options_init, _mi_thread_done, _mi_thread_id,
+    _mi_auto_process_done, _mi_auto_process_init, _mi_cpu_stosb_max, _mi_is_heap_main,
+    _mi_is_theap_main, _mi_preloading, _mi_subproc, _mi_subproc_from_id, _mi_subproc_heap_main,
+    _mi_subproc_main, _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_default_set,
+    _mi_theap_empty_get, _mi_theap_guarded_init, _mi_theap_main_safe, _mi_theap_options_init,
+    _mi_thread_done, _mi_thread_id,
 };
 pub(crate) use crate::libc::{
     _mi_getenv, _mi_streq, _mi_strlcat, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen,
@@ -1333,10 +1333,30 @@ pub unsafe fn mi_block_set_next(
 }
 
 #[inline]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+unsafe fn mi_cpu_movsb_max() -> usize {
+    let max: usize;
+    unsafe {
+        core::arch::asm!(
+            "mov {max}, qword ptr [rip + _mi_cpu_movsb_max]",
+            max = lateout(reg) max,
+            options(nostack, readonly, preserves_flags)
+        );
+    }
+    max
+}
+
+#[inline]
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+unsafe fn mi_cpu_movsb_max() -> usize {
+    crate::init::_mi_cpu_movsb_max
+}
+
+#[inline]
 pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
     #[cfg(target_arch = "x86_64")]
     {
-        if n <= _mi_cpu_movsb_max {
+        if n <= mi_cpu_movsb_max() {
             mi_rep_movsb(dst, src, n);
             return;
         }
@@ -1353,12 +1373,17 @@ pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
 pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize) {
     #[cfg(target_arch = "x86_64")]
     {
-        if n > _mi_cpu_movsb_max && n.is_multiple_of(size_of::<usize>()) {
+        let movsb_max = mi_cpu_movsb_max();
+        if n > movsb_max && n.is_multiple_of(size_of::<usize>()) {
             mi_rep_movsq(dst, src, n / size_of::<usize>());
             return;
         }
+        if n <= movsb_max {
+            mi_rep_movsb(dst, src, n);
+            return;
+        }
     }
-    _mi_memcpy(dst, src, n);
+    ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
 }
 
 #[inline]

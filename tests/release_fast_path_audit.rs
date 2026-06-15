@@ -385,6 +385,12 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         "Linux x86_64 TLS setters should not let the offset scratch register overlap the stored pointer"
     );
     assert!(
+        prim_rs.contains("pub unsafe fn __mi_theap_empty() -> *mut mi_theap_t")
+            && prim_rs.contains("\"lea {empty}, [rip + _mi_theap_empty]\"")
+            && init_rs.contains("core::arch::global_asm!(\".hidden _mi_theap_empty\")"),
+        "Linux x86_64 empty-theap address loads should use the hidden local symbol directly like C"
+    );
+    assert!(
         threadlocal_rs.contains("fn mi_linux_x64_thread_locals_get()")
             && threadlocal_rs
                 .contains("fn mi_linux_x64_thread_locals_set(tls: *mut mi_thread_locals_t)")
@@ -2196,10 +2202,13 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         theap_rs.contains("_mi_memcpy_aligned(\n        theap.cast(),")
-            && internal.contains("if n <= _mi_cpu_movsb_max")
+            && internal.contains("unsafe fn mi_cpu_movsb_max() -> usize")
+            && internal.contains("\"mov {max}, qword ptr [rip + _mi_cpu_movsb_max]\"")
+            && internal.contains("if n <= mi_cpu_movsb_max()")
             && internal.contains("\"rep movsb\"")
-            && internal
-                .contains("if n > _mi_cpu_movsb_max && n.is_multiple_of(size_of::<usize>())")
+            && internal.contains("let movsb_max = mi_cpu_movsb_max();")
+            && internal.contains("if n > movsb_max && n.is_multiple_of(size_of::<usize>())")
+            && internal.contains("if n <= movsb_max")
             && internal.contains("\"rep movsq\"")
             && internal.contains("pub unsafe fn _mi_memcpy_aligned"),
         "_mi_theap_init should copy the empty template through C's _mi_memcpy_aligned path"
@@ -2690,6 +2699,15 @@ fn free_path_internals_are_not_dynamic_exports() {
             && init_rs.contains("core::arch::global_asm!(\".hidden _mi_theap_empty\")")
             && !init_rs.contains("#[unsafe(no_mangle)]\npub static _mi_theap_empty"),
         "_mi_theap_empty needs a stable hidden local link name for TLS initialization without becoming a public dynamic ABI symbol"
+    );
+    assert!(
+        init_rs.contains(
+            "core::arch::global_asm!(\".hidden _mi_cpu_movsb_max\", \".hidden _mi_cpu_stosb_max\")"
+        ) && init_rs.contains("#[unsafe(no_mangle)]\npub(crate) static mut _mi_cpu_movsb_max")
+            && init_rs.contains("#[unsafe(no_mangle)]\npub(crate) static mut _mi_cpu_stosb_max")
+            && !init_rs.contains("#[unsafe(no_mangle)]\npub static mut _mi_cpu_movsb_max")
+            && !init_rs.contains("#[unsafe(no_mangle)]\npub static mut _mi_cpu_stosb_max"),
+        "CPU copy thresholds should use stable hidden C names like C without becoming public dynamic ABI symbols"
     );
     for internal_static in [
         "_mi_cpu_movsb_max",

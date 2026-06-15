@@ -2,6 +2,25 @@
 
 ## 2026-06-15
 
+- Continuing `_mi_theap_init` copy-symbol parity after `ff2808b`:
+  - Fresh profiling after the free-wrapper slice showed Rust-side samples in `mi_calloc`, `_mi_theap_init`, and bitmap helpers. The `calloc` hot path was already close, but `_mi_theap_init` still had a concrete artifact mismatch: C loads the empty-theap template and CPU copy threshold through local RIP-relative symbols, while Rust was loading `_mi_theap_empty` and `_mi_cpu_movsb_max` through relocation slots in the release artifact.
+  - Patched Linux x86_64 empty-theap address loading to use `lea [rip + _mi_theap_empty]` like the existing `subproc_main` helper. Gave `_mi_cpu_movsb_max`/`_mi_cpu_stosb_max` stable hidden C link names and made the x86 copy helpers load `_mi_cpu_movsb_max` directly from the hidden symbol.
+  - Reworked `_mi_memcpy_aligned`'s x86 branch so the direct threshold load does not fall back into `_mi_memcpy` and re-expand into an extra `memcpy` call. The release `_mi_theap_init` prefix now uses direct RIP-relative `_mi_theap_empty` and `_mi_cpu_movsb_max` references, then branches to `rep movsq` or `rep movsb`, with no relocation-slot load for either symbol and no fallback call on this fixed-size copy.
+  - Extended the release audit to require the hidden empty-theap `lea`, stable hidden CPU threshold symbols, and the explicit x86 copy decision in `_mi_memcpy_aligned`.
+  - Validation passed:
+    - `cargo fmt --check`
+    - `cargo build --release`
+    - `cargo test --quiet --test release_fast_path_audit`
+    - `scripts/check-public-symbols.py`
+    - `cargo clippy --all-targets -- -D warnings`
+    - `cargo test --quiet`
+    - `scripts/check-unix-syscall-parity.py`
+    - `scripts/check-behavioral-parity.py`
+    - `git diff --check`
+  - Refreshed `target/bench-allocators/libmimalloc-rust.so` from the release cdylib and rechecked direct `./mleak 100`:
+    - C `2.33s, 2.35s, 2.18s`; Rust `2.10s, 2.11s, 2.18s`; minor faults still matched around `120.2K`.
+    - Single-run direct `perf stat`: C `10.44B` instructions / `17.66B` cycles; Rust `10.84B` instructions / `18.32B` cycles.
+  - This removes relocation-slot loads from the theap-empty copy setup. The remaining benchmark gap is still present, so the next pass should compare the next hot body, likely bitmap/meta allocation or the remaining init/thread-start helpers from the fresh profiles.
 - Continuing free-size/aligned public wrapper parity after `d26e514`:
   - Fresh Rust/C profile comparison still had `operator delete[](void*)` as the largest allocator-side sample, and the symbol table showed a concrete exported-wrapper drift in nearby C++ delete/free-hint variants. C keeps `mi_free_size`, `mi_free_aligned`, and `mi_free_size_aligned` as tiny separate forwarding stubs; Rust's release artifact had folded `mi_free_size` together with the aligned-free body, so sized C++ delete symbols resolved to the aligned-free implementation shape.
   - Patched the Linux fast release build to define C-shaped global-asm wrappers: `mi_free_size` jumps to `mi_free`, `mi_free_aligned` jumps to `mi_free`, and `mi_free_size_aligned` jumps to `mi_free_size`. The existing Rust bodies remain exported for non-fast builds via `cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))`.

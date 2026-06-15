@@ -430,8 +430,7 @@ unsafe fn mi_theap_collect_ex(theap: *mut mi_theap_t, mut collect: mi_collect_t)
     mi_theap_merge_stats(theap);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_collect_abandon(theap: *mut mi_theap_t) {
+pub(crate) unsafe extern "C" fn _mi_theap_collect_abandon(theap: *mut mi_theap_t) {
     mi_theap_collect_ex(theap, mi_collect_t::MI_ABANDON);
 }
 
@@ -530,8 +529,7 @@ unsafe fn _mi_theap_init(theap: *mut mi_theap_t, heap: *mut mi_heap_t, tld: *mut
     mi_lock_release(ptr::addr_of_mut!((*heap).theaps_lock));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_create(
+pub(crate) unsafe extern "C" fn _mi_theap_create(
     heap: *mut mi_heap_t,
     tld: *mut mi_tld_t,
 ) -> *mut mi_theap_t {
@@ -601,15 +599,13 @@ unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_incref(theap: *mut mi_theap_t) {
+pub(crate) unsafe extern "C" fn _mi_theap_incref(theap: *mut mi_theap_t) {
     if !theap.is_null() && ((*theap).memid.memkind as i32) > (mi_memkind_t::MI_MEM_STATIC as i32) {
         mi_atomic_increment_acq_rel(ptr::addr_of_mut!((*theap).refcount));
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
+pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
     if !theap.is_null()
         && ((*theap).memid.memkind as i32) > (mi_memkind_t::MI_MEM_STATIC as i32)
         && mi_atomic_fetch_sub_explicit(
@@ -622,8 +618,7 @@ pub unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_free(
+pub(crate) unsafe extern "C" fn _mi_theap_free(
     theap: *mut mi_theap_t,
     acquire_heap_theaps_lock: bool,
     acquire_tld_theaps_lock: bool,
@@ -684,8 +679,10 @@ pub unsafe extern "C" fn _mi_theap_free(
     true
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_delete(theap: *mut mi_theap_t, acquire_tld_theaps_lock: bool) {
+pub(crate) unsafe extern "C" fn _mi_theap_delete(
+    theap: *mut mi_theap_t,
+    acquire_tld_theaps_lock: bool,
+) {
     crate::mi_assert!(!theap.is_null());
     crate::mi_assert!(mi_theap_is_initialized(theap));
     crate::mi_assert_expensive!(mi_theap_is_valid(theap));

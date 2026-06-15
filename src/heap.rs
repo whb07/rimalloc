@@ -8,7 +8,9 @@ use core::sync::atomic::Ordering;
 
 use crate::arena::_mi_arena_from_id;
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
-use crate::init::{_mi_theap_default_safe, _mi_theap_empty_wrong, mi_heap_main};
+use crate::init::{
+    _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_empty_wrong, mi_heap_main,
+};
 use crate::internal::{
     __mi_stat_counter_increase_mt, __mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_is_heap_main,
     mi_page_heap,
@@ -19,22 +21,16 @@ use crate::os::_mi_os_numa_node_count;
 use crate::page_map::_mi_safe_ptr_page;
 use crate::prim::{_mi_heap_theap, _mi_prim_thread_yield};
 use crate::stats::{_mi_stats_merge_into, mi_stats_header_init};
+use crate::theap::{_mi_theap_create, _mi_theap_free};
 use crate::threadlocal::{
     _mi_thread_local_create, _mi_thread_local_free, _mi_thread_local_get, _mi_thread_local_set,
 };
-use crate::types::{EFAULT, mi_arena_id_t, mi_heap_t, mi_page_t, mi_theap_t, mi_tld_t};
+use crate::types::{EFAULT, mi_arena_id_t, mi_heap_t, mi_page_t, mi_theap_t};
 
 #[allow(clippy::manual_dangling_ptr)]
 const MI_THEAP_TLS_BUSY: *mut mi_theap_t = 1usize as *mut mi_theap_t;
 
 unsafe extern "C" {
-    fn _mi_theap_cached_set(theap: *mut mi_theap_t);
-    fn _mi_theap_create(heap: *mut mi_heap_t, tld: *mut mi_tld_t) -> *mut mi_theap_t;
-    fn _mi_theap_free(
-        theap: *mut mi_theap_t,
-        acquire_heap_theaps_lock: bool,
-        acquire_tld_theaps_lock: bool,
-    ) -> bool;
     fn _mi_heap_move_pages(heap_from: *mut mi_heap_t, heap_to: *mut mi_heap_t);
     fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t);
 }

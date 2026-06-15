@@ -315,8 +315,7 @@ unsafe fn mi_theap_malloc_zero_nonnull(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_malloc_zero_ex(
+pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     theap: *mut mi_theap_t,
     size: usize,
     zero: bool,
@@ -331,8 +330,7 @@ pub unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_malloc_zero(
+pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
     theap: *mut mi_theap_t,
     size: usize,
     zero: bool,
@@ -531,8 +529,7 @@ unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const i8) -> *mut mi_page
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_realloc_zero(
+pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
     theap: *mut mi_theap_t,
     p: *mut c_void,
     newsize: usize,
@@ -1022,8 +1019,7 @@ unsafe fn mi_block_ptr_set_guarded(block: *mut mi_block_t, obj_size: usize) -> *
     p
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_malloc_guarded(
+pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
     theap: *mut mi_theap_t,
     size: usize,
     zero: bool,

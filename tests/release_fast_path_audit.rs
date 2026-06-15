@@ -6,6 +6,17 @@ use mechanical_mimalloc::types::mi_page_t;
 #[cfg(not(feature = "guarded"))]
 use mechanical_mimalloc::types::mi_theap_t;
 
+fn assert_not_no_mangle_item(source_name: &str, source: &str, internal_name: &str) {
+    let Some(start) = source.find(internal_name) else {
+        return;
+    };
+    let item_start = source[..start].rfind("\n\n").map_or(0, |idx| idx + 2);
+    assert!(
+        !source[item_start..start].contains("#[unsafe(no_mangle)]"),
+        "{internal_name} in {source_name} should stay crate-internal instead of a dynamic export"
+    );
+}
+
 #[test]
 fn debug_assert_macros_are_release_gated_like_c_mimalloc() {
     let internal_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/internal.rs");
@@ -152,6 +163,9 @@ fn free_path_internals_are_not_dynamic_exports() {
     let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
     let theap_rs = fs::read_to_string(root.join("src/theap.rs")).expect("read src/theap.rs");
     let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
+    let alloc_aligned_rs =
+        fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read src/alloc_aligned.rs");
+    let heap_rs = fs::read_to_string(root.join("src/heap.rs")).expect("read src/heap.rs");
     let prim_rs = fs::read_to_string(root.join("src/prim.rs")).expect("read src/prim.rs");
     let prim_unix_rs =
         fs::read_to_string(root.join("src/prim/unix.rs")).expect("read src/prim/unix.rs");
@@ -475,6 +489,102 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub unsafe extern \"C\" fn _mi_random_reinit_if_weak",
         ),
         (
+            "src/alloc.rs",
+            &alloc_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_malloc_zero_ex",
+        ),
+        (
+            "src/alloc.rs",
+            &alloc_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_malloc_zero",
+        ),
+        (
+            "src/alloc.rs",
+            &alloc_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_realloc_zero",
+        ),
+        (
+            "src/alloc.rs",
+            &alloc_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_malloc_guarded",
+        ),
+        ("src/init.rs", &init_rs, "pub extern \"C\" fn _mi_thread_id"),
+        (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_thread_done",
+        ),
+        (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_guarded_init",
+        ),
+        (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_options_init",
+        ),
+        (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_default_set",
+        ),
+        (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_cached_set",
+        ),
+        (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_default_safe",
+        ),
+        (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_main_safe",
+        ),
+        (
+            "src/init.rs",
+            &init_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_empty_get",
+        ),
+        (
+            "src/page.rs",
+            &page_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_collect_retired",
+        ),
+        (
+            "src/theap.rs",
+            &theap_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_collect_abandon",
+        ),
+        (
+            "src/theap.rs",
+            &theap_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_create",
+        ),
+        (
+            "src/theap.rs",
+            &theap_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_incref",
+        ),
+        (
+            "src/theap.rs",
+            &theap_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_decref",
+        ),
+        (
+            "src/theap.rs",
+            &theap_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_free",
+        ),
+        (
+            "src/theap.rs",
+            &theap_rs,
+            "pub unsafe extern \"C\" fn _mi_theap_delete",
+        ),
+        (
             "src/theap.rs",
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_random_next",
@@ -485,6 +595,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             !source.contains(&no_mangle_export),
             "{internal_name} in {source_name} should stay crate-internal instead of a dynamic export"
         );
+        assert_not_no_mangle_item(source_name, source, internal_name);
     }
 
     assert!(
@@ -503,6 +614,23 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub fn _mi_os_page_size(")
             && !internal.contains("pub fn _mi_os_commit(")
             && !internal.contains("pub fn _mi_os_purge_ex(")
+            && !internal.contains("pub fn _mi_thread_done(")
+            && !internal.contains("pub fn _mi_thread_id(")
+            && !internal.contains("pub fn _mi_theap_guarded_init(")
+            && !internal.contains("pub fn _mi_theap_options_init(")
+            && !internal.contains("pub fn _mi_theap_default_set(")
+            && !internal.contains("pub fn _mi_theap_cached_set(")
+            && !internal.contains("pub fn _mi_theap_default_safe(")
+            && !internal.contains("pub fn _mi_theap_main_safe(")
+            && !internal.contains("pub fn _mi_theap_collect_retired(")
+            && !internal.contains("pub fn _mi_theap_collect_abandon(")
+            && !internal.contains("pub fn _mi_theap_free(")
+            && !internal.contains("pub fn _mi_theap_incref(")
+            && !internal.contains("pub fn _mi_theap_decref(")
+            && !internal.contains("pub fn _mi_theap_malloc_zero(")
+            && !internal.contains("pub fn _mi_theap_malloc_zero_ex(")
+            && !internal.contains("pub fn _mi_theap_realloc_zero(")
+            && !internal.contains("pub fn _mi_theap_create(")
             && !internal.contains("pub static _mi_page_empty:")
             && !internal.contains("pub static _mi_theap_empty:")
             && !internal.contains("pub static _mi_theap_empty_wrong:")
@@ -511,10 +639,30 @@ fn free_path_internals_are_not_dynamic_exports() {
         "page-map internals should be imported through crate paths, not extern declarations"
     );
     assert!(
+        !alloc_aligned_rs.contains("fn _mi_theap_malloc_guarded(")
+            && !alloc_aligned_rs.contains("fn _mi_theap_malloc_zero(")
+            && !alloc_aligned_rs.contains("fn _mi_theap_malloc_zero_ex(")
+            && !alloc_aligned_rs.contains("fn _mi_theap_realloc_zero("),
+        "aligned allocation internals should call crate-local theap allocation helpers directly"
+    );
+    assert!(
+        !heap_rs.contains("fn _mi_theap_cached_set(")
+            && !heap_rs.contains("fn _mi_theap_create(")
+            && !heap_rs.contains("fn _mi_theap_free("),
+        "heap internals should call crate-local theap helpers directly"
+    );
+    assert!(
+        !init_rs.contains("fn _mi_theap_collect_abandon(")
+            && !init_rs.contains("fn _mi_theap_create(")
+            && !init_rs.contains("fn _mi_theap_free("),
+        "thread initialization internals should call crate-local theap lifecycle helpers directly"
+    );
+    assert!(
         prim_rs.contains("pub(crate) use unix::{")
             && !prim_rs.contains("pub fn _mi_prim_mem_init(")
             && !prim_rs.contains("pub fn _mi_prim_alloc(")
-            && !prim_rs.contains("pub fn _mi_prim_thread_yield("),
+            && !prim_rs.contains("pub fn _mi_prim_thread_yield(")
+            && !prim_rs.contains("pub fn _mi_theap_empty_get("),
         "Unix primitive helpers should be routed through crate paths, not extern declarations"
     );
     assert!(

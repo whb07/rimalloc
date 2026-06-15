@@ -16,7 +16,10 @@ use core::mem::{size_of, zeroed};
 use core::ptr;
 use std::os::raw::c_long;
 
-pub(crate) use crate::alloc::_mi_page_malloc_zero;
+pub(crate) use crate::alloc::{
+    _mi_page_malloc_zero, _mi_theap_malloc_guarded, _mi_theap_malloc_zero,
+    _mi_theap_malloc_zero_ex, _mi_theap_realloc_zero,
+};
 pub(crate) use crate::arena::{
     _mi_arenas_alloc, _mi_arenas_alloc_aligned, _mi_arenas_collect, _mi_arenas_contain,
     _mi_arenas_free, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free,
@@ -31,6 +34,11 @@ pub use crate::bits::{
     MI_PAGE_MAP_FLAT, MI_SIZE_BITS, MI_SIZE_SIZE, mi_rotl, mi_rotl32, mi_rotr,
 };
 pub(crate) use crate::free::_mi_page_ptr_unalign;
+pub(crate) use crate::init::{
+    _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_default_set, _mi_theap_empty_get,
+    _mi_theap_guarded_init, _mi_theap_main_safe, _mi_theap_options_init, _mi_thread_done,
+    _mi_thread_id,
+};
 pub(crate) use crate::libc::{
     _mi_getenv, _mi_streq, _mi_strlcat, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen,
     _mi_strnstr, _mi_toupper, _mi_vsnprintf,
@@ -44,7 +52,9 @@ pub(crate) use crate::os::{
     _mi_os_purge, _mi_os_purge_ex, _mi_os_reset, _mi_os_reuse, _mi_os_unprotect,
     _mi_os_virtual_address_bits, _mi_os_zalloc,
 };
-pub(crate) use crate::page::{_mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire};
+pub(crate) use crate::page::{
+    _mi_page_abandon, _mi_page_free, _mi_page_init, _mi_page_retire, _mi_theap_collect_retired,
+};
 pub use crate::page::{
     _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
     _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, _mi_theap_page_reclaim,
@@ -66,7 +76,10 @@ pub use crate::stats::{
     __mi_stat_adjust_increase_mt, __mi_stat_counter_increase, __mi_stat_counter_increase_mt,
     __mi_stat_decrease, __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt,
 };
-pub(crate) use crate::theap::_mi_theap_random_next;
+pub(crate) use crate::theap::{
+    _mi_theap_collect_abandon, _mi_theap_create, _mi_theap_decref, _mi_theap_delete,
+    _mi_theap_free, _mi_theap_incref, _mi_theap_random_next,
+};
 pub use crate::types::*;
 
 pub const MI_INTERNAL_H: () = ();
@@ -507,53 +520,14 @@ unsafe extern "C" {
     pub fn _mi_allocator_done();
     pub fn _mi_is_main_thread() -> bool;
     pub fn _mi_preloading() -> bool;
-    pub fn _mi_thread_done(theap: *mut mi_theap_t);
     pub fn _mi_subproc() -> *mut mi_subproc_t;
     pub fn _mi_subproc_main() -> *mut mi_subproc_t;
     pub fn _mi_subproc_heap_main(subproc: *mut mi_subproc_t) -> *mut mi_heap_t;
     pub fn _mi_subproc_from_id(subproc_id: mi_subproc_id_t) -> *mut mi_subproc_t;
-    pub fn _mi_thread_id() -> mi_threadid_t;
     pub fn _mi_thread_seq_id() -> usize;
     pub fn _mi_is_heap_main(heap: *const mi_heap_t) -> bool;
     pub fn _mi_is_theap_main(theap: *const mi_theap_t) -> bool;
-    pub fn _mi_theap_guarded_init(theap: *mut mi_theap_t);
-    pub fn _mi_theap_options_init(theap: *mut mi_theap_t);
-    pub fn _mi_theap_default_safe() -> *mut mi_theap_t;
-    pub fn _mi_theap_main_safe() -> *mut mi_theap_t;
     pub fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool);
-    pub fn _mi_theap_delete(theap: *mut mi_theap_t, acquire_tld_theaps_lock: bool);
-    pub fn _mi_theap_default_set(theap: *mut mi_theap_t);
-    pub fn _mi_theap_cached_set(theap: *mut mi_theap_t);
-    pub fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool);
-    pub fn _mi_theap_collect_abandon(theap: *mut mi_theap_t);
-    pub fn _mi_theap_free(
-        theap: *mut mi_theap_t,
-        acquire_heap_theaps_lock: bool,
-        acquire_tld_theaps_lock: bool,
-    ) -> bool;
-    pub fn _mi_theap_incref(theap: *mut mi_theap_t);
-    pub fn _mi_theap_decref(theap: *mut mi_theap_t);
-    pub fn _mi_theap_malloc_zero(
-        theap: *mut mi_theap_t,
-        size: usize,
-        zero: bool,
-        usable: *mut usize,
-    ) -> *mut c_void;
-    pub fn _mi_theap_malloc_zero_ex(
-        theap: *mut mi_theap_t,
-        size: usize,
-        zero: bool,
-        huge_alignment: usize,
-        usable: *mut usize,
-    ) -> *mut c_void;
-    pub fn _mi_theap_realloc_zero(
-        theap: *mut mi_theap_t,
-        p: *mut c_void,
-        newsize: usize,
-        zero: bool,
-        usable_pre: *mut usize,
-        usable_post: *mut usize,
-    ) -> *mut c_void;
 
     pub fn _mi_arena_id_none() -> mi_arena_id_t;
     pub fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t;
@@ -564,7 +538,6 @@ unsafe extern "C" {
         zero_huge_alignment: usize,
         usable: *mut usize,
     ) -> *mut c_void;
-    pub fn _mi_theap_create(heap: *mut mi_heap_t, tld: *mut mi_tld_t) -> *mut mi_theap_t;
     pub fn _mi_theap_area_visit_blocks(
         theap: *mut mi_theap_t,
         area: *mut mi_heap_area_t,

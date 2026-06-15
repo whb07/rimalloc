@@ -493,8 +493,7 @@ pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
     _mi_page_free(page, pq);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool) {
+pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool) {
     let mut min = MI_BIN_FULL;
     let mut max = 0usize;
     for bin in (*theap).page_retired_min..=(*theap).page_retired_max {

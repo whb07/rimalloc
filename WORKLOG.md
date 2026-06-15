@@ -698,3 +698,31 @@
   - `scripts/check-behavioral-parity.py`
   - `scripts/check-unix-syscall-parity.py`
   - `git diff --check`
+- Started the thread-heap helper localization batch:
+  - Benchmark C mimalloc exports no `_mi_theap*` or `_mi_thread_*` dynamic helper functions.
+  - Rust still exports thread/theap helpers and has local Rust-to-Rust extern declarations in `alloc_aligned.rs`, `heap.rs`, and `prim.rs`; this batch will route those through crate-local imports before removing their dynamic export attributes.
+- Localized the thread-heap helper batch:
+  - Replaced thread/theap helper extern declarations in `internal.rs` with crate-local imports.
+  - Removed local Rust-to-Rust extern declarations in `alloc_aligned.rs`, `heap.rs`, `prim.rs`, and `init.rs` for the localized helper set.
+  - Removed release dynamic exports for `_mi_thread_id`, `_mi_thread_done`, `_mi_theap_guarded_init`, `_mi_theap_options_init`, `_mi_theap_default_set`, `_mi_theap_cached_set`, `_mi_theap_default_safe`, `_mi_theap_main_safe`, `_mi_theap_empty_get`, `_mi_theap_collect_retired`, `_mi_theap_collect_abandon`, `_mi_theap_create`, `_mi_theap_incref`, `_mi_theap_decref`, `_mi_theap_free`, `_mi_theap_delete`, `_mi_theap_malloc_zero_ex`, `_mi_theap_malloc_zero`, `_mi_theap_realloc_zero`, and `_mi_theap_malloc_guarded`.
+  - Normal release cdylib inspection now reports zero global `_mi_theap*` and zero global `_mi_thread_*` helper functions.
+  - Dynamic defined function names dropped from Rust `290` to `270`; dynamic relocations dropped from `1,599` to `1,595`; `R_X86_64_GLOB_DAT` dropped from `95` to `90`; `R_X86_64_RELATIVE` rose from `1,491` to `1,492`.
+  - `size -A` total is `668,059` bytes.
+- Focused `cfrac -n=5` after the thread-heap helper-localization batch:
+  - C: `2.70s..2.74s`, RSS `5820..6280` KiB, reclaims `199..202`.
+  - Rust: `2.71s..2.77s`, RSS `6716..6760` KiB, reclaims `207..209`.
+  - Result: wall time still overlaps; Rust's RSS/reclaim tail remains, so the next parity pass should continue with the remaining non-C-exported internal helpers and then measure allocator-behavior drift if linkage cleanup stops changing the tail.
+- Full established validation passed after the thread-heap helper-localization batch:
+  - `cargo fmt --check`
+  - `cargo test --quiet`
+  - `cargo test --release --quiet`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo clippy --features secure --all-targets -- -D warnings`
+  - `cargo clippy --features guarded --all-targets -- -D warnings`
+  - `cargo test --features secure --quiet`
+  - `cargo test --features guarded --quiet`
+  - `cargo check --features track-valgrind --quiet`
+  - `cargo check --features track-asan --quiet`
+  - `scripts/check-behavioral-parity.py`
+  - `scripts/check-unix-syscall-parity.py`
+  - `git diff --check`

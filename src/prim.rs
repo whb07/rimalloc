@@ -154,7 +154,6 @@ unsafe extern "C" {
     pub static mut _mi_theap_default_key: mi_thread_local_t;
     pub static mut _mi_theap_cached_key: mi_thread_local_t;
 
-    pub fn _mi_theap_empty_get() -> *mut mi_theap_t;
     pub fn _mi_heap_theap_get_or_init(heap: *const mi_heap_t) -> *mut mi_theap_t;
     pub fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t;
     pub fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut c_void;

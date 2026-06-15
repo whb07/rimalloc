@@ -10,9 +10,13 @@
 use core::ffi::c_void;
 use core::mem::size_of;
 
-use crate::alloc::_mi_page_malloc_zero;
+use crate::alloc::{
+    _mi_page_malloc_zero, _mi_theap_malloc_guarded, _mi_theap_malloc_zero,
+    _mi_theap_malloc_zero_ex, _mi_theap_realloc_zero,
+};
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
+use crate::init::_mi_theap_empty_get;
 use crate::internal::{
     _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero, _mi_ptr_page,
     MI_BLOCK_TAG_ALIGNED, MI_GUARDED, mi_count_size_overflow, mi_likely,
@@ -21,7 +25,7 @@ use crate::internal::{
 };
 use crate::options::_mi_error_message_fmt;
 use crate::page::{MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size};
-use crate::prim::{_mi_heap_theap, _mi_theap_default, _mi_theap_empty_get, MI_THEAP_INITASNULL};
+use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{mi_track_align, mi_track_malloc};
 use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_page_t, mi_theap_t};
 
@@ -31,28 +35,6 @@ const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = MI_ARENA_SLICE_SIZE;
 const MI_EOVERFLOW: i32 = 75;
 
 unsafe extern "C" {
-    fn _mi_theap_malloc_guarded(theap: *mut mi_theap_t, size: usize, zero: bool) -> *mut c_void;
-    fn _mi_theap_malloc_zero(
-        theap: *mut mi_theap_t,
-        size: usize,
-        zero: bool,
-        usable: *mut usize,
-    ) -> *mut c_void;
-    fn _mi_theap_malloc_zero_ex(
-        theap: *mut mi_theap_t,
-        size: usize,
-        zero: bool,
-        huge_alignment: usize,
-        usable: *mut usize,
-    ) -> *mut c_void;
-    fn _mi_theap_realloc_zero(
-        theap: *mut mi_theap_t,
-        p: *mut c_void,
-        newsize: usize,
-        zero: bool,
-        usable_pre: *mut usize,
-        usable_post: *mut usize,
-    ) -> *mut c_void;
     fn _mi_padding_shrink(page: *mut mi_page_t, block: *mut mi_block_t, min_size: usize);
 }
 

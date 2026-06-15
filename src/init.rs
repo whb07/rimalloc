@@ -23,6 +23,7 @@ use crate::options::{
     mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
 };
 use crate::stats::{_mi_stats_merge_into, mi_stat_count_t, mi_stats_header_init, mi_stats_t};
+use crate::theap::{_mi_theap_collect_abandon, _mi_theap_create, _mi_theap_free};
 use crate::types::{
     MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_PAGES_DIRECT, mi_heap_t, mi_heap_visit_fun,
     mi_page_queue_t, mi_page_t, mi_random_ctx_t, mi_subproc_id_t, mi_subproc_t, mi_theap_t,
@@ -758,8 +759,7 @@ pub(crate) fn mi_mark_main_thread() {
     let _ = MAIN_THREAD_ID.compare_exchange(0, tid, Ordering::AcqRel, Ordering::Acquire);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn _mi_thread_id() -> mi_threadid_t {
+pub(crate) extern "C" fn _mi_thread_id() -> mi_threadid_t {
     current_thread_id()
 }
 
@@ -775,10 +775,9 @@ pub unsafe extern "C" fn mi_thread_done() {
     unsafe { crate::internal::_mi_thread_done(ptr::null_mut()) };
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// `theap` must be null or the current thread's thread-local heap.
-pub unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
+pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     let mut default_theap = theap;
     if default_theap.is_null() {
         default_theap = mi_theap_main_tls_peek();
@@ -875,8 +874,7 @@ pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
+pub(crate) unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
     #[cfg(feature = "guarded")]
     {
         unsafe {
@@ -901,10 +899,9 @@ pub unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
     }
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// `theap` must be valid when non-null.
-pub unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
+pub(crate) unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
     if theap.is_null() {
         return;
     }
@@ -1031,13 +1028,6 @@ fn mi_tld_free(tld: *mut mi_tld_t) {
 }
 
 unsafe extern "C" {
-    fn _mi_theap_collect_abandon(theap: *mut mi_theap_t);
-    fn _mi_theap_create(heap: *mut mi_heap_t, tld: *mut mi_tld_t) -> *mut mi_theap_t;
-    fn _mi_theap_free(
-        theap: *mut mi_theap_t,
-        acquire_heap_theaps_lock: bool,
-        acquire_tld_theaps_lock: bool,
-    ) -> bool;
     fn mi_heap_destroy(heap: *mut mi_heap_t);
     fn _mi_heap_force_destroy(heap: *mut mi_heap_t);
 }
@@ -1302,10 +1292,9 @@ pub unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
     unsafe { mi_subproc_main_ptr() }
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// `theap` must be a valid default theap for the current thread.
-pub unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
+pub(crate) unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
     let theap_old = unsafe { crate::prim::_mi_theap_default() };
     crate::mi_assert_internal!(!theap.is_null());
     crate::mi_assert_internal!(
@@ -1350,10 +1339,9 @@ pub unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
     }
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// `theap` must be valid for the current thread or the empty sentinel.
-pub unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
+pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
     let prev = unsafe { crate::prim::_mi_theap_cached() };
     if ptr::eq(prev, theap) {
         return;
@@ -1396,10 +1384,9 @@ pub unsafe extern "C" fn mi_thread_set_in_threadpool() {
     }
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// Returns the current thread default theap, initializing thread state when needed.
-pub unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
+pub(crate) unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
     let theap = unsafe { crate::prim::_mi_theap_default() };
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
@@ -1410,10 +1397,9 @@ pub unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
     theap
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// Returns the process main theap, ensuring the default path initialized it first.
-pub unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
+pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     let mut theap = mi_theap_main_tls_peek();
     if theap.is_null() {
         unsafe { crate::mimalloc::mi_thread_init() };
@@ -1433,10 +1419,9 @@ pub unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     theap
 }
 
-#[unsafe(no_mangle)]
 /// # Safety
 /// Returns the process-global empty theap sentinel.
-pub unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
+pub(crate) unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
     ptr::addr_of!(_mi_theap_empty).cast_mut()
 }
 

@@ -302,39 +302,22 @@ unsafe fn mi_prim_tls_slot_theap(slot: usize, expansion_slot: usize) -> *mut mi_
     }
 }
 
-#[inline]
-pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
+#[inline(always)]
+pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
     if MI_TLS_MODEL_THREAD_LOCAL {
         #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
         {
-            let theap = unsafe { mi_linux_x64_theap_default_get() };
-            if theap.is_null() {
-                unsafe { __mi_theap_empty() }
-            } else {
-                theap
-            }
+            unsafe { mi_linux_x64_theap_default_get() }
         }
         #[cfg(all(
             target_os = "linux",
             not(all(target_arch = "x86_64", not(target_env = "musl")))
         ))]
         {
-            let theap = unsafe { _mi_tls_theap_default_get() };
-            if theap.is_null() {
-                unsafe { __mi_theap_empty() }
-            } else {
-                theap
-            }
+            unsafe { _mi_tls_theap_default_get() }
         }
         #[cfg(not(target_os = "linux"))]
-        TLS_THEAP_DEFAULT.with(|cell| {
-            let theap = cell.get();
-            if theap.is_null() {
-                unsafe { __mi_theap_empty() }
-            } else {
-                theap
-            }
-        })
+        TLS_THEAP_DEFAULT.with(|cell| cell.get())
     } else if MI_TLS_MODEL_FIXED_SLOT {
         mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_DEFAULT) as *mut mi_theap_t
     } else if MI_TLS_MODEL_DYNAMIC_WIN32 {
@@ -347,6 +330,16 @@ pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
         }
     } else {
         ptr::null_mut()
+    }
+}
+
+#[inline]
+pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
+    let theap = unsafe { _mi_theap_default_raw() };
+    if theap.is_null() {
+        unsafe { __mi_theap_empty() }
+    } else {
+        theap
     }
 }
 

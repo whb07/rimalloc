@@ -573,6 +573,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) ->
     _mi_random_next(ptr::addr_of_mut!((*theap).random))
 }
 
+#[inline(always)]
 unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
     if theap.is_null() {
         return;
@@ -600,13 +601,15 @@ unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
     }
 }
 
+#[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_incref(theap: *mut mi_theap_t) {
     if !theap.is_null() && ((*theap).memid.memkind as i32) > (mi_memkind_t::MI_MEM_STATIC as i32) {
         mi_atomic_increment_acq_rel(ptr::addr_of_mut!((*theap).refcount));
     }
 }
 
-pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
+#[inline(always)]
+unsafe fn mi_theap_decref_inline(theap: *mut mi_theap_t) {
     if !theap.is_null()
         && ((*theap).memid.memkind as i32) > (mi_memkind_t::MI_MEM_STATIC as i32)
         && mi_atomic_fetch_sub_explicit(
@@ -617,6 +620,11 @@ pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
     {
         mi_theap_free_mem(theap);
     }
+}
+
+#[inline(never)]
+pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
+    mi_theap_decref_inline(theap);
 }
 
 #[inline(never)]
@@ -677,7 +685,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_free(
     }
 
     (*theap).tld = ptr::null_mut();
-    _mi_theap_decref(theap);
+    mi_theap_decref_inline(theap);
     true
 }
 

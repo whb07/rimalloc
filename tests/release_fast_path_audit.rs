@@ -1225,6 +1225,21 @@ fn free_path_internals_are_not_dynamic_exports() {
         "heap cleanup should keep C's stats merge call boundary instead of inlining it into _mi_theap_free"
     );
     assert!(
+        init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")
+            && init_rs.contains("crate::prim::_mi_theap_default_raw()")
+            && prim_rs.contains("pub unsafe fn _mi_theap_default_raw()"),
+        "_mi_subproc should stay as C's small local helper and inspect the raw default TLS cell"
+    );
+    assert!(
+        theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")
+            && theap_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_decref")
+            && theap_rs.contains("#[inline(always)]\nunsafe fn mi_theap_decref_inline")
+            && theap_rs.contains("mi_theap_decref_inline(theap);\n    true")
+            && !theap_rs.contains("    _mi_theap_decref(theap);\n    true"),
+        "_mi_theap_free should inline C's decref tail while preserving the standalone _mi_theap_decref helper for other call sites"
+    );
+    assert!(
         init_rs.contains("#[inline(always)]\nunsafe fn _mi_thread_init_theap_default()"),
         "thread default-heap initialization should stay inlined like C's static helper"
     );

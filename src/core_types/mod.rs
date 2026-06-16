@@ -4,6 +4,7 @@
 mod ptr;
 mod scalar;
 mod layout;
+mod page;
 
 pub(crate) use ptr::{
     ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageConstPtr, PagePtr, PageQueuePtr,
@@ -18,4 +19,8 @@ pub(crate) use scalar::{
 pub(crate) use layout::{
     CallocRequest, ItemCount, LayoutError, LayoutRequest, MallocGenericFlags,
     MaybeHugeAlignment, OldAllocation, ReallocRequest, Zeroed,
+};
+
+pub(crate) use page::{
+    FreePathKind, PageFlags, PageOwnerId, PageThreadId, ThreadId, XThreadDelta,
 };

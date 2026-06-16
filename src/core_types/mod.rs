@@ -8,6 +8,9 @@ mod page;
 mod freelist;
 mod validation;
 mod memid;
+mod page_states;
+mod validation_extra;
+mod freelist_wrappers;
 
 pub(crate) use ptr::{
     ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageConstPtr, PagePtr, PageQueuePtr,
@@ -41,4 +44,18 @@ pub(crate) use memid::{
     AnyMem, ArenaMem, ArenaMemId, BlockIndex, ExternalMem, HeapMainMem, InitiallyCommitted,
     InitiallyZero, MemId, MemIdView, MemKind, MemKindCode, MetaMem, MetaMemId, NoneMem, OsMem,
     OsMemId, OsMemKind, Pinned, ReservedBytes, StaticMem,
+};
+
+pub(crate) use page_states::{
+    Abandoned, AbandonedMapped, Active, Destroyed, Full, Retired, Uninit,
+    ActivePage, AvailablePage, LocalPage, ForeignPage, AbandonedPageType as AbandonedPage,
+    AbandonedMappedPageType as AbandonedMappedPage, OwnedAbandonedPage, PageFreeOwner,
+    FullPage, RetiredPage, Page,
+};
+
+pub(crate) use validation_extra::{AllocatedBlock, FreeBlock};
+
+pub(crate) use freelist_wrappers::{
+    AvailableFreeList, BlockLink, BlockTag, EncodedFreeList, EncodedPtr, EncodedWord, ForceCollect,
+    LocalFreeList, PageKeys, RemoteFreeList,
 };

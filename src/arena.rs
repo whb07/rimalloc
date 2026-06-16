@@ -578,10 +578,11 @@ pub(crate) unsafe extern "C" fn _mi_arena_memid_is_suitable(
     memid: mi_memid_t,
     request_arena: *mut mi_arena_t,
 ) -> bool {
-    if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
-        unsafe { mi_arena_is_suitable(memid.mem.arena.arena, request_arena) }
-    } else {
-        unsafe { mi_arena_is_suitable(ptr::null_mut(), request_arena) }
+    match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::Arena(a) => {
+            unsafe { mi_arena_is_suitable(a.arena.as_ptr(), request_arena) }
+        },
+        _ => unsafe { mi_arena_is_suitable(ptr::null_mut(), request_arena) }
     }
 }
 
@@ -647,16 +648,14 @@ unsafe fn mi_heap_has_page(
     let arena_pages =
         unsafe { (*heap.cast::<MiHeapPrefix>()).arena_pages[arena_idx].load(Ordering::Acquire) }
             .cast::<MiArenaPagesPrefix>();
-    (unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA })
-        && (unsafe { (*page).memid.mem.arena.arena == arena })
-        && !arena_pages.is_null()
-        && unsafe {
-            mi_bitmap_is_setN(
-                (*arena_pages).pages,
-                (*page).memid.mem.arena.slice_index as usize,
-                1,
-            )
+    match crate::core_types::MemId::view(unsafe { (*page).memid }) {
+        crate::core_types::MemIdView::Arena(a) => {
+            a.arena.as_ptr() == arena && !arena_pages.is_null() && unsafe {
+                mi_bitmap_is_setN((*arena_pages).pages, a.range.start().0, 1)
+            }
         }
+        _ => false,
+    }
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -889,21 +888,37 @@ unsafe fn mi_memid_is_os(memid: mi_memid_t) -> bool {
 #[allow(dead_code)]
 unsafe fn mi_page_full_size(page: *mut mi_page_t) -> usize {
     let memid = unsafe { (*page).memid };
-    if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
-        unsafe { memid.mem.arena.slice_count as usize * MI_ARENA_SLICE_SIZE }
-    } else if unsafe { mi_memid_is_os(memid) } || memid.memkind == mi_memkind_t::MI_MEM_EXTERNAL {
-        let base = unsafe { memid.mem.os.base.cast::<u8>() };
-        let page_ptr = page.cast::<u8>();
-        crate::mi_assert_internal!(base <= page_ptr);
-        let presize = unsafe { page_ptr.offset_from(base) };
-        crate::mi_assert_internal!(unsafe { memid.mem.os.size as isize >= presize });
-        if presize > unsafe { memid.mem.os.size as isize } {
-            0
-        } else {
-            unsafe { memid.mem.os.size - presize as usize }
-        }
-    } else {
-        0
+    match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::Arena(a) => a.range.count().0.get() as usize * MI_ARENA_SLICE_SIZE,
+        crate::core_types::MemIdView::Os(os) => {
+            let base = os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()).cast::<u8>();
+            let os_size = os.size.0;
+
+            let page_ptr = page.cast::<u8>();
+            crate::mi_assert_internal!(base <= page_ptr);
+            let presize = unsafe { page_ptr.offset_from(base) };
+            crate::mi_assert_internal!(os_size as isize >= presize);
+            if presize > os_size as isize {
+                0
+            } else {
+                os_size - presize as usize
+            }
+        },
+        crate::core_types::MemIdView::External(_) => {
+            let base = unsafe { memid.mem.os.base }.cast::<u8>();
+            let os_size = unsafe { memid.mem.os.size };
+
+            let page_ptr = page.cast::<u8>();
+            crate::mi_assert_internal!(base <= page_ptr);
+            let presize = unsafe { page_ptr.offset_from(base) };
+            crate::mi_assert_internal!(os_size as isize >= presize);
+            if presize > os_size as isize {
+                0
+            } else {
+                os_size - presize as usize
+            }
+        },
+        _ => 0,
     }
 }
 

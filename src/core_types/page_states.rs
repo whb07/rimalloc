@@ -1,7 +1,7 @@
 //! Required types for page typestate signatures referenced in freelist_wrappers.
 
 use core::marker::PhantomData;
-use crate::core_types::{PagePtr, ThreadHeapPtr, ActivePage};
+use crate::core_types::{PagePtr, ThreadHeapPtr};
 
 pub(crate) struct Page<S> {
     pub(crate) ptr: PagePtr,
@@ -42,6 +42,13 @@ pub(crate) struct AbandonedMappedPageType(pub(crate) PagePtr);
 
 #[repr(transparent)]
 pub(crate) struct OwnedAbandonedPage(pub(crate) PagePtr);
+
+#[repr(transparent)]
+pub(crate) struct DestroyedPage(pub(crate) PagePtr);
+
+pub(crate) struct AllFreePage<S> {
+    pub(crate) page: Page<S>,
+}
 
 pub(crate) enum PageFreeOwner {
     Local(LocalPage),

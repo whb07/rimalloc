@@ -504,11 +504,9 @@ pub const fn mi_memid_needs_no_free(memid: mi_memid_t) -> bool {
 
 #[inline]
 pub fn mi_memid_arena(memid: mi_memid_t) -> *mut mi_arena_t {
-    if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
-        // SAFETY: reading the active union field is valid when `memkind` indicates arena storage.
-        unsafe { memid.mem.arena.arena }
-    } else {
-        ptr::null_mut()
+    match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::Arena(a) => a.arena.as_ptr(),
+        _ => ptr::null_mut(),
     }
 }
 

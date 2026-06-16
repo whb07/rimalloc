@@ -1129,14 +1129,14 @@ pub const fn mi_size_of_slices(bcount: usize) -> usize {
 
 #[inline]
 pub unsafe fn _mi_memid_create(memkind: mi_memkind_t) -> mi_memid_t {
-    let mut memid: mi_memid_t = zeroed();
-    memid.memkind = memkind;
-    memid
+    let mut raw: mi_memid_t = zeroed();
+    raw.memkind = memkind;
+    raw
 }
 
 #[inline]
 pub unsafe fn _mi_memid_none() -> mi_memid_t {
-    _mi_memid_create(mi_memkind_t::MI_MEM_NONE)
+    crate::core_types::MemId::<crate::core_types::NoneMem>::none().raw
 }
 
 #[inline]

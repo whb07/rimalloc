@@ -668,6 +668,7 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
 ) {
     if !mi_memkind_is_os(memid.memkind) {
         return;
+    }
     let (mut csize, mut base) = match crate::core_types::MemId::view(memid) {
         crate::core_types::MemIdView::Os(os) => (
             os.size.0,
@@ -686,20 +687,19 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
     let commit_size = if still_committed { csize } else { 0 };
     if base != addr {
         crate::mi_assert_internal!(base <= addr);
-    }
         let diff = addr as usize - base as usize;
         if csize == 0 {
             csize += diff;
         }
         if still_committed {
-            commit_size -= diff;
+            // commit_size -= diff; // Handled below by subtracting from final argument instead to match original code structure correctly
         }
     }
     unsafe {
         mi_os_prim_free(
             base,
             csize,
-            if still_committed { commit_size } else { 0 },
+            if still_committed { commit_size - (addr as usize - base as usize) } else { 0 },
             subproc,
         )
     };

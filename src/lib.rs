@@ -4,6 +4,7 @@
 #![allow(clippy::nonminimal_bool)]
 
 pub mod abi;
+pub(crate) mod core_types;
 pub mod alloc;
 pub mod alloc_aligned;
 pub mod alloc_override;

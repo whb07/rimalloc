@@ -75,7 +75,7 @@ pub(crate) struct OnceGuard<'a> {
 }
 
 #[repr(transparent)]
-pub(crate) struct MiLockPtr(pub(crate) NonNull<crate::types::mi_lock_t>);
+pub(crate) struct MiLockPtr(pub(crate) NonNull<crate::types::mi_lock_t_pub>);
 
 pub(crate) struct MiLockGuard<'a> {
     pub(crate) lock: MiLockPtr,

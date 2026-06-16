@@ -7,6 +7,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize};
 
 use crate::atomic::mi_lock_t;
+pub use crate::atomic::mi_lock_t as mi_lock_t_pub;
 use crate::stats::mi_stats_t;
 
 pub const MI_TYPES_H: () = ();

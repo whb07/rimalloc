@@ -11,6 +11,7 @@ pub(crate) enum SliceError {
     OutOfBounds,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct SliceRange {
     start: SliceIndex,
     count: SliceCount,
@@ -19,8 +20,8 @@ pub(crate) struct SliceRange {
 impl SliceRange {
     /// Note: arena validation logic omitted in data-types stage.
     pub(crate) fn new(start: usize, count: usize, _arena: ArenaPtr) -> Result<Self, SliceError> {
-        let start_u32 = start.try_into().map_err(|_| SliceError::Overflow)?;
-        let count_u32 = count.try_into().map_err(|_| SliceError::Overflow)?;
+        let start_u32: u32 = start.try_into().map_err(|_| SliceError::Overflow)?;
+        let count_u32: u32 = count.try_into().map_err(|_| SliceError::Overflow)?;
         let nz_count = NonZeroU32::new(count_u32).ok_or(SliceError::Overflow)?;
         
         Ok(Self {

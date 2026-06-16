@@ -66,7 +66,7 @@ pub(crate) enum HeapMainMem {}
 /// Safely wraps the raw `mi_memid_t` with a phantom tag proving its valid discriminator.
 #[repr(transparent)]
 pub(crate) struct MemId<K = AnyMem> {
-    pub(crate) raw: crate::types::mi_memid_t,
+    pub(crate) raw: crate::internal::mi_memid_t,
     _kind: PhantomData<K>,
 }
 
@@ -82,8 +82,8 @@ pub(crate) enum MemIdView {
 }
 
 impl MemId<AnyMem> {
-    pub(crate) fn view(raw: crate::types::mi_memid_t) -> MemIdView {
-        let code = MemKindCode(raw.memkind);
+    pub(crate) fn view(raw: crate::internal::mi_memid_t) -> MemIdView {
+        let code = MemKindCode(raw.memkind as i32);
         match MemKind::from(code) {
             MemKind::None => MemIdView::None(MemId { raw, _kind: PhantomData }),
             MemKind::External => MemIdView::External(MemId { raw, _kind: PhantomData }),
@@ -130,12 +130,12 @@ impl MemId<AnyMem> {
 impl MemId<NoneMem> {
     pub(crate) const fn none() -> Self {
         Self {
-            raw: crate::types::mi_memid_t {
-                mem: crate::types::mi_memid_mem_t { os: crate::types::mi_memid_os_info_t { base: core::ptr::null_mut(), size: 0 } },
+            raw: crate::internal::mi_memid_t {
+                mem: crate::internal::mi_memid_mem_t { os: crate::internal::mi_memid_os_info_t { base: core::ptr::null_mut(), size: 0 } },
                 is_pinned: false,
                 initially_committed: false,
                 initially_zero: false,
-                memkind: MemKindCode::NONE.0,
+                memkind: crate::internal::mi_memkind_t::MI_MEM_NONE as _,
             },
             _kind: PhantomData,
         }
@@ -151,9 +151,9 @@ impl MemId<OsMem> {
         pinned: Pinned,
     ) -> Self {
         Self {
-            raw: crate::types::mi_memid_t {
-                mem: crate::types::mi_memid_mem_t {
-                    os: crate::types::mi_memid_os_info_t {
+            raw: crate::internal::mi_memid_t {
+                mem: crate::internal::mi_memid_mem_t {
+                    os: crate::internal::mi_memid_os_info_t {
                         base: base.map_or(core::ptr::null_mut(), |p| p.as_ptr()),
                         size: size.0,
                     },
@@ -161,7 +161,7 @@ impl MemId<OsMem> {
                 is_pinned: pinned.0,
                 initially_committed: committed.0,
                 initially_zero: zero.0,
-                memkind: MemKindCode::OS.0,
+                memkind: crate::internal::mi_memkind_t::MI_MEM_OS as _,
             },
             _kind: PhantomData,
         }
@@ -171,9 +171,9 @@ impl MemId<OsMem> {
 impl MemId<ArenaMem> {
     pub(crate) fn arena(arena: ArenaPtr, range: SliceRange) -> Self {
         Self {
-            raw: crate::types::mi_memid_t {
-                mem: crate::types::mi_memid_mem_t {
-                    arena: crate::types::mi_memid_arena_info_t {
+            raw: crate::internal::mi_memid_t {
+                mem: crate::internal::mi_memid_mem_t {
+                    arena: crate::internal::mi_memid_arena_info_t {
                         arena: arena.as_ptr(),
                         slice_index: range.start().0 as u32,
                         slice_count: range.count().0.get(),
@@ -182,7 +182,7 @@ impl MemId<ArenaMem> {
                 is_pinned: false,
                 initially_committed: false, // Default false until proven
                 initially_zero: false,      // Default false until proven
-                memkind: MemKindCode::ARENA.0,
+                memkind: crate::internal::mi_memkind_t::MI_MEM_ARENA as _,
             },
             _kind: PhantomData,
         }
@@ -196,9 +196,9 @@ impl MemId<MetaMem> {
         block_count: core::num::NonZeroU32,
     ) -> Self {
         Self {
-            raw: crate::types::mi_memid_t {
-                mem: crate::types::mi_memid_mem_t {
-                    meta: crate::types::mi_memid_meta_info_t {
+            raw: crate::internal::mi_memid_t {
+                mem: crate::internal::mi_memid_mem_t {
+                    meta: crate::internal::mi_memid_meta_info_t {
                         meta_page: meta_page.as_ptr(),
                         block_index: block_index.0,
                         block_count: block_count.get(),
@@ -207,7 +207,7 @@ impl MemId<MetaMem> {
                 is_pinned: false,
                 initially_committed: false,
                 initially_zero: false,
-                memkind: MemKindCode::META.0,
+                memkind: crate::internal::mi_memkind_t::MI_MEM_META as _,
             },
             _kind: PhantomData,
         }

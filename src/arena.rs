@@ -2270,25 +2270,24 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
             .cast::<u8>()
         };
         if !start.is_null() {
-            let arena = unsafe { (*memid).mem.arena.arena };
-            let arena_pages = unsafe { mi_heap_ensure_arena_pages(heap, arena) };
-            if arena_pages.is_null() {
-                unsafe { _mi_arenas_free(start.cast(), mi_size_of_slices(slice_count), *memid) };
-                start = ptr::null_mut();
-            } else {
-                crate::mi_assert_internal!(unsafe {
-                    !mi_bitmap_is_setN(
-                        (*arena_pages).pages,
-                        (*memid).mem.arena.slice_index as usize,
-                        1,
-                    )
-                });
-                unsafe {
-                    mi_bitmap_set(
-                        (*arena_pages).pages,
-                        (*memid).mem.arena.slice_index as usize,
-                    )
-                };
+            match crate::core_types::MemId::view(unsafe { *memid }) {
+                crate::core_types::MemIdView::Arena(a) => {
+                    let arena = a.arena.as_ptr();
+                    let arena_pages = unsafe { mi_heap_ensure_arena_pages(heap, arena) };
+                    if arena_pages.is_null() {
+                        unsafe { _mi_arenas_free(start.cast(), mi_size_of_slices(slice_count), *memid) };
+                        start = ptr::null_mut();
+                    } else {
+                        let slice_idx = a.range.start().0;
+                        crate::mi_assert_internal!(unsafe {
+                            !mi_bitmap_is_setN((*arena_pages).pages, slice_idx, 1)
+                        });
+                        unsafe { mi_bitmap_set((*arena_pages).pages, slice_idx) };
+                    }
+                },
+                _ => {
+                    // Fallback for non-arena allocations that bypassed the arena path above.
+                }
             }
         }
     }
@@ -2384,13 +2383,13 @@ unsafe fn mi_arenas_page_alloc_fresh(
     let mut page_meta_is_separate = false;
     let mut block_start = 0usize;
 
-    if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
-        let arena = unsafe { memid.mem.arena.arena };
+    if let crate::core_types::MemIdView::Arena(a) = crate::core_types::MemId::view(memid) {
+        let arena = a.arena.as_ptr();
         if unsafe { !(*arena.cast::<MiArenaPrefix>()).pages_meta.is_null() } {
             let page_meta = unsafe {
                 (*arena.cast::<MiArenaPrefix>())
                     .pages_meta
-                    .add(memid.mem.arena.slice_index as usize)
+                    .add(a.range.start().0)
             };
             crate::mi_assert_internal!(unsafe { (*page_meta).block_size == 0 });
             if block_size > MI_SMALL_SIZE_MAX || MI_PAGE_META_ALIGNED_FREE_SMALL == 0 {
@@ -2422,12 +2421,12 @@ unsafe fn mi_arenas_page_alloc_fresh(
         }
         let mut is_zero = false;
         if !unsafe {
+            let arena_ptr = match crate::core_types::MemId::view(memid) {
+                crate::core_types::MemIdView::Arena(a) => a.arena.as_ptr(),
+                _ => ptr::null_mut(),
+            };
             mi_arena_commit(
-                if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
-                    memid.mem.arena.arena
-                } else {
-                    ptr::null_mut()
-                },
+                arena_ptr,
                 slice_start.cast(),
                 commit_size,
                 &mut is_zero,
@@ -2527,8 +2526,10 @@ unsafe fn mi_arenas_page_regular_alloc(
         return ptr::null_mut();
     }
     crate::mi_assert_internal!(
-        unsafe { (*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA }
-            || unsafe { (*page).memid.mem.arena.slice_count as usize == slice_count }
+        match crate::core_types::MemId::view(unsafe { (*page).memid }) {
+            crate::core_types::MemIdView::Arena(a) => a.range.count().0.get() as usize == slice_count,
+            _ => true, // Non-arena allocations trivially pass this slice_count assert
+        }
     );
     if !unsafe { crate::page::_mi_page_init(theap, page) } {
         unsafe { _mi_arenas_free(page.cast(), mi_page_full_size(page), (*page).memid) };
@@ -3582,12 +3583,14 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     exclusive: bool,
     arena_id: *mut mi_arena_id_t,
 ) -> bool {
-    let mut memid = unsafe { _mi_memid_create(mi_memkind_t::MI_MEM_EXTERNAL) };
-    memid.mem.os.base = start;
-    memid.mem.os.size = size;
-    memid.initially_committed = is_committed;
-    memid.initially_zero = is_zero;
-    memid.is_pinned = is_pinned;
+    let mut memid = crate::core_types::MemId::<crate::core_types::OsMem>::os(
+        crate::core_types::OsMemPtr::new(start),
+        crate::core_types::ReservedBytes(size),
+        crate::core_types::InitiallyCommitted(is_committed),
+        crate::core_types::InitiallyZero(is_zero),
+        crate::core_types::Pinned(is_pinned)
+    ).raw;
+    memid.memkind = mi_memkind_t::MI_MEM_EXTERNAL; // Overwrite memkind to match original
     unsafe {
         mi_manage_os_memory_ex2(
             _mi_subproc(),
@@ -3620,12 +3623,14 @@ pub unsafe extern "C" fn mi_manage_memory(
     commit_fun_arg: *mut c_void,
     arena_id: *mut mi_arena_id_t,
 ) -> bool {
-    let mut memid = unsafe { _mi_memid_create(mi_memkind_t::MI_MEM_EXTERNAL) };
-    memid.mem.os.base = start;
-    memid.mem.os.size = size;
-    memid.initially_committed = is_committed;
-    memid.initially_zero = is_zero;
-    memid.is_pinned = is_pinned;
+    let mut memid = crate::core_types::MemId::<crate::core_types::OsMem>::os(
+        crate::core_types::OsMemPtr::new(start),
+        crate::core_types::ReservedBytes(size),
+        crate::core_types::InitiallyCommitted(is_committed),
+        crate::core_types::InitiallyZero(is_zero),
+        crate::core_types::Pinned(is_pinned)
+    ).raw;
+    memid.memkind = mi_memkind_t::MI_MEM_EXTERNAL; // Overwrite memkind to match original
     unsafe {
         mi_manage_os_memory_ex2(
             _mi_subproc(),

@@ -5,6 +5,7 @@ mod ptr;
 mod scalar;
 mod layout;
 mod page;
+mod freelist;
 
 pub(crate) use ptr::{
     ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageConstPtr, PagePtr, PageQueuePtr,
@@ -23,4 +24,8 @@ pub(crate) use layout::{
 
 pub(crate) use page::{
     FreePathKind, PageFlags, PageOwnerId, PageThreadId, ThreadId, XThreadDelta,
+};
+
+pub(crate) use freelist::{
+    ThreadFreeOwner, ThreadFreeSnapshot, ThreadFreeWord,
 };

@@ -56,9 +56,10 @@ pub(crate) enum WasGuarded {
 }
 
 /// A block that has been completely validated and is ready for the typed free path.
+#[derive(Clone, Copy)]
 pub(crate) struct BlockForFree {
-    block: BlockPtr,
-    was_guarded: WasGuarded,
+    pub(crate) block: BlockPtr,
+    pub(crate) was_guarded: WasGuarded,
 }
 
 impl BlockForFree {
@@ -76,10 +77,11 @@ impl BlockForFree {
 }
 
 /// A fully validated free request ready to be routed.
+#[derive(Clone, Copy)]
 pub(crate) struct ValidatedFree {
-    user: UserPtr,
-    page: PagePtr,
-    block: BlockForFree,
+    pub(crate) user: UserPtr,
+    pub(crate) page: PagePtr,
+    pub(crate) block: BlockForFree,
 }
 
 impl ValidatedFree {

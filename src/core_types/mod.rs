@@ -7,6 +7,7 @@ mod layout;
 mod page;
 mod freelist;
 mod validation;
+mod memid;
 
 pub(crate) use ptr::{
     ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageConstPtr, PagePtr, PageQueuePtr,
@@ -34,4 +35,10 @@ pub(crate) use freelist::{
 pub(crate) use validation::{
     BlockForFree, BlockOffset, GuardedBlock, PointerInvalidReason, PointerLocation, PointerLookup,
     ValidatedFree, WasGuarded,
+};
+
+pub(crate) use memid::{
+    AnyMem, ArenaMem, ArenaMemId, BlockIndex, ExternalMem, HeapMainMem, InitiallyCommitted,
+    InitiallyZero, MemId, MemIdView, MemKind, MemKindCode, MetaMem, MetaMemId, NoneMem, OsMem,
+    OsMemId, OsMemKind, Pinned, ReservedBytes, StaticMem,
 };

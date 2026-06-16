@@ -6,6 +6,7 @@ mod scalar;
 mod layout;
 mod page;
 mod freelist;
+mod validation;
 
 pub(crate) use ptr::{
     ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageConstPtr, PagePtr, PageQueuePtr,
@@ -28,4 +29,9 @@ pub(crate) use page::{
 
 pub(crate) use freelist::{
     ThreadFreeOwner, ThreadFreeSnapshot, ThreadFreeWord,
+};
+
+pub(crate) use validation::{
+    BlockForFree, BlockOffset, GuardedBlock, PointerInvalidReason, PointerLocation, PointerLookup,
+    ValidatedFree, WasGuarded,
 };

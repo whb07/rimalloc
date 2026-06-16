@@ -310,7 +310,10 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
         return true;
     }
     if MI_SECURE > 0 && !memid.is_pinned {
-        let arena = unsafe { memid.mem.arena.arena };
+        let arena = match crate::core_types::MemId::view(memid) {
+            crate::core_types::MemIdView::Arena(a) => a.arena.as_ptr(),
+            _ => core::ptr::null_mut(),
+        };
         if !arena.is_null() {
             let commit_fun = unsafe { (*arena.cast::<MiArenaCommitPrefix>()).commit_fun };
             if let Some(commit_fun) = commit_fun {
@@ -355,7 +358,10 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
         return true;
     }
     if MI_SECURE > 0 && !memid.is_pinned {
-        let arena = unsafe { memid.mem.arena.arena };
+        let arena = match crate::core_types::MemId::view(memid) {
+            crate::core_types::MemIdView::Arena(a) => a.arena.as_ptr(),
+            _ => core::ptr::null_mut(),
+        };
         if !arena.is_null() {
             let commit_fun = unsafe { (*arena.cast::<MiArenaCommitPrefix>()).commit_fun };
             if let Some(commit_fun) = commit_fun {
@@ -662,18 +668,25 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
 ) {
     if !mi_memkind_is_os(memid.memkind) {
         return;
-    }
-    let mut csize = unsafe { memid.mem.os.size };
+    let (mut csize, mut base) = match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::Os(os) => (
+            os.size.0,
+            os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()),
+        ),
+        crate::core_types::MemIdView::External(_) => {
+            (unsafe { memid.mem.os.size }, unsafe { memid.mem.os.base })
+        }
+        _ => (0, addr),
+    };
     if csize == 0 {
         csize = unsafe { _mi_os_good_alloc_size(size) };
     }
     crate::mi_assert_internal!(csize >= size);
 
-    let mut commit_size = if still_committed { csize } else { 0 };
-    let mut base = addr;
-    if unsafe { memid.mem.os.base } != base {
-        crate::mi_assert_internal!(unsafe { memid.mem.os.base } <= addr);
-        base = unsafe { memid.mem.os.base };
+    let commit_size = if still_committed { csize } else { 0 };
+    if base != addr {
+        crate::mi_assert_internal!(base <= addr);
+    }
         let diff = addr as usize - base as usize;
         if csize == 0 {
             csize += diff;
@@ -1343,14 +1356,26 @@ unsafe fn mi_os_alloc_aligned_ex(
     if !is_pinned.is_null() {
         unsafe { *is_pinned = memid.is_pinned };
     }
-    if !base.is_null() {
-        unsafe { *base = memid.mem.os.base };
-    }
-    if !full_size.is_null() {
-        unsafe { *full_size = memid.mem.os.size };
-    }
-    if memid.initially_committed && !memid.initially_zero {
-        unsafe { _mi_memzero_aligned(memid.mem.os.base, memid.mem.os.size) };
+    if !base.is_null() || !full_size.is_null() || (memid.initially_committed && !memid.initially_zero) {
+        let (os_base, os_size) = match crate::core_types::MemId::view(memid) {
+            crate::core_types::MemIdView::Os(os) => (
+                os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()),
+                os.size.0,
+            ),
+            crate::core_types::MemIdView::External(_) => {
+                (unsafe { memid.mem.os.base }, unsafe { memid.mem.os.size })
+            }
+            _ => (core::ptr::null_mut(), 0),
+        };
+        if !base.is_null() {
+            unsafe { *base = os_base };
+        }
+        if !full_size.is_null() {
+            unsafe { *full_size = os_size };
+        }
+        if memid.initially_committed && !memid.initially_zero {
+            unsafe { _mi_memzero_aligned(os_base, os_size) };
+        }
     }
     p
 }

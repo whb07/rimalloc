@@ -1559,6 +1559,35 @@ pub unsafe extern "C" fn _mi_assert_fail(
     } else {
         unsafe { CStr::from_ptr(func).to_str().unwrap_or("") }
     };
+    unsafe {
+        unsafe extern "C" {
+            fn dprintf(
+                fd: core::ffi::c_int,
+                format: *const core::ffi::c_char,
+                ...
+            ) -> core::ffi::c_int;
+        }
+        dprintf(
+            2,
+            c"mimalloc PANIC or ASSERT FAILED: at %s:%d, %s\n  assertion: %s\n".as_ptr(),
+            if fname.is_empty() {
+                c"".as_ptr()
+            } else {
+                fname.as_ptr() as *const _
+            },
+            line,
+            if func.is_empty() {
+                c"".as_ptr()
+            } else {
+                func.as_ptr() as *const _
+            },
+            if assertion.is_empty() {
+                c"".as_ptr()
+            } else {
+                assertion.as_ptr() as *const _
+            },
+        );
+    }
     _mi_fprintf(
         None,
         ptr::null_mut(),

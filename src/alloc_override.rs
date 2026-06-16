@@ -53,8 +53,8 @@ pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
         "ret",
         "2:",
         "xor edx, edx",
-        "jmp {try_new}",
-        try_new = sym crate::alloc::mi_theap_try_new,
+        "jmp {alloc_new}",
+        alloc_new = sym crate::alloc::mi_theap_alloc_new,
     );
 }
 

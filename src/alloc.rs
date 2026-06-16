@@ -910,7 +910,8 @@ unsafe extern "C" fn mi_heap_try_new(
     mi_theap_try_new(_mi_heap_theap(heap), size, nothrow)
 }
 
-unsafe fn mi_theap_alloc_new(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
+#[unsafe(no_mangle)]
+pub(crate) unsafe extern "C" fn mi_theap_alloc_new(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     let p = mi_theap_malloc(theap, size);
     if mi_unlikely(p.is_null()) {
         mi_theap_try_new(theap, size, false)

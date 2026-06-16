@@ -1,6 +1,13 @@
-# remaining mimalloc refactoring phases
+# Remaining mimalloc refactoring phases
 
-## Phase 3: Validation Boundaries (DT-6 Implementation)
+> **Note on Traceability:**
+> This document summarizes the migration order for integrating the strict types. 
+> Detailed type definitions, constructors, invariants, and the `DT-1`..`DT-10` PR sequence 
+> are defined in `TYPES_SPEC.md` (specifically Section 19). Each phase below corresponds 
+> directly to one or more `DT-*` items from that specification. `TYPES_SPEC.md` remains 
+> the authoritative source for acceptance criteria and invariants.
+
+## Phase 3: Validation Boundaries (Covers DT-6)
 
 **Goal:** Establish a strict trusted vs. untrusted pointer boundary before any free action can take place.
 
@@ -16,7 +23,7 @@
 3. **Guard Blocks:**
    - Extract the `was_guarded` boolean into the explicit `WasGuarded` enum when constructing the `BlockForFree`.
 
-## Phase 4: Typestates & The Core State Machine (DT-9 & DT-10 Implementation)
+## Phase 4: Typestates & The Core State Machine (Covers DT-8, DT-9, DT-10)
 
 **Goal:** Prevent illegal state transitions in the allocator's core state machine (the queues and free lists). This is the most complex phase.
 
@@ -34,7 +41,7 @@
    - Update the core allocation loop (`mi_malloc_generic`) to extract blocks by calling `pop()` on an `AvailableFreeList`.
    - Update `mi_free_block_local` to return blocks by calling `push()` on `LocalFreeList`.
 
-## Phase 5: Scalar and Layout Enforcement (DT-1 & DT-3 Implementation)
+## Phase 5: Scalar and Layout Enforcement (Covers DT-1, DT-2, DT-3, DT-11)
 
 **Goal:** Eliminate all instances of bare `usize` used for domain-specific metrics in the internal API, ensuring mathematical operations (like padding addition or alignment) cannot silently overflow.
 

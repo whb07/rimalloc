@@ -847,11 +847,10 @@ unsafe fn mi_memid_create_arena(
     crate::mi_assert_internal!(
         slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
-    let mut memid = unsafe { _mi_memid_create(mi_memkind_t::MI_MEM_ARENA) };
-    memid.mem.arena.arena = arena;
-    memid.mem.arena.slice_index = slice_index as u32;
-    memid.mem.arena.slice_count = slice_count as u32;
-    memid
+    crate::core_types::MemId::<crate::core_types::ArenaMem>::arena(
+        unsafe { crate::core_types::ArenaPtr::new_unchecked(arena) },
+        crate::core_types::SliceRange::from_raw(slice_index as u32, slice_count as u32)
+    ).raw
 }
 
 #[allow(dead_code)]
@@ -860,15 +859,18 @@ unsafe fn mi_arena_from_memid(
     slice_index: *mut usize,
     slice_count: *mut usize,
 ) -> *mut mi_arena_t {
-    crate::mi_assert_internal!(memid.memkind == mi_memkind_t::MI_MEM_ARENA);
-    let arena = unsafe { memid.mem.arena.arena };
-    if !slice_index.is_null() {
-        unsafe { *slice_index = memid.mem.arena.slice_index as usize };
+    match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::Arena(a) => {
+            if !slice_index.is_null() {
+                unsafe { *slice_index = a.range.start().0 };
+            }
+            if !slice_count.is_null() {
+                unsafe { *slice_count = a.range.count().0.get() as usize };
+            }
+            a.arena.as_ptr()
+        }
+        _ => { crate::mi_assert_internal!(false); core::ptr::null_mut() }
     }
-    if !slice_count.is_null() {
-        unsafe { *slice_count = memid.mem.arena.slice_count as usize };
-    }
-    arena
 }
 
 #[allow(dead_code)]

@@ -13,6 +13,7 @@ mod validation_extra;
 mod freelist_wrappers;
 mod free_actions;
 mod page_queues;
+mod arena;
 
 pub(crate) use ptr::{
     ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageConstPtr, PagePtr, PageQueuePtr,
@@ -70,3 +71,21 @@ pub(crate) use page_queues::{
     FullPageQueue, FullQueue, HugePageQueue, HugeQueue, NormalPageQueue, NormalQueue, PageQueue,
     QueuedPage, UnqueuedPage, free_all_free_page_to_arena, move_to_full_queue, unfull_page,
 };
+
+pub(crate) use arena::{SliceError, SliceRange, SharedArena, ExclusiveArena, ParentArena, ArenaPageTablePtr, AbandonedCountCell, ArenaPageCell};
+mod heap;
+
+pub(crate) use heap::{
+    BorrowedHeap, BorrowedSubproc, MainHeap, MainSubproc, OwnedHeap, ThreadHeapBorrowed,
+    ThreadHeapState,
+};
+mod atomic_wrappers;
+
+pub(crate) use atomic_wrappers::{
+    AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicPageThreadId, AtomicThreadFree,
+    AtomicUsizeField, MemoryOrder, MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr,
+    RemotePushOutcome,
+};
+mod padding;
+
+pub(crate) use padding::{Padding, PaddingCanary, PaddingDelta, PaddingPtr};

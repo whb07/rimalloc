@@ -175,7 +175,7 @@ impl MemId<ArenaMem> {
                 mem: crate::types::mi_memid_mem_t {
                     arena: crate::types::mi_memid_arena_info_t {
                         arena: arena.as_ptr(),
-                        slice_index: range.start().0,
+                        slice_index: range.start().0 as u32,
                         slice_count: range.count().0.get(),
                     },
                 },

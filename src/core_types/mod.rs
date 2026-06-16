@@ -3,6 +3,7 @@
 
 mod ptr;
 mod scalar;
+mod layout;
 
 pub(crate) use ptr::{
     ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageConstPtr, PagePtr, PageQueuePtr,
@@ -12,4 +13,9 @@ pub(crate) use ptr::{
 pub(crate) use scalar::{
     Alignment, AllocSizeError, ArenaIndex, Bin, BlockSize, DirectBin, EffectiveSize,
     MaybeAlignment, PaddedSize, RequestedSize, SliceCount, SliceIndex, UsableSize,
+};
+
+pub(crate) use layout::{
+    CallocRequest, ItemCount, LayoutError, LayoutRequest, MallocGenericFlags,
+    MaybeHugeAlignment, OldAllocation, ReallocRequest, Zeroed,
 };

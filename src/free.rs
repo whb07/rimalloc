@@ -362,24 +362,21 @@ pub unsafe fn mi_free_block_mt(page: *mut mi_page_t, block: *mut mi_block_t, was
         _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
     }
 
-    let mut tf_old = mi_atomic_load_explicit(
-        ptr::addr_of!((*page).xthread_free).cast(),
-        mi_memory_order_e::mi_memory_order_relaxed,
+    let atomic_tf = crate::core_types::AtomicThreadFree(
+        ptr::addr_of_mut!((*page).xthread_free)
     );
+    
+    let mut tf_old = atomic_tf.load_relaxed();
     loop {
-        mi_block_set_next(page, block, mi_tf_block(tf_old));
-        let tf_new = mi_tf_create(block, true);
-        if mi_atomic_cas_weak_acq_rel(
-            ptr::addr_of_mut!((*page).xthread_free).cast(),
-            &mut tf_old,
-            tf_new,
-        ) {
-            break;
+        mi_block_set_next(page, block, tf_old.head().map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()));
+        let bp = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
+        match atomic_tf.compare_exchange_push(&mut tf_old, bp) {
+            Ok(_) => break,
+            Err(_) => continue, // tf_old is updated by the atomic wrapper
         }
     }
 
-    let is_owned_now = !mi_tf_is_owned(tf_old);
-    if is_owned_now {
+    if !tf_old.is_owned() {
         crate::mi_assert_internal!(mi_page_is_abandoned(page));
         mi_free_try_collect_mt(page, block);
     }

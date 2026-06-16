@@ -13,10 +13,15 @@ pub(crate) enum ThreadFreeOwner {
 /// Packs a block pointer (aligned) and an ownership bit.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct ThreadFreeWord(usize);
+pub(crate) struct ThreadFreeWord(pub(crate) usize);
 
 impl ThreadFreeWord {
     pub(crate) const OWNED_BIT: usize = 1;
+
+    #[inline(always)]
+    pub(crate) const fn raw(self) -> usize {
+        self.0
+    }
 
     #[inline(always)]
     pub(crate) fn head(self) -> Option<BlockPtr> {

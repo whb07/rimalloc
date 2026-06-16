@@ -35,22 +35,41 @@ pub(crate) enum RemotePushOutcome {
 }
 
 #[repr(transparent)]
-pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);
+#[derive(Clone, Copy)]
+pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);
 
 impl AtomicThreadFree {
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord {
+        let val = unsafe { core::sync::atomic::AtomicUsize::from_ptr(self.0).load(Ordering::Relaxed) };
+        ThreadFreeWord(val)
+    }
+    
+    pub(crate) fn compare_exchange_push(
+        self,
+        old: &mut ThreadFreeWord,
+        block: BlockPtr,
+    ) -> Result<ThreadFreeWord, ThreadFreeWord> {
+        let new_tf = ThreadFreeWord::from_parts(Some(block), crate::core_types::ThreadFreeOwner::Owned);
+        let atomic = unsafe { &*self.0.cast::<core::sync::atomic::AtomicUsize>() };
+        match atomic.compare_exchange_weak(
+            old.raw(),
+            new_tf.raw(),
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => Ok(new_tf),
+            Err(val) => {
+                *old = ThreadFreeWord::from_parts(ThreadFreeWord(val).head(), if ThreadFreeWord(val).is_owned() { crate::core_types::ThreadFreeOwner::Owned } else { crate::core_types::ThreadFreeOwner::Unowned });
+                Err(*old)
+            }
+        }
+    }
+    
+    pub(crate) fn claim_ownership(self) -> bool {
         unimplemented!()
     }
     
-    pub(crate) fn push_remote_acq_rel(self, _block: BlockPtr) -> RemotePushOutcome {
-        unimplemented!()
-    }
-    
-    pub(crate) fn collect_acq_rel(self) -> Option<RemoteFreeList> {
-        unimplemented!()
-    }
-    
-    pub(crate) fn claim_acq_rel(self) -> bool {
+    pub(crate) fn release_ownership(self, _expected_head: Option<BlockPtr>) -> bool {
         unimplemented!()
     }
 }

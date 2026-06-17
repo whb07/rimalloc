@@ -21,9 +21,8 @@ use crate::free::_mi_padding_shrink;
 use crate::init::_mi_theap_empty_get;
 use crate::internal::{
     _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero, _mi_ptr_page,
-    MI_BLOCK_TAG_ALIGNED, MI_GUARDED, mi_count_size_overflow, mi_likely,
-    mi_page_set_has_interior_pointers, mi_page_usable_block_size, mi_theap_malloc_use_guarded,
-    mi_unlikely,
+    MI_BLOCK_TAG_ALIGNED, MI_GUARDED, mi_likely, mi_page_set_has_interior_pointers,
+    mi_page_usable_block_size, mi_theap_malloc_use_guarded, mi_unlikely,
 };
 use crate::options::_mi_error_message_fmt;
 use crate::page::{MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size};
@@ -332,11 +331,11 @@ pub unsafe fn mi_theap_calloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_count_size_overflow(count, size, &mut total) {
-        return core::ptr::null_mut();
+    if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        mi_theap_zalloc_aligned_at(theap, req.layout().requested().get(), alignment, offset)
+    } else {
+        core::ptr::null_mut()
     }
-    mi_theap_zalloc_aligned_at(theap, total, alignment, offset)
 }
 
 #[inline]
@@ -615,11 +614,11 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_count_size_overflow(newcount, size, &mut total) {
-        return core::ptr::null_mut();
+    if let Ok(req) = crate::core_types::CallocRequest::new(newcount, size) {
+        mi_theap_rezalloc_aligned_at(theap, p, req.layout().requested().get(), alignment, offset)
+    } else {
+        core::ptr::null_mut()
     }
-    mi_theap_rezalloc_aligned_at(theap, p, total, alignment, offset)
 }
 
 #[inline]
@@ -630,11 +629,7 @@ pub unsafe fn mi_theap_recalloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_count_size_overflow(newcount, size, &mut total) {
-        return core::ptr::null_mut();
-    }
-    mi_theap_rezalloc_aligned(theap, p, total, alignment)
+    mi_theap_recalloc_aligned_at(theap, p, newcount, size, alignment, 0)
 }
 
 #[unsafe(no_mangle)]

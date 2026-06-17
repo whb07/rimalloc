@@ -4,7 +4,7 @@
 
 use crate::internal::{
     _mi_align_up, _mi_is_aligned, _mi_is_power_of_two, _mi_memcpy, _mi_os_page_size,
-    mi_count_size_overflow, mi_mul_overflow,
+    mi_mul_overflow,
 };
 use crate::mimalloc::{
     c_wchar, mi_expand, mi_free, mi_is_in_heap_region, mi_malloc, mi_malloc_aligned, mi_realloc,
@@ -110,16 +110,16 @@ pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reallocarray(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_count_size_overflow(count, size, &mut total) {
+    if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        let newp = mi_realloc(p, req.total().get());
+        if newp.is_null() {
+            mi_set_errno(ENOMEM);
+        }
+        newp
+    } else {
         mi_set_errno(EOVERFLOW);
-        return ptr::null_mut();
+        ptr::null_mut()
     }
-    let newp = mi_realloc(p, total);
-    if newp.is_null() {
-        mi_set_errno(ENOMEM);
-    }
-    newp
 }
 
 #[unsafe(no_mangle)]
@@ -131,11 +131,11 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
         return EINVAL;
     }
 
-    let mut total = 0usize;
-    if mi_count_size_overflow(count, size, &mut total) {
+    let Ok(req) = crate::core_types::CallocRequest::new(count, size) else {
         mi_set_errno(EOVERFLOW);
         return EOVERFLOW;
-    }
+    };
+    let total = req.total().get();
 
     if total == 0 {
         mi_free(*ptrp);

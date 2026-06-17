@@ -123,7 +123,21 @@ unsafe fn mi_page_malloc_zero(
         *usable = mi_page_usable_block_size(page).get();
     }
 
-    (*page).free = mi_block_next(page, block);
+    // Pop the head block off the page's available free list via the typed
+    // wrapper. Zero-cost: compiles to the same `mi_block_next` + store as the
+    // raw form below it replaces.
+    // SAFETY: `page` is a valid page with a non-null `free` head (`block`).
+    let available = unsafe { crate::core_types::AvailableFreeList::from_raw(block) };
+    let (allocated, next_list) = unsafe {
+        available.pop(crate::core_types::AvailablePage(
+            crate::core_types::PagePtr::new_unchecked(page),
+        ))
+    };
+    (*page).free = next_list
+        .0
+        .map(|b| b.as_ptr())
+        .unwrap_or(core::ptr::null_mut());
+    let block = allocated.0.as_ptr();
     (*page).used = (*page).used.wrapping_add(1);
     crate::mi_assert_internal!((*page).free.is_null() || _mi_ptr_page((*page).free.cast()) == page);
     crate::mi_assert_internal!(

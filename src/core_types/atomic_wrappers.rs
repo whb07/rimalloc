@@ -76,12 +76,50 @@ impl AtomicThreadFree {
         }
     }
 
-    pub(crate) fn claim_ownership(self) -> bool {
-        unimplemented!()
+    /// Claim ownership of the page's thread-free list by setting the owned bit
+    /// (bit 0 of `xthread_free`). Returns `true` if the bit was previously clear
+    /// (i.e. this thread successfully claimed ownership).
+    ///
+    /// Mirrors `mi_page_claim_ownership` in `internal.rs`: a single
+    /// `fetch_or(1, AcqRel)`.
+    ///
+    /// # Safety
+    /// `self` must point to a valid page's `xthread_free` field.
+    #[inline]
+    pub(crate) unsafe fn claim_ownership(self) -> bool {
+        let old = crate::atomic::mi_atomic_fetch_or_explicit(
+            self.0,
+            1,
+            crate::atomic::mi_memory_order_e::mi_memory_order_acq_rel,
+        );
+        (old & 1) == 0
     }
 
-    pub(crate) fn release_ownership(self, _expected_head: Option<BlockPtr>) -> bool {
-        unimplemented!()
+    /// Release ownership of the page's thread-free list, preserving the current
+    /// list head. Loops with a weak CAS clearing the owned bit, retrying if the
+    /// head changed concurrently. Returns `true` if the owned bit was cleared
+    /// by this call.
+    ///
+    /// `expected_head`, if provided, is the head the caller believes is current;
+    /// the CAS still validates against the live atomic value, so a mismatch just
+    /// causes a retry rather than UB.
+    ///
+    /// # Safety
+    /// `self` must point to a valid page's `xthread_free` field, and the caller
+    /// must ensure no concurrent collector can leave the list in an inconsistent
+    /// state (see `mi_abandoned_page_unown_from_free` for the full protocol).
+    #[inline]
+    pub(crate) unsafe fn release_ownership(self, _expected_head: Option<BlockPtr>) -> bool {
+        let atomic = unsafe { &*self.0.cast::<core::sync::atomic::AtomicUsize>() };
+        loop {
+            let current = atomic.load(Ordering::Acquire);
+            // Preserve the head pointer (all bits except the owned bit).
+            let new = current & !1usize;
+            match atomic.compare_exchange_weak(current, new, Ordering::AcqRel, Ordering::Relaxed) {
+                Ok(_) => return (current & 1) == 1,
+                Err(_) => continue,
+            }
+        }
     }
 }
 

@@ -338,8 +338,21 @@ pub(crate) unsafe fn mi_free_block_local(
         );
     }
 
-    mi_block_set_next(page, block, (*page).local_free);
-    (*page).local_free = block;
+    // Push the freed block onto the page's local free list via the typed
+    // wrapper. Zero-cost: compiles to the same `mi_block_set_next` + store as
+    // the raw form it replaces.
+    // SAFETY: `page` is a valid local page; `block` is a valid block in it.
+    let local = unsafe { crate::core_types::LocalFreeList::from_raw((*page).local_free) };
+    let new_local = unsafe {
+        local.push(
+            crate::core_types::LocalPage(crate::core_types::PagePtr::new_unchecked(page)),
+            crate::core_types::FreeBlock(crate::core_types::BlockPtr::new_unchecked(block)),
+        )
+    };
+    (*page).local_free = new_local
+        .0
+        .map(|b| b.as_ptr())
+        .unwrap_or(core::ptr::null_mut());
     (*page).used -= 1;
     if (*page).used == 0 {
         if (*page).retire_expire == 0 {

@@ -2227,6 +2227,22 @@ fn free_path_internals_are_not_dynamic_exports() {
         "abandoned arena page claiming should keep C's inlined page lookup shape"
     );
     assert!(
+        arena_rs.contains(
+            "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange)"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange) -> bool"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arena_try_purge_range(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> bool"
+        ) && arena_rs.contains("let Some((arena_ptr, range)) = (unsafe { mi_arena_range_from_memid(memid) })")
+            && !arena_rs.contains(
+                "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize)"
+            )
+            && !arena_rs.contains(
+                "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize)"
+            ),
+        "arena free/purge path should carry SliceRange after decoding arena memids"
+    );
+    assert!(
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_end(")

@@ -46,8 +46,18 @@ impl SliceRange {
         self.start
     }
 
+    #[inline(always)]
+    pub(crate) fn start_usize(self) -> usize {
+        self.start.0
+    }
+
     pub(crate) fn count(self) -> SliceCount {
         self.count
+    }
+
+    #[inline(always)]
+    pub(crate) fn count_usize(self) -> usize {
+        self.count.0.get() as usize
     }
 }
 

@@ -877,6 +877,19 @@ unsafe fn mi_arena_from_memid(
 }
 
 #[allow(dead_code)]
+unsafe fn mi_arena_range_from_memid(
+    memid: mi_memid_t,
+) -> Option<(crate::core_types::ArenaPtr, crate::core_types::SliceRange)> {
+    match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::Arena(a) => Some((a.arena, a.range)),
+        _ => {
+            crate::mi_assert_internal!(false);
+            None
+        }
+    }
+}
+
+#[allow(dead_code)]
 const fn mi_memkind_is_os(memkind: mi_memkind_t) -> bool {
     matches!(
         memkind,
@@ -2991,7 +3004,9 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     }
 }
 
-unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize) {
+unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange) {
+    let slice_index = range.start_usize();
+    let slice_count = range.count_usize();
     let delay = unsafe { mi_arena_purge_delay() };
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } || delay < 0 || _mi_preloading()
     {
@@ -3005,7 +3020,7 @@ unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, sl
         )
     });
     if delay == 0 {
-        unsafe { mi_arena_purge(arena, slice_index, slice_count) };
+        unsafe { mi_arena_purge(arena, range) };
         return;
     }
 
@@ -3049,12 +3064,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
     if mi_memkind_is_os(memid.memkind) {
         unsafe { _mi_os_free(p, size, memid) };
     } else if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
-        let mut slice_index = 0usize;
-        let mut slice_count = 0usize;
-        let arena = unsafe { mi_arena_from_memid(memid, &mut slice_index, &mut slice_count) };
-        crate::mi_assert_internal!(size.is_multiple_of(MI_ARENA_SLICE_SIZE));
-        crate::mi_assert_internal!(slice_count * MI_ARENA_SLICE_SIZE == size);
-        if arena.is_null() {
+        let Some((arena_ptr, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else {
             crate::options::_mi_error_message_fmt(
                 EINVAL,
                 format_args!(
@@ -3063,7 +3073,12 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
                 ),
             );
             return;
-        }
+        };
+        let arena = arena_ptr.as_ptr();
+        let slice_index = range.start_usize();
+        let slice_count = range.count_usize();
+        crate::mi_assert_internal!(size.is_multiple_of(MI_ARENA_SLICE_SIZE));
+        crate::mi_assert_internal!(slice_count * MI_ARENA_SLICE_SIZE == size);
         crate::mi_assert_internal!(
             slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
         );
@@ -3082,7 +3097,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
         }
 
         if !unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
-            unsafe { mi_arena_schedule_purge(arena, slice_index, slice_count) };
+            unsafe { mi_arena_schedule_purge(arena, range) };
         }
 
         let all_inuse = unsafe {
@@ -3117,7 +3132,9 @@ unsafe fn mi_arena_purge_delay() -> c_long {
 }
 
 #[inline(never)]
-unsafe fn mi_arena_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize) -> bool {
+unsafe fn mi_arena_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange) -> bool {
+    let slice_index = range.start_usize();
+    let slice_count = range.count_usize();
     crate::mi_assert_internal!(!unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned });
     crate::mi_assert_internal!(unsafe {
         mi_bbitmap_is_clearN(
@@ -3166,9 +3183,10 @@ unsafe fn mi_arena_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count
 #[allow(dead_code)]
 unsafe fn mi_arena_try_purge_range(
     arena: *mut mi_arena_t,
-    slice_index: usize,
-    slice_count: usize,
+    range: crate::core_types::SliceRange,
 ) -> bool {
+    let slice_index = range.start_usize();
+    let slice_count = range.count_usize();
     crate::mi_assert!(slice_count < MI_BCHUNK_BITS);
     if unsafe {
         mi_bbitmap_try_clearNC(
@@ -3177,7 +3195,7 @@ unsafe fn mi_arena_try_purge_range(
             slice_count,
         )
     } {
-        let decommitted = unsafe { mi_arena_purge(arena, slice_index, slice_count) };
+        let decommitted = unsafe { mi_arena_purge(arena, range) };
         crate::mi_assert_internal!(
             !decommitted
                 || unsafe {
@@ -3209,14 +3227,29 @@ unsafe extern "C" fn mi_arena_try_purge_visitor(
     arg: *mut c_void,
 ) -> bool {
     let vinfo = arg.cast::<mi_purge_visit_info_t>();
-    if unsafe { mi_arena_try_purge_range(arena, slice_index, slice_count) } {
+    let Some(range) = crate::core_types::SliceRange::new(slice_index, slice_count, unsafe {
+        crate::core_types::ArenaPtr::new_unchecked(arena)
+    })
+    .ok() else {
+        crate::mi_assert_internal!(false);
+        return true;
+    };
+    if unsafe { mi_arena_try_purge_range(arena, range) } {
         unsafe {
             (*vinfo).any_purged = true;
             (*vinfo).all_purged = true;
         }
     } else if slice_count > 1 {
         for i in 0..slice_count {
-            let purged = unsafe { mi_arena_try_purge_range(arena, slice_index + i, 1) };
+            let Some(single) = crate::core_types::SliceRange::new(slice_index + i, 1, unsafe {
+                crate::core_types::ArenaPtr::new_unchecked(arena)
+            })
+            .ok() else {
+                crate::mi_assert_internal!(false);
+                unsafe { (*vinfo).all_purged = false };
+                continue;
+            };
+            let purged = unsafe { mi_arena_try_purge_range(arena, single) };
             unsafe {
                 (*vinfo).any_purged = (*vinfo).any_purged || purged;
                 (*vinfo).all_purged = (*vinfo).all_purged && purged;
@@ -4191,6 +4224,7 @@ static MI_ARENAS_PAGE_ALLOC_KEEP: unsafe extern "C" fn(
     usize,
 ) -> *mut mi_page_t = _mi_arenas_page_alloc;
 #[used]
-static MI_ARENA_PURGE_KEEP: unsafe fn(*mut mi_arena_t, usize, usize) -> bool = mi_arena_purge;
+static MI_ARENA_PURGE_KEEP: unsafe fn(*mut mi_arena_t, crate::core_types::SliceRange) -> bool =
+    mi_arena_purge;
 #[used]
 static MI_DEBUG_SHOW_CHUNKS_KEEP: MiDebugShowChunksFunT = mi_debug_show_chunks;

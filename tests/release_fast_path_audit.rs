@@ -586,6 +586,7 @@ fn allocation_product_paths_use_typed_requests() {
         !alloc_rs.contains("mi_count_size_overflow")
             && !alloc_rs.contains("Temp compat bridge")
             && !aligned_rs.contains("mi_count_size_overflow")
+            && !aligned_rs.contains("_mi_theap_realloc_zero(")
             && !posix_rs.contains("mi_count_size_overflow")
             && alloc_rs.contains("unsafe fn mi_theap_calloc_req(")
             && alloc_rs.contains("unsafe fn mi_theap_mallocn_req(")
@@ -597,6 +598,11 @@ fn allocation_product_paths_use_typed_requests() {
             && alloc_rs.contains("crate::core_types::CallocRequest::new(newcount, size)")
             && alloc_rs.contains("crate::core_types::LayoutRequest::malloc(req.total().get())")
             && alloc_rs.contains("layout.zeroed() == crate::core_types::Zeroed::Yes")
+            && aligned_rs.contains("unsafe fn mi_theap_realloc_zero_aligned_at_req(")
+            && aligned_rs.contains(
+                "crate::core_types::LayoutRequest::aligned_at(newsize, alignment, offset, zeroed)"
+            )
+            && aligned_rs.contains("mi_theap_realloc_req(theap, p, layout)")
             && aligned_rs.contains("crate::core_types::CallocRequest::new(count, size)")
             && aligned_rs.contains("crate::core_types::CallocRequest::new(newcount, size)")
             && posix_rs.contains("crate::core_types::CallocRequest::new(count, size)")

@@ -12,7 +12,7 @@ use core::mem::size_of;
 
 use crate::alloc::{
     _mi_page_malloc_zero, _mi_theap_malloc_guarded, _mi_theap_malloc_zero,
-    _mi_theap_malloc_zero_ex, _mi_theap_realloc_zero,
+    _mi_theap_malloc_zero_ex, mi_theap_realloc_req,
 };
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
@@ -496,16 +496,35 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
     offset: usize,
     zero: bool,
 ) -> *mut c_void {
+    if alignment == 0 {
+        return core::ptr::null_mut();
+    }
+    let zeroed = if zero {
+        crate::core_types::Zeroed::Yes
+    } else {
+        crate::core_types::Zeroed::No
+    };
+    let Ok(layout) =
+        crate::core_types::LayoutRequest::aligned_at(newsize, alignment, offset, zeroed)
+    else {
+        return core::ptr::null_mut();
+    };
+    mi_theap_realloc_zero_aligned_at_req(theap, p, layout, offset)
+}
+
+unsafe fn mi_theap_realloc_zero_aligned_at_req(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    layout: crate::core_types::LayoutRequest,
+    offset: usize,
+) -> *mut c_void {
+    let newsize = layout.requested().get();
+    let alignment = layout.alignment().get();
+    let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
+
     crate::mi_assert!(alignment > 0);
     if alignment <= size_of::<usize>() && offset == 0 {
-        return _mi_theap_realloc_zero(
-            theap,
-            p,
-            newsize,
-            zero,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-        );
+        return mi_theap_realloc_req(theap, p, layout);
     }
     if p.is_null() {
         return mi_theap_malloc_zero_aligned_at(
@@ -550,16 +569,6 @@ pub unsafe fn mi_theap_realloc_zero_aligned(
     zero: bool,
 ) -> *mut c_void {
     crate::mi_assert!(alignment > 0);
-    if alignment <= size_of::<usize>() {
-        return _mi_theap_realloc_zero(
-            theap,
-            p,
-            newsize,
-            zero,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-        );
-    }
     mi_theap_realloc_zero_aligned_at(theap, p, newsize, alignment, 0, zero)
 }
 

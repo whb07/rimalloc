@@ -680,7 +680,7 @@ pub unsafe extern "C" fn mi_theap_realloc(
     }
 }
 
-unsafe fn mi_theap_realloc_req(
+pub(crate) unsafe fn mi_theap_realloc_req(
     theap: *mut mi_theap_t,
     p: *mut c_void,
     layout: crate::core_types::LayoutRequest,

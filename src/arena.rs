@@ -1243,7 +1243,7 @@ unsafe fn mi_forall_suitable_arenas<F>(
 #[allow(clippy::too_many_arguments)]
 unsafe fn mi_arenas_try_find_free(
     heap: *mut mi_heap_t,
-    slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
     alignment: usize,
     commit: bool,
     allow_large: bool,
@@ -1267,7 +1267,8 @@ unsafe fn mi_arenas_try_find_free(
             numa_node,
             allow_large,
             |arena| {
-                let p = mi_arena_try_alloc_at(arena, slice_count, commit, tseq, memid);
+                let p =
+                    mi_arena_try_alloc_at(arena, slice_count.get() as usize, commit, tseq, memid);
                 if !p.is_null() {
                     found = p;
                     false
@@ -1290,7 +1291,8 @@ unsafe fn mi_arenas_try_find_free(
             numa_node,
             allow_large,
             |arena| {
-                let p = mi_arena_try_alloc_at(arena, slice_count, commit, tseq, memid);
+                let p =
+                    mi_arena_try_alloc_at(arena, slice_count.get() as usize, commit, tseq, memid);
                 if !p.is_null() {
                     found = p;
                     false
@@ -1688,7 +1690,7 @@ unsafe fn mi_arena_initialize(
 #[allow(dead_code, clippy::too_many_arguments)]
 unsafe fn mi_arenas_try_alloc(
     heap: *mut mi_heap_t,
-    slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
     alignment: usize,
     commit: bool,
     allow_large: bool,
@@ -1698,7 +1700,7 @@ unsafe fn mi_arenas_try_alloc(
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
     crate::mi_assert!(alignment <= MI_ARENA_SLICE_ALIGN);
-    if slice_count.saturating_mul(MI_ARENA_SLICE_SIZE) > MI_ARENA_MAX_SIZE {
+    if (slice_count.get() as usize).saturating_mul(MI_ARENA_SLICE_SIZE) > MI_ARENA_MAX_SIZE {
         return ptr::null_mut();
     }
 
@@ -1737,7 +1739,7 @@ unsafe fn mi_arenas_try_alloc(
         let _ = unsafe {
             mi_arena_reserve(
                 subproc,
-                mi_size_of_slices(slice_count),
+                mi_size_of_slices(slice_count.get() as usize),
                 allow_large,
                 &mut arena_id,
             )
@@ -1943,6 +1945,9 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
         && align_offset == 0
     {
         let slice_count = mi_slice_count_of_size(size);
+        // `size >= MI_ARENA_MIN_OBJ_SIZE > 0` (guarded above), so the slice count is non-zero.
+        let slice_count = crate::core_types::SliceCount::from_usize(slice_count)
+            .expect("non-zero size yields a non-zero slice count");
         let p = unsafe {
             mi_arenas_try_alloc(
                 heap,
@@ -2268,7 +2273,10 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
         start = unsafe {
             mi_arenas_try_alloc(
                 heap,
-                slice_count,
+                // Callers derive `slice_count` via `mi_slice_count_of_size` of a positive size,
+                // so it is non-zero.
+                crate::core_types::SliceCount::from_usize(slice_count)
+                    .expect("non-zero size yields a non-zero slice count"),
                 page_alignment,
                 commit,
                 allow_large,

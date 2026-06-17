@@ -213,6 +213,11 @@ impl SliceIndex {
 pub(crate) struct SliceCount(pub(crate) NonZeroU32);
 
 impl SliceCount {
+    /// Construct from a `usize` count. Returns `None` if zero or too large for `u32`.
+    #[inline(always)]
+    pub(crate) fn from_usize(count: usize) -> Option<Self> {
+        NonZeroU32::new(u32::try_from(count).ok()?).map(Self)
+    }
     /// # Safety
     /// `count` must be non-zero.
     #[inline(always)]

@@ -31,6 +31,25 @@ impl RequestedSize {
             .map(PaddedSize)
             .ok_or(AllocSizeError::Overflow)
     }
+
+    /// Padded size without overflow checking (branchless in release).
+    ///
+    /// # Safety (invariant)
+    ///
+    /// The caller must guarantee `self.get() + MI_PADDING_SIZE` does not overflow
+    /// and is non-zero. On the small allocation path this holds because
+    /// `size <= MI_SMALL_SIZE_MAX` (≤ 1024) and `MI_PADDING_SIZE` is tiny; on
+    /// other paths where overflow is possible, use `checked_padded` instead.
+    /// A `debug_assert!` catches violations in debug builds.
+    #[inline(always)]
+    pub(crate) fn padded_unchecked(self) -> PaddedSize {
+        crate::mi_debug_assert!(
+            self.0.checked_add(crate::types::MI_PADDING_SIZE).is_some(),
+            "requested size + padding must not overflow"
+        );
+        // SAFETY: caller guarantees the sum is non-zero and does not overflow.
+        unsafe { PaddedSize::new_unchecked(self.0.wrapping_add(crate::types::MI_PADDING_SIZE)) }
+    }
 }
 
 /// Effective size after mimalloc zero-size normalization (never zero in Rust paths).

@@ -212,6 +212,22 @@ impl LayoutRequest {
     pub(crate) fn requested(self) -> RequestedSize {
         self.requested
     }
+    /// The padded size (`requested + MI_PADDING_SIZE`), computed once at
+    /// construction via `RequestedSize::checked_padded`. Lower layers that need
+    /// the padded size should read this instead of re-adding `MI_PADDING_SIZE`.
+    pub(crate) fn padded(self) -> PaddedSize {
+        self.padded
+    }
+    /// The effective size after mimalloc's zero-size normalization (never zero).
+    pub(crate) fn effective(self) -> EffectiveSize {
+        self.effective
+    }
+    pub(crate) fn zeroed(self) -> Zeroed {
+        self.zeroed
+    }
+    pub(crate) fn alignment(self) -> MaybeAlignment {
+        self.alignment
+    }
 }
 
 impl CallocRequest {

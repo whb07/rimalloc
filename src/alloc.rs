@@ -237,8 +237,14 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
         return _mi_theap_malloc_guarded(theap, size, zero);
     }
 
-    let page = _mi_theap_get_free_small_page(theap, size + MI_PADDING_SIZE);
-    let p = mi_page_malloc_zero(theap, page, size + MI_PADDING_SIZE, zero, usable);
+    // Compute the padded size once via the typed `PaddedSize` boundary so both
+    // the page lookup and the page-malloc use the same value, instead of
+    // open-coding `size + MI_PADDING_SIZE` twice. Uses the branchless unchecked
+    // path: `size <= MI_SMALL_SIZE_MAX` (≤ 1024, guarded upstream) and is
+    // normalized to non-zero above, so the sum cannot overflow or yield zero.
+    let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
+    let page = _mi_theap_get_free_small_page(theap, padded.get());
+    let p = mi_page_malloc_zero(theap, page, padded.get(), zero, usable);
     mi_track_malloc(p, size, zero);
 
     if cfg!(debug_assertions) && !p.is_null() && zero {
@@ -269,16 +275,21 @@ unsafe fn mi_theap_malloc_generic(
         return _mi_theap_malloc_guarded(theap, size, zero);
     }
 
-    let Some(padded_size) = size.checked_add(MI_PADDING_SIZE) else {
-        _mi_error_message_fmt(
-            EOVERFLOW,
-            format_args!("allocation request is too large ({size} bytes)\n"),
-        );
-        return ptr::null_mut();
+    // Compute the padded size via the typed `PaddedSize` boundary, matching the
+    // small path. On overflow (request too large), report and return null.
+    let padded = match crate::core_types::RequestedSize::new(size).checked_padded() {
+        Ok(p) => p,
+        Err(_) => {
+            _mi_error_message_fmt(
+                EOVERFLOW,
+                format_args!("allocation request is too large ({size} bytes)\n"),
+            );
+            return ptr::null_mut();
+        }
     };
     let p = _mi_malloc_generic(
         theap,
-        padded_size,
+        padded.get(),
         usize::from(zero) | huge_alignment,
         usable,
     );

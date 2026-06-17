@@ -32,24 +32,53 @@ pub(crate) struct EncodedPtr<T> {
 }
 
 impl EncodedPtr<crate::types::mi_block_t> {
-    /// Note: Actual encoding/decoding implementations will rely on `mi_ptr_decode` etc.,
-    /// but the API contract starts here.
-    pub(crate) fn decode_block(
+    /// Decode an encoded block-pointer word back to a `BlockPtr`.
+    ///
+    /// Returns `None` if the decoded value is the page's null sentinel. This is
+    /// the low-level encoding primitive; the block-level free-list wrappers
+    /// (`AvailableFreeList`/`LocalFreeList`) use `mi_block_next`/`mi_block_set_next`
+    /// which call this under the hood.
+    ///
+    /// # Safety
+    /// `null_context` must be the page's null sentinel base and `keys` the page's
+    /// encoding keys; mismatched keys yield a garbage pointer, not UB, but break
+    /// the free list.
+    #[inline]
+    pub(crate) unsafe fn decode_block(
         self,
-        _null_context: crate::core_types::PagePtr,
-        _keys: PageKeys,
+        null_context: crate::core_types::PagePtr,
+        keys: PageKeys,
     ) -> Option<BlockPtr> {
-        // Implementation omitted in structural phase.
-        unimplemented!()
+        let raw = unsafe {
+            crate::internal::mi_ptr_decode(null_context.as_ptr().cast(), self.word.0, &keys.0)
+        };
+        if raw.is_null() {
+            None
+        } else {
+            // SAFETY: `raw` is a non-null decoded block pointer.
+            Some(unsafe { BlockPtr::new_unchecked(raw.cast()) })
+        }
     }
 
-    pub(crate) fn encode_block(
-        _block: Option<BlockPtr>,
-        _null_context: crate::core_types::PagePtr,
-        _keys: PageKeys,
+    /// Encode a block pointer (or `None` for null) into an encoded word.
+    ///
+    /// # Safety
+    /// See `decode_block`; `null_context` and `keys` must belong to the page.
+    #[inline]
+    pub(crate) unsafe fn encode_block(
+        block: Option<BlockPtr>,
+        null_context: crate::core_types::PagePtr,
+        keys: PageKeys,
     ) -> Self {
-        // Implementation omitted in structural phase.
-        unimplemented!()
+        let p = block
+            .map(|b| b.as_ptr().cast::<core::ffi::c_void>())
+            .unwrap_or(core::ptr::null_mut());
+        let word =
+            unsafe { crate::internal::mi_ptr_encode(null_context.as_ptr().cast(), p, &keys.0) };
+        Self {
+            word: EncodedWord(word),
+            _ty: PhantomData,
+        }
     }
 }
 
@@ -161,13 +190,51 @@ pub(crate) enum ForceCollect {
 }
 
 impl LocalFreeList {
-    pub(crate) fn collect_into_available(
+    /// Move the local free list into the page's available (`free`) list.
+    ///
+    /// Mirrors step 2 of `_mi_page_free_collect` (the local→available move/splice).
+    /// Does NOT collect the remote thread-free list — that is
+    /// `RemoteFreeList::collect_into_local`. The caller is responsible for
+    /// writing the returned `(available, local)` back into `(*page).free` /
+    /// `(*page).local_free` and clearing `free_is_zero` if applicable.
+    ///
+    /// # Safety
+    /// `page` must be a valid `LocalPage` whose `local_free` field matches
+    /// `self` and whose `free` field matches `available`.
+    #[inline]
+    pub(crate) unsafe fn collect_into_available(
         self,
-        _page: LocalPage,
-        _available: AvailableFreeList,
-        _force: ForceCollect,
+        page: LocalPage,
+        available: AvailableFreeList,
+        force: ForceCollect,
     ) -> (AvailableFreeList, LocalFreeList) {
-        unimplemented!()
+        let raw_page = page.0.as_ptr();
+        // If local is empty, nothing to move.
+        if self.0.is_none() {
+            return (available, self);
+        }
+        match (available.0, force) {
+            // available is empty: move local -> available directly.
+            (None, _) => (AvailableFreeList(self.0), LocalFreeList(None)),
+            // available non-empty, not forced: leave unchanged (matches the
+            // `else` branch of `_mi_page_free_collect` which skips the merge).
+            (Some(_), ForceCollect::No) => (available, self),
+            // available non-empty, forced: splice local tail -> available head,
+            // then move local -> available.
+            (Some(avail_head), ForceCollect::Yes) => {
+                let local_head = self.0.unwrap().as_ptr();
+                let mut tail = local_head;
+                loop {
+                    let next = unsafe { mi_block_next(raw_page, tail) };
+                    if next.is_null() {
+                        break;
+                    }
+                    tail = next;
+                }
+                unsafe { mi_block_set_next(raw_page, tail, avail_head.as_ptr()) };
+                (AvailableFreeList(self.0), LocalFreeList(None))
+            }
+        }
     }
 }
 
@@ -177,12 +244,32 @@ impl LocalFreeList {
 pub(crate) struct RemoteFreeList(pub(crate) Option<BlockPtr>);
 
 impl RemoteFreeList {
-    pub(crate) fn collect_into_local(
+    /// Collect the remote (thread-free) list into the page's local free list.
+    ///
+    /// Delegates to `mi_page_thread_collect_to_local`, which splices `self`'s
+    /// head into `(*page).local_free`, runs the corruption/length checks, and
+    /// decrements `(*page).used`. Returns the updated local free list read back
+    /// from the page. The `_local` argument is ignored because the raw function
+    /// reads `(*page).local_free` directly; the caller must ensure it matches.
+    ///
+    /// Constrained to `OwnedAbandonedPage` (the reclaim path); regular-page
+    /// collection uses the raw `_mi_page_free_collect` entry point directly.
+    ///
+    /// # Safety
+    /// `page` must be a valid owned abandoned page; `self` must be the head
+    /// popped from `(*page).xthread_free` via the ownership CAS protocol.
+    #[inline]
+    pub(crate) unsafe fn collect_into_local(
         self,
-        _page: OwnedAbandonedPage,
+        page: OwnedAbandonedPage,
         _local: LocalFreeList,
     ) -> LocalFreeList {
-        unimplemented!()
+        let raw_page = page.0.as_ptr();
+        let head = self.0.map(|b| b.as_ptr()).unwrap_or(core::ptr::null_mut());
+        if !head.is_null() {
+            unsafe { crate::page::mi_page_thread_collect_to_local(raw_page, head) };
+        }
+        unsafe { LocalFreeList::from_raw((*raw_page).local_free) }
     }
 }
 

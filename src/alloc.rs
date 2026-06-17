@@ -673,7 +673,26 @@ pub unsafe extern "C" fn mi_theap_realloc(
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    _mi_theap_realloc_zero(theap, p, newsize, false, ptr::null_mut(), ptr::null_mut())
+    if let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) {
+        mi_theap_realloc_req(theap, p, layout)
+    } else {
+        ptr::null_mut()
+    }
+}
+
+unsafe fn mi_theap_realloc_req(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    layout: crate::core_types::LayoutRequest,
+) -> *mut c_void {
+    _mi_theap_realloc_zero(
+        theap,
+        p,
+        layout.requested().get(),
+        layout.zeroed() == crate::core_types::Zeroed::Yes,
+        ptr::null_mut(),
+        ptr::null_mut(),
+    )
 }
 
 unsafe fn mi_theap_reallocn(
@@ -694,11 +713,19 @@ unsafe fn mi_theap_reallocn_req(
     p: *mut c_void,
     req: crate::core_types::CallocRequest,
 ) -> *mut c_void {
-    mi_theap_realloc(theap, p, req.total().get())
+    if let Ok(layout) = crate::core_types::LayoutRequest::malloc(req.total().get()) {
+        mi_theap_realloc_req(theap, p, layout)
+    } else {
+        ptr::null_mut()
+    }
 }
 
-unsafe fn mi_theap_reallocf(theap: *mut mi_theap_t, p: *mut c_void, newsize: usize) -> *mut c_void {
-    let newp = mi_theap_realloc(theap, p, newsize);
+unsafe fn mi_theap_reallocf_req(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    layout: crate::core_types::LayoutRequest,
+) -> *mut c_void {
+    let newp = mi_theap_realloc_req(theap, p, layout);
     if newp.is_null() && !p.is_null() {
         mi_free(p);
     }
@@ -706,7 +733,11 @@ unsafe fn mi_theap_reallocf(theap: *mut mi_theap_t, p: *mut c_void, newsize: usi
 }
 
 unsafe fn mi_theap_rezalloc(theap: *mut mi_theap_t, p: *mut c_void, newsize: usize) -> *mut c_void {
-    _mi_theap_realloc_zero(theap, p, newsize, true, ptr::null_mut(), ptr::null_mut())
+    if let Ok(layout) = crate::core_types::LayoutRequest::zalloc(newsize) {
+        mi_theap_realloc_req(theap, p, layout)
+    } else {
+        ptr::null_mut()
+    }
 }
 
 unsafe fn mi_theap_recalloc(
@@ -727,13 +758,13 @@ unsafe fn mi_theap_recalloc_req(
     p: *mut c_void,
     req: crate::core_types::CallocRequest,
 ) -> *mut c_void {
-    mi_theap_rezalloc(theap, p, req.layout().requested().get())
+    mi_theap_realloc_req(theap, p, req.layout())
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) {
-        mi_theap_realloc(_mi_theap_default(), p, layout.requested().get()) // Temp compat bridge
+        mi_theap_realloc_req(_mi_theap_default(), p, layout)
     } else {
         core::ptr::null_mut()
     }
@@ -768,7 +799,7 @@ pub unsafe extern "C" fn mi_urealloc(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reallocf(p: *mut c_void, newsize: usize) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) {
-        mi_theap_reallocf(_mi_theap_default(), p, layout.requested().get()) // Temp compat bridge
+        mi_theap_reallocf_req(_mi_theap_default(), p, layout)
     } else {
         if !p.is_null() {
             crate::free::mi_free(p);
@@ -780,7 +811,7 @@ pub unsafe extern "C" fn mi_reallocf(p: *mut c_void, newsize: usize) -> *mut c_v
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_rezalloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::zalloc(newsize) {
-        mi_theap_rezalloc(_mi_theap_default(), p, layout.requested().get()) // Temp compat bridge
+        mi_theap_realloc_req(_mi_theap_default(), p, layout)
     } else {
         core::ptr::null_mut()
     }
@@ -798,7 +829,7 @@ pub unsafe extern "C" fn mi_heap_realloc(
     newsize: usize,
 ) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) {
-        mi_theap_realloc(_mi_heap_theap(heap), p, layout.requested().get()) // Temp compat bridge
+        mi_theap_realloc_req(_mi_heap_theap(heap), p, layout)
     } else {
         core::ptr::null_mut()
     }
@@ -821,7 +852,7 @@ pub unsafe extern "C" fn mi_heap_reallocf(
     newsize: usize,
 ) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) {
-        mi_theap_reallocf(_mi_heap_theap(heap), p, layout.requested().get()) // Temp compat bridge
+        mi_theap_reallocf_req(_mi_heap_theap(heap), p, layout)
     } else {
         if !p.is_null() {
             crate::free::mi_free(p);

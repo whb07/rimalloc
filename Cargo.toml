@@ -12,6 +12,9 @@ track-valgrind = []
 track-asan = []
 secure = []
 guarded = []
+std = []
+bench = ["std"]
+compare = []
 
 [profile.dev]
 panic = "abort"
@@ -22,3 +25,13 @@ lto = "fat"
 codegen-units = 1
 
 [dependencies]
+
+[dev-dependencies]
+criterion = "0.5"
+rand = "0.8"
+
+[[bench]]
+name = "workloads"
+path = "benches/workloads.rs"
+harness = false
+required-features = ["bench"]

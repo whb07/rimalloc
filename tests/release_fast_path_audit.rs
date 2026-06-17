@@ -613,6 +613,32 @@ fn allocation_product_paths_use_typed_requests() {
 }
 
 #[test]
+fn generic_allocation_flags_use_typed_boundary() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
+    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
+    let layout_rs =
+        fs::read_to_string(root.join("src/core_types/layout.rs")).expect("read layout.rs");
+
+    assert!(
+        !alloc_rs.contains("usize::from(zero) | huge_alignment")
+            && !page_rs.contains("zero_huge_alignment & !1")
+            && !page_rs.contains("zero_huge_alignment & 1")
+            && alloc_rs.contains("crate::core_types::MallocGenericFlags::new(")
+            && alloc_rs.contains("crate::core_types::MaybeHugeAlignment::new(huge_alignment)")
+            && alloc_rs.contains("crate::core_types::MaybeHugeAlignment::none()")
+            && page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(")
+            && page_rs
+                .contains("crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment)")
+            && page_rs.contains("flags.zeroed() == crate::core_types::Zeroed::Yes")
+            && page_rs.contains("flags.huge_alignment().get()")
+            && layout_rs.contains("pub(crate) struct MaybeHugeAlignment(usize);")
+            && layout_rs.contains("pub(crate) struct MallocGenericFlags(usize);"),
+        "generic allocation should use MallocGenericFlags instead of manually packing zero and huge alignment bits"
+    );
+}
+
+#[test]
 fn aligned_os_hints_are_randomized_like_c_release_builds() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");

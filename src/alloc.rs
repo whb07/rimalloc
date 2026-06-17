@@ -23,7 +23,7 @@ use crate::internal::{
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
-use crate::page::{_mi_bin, _mi_malloc_generic, MI_MAX_ALLOC_SIZE, mi_good_size};
+use crate::page::{_mi_bin, _mi_malloc_generic_typed, MI_MAX_ALLOC_SIZE, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{
     MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
@@ -116,7 +116,19 @@ unsafe fn mi_page_malloc_zero(
 
     let block = (*page).free;
     if mi_unlikely(block.is_null()) {
-        return _mi_malloc_generic(theap, size, usize::from(zero), usable);
+        return _mi_malloc_generic_typed(
+            theap,
+            size,
+            crate::core_types::MallocGenericFlags::new(
+                if zero {
+                    crate::core_types::Zeroed::Yes
+                } else {
+                    crate::core_types::Zeroed::No
+                },
+                crate::core_types::MaybeHugeAlignment::none(),
+            ),
+            usable,
+        );
     }
     crate::mi_assert_internal!(!block.is_null() && _mi_ptr_page(block.cast()) == page);
     if !usable.is_null() {
@@ -287,12 +299,15 @@ unsafe fn mi_theap_malloc_generic(
             return ptr::null_mut();
         }
     };
-    let p = _mi_malloc_generic(
-        theap,
-        padded.get(),
-        usize::from(zero) | huge_alignment,
-        usable,
+    let flags = crate::core_types::MallocGenericFlags::new(
+        if zero {
+            crate::core_types::Zeroed::Yes
+        } else {
+            crate::core_types::Zeroed::No
+        },
+        crate::core_types::MaybeHugeAlignment::new(huge_alignment),
     );
+    let p = _mi_malloc_generic_typed(theap, padded.get(), flags, usable);
     mi_track_malloc(p, size, zero);
     if cfg!(debug_assertions) && !p.is_null() && zero {
         crate::mi_assert_expensive!(crate::internal::mi_mem_is_zero(p, size));
@@ -1238,7 +1253,16 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
         MI_MAX_ALIGN_SIZE,
     );
     let req_size = _mi_align_up(bsize + os_page_size, os_page_size);
-    let block = _mi_malloc_generic(theap, req_size, 0, ptr::null_mut()).cast::<mi_block_t>();
+    let block = _mi_malloc_generic_typed(
+        theap,
+        req_size,
+        crate::core_types::MallocGenericFlags::new(
+            crate::core_types::Zeroed::No,
+            crate::core_types::MaybeHugeAlignment::none(),
+        ),
+        ptr::null_mut(),
+    )
+    .cast::<mi_block_t>();
     if block.is_null() {
         return ptr::null_mut();
     }

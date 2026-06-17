@@ -1613,13 +1613,27 @@ unsafe fn mi_find_page(
 }
 
 pub(crate) unsafe extern "C" fn _mi_malloc_generic(
-    mut theap: *mut mi_theap_t,
+    theap: *mut mi_theap_t,
     size: usize,
     zero_huge_alignment: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    let zero = (zero_huge_alignment & 1) != 0;
-    let huge_alignment = zero_huge_alignment & !1;
+    _mi_malloc_generic_typed(
+        theap,
+        size,
+        crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment),
+        usable,
+    )
+}
+
+pub(crate) unsafe fn _mi_malloc_generic_typed(
+    mut theap: *mut mi_theap_t,
+    size: usize,
+    flags: crate::core_types::MallocGenericFlags,
+    usable: *mut usize,
+) -> *mut c_void {
+    let zero = flags.zeroed() == crate::core_types::Zeroed::Yes;
+    let huge_alignment = flags.huge_alignment().get();
 
     if !mi_theap_is_initialized(theap) {
         if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {

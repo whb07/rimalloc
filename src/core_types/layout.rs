@@ -12,11 +12,32 @@ pub(crate) enum Zeroed {
     Yes,
 }
 
-/// Represents an alignment request that might be huge.
+/// Represents the optional huge-page alignment payload packed into the generic
+/// allocation flag word. The raw value must keep bit 0 clear; bit 0 is reserved
+/// for the zeroing flag.
+#[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum MaybeHugeAlignment {
-    Normal,
-    Huge,
+pub(crate) struct MaybeHugeAlignment(usize);
+
+impl MaybeHugeAlignment {
+    #[inline(always)]
+    pub(crate) const fn none() -> Self {
+        Self(0)
+    }
+
+    #[inline(always)]
+    pub(crate) fn new(alignment: usize) -> Self {
+        crate::mi_debug_assert!(
+            (alignment & MallocGenericFlags::ZERO_BIT) == 0,
+            "huge alignment must not collide with the zeroing flag"
+        );
+        Self(alignment)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn get(self) -> usize {
+        self.0
+    }
 }
 
 /// Errors when creating layout structures.
@@ -181,30 +202,44 @@ impl ReallocRequest {
 pub(crate) struct MallocGenericFlags(usize);
 
 impl MallocGenericFlags {
+    const ZERO_BIT: usize = 1;
+
+    #[inline(always)]
     pub(crate) fn new(zeroed: Zeroed, huge_alignment: MaybeHugeAlignment) -> Self {
-        let z = if zeroed == Zeroed::Yes { 1 } else { 0 };
-        let a = if huge_alignment == MaybeHugeAlignment::Huge {
-            2
+        let z = if zeroed == Zeroed::Yes {
+            Self::ZERO_BIT
         } else {
             0
         };
-        Self(z | a)
+        crate::mi_debug_assert!(
+            (huge_alignment.get() & Self::ZERO_BIT) == 0,
+            "huge alignment must not collide with the zeroing flag"
+        );
+        Self(z | huge_alignment.get())
     }
 
+    #[inline(always)]
+    pub(crate) fn from_raw(raw: usize) -> Self {
+        Self(raw)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn raw(self) -> usize {
+        self.0
+    }
+
+    #[inline(always)]
     pub(crate) fn zeroed(self) -> Zeroed {
-        if (self.0 & 1) != 0 {
+        if (self.0 & Self::ZERO_BIT) != 0 {
             Zeroed::Yes
         } else {
             Zeroed::No
         }
     }
 
+    #[inline(always)]
     pub(crate) fn huge_alignment(self) -> MaybeHugeAlignment {
-        if (self.0 & 2) != 0 {
-            MaybeHugeAlignment::Huge
-        } else {
-            MaybeHugeAlignment::Normal
-        }
+        MaybeHugeAlignment(self.0 & !Self::ZERO_BIT)
     }
 }
 impl LayoutRequest {

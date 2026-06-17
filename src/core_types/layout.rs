@@ -239,4 +239,7 @@ impl CallocRequest {
     pub(crate) fn total(self) -> RequestedSize {
         self.total
     }
+    pub(crate) fn layout(self) -> LayoutRequest {
+        self.layout
+    }
 }

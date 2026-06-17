@@ -572,6 +572,27 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
 }
 
 #[test]
+fn allocation_product_paths_use_typed_requests() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
+    let layout_rs =
+        fs::read_to_string(root.join("src/core_types/layout.rs")).expect("read layout.rs");
+
+    assert!(
+        !alloc_rs.contains("mi_count_size_overflow")
+            && alloc_rs.contains("unsafe fn mi_theap_calloc_req(")
+            && alloc_rs.contains("unsafe fn mi_theap_mallocn_req(")
+            && alloc_rs.contains("unsafe fn mi_theap_reallocn_req(")
+            && alloc_rs.contains("unsafe fn mi_theap_recalloc_req(")
+            && alloc_rs.contains("crate::core_types::CallocRequest::new(count, size)")
+            && alloc_rs.contains("crate::core_types::CallocRequest::new(newcount, size)")
+            && layout_rs.contains("pub(crate) fn layout(self) -> LayoutRequest")
+            && layout_rs.contains("let total_size = count.checked_mul(size)"),
+        "calloc/mallocn/recalloc product-size paths should use CallocRequest as the checked multiplication boundary"
+    );
+}
+
+#[test]
 fn aligned_os_hints_are_randomized_like_c_release_builds() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");

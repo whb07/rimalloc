@@ -16,8 +16,8 @@ use crate::internal::{
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size, _mi_ptr_page,
     _mi_safe_ptr_page, _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page, _mi_theap_heap,
     _mi_thread_id, MI_BLOCK_TAG_GUARDED, MI_DEBUG, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_PADDING,
-    MI_PADDING_CHECK, mi_count_size_overflow, mi_likely, mi_page_block_size, mi_page_heap,
-    mi_page_keys, mi_page_set_has_interior_pointers, mi_page_slice_start, mi_page_start,
+    MI_PADDING_CHECK, mi_likely, mi_page_block_size, mi_page_heap, mi_page_keys,
+    mi_page_set_has_interior_pointers, mi_page_slice_start, mi_page_start,
     mi_page_usable_block_size, mi_ptr_encode_canary, mi_theap_is_initialized,
     mi_theap_malloc_use_guarded, mi_unlikely,
 };
@@ -449,21 +449,24 @@ pub unsafe extern "C" fn mi_theap_calloc(
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_count_size_overflow(count, size, &mut total) {
-        return ptr::null_mut();
+    if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        mi_theap_calloc_req(theap, req)
+    } else {
+        ptr::null_mut()
     }
-    mi_theap_zalloc(theap, total)
+}
+
+unsafe fn mi_theap_calloc_req(
+    theap: *mut mi_theap_t,
+    req: crate::core_types::CallocRequest,
+) -> *mut c_void {
+    mi_theap_zalloc(theap, req.layout().requested().get())
 }
 
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
-        mi_theap_calloc(
-            _mi_theap_default(),
-            req.count().get(),
-            req.item_size().get(),
-        ) // Temp compat bridge
+        mi_theap_calloc_req(_mi_theap_default(), req)
     } else {
         core::ptr::null_mut()
     }
@@ -476,7 +479,7 @@ pub unsafe extern "C" fn mi_heap_calloc(
     size: usize,
 ) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
-        mi_heap_zalloc(heap, req.total().get()) // Temp compat bridge
+        mi_theap_calloc_req(_mi_heap_theap(heap), req)
     } else {
         core::ptr::null_mut()
     }
@@ -513,11 +516,11 @@ pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_v
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_ucalloc(count: usize, size: usize, usable: *mut usize) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_count_size_overflow(count, size, &mut total) {
-        return ptr::null_mut();
+    if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        mi_uzalloc(req.layout().requested().get(), usable)
+    } else {
+        ptr::null_mut()
     }
-    mi_uzalloc(total, usable)
 }
 
 #[unsafe(no_mangle)]
@@ -526,21 +529,24 @@ pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
 }
 
 unsafe fn mi_theap_mallocn(theap: *mut mi_theap_t, count: usize, size: usize) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_count_size_overflow(count, size, &mut total) {
-        return ptr::null_mut();
+    if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        mi_theap_mallocn_req(theap, req)
+    } else {
+        ptr::null_mut()
     }
-    mi_theap_malloc(theap, total)
+}
+
+unsafe fn mi_theap_mallocn_req(
+    theap: *mut mi_theap_t,
+    req: crate::core_types::CallocRequest,
+) -> *mut c_void {
+    mi_theap_malloc(theap, req.total().get())
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
-        mi_theap_mallocn(
-            _mi_theap_default(),
-            req.count().get(),
-            req.item_size().get(),
-        ) // Temp compat bridge
+        mi_theap_mallocn_req(_mi_theap_default(), req)
     } else {
         core::ptr::null_mut()
     }
@@ -553,7 +559,7 @@ pub unsafe extern "C" fn mi_heap_mallocn(
     size: usize,
 ) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
-        mi_heap_malloc(heap, req.total().get()) // Temp compat bridge
+        mi_theap_mallocn_req(_mi_heap_theap(heap), req)
     } else {
         core::ptr::null_mut()
     }
@@ -676,11 +682,19 @@ unsafe fn mi_theap_reallocn(
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_count_size_overflow(count, size, &mut total) {
-        return ptr::null_mut();
+    if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        mi_theap_reallocn_req(theap, p, req)
+    } else {
+        ptr::null_mut()
     }
-    mi_theap_realloc(theap, p, total)
+}
+
+unsafe fn mi_theap_reallocn_req(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    req: crate::core_types::CallocRequest,
+) -> *mut c_void {
+    mi_theap_realloc(theap, p, req.total().get())
 }
 
 unsafe fn mi_theap_reallocf(theap: *mut mi_theap_t, p: *mut c_void, newsize: usize) -> *mut c_void {
@@ -701,11 +715,19 @@ unsafe fn mi_theap_recalloc(
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_count_size_overflow(count, size, &mut total) {
-        return ptr::null_mut();
+    if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        mi_theap_recalloc_req(theap, p, req)
+    } else {
+        ptr::null_mut()
     }
-    mi_theap_rezalloc(theap, p, total)
+}
+
+unsafe fn mi_theap_recalloc_req(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    req: crate::core_types::CallocRequest,
+) -> *mut c_void {
+    mi_theap_rezalloc(theap, p, req.layout().requested().get())
 }
 
 #[unsafe(no_mangle)]
@@ -720,12 +742,7 @@ pub unsafe extern "C" fn mi_realloc(p: *mut c_void, newsize: usize) -> *mut c_vo
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reallocn(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
-        mi_theap_reallocn(
-            _mi_theap_default(),
-            p,
-            req.count().get(),
-            req.item_size().get(),
-        ) // Temp compat bridge
+        mi_theap_reallocn_req(_mi_theap_default(), p, req)
     } else {
         core::ptr::null_mut()
     }
@@ -1025,12 +1042,12 @@ pub unsafe extern "C" fn mi_heap_alloc_new(heap: *mut mi_heap_t, size: usize) ->
 }
 
 unsafe fn mi_theap_alloc_new_n(theap: *mut mi_theap_t, count: usize, size: usize) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_unlikely(mi_count_size_overflow(count, size, &mut total)) {
-        mi_try_new_handler(false);
-        ptr::null_mut()
-    } else {
-        mi_theap_alloc_new(theap, total)
+    match crate::core_types::CallocRequest::new(count, size) {
+        Ok(req) => mi_theap_alloc_new(theap, req.total().get()),
+        Err(_) => {
+            mi_try_new_handler(false);
+            ptr::null_mut()
+        }
     }
 }
 
@@ -1097,12 +1114,12 @@ pub unsafe extern "C" fn mi_new_reallocn(
     newcount: usize,
     size: usize,
 ) -> *mut c_void {
-    let mut total = 0usize;
-    if mi_unlikely(mi_count_size_overflow(newcount, size, &mut total)) {
-        mi_try_new_handler(false);
-        ptr::null_mut()
-    } else {
-        mi_new_realloc(p, total)
+    match crate::core_types::CallocRequest::new(newcount, size) {
+        Ok(req) => mi_new_realloc(p, req.total().get()),
+        Err(_) => {
+            mi_try_new_handler(false);
+            ptr::null_mut()
+        }
     }
 }
 

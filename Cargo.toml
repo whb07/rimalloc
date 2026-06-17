@@ -35,3 +35,9 @@ name = "workloads"
 path = "benches/workloads.rs"
 harness = false
 required-features = ["bench"]
+
+[[bench]]
+name = "hotpath"
+path = "benches/hotpath.rs"
+harness = false
+required-features = ["bench"]

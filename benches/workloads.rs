@@ -1,3 +1,6 @@
+// The GlobalAlloc shim calls unsafe extern "C" fns; bodies are unsafe by intent.
+#![allow(unsafe_op_in_unsafe_fn)]
+
 //! Allocator workload benchmarks for mechanical_mimalloc.
 //!
 //! Mirrors the workload shape from yet-another-mimalloc-rs, but drives the

@@ -4,7 +4,6 @@ use crate::core_types::{
     BlockPtr, EffectiveSize, MaybeAlignment, PaddedSize, PagePtr, RequestedSize, UsableSize,
     UserPtr,
 };
-use crate::types::MI_PADDING_SIZE;
 
 /// Represents an explicit zeroing request.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

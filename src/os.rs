@@ -669,7 +669,7 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
     if !mi_memkind_is_os(memid.memkind) {
         return;
     }
-    let (mut csize, mut base) = match crate::core_types::MemId::view(memid) {
+    let (mut csize, base) = match crate::core_types::MemId::view(memid) {
         crate::core_types::MemIdView::Os(os) => (
             os.size.0,
             os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()),

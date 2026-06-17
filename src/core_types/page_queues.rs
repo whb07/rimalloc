@@ -9,18 +9,22 @@ pub(crate) enum HugeQueue {}
 pub(crate) enum FullQueue {}
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub(crate) struct PageQueue<K> {
     pub(crate) ptr: PageQueuePtr,
     _kind: PhantomData<K>,
 }
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub(crate) struct NormalPageQueue(pub(crate) PageQueuePtr);
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub(crate) struct HugePageQueue(pub(crate) PageQueuePtr);
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub(crate) struct FullPageQueue(pub(crate) PageQueuePtr);
 
 /// Witness that a page is currently inside a specific queue.
@@ -38,26 +42,26 @@ pub(crate) struct UnqueuedPage<S> {
 
 #[inline]
 pub(crate) fn move_to_full_queue(
-    _page: ActivePage,
+    page: ActivePage,
     _from: NormalPageQueue,
     _to: FullPageQueue,
 ) -> FullPage {
-    unimplemented!()
+    FullPage(page.0)
 }
 
 #[inline]
 pub(crate) fn unfull_page(
-    _page: FullPage,
+    page: FullPage,
     _from: FullPageQueue,
     _to: NormalPageQueue,
 ) -> ActivePage {
-    unimplemented!()
+    ActivePage(page.0)
 }
 
 #[inline]
 pub(crate) fn free_all_free_page_to_arena(
-    _page: crate::core_types::page_states::AllFreePage<Active>,
+    page: crate::core_types::page_states::AllFreePage<Active>,
     _owner: crate::core_types::page_states::ThreadHeapLocal,
 ) -> crate::core_types::page_states::DestroyedPage {
-    unimplemented!()
+    crate::core_types::page_states::DestroyedPage(page.page.ptr)
 }

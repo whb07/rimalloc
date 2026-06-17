@@ -833,7 +833,9 @@ pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
 }
 
 #[inline]
-pub unsafe fn mi_page_usable_block_size(page: *const mi_page_t) -> crate::core_types::UsableSize {
+pub(crate) unsafe fn mi_page_usable_block_size(
+    page: *const mi_page_t,
+) -> crate::core_types::UsableSize {
     // SAFETY: mi_page_block_size is never zero for an initialized page.
     let block_size = crate::core_types::BlockSize::new_unchecked(mi_page_block_size(page));
     block_size.usable()

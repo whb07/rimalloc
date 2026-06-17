@@ -5,9 +5,7 @@ use core::marker::PhantomData;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
-use crate::core_types::{
-    BlockPtr, PageFlags, PageOwnerId, PageThreadId, RemoteFreeList, ThreadFreeWord,
-};
+use crate::core_types::{BlockPtr, PageFlags, PageOwnerId, PageThreadId, ThreadFreeWord};
 
 pub(crate) type MemoryOrder = Ordering;
 

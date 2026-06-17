@@ -99,10 +99,13 @@ impl MemId<AnyMem> {
             }),
             MemKind::Meta => {
                 let m = unsafe { raw.mem.meta };
+                let Some(block_count) = core::num::NonZeroU32::new(m.block_count) else {
+                    return MemIdView::Unknown(code);
+                };
                 MemIdView::Meta(MetaMemId {
                     meta_page: unsafe { NonNull::new_unchecked(m.meta_page) },
                     block_index: BlockIndex(m.block_index),
-                    block_count: core::num::NonZeroU32::new(m.block_count).unwrap(),
+                    block_count,
                 })
             }
             MemKind::Os | MemKind::OsHuge | MemKind::OsRemap => {

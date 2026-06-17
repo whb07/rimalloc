@@ -2,11 +2,11 @@
 
 use core::marker::PhantomData;
 
+use crate::core_types::BlockPtr;
 use crate::core_types::page_states::{AvailablePage, LocalPage, OwnedAbandonedPage};
 use crate::core_types::validation_extra::{AllocatedBlock, FreeBlock};
-use crate::core_types::{BlockPtr, PagePtr, ThreadFreeOwner, ThreadFreeWord};
 use crate::internal::{mi_block_next, mi_block_set_next};
-use crate::types::{mi_block_t, mi_page_t};
+use crate::types::mi_block_t;
 
 /// Keys used to encode and decode free-list pointers.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -49,9 +49,8 @@ impl EncodedPtr<crate::types::mi_block_t> {
         null_context: crate::core_types::PagePtr,
         keys: PageKeys,
     ) -> Option<BlockPtr> {
-        let raw = unsafe {
-            crate::internal::mi_ptr_decode(null_context.as_ptr().cast(), self.word.0, &keys.0)
-        };
+        let raw =
+            crate::internal::mi_ptr_decode(null_context.as_ptr().cast(), self.word.0, &keys.0);
         if raw.is_null() {
             None
         } else {
@@ -73,8 +72,7 @@ impl EncodedPtr<crate::types::mi_block_t> {
         let p = block
             .map(|b| b.as_ptr().cast::<core::ffi::c_void>())
             .unwrap_or(core::ptr::null_mut());
-        let word =
-            unsafe { crate::internal::mi_ptr_encode(null_context.as_ptr().cast(), p, &keys.0) };
+        let word = crate::internal::mi_ptr_encode(null_context.as_ptr().cast(), p, &keys.0);
         Self {
             word: EncodedWord(word),
             _ty: PhantomData,
@@ -226,7 +224,9 @@ impl LocalFreeList {
             // available non-empty, forced: splice local tail -> available head,
             // then move local -> available.
             (Some(avail_head), ForceCollect::Yes) => {
-                let local_head = self.0.unwrap().as_ptr();
+                let Some(local_head) = self.0.map(|head| head.as_ptr()) else {
+                    return (available, self);
+                };
                 let mut tail = local_head;
                 loop {
                     let next = unsafe { mi_block_next(raw_page, tail) };

@@ -124,6 +124,11 @@ pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
     unsafe { (*ptr::addr_of!(_mi_theap_empty).cast::<mi_theap_t>()).pages[bin].block_size }
 }
 
+#[inline(always)]
+fn mi_good_size_small(size: usize) -> usize {
+    _mi_bin_size(mi_bin(size + MI_PADDING_SIZE))
+}
+
 pub(crate) fn mi_good_size_typed(
     size: crate::core_types::RequestedSize,
 ) -> crate::core_types::GoodSize {
@@ -132,14 +137,15 @@ pub(crate) fn mi_good_size_typed(
         // `sz <= MI_LARGE_MAX_OBJ_SIZE` is far below `usize::MAX`, so padding
         // cannot overflow; `checked_padded` makes that explicit rather than open-
         // coding `sz + MI_PADDING_SIZE`.
-        let padded = size
-            .checked_padded()
-            .expect("padding fits for sizes <= MI_LARGE_MAX_OBJ_SIZE");
-        crate::core_types::GoodSize::new(_mi_bin_size(mi_bin(padded.get())))
+        let Ok(padded) = size.checked_padded() else {
+            return crate::core_types::GoodSize::new(sz);
+        };
+        let _ = padded;
+        crate::core_types::GoodSize::new(mi_good_size_small(sz))
     } else if sz <= MI_MAX_ALLOC_SIZE {
-        let padded = size
-            .checked_padded()
-            .expect("padding fits for sizes <= MI_MAX_ALLOC_SIZE");
+        let Ok(padded) = size.checked_padded() else {
+            return crate::core_types::GoodSize::new(sz);
+        };
         crate::core_types::GoodSize::new(align_up(padded.get(), crate::internal::MI_OS_PAGE_SIZE))
     } else {
         crate::core_types::GoodSize::new(sz)
@@ -443,7 +449,11 @@ pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
     mi_page_set_in_full(page, false);
     let pq = mi_theap_page_queue_of(theap, page);
     mi_page_set_in_full(page, true);
-    mi_page_queue_enqueue_from_full(pq, pqfull, page);
+    mi_page_unfull_typed(
+        crate::core_types::FullPage(crate::core_types::PagePtr::new_unchecked(page)),
+        crate::core_types::FullPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pqfull)),
+        crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pq)),
+    );
 }
 
 #[allow(dead_code)]
@@ -458,9 +468,33 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
         _mi_page_abandon(page, pq);
     } else if !mi_page_is_in_full(page) {
         let full = ptr::addr_of_mut!((*theap).pages[MI_BIN_FULL]);
-        mi_page_queue_enqueue_from(full, pq, page);
+        mi_page_move_to_full_typed(
+            crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
+            crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pq)),
+            crate::core_types::FullPageQueue(crate::core_types::PageQueuePtr::new_unchecked(full)),
+        );
         _mi_page_free_collect(page, false);
     }
+}
+
+#[inline]
+unsafe fn mi_page_move_to_full_typed(
+    page: crate::core_types::ActivePage,
+    from: crate::core_types::NormalPageQueue,
+    to: crate::core_types::FullPageQueue,
+) -> crate::core_types::FullPage {
+    mi_page_queue_enqueue_from(to.0.as_ptr(), from.0.as_ptr(), page.0.as_ptr());
+    crate::core_types::move_to_full_queue(page, from, to)
+}
+
+#[inline]
+unsafe fn mi_page_unfull_typed(
+    page: crate::core_types::FullPage,
+    from: crate::core_types::FullPageQueue,
+    to: crate::core_types::NormalPageQueue,
+) -> crate::core_types::ActivePage {
+    mi_page_queue_enqueue_from_full(to.0.as_ptr(), from.0.as_ptr(), page.0.as_ptr());
+    crate::core_types::unfull_page(page, from, to)
 }
 
 #[inline(never)]

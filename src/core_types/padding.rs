@@ -2,8 +2,6 @@
 
 use core::ptr::NonNull;
 
-use crate::core_types::{PageKeys, UsableSize};
-
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct PaddingCanary(pub(crate) u32);

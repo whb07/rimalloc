@@ -16,9 +16,9 @@ use crate::internal::{
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size, _mi_ptr_page,
     _mi_safe_ptr_page, _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page, _mi_theap_heap,
     _mi_thread_id, MI_BLOCK_TAG_GUARDED, MI_DEBUG, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_PADDING,
-    MI_PADDING_CHECK, mi_block_next, mi_count_size_overflow, mi_likely, mi_page_block_size,
-    mi_page_heap, mi_page_keys, mi_page_set_has_interior_pointers, mi_page_slice_start,
-    mi_page_start, mi_page_usable_block_size, mi_ptr_encode_canary, mi_theap_is_initialized,
+    MI_PADDING_CHECK, mi_count_size_overflow, mi_likely, mi_page_block_size, mi_page_heap,
+    mi_page_keys, mi_page_set_has_interior_pointers, mi_page_slice_start, mi_page_start,
+    mi_page_usable_block_size, mi_ptr_encode_canary, mi_theap_is_initialized,
     mi_theap_malloc_use_guarded, mi_unlikely,
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
@@ -395,11 +395,7 @@ pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) ->
 
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
-    if let Ok(layout) = crate::core_types::LayoutRequest::malloc(size) {
-        mi_theap_malloc(_mi_theap_default(), layout.requested().get())
-    } else {
-        core::ptr::null_mut()
-    }
+    mi_theap_malloc(_mi_theap_default(), size)
 }
 
 #[unsafe(no_mangle)]
@@ -979,7 +975,7 @@ pub(crate) unsafe extern "C" fn mi_theap_try_new(
     size: usize,
     nothrow: bool,
 ) -> *mut c_void {
-    let mut p: *mut c_void = ptr::null_mut();
+    let mut p = mi_theap_malloc(theap, size);
     while p.is_null() && mi_try_new_handler(nothrow) {
         p = mi_theap_malloc(theap, size);
     }

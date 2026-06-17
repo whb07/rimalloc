@@ -44,11 +44,7 @@ impl ThreadFreeWord {
         let ptr_val = match head {
             Some(ptr) => {
                 let val = ptr.as_ptr() as usize;
-                // Invariant: The block pointer must have its lowest bit clear.
-                debug_assert!(
-                    (val & Self::OWNED_BIT) == 0,
-                    "BlockPtr must be aligned, found bottom bit set"
-                );
+                crate::mi_assert_internal!((val & Self::OWNED_BIT) == 0);
                 val
             }
             None => 0,

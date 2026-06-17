@@ -28,10 +28,10 @@ use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_adjust_decrease_mt, __mi_stat_adjust_increase_mt,
     __mi_stat_counter_increase, __mi_stat_counter_increase_mt, __mi_stat_decrease,
     __mi_stat_decrease_mt, __mi_stat_increase, __mi_stat_increase_mt, _mi_align_up, _mi_clamp,
-    _mi_divide_up, _mi_is_heap_main, _mi_memid_create, _mi_memid_none, _mi_meta_free,
-    _mi_meta_is_meta_page, _mi_os_commit, _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex,
-    _mi_os_has_overcommit, _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc,
-    _mi_theap_heap, _mi_thread_id, _mi_toupper, MI_DEBUG, mi_mem_is_zero, mi_memid_t, mi_memkind_t,
+    _mi_divide_up, _mi_is_heap_main, _mi_memid_none, _mi_meta_free, _mi_meta_is_meta_page,
+    _mi_os_commit, _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex, _mi_os_has_overcommit,
+    _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc, _mi_theap_heap,
+    _mi_thread_id, _mi_toupper, MI_DEBUG, mi_mem_is_zero, mi_memid_t, mi_memkind_t,
     mi_mul_overflow, mi_page_all_free, mi_page_block_size, mi_page_claim_ownership,
     mi_page_clear_abandoned_mapped, mi_page_committed, mi_page_heap, mi_page_is_abandoned,
     mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned, mi_page_is_singleton,
@@ -1945,24 +1945,23 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
         && align_offset == 0
     {
         let slice_count = mi_slice_count_of_size(size);
-        // `size >= MI_ARENA_MIN_OBJ_SIZE > 0` (guarded above), so the slice count is non-zero.
-        let slice_count = crate::core_types::SliceCount::from_usize(slice_count)
-            .expect("non-zero size yields a non-zero slice count");
-        let p = unsafe {
-            mi_arenas_try_alloc(
-                heap,
-                slice_count,
-                alignment,
-                commit,
-                allow_large,
-                req_arena,
-                tseq,
-                numa_node,
-                memid,
-            )
-        };
-        if !p.is_null() {
-            return p;
+        if let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) {
+            let p = unsafe {
+                mi_arenas_try_alloc(
+                    heap,
+                    slice_count,
+                    alignment,
+                    commit,
+                    allow_large,
+                    req_arena,
+                    tseq,
+                    numa_node,
+                    memid,
+                )
+            };
+            if !p.is_null() {
+                return p;
+            }
         }
     }
 
@@ -2270,23 +2269,22 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
         && !os_align
         && slice_count <= unsafe { mi_arena_max_object_size() } / MI_ARENA_SLICE_SIZE
     {
-        start = unsafe {
-            mi_arenas_try_alloc(
-                heap,
-                // Callers derive `slice_count` via `mi_slice_count_of_size` of a positive size,
-                // so it is non-zero.
-                crate::core_types::SliceCount::from_usize(slice_count)
-                    .expect("non-zero size yields a non-zero slice count"),
-                page_alignment,
-                commit,
-                allow_large,
-                req_arena,
-                (*tld).thread_seq,
-                numa_node,
-                memid,
-            )
-            .cast::<u8>()
-        };
+        if let Some(typed_slice_count) = crate::core_types::SliceCount::from_usize(slice_count) {
+            start = unsafe {
+                mi_arenas_try_alloc(
+                    heap,
+                    typed_slice_count,
+                    page_alignment,
+                    commit,
+                    allow_large,
+                    req_arena,
+                    (*tld).thread_seq,
+                    numa_node,
+                    memid,
+                )
+                .cast::<u8>()
+            };
+        }
         if !start.is_null() {
             match crate::core_types::MemId::view(unsafe { *memid }) {
                 crate::core_types::MemIdView::Arena(a) => {

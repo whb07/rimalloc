@@ -1965,6 +1965,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("mi_page_thread_free_collect(page);")
             && page_rs
                 .contains("crate::mi_assert_internal!(!force || (*page).local_free.is_null());")
+            && page_rs.contains("unsafe fn mi_page_move_to_full_typed(")
+            && page_rs.contains("unsafe fn mi_page_unfull_typed(")
+            && page_rs.contains("crate::core_types::move_to_full_queue(page, from, to)")
+            && page_rs.contains("crate::core_types::unfull_page(page, from, to)")
+            && page_rs.contains("mi_page_unfull_typed(\n        crate::core_types::FullPage")
+            && page_rs
+                .contains("mi_page_move_to_full_typed(\n            crate::core_types::ActivePage")
             && free_rs.contains("_mi_page_unfull(page);")
             && free_rs.contains("_mi_page_free_collect(page, false);")
             && free_rs.contains("_mi_page_free_collect_partly(page, mt_free);")
@@ -2607,8 +2614,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("static MI_ABANDONED_PAGE_TRY_RECLAIM_KEEP")
             && free_rs.contains("static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP")
             && free_rs.contains("&& mi_abandoned_page_try_reclaim(page, reclaim_on_free)")
+            && free_rs
+                .contains("try_reclaim_abandoned(\n        crate::core_types::OwnedAbandonedPage")
+            && !free_rs.contains("_mi_theap_page_reclaim(theap, page)")
             && free_rs.contains("mi_page_usable_aligned_size_of(page, p)"),
-        "abandoned-page reclaim and aligned usable-size helpers should keep C's local helper boundaries"
+        "abandoned-page reclaim should keep C helper boundaries while routing internal reclaim through typed page/heap witnesses"
     );
     assert!(
         theap_rs.contains(

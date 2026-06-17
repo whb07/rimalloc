@@ -6,6 +6,7 @@
 // Match the crate convention (`src/free.rs` et al.) and allow implicit unsafe
 // in unsafe-fn bodies rather than wrapping every operation in `unsafe {}`.
 #![allow(unsafe_op_in_unsafe_fn)]
+#![allow(dead_code, unused_imports)]
 
 mod arena;
 mod free_actions;

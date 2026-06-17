@@ -1,7 +1,8 @@
 //! DT-3 allocation layout types.
 
 use crate::core_types::{
-    BlockPtr, EffectiveSize, MaybeAlignment, PaddedSize, PagePtr, RequestedSize, UsableSize, UserPtr,
+    BlockPtr, EffectiveSize, MaybeAlignment, PaddedSize, PagePtr, RequestedSize, UsableSize,
+    UserPtr,
 };
 use crate::types::MI_PADDING_SIZE;
 
@@ -178,7 +179,11 @@ pub(crate) struct MallocGenericFlags(usize);
 impl MallocGenericFlags {
     pub(crate) fn new(zeroed: Zeroed, huge_alignment: MaybeHugeAlignment) -> Self {
         let z = if zeroed == Zeroed::Yes { 1 } else { 0 };
-        let a = if huge_alignment == MaybeHugeAlignment::Huge { 2 } else { 0 };
+        let a = if huge_alignment == MaybeHugeAlignment::Huge {
+            2
+        } else {
+            0
+        };
         Self(z | a)
     }
 

@@ -2,9 +2,9 @@
 
 use core::marker::PhantomData;
 
-use crate::core_types::{BlockPtr, ThreadFreeWord, ThreadFreeOwner};
-use crate::core_types::page_states::{LocalPage, OwnedAbandonedPage, AvailablePage};
+use crate::core_types::page_states::{AvailablePage, LocalPage, OwnedAbandonedPage};
 use crate::core_types::validation_extra::{AllocatedBlock, FreeBlock};
+use crate::core_types::{BlockPtr, ThreadFreeOwner, ThreadFreeWord};
 
 /// Keys used to encode and decode free-list pointers.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -73,10 +73,7 @@ pub(crate) enum BlockLink {
 pub(crate) struct AvailableFreeList(pub(crate) Option<BlockPtr>);
 
 impl AvailableFreeList {
-    pub(crate) fn pop(
-        self,
-        _page: AvailablePage,
-    ) -> (AllocatedBlock, AvailableFreeList) {
+    pub(crate) fn pop(self, _page: AvailablePage) -> (AllocatedBlock, AvailableFreeList) {
         unimplemented!()
     }
 

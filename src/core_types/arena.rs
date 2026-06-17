@@ -23,7 +23,7 @@ impl SliceRange {
         let start_u32: u32 = start.try_into().map_err(|_| SliceError::Overflow)?;
         let count_u32: u32 = count.try_into().map_err(|_| SliceError::Overflow)?;
         let nz_count = NonZeroU32::new(count_u32).ok_or(SliceError::Overflow)?;
-        
+
         Ok(Self {
             start: SliceIndex(start_u32 as usize),
             count: unsafe { SliceCount::new_unchecked(nz_count.get()) },
@@ -56,9 +56,9 @@ pub(crate) struct ExclusiveArena(pub(crate) ArenaPtr);
 #[repr(transparent)]
 pub(crate) struct ParentArena(pub(crate) ArenaPtr);
 
-use core::ptr::NonNull;
 use core::ffi::c_void;
-use core::sync::atomic::{AtomicUsize, AtomicPtr};
+use core::ptr::NonNull;
+use core::sync::atomic::{AtomicPtr, AtomicUsize};
 
 #[repr(transparent)]
 pub(crate) struct ArenaPageTablePtr(pub(crate) NonNull<crate::types::mi_arena_pages_t>);

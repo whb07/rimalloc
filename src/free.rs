@@ -129,7 +129,7 @@ unsafe fn mi_page_decode_padding(
     delta: *mut usize,
     bsize: *mut usize,
 ) -> bool {
-    *bsize = mi_page_usable_block_size(page);
+    *bsize = mi_page_usable_block_size(page).get();
     let padding = (block.cast::<u8>()).add(*bsize).cast::<mi_padding_t>();
     mi_track_mem_defined(
         padding.cast_mut().cast::<c_void>(),
@@ -263,7 +263,7 @@ pub unsafe fn mi_page_usable_size_of(
     if MI_PADDING == 0 {
         let _ = block;
         let _ = is_guarded;
-        return mi_page_usable_block_size(page);
+        return mi_page_usable_block_size(page).get();
     }
 
     if is_guarded {
@@ -291,11 +291,11 @@ pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
     }
 
     let bsize = mi_page_usable_block_size(page);
-    if bsize <= MI_LARGE_MAX_OBJ_SIZE {
-        __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize);
+    if bsize.get() <= MI_LARGE_MAX_OBJ_SIZE {
+        __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize.get());
         if crate::types::MI_STAT > 1 {
             __mi_stat_decrease(
-                ptr::addr_of_mut!((*theap).stats.malloc_bins[_mi_bin(bsize)]),
+                ptr::addr_of_mut!((*theap).stats.malloc_bins[_mi_bin(bsize.get())]),
                 1,
             );
         }
@@ -305,13 +305,16 @@ pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
     }
 }
 
-pub unsafe fn mi_free_block_local(
-    page: *mut mi_page_t,
-    block: *mut mi_block_t,
-    was_guarded: bool,
-    track_stats: bool,
-    check_full: bool,
+pub(crate) unsafe fn mi_free_block_local(
+    page_wrapper: crate::core_types::LocalPage,
+    block_wrapper: crate::core_types::BlockForFree,
+    mode: crate::core_types::LocalFreeMode,
 ) {
+    let page = page_wrapper.0.as_ptr();
+    let block = block_wrapper.block.as_ptr();
+    let was_guarded = block_wrapper.was_guarded == crate::core_types::WasGuarded::Yes;
+    let track_stats = mode.track_stats;
+    let check_full = mode.check_full;
     if mi_check_is_double_free(page, block) {
         return;
     }
@@ -347,7 +350,13 @@ pub unsafe fn mi_free_block_local(
     }
 }
 
-pub unsafe fn mi_free_block_mt(page: *mut mi_page_t, block: *mut mi_block_t, was_guarded: bool) {
+pub(crate) unsafe fn mi_free_block_mt(
+    page_wrapper: crate::core_types::ForeignPage,
+    block_wrapper: crate::core_types::BlockForFree,
+) {
+    let page = page_wrapper.0.as_ptr();
+    let block = block_wrapper.block.as_ptr();
+    let was_guarded = block_wrapper.was_guarded == crate::core_types::WasGuarded::Yes;
     mi_stat_free(page, block);
     mi_track_free_size(
         block.cast::<c_void>(),
@@ -362,13 +371,18 @@ pub unsafe fn mi_free_block_mt(page: *mut mi_page_t, block: *mut mi_block_t, was
         _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
     }
 
-    let atomic_tf = crate::core_types::AtomicThreadFree(
-        ptr::addr_of_mut!((*page).xthread_free)
-    );
-    
+    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+
     let mut tf_old = atomic_tf.load_relaxed();
     loop {
-        mi_block_set_next(page, block, tf_old.head().map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()));
+        mi_block_set_next(
+            page,
+            block,
+            tf_old
+                .head()
+                .map(|p| p.as_ptr())
+                .unwrap_or(core::ptr::null_mut()),
+        );
         let bp = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
         match atomic_tf.compare_exchange_push(&mut tf_old, bp) {
             Ok(_) => break,
@@ -447,7 +461,28 @@ pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *
         mi_validate_block_from_ptr(page, p)
     };
     let was_guarded = mi_block_check_unguard(page, block, p);
-    mi_free_block_local(page, block, was_guarded, true, true);
+
+    // SAFETY: The caller (`mi_free_ex_slow`) has already validated ownership via `mi_validate_pointer`
+    // before routing to this slow path. We safely reconstruct the `LocalPage` and `BlockForFree` wrappers.
+    let page_wrapper =
+        crate::core_types::LocalPage(crate::core_types::PagePtr::new_unchecked(page));
+    let block_wrapper = crate::core_types::BlockForFree::new(
+        crate::core_types::BlockPtr::new_unchecked(block),
+        if was_guarded {
+            crate::core_types::WasGuarded::Yes
+        } else {
+            crate::core_types::WasGuarded::No
+        },
+    );
+
+    mi_free_block_local(
+        page_wrapper,
+        block_wrapper,
+        crate::core_types::LocalFreeMode {
+            track_stats: true,
+            check_full: true,
+        },
+    );
 }
 
 #[cold]
@@ -460,7 +495,21 @@ pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut
         mi_validate_block_from_ptr(page, p)
     };
     let was_guarded = mi_block_check_unguard(page, block, p);
-    mi_free_block_mt(page, block, was_guarded);
+
+    // SAFETY: The caller (`mi_free_ex_slow`) has already validated ownership via `mi_validate_pointer`
+    // before routing to this slow path. We safely reconstruct the `ForeignPage` and `BlockForFree` wrappers.
+    let page_wrapper =
+        crate::core_types::ForeignPage(crate::core_types::PagePtr::new_unchecked(page));
+    let block_wrapper = crate::core_types::BlockForFree::new(
+        crate::core_types::BlockPtr::new_unchecked(block),
+        if was_guarded {
+            crate::core_types::WasGuarded::Yes
+        } else {
+            crate::core_types::WasGuarded::No
+        },
+    );
+
+    mi_free_block_mt(page_wrapper, block_wrapper);
 }
 
 #[inline(never)]
@@ -480,8 +529,14 @@ pub(crate) unsafe extern "C" fn _mi_free_generic(
 static MI_FREE_GENERIC_KEEP: unsafe extern "C" fn(*mut mi_page_t, bool, *mut c_void) =
     _mi_free_generic;
 
-pub(crate) unsafe fn mi_validate_pointer(p: *mut c_void, msg: *const c_char) -> crate::core_types::PointerLookup {
-    use crate::core_types::{PointerLookup, UserPtr, PagePtr, PointerLocation, PointerInvalidReason, BlockOffset, GuardedBlock, BlockPtr};
+pub(crate) unsafe fn mi_validate_pointer(
+    p: *mut c_void,
+    msg: *const c_char,
+) -> crate::core_types::PointerLookup {
+    use crate::core_types::{
+        BlockOffset, BlockPtr, GuardedBlock, PagePtr, PointerInvalidReason, PointerLocation,
+        PointerLookup, UserPtr,
+    };
     if p.is_null() {
         return PointerLookup::Null;
     }
@@ -492,14 +547,24 @@ pub(crate) unsafe fn mi_validate_pointer(p: *mut c_void, msg: *const c_char) -> 
             && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
         {
             let msg_str = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
-            _mi_error_message_fmt(EINVAL, format_args!("{msg_str}: invalid (unaligned) pointer: {p:p}\n"));
-            return PointerLookup::Invalid { user: Some(user_ptr), reason: PointerInvalidReason::BadAlignment };
+            _mi_error_message_fmt(
+                EINVAL,
+                format_args!("{msg_str}: invalid (unaligned) pointer: {p:p}\n"),
+            );
+            return PointerLookup::Invalid {
+                user: Some(user_ptr),
+                reason: PointerInvalidReason::BadAlignment,
+            };
         }
     }
 
     let page_raw = if MI_DEBUG != 0 || cfg!(feature = "secure") {
         let pg = _mi_safe_ptr_page(p);
-        if !pg.is_null() && !mi_page_contains_address(pg, p) { ptr::null_mut() } else { pg }
+        if !pg.is_null() && !mi_page_contains_address(pg, p) {
+            ptr::null_mut()
+        } else {
+            pg
+        }
     } else {
         _mi_ptr_page(p)
     };
@@ -509,7 +574,10 @@ pub(crate) unsafe fn mi_validate_pointer(p: *mut c_void, msg: *const c_char) -> 
             let msg_str = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
             _mi_error_message_fmt(EINVAL, format_args!("{msg_str}: invalid pointer: {p:p}\n"));
         }
-        return PointerLookup::Invalid { user: Some(user_ptr), reason: PointerInvalidReason::NotOwnedByAllocator };
+        return PointerLookup::Invalid {
+            user: Some(user_ptr),
+            reason: PointerInvalidReason::NotOwnedByAllocator,
+        };
     }
 
     let page_ptr = PagePtr::new_unchecked(page_raw);
@@ -523,9 +591,15 @@ pub(crate) unsafe fn mi_validate_pointer(p: *mut c_void, msg: *const c_char) -> 
     let block_ptr = BlockPtr::new_unchecked(block_raw);
 
     let location = if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block_raw, p) {
-        PointerLocation::Guarded { block: GuardedBlock(block_ptr), offset }
+        PointerLocation::Guarded {
+            block: GuardedBlock(block_ptr),
+            offset,
+        }
     } else if offset.0 != 0 {
-        PointerLocation::Interior { block: block_ptr, offset }
+        PointerLocation::Interior {
+            block: block_ptr,
+            offset,
+        }
     } else {
         PointerLocation::BlockStart(block_ptr)
     };
@@ -538,11 +612,14 @@ pub(crate) unsafe fn mi_validate_pointer(p: *mut c_void, msg: *const c_char) -> 
 }
 
 #[inline(always)]
-pub(crate) unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable: *mut usize) {
+pub(crate) unsafe fn mi_free_validated(
+    validated: crate::core_types::ValidatedFree,
+    usable: *mut usize,
+) {
     let p = validated.user.as_ptr();
     let page = validated.page.as_ptr();
     if !usable.is_null() {
-        *usable = mi_page_usable_block_size(page);
+        *usable = mi_page_usable_block_size(page).get();
     }
 
     let current_tid = unsafe { crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id()) };
@@ -550,9 +627,14 @@ pub(crate) unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFr
     let delta = page_tid.xor_current(current_tid);
 
     if delta.is_local_fast() {
-        let block = validated.block.block().as_ptr();
-        let was_guarded = validated.block.was_guarded() == crate::core_types::WasGuarded::Yes;
-        mi_free_block_local(page, block, was_guarded, true, false);
+        mi_free_block_local(
+            crate::core_types::LocalPage(validated.page),
+            validated.block,
+            crate::core_types::LocalFreeMode {
+                track_stats: true,
+                check_full: false,
+            },
+        );
         return;
     }
     mi_free_ex_slow(validated, delta);
@@ -560,24 +642,34 @@ pub(crate) unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFr
 
 #[cold]
 #[inline(never)]
-pub(crate) unsafe fn mi_free_ex_slow(validated: crate::core_types::ValidatedFree, delta: crate::core_types::XThreadDelta) {
+pub(crate) unsafe fn mi_free_ex_slow(
+    validated: crate::core_types::ValidatedFree,
+    delta: crate::core_types::XThreadDelta,
+) {
     let p = validated.user.as_ptr();
     let page = validated.page.as_ptr();
     if delta.needs_local_slow() {
         mi_free_generic_local(page, p);
     } else if delta.is_remote_plain() {
-        let block = validated.block.block().as_ptr();
-        let was_guarded = validated.block.was_guarded() == crate::core_types::WasGuarded::Yes;
-        mi_free_block_mt(page, block, was_guarded);
+        mi_free_block_mt(
+            crate::core_types::ForeignPage(validated.page),
+            validated.block,
+        );
     } else {
         mi_free_generic_mt(page, p);
     }
 }
 
 pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *mut usize) {
-    if p.is_null() { return; }
+    if p.is_null() {
+        return;
+    }
     match mi_validate_pointer(p, msg) {
-        crate::core_types::PointerLookup::Valid { user, page, location } => {
+        crate::core_types::PointerLookup::Valid {
+            user,
+            page,
+            location,
+        } => {
             let (block_ptr, was_guarded) = match location {
                 crate::core_types::PointerLocation::BlockStart(b) => (b, false),
                 crate::core_types::PointerLocation::Interior { block, .. } => (block, false),
@@ -591,7 +683,11 @@ pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *
                 page,
                 crate::core_types::BlockForFree::new(
                     block_ptr,
-                    if was_guarded { crate::core_types::WasGuarded::Yes } else { crate::core_types::WasGuarded::No }
+                    if was_guarded {
+                        crate::core_types::WasGuarded::Yes
+                    } else {
+                        crate::core_types::WasGuarded::No
+                    },
                 ),
             );
             mi_free_validated(validated, usable);
@@ -601,7 +697,9 @@ pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *
 }
 
 pub(crate) unsafe fn mi_route_usable_size(p: *const c_void, msg: *const c_char) -> usize {
-    if p.is_null() { return 0; }
+    if p.is_null() {
+        return 0;
+    }
     match mi_validate_pointer(p.cast_mut(), msg) {
         crate::core_types::PointerLookup::Valid { page, location, .. } => {
             let (block_ptr, was_guarded) = match location {
@@ -611,7 +709,7 @@ pub(crate) unsafe fn mi_route_usable_size(p: *const c_void, msg: *const c_char) 
             };
             mi_page_usable_size_of(page.as_ptr(), block_ptr.as_ptr(), was_guarded)
         }
-        _ => 0
+        _ => 0,
     }
 }
 
@@ -856,7 +954,9 @@ pub unsafe extern "C" fn mi_free_small(p: *mut c_void) {
 
     let page = _mi_align_down_ptr(p, MI_SMALL_PAGE_SIZE).cast::<mi_page_t>();
     crate::mi_assert!(
-        if let crate::core_types::PointerLookup::Valid { page: pg, .. } = mi_validate_pointer(p, c"mi_free_small".as_ptr()) {
+        if let crate::core_types::PointerLookup::Valid { page: pg, .. } =
+            mi_validate_pointer(p, c"mi_free_small".as_ptr())
+        {
             page == pg.as_ptr()
         } else {
             false

@@ -29,14 +29,17 @@ pub(crate) struct BorrowedSubproc(pub(crate) SubprocPtr);
 
 impl ThreadHeapPtr {
     // Basic structural stubs mandated by DT-10
-    pub(crate) fn try_local(self, _current: crate::core_types::ThreadId) -> Result<crate::core_types::ThreadHeapLocal, ThreadHeapPtr> {
+    pub(crate) fn try_local(
+        self,
+        _current: crate::core_types::ThreadId,
+    ) -> Result<crate::core_types::ThreadHeapLocal, ThreadHeapPtr> {
         unimplemented!()
     }
-    
+
     pub(crate) fn heap(self) -> Option<HeapPtr> {
         unimplemented!()
     }
-    
+
     pub(crate) fn tld(self) -> Option<TldPtr> {
         unimplemented!()
     }

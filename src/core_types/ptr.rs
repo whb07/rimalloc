@@ -6,7 +6,8 @@ use core::ffi::c_void;
 use core::ptr::NonNull;
 
 use crate::types::{
-    mi_arena_t, mi_block_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_subproc_t, mi_theap_t, mi_tld_t,
+    mi_arena_t, mi_block_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_subproc_t, mi_theap_t,
+    mi_tld_t,
 };
 
 macro_rules! define_ptr_wrapper {
@@ -33,7 +34,7 @@ macro_rules! define_ptr_wrapper {
             pub(crate) fn as_ptr(self) -> *mut $raw_type {
                 self.0.as_ptr()
             }
-            
+
             #[inline(always)]
             pub(crate) fn as_non_null(self) -> NonNull<$raw_type> {
                 self.0
@@ -43,15 +44,27 @@ macro_rules! define_ptr_wrapper {
 }
 
 define_ptr_wrapper!(PagePtr, mi_page_t, "Non-null, aligned raw page metadata");
-define_ptr_wrapper!(BlockPtr, mi_block_t, "Non-null block pointer, block-aligned for its page");
+define_ptr_wrapper!(
+    BlockPtr,
+    mi_block_t,
+    "Non-null block pointer, block-aligned for its page"
+);
 define_ptr_wrapper!(HeapPtr, mi_heap_t, "Non-null raw heap metadata");
-define_ptr_wrapper!(ThreadHeapPtr, mi_theap_t, "Non-null raw thread heap metadata");
+define_ptr_wrapper!(
+    ThreadHeapPtr,
+    mi_theap_t,
+    "Non-null raw thread heap metadata"
+);
 define_ptr_wrapper!(TldPtr, mi_tld_t, "Non-null thread-local data");
 define_ptr_wrapper!(ArenaPtr, mi_arena_t, "Non-null raw arena metadata");
 define_ptr_wrapper!(SubprocPtr, mi_subproc_t, "Non-null raw subproc metadata");
 define_ptr_wrapper!(PageQueuePtr, mi_page_queue_t, "Non-null page queue");
 define_ptr_wrapper!(UserPtr, c_void, "Non-null pointer returned to/from user");
-define_ptr_wrapper!(InteriorUserPtr, c_void, "User pointer may not equal block start");
+define_ptr_wrapper!(
+    InteriorUserPtr,
+    c_void,
+    "User pointer may not equal block start"
+);
 define_ptr_wrapper!(PageStart, u8, "Start of page block area");
 define_ptr_wrapper!(SliceStart, u8, "Aligned arena slice start");
 define_ptr_wrapper!(OsMemPtr, c_void, "OS allocation base");

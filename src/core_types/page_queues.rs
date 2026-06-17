@@ -1,8 +1,8 @@
 //! DT-10: Page queue types.
 
+use crate::core_types::page_states::{Active, ActivePage, FullPage, Page};
+use crate::core_types::{PagePtr, PageQueuePtr};
 use core::marker::PhantomData;
-use crate::core_types::{PageQueuePtr, PagePtr};
-use crate::core_types::page_states::{Page, Active, FullPage, ActivePage};
 
 pub(crate) enum NormalQueue {}
 pub(crate) enum HugeQueue {}

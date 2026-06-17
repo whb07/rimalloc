@@ -120,7 +120,7 @@ unsafe fn mi_page_malloc_zero(
     }
     crate::mi_assert_internal!(!block.is_null() && _mi_ptr_page(block.cast()) == page);
     if !usable.is_null() {
-        *usable = mi_page_usable_block_size(page);
+        *usable = mi_page_usable_block_size(page).get();
     }
 
     (*page).free = mi_block_next(page, block);
@@ -137,7 +137,7 @@ unsafe fn mi_page_malloc_zero(
         ));
     }
 
-    let bsize = mi_page_usable_block_size(page);
+    let bsize = mi_page_usable_block_size(page).get();
     mi_track_mem_undefined(block.cast(), bsize);
 
     if MI_STAT > 0 && bsize <= MI_LARGE_MAX_OBJ_SIZE {
@@ -570,7 +570,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
         let page = mi_validate_ptr_page(p, c"mi_realloc".as_ptr());
         let size = _mi_usable_size(p, page);
         if !usable_pre.is_null() {
-            *usable_pre = mi_page_usable_block_size(page);
+            *usable_pre = mi_page_usable_block_size(page).get();
         }
         (page, size)
     };
@@ -583,7 +583,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
     ) {
         crate::mi_assert_internal!(!p.is_null());
         if !usable_post.is_null() {
-            *usable_post = mi_page_usable_block_size(page);
+            *usable_post = mi_page_usable_block_size(page).get();
         }
         return p;
     }

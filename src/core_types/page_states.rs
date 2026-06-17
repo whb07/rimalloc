@@ -1,7 +1,7 @@
 //! Required types for page typestate signatures referenced in freelist_wrappers.
 
-use core::marker::PhantomData;
 use crate::core_types::{PagePtr, ThreadHeapPtr};
+use core::marker::PhantomData;
 
 pub(crate) struct Page<S> {
     pub(crate) ptr: PagePtr,
@@ -60,21 +60,38 @@ pub(crate) enum PageFreeOwner {
 #[repr(transparent)]
 pub(crate) struct ThreadHeapLocal(pub(crate) ThreadHeapPtr);
 
-pub(crate) enum ReclaimResult {
-    Reclaimed(ActivePage),
-    Failed,
-}
-
 impl PagePtr {
-    pub(crate) fn try_local(self, _current: crate::core_types::ThreadId) -> Result<LocalPage, PagePtr> {
-        unimplemented!()
+    pub(crate) unsafe fn try_local(
+        self,
+        current: crate::core_types::ThreadId,
+    ) -> Result<LocalPage, PagePtr> {
+        match self.classify_for_free(current) {
+            PageFreeOwner::Local(lp) => Ok(lp),
+            _ => Err(self),
+        }
     }
-    
-    pub(crate) fn try_abandoned(self) -> Result<AbandonedPageType, PagePtr> {
-        unimplemented!()
+
+    pub(crate) unsafe fn try_abandoned(
+        self,
+        current: crate::core_types::ThreadId,
+    ) -> Result<AbandonedPageType, PagePtr> {
+        match self.classify_for_free(current) {
+            PageFreeOwner::Abandoned(ap) => Ok(ap),
+            _ => Err(self),
+        }
     }
-    
-    pub(crate) fn classify_for_free(self, _current: crate::core_types::ThreadId) -> PageFreeOwner {
-        unimplemented!()
+
+    pub(crate) unsafe fn classify_for_free(
+        self,
+        current: crate::core_types::ThreadId,
+    ) -> PageFreeOwner {
+        let tid = crate::core_types::PageThreadId::new(unsafe { (*self.as_ptr()).xthread_id });
+        if tid.is_abandoned() || tid.is_abandoned_mapped() {
+            PageFreeOwner::Abandoned(AbandonedPageType(self))
+        } else if tid.xor_current(current).is_local_fast() {
+            PageFreeOwner::Local(LocalPage(self))
+        } else {
+            PageFreeOwner::Foreign(ForeignPage(self))
+        }
     }
 }

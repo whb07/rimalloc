@@ -103,7 +103,7 @@ impl BlockSize {
     }
     #[inline(always)]
     pub(crate) fn usable(self) -> UsableSize {
-        UsableSize(self.get() - crate::types::MI_PADDING_SIZE)
+        UsableSize(self.get().checked_sub(crate::types::MI_PADDING_SIZE).expect("Block size must be larger than padding size"))
     }
 }
 
@@ -233,6 +233,22 @@ impl ArenaIndex {
     }
     #[inline(always)]
     pub(crate) const fn get(self) -> u16 {
+        self.0
+    }
+}
+
+/// Good size returned by mi_good_size.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub(crate) struct GoodSize(pub(crate) usize);
+
+impl GoodSize {
+    #[inline(always)]
+    pub(crate) const fn new(size: usize) -> Self {
+        Self(size)
+    }
+    #[inline(always)]
+    pub(crate) const fn get(self) -> usize {
         self.0
     }
 }

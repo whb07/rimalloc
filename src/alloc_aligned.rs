@@ -183,7 +183,7 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
         mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size);
     }
 
-    crate::mi_assert_internal!(mi_page_usable_block_size(page) >= adjust + size);
+    crate::mi_assert_internal!(mi_page_usable_block_size(page).get() >= adjust + size);
     crate::mi_assert_internal!(((aligned_p as usize) + offset).is_multiple_of(alignment));
     crate::mi_assert_internal!(crate::mimalloc::mi_usable_size(aligned_p) >= size);
     crate::mi_assert_internal!(
@@ -272,7 +272,7 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at(
             let is_aligned = (((*page).free as usize) + offset) & align_mask == 0;
             if mi_likely(is_aligned) {
                 if !usable.is_null() {
-                    *usable = mi_page_usable_block_size(page);
+                    *usable = mi_page_usable_block_size(page).get();
                 }
                 let p = _mi_page_malloc_zero(theap, page, padsize, zero);
                 crate::mi_assert_internal!(!p.is_null());

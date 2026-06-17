@@ -124,15 +124,20 @@ pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
     unsafe { (*ptr::addr_of!(_mi_theap_empty).cast::<mi_theap_t>()).pages[bin].block_size }
 }
 
+pub(crate) fn mi_good_size_typed(size: crate::core_types::RequestedSize) -> crate::core_types::GoodSize {
+    let sz = size.get();
+    if sz <= MI_LARGE_MAX_OBJ_SIZE {
+        crate::core_types::GoodSize::new(_mi_bin_size(mi_bin(sz + crate::types::MI_PADDING_SIZE)))
+    } else if sz <= MI_MAX_ALLOC_SIZE {
+        crate::core_types::GoodSize::new(align_up(sz + crate::types::MI_PADDING_SIZE, crate::internal::MI_OS_PAGE_SIZE))
+    } else {
+        crate::core_types::GoodSize::new(sz)
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_good_size(size: usize) -> usize {
-    if size <= MI_LARGE_MAX_OBJ_SIZE {
-        _mi_bin_size(mi_bin(size + MI_PADDING_SIZE))
-    } else if size <= MI_MAX_ALLOC_SIZE {
-        align_up(size + MI_PADDING_SIZE, MI_OS_PAGE_SIZE)
-    } else {
-        size
-    }
+    mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()
 }
 
 /// # Safety
@@ -214,7 +219,7 @@ pub unsafe fn mi_page_list_is_valid(page: *mut mi_page_t, mut p: *mut mi_block_t
         while !block.is_null() {
             crate::mi_assert_expensive!(mi_mem_is_zero(
                 block.add(1).cast(),
-                ubsize - size_of::<mi_block_t>()
+                ubsize.get() - size_of::<mi_block_t>()
             ));
             block = mi_block_next(page, block);
         }
@@ -236,7 +241,7 @@ pub unsafe fn mi_page_is_valid_init(page: *mut mi_page_t) -> bool {
         while !block.is_null() {
             crate::mi_assert_expensive!(mi_mem_is_zero(
                 block.add(1).cast(),
-                ubsize - size_of::<mi_block_t>()
+                ubsize.get() - size_of::<mi_block_t>()
             ));
             block = mi_block_next(page, block);
         }
@@ -853,7 +858,9 @@ pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) ->
 }
 
 #[inline(never)]
-pub unsafe extern "C" fn _mi_theap_page_reclaim(theap: *mut mi_theap_t, page: *mut mi_page_t) {
+pub(crate) unsafe fn try_reclaim_abandoned(page_wrapper: crate::core_types::OwnedAbandonedPage, target: crate::core_types::ThreadHeapLocal) -> crate::core_types::ActivePage {
+    let page = page_wrapper.0.as_ptr();
+    let theap = target.0.as_ptr();
     crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
         mi_page_slice_start(page).cast(),
         MI_PAGE_ALIGN,
@@ -867,6 +874,18 @@ pub unsafe extern "C" fn _mi_theap_page_reclaim(theap: *mut mi_theap_t, page: *m
     let pq = mi_theap_page_queue_of(theap, page);
     mi_page_queue_push_at_end(theap, pq, page);
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
+    crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page))
+}
+
+/// # Safety
+/// C-ABI boundary for page reclaim. The caller must ensure `theap` and `page` are valid.
+#[inline(never)]
+pub unsafe extern "C" fn _mi_theap_page_reclaim(theap: *mut mi_theap_t, page: *mut mi_page_t) {
+    let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
+    let wrapper = crate::core_types::OwnedAbandonedPage(page_ptr);
+    let theap_ptr = crate::core_types::ThreadHeapPtr::new_unchecked(theap);
+    let theap_wrapper = crate::core_types::ThreadHeapLocal(theap_ptr);
+    try_reclaim_abandoned(wrapper, theap_wrapper);
 }
 
 #[used]
@@ -1606,7 +1625,7 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
     crate::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
 
     if !usable.is_null() {
-        *usable = mi_page_usable_block_size(page);
+        *usable = mi_page_usable_block_size(page).get();
     }
     let p = _mi_page_malloc_zero(theap, page, size, zero);
     crate::mi_assert_internal!(!p.is_null());

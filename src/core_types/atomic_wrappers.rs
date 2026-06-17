@@ -1,11 +1,13 @@
 //! DT-13: Atomic field wrappers.
 
-use core::marker::PhantomData;
-use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 use core::ffi::c_void;
+use core::marker::PhantomData;
 use core::ptr::NonNull;
+use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
-use crate::core_types::{BlockPtr, PageFlags, PageOwnerId, PageThreadId, RemoteFreeList, ThreadFreeWord};
+use crate::core_types::{
+    BlockPtr, PageFlags, PageOwnerId, PageThreadId, RemoteFreeList, ThreadFreeWord,
+};
 
 pub(crate) type MemoryOrder = Ordering;
 
@@ -19,11 +21,11 @@ impl AtomicPageThreadId {
     pub(crate) fn load_relaxed(self) -> PageThreadId {
         unimplemented!()
     }
-    
+
     pub(crate) fn set_flags(self, _flags: PageFlags, _set: bool) -> PageThreadId {
         unimplemented!()
     }
-    
+
     pub(crate) fn set_owner_release(self, _owner: PageOwnerId) {
         unimplemented!()
     }
@@ -31,7 +33,7 @@ impl AtomicPageThreadId {
 
 pub(crate) enum RemotePushOutcome {
     Success,
-    Failed(BlockPtr)
+    Failed(BlockPtr),
 }
 
 #[repr(transparent)]
@@ -40,16 +42,18 @@ pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);
 
 impl AtomicThreadFree {
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord {
-        let val = unsafe { core::sync::atomic::AtomicUsize::from_ptr(self.0).load(Ordering::Relaxed) };
+        let val =
+            unsafe { core::sync::atomic::AtomicUsize::from_ptr(self.0).load(Ordering::Relaxed) };
         ThreadFreeWord(val)
     }
-    
+
     pub(crate) fn compare_exchange_push(
         self,
         old: &mut ThreadFreeWord,
         block: BlockPtr,
     ) -> Result<ThreadFreeWord, ThreadFreeWord> {
-        let new_tf = ThreadFreeWord::from_parts(Some(block), crate::core_types::ThreadFreeOwner::Owned);
+        let new_tf =
+            ThreadFreeWord::from_parts(Some(block), crate::core_types::ThreadFreeOwner::Owned);
         let atomic = unsafe { &*self.0.cast::<core::sync::atomic::AtomicUsize>() };
         match atomic.compare_exchange_weak(
             old.raw(),
@@ -59,16 +63,23 @@ impl AtomicThreadFree {
         ) {
             Ok(_) => Ok(new_tf),
             Err(val) => {
-                *old = ThreadFreeWord::from_parts(ThreadFreeWord(val).head(), if ThreadFreeWord(val).is_owned() { crate::core_types::ThreadFreeOwner::Owned } else { crate::core_types::ThreadFreeOwner::Unowned });
+                *old = ThreadFreeWord::from_parts(
+                    ThreadFreeWord(val).head(),
+                    if ThreadFreeWord(val).is_owned() {
+                        crate::core_types::ThreadFreeOwner::Owned
+                    } else {
+                        crate::core_types::ThreadFreeOwner::Unowned
+                    },
+                );
                 Err(*old)
             }
         }
     }
-    
+
     pub(crate) fn claim_ownership(self) -> bool {
         unimplemented!()
     }
-    
+
     pub(crate) fn release_ownership(self, _expected_head: Option<BlockPtr>) -> bool {
         unimplemented!()
     }

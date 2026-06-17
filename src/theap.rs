@@ -89,7 +89,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_area_init(
     (*area).committed = (*page).capacity as usize * bsize;
     (*area).blocks = mi_page_start(page).cast::<c_void>();
     (*area).used = (*page).used as usize;
-    (*area).block_size = ubsize;
+    (*area).block_size = ubsize.get();
     (*area).full_block_size = bsize;
     (*area).reserved1 = page.cast::<c_void>();
 }
@@ -137,14 +137,14 @@ pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
 
     if (*page).capacity == 1 {
         crate::mi_assert_internal!((*page).used == 1 && (*page).free.is_null());
-        return visitor(heap, area, pstart.cast::<c_void>(), ubsize, arg);
+        return visitor(heap, area, pstart.cast::<c_void>(), ubsize.get(), arg);
     }
     crate::mi_assert_internal!(u32::try_from(bsize).is_ok());
 
     if (*page).used == (*page).capacity {
         let mut block = pstart;
         for _ in 0..(*page).capacity as usize {
-            if !visitor(heap, area, block.cast::<c_void>(), ubsize, arg) {
+            if !visitor(heap, area, block.cast::<c_void>(), ubsize.get(), arg) {
                 return false;
             }
             block = block.add(bsize);
@@ -188,7 +188,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
     for mask in free_map.iter().take(bmapsize) {
         if *mask == 0 {
             for _ in 0..MI_INTPTR_BITS {
-                if !visitor(heap, area, block.cast::<c_void>(), ubsize, arg) {
+                if !visitor(heap, area, block.cast::<c_void>(), ubsize.get(), arg) {
                     return false;
                 }
                 block = block.add(bsize);
@@ -201,7 +201,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
                     heap,
                     area,
                     block.add(bitidx * bsize).cast::<c_void>(),
-                    ubsize,
+                    ubsize.get(),
                     arg,
                 ) {
                     return false;

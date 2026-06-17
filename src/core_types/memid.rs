@@ -85,9 +85,18 @@ impl MemId<AnyMem> {
     pub(crate) fn view(raw: crate::internal::mi_memid_t) -> MemIdView {
         let code = MemKindCode(raw.memkind as i32);
         match MemKind::from(code) {
-            MemKind::None => MemIdView::None(MemId { raw, _kind: PhantomData }),
-            MemKind::External => MemIdView::External(MemId { raw, _kind: PhantomData }),
-            MemKind::Static => MemIdView::Static(MemId { raw, _kind: PhantomData }),
+            MemKind::None => MemIdView::None(MemId {
+                raw,
+                _kind: PhantomData,
+            }),
+            MemKind::External => MemIdView::External(MemId {
+                raw,
+                _kind: PhantomData,
+            }),
+            MemKind::Static => MemIdView::Static(MemId {
+                raw,
+                _kind: PhantomData,
+            }),
             MemKind::Meta => {
                 let m = unsafe { raw.mem.meta };
                 MemIdView::Meta(MetaMemId {
@@ -121,7 +130,10 @@ impl MemId<AnyMem> {
                     pinned: Pinned(raw.is_pinned),
                 })
             }
-            MemKind::HeapMain => MemIdView::HeapMain(MemId { raw, _kind: PhantomData }),
+            MemKind::HeapMain => MemIdView::HeapMain(MemId {
+                raw,
+                _kind: PhantomData,
+            }),
             MemKind::Unknown(c) => MemIdView::Unknown(c),
         }
     }
@@ -131,7 +143,12 @@ impl MemId<NoneMem> {
     pub(crate) const fn none() -> Self {
         Self {
             raw: crate::internal::mi_memid_t {
-                mem: crate::internal::mi_memid_mem_t { os: crate::internal::mi_memid_os_info_t { base: core::ptr::null_mut(), size: 0 } },
+                mem: crate::internal::mi_memid_mem_t {
+                    os: crate::internal::mi_memid_os_info_t {
+                        base: core::ptr::null_mut(),
+                        size: 0,
+                    },
+                },
                 is_pinned: false,
                 initially_committed: false,
                 initially_zero: false,

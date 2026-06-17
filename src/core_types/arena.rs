@@ -31,7 +31,11 @@ impl SliceRange {
     }
 
     pub(crate) fn from_raw(start: u32, count: u32) -> Self {
-        // Assume raw values from memid are valid.
+        // A valid arena memid always carries a non-zero slice count. The
+        // `debug_assert!` catches corrupted memids in debug builds; release builds
+        // trust the invariant to stay branchless on the arena free path.
+        crate::mi_debug_assert!(count != 0, "arena memid slice count is non-zero");
+        // SAFETY: `count` is non-zero per the invariant above.
         Self {
             start: SliceIndex(start as usize),
             count: unsafe { SliceCount::new_unchecked(count) },

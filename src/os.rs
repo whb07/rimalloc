@@ -699,7 +699,11 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
         mi_os_prim_free(
             base,
             csize,
-            if still_committed { commit_size - (addr as usize - base as usize) } else { 0 },
+            if still_committed {
+                commit_size - (addr as usize - base as usize)
+            } else {
+                0
+            },
             subproc,
         )
     };
@@ -1356,7 +1360,10 @@ unsafe fn mi_os_alloc_aligned_ex(
     if !is_pinned.is_null() {
         unsafe { *is_pinned = memid.is_pinned };
     }
-    if !base.is_null() || !full_size.is_null() || (memid.initially_committed && !memid.initially_zero) {
+    if !base.is_null()
+        || !full_size.is_null()
+        || (memid.initially_committed && !memid.initially_zero)
+    {
         let (os_base, os_size) = match crate::core_types::MemId::view(memid) {
             crate::core_types::MemIdView::Os(os) => (
                 os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()),

@@ -4,7 +4,6 @@
 #![allow(clippy::nonminimal_bool)]
 
 pub mod abi;
-pub(crate) mod core_types;
 pub mod alloc;
 pub mod alloc_aligned;
 pub mod alloc_override;
@@ -14,6 +13,7 @@ pub mod arena_meta;
 pub mod atomic;
 pub mod bitmap;
 pub mod bits;
+pub(crate) mod core_types;
 pub mod free;
 pub mod headers;
 pub mod heap;

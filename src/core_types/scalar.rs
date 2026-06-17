@@ -103,7 +103,10 @@ impl BlockSize {
     }
     #[inline(always)]
     pub(crate) fn usable(self) -> UsableSize {
-        crate::mi_debug_assert!(self.get() >= crate::types::MI_PADDING_SIZE, "Block size must be at least as large as padding size");
+        crate::mi_debug_assert!(
+            self.get() >= crate::types::MI_PADDING_SIZE,
+            "Block size must be at least as large as padding size"
+        );
         UsableSize(self.get().wrapping_sub(crate::types::MI_PADDING_SIZE))
     }
 }

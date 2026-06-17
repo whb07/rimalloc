@@ -579,10 +579,10 @@ pub(crate) unsafe extern "C" fn _mi_arena_memid_is_suitable(
     request_arena: *mut mi_arena_t,
 ) -> bool {
     match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::Arena(a) => {
-            unsafe { mi_arena_is_suitable(a.arena.as_ptr(), request_arena) }
+        crate::core_types::MemIdView::Arena(a) => unsafe {
+            mi_arena_is_suitable(a.arena.as_ptr(), request_arena)
         },
-        _ => unsafe { mi_arena_is_suitable(ptr::null_mut(), request_arena) }
+        _ => unsafe { mi_arena_is_suitable(ptr::null_mut(), request_arena) },
     }
 }
 
@@ -650,9 +650,9 @@ unsafe fn mi_heap_has_page(
             .cast::<MiArenaPagesPrefix>();
     match crate::core_types::MemId::view(unsafe { (*page).memid }) {
         crate::core_types::MemIdView::Arena(a) => {
-            a.arena.as_ptr() == arena && !arena_pages.is_null() && unsafe {
-                mi_bitmap_is_setN((*arena_pages).pages, a.range.start().0, 1)
-            }
+            a.arena.as_ptr() == arena
+                && !arena_pages.is_null()
+                && unsafe { mi_bitmap_is_setN((*arena_pages).pages, a.range.start().0, 1) }
         }
         _ => false,
     }
@@ -848,8 +848,9 @@ unsafe fn mi_memid_create_arena(
     );
     crate::core_types::MemId::<crate::core_types::ArenaMem>::arena(
         unsafe { crate::core_types::ArenaPtr::new_unchecked(arena) },
-        crate::core_types::SliceRange::from_raw(slice_index as u32, slice_count as u32)
-    ).raw
+        crate::core_types::SliceRange::from_raw(slice_index as u32, slice_count as u32),
+    )
+    .raw
 }
 
 #[allow(dead_code)]
@@ -868,7 +869,10 @@ unsafe fn mi_arena_from_memid(
             }
             a.arena.as_ptr()
         }
-        _ => { crate::mi_assert_internal!(false); core::ptr::null_mut() }
+        _ => {
+            crate::mi_assert_internal!(false);
+            core::ptr::null_mut()
+        }
     }
 }
 
@@ -889,9 +893,15 @@ unsafe fn mi_memid_is_os(memid: mi_memid_t) -> bool {
 unsafe fn mi_page_full_size(page: *mut mi_page_t) -> usize {
     let memid = unsafe { (*page).memid };
     match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::Arena(a) => a.range.count().0.get() as usize * MI_ARENA_SLICE_SIZE,
+        crate::core_types::MemIdView::Arena(a) => {
+            a.range.count().0.get() as usize * MI_ARENA_SLICE_SIZE
+        }
         crate::core_types::MemIdView::Os(os) => {
-            let base = os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()).cast::<u8>();
+            let base = os
+                .base
+                .map(|p| p.as_ptr())
+                .unwrap_or(core::ptr::null_mut())
+                .cast::<u8>();
             let os_size = os.size.0;
 
             let page_ptr = page.cast::<u8>();
@@ -903,7 +913,7 @@ unsafe fn mi_page_full_size(page: *mut mi_page_t) -> usize {
             } else {
                 os_size - presize as usize
             }
-        },
+        }
         crate::core_types::MemIdView::External(_) => {
             let base = unsafe { memid.mem.os.base }.cast::<u8>();
             let os_size = unsafe { memid.mem.os.size };
@@ -917,7 +927,7 @@ unsafe fn mi_page_full_size(page: *mut mi_page_t) -> usize {
             } else {
                 os_size - presize as usize
             }
-        },
+        }
         _ => 0,
     }
 }
@@ -2275,7 +2285,9 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
                     let arena = a.arena.as_ptr();
                     let arena_pages = unsafe { mi_heap_ensure_arena_pages(heap, arena) };
                     if arena_pages.is_null() {
-                        unsafe { _mi_arenas_free(start.cast(), mi_size_of_slices(slice_count), *memid) };
+                        unsafe {
+                            _mi_arenas_free(start.cast(), mi_size_of_slices(slice_count), *memid)
+                        };
                         start = ptr::null_mut();
                     } else {
                         let slice_idx = a.range.start().0;
@@ -2284,7 +2296,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
                         });
                         unsafe { mi_bitmap_set((*arena_pages).pages, slice_idx) };
                     }
-                },
+                }
                 _ => {
                     // Fallback for non-arena allocations that bypassed the arena path above.
                 }
@@ -2425,13 +2437,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
                 crate::core_types::MemIdView::Arena(a) => a.arena.as_ptr(),
                 _ => ptr::null_mut(),
             };
-            mi_arena_commit(
-                arena_ptr,
-                slice_start.cast(),
-                commit_size,
-                &mut is_zero,
-                0,
-            )
+            mi_arena_commit(arena_ptr, slice_start.cast(), commit_size, &mut is_zero, 0)
         } {
             unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
             return ptr::null_mut();
@@ -2527,7 +2533,8 @@ unsafe fn mi_arenas_page_regular_alloc(
     }
     crate::mi_assert_internal!(
         match crate::core_types::MemId::view(unsafe { (*page).memid }) {
-            crate::core_types::MemIdView::Arena(a) => a.range.count().0.get() as usize == slice_count,
+            crate::core_types::MemIdView::Arena(a) =>
+                a.range.count().0.get() as usize == slice_count,
             _ => true, // Non-arena allocations trivially pass this slice_count assert
         }
     );
@@ -3588,8 +3595,9 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
         crate::core_types::ReservedBytes(size),
         crate::core_types::InitiallyCommitted(is_committed),
         crate::core_types::InitiallyZero(is_zero),
-        crate::core_types::Pinned(is_pinned)
-    ).raw;
+        crate::core_types::Pinned(is_pinned),
+    )
+    .raw;
     memid.memkind = mi_memkind_t::MI_MEM_EXTERNAL; // Overwrite memkind to match original
     unsafe {
         mi_manage_os_memory_ex2(
@@ -3628,8 +3636,9 @@ pub unsafe extern "C" fn mi_manage_memory(
         crate::core_types::ReservedBytes(size),
         crate::core_types::InitiallyCommitted(is_committed),
         crate::core_types::InitiallyZero(is_zero),
-        crate::core_types::Pinned(is_pinned)
-    ).raw;
+        crate::core_types::Pinned(is_pinned),
+    )
+    .raw;
     memid.memkind = mi_memkind_t::MI_MEM_EXTERNAL; // Overwrite memkind to match original
     unsafe {
         mi_manage_os_memory_ex2(

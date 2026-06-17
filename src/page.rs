@@ -124,12 +124,17 @@ pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
     unsafe { (*ptr::addr_of!(_mi_theap_empty).cast::<mi_theap_t>()).pages[bin].block_size }
 }
 
-pub(crate) fn mi_good_size_typed(size: crate::core_types::RequestedSize) -> crate::core_types::GoodSize {
+pub(crate) fn mi_good_size_typed(
+    size: crate::core_types::RequestedSize,
+) -> crate::core_types::GoodSize {
     let sz = size.get();
     if sz <= MI_LARGE_MAX_OBJ_SIZE {
         crate::core_types::GoodSize::new(_mi_bin_size(mi_bin(sz + crate::types::MI_PADDING_SIZE)))
     } else if sz <= MI_MAX_ALLOC_SIZE {
-        crate::core_types::GoodSize::new(align_up(sz + crate::types::MI_PADDING_SIZE, crate::internal::MI_OS_PAGE_SIZE))
+        crate::core_types::GoodSize::new(align_up(
+            sz + crate::types::MI_PADDING_SIZE,
+            crate::internal::MI_OS_PAGE_SIZE,
+        ))
     } else {
         crate::core_types::GoodSize::new(sz)
     }
@@ -858,7 +863,10 @@ pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) ->
 }
 
 #[inline(never)]
-pub(crate) unsafe fn try_reclaim_abandoned(page_wrapper: crate::core_types::OwnedAbandonedPage, target: crate::core_types::ThreadHeapLocal) -> crate::core_types::ActivePage {
+pub(crate) unsafe fn try_reclaim_abandoned(
+    page_wrapper: crate::core_types::OwnedAbandonedPage,
+    target: crate::core_types::ThreadHeapLocal,
+) -> crate::core_types::ActivePage {
     let page = page_wrapper.0.as_ptr();
     let theap = target.0.as_ptr();
     crate::mi_assert_internal!(crate::internal::_mi_is_aligned(

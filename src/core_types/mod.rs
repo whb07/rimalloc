@@ -20,8 +20,8 @@ pub(crate) use ptr::{
     PageStart, SliceStart, SubprocPtr, ThreadHeapPtr, TldPtr, UserPtr,
 };
 
-pub(crate) use scalar::{GoodSize, 
-    Alignment, AllocSizeError, ArenaIndex, Bin, BlockSize, DirectBin, EffectiveSize,
+pub(crate) use scalar::{
+    Alignment, AllocSizeError, ArenaIndex, Bin, BlockSize, DirectBin, EffectiveSize, GoodSize,
     MaybeAlignment, PaddedSize, RequestedSize, SliceCount, SliceIndex, UsableSize,
 };
 

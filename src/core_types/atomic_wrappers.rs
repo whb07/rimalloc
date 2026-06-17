@@ -12,7 +12,50 @@ use crate::core_types::{
 pub(crate) type MemoryOrder = Ordering;
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);
+
+impl AtomicUsizeField {
+    /// # Safety
+    /// `self.0` must be a valid, properly aligned pointer to an atomic-compatible
+    /// `usize` field for the lifetime of the access.
+    #[inline(always)]
+    pub(crate) unsafe fn as_atomic(self) -> &'static AtomicUsize {
+        // SAFETY: caller guarantees `self.0` is valid and aligned. The borrow is
+        // unbounded ('static) because the field lives as long as the containing
+        // page/heap, matching the raw-pointer lifetime model used throughout the
+        // allocator.
+        unsafe { &*self.0.cast::<AtomicUsize>() }
+    }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn load(self, order: Ordering) -> usize {
+        unsafe { self.as_atomic() }.load(order)
+    }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn store(self, value: usize, order: Ordering) {
+        unsafe { self.as_atomic() }.store(value, order);
+    }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn fetch_or(self, bits: usize, order: Ordering) -> usize {
+        unsafe { self.as_atomic() }.fetch_or(bits, order)
+    }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn fetch_and(self, bits: usize, order: Ordering) -> usize {
+        unsafe { self.as_atomic() }.fetch_and(bits, order)
+    }
+}
 
 #[repr(transparent)]
 pub(crate) struct AtomicPageThreadId(pub(crate) AtomicUsizeField);
@@ -25,11 +68,7 @@ impl AtomicPageThreadId {
     /// `self.0` must point to a valid page's `xthread_id` field.
     #[inline]
     pub(crate) unsafe fn load_relaxed(self) -> PageThreadId {
-        let val = unsafe {
-            core::sync::atomic::AtomicUsize::from_ptr(self.0.0)
-                .load(core::sync::atomic::Ordering::Relaxed)
-        };
-        PageThreadId::new(val)
+        PageThreadId::new(unsafe { self.0.load(Ordering::Relaxed) })
     }
 
     /// Set or clear the given flag bits in the page's `xthread_id` field using a
@@ -41,11 +80,10 @@ impl AtomicPageThreadId {
     /// `self.0` must point to a valid page's `xthread_id` field.
     #[inline]
     pub(crate) unsafe fn set_flags(self, flags: PageFlags, set: bool) -> PageThreadId {
-        let atomic = unsafe { &*self.0.0.cast::<core::sync::atomic::AtomicUsize>() };
         let old = if set {
-            atomic.fetch_or(flags.bits(), core::sync::atomic::Ordering::Relaxed)
+            unsafe { self.0.fetch_or(flags.bits(), Ordering::Relaxed) }
         } else {
-            atomic.fetch_and(!flags.bits(), core::sync::atomic::Ordering::Relaxed)
+            unsafe { self.0.fetch_and(!flags.bits(), Ordering::Relaxed) }
         };
         PageThreadId::new(old)
     }
@@ -60,14 +98,11 @@ impl AtomicPageThreadId {
     /// concurrent free-path readers that require Acq/Rel ordering).
     #[inline]
     pub(crate) unsafe fn set_owner_release(self, owner: PageOwnerId) {
-        let atomic = unsafe { &*self.0.0.cast::<core::sync::atomic::AtomicUsize>() };
-        // Preserve the flag bits; replace the owner portion.
-        let current = atomic.load(core::sync::atomic::Ordering::Relaxed);
-        let current_tid = PageThreadId::new(current);
-        let new = current_tid
-            .with_owner(owner)
-            .with_flags(current_tid.flags());
-        atomic.store(new.raw(), core::sync::atomic::Ordering::Relaxed);
+        let current = unsafe { self.0.load(Ordering::Relaxed) };
+        // `with_owner` preserves the existing flag bits, so no separate
+        // `.with_flags(...)` is needed.
+        let new = PageThreadId::new(current).with_owner(owner);
+        unsafe { self.0.store(new.raw(), Ordering::Relaxed) };
     }
 }
 

@@ -33,14 +33,27 @@ impl ThreadHeapPtr {
     /// `ThreadHeapLocal` witness; otherwise return `Err(self)`.
     ///
     /// # Safety
-    /// `self` must point to a valid `mi_theap_t`.
+    ///
+    /// `self` must point to a valid `mi_theap_t`. The read of
+    /// `(*(*theap).tld).thread_id` is a plain (non-atomic) field access; this is
+    /// sound because the invariant holds:
+    /// - `(*theap).tld` is set once during thread-heap initialization and never
+    ///   mutated for the lifetime of the theap, so the pointer deref is race-free.
+    /// - `(*tld).thread_id` is written once when the tld is created and never
+    ///   subsequently modified, so a plain read is sufficient. (This matches the
+    ///   existing raw pattern at `src/alloc.rs` and `src/arena.rs` which read
+    ///   `(*(*theap).tld).thread_id` without atomics.)
+    ///
+    /// Callers must not invoke this on a theap whose tld is concurrently being
+    /// torn down.
     #[inline]
     pub(crate) unsafe fn try_local(
         self,
         current: crate::core_types::ThreadId,
     ) -> Result<crate::core_types::ThreadHeapLocal, ThreadHeapPtr> {
         let theap = self.as_ptr();
-        // SAFETY: caller guarantees `theap` is valid; `tld` is stable after init.
+        // SAFETY: see the function-level safety doc — `tld` and `thread_id` are
+        // stable after init, so this plain read is race-free.
         let tld_thread_id = unsafe { (*(*theap).tld).thread_id };
         if tld_thread_id == 0 || tld_thread_id == current.get() {
             Ok(crate::core_types::ThreadHeapLocal(self))

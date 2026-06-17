@@ -118,7 +118,11 @@ impl AvailableFreeList {
     #[inline(always)]
     pub(crate) unsafe fn pop(self, page: AvailablePage) -> (AllocatedBlock, AvailableFreeList) {
         let raw_page = page.0.as_ptr();
-        let head = self.0.expect("available free list was empty on pop");
+        // SAFETY: the caller (`mi_page_malloc_zero`) checks `(*page).free` for
+        // null before constructing this `AvailableFreeList`, so `self.0` is
+        // always `Some` here. Using `unwrap_unchecked` keeps the hot path free
+        // of a panic branch.
+        let head = unsafe { self.0.unwrap_unchecked() };
         let head_raw = head.as_ptr();
         // SAFETY: `head` is a valid block pointer in `page`'s free list; the page
         // keys and encoding are page-local and `head_raw` is non-null.

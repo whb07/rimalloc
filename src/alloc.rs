@@ -396,7 +396,7 @@ pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) ->
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::malloc(size) {
-        mi_theap_malloc(_mi_theap_default(), layout.requested().get()) // Temp compatibility bridge
+        mi_theap_malloc(_mi_theap_default(), layout.requested().get())
     } else {
         core::ptr::null_mut()
     }
@@ -411,7 +411,7 @@ pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *m
             false,
             0,
             ptr::null_mut(),
-        ) // Temp compatibility bridge
+        )
     } else {
         core::ptr::null_mut()
     }

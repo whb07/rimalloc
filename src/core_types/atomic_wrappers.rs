@@ -18,16 +18,56 @@ pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);
 pub(crate) struct AtomicPageThreadId(pub(crate) AtomicUsizeField);
 
 impl AtomicPageThreadId {
-    pub(crate) fn load_relaxed(self) -> PageThreadId {
-        unimplemented!()
+    /// Load the page's tagged thread-id word (thread id + flag bits) as a typed
+    /// `PageThreadId`.
+    ///
+    /// # Safety
+    /// `self.0` must point to a valid page's `xthread_id` field.
+    #[inline]
+    pub(crate) unsafe fn load_relaxed(self) -> PageThreadId {
+        let val = unsafe {
+            core::sync::atomic::AtomicUsize::from_ptr(self.0.0)
+                .load(core::sync::atomic::Ordering::Relaxed)
+        };
+        PageThreadId::new(val)
     }
 
-    pub(crate) fn set_flags(self, _flags: PageFlags, _set: bool) -> PageThreadId {
-        unimplemented!()
+    /// Set or clear the given flag bits in the page's `xthread_id` field using a
+    /// relaxed `fetch_or` / `fetch_and`. Returns the previous `PageThreadId`.
+    ///
+    /// Mirrors `mi_page_flags_set`: a single relaxed atomic RMW on `xthread_id`.
+    ///
+    /// # Safety
+    /// `self.0` must point to a valid page's `xthread_id` field.
+    #[inline]
+    pub(crate) unsafe fn set_flags(self, flags: PageFlags, set: bool) -> PageThreadId {
+        let atomic = unsafe { &*self.0.0.cast::<core::sync::atomic::AtomicUsize>() };
+        let old = if set {
+            atomic.fetch_or(flags.bits(), core::sync::atomic::Ordering::Relaxed)
+        } else {
+            atomic.fetch_and(!flags.bits(), core::sync::atomic::Ordering::Relaxed)
+        };
+        PageThreadId::new(old)
     }
 
-    pub(crate) fn set_owner_release(self, _owner: PageOwnerId) {
-        unimplemented!()
+    /// Release ownership of the page by writing the owner-encoding of `owner`
+    /// (clearing the live thread id, preserving flag bits) with a relaxed store.
+    /// Used when a thread abandons a page.
+    ///
+    /// # Safety
+    /// `self.0` must point to a valid page's `xthread_id` field, and the caller
+    /// must hold the page in a state where a relaxed store is safe (no
+    /// concurrent free-path readers that require Acq/Rel ordering).
+    #[inline]
+    pub(crate) unsafe fn set_owner_release(self, owner: PageOwnerId) {
+        let atomic = unsafe { &*self.0.0.cast::<core::sync::atomic::AtomicUsize>() };
+        // Preserve the flag bits; replace the owner portion.
+        let current = atomic.load(core::sync::atomic::Ordering::Relaxed);
+        let current_tid = PageThreadId::new(current);
+        let new = current_tid
+            .with_owner(owner)
+            .with_flags(current_tid.flags());
+        atomic.store(new.raw(), core::sync::atomic::Ordering::Relaxed);
     }
 }
 

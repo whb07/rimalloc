@@ -102,6 +102,10 @@ impl ItemCount {
     pub(crate) fn new(count: usize) -> Self {
         Self(count)
     }
+    #[inline(always)]
+    pub(crate) const fn get(self) -> usize {
+        self.0
+    }
 }
 
 #[derive(Clone, Copy)]

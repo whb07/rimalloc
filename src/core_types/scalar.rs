@@ -101,6 +101,20 @@ impl BlockSize {
     pub(crate) const fn get(self) -> usize {
         self.0.get()
     }
+    /// Subtract padding to get the user-visible usable size.
+    ///
+    /// Uses `wrapping_sub` (branchless in release) rather than `checked_sub` to
+    /// honor the spec's zero-added-branches mandate for the free path (spec §1
+    /// invariant 17). Correctness relies on the invariant below; a release build
+    /// cannot detect a violation, so this is only sound when the caller upholds it.
+    ///
+    /// # Safety (invariant)
+    ///
+    /// For any initialized page, `mi_page_block_size` returns a value that already
+    /// includes `MI_PADDING_SIZE` (padding is reserved when the page is sized), so
+    /// `block_size >= MI_PADDING_SIZE` always holds. The `debug_assert!` catches
+    /// corruption in debug builds. If this invariant cannot be guaranteed at a
+    /// call site, the caller must validate before constructing the `BlockSize`.
     #[inline(always)]
     pub(crate) fn usable(self) -> UsableSize {
         crate::mi_debug_assert!(

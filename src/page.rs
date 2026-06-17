@@ -129,12 +129,18 @@ pub(crate) fn mi_good_size_typed(
 ) -> crate::core_types::GoodSize {
     let sz = size.get();
     if sz <= MI_LARGE_MAX_OBJ_SIZE {
-        crate::core_types::GoodSize::new(_mi_bin_size(mi_bin(sz + crate::types::MI_PADDING_SIZE)))
+        // `sz <= MI_LARGE_MAX_OBJ_SIZE` is far below `usize::MAX`, so padding
+        // cannot overflow; `checked_padded` makes that explicit rather than open-
+        // coding `sz + MI_PADDING_SIZE`.
+        let padded = size
+            .checked_padded()
+            .expect("padding fits for sizes <= MI_LARGE_MAX_OBJ_SIZE");
+        crate::core_types::GoodSize::new(_mi_bin_size(mi_bin(padded.get())))
     } else if sz <= MI_MAX_ALLOC_SIZE {
-        crate::core_types::GoodSize::new(align_up(
-            sz + crate::types::MI_PADDING_SIZE,
-            crate::internal::MI_OS_PAGE_SIZE,
-        ))
+        let padded = size
+            .checked_padded()
+            .expect("padding fits for sizes <= MI_MAX_ALLOC_SIZE");
+        crate::core_types::GoodSize::new(align_up(padded.get(), crate::internal::MI_OS_PAGE_SIZE))
     } else {
         crate::core_types::GoodSize::new(sz)
     }

@@ -646,17 +646,29 @@ pub(crate) unsafe fn mi_free_ex_slow(
     validated: crate::core_types::ValidatedFree,
     delta: crate::core_types::XThreadDelta,
 ) {
-    let p = validated.user.as_ptr();
-    let page = validated.page.as_ptr();
+    // `validated` was produced by `mi_validate_pointer`, which already derived the
+    // interior-corrected block and resolved guard state. Route the typed witness
+    // directly to the block free functions instead of re-deriving from the raw
+    // pointer via `mi_free_generic_local`/`mi_free_generic_mt` (which would also
+    // double-call `mi_block_check_unguard` on guarded blocks).
     if delta.needs_local_slow() {
-        mi_free_generic_local(page, p);
-    } else if delta.is_remote_plain() {
+        // Local page with flags set (e.g. in the full queue): check for unfull.
+        mi_free_block_local(
+            crate::core_types::LocalPage(validated.page),
+            validated.block,
+            crate::core_types::LocalFreeMode {
+                track_stats: true,
+                check_full: true,
+            },
+        );
+    } else {
+        // Remote (plain or with flags): push onto the owning thread's free list.
+        // The flag distinction collapses here because validation already resolved
+        // the block; `mi_free_block_mt` does not branch on page flags.
         mi_free_block_mt(
             crate::core_types::ForeignPage(validated.page),
             validated.block,
         );
-    } else {
-        mi_free_generic_mt(page, p);
     }
 }
 

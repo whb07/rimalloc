@@ -837,18 +837,17 @@ pub unsafe extern "C" fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_
 #[allow(dead_code)]
 unsafe fn mi_memid_create_arena(
     arena: *mut mi_arena_t,
-    slice_index: usize,
-    slice_count: usize,
+    range: crate::core_types::SliceRange,
 ) -> mi_memid_t {
-    crate::mi_assert_internal!(u32::try_from(slice_index).is_ok());
-    crate::mi_assert_internal!(u32::try_from(slice_count).is_ok());
+    let slice_index = range.start_usize();
+    let slice_count = range.count_usize();
     crate::mi_assert_internal!(slice_count > 0);
     crate::mi_assert_internal!(
         slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
     crate::core_types::MemId::<crate::core_types::ArenaMem>::arena(
         unsafe { crate::core_types::ArenaPtr::new_unchecked(arena) },
-        crate::core_types::SliceRange::from_raw(slice_index as u32, slice_count as u32),
+        range,
     )
     .raw
 }
@@ -966,7 +965,21 @@ unsafe fn mi_arena_try_alloc_at(
     }
 
     let p = unsafe { mi_arena_slice_start(arena, slice_index).cast::<c_void>() };
-    unsafe { *memid = mi_memid_create_arena(arena, slice_index, slice_count) };
+    let Some(range) = crate::core_types::SliceRange::new(slice_index, slice_count, unsafe {
+        crate::core_types::ArenaPtr::new_unchecked(arena)
+    })
+    .ok() else {
+        crate::mi_assert_internal!(false);
+        unsafe {
+            mi_bbitmap_setN(
+                (*arena.cast::<MiArenaPrefix>()).slices_free,
+                slice_index,
+                slice_count,
+            )
+        };
+        return ptr::null_mut();
+    };
+    unsafe { *memid = mi_memid_create_arena(arena, range) };
     unsafe { (*memid).is_pinned = (*arena.cast::<MiArenaPrefix>()).memid.is_pinned };
 
     let mut touched_slices = slice_count;

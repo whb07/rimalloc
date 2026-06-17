@@ -2243,6 +2243,16 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena free/purge path should carry SliceRange after decoding arena memids"
     );
     assert!(
+        arena_rs.contains(
+            "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> mi_memid_t"
+        ) && arena_rs.contains("unsafe { *memid = mi_memid_create_arena(arena, range) };")
+            && !arena_rs.contains(
+                "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    slice_index: usize,\n    slice_count: usize,"
+            )
+            && !arena_rs.contains("SliceRange::from_raw(slice_index as u32, slice_count as u32)"),
+        "arena memid construction should receive an already-typed SliceRange"
+    );
+    assert!(
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_end(")

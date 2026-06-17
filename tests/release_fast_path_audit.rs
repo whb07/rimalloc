@@ -2253,6 +2253,13 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena memid construction should receive an already-typed SliceRange"
     );
     assert!(
+        arena_rs.contains(
+            "unsafe fn mi_arena_try_alloc_at(\n    arena: *mut mi_arena_t,\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains("let p = mi_arena_try_alloc_at(arena, slice_count, commit, tseq, memid);")
+            && !arena_rs.contains("mi_arena_try_alloc_at(arena, slice_count.get() as usize"),
+        "arena allocation helper should accept typed SliceCount from its callers"
+    );
+    assert!(
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_end(")

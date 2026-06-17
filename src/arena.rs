@@ -947,11 +947,12 @@ unsafe fn mi_page_full_size(page: *mut mi_page_t) -> usize {
 #[allow(dead_code)]
 unsafe fn mi_arena_try_alloc_at(
     arena: *mut mi_arena_t,
-    slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
     commit: bool,
     tseq: usize,
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
+    let slice_count = slice_count.get() as usize;
     let mut slice_index = 0usize;
     if !unsafe {
         mi_bbitmap_try_find_and_clearN(
@@ -1293,8 +1294,7 @@ unsafe fn mi_arenas_try_find_free(
             numa_node,
             allow_large,
             |arena| {
-                let p =
-                    mi_arena_try_alloc_at(arena, slice_count.get() as usize, commit, tseq, memid);
+                let p = mi_arena_try_alloc_at(arena, slice_count, commit, tseq, memid);
                 if !p.is_null() {
                     found = p;
                     false
@@ -1317,8 +1317,7 @@ unsafe fn mi_arenas_try_find_free(
             numa_node,
             allow_large,
             |arena| {
-                let p =
-                    mi_arena_try_alloc_at(arena, slice_count.get() as usize, commit, tseq, memid);
+                let p = mi_arena_try_alloc_at(arena, slice_count, commit, tseq, memid);
                 if !p.is_null() {
                     found = p;
                     false

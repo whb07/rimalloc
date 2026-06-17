@@ -104,6 +104,7 @@ impl ItemCount {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct CallocRequest {
     count: ItemCount,
     item_size: RequestedSize,
@@ -201,5 +202,22 @@ impl MallocGenericFlags {
         } else {
             MaybeHugeAlignment::Normal
         }
+    }
+}
+impl LayoutRequest {
+    pub(crate) fn requested(self) -> RequestedSize {
+        self.requested
+    }
+}
+
+impl CallocRequest {
+    pub(crate) fn count(self) -> ItemCount {
+        self.count
+    }
+    pub(crate) fn item_size(self) -> RequestedSize {
+        self.item_size
+    }
+    pub(crate) fn total(self) -> RequestedSize {
+        self.total
     }
 }

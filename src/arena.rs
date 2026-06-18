@@ -942,7 +942,6 @@ unsafe fn mi_page_full_size(page: *mut mi_page_t) -> usize {
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_try_alloc_at(
     arena: *mut mi_arena_t,
     slice_count: crate::core_types::SliceCount,
@@ -1328,7 +1327,6 @@ unsafe fn mi_arenas_try_find_free(
     found
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_pages_size(
     slice_count: crate::core_types::SliceCount,
     bitmap_base: *mut usize,
@@ -1531,7 +1529,7 @@ unsafe fn mi_arenas_add(
     false
 }
 
-#[allow(dead_code, clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 unsafe fn mi_arena_initialize(
     subproc: *mut mi_subproc_t,
     start: *mut c_void,
@@ -1712,7 +1710,7 @@ unsafe fn mi_arena_initialize(
     arena
 }
 
-#[allow(dead_code, clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 unsafe fn mi_arenas_try_alloc(
     heap: *mut mi_heap_t,
     slice_count: crate::core_types::SliceCount,
@@ -1792,7 +1790,6 @@ unsafe fn mi_arenas_try_alloc(
     p
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_reserve(
     subproc: *mut mi_subproc_t,
     req_size: usize,
@@ -1912,7 +1909,6 @@ unsafe fn mi_arena_reserve(
     err == 0
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_os_alloc_aligned(
     size: usize,
     alignment: usize,
@@ -2032,7 +2028,6 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_abandoned_page_unown(page: *mut mi_page_t, current_theap: *mut mi_theap_t) -> bool {
     crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
@@ -2061,7 +2056,6 @@ unsafe fn mi_abandoned_page_unown(page: *mut mi_page_t, current_theap: *mut mi_t
     }
 }
 
-#[allow(dead_code)]
 unsafe extern "C" fn mi_arena_try_claim_abandoned(
     slice_index: usize,
     arena: *mut mi_arena_t,
@@ -3177,7 +3171,6 @@ unsafe fn mi_arena_purge(arena: *mut mi_arena_t, range: crate::core_types::Slice
     needs_recommit
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_try_purge_range(
     arena: *mut mi_arena_t,
     range: crate::core_types::SliceRange,
@@ -3216,7 +3209,6 @@ unsafe fn mi_arena_try_purge_range(
     }
 }
 
-#[allow(dead_code)]
 unsafe extern "C" fn mi_arena_try_purge_visitor(
     slice_index: usize,
     slice_count: usize,
@@ -3253,7 +3245,6 @@ unsafe extern "C" fn mi_arena_try_purge_visitor(
     true
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_try_purge(arena: *mut mi_arena_t, now: mi_msecs_t, force: bool) -> c_int {
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
         return -1;
@@ -3311,7 +3302,6 @@ unsafe fn mi_arena_try_purge(arena: *mut mi_arena_t, now: mi_msecs_t, force: boo
     if vinfo.any_purged { 1 } else { -1 }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arenas_try_purge(
     force: bool,
     visit_all: bool,

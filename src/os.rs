@@ -701,18 +701,23 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
             // commit_size -= diff; // Handled below by subtracting from final argument instead to match original code structure correctly
         }
     }
-    unsafe {
-        mi_os_prim_free(
-            base,
-            csize,
-            if still_committed {
-                commit_size - (addr as usize - base as usize)
-            } else {
-                0
-            },
-            subproc,
-        )
-    };
+    if matches!(&os.kind, crate::core_types::OsMemKind::Huge) {
+        crate::mi_assert!(os.pinned.0);
+        unsafe { mi_os_free_huge_os_pages(base, csize, subproc) };
+    } else {
+        unsafe {
+            mi_os_prim_free(
+                base,
+                csize,
+                if still_committed {
+                    commit_size - (addr as usize - base as usize)
+                } else {
+                    0
+                },
+                subproc,
+            )
+        };
+    }
 }
 
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
@@ -1156,7 +1161,6 @@ unsafe fn mi_os_claim_huge_pages(pages: usize, total_size: *mut usize) -> *mut u
 }
 
 #[inline]
-#[allow(dead_code)]
 unsafe fn mi_os_free_huge_os_pages(p: *mut c_void, mut size: usize, subproc: *mut mi_subproc_t) {
     if p.is_null() || size == 0 {
         return;

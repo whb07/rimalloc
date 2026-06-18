@@ -900,7 +900,6 @@ fn phase6_dead_code_allowances_stay_intentional() {
         ("src/core_types/mod.rs", 13),
         ("src/init.rs", 2),
         ("src/internal.rs", 1),
-        ("src/os.rs", 1),
         ("src/prim/emscripten.rs", 1),
         ("src/prim/osx.rs", 1),
         ("src/prim/unix.rs", 2),
@@ -2541,6 +2540,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_unprotect(")
             && os_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_free_ex(")
+            && os_rs.contains("if matches!(&os.kind, crate::core_types::OsMemKind::Huge) {")
+            && os_rs.contains("unsafe { mi_os_free_huge_os_pages(base, csize, subproc) };")
+            && os_rs.contains("} else {\n        unsafe {\n            mi_os_prim_free(")
             && os_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_zalloc(")
             && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_alloc_aligned(")
             && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_numa_node()")

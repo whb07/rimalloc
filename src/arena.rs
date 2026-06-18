@@ -249,7 +249,8 @@ unsafe extern "C" fn mi_heap_visit_page_at(
     arg: *mut c_void,
 ) -> bool {
     let vinfo = arg.cast::<mi_heap_visit_info_t>();
-    let page = unsafe { mi_arena_page_at_slice(arena, slice_index) };
+    let page =
+        unsafe { mi_arena_page_at_slice(arena, crate::core_types::SliceIndex::new(slice_index)) };
     unsafe { mi_heap_visit_page(page, vinfo) }
 }
 
@@ -741,7 +742,11 @@ unsafe fn mi_arena_start(arena: *mut mi_arena_t) -> *mut u8 {
 
 #[allow(dead_code)]
 #[inline(never)]
-unsafe fn mi_arena_slice_start(arena: *mut mi_arena_t, slice_index: usize) -> *mut u8 {
+unsafe fn mi_arena_slice_start(
+    arena: *mut mi_arena_t,
+    slice_index: crate::core_types::SliceIndex,
+) -> *mut u8 {
+    let slice_index = slice_index.get();
     crate::mi_assert_internal!(
         slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
@@ -750,13 +755,17 @@ unsafe fn mi_arena_slice_start(arena: *mut mi_arena_t, slice_index: usize) -> *m
 
 #[allow(dead_code)]
 #[inline(never)]
-unsafe fn mi_arena_page_at_slice(arena: *mut mi_arena_t, slice_index: usize) -> *mut mi_page_t {
+unsafe fn mi_arena_page_at_slice(
+    arena: *mut mi_arena_t,
+    slice_index: crate::core_types::SliceIndex,
+) -> *mut mi_page_t {
+    let slice_index_usize = slice_index.get();
     crate::mi_assert_internal!(
-        slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
+        slice_index_usize < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
     let pages_meta = unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta };
     if !pages_meta.is_null() {
-        return unsafe { pages_meta.add(slice_index) };
+        return unsafe { pages_meta.add(slice_index_usize) };
     }
     unsafe { mi_arena_slice_start(arena, slice_index).cast::<mi_page_t>() }
 }
@@ -972,7 +981,10 @@ unsafe fn mi_arena_try_alloc_at(
         return ptr::null_mut();
     }
 
-    let p = unsafe { mi_arena_slice_start(arena, slice_index).cast::<c_void>() };
+    let p = unsafe {
+        mi_arena_slice_start(arena, crate::core_types::SliceIndex::new(slice_index))
+            .cast::<c_void>()
+    };
     let Some(range) = crate::core_types::SliceRange::new(slice_index, slice_count, unsafe {
         crate::core_types::ArenaPtr::new_unchecked(arena)
     })
@@ -2227,7 +2239,8 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                 &mut claim_fun,
                 arena.cast(),
             ) {
-                let page = mi_arena_page_at_slice(arena, slice_index);
+                let page =
+                    mi_arena_page_at_slice(arena, crate::core_types::SliceIndex::new(slice_index));
                 crate::mi_assert_internal!(mi_page_is_owned(page));
                 crate::mi_assert_internal!(mi_page_is_abandoned(page));
                 crate::mi_assert_internal!(mi_heap_has_page(heap, arena, page));
@@ -3169,7 +3182,7 @@ unsafe fn mi_arena_purge(arena: *mut mi_arena_t, range: crate::core_types::Slice
     });
 
     let size = mi_size_of_slices(slice_count);
-    let p = unsafe { mi_arena_slice_start(arena, slice_index).cast::<c_void>() };
+    let p = unsafe { mi_arena_slice_start(arena, range.start()).cast::<c_void>() };
     let mut already_committed = 0usize;
     unsafe {
         mi_bitmap_setN(
@@ -3773,7 +3786,10 @@ unsafe fn mi_debug_show_page_bfield(
     let mut color = unsafe { *pcolor_of_page };
     let mut prev_color = MI_GRAY;
     for bit in 0..MI_BFIELD_BITS {
-        let start = unsafe { mi_arena_slice_start(arena, slice_index + bit).cast::<c_void>() };
+        let start = unsafe {
+            mi_arena_slice_start(arena, crate::core_types::SliceIndex::new(slice_index + bit))
+                .cast::<c_void>()
+        };
         let page = unsafe { _mi_safe_ptr_page(start) };
         if !page.is_null() && start == unsafe { mi_page_slice_start(page) }.cast::<c_void>() {
             crate::mi_assert_internal!(bit_of_page <= 0);
@@ -4234,11 +4250,15 @@ type MiDebugShowChunksFunT = unsafe fn(
 ) -> usize;
 
 #[used]
-static MI_ARENA_SLICE_START_KEEP: unsafe fn(*mut mi_arena_t, usize) -> *mut u8 =
-    mi_arena_slice_start;
+static MI_ARENA_SLICE_START_KEEP: unsafe fn(
+    *mut mi_arena_t,
+    crate::core_types::SliceIndex,
+) -> *mut u8 = mi_arena_slice_start;
 #[used]
-static MI_ARENA_PAGE_AT_SLICE_KEEP: unsafe fn(*mut mi_arena_t, usize) -> *mut mi_page_t =
-    mi_arena_page_at_slice;
+static MI_ARENA_PAGE_AT_SLICE_KEEP: unsafe fn(
+    *mut mi_arena_t,
+    crate::core_types::SliceIndex,
+) -> *mut mi_page_t = mi_arena_page_at_slice;
 #[used]
 static MI_ARENAS_PAGE_SINGLETON_ALLOC_KEEP: unsafe fn(
     *mut mi_theap_t,

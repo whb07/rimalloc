@@ -2385,6 +2385,20 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         arena_rs.contains(
+            "unsafe fn mi_arena_slice_start(\n    arena: *mut mi_arena_t,\n    slice_index: crate::core_types::SliceIndex,"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arena_page_at_slice(\n    arena: *mut mi_arena_t,\n    slice_index: crate::core_types::SliceIndex,"
+        ) && arena_rs.contains(
+            "mi_arena_page_at_slice(arena, crate::core_types::SliceIndex::new(slice_index))"
+        ) && arena_rs.contains(
+            "mi_arena_slice_start(arena, crate::core_types::SliceIndex::new(slice_index))"
+        ) && arena_rs.contains("mi_arena_slice_start(arena, range.start()).cast::<c_void>()")
+            && !arena_rs.contains("mi_arena_page_at_slice(arena, slice_index)")
+            && !arena_rs.contains("mi_arena_slice_start(arena, slice_index).cast::<c_void>()"),
+        "arena slice address/page helpers should receive typed SliceIndex values"
+    );
+    assert!(
+        arena_rs.contains(
             "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange)"
         ) && arena_rs.contains(
             "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange) -> bool"

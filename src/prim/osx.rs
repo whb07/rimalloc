@@ -11,7 +11,6 @@
     dead_code,
     unused_imports,
     unused_macros,
-    clippy::missing_safety_doc,
     unsafe_op_in_unsafe_fn
 )]
 
@@ -166,16 +165,27 @@ unsafe extern "C" {
     fn malloc_zone_valloc(zone: *mut malloc_zone_t, size: usize) -> *mut c_void;
 }
 
+/// # Safety
+///
+/// `zone` must be null or point to a valid malloc zone object for the duration
+/// of the call.
 #[inline]
 pub unsafe fn is_mimalloc_zone(zone: *mut malloc_zone_t) -> bool {
     zone.is_null() || core::ptr::eq(zone.cast_const(), addr_of_mut!(mi_malloc_zone).cast_const())
 }
 
+/// # Safety
+///
+/// Returns the process-global mimalloc zone pointer. Callers must not mutate the
+/// returned zone except through the macOS malloc-zone override hooks.
 #[inline]
 pub unsafe fn mi_get_default_zone() -> *mut malloc_zone_t {
     addr_of_mut!(mi_malloc_zone)
 }
 
+/// # Safety
+///
+/// Must be called only through the macOS malloc-zone creation ABI.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_create_zone(
     _size: vm_size_t,
@@ -184,21 +194,35 @@ pub unsafe extern "C" fn mi_malloc_create_zone(
     mi_get_default_zone()
 }
 
+/// # Safety
+///
+/// Must be called only through the macOS malloc default-zone ABI.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_default_zone() -> *mut malloc_zone_t {
     mi_get_default_zone()
 }
 
+/// # Safety
+///
+/// Must be called only through the macOS malloc purgeable-zone ABI.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_default_purgeable_zone() -> *mut malloc_zone_t {
     mi_get_default_zone()
 }
 
+/// # Safety
+///
+/// `_zone`, when non-null, must be a valid malloc zone pointer supplied by the
+/// macOS malloc-zone ABI.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_destroy_zone(_zone: *mut malloc_zone_t) {
     // nothing
 }
 
+/// # Safety
+///
+/// `addresses` and `count`, when non-null, must be valid writable out-pointers
+/// for the duration of the call.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_get_all_zones(
     _task: task_t,
@@ -215,6 +239,9 @@ pub unsafe extern "C" fn mi_malloc_get_all_zones(
     KERN_SUCCESS
 }
 
+/// # Safety
+///
+/// `zone`, when non-null, must point to a valid malloc zone object.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_get_zone_name(zone: *mut malloc_zone_t) -> *const c_char {
     let zone = if zone.is_null() {
@@ -225,16 +252,28 @@ pub unsafe extern "C" fn mi_malloc_get_zone_name(zone: *mut malloc_zone_t) -> *c
     (*zone).zone_name
 }
 
+/// # Safety
+///
+/// `_zone`, when non-null, must be a valid malloc zone pointer. `_name`, when
+/// non-null, must point to a valid NUL-terminated C string.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_set_zone_name(_zone: *mut malloc_zone_t, _name: *const c_char) {
     // nothing
 }
 
+/// # Safety
+///
+/// Must be called only through the macOS malloc jumpstart ABI.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_jumpstart(_cookie: uintptr_t) -> c_int {
     1
 }
 
+/// # Safety
+///
+/// `zone`, when used for forwarding, must point to a valid malloc zone object.
+/// `p` must be null or an allocation pointer accepted by either mimalloc or the
+/// forwarded zone.
 #[inline]
 pub unsafe extern "C" fn zone_size(zone: *mut malloc_zone_t, p: *const c_void) -> usize {
     if mi_any_heap_contains(p) {
@@ -249,11 +288,17 @@ pub unsafe extern "C" fn zone_size(zone: *mut malloc_zone_t, p: *const c_void) -
     }
 }
 
+/// # Safety
+///
+/// Must be called only through the macOS malloc-zone ABI.
 #[inline]
 pub unsafe extern "C" fn zone_malloc(_zone: *mut malloc_zone_t, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
 }
 
+/// # Safety
+///
+/// Must be called only through the macOS malloc-zone ABI.
 #[inline]
 pub unsafe extern "C" fn zone_calloc(
     _zone: *mut malloc_zone_t,
@@ -263,11 +308,19 @@ pub unsafe extern "C" fn zone_calloc(
     unsafe { crate::mimalloc::mi_calloc(count, size) }
 }
 
+/// # Safety
+///
+/// Must be called only through the macOS malloc-zone ABI.
 #[inline]
 pub unsafe extern "C" fn zone_valloc(_zone: *mut malloc_zone_t, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc_aligned(size, crate::os::_mi_os_page_size()) }
 }
 
+/// # Safety
+///
+/// `zone`, when used for forwarding, must point to a valid malloc zone object.
+/// `p` must be null or an allocation pointer accepted by either mimalloc or the
+/// forwarded zone.
 #[inline]
 pub unsafe extern "C" fn zone_free(zone: *mut malloc_zone_t, p: *mut c_void) {
     if mi_any_heap_contains(p.cast_const()) {
@@ -279,6 +332,11 @@ pub unsafe extern "C" fn zone_free(zone: *mut malloc_zone_t, p: *mut c_void) {
     }
 }
 
+/// # Safety
+///
+/// `zone`, when used for forwarding, must point to a valid malloc zone object.
+/// `p` must be null or an allocation pointer accepted by either mimalloc or the
+/// forwarded zone.
 #[inline]
 pub unsafe extern "C" fn zone_realloc(
     zone: *mut malloc_zone_t,
@@ -297,6 +355,10 @@ pub unsafe extern "C" fn zone_realloc(
     }
 }
 
+/// # Safety
+///
+/// Must be called only through the macOS malloc-zone ABI with an alignment
+/// accepted by `mi_malloc_aligned`.
 #[inline]
 pub unsafe extern "C" fn zone_memalign(
     _zone: *mut malloc_zone_t,
@@ -306,6 +368,9 @@ pub unsafe extern "C" fn zone_memalign(
     unsafe { crate::mimalloc::mi_malloc_aligned(size, alignment) }
 }
 
+/// # Safety
+///
+/// `zone`, when not the mimalloc zone, must point to a valid malloc zone object.
 #[inline]
 pub unsafe extern "C" fn zone_destroy(zone: *mut malloc_zone_t) {
     if !unsafe { is_mimalloc_zone(zone) }
@@ -315,6 +380,10 @@ pub unsafe extern "C" fn zone_destroy(zone: *mut malloc_zone_t) {
     }
 }
 
+/// # Safety
+///
+/// `ps` must point to writable storage for `count` pointers. `zone` must be a
+/// valid malloc zone pointer accepted by `zone_malloc`.
 #[inline]
 pub unsafe extern "C" fn zone_batch_malloc(
     zone: *mut malloc_zone_t,
@@ -334,6 +403,10 @@ pub unsafe extern "C" fn zone_batch_malloc(
     i
 }
 
+/// # Safety
+///
+/// `ps` must point to writable storage for `count` pointers. Each stored pointer
+/// must be null or accepted by `zone_free` for `zone`.
 #[inline]
 pub unsafe extern "C" fn zone_batch_free(
     zone: *mut malloc_zone_t,
@@ -349,46 +422,73 @@ pub unsafe extern "C" fn zone_batch_free(
     }
 }
 
+/// # Safety
+///
+/// Must be called only by the macOS malloc fork-prepare hook.
 #[inline]
 pub unsafe fn mi__malloc_fork_prepare() {
     // nothing
 }
 
+/// # Safety
+///
+/// Must be called only by the macOS malloc fork-prepare hook.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _malloc_fork_prepare() {
     unsafe { mi__malloc_fork_prepare() }
 }
 
+/// # Safety
+///
+/// Must be called only by the macOS malloc fork-parent hook.
 #[inline]
 pub unsafe fn mi__malloc_fork_parent() {
     // nothing
 }
 
+/// # Safety
+///
+/// Must be called only by the macOS malloc fork-parent hook.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _malloc_fork_parent() {
     unsafe { mi__malloc_fork_parent() }
 }
 
+/// # Safety
+///
+/// Must be called only by the macOS malloc fork-child hook.
 #[inline]
 pub unsafe fn mi__malloc_fork_child() {
     // nothing
 }
 
+/// # Safety
+///
+/// Must be called only by the macOS malloc fork-child hook.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _malloc_fork_child() {
     unsafe { mi__malloc_fork_child() }
 }
 
+/// # Safety
+///
+/// `_fmt`, when non-null, must point to a valid NUL-terminated C format string.
 #[inline]
 pub unsafe fn mi_malloc_printf(_fmt: *const c_char) {
     // nothing
 }
 
+/// # Safety
+///
+/// `_zone`, when non-null, must be a valid malloc zone pointer.
 #[inline]
 pub unsafe extern "C" fn zone_check(_zone: *mut malloc_zone_t) -> boolean_t {
     1
 }
 
+/// # Safety
+///
+/// `p` must be null or an allocation pointer suitable for ownership queries.
 #[inline]
 pub unsafe extern "C" fn zone_from_ptr(p: *const c_void) -> *mut malloc_zone_t {
     if mi_any_heap_contains(p) {
@@ -398,26 +498,42 @@ pub unsafe extern "C" fn zone_from_ptr(p: *const c_void) -> *mut malloc_zone_t {
     }
 }
 
+/// # Safety
+///
+/// `_zone`, when non-null, must be a valid malloc zone pointer. `_p` must be
+/// null or a pointer accepted by the zone logging ABI.
 #[inline]
 pub unsafe extern "C" fn zone_log(_zone: *mut malloc_zone_t, _p: *mut c_void) {
     // nothing
 }
 
+/// # Safety
+///
+/// `_zone`, when non-null, must be a valid malloc zone pointer.
 #[inline]
 pub unsafe extern "C" fn zone_print(_zone: *mut malloc_zone_t, _verbose: boolean_t) {
     // nothing
 }
 
+/// # Safety
+///
+/// `_p` must be null or a pointer accepted by the macOS malloc pointer-info ABI.
 #[inline]
 pub unsafe extern "C" fn zone_print_ptr_info(_p: *mut c_void) {
     // nothing
 }
 
+/// # Safety
+///
+/// `_zone`, when non-null, must be a valid malloc zone pointer.
 #[inline]
 pub unsafe extern "C" fn zone_register(_zone: *mut malloc_zone_t) {
     // nothing
 }
 
+/// # Safety
+///
+/// `_zone`, when non-null, must be a valid malloc zone pointer.
 #[inline]
 pub unsafe extern "C" fn zone_unregister(_zone: *mut malloc_zone_t) {
     // nothing
@@ -475,6 +591,10 @@ pub static _mi_zone_interposes: [mi_interpose_s; 27] = [
 ];
 
 #[cfg(target_os = "macos")]
+/// # Safety
+///
+/// Must be called during macOS process initialization before allocator override
+/// interposition is used concurrently.
 pub unsafe extern "C" fn _mi_macos_override_malloc() {
     let purgeable_zone = unsafe { malloc_default_purgeable_zone() };
 

@@ -6,6 +6,12 @@ use crate::MiMalloc;
 
 /// Error returned when a safe Rust allocation request cannot be satisfied.
 ///
+/// Cause: mimalloc returned null for a valid Rust [`Layout`].
+///
+/// Recovery: keep or drop existing allocations, reduce the requested size or
+/// alignment, or propagate the error. The failed request does not create an
+/// allocation that needs to be freed.
+///
 /// Allocation failure is platform and overcommit dependent, so examples should
 /// treat this as the error branch from safe allocation APIs rather than trying
 /// to force a reliable runtime failure:
@@ -51,6 +57,12 @@ impl std::error::Error for AllocError {}
 
 /// Error returned when size/alignment parameters do not form a valid layout.
 ///
+/// Cause: a size/alignment convenience constructor received parameters rejected
+/// by [`Layout::from_size_align`].
+///
+/// Recovery: pass a non-zero power-of-two alignment and a size/alignment pair
+/// that fits Rust's layout rules.
+///
 /// ```rust
 /// use mechanical_mimalloc::{Allocation, TryAllocError};
 ///
@@ -95,6 +107,10 @@ impl fmt::Display for LayoutError {
 impl std::error::Error for LayoutError {}
 
 /// Error returned by size/alignment convenience allocation constructors.
+///
+/// `TryAllocError::Layout` means no allocator call was made because the
+/// requested layout was invalid. `TryAllocError::Alloc` means the layout was
+/// valid but allocation failed.
 ///
 /// ```rust
 /// use mechanical_mimalloc::{Allocation, TryAllocError};
@@ -317,6 +333,7 @@ fn dangling_for(layout: Layout) -> NonNull<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::fmt::Write;
 
     #[test]
     fn owned_allocation_round_trips_bytes() {
@@ -383,6 +400,66 @@ mod tests {
                 assert_eq!(err.align(), 3);
             }
             TryAllocError::Alloc(_) => panic!("expected layout error"),
+        }
+    }
+
+    #[test]
+    fn overflow_layout_reports_rust_error_without_allocating() {
+        let err = Allocation::zeroed_with_size_align(usize::MAX, 2).expect_err("invalid layout");
+        match err {
+            TryAllocError::Layout(err) => {
+                assert_eq!(err.size(), usize::MAX);
+                assert_eq!(err.align(), 2);
+            }
+            TryAllocError::Alloc(_) => panic!("expected layout error"),
+        }
+    }
+
+    #[test]
+    fn error_types_are_copy_clone_and_format_without_owned_strings() {
+        fn assert_traits<T: Copy + Clone + core::fmt::Debug + Eq>() {}
+        assert_traits::<AllocError>();
+        assert_traits::<LayoutError>();
+        assert_traits::<TryAllocError>();
+
+        let layout = Layout::from_size_align(64, 16).expect("layout");
+        let alloc = AllocError { layout };
+        let layout_err = LayoutError { size: 1, align: 3 };
+        let try_alloc = TryAllocError::Alloc(alloc);
+
+        let mut buf = FixedBuf::new();
+        write!(&mut buf, "{alloc}; {layout_err}; {try_alloc}").expect("format");
+        assert!(buf.as_str().contains("mimalloc allocation failed"));
+        assert!(buf.as_str().contains("invalid allocation layout"));
+    }
+
+    struct FixedBuf {
+        bytes: [u8; 256],
+        len: usize,
+    }
+
+    impl FixedBuf {
+        fn new() -> Self {
+            Self {
+                bytes: [0; 256],
+                len: 0,
+            }
+        }
+
+        fn as_str(&self) -> &str {
+            core::str::from_utf8(&self.bytes[..self.len]).expect("utf8")
+        }
+    }
+
+    impl Write for FixedBuf {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            let next = self.len.checked_add(s.len()).ok_or(fmt::Error)?;
+            if next > self.bytes.len() {
+                return Err(fmt::Error);
+            }
+            self.bytes[self.len..next].copy_from_slice(s.as_bytes());
+            self.len = next;
+            Ok(())
         }
     }
 }

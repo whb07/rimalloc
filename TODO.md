@@ -611,7 +611,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## C4. Error and status types
 
-- [ ] Finalize error hierarchy.
+- [x] Finalize error hierarchy.
   - Minimum current types:
     - `AllocError`
     - `LayoutError`
@@ -627,8 +627,13 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `Display` does not allocate.
     - `std::error::Error` impls are gated by `std`.
     - Errors are `Copy`/`Clone` only when semantically stable and cheap.
+  - Evidence:
+    - `src/safe.rs` documents cause and recovery for `AllocError`, `LayoutError`, and `TryAllocError`.
+    - Unit tests format errors through a fixed caller-provided `fmt::Write` buffer.
+    - `std::error::Error` impls are gated with `#[cfg(feature = "std")]`.
+    - Unit tests compile-check the safe error types as `Copy + Clone + Debug + Eq`.
 
-- [ ] Avoid stringly or ambiguous errors.
+- [x] Avoid stringly or ambiguous errors.
   - Required behavior:
     - No public safe API returns `bool` for failure unless the meaning is obvious and documented.
     - No public safe API returns raw errno integers without a typed wrapper.
@@ -637,8 +642,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - Public API review checks return types.
     - No `String`, `Vec`, `Box`, or formatting allocation occurs in allocator hot/error paths.
     - `tests/no_allocation_critical_paths.rs` or equivalent covers this.
+  - Evidence:
+    - Public safe allocation APIs return `Result<_, AllocError>` or `Result<_, TryAllocError>`; there are no safe bool/errno failure returns.
+    - `rg -n "String|Vec|Box|format!|to_string" src/safe.rs` finds no owned allocation or string construction in safe error paths.
+    - `tests/no_allocation_critical_paths.rs` covers allocator critical paths, and safe error `Display` tests use a fixed stack buffer.
 
-- [ ] Define mapping from raw C failure to Rust errors.
+- [x] Define mapping from raw C failure to Rust errors.
   - Required mapping examples:
     - Null from allocation => `AllocError`.
     - Invalid size/alignment => `LayoutError`.
@@ -647,6 +656,10 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - Docs include mapping table.
     - Tests cover null/overflow allocation requests and invalid alignment.
+  - Evidence:
+    - `docs/safe-api.md` includes the raw-condition-to-safe-error mapping table.
+    - `Allocation::allocate` maps null from `MiMalloc` to `AllocError`.
+    - Unit tests cover invalid alignment and layout overflow mapping to `TryAllocError::Layout`.
 
 ---
 

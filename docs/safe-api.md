@@ -60,6 +60,18 @@ only where the semantics are correct for the safe abstraction.
 - Handle wrappers should not implement `Deref` unless the deref target
   semantics are obvious, safe, and do not expose allocator metadata aliases.
 
+## Error Mapping
+
+Safe APIs translate raw C failure conventions at the safe boundary:
+
+| Raw condition | Safe Rust result |
+| --- | --- |
+| Null from an allocation request with a valid `Layout` | `AllocError` |
+| Invalid size/alignment convenience arguments | `LayoutError` |
+| Convenience constructor failure after layout validation | `TryAllocError::Alloc` |
+| Unsupported platform or feature for a future safe API | a typed `UnsupportedError` or equivalent, if that API is added |
+| Raw errno-style behavior | remains under `raw` until wrapped by a typed safe API |
+
 ## Feature Expectations
 
 Safe API behavior should remain understandable under:

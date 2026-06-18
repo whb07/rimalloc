@@ -6,7 +6,6 @@
 #![allow(
     non_camel_case_types,
     non_upper_case_globals,
-    dead_code,
     unused_imports,
     unsafe_op_in_unsafe_fn
 )]
@@ -197,6 +196,7 @@ unsafe extern "C" {
     fn munmap(addr: *mut c_void, len: usize) -> c_int;
     fn access(path: *const c_char, amode: c_int) -> c_int;
     fn sysconf(name: c_int) -> c_long;
+    #[allow(dead_code)]
     fn clock() -> c_long;
     fn mmap(
         addr: *mut c_void,
@@ -256,6 +256,7 @@ const CLOCK_MONOTONIC: c_int = 1;
 const CLOCK_REALTIME: c_int = 0;
 #[cfg(target_os = "macos")]
 const CLOCK_MONOTONIC: c_int = 6;
+#[allow(dead_code)]
 const CLOCKS_PER_SEC: c_long = 1_000_000;
 
 #[cfg(all(

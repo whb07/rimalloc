@@ -1,11 +1,6 @@
 //! Mechanical translation of `src/arena-meta.c`.
 
-#![allow(
-    dead_code,
-    non_camel_case_types,
-    non_upper_case_globals,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_void;
 use core::mem::offset_of;

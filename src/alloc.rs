@@ -641,11 +641,8 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
-    let (page, size) = if p.is_null() {
-        if !usable_pre.is_null() {
-            *usable_pre = 0;
-        }
-        (ptr::null_mut(), 0usize)
+    let old = if p.is_null() {
+        None
     } else {
         let Some(old) = mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) else {
             if !usable_pre.is_null() {
@@ -653,12 +650,32 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
             }
             return ptr::null_mut();
         };
+        Some(old)
+    };
+    mi_theap_realloc_apply(theap, p, old, newsize, zero, usable_pre, usable_post)
+}
+
+unsafe fn mi_theap_realloc_apply(
+    theap: *mut mi_theap_t,
+    p: *mut c_void,
+    old: Option<crate::core_types::OldAllocation>,
+    newsize: usize,
+    zero: bool,
+    usable_pre: *mut usize,
+    usable_post: *mut usize,
+) -> *mut c_void {
+    let (page, size) = if let Some(old) = old {
         let page = old.page().as_ptr();
         let size = old.usable();
         if !usable_pre.is_null() {
             *usable_pre = mi_page_usable_block_size(page).get();
         }
         (page, size.get())
+    } else {
+        if !usable_pre.is_null() {
+            *usable_pre = 0;
+        }
+        (ptr::null_mut(), 0usize)
     };
 
     if mi_unlikely(
@@ -733,10 +750,23 @@ unsafe fn mi_theap_realloc_request(
         .ptr()
         .map(|ptr| ptr.as_ptr())
         .unwrap_or(core::ptr::null_mut());
+    let old = if p.is_null() {
+        None
+    } else {
+        let Some(old) = mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) else {
+            if !usable_pre.is_null() {
+                *usable_pre = 0;
+            }
+            return ptr::null_mut();
+        };
+        Some(old)
+    };
+    let req = req.with_old(old);
     let layout = req.new_layout();
-    _mi_theap_realloc_zero(
+    mi_theap_realloc_apply(
         theap,
         p,
+        req.old(),
         layout.requested().get(),
         req.zero_new_tail() == crate::core_types::Zeroed::Yes,
         usable_pre,

@@ -631,12 +631,17 @@ fn realloc_validation_uses_pointer_lookup_boundary() {
             && alloc_rs.contains("crate::core_types::PointerLookup::Valid {\n            user,\n            page,\n            location,")
             && alloc_rs.contains("Some(crate::core_types::OldAllocation::new(")
             && alloc_rs.contains("let Some(old) = mi_realloc_old_allocation(p, c\"mi_realloc\".as_ptr())")
+            && alloc_rs.contains("unsafe fn mi_theap_realloc_apply(")
+            && alloc_rs.contains("let req = req.with_old(old);")
+            && alloc_rs.contains("req.old(),")
             && alloc_rs.contains("let page = old.page().as_ptr();")
             && alloc_rs.contains("let size = old.usable();")
             && alloc_rs.contains("crate::core_types::PointerLookup::Invalid { .. }")
             && layout_rs.contains("pub(crate) struct OldAllocation")
             && layout_rs.contains("pub(crate) fn usable(self) -> UsableSize")
             && layout_rs.contains("pub(crate) fn page(self) -> PagePtr")
+            && layout_rs.contains("pub(crate) fn old(&self) -> Option<OldAllocation>")
+            && layout_rs.contains("pub(crate) fn with_old(mut self, old: Option<OldAllocation>) -> Self")
             && !alloc_rs.contains("unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const c_char) -> *mut mi_page_t")
             && !alloc_rs.contains("_mi_safe_ptr_page"),
         "realloc must use PointerLookup and construct OldAllocation only after validation"

@@ -216,12 +216,21 @@ impl ReallocRequest {
         self.ptr
     }
 
+    pub(crate) fn old(&self) -> Option<OldAllocation> {
+        self.old
+    }
+
     pub(crate) fn new_layout(&self) -> LayoutRequest {
         self.new_layout
     }
 
     pub(crate) fn zero_new_tail(&self) -> Zeroed {
         self.zero_new_tail
+    }
+
+    pub(crate) fn with_old(mut self, old: Option<OldAllocation>) -> Self {
+        self.old = old;
+        self
     }
 }
 

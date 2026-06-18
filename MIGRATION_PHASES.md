@@ -77,6 +77,8 @@ Benchmark verification after the `AtomicThreadFree(AtomicUsizeField)` cleanup re
 
 `tests/release_fast_path_audit.rs` now includes a cross-cutting data-type acceptance audit for the `TYPES_SPEC.md` Section 18 invariants that are enforceable from source shape: `core_types` module ownership, memid union access limited to `MemId::view`/constructors, pointer-to-atomic casts limited to typed atomic field wrappers, no `Deref`/`DerefMut` on core metadata wrappers, block-link raw field access limited to the free-list wrapper layer, and typed free/reclaim/page-queue signatures.
 
+Padding metadata access now routes through `core_types::PaddingPtr`, `Padding`, `PaddingCanary`, and `PaddingDelta` in the allocation/free support paths. The source audit guards that raw `mi_padding_t` field access remains confined to the raw type definition and padding wrapper, moving the Section 14 padding scaffold closer to the `TYPES_SPEC.md` centralization rule without changing the default release allocator path where `MI_PADDING == 0`.
+
 A Phase 6 dead-code probe confirmed the remaining broad `core_types` `dead_code` allowance covers required staged typestate/scalar scaffolding from `TYPES_SPEC.md`, not accidental live-code silence. The unused pointer-wrapper `as_non_null` escape hatch was removed so pointer wrappers expose only the constructor/raw-pointer surface required by the spec.
 
 Follow-up Phase 6 dead-code cleanup removed stale module-wide `dead_code` allowances from the public header/static facades, stats/tracking/POSIX allocation boundaries, bitmap/libc/override/primitive boundary modules, the active Unix primitive layer, arena metadata, thread-heap helpers, and the allocation/free hot-path modules. Remaining broad `dead_code` allowances are now limited to `internal` re-export compatibility, `core_types` staged strict-type scaffolding, non-Linux primitive targets that are not compiled on this platform, and a small set of arena C-compatibility definitions/helpers. The active hot-path modules now rely on item-level allowances only where a specific staged compatibility helper remains.
@@ -91,7 +93,7 @@ The tracking shim no longer needs the broad `unsafe_op_in_unsafe_fn` module allo
 
 Stale C naming allowances were removed from the static and tracking facades. The source audit now enforces the remaining C naming, macro, and ctypes allowlist by file/lint count, with `static.rs` and `track.rs` guarded against regaining those suppressions.
 
-No benchmark rerun was needed for the allowance narrowing because these changes only adjust lint attributes, source audits, and item-level documentation of staged compatibility helpers; no generated allocator logic or hot-path operation changed. The latest runtime benchmark evidence remains the post-`AtomicThreadFree(AtomicUsizeField)` verification above against `BENCHMARK_RESULTS.md`.
+No benchmark rerun was needed for the allowance and padding-wrapper narrowing because the lint/audit changes do not affect generated allocator logic, and default release builds compile the padding metadata branch out (`MI_PADDING == 0`). The latest runtime benchmark evidence remains the post-`AtomicThreadFree(AtomicUsizeField)` verification above against `BENCHMARK_RESULTS.md`.
 
 **Action Items:**
 1. **Remove Unused Types:** In progress. Do not delete C ABI aliases still required by `raw`/compat/public module boundaries.

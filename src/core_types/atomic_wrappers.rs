@@ -5,7 +5,9 @@ use core::marker::PhantomData;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
-use crate::core_types::{BlockPtr, PageFlags, PageOwnerId, PageThreadId, ThreadFreeWord};
+use crate::core_types::{
+    BlockPtr, PageFlags, PageOwnerId, PageThreadId, RemoteFreeList, ThreadFreeOwner, ThreadFreeWord,
+};
 
 pub(crate) type MemoryOrder = Ordering;
 
@@ -145,6 +147,42 @@ impl AtomicThreadFree {
                     },
                 );
                 Err(*old)
+            }
+        }
+    }
+
+    /// Atomically detach the current remote free-list head while preserving the
+    /// ownership bit in `xthread_free`.
+    ///
+    /// Mirrors the CAS loop in `mi_page_thread_free_collect`; returning a
+    /// `RemoteFreeList` makes the subsequent abandoned-page collection consume
+    /// the typed free-list wrapper instead of a raw `mi_block_t*`.
+    ///
+    /// # Safety
+    /// `self` must point to a valid page's `xthread_free` field.
+    #[inline]
+    pub(crate) unsafe fn take_head_preserving_owner(self) -> RemoteFreeList {
+        let atomic = unsafe { &*self.0.cast::<core::sync::atomic::AtomicUsize>() };
+        let mut old = ThreadFreeWord(atomic.load(Ordering::Relaxed));
+        loop {
+            let head = old.head();
+            if head.is_none() {
+                return RemoteFreeList(None);
+            }
+            let owner = if old.is_owned() {
+                ThreadFreeOwner::Owned
+            } else {
+                ThreadFreeOwner::Unowned
+            };
+            let new = ThreadFreeWord::from_parts(None, owner);
+            match atomic.compare_exchange_weak(
+                old.raw(),
+                new.raw(),
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return RemoteFreeList(head),
+                Err(value) => old = ThreadFreeWord(value),
             }
         }
     }

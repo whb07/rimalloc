@@ -929,6 +929,12 @@ pub(crate) unsafe fn try_reclaim_abandoned(
     crate::mi_assert_internal!(mi_page_is_abandoned(page));
 
     mi_page_set_theap(page, theap);
+
+    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+    let remote = atomic_tf.take_head_preserving_owner();
+    let local = crate::core_types::LocalFreeList::from_raw((*page).local_free);
+    remote.collect_into_local(page_wrapper, local);
+
     _mi_page_free_collect(page, false);
     let pq = mi_theap_page_queue_of(theap, page);
     mi_page_queue_push_at_end(theap, pq, page);

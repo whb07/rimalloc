@@ -2742,8 +2742,13 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_theap_page_reclaim")
             && page_rs.contains("static MI_THEAP_PAGE_RECLAIM_KEEP")
+            && page_rs.contains(
+                "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
+            )
+            && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
+            && page_rs.contains("remote.collect_into_local(page_wrapper, local);")
             && page_rs.contains("mi_page_queue_push_at_end(theap, pq, page);"),
-        "_mi_theap_page_reclaim should keep C's local abandoned-page reclaim helper boundary"
+        "_mi_theap_page_reclaim should keep C's local abandoned-page reclaim helper boundary while collecting remote frees through typed wrappers"
     );
     assert!(
         page_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_page_free_list_extend")

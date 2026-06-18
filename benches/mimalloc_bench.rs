@@ -394,6 +394,10 @@ fn scenarios() -> Vec<Scenario> {
             run: sh6bench::run,
         },
         Scenario {
+            name: "sh8benchN",
+            run: sh8bench::run,
+        },
+        Scenario {
             name: "mleak10",
             run: |alloc| unsafe { mleak::run(alloc, 5) },
         },
@@ -1638,6 +1642,232 @@ mod sh6bench {
                 assert_eq!(rc, 0, "pthread_join failed in sh6benchN: {rc}");
             }
             start.elapsed()
+        }
+    }
+}
+
+mod sh8bench {
+    use super::*;
+
+    const ITERATIONS: usize = 700_000;
+    const HEAP_SIZE: usize = 1_000_000;
+    const FOREIGN_ALLOC_COUNT: usize = 10_000_000;
+    const HISTOGRAM: &[(usize, usize)] = &[
+        (8, 1000),
+        (16, 5000),
+        (48, 1000),
+        (72, 100),
+        (148, 100),
+        (200, 100),
+        (520, 10),
+        (1056, 5),
+        (4096, 3),
+        (9162, 1),
+        (34562, 1),
+        (168524, 1),
+    ];
+
+    struct State {
+        alloc: BenchAllocator,
+        thread_count: usize,
+        foreign_slots: *mut *mut u8,
+        foreign_slot_count: usize,
+    }
+
+    struct ThreadArg {
+        state: *const State,
+        index: usize,
+    }
+
+    unsafe fn free_slot(alloc: BenchAllocator, slot: *mut *mut u8) {
+        unsafe {
+            let p = slot.read();
+            if !p.is_null() {
+                alloc.free(p);
+                slot.write(ptr::null_mut());
+            }
+        }
+    }
+
+    unsafe fn do_bench(arg: &ThreadArg) {
+        unsafe {
+            let state = &*arg.state;
+            let alloc = state.alloc;
+            let foreign_slot_size = state.foreign_slot_count / state.thread_count;
+            let foreign_frees_reset = foreign_slot_size / state.thread_count;
+            let mut foreign_frees_left = foreign_slot_size;
+            let mut foreign_frees_per_thread = foreign_frees_reset;
+            let mut foreign_frees = state.foreign_slots.add(foreign_frees_reset * arg.index);
+
+            let iterations = ITERATIONS / state.thread_count;
+            let heap_size = HEAP_SIZE / state.thread_count;
+            let memory = alloc
+                .calloc(heap_size, std::mem::size_of::<*mut u8>())
+                .cast::<*mut u8>();
+            assert!(
+                !memory.is_null(),
+                "pointer array allocation failed in sh8benchN"
+            );
+
+            let mut mp = 0usize;
+            let mut save_start = heap_size;
+            let mut save_end = heap_size;
+            let mut size_index = 0usize;
+
+            for _ in 0..iterations {
+                while foreign_frees_left != 0 {
+                    let p = foreign_frees.read_volatile();
+                    if p.is_null() {
+                        break;
+                    }
+                    let owner = p.cast::<*mut *mut u8>().read();
+                    assert_eq!(
+                        owner, foreign_frees,
+                        "foreign allocation ownership mismatch in sh8benchN"
+                    );
+                    alloc.free(p);
+                    foreign_frees.write_volatile(ptr::null_mut());
+                    foreign_frees = foreign_frees.add(1);
+                    foreign_frees_left -= 1;
+                    foreign_frees_per_thread -= 1;
+
+                    if foreign_frees_per_thread == 0 {
+                        foreign_frees_per_thread = foreign_frees_reset;
+                        foreign_frees = foreign_frees.add(foreign_slot_size - foreign_frees_reset);
+                    }
+                }
+
+                size_index += 1;
+                if size_index == HISTOGRAM.len() {
+                    size_index = 0;
+                }
+                let (size, mut count) = HISTOGRAM[size_index];
+
+                while count != 0 {
+                    count -= 1;
+                    if mp == save_start {
+                        mp = save_end;
+                    }
+
+                    if mp >= heap_size {
+                        mp = 0;
+                        save_start = save_end;
+                        if save_start >= heap_size {
+                            save_start = 0;
+                        }
+                        save_end = save_start + (heap_size / 5);
+                        if save_end > heap_size {
+                            save_end = heap_size;
+                        }
+
+                        while mp < save_start {
+                            free_slot(alloc, memory.add(mp));
+                            mp += 1;
+                        }
+
+                        mp = heap_size;
+                        while mp > save_end {
+                            mp -= 1;
+                            free_slot(alloc, memory.add(mp));
+                        }
+
+                        mp = 0;
+                    } else {
+                        let p = alloc.malloc(size);
+                        assert!(!p.is_null(), "allocation failed in sh8benchN");
+                        p.write(0);
+                        p.add(size - 1).write(0);
+                        memory.add(mp).write(p);
+                        mp += 1;
+                    }
+                }
+            }
+
+            for i in 0..heap_size {
+                free_slot(alloc, memory.add(i));
+            }
+            alloc.free(memory.cast());
+        }
+    }
+
+    extern "C" fn thread_entry(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            do_bench(&*arg.cast::<ThreadArg>());
+        }
+        ptr::null_mut()
+    }
+
+    unsafe fn allocate_foreign_slots(state: &State) {
+        unsafe {
+            for i in 0..state.foreign_slot_count {
+                let slot = state.foreign_slots.add(i);
+                let p = state.alloc.malloc(HISTOGRAM[0].0);
+                if !p.is_null() {
+                    p.cast::<*mut *mut u8>().write(slot);
+                }
+                slot.write_volatile(p);
+            }
+        }
+    }
+
+    unsafe fn cleanup_foreign_slots(state: &State) {
+        unsafe {
+            for i in 0..state.foreign_slot_count {
+                let slot = state.foreign_slots.add(i);
+                let p = slot.read_volatile();
+                slot.write_volatile(ptr::null_mut());
+                state.alloc.free(p);
+            }
+        }
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let thread_count = logical_cpus() * 2;
+            let foreign_slot_count =
+                (FOREIGN_ALLOC_COUNT / (thread_count * thread_count)) * thread_count * thread_count;
+            let foreign_slots = alloc
+                .calloc(foreign_slot_count, std::mem::size_of::<*mut u8>())
+                .cast::<*mut u8>();
+            assert!(
+                !foreign_slots.is_null(),
+                "foreign slot allocation failed in sh8benchN"
+            );
+
+            let state = State {
+                alloc,
+                thread_count,
+                foreign_slots,
+                foreign_slot_count,
+            };
+            let mut threads = vec![0; thread_count];
+            let mut args = Vec::with_capacity(thread_count);
+            for index in 0..thread_count {
+                args.push(ThreadArg {
+                    state: &state,
+                    index,
+                });
+            }
+
+            let start = Instant::now();
+            for i in 0..thread_count {
+                let rc = pthread::pthread_create(
+                    &mut threads[i],
+                    ptr::null(),
+                    thread_entry,
+                    (&mut args[i] as *mut ThreadArg).cast(),
+                );
+                assert_eq!(rc, 0, "pthread_create failed in sh8benchN: {rc}");
+            }
+            allocate_foreign_slots(&state);
+            for thread in threads {
+                let rc = pthread::pthread_join(thread, ptr::null_mut());
+                assert_eq!(rc, 0, "pthread_join failed in sh8benchN: {rc}");
+            }
+            let elapsed = start.elapsed();
+            cleanup_foreign_slots(&state);
+            alloc.free(foreign_slots.cast());
+            elapsed
         }
     }
 }

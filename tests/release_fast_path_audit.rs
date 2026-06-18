@@ -972,7 +972,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         .collect::<BTreeSet<_>>();
     let expected = BTreeSet::from([
         "src/alloc.rs",
-        "src/bitmap.rs",
         "src/free.rs",
         "src/os.rs",
         "src/page.rs",
@@ -991,6 +990,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/alloc_override.rs")
             && !actual.contains("src/arena_meta.rs")
             && !actual.contains("src/atomic.rs")
+            && !actual.contains("src/bitmap.rs")
             && !actual.contains("src/core_types/mod.rs")
             && !actual.contains("src/heap.rs")
             && !actual.contains("src/internal.rs")
@@ -1002,7 +1002,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/theap.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, heap helpers, internal helpers, libc helpers, options helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, heap helpers, internal helpers, libc helpers, options helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 

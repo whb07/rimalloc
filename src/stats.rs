@@ -406,7 +406,6 @@ fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_coun
     }
 }
 
-#[allow(dead_code)]
 #[inline(never)]
 unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {
@@ -498,10 +497,9 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
 }
 
 fn mi_stats_add_into(to: &mut mi_stats_t, from: &mi_stats_t) {
-    if ptr::eq(to, from) {
-        return;
-    }
-    unsafe { mi_stats_add_nonnull(to as *mut mi_stats_t, from as *const mi_stats_t) };
+    // SAFETY: references are valid `mi_stats_t` values; the checked raw helper preserves C's
+    // null/self guard at the compatibility boundary.
+    unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };
 }
 
 fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bool {

@@ -910,7 +910,6 @@ fn phase6_dead_code_allowances_stay_intentional() {
         ("src/prim/osx.rs", 1),
         ("src/prim/wasi.rs", 1),
         ("src/prim/windows.rs", 3),
-        ("src/stats.rs", 1),
     ]);
 
     assert_eq!(
@@ -2412,6 +2411,20 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !stats_add_nonnull_body.contains("src.is_null()")
             && !stats_add_nonnull_body.contains("ptr::eq(stats.cast_const(), src)"),
         "mi_stats_add_nonnull should keep the checked merge body free of duplicate entry guards"
+    );
+    let stats_add_into_start = stats_rs
+        .find("fn mi_stats_add_into(to: &mut mi_stats_t, from: &mi_stats_t)")
+        .expect("find mi_stats_add_into");
+    let stats_add_into_end = stats_rs[stats_add_into_start..]
+        .find("\n}\n\nfn mi_stats_copy")
+        .map(|offset| stats_add_into_start + offset)
+        .expect("find end of mi_stats_add_into");
+    let stats_add_into_body = &stats_rs[stats_add_into_start..stats_add_into_end];
+    assert!(
+        stats_add_into_body.contains(
+            "unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };"
+        ) && !stats_add_into_body.contains("mi_stats_add_nonnull("),
+        "mi_stats_add_into should exercise C's checked raw mi_stats_add compatibility boundary"
     );
     let stats_merge_start = stats_rs
         .find("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into(")

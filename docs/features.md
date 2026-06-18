@@ -25,8 +25,16 @@ cargo check
 cargo check --features std
 cargo check --features secure
 cargo check --features guarded
+cargo check --features compare
 cargo check --features track-valgrind
 cargo check --features track-asan
+cargo check --features "secure guarded std"
 cargo check --benches --features bench
+cargo check --benches --features "bench compare"
 ```
 
+The intentionally invalid tracking combination should fail:
+
+```sh
+cargo check --features "track-valgrind track-asan"
+```

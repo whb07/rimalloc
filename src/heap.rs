@@ -1,6 +1,6 @@
 //! Heap algorithms
 
-#![allow(clippy::missing_safety_doc, unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_void;
 use core::ptr;
@@ -31,11 +31,19 @@ use crate::types::{EFAULT, mi_arena_id_t, mi_heap_t, mi_page_t, mi_theap_t};
 #[allow(clippy::manual_dangling_ptr)]
 const MI_THEAP_TLS_BUSY: *mut mi_theap_t = 1usize as *mut mi_theap_t;
 
+/// # Safety
+///
+/// `heap` must be null or point to a live heap object accepted by the
+/// mimalloc heap APIs. Non-null heaps must not be concurrently destroyed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_theap(heap: *mut mi_heap_t) -> *mut mi_theap_t {
     _mi_heap_theap(heap)
 }
 
+/// # Safety
+///
+/// `heap` may be null to select the main heap. Otherwise it must point to a
+/// live heap whose NUMA affinity may be mutated by the caller.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_set_numa_affinity(heap: *mut mi_heap_t, numa_node: i32) {
     let heap = if heap.is_null() { mi_heap_main() } else { heap };
@@ -47,6 +55,10 @@ pub unsafe extern "C" fn mi_heap_set_numa_affinity(heap: *mut mi_heap_t, numa_no
     };
 }
 
+/// # Safety
+///
+/// `heap` may be null. A non-null heap must be live and its stats must not be
+/// concurrently mutated outside the allocator synchronization rules.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
     if heap.is_null() {
@@ -58,6 +70,11 @@ pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
     );
 }
 
+/// # Safety
+///
+/// The allocator runtime must be initialized or safe to initialize on this
+/// thread. The returned heap, when non-null, must later be released through the
+/// heap deletion or destruction APIs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t) -> *mut mi_heap_t {
     crate::mimalloc::mi_thread_init();
@@ -108,6 +125,11 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
     heap
 }
 
+/// # Safety
+///
+/// The allocator runtime must be initialized or safe to initialize on this
+/// thread. The returned heap, when non-null, must later be released through the
+/// heap deletion or destruction APIs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_new() -> *mut mi_heap_t {
     mi_heap_new_in_arena(ptr::null_mut())
@@ -176,6 +198,10 @@ unsafe fn mi_heap_free(heap: *mut mi_heap_t) {
     mi_free(heap.cast::<c_void>());
 }
 
+/// # Safety
+///
+/// `heap` may be null. A non-null heap must be live, must not be the main heap,
+/// and must not be used again after this call returns.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
     if heap.is_null() {
@@ -190,6 +216,10 @@ pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
     mi_heap_free(heap);
 }
 
+/// # Safety
+///
+/// `heap` may be null. A non-null heap must be live and must not be accessed
+/// after destruction starts, except through allocator teardown internals.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
     if heap.is_null() {
@@ -202,6 +232,10 @@ pub(crate) unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
     }
 }
 
+/// # Safety
+///
+/// `heap` may be null. A non-null heap must be live, must not be the main heap,
+/// and must not be used again after this call returns.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_destroy(heap: *mut mi_heap_t) {
     if heap.is_null() {
@@ -214,6 +248,10 @@ pub unsafe extern "C" fn mi_heap_destroy(heap: *mut mi_heap_t) {
     _mi_heap_force_destroy(heap);
 }
 
+/// # Safety
+///
+/// `p` may be null. A non-null pointer must be suitable for mimalloc's safe
+/// page lookup, such as an allocation pointer or supported interior pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_of(p: *const c_void) -> *mut mi_heap_t {
     let page: *mut mi_page_t = _mi_safe_ptr_page(p);
@@ -223,27 +261,47 @@ pub unsafe extern "C" fn mi_heap_of(p: *const c_void) -> *mut mi_heap_t {
     mi_page_heap(page)
 }
 
+/// # Safety
+///
+/// `p` may be null. A non-null pointer must be suitable for mimalloc's safe
+/// page lookup, such as an allocation pointer or supported interior pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_any_heap_contains(p: *const c_void) -> bool {
     !mi_heap_of(p).is_null()
 }
 
+/// # Safety
+///
+/// `heap` may be null to select the main heap. Non-null heap and pointer
+/// arguments must remain valid for allocator ownership inspection.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_void) -> bool {
     let heap = if heap.is_null() { mi_heap_main() } else { heap };
     core::ptr::eq(heap, mi_heap_of(p))
 }
 
+/// # Safety
+///
+/// `heap` may be null to select the main heap. Non-null heap and pointer
+/// arguments must remain valid for allocator ownership inspection.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_void) -> bool {
     mi_heap_contains(heap.cast_const(), p)
 }
 
+/// # Safety
+///
+/// `p` may be null. A non-null pointer must be suitable for mimalloc's safe
+/// page lookup, such as an allocation pointer or supported interior pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_check_owned(p: *const c_void) -> bool {
     mi_any_heap_contains(p)
 }
 
+/// # Safety
+///
+/// `heap` may be null. A non-null `p` must be suitable for mimalloc's safe page
+/// lookup, and the owning page and heap must not be concurrently destroyed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
     heap: *mut mi_heap_t,
@@ -278,6 +336,9 @@ pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
     perc_threshold >= ((100usize * (*page).used as usize) / (*page).capacity as usize)
 }
 
+/// # Safety
+///
+/// `heap` must be a live heap pointer with initialized thread-local metadata.
 #[allow(dead_code)]
 #[inline(never)]
 unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
@@ -323,6 +384,10 @@ unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap
     theap
 }
 
+/// # Safety
+///
+/// `heap` may be null or point to a live heap. Non-main heaps must have a valid
+/// thread-local slot and must not be concurrently destroyed.
 #[allow(dead_code)]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
@@ -333,6 +398,10 @@ pub(crate) unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) 
     }
 }
 
+/// # Safety
+///
+/// `heap` may be null or point to a live heap. Non-main heaps must have a valid
+/// thread-local slot and must not be concurrently destroyed.
 #[allow(dead_code)]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_theap_get_or_init(

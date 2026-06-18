@@ -28,6 +28,11 @@ not a safe Rust abstraction and is not yet promised as a stable Rust SemVer
 surface. Changes must still be reviewed because tests, examples, benchmarks,
 and low-level users may depend on it.
 
+The default raw facade is intentionally narrow: root `raw::mi_*`, `raw::abi`,
+`raw::mimalloc`, and `raw::headers`. The `unstable-raw-internals` feature
+temporarily exposes translated implementation modules for repository audits and
+parity tests. That feature is off by default and has no Rust SemVer guarantee.
+
 Raw facade changes require updating `docs/api-inventory.md`, ABI/layout checks,
 and any affected examples or parity tests.
 

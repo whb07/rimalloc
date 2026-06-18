@@ -1,3 +1,5 @@
+#![cfg(feature = "unstable-raw-internals")]
+
 #[path = "original_testhelper.rs"]
 mod original_testhelper;
 

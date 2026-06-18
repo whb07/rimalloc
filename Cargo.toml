@@ -57,6 +57,9 @@ std = []
 bench = ["std"]
 # Enable comparison-oriented benchmark/test code.
 compare = []
+# Expose translated implementation modules through `raw` for repository
+# internal audits while the facade is being narrowed. This is not a public API.
+unstable-raw-internals = []
 
 [package.metadata.docs.rs]
 features = ["std"]

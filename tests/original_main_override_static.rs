@@ -1,3 +1,6 @@
+#![cfg(feature = "unstable-raw-internals")]
+#![allow(deprecated)]
+
 use core::ffi::c_void;
 use core::ptr;
 use std::ffi::CString;

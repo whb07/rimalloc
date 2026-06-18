@@ -232,7 +232,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## B2. Narrow the default `raw` facade
 
-- [ ] Create a default `raw` export allowlist.
+- [x] Create a default `raw` export allowlist.
   - Recommended default allowlist:
     - `raw::abi` or `raw::mimalloc` for public C API declarations.
     - Public C-compatible types needed to call those APIs.
@@ -242,8 +242,13 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - A script prints the default `raw` public modules and compares them to an allowlist file.
     - `docs/api-inventory.md` lists the default raw modules.
     - No raw default module exists only because a test/bench previously used an implementation path.
+  - Evidence:
+    - `src/raw.rs` exposes only `raw::abi`, `raw::headers`, `raw::mimalloc`, and root `raw::mi_*` C-header re-exports by default.
+    - `scripts/check-api-inventory.py` enforces the default raw module allowlist.
+    - `scripts/check-raw-facade.sh` enforces no implementation-module `pub use crate::<module>::*` leaks into default raw.
+    - `docs/api-inventory.md` lists the default raw modules.
 
-- [ ] Move internal raw re-exports behind `unstable-raw-internals` or remove them.
+- [x] Move internal raw re-exports behind `unstable-raw-internals` or remove them.
   - Candidate modules to remove or gate by default:
     - `raw::internal`
     - `raw::page`
@@ -265,8 +270,13 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - Default rustdoc does not show these modules.
     - Existing tests/benches are migrated to crate-internal paths or an explicit unstable feature.
     - A downstream compile-fail test verifies `mechanical_mimalloc::raw::internal` is unavailable by default.
+  - Evidence:
+    - Implementation modules in `src/raw.rs` are gated behind `#[cfg(feature = "unstable-raw-internals")]`.
+    - Integration tests that still inspect raw internals are gated with `#![cfg(feature = "unstable-raw-internals")]`.
+    - `cargo test --quiet --features std` passes with default raw internals unavailable.
+    - `cargo test --quiet --features "std unstable-raw-internals"` passes and covers the gated internal audits.
 
-- [ ] If an unstable internals feature is kept, make it unmistakably unstable.
+- [x] If an unstable internals feature is kept, make it unmistakably unstable.
   - Required behavior:
     - Feature name includes `unstable`, for example `unstable-raw-internals`.
     - Feature is not enabled by default, not enabled by `std`, and not enabled by `bench` unless absolutely necessary.
@@ -276,6 +286,10 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `cargo check` default does not expose the internals.
     - `cargo check --features unstable-raw-internals` exposes only the allowlisted unstable modules.
     - `scripts/check-features.sh` covers it if present.
+  - Evidence:
+    - `Cargo.toml` defines `unstable-raw-internals`, leaves it out of `default`, `std`, and `bench`, and documents that it is not public API.
+    - `docs/api-inventory.md`, `docs/compatibility.md`, and `docs/raw-facade-migration.md` state that the feature is off by default and has no SemVer guarantees.
+    - `scripts/check-features.sh` checks `cargo check --features unstable-raw-internals` and `cargo test --quiet --features "std unstable-raw-internals"`.
 
 - [ ] Remove test/benchmark dependence on public raw internals where possible.
   - Required migration:
@@ -1091,7 +1105,7 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## H1. API inventory enforcement
 
-- [ ] Expand `scripts/check-api-inventory.py` for root and raw modules.
+- [x] Expand `scripts/check-api-inventory.py` for root and raw modules.
   - Required checks:
     - Crate-root public item allowlist.
     - Default `raw` module allowlist.
@@ -1100,8 +1114,12 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Script fails when a new public root item is added without docs.
     - Script fails when a new raw module is added without docs.
+  - Evidence:
+    - `scripts/check-api-inventory.py` enforces the crate-root public item allowlist.
+    - It separately enforces default raw module allowlist and `unstable-raw-internals` module allowlist.
+    - It checks docs inventory policy phrases, `docs/abi.md` taxonomy phrases, and the C-header declaration ownership split.
 
-- [ ] Add `scripts/check-raw-facade.sh` or equivalent.
+- [x] Add `scripts/check-raw-facade.sh` or equivalent.
   - Required checks:
     - No accidental `pub use crate::<internal>::*` in default `raw`.
     - No default raw re-export of implementation-only modules.
@@ -1109,6 +1127,10 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Script is included in `scripts/check-local.sh`.
     - Deliberately adding `pub mod internal` to default raw causes failure.
+  - Evidence:
+    - `scripts/check-raw-facade.sh` enforces the default raw allowlist, unstable raw-internals allowlist, and absence of default implementation-module glob re-exports.
+    - `scripts/check-local.sh` runs `scripts/check-raw-facade.sh`.
+    - `scripts/check-raw-facade.sh` passes.
 
 ## H2. FFI export enforcement
 
@@ -1253,7 +1275,7 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## I2. Provide transition compatibility if needed
 
-- [ ] Decide whether to keep temporary raw internals under a feature.
+- [x] Decide whether to keep temporary raw internals under a feature.
   - Required docs if kept:
     - Feature name.
     - No semver guarantees.
@@ -1262,22 +1284,33 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Feature is off by default.
     - Docs and changelog warn about instability.
+  - Evidence:
+    - Temporary raw internals are kept under `unstable-raw-internals`.
+    - The feature is off by default and not implied by `std`, `bench`, or `compare`.
+    - Docs warn that the feature is repository-audit/parity-test only and has no SemVer guarantees.
 
-- [ ] Add deprecation warnings for old raw paths if they remain public temporarily.
+- [x] Add deprecation warnings for old raw paths if they remain public temporarily.
   - Required behavior:
     - Use `#[deprecated]` where possible.
     - Deprecation message points to replacement path or says “not public API.”
   - Validation:
     - `cargo check` under compatibility feature shows expected deprecation warnings in a controlled test.
     - Docs mark deprecated modules.
+  - Evidence:
+    - Every `unstable-raw-internals` module in `src/raw.rs` is annotated `#[deprecated]` with a note that the path is not public API and callers should use root `raw::mi_*`/`raw::abi` for C-header surface.
+    - `cargo test --quiet --features "std unstable-raw-internals"` exercises those paths and emits controlled deprecation warnings without failing.
 
 ## I3. Final raw facade cutover
 
-- [ ] Remove or gate broad re-exports.
+- [x] Remove or gate broad re-exports.
   - Validation:
     - Default `raw.rs` exposes only allowlisted modules.
     - Examples/docs updated.
     - All local scripts pass.
+  - Evidence:
+    - Broad translated implementation modules are gated behind `unstable-raw-internals` in `src/raw.rs`.
+    - Default raw facade remains limited to the allowlisted C-header modules.
+    - `scripts/check-raw-facade.sh` enforces this shape.
 
 - [ ] Update public API inventory and changelog.
   - Validation:

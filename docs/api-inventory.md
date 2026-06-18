@@ -66,14 +66,21 @@ The raw facade is a compatibility surface, not a safe abstraction. Most calls
 are unsafe because they inherit mimalloc's C preconditions.
 The raw Rust module path surface is unstable until explicitly versioned.
 
+By default, `raw` exposes the root C-header mirror plus `raw::abi`,
+`raw::mimalloc`, and `raw::headers`. Translated implementation modules are
+available only with the `unstable-raw-internals` feature for repository audits
+and parity tests. That feature is off by default, has no SemVer guarantees, and
+must not be used as an application integration surface.
+
 The source/documentation inventory is checked by:
 
 ```sh
 scripts/check-api-inventory.py
+scripts/check-raw-facade.sh
 ```
 
 Current raw users and raw module classifications are tracked in
-`docs/raw-facade-migration.md` before the default raw facade is narrowed.
+`docs/raw-facade-migration.md`.
 
 ## docs.rs Behavior
 

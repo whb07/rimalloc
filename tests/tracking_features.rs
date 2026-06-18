@@ -1,3 +1,6 @@
+#![cfg(feature = "unstable-raw-internals")]
+#![allow(deprecated)]
+
 use mechanical_mimalloc::raw::{internal, track};
 
 #[test]

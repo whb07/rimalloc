@@ -1,3 +1,5 @@
+#![cfg(feature = "unstable-raw-internals")]
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 #[cfg(all(target_os = "linux", not(debug_assertions)))]

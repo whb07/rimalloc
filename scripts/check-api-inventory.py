@@ -18,8 +18,13 @@ EXPECTED_ROOT_ITEMS = {
     "TryAllocError",
 }
 
-EXPECTED_RAW_MODULES = {
+EXPECTED_RAW_DEFAULT_MODULES = {
     "abi",
+    "headers",
+    "mimalloc",
+}
+
+EXPECTED_UNSTABLE_RAW_INTERNAL_MODULES = {
     "alloc",
     "alloc_aligned",
     "alloc_override",
@@ -30,13 +35,11 @@ EXPECTED_RAW_MODULES = {
     "bitmap",
     "bits",
     "free",
-    "headers",
     "heap",
     "init",
     "internal",
     "libc",
     "memory",
-    "mimalloc",
     "options",
     "os",
     "page",
@@ -70,8 +73,37 @@ def root_public_items(lib_rs: str) -> set[str]:
     return items
 
 
-def raw_modules(raw_rs: str) -> set[str]:
-    return set(re.findall(r"^pub mod\s+([A-Za-z0-9_]+)\s*\{", raw_rs, flags=re.M))
+def raw_modules_by_gate(raw_rs: str) -> tuple[set[str], set[str]]:
+    default = set()
+    unstable = set()
+    pending_cfg = False
+    pending_attr = False
+    for line in raw_rs.splitlines():
+        stripped = line.strip()
+        if stripped == '#[cfg(feature = "unstable-raw-internals")]':
+            pending_cfg = True
+            pending_attr = False
+            continue
+        if pending_attr:
+            if stripped.endswith("]"):
+                pending_attr = False
+            continue
+        if stripped.startswith("#["):
+            if not stripped.endswith("]"):
+                pending_attr = True
+            continue
+        match = re.match(r"pub mod\s+([A-Za-z0-9_]+)\s*\{", line)
+        if not match:
+            if stripped:
+                pending_cfg = False
+            continue
+        name = match.group(1)
+        if pending_cfg:
+            unstable.add(name)
+        else:
+            default.add(name)
+        pending_cfg = False
+    return default, unstable
 
 
 def main() -> int:
@@ -89,11 +121,17 @@ def main() -> int:
         f"extra={sorted(actual_root - EXPECTED_ROOT_ITEMS)}",
     )
 
-    actual_raw = raw_modules(raw_rs)
+    actual_raw, actual_unstable = raw_modules_by_gate(raw_rs)
     require(
-        actual_raw == EXPECTED_RAW_MODULES,
-        f"raw facade module inventory drift: missing={sorted(EXPECTED_RAW_MODULES - actual_raw)} "
-        f"extra={sorted(actual_raw - EXPECTED_RAW_MODULES)}",
+        actual_raw == EXPECTED_RAW_DEFAULT_MODULES,
+        f"default raw facade module inventory drift: missing={sorted(EXPECTED_RAW_DEFAULT_MODULES - actual_raw)} "
+        f"extra={sorted(actual_raw - EXPECTED_RAW_DEFAULT_MODULES)}",
+    )
+    require(
+        actual_unstable == EXPECTED_UNSTABLE_RAW_INTERNAL_MODULES,
+        "unstable raw-internals module inventory drift: "
+        f"missing={sorted(EXPECTED_UNSTABLE_RAW_INTERNAL_MODULES - actual_unstable)} "
+        f"extra={sorted(actual_unstable - EXPECTED_UNSTABLE_RAW_INTERNAL_MODULES)}",
     )
 
     for item in sorted(EXPECTED_ROOT_ITEMS):
@@ -105,6 +143,7 @@ def main() -> int:
         "Tier C: exported C ABI and raw layout compatibility surface.",
         "Tier I: internal implementation surface, not public API.",
         "The raw Rust module path surface is unstable until explicitly versioned.",
+        "`unstable-raw-internals`",
         "symbols/public-symbol-classification.tsv",
     ]:
         require(phrase in api_doc, f"docs/api-inventory.md missing policy phrase: {phrase}")
@@ -132,7 +171,8 @@ def main() -> int:
 
     print(
         f"ok: public API inventory covers {len(actual_root)} crate-root items "
-        f"and {len(actual_raw)} raw facade modules"
+        f"{len(actual_raw)} default raw facade modules, and "
+        f"{len(actual_unstable)} unstable raw-internals modules"
     )
     return 0
 

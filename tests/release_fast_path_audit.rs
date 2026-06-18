@@ -1580,12 +1580,21 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(
                 "#[inline(never)]\npub extern \"C\" fn _mi_bin_size(bin: usize) -> usize"
             )
+            && page_rs
+                .contains("pub(crate) fn _mi_bin_typed(size: usize) -> crate::core_types::Bin")
             && page_rs.contains("mi_bin(size)")
             && page_rs.contains("_mi_theap_empty")
             && page_rs.contains(".pages[bin].block_size")
             && page_rs.contains("_mi_bin_size(mi_bin(size + MI_PADDING_SIZE))")
             && stats_rs.contains("_mi_bin_size(bin)"),
         "bin lookup helpers should keep C's mi_bin/_mi_bin/_mi_bin_size boundaries and empty-theap table dependency"
+    );
+    assert!(
+        alloc_rs.contains("let bin = _mi_bin_typed(bsize).as_usize();")
+            && free_rs.contains("_mi_bin_typed(bsize.get()).as_usize()")
+            && arena_rs.contains("let bin = _mi_bin_typed(block_size).as_usize();")
+            && internal.contains("crate::page::_mi_bin_typed(size).as_usize()"),
+        "internal bin users should consume typed Bin wrappers before raw array indexing"
     );
     assert!(
         options_rs.contains(

@@ -45,8 +45,8 @@ use crate::os::{
     _mi_os_minimal_purge_size, _mi_os_numa_node_count,
 };
 use crate::page::{
-    _mi_bin, _mi_page_free_collect, _mi_page_stats_bin, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE,
-    MI_MEDIUM_MAX_OBJ_SIZE, MI_MEDIUM_PAGE_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2,
+    _mi_bin_typed, _mi_page_free_collect, _mi_page_stats_bin, MI_LARGE_MAX_OBJ_SIZE,
+    MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE, MI_MEDIUM_PAGE_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2,
     MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE, mi_page_set_theap,
 };
 use crate::page_map::{_mi_page_map_register, _mi_page_map_unregister, _mi_safe_ptr_page};
@@ -2194,7 +2194,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
     let req_arena = unsafe { (*heap.cast::<MiHeapPrefix>()).exclusive_arena };
     let _ = slice_count;
 
-    let bin = _mi_bin(block_size);
+    let bin = _mi_bin_typed(block_size).as_usize();
     crate::mi_assert_internal!(bin < MI_BIN_COUNT);
     if unsafe { (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin].load(Ordering::Relaxed) } == 0 {
         return ptr::null_mut();
@@ -2702,7 +2702,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
         && unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA }
         && !unsafe { mi_page_is_full_local(page) }
     {
-        let bin = _mi_bin(unsafe { mi_page_block_size(page) });
+        let bin = _mi_bin_typed(unsafe { mi_page_block_size(page) }).as_usize();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
@@ -2811,7 +2811,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
     if unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA }
         && !unsafe { mi_page_is_full_local(page) }
     {
-        let bin = _mi_bin(unsafe { mi_page_block_size(page) });
+        let bin = _mi_bin_typed(unsafe { mi_page_block_size(page) }).as_usize();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
@@ -2946,7 +2946,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     let heap = unsafe { mi_page_heap(page) };
     if unsafe { mi_page_is_abandoned_mapped(page) } {
         crate::mi_assert_internal!(unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA });
-        let bin = _mi_bin(unsafe { mi_page_block_size(page) });
+        let bin = _mi_bin_typed(unsafe { mi_page_block_size(page) }).as_usize();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();

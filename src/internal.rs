@@ -925,8 +925,10 @@ pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
 
 #[inline]
 pub unsafe fn mi_page_queue(theap: *const mi_theap_t, size: usize) -> *mut mi_page_queue_t {
-    let pq =
-        ptr::addr_of!((*(theap as *mut mi_theap_t)).pages[crate::page::_mi_bin(size)]).cast_mut();
+    let pq = ptr::addr_of!(
+        (*(theap as *mut mi_theap_t)).pages[crate::page::_mi_bin_typed(size).as_usize()]
+    )
+    .cast_mut();
     if size <= MI_LARGE_MAX_OBJ_SIZE {
         crate::mi_assert_internal!((*pq).block_size <= MI_LARGE_MAX_OBJ_SIZE);
     }

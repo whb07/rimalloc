@@ -23,7 +23,7 @@ use crate::internal::{
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
-use crate::page::{_mi_bin, _mi_malloc_generic_typed, MI_MAX_ALLOC_SIZE, mi_good_size};
+use crate::page::{_mi_bin_typed, _mi_malloc_generic_typed, MI_MAX_ALLOC_SIZE, mi_good_size};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{
     MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
@@ -170,7 +170,7 @@ unsafe fn mi_page_malloc_zero(
         __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize);
         if MI_STAT > 1 {
             __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal_count), 1);
-            let bin = _mi_bin(bsize);
+            let bin = _mi_bin_typed(bsize).as_usize();
             __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_bins[bin]), 1);
             __mi_stat_increase(
                 ptr::addr_of_mut!((*theap).stats.malloc_requested),

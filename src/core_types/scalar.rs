@@ -206,6 +206,10 @@ impl Bin {
     pub(crate) const fn get(self) -> u16 {
         self.0
     }
+    #[inline(always)]
+    pub(crate) const fn as_usize(self) -> usize {
+        self.0 as usize
+    }
 }
 
 /// Direct bin index (0 … MI_PAGES_DIRECT-1).
@@ -221,6 +225,10 @@ impl DirectBin {
     #[inline(always)]
     pub(crate) const fn get(self) -> u16 {
         self.0
+    }
+    #[inline(always)]
+    pub(crate) const fn as_usize(self) -> usize {
+        self.0 as usize
     }
 }
 

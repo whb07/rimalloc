@@ -118,6 +118,18 @@ pub extern "C" fn _mi_bin(size: usize) -> usize {
     mi_bin(size)
 }
 
+#[inline(always)]
+pub(crate) fn mi_bin_typed(size: usize) -> crate::core_types::Bin {
+    let bin = mi_bin(size);
+    crate::mi_debug_assert!(u16::try_from(bin).is_ok());
+    crate::core_types::Bin::new(bin as u16)
+}
+
+#[inline(always)]
+pub(crate) fn _mi_bin_typed(size: usize) -> crate::core_types::Bin {
+    mi_bin_typed(size)
+}
+
 #[inline(never)]
 pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
     crate::mi_debug_assert!(bin <= MI_BIN_HUGE);

@@ -7,7 +7,8 @@
 // in unsafe-fn bodies rather than wrapping every operation in `unsafe {}`.
 #![allow(unsafe_op_in_unsafe_fn)]
 // `core_types` intentionally contains strict typestate/scalar wrappers before
-// every scaffolded state is migrated to a live call site.
+// every scaffolded state is migrated to a live call site. The source-audit
+// tests guard the accepted scaffold shape against raw-access regressions.
 #![allow(dead_code)]
 
 mod arena;

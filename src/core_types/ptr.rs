@@ -34,11 +34,6 @@ macro_rules! define_ptr_wrapper {
             pub(crate) fn as_ptr(self) -> *mut $raw_type {
                 self.0.as_ptr()
             }
-
-            #[inline(always)]
-            pub(crate) fn as_non_null(self) -> NonNull<$raw_type> {
-                self.0
-            }
         }
     };
 }

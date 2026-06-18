@@ -1,11 +1,6 @@
 //! Mechanical translation of `src/alloc-override.c`.
 
-#![allow(
-    non_camel_case_types,
-    non_snake_case,
-    non_upper_case_globals,
-    unused_macros
-)]
+#![allow(non_camel_case_types, non_snake_case, non_upper_case_globals)]
 
 use core::ffi::{c_char, c_int, c_void};
 
@@ -59,67 +54,6 @@ pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
 
 #[cfg(mi_c_malloc_fast)]
 core::arch::global_asm!(".globl _Znam", ".type _Znam,@function", ".set _Znam, _Znwm",);
-
-macro_rules! mi_free_fast_body {
-    () => {
-        core::arch::naked_asm!(
-            "mov rax, qword ptr [rip + {page_map}]",
-            "mov rdx, rdi",
-            "mov rsi, rdi",
-            "shr rdx, 29",
-            "mov rdx, qword ptr [rax + rdx*8]",
-            "mov rax, rdi",
-            "shr rax, 16",
-            "and eax, 0x1fff",
-            "mov rdi, qword ptr [rdx + rax*8]",
-            "test rdi, rdi",
-            "je 3f",
-            "mov rax, qword ptr fs:[0]",
-            "mov rdx, qword ptr [rdi]",
-            "cmp rdx, rax",
-            "jne 2f",
-            "mov rax, qword ptr [rdi + 0x18]",
-            "mov qword ptr [rsi], rax",
-            "sub word ptr [rdi + 0x10], 1",
-            "mov qword ptr [rdi + 0x18], rsi",
-            "je 7f",
-            "3:",
-            "ret",
-            "7:",
-            "cmp byte ptr [rdi + 0x16], 0",
-            "jne 3b",
-            "jmp {retire}",
-            "2:",
-            "xor rdx, rax",
-            "cmp rdx, 3",
-            "jbe 5f",
-            "test dl, 3",
-            "jne 6f",
-            "mov rcx, rsi",
-            "mov rax, qword ptr [rdi + 0x20]",
-            "lea rdx, [rdi + 0x20]",
-            "or rcx, 1",
-            "4:",
-            "mov r8, rax",
-            "and r8, -2",
-            "mov qword ptr [rsi], r8",
-            "lock cmpxchg qword ptr [rdx], rcx",
-            "jne 4b",
-            "test al, 1",
-            "jne 3b",
-            "jmp {collect_mt}",
-            "5:",
-            "jmp {generic_local}",
-            "6:",
-            "jmp {generic_mt}",
-            page_map = sym crate::page_map::_mi_page_map,
-            retire = sym crate::page::_mi_page_retire,
-            collect_mt = sym crate::free::mi_free_try_collect_mt,
-            generic_local = sym crate::free::mi_free_generic_local,
-            generic_mt = sym crate::free::mi_free_generic_mt,
-        )
-    };
-}
 
 #[cfg(all(not(windows), mi_c_malloc_fast))]
 core::arch::global_asm!(

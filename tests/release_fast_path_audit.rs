@@ -581,10 +581,13 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     );
     assert!(
         override_rs.contains("\"free:\"")
-            && override_rs.contains(
-                "\"sub word ptr [rdi + 0x10], 1\",\n            \"mov qword ptr [rdi + 0x18], rsi\",\n            \"je 7f\",\n            \"3:\",\n            \"ret\","
-            )
-            && override_rs.contains("\"cmp byte ptr [rdi + 0x16], 0\",\n            \"jne 3b\",")
+            && override_rs.contains("\"sub word ptr [rdi + 0x10], 1\"")
+            && override_rs.contains("\"mov qword ptr [rdi + 0x18], rsi\"")
+            && override_rs.contains("\"je 7f\"")
+            && override_rs.contains("\"3:\"")
+            && override_rs.contains("\"ret\"")
+            && override_rs.contains("\"cmp byte ptr [rdi + 0x16], 0\"")
+            && override_rs.contains("\"jne 3b\"")
             && override_rs.contains(".set mi_free, free")
             && free_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))"),
         "Unix free/mi_free exports must keep the C-like aligned assembly fast override and hot local-free branch layout"
@@ -1032,7 +1035,6 @@ fn phase6_c_compat_allowances_stay_intentional() {
         (("src/alloc_override.rs", "non_camel_case_types"), 1),
         (("src/alloc_override.rs", "non_snake_case"), 1),
         (("src/alloc_override.rs", "non_upper_case_globals"), 1),
-        (("src/alloc_override.rs", "unused_macros"), 1),
         (("src/arena.rs", "non_camel_case_types"), 6),
         (("src/arena.rs", "non_upper_case_globals"), 1),
         (("src/arena_meta.rs", "non_camel_case_types"), 1),

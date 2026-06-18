@@ -1,7 +1,7 @@
 use core::ffi::c_void;
 use core::ptr;
 
-use mechanical_mimalloc::mimalloc::*;
+use mechanical_mimalloc::raw::mimalloc::*;
 
 fn assert_aligned_at(p: *mut c_void, alignment: usize, offset: usize) {
     assert!(!p.is_null());

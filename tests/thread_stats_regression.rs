@@ -1,8 +1,8 @@
 use std::sync::{Arc, Barrier};
 use std::thread;
 
-use mechanical_mimalloc::mimalloc::{mi_free, mi_malloc, mi_process_init, mi_stats_get};
-use mechanical_mimalloc::stats::{MI_STAT_VERSION, mi_stats_t};
+use mechanical_mimalloc::raw::mimalloc::{mi_free, mi_malloc, mi_process_init, mi_stats_get};
+use mechanical_mimalloc::raw::stats::{MI_STAT_VERSION, mi_stats_t};
 
 fn initialized_stats() -> mi_stats_t {
     mi_stats_t {

@@ -2,13 +2,13 @@ use core::ffi::c_void;
 use core::ptr;
 use std::ffi::CString;
 
-use mechanical_mimalloc::bits::{MI_INTPTR_SIZE, MI_SIZE_BITS, mi_clz};
-use mechanical_mimalloc::internal::_mi_wsize_from_size;
-use mechanical_mimalloc::mimalloc;
-use mechanical_mimalloc::options::{self, mi_option_t};
-use mechanical_mimalloc::page;
-use mechanical_mimalloc::stats::{MI_BIN_HUGE, MI_STAT_VERSION, mi_stats_t};
-use mechanical_mimalloc::types::{mi_arena_id_t, mi_heap_area_t, mi_heap_t};
+use mechanical_mimalloc::raw::bits::{MI_INTPTR_SIZE, MI_SIZE_BITS, mi_clz};
+use mechanical_mimalloc::raw::internal::_mi_wsize_from_size;
+use mechanical_mimalloc::raw::mimalloc;
+use mechanical_mimalloc::raw::options::{self, mi_option_t};
+use mechanical_mimalloc::raw::page;
+use mechanical_mimalloc::raw::stats::{MI_BIN_HUGE, MI_STAT_VERSION, mi_stats_t};
+use mechanical_mimalloc::raw::types::{mi_arena_id_t, mi_heap_area_t, mi_heap_t};
 
 const HUGE_ALLOC_SIZE: usize = 67_108_872;
 const LARGE_WSIZE_MAX: usize = (4 * 1024 * 1024) / MI_INTPTR_SIZE;

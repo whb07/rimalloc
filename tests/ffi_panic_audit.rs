@@ -85,7 +85,7 @@ fn mimalloc_assert_fail_aborts_instead_of_unwinding() {
 
     if std::env::var_os(CHILD_ENV).is_some() {
         unsafe {
-            mechanical_mimalloc::options::_mi_assert_fail(
+            mechanical_mimalloc::raw::options::_mi_assert_fail(
                 c"false".as_ptr(),
                 c"ffi_panic_audit.rs".as_ptr(),
                 line!(),

@@ -3,19 +3,19 @@ mod original_testhelper;
 
 use std::slice;
 
-use mechanical_mimalloc::alloc::{
+use mechanical_mimalloc::raw::alloc::{
     mi_calloc, mi_malloc_small, mi_mallocn, mi_reallocn, mi_recalloc, mi_rezalloc, mi_zalloc,
     mi_zalloc_small,
 };
-use mechanical_mimalloc::alloc_aligned::{
+use mechanical_mimalloc::raw::alloc_aligned::{
     mi_calloc_aligned, mi_malloc_aligned, mi_realloc_aligned, mi_recalloc_aligned,
     mi_rezalloc_aligned, mi_zalloc_aligned,
 };
-use mechanical_mimalloc::free::mi_free;
-use mechanical_mimalloc::internal::MI_DEBUG;
-use mechanical_mimalloc::options::{mi_option_disable, mi_option_t};
-use mechanical_mimalloc::track::{MI_TRACK_ASAN, MI_TRACK_VALGRIND};
-use mechanical_mimalloc::types::{
+use mechanical_mimalloc::raw::free::mi_free;
+use mechanical_mimalloc::raw::internal::MI_DEBUG;
+use mechanical_mimalloc::raw::options::{mi_option_disable, mi_option_t};
+use mechanical_mimalloc::raw::track::{MI_TRACK_ASAN, MI_TRACK_VALGRIND};
+use mechanical_mimalloc::raw::types::{
     MI_DEBUG_FREED, MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_SMALL_SIZE_MAX,
 };
 

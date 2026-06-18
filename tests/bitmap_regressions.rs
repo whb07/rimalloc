@@ -1,4 +1,4 @@
-use mechanical_mimalloc::bitmap::{
+use mechanical_mimalloc::raw::bitmap::{
     mi_bbitmap_init, mi_bbitmap_is_setN, mi_bbitmap_setN, mi_bbitmap_t,
     mi_bbitmap_try_find_and_clearN,
 };

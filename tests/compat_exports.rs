@@ -2,7 +2,7 @@ use core::ffi::{c_uchar, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use mechanical_mimalloc::mimalloc::*;
+use mechanical_mimalloc::raw::mimalloc::*;
 
 fn assert_aligned_at(p: *mut c_void, alignment: usize, offset: usize) {
     assert!(!p.is_null());

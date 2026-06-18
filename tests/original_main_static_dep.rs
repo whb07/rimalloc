@@ -5,7 +5,7 @@ mod original_testhelper;
 
 use std::ffi::c_void;
 
-use mechanical_mimalloc::{alloc, free};
+use mechanical_mimalloc::raw::{alloc, free};
 
 struct Static {
     p: *mut c_void,

@@ -2,19 +2,59 @@
 name = "mechanical_mimalloc"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.92"
+description = "Mechanical Rust translation foundation for mimalloc 3.3.2"
+license = "MIT"
+repository = "https://github.com/whb07/mechanical_mimalloc"
+readme = "README.md"
+documentation = "https://docs.rs/mechanical_mimalloc"
+keywords = ["allocator", "mimalloc", "ffi", "no-std"]
+categories = ["memory-management", "external-ffi-bindings"]
+publish = false
+include = [
+  "/Cargo.toml",
+  "/Cargo.lock",
+  "/README.md",
+  "/LICENSE",
+  "/CHANGELOG.md",
+  "/SECURITY.md",
+  "/CONTRIBUTING.md",
+  "/src/**",
+  "/tests/**",
+  "/benches/**",
+  "/docs/**",
+  "/build.rs",
+  "/PARITY.md",
+  "/BENCHMARK_RESULTS.md",
+  "/MIGRATION_PHASES.md",
+  "/TYPES_SPEC.md",
+]
 
 [lib]
 crate-type = ["rlib", "cdylib"]
 
 [features]
+# Default features are intentionally empty so optimized Linux cdylib builds can
+# stay `no_std` unless tooling explicitly opts into `std`.
 default = []
+# Enable Valgrind tracking shims. Mutually exclusive with `track-asan`.
 track-valgrind = []
+# Enable ASan tracking shims. Mutually exclusive with `track-valgrind`.
 track-asan = []
+# Enable secure-mode padding and encoded free lists.
 secure = []
+# Enable guarded allocation sampling.
 guarded = []
+# Opt into `std` for tests, docs, examples, and tooling builds.
 std = []
+# Enable Criterion benchmark targets.
 bench = ["std"]
+# Enable comparison-oriented benchmark/test code.
 compare = []
+
+[package.metadata.docs.rs]
+features = ["std"]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [profile.dev]
 panic = "abort"

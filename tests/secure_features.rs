@@ -1,4 +1,4 @@
-use mechanical_mimalloc::{internal, types};
+use mechanical_mimalloc::raw::{internal, types};
 
 #[test]
 fn secure_feature_constants_follow_c_mode_rules() {

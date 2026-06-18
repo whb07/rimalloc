@@ -1,10 +1,10 @@
-use mechanical_mimalloc::alloc_aligned::mi_zalloc_aligned;
-use mechanical_mimalloc::free::mi_free;
-use mechanical_mimalloc::headers::{
+use mechanical_mimalloc::raw::alloc_aligned::mi_zalloc_aligned;
+use mechanical_mimalloc::raw::free::mi_free;
+use mechanical_mimalloc::raw::headers::{
     mi_stl_allocator, mi_stl_allocator_operator_eq, mi_stl_allocator_operator_ne,
 };
-use mechanical_mimalloc::options::{mi_option_disable, mi_option_t};
-use mechanical_mimalloc::types::MI_MAX_ALIGN_SIZE;
+use mechanical_mimalloc::raw::options::{mi_option_disable, mi_option_t};
+use mechanical_mimalloc::raw::types::MI_MAX_ALIGN_SIZE;
 
 #[derive(Clone, Copy, Default)]
 struct SomeStruct {

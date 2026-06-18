@@ -3,7 +3,7 @@ mod original_testhelper;
 
 use std::ffi::c_void;
 
-use mechanical_mimalloc::{alloc, free, heap};
+use mechanical_mimalloc::raw::{alloc, free, heap};
 
 fn test_heap(p_out: *mut *mut c_void) {
     unsafe {

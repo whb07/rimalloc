@@ -1,6 +1,6 @@
 use core::ptr;
 
-use mechanical_mimalloc::{internal, types};
+use mechanical_mimalloc::raw::{internal, types};
 
 #[test]
 fn default_freelist_links_are_raw_pointers() {

@@ -6,10 +6,10 @@ use std::mem::{offset_of, size_of};
 use std::path::Path;
 
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
-use mechanical_mimalloc::atomic::mi_lock_t;
-use mechanical_mimalloc::types::mi_page_t;
+use mechanical_mimalloc::raw::atomic::mi_lock_t;
+use mechanical_mimalloc::raw::types::mi_page_t;
 #[cfg(not(feature = "guarded"))]
-use mechanical_mimalloc::types::mi_theap_t;
+use mechanical_mimalloc::raw::types::mi_theap_t;
 
 fn assert_not_no_mangle_item(source_name: &str, source: &str, internal_name: &str) {
     let Some(start) = source.find(internal_name) else {
@@ -373,6 +373,59 @@ fn options_state_uses_internal_locks_like_c() {
             && free_rs.contains("core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes())"),
         "pointer validation messages should route through raw C message names without lossy Rust decoding"
     );
+}
+
+#[test]
+fn crate_root_exposes_only_curated_rust_facade() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+
+    assert!(
+        lib_rs.contains("pub mod raw;") && lib_rs.contains("pub struct MiMalloc;"),
+        "crate root should expose the explicit raw facade and the small Rust allocator facade"
+    );
+
+    for module in [
+        "abi",
+        "alloc",
+        "alloc_aligned",
+        "alloc_override",
+        "alloc_posix",
+        "arena",
+        "arena_meta",
+        "atomic",
+        "bitmap",
+        "bits",
+        "free",
+        "headers",
+        "heap",
+        "init",
+        "internal",
+        "libc",
+        "memory",
+        "mimalloc",
+        "options",
+        "os",
+        "page",
+        "page_map",
+        "prim",
+        "random",
+        "stats",
+        "theap",
+        "threadlocal",
+        "track",
+        "types",
+    ] {
+        assert!(
+            !lib_rs.contains(&format!("pub mod {module};")),
+            "implementation module `{module}` should not be public at the crate root"
+        );
+        assert!(
+            raw_rs.contains(&format!("pub mod {module}")),
+            "raw facade should intentionally expose `{module}` compatibility items"
+        );
+    }
 }
 
 #[test]
@@ -1085,6 +1138,7 @@ fn phase6_c_compat_allowances_stay_intentional() {
         (("src/prim/windows.rs", "unused_macros"), 1),
         (("src/random.rs", "non_camel_case_types"), 1),
         (("src/random.rs", "non_upper_case_globals"), 1),
+        (("src/raw.rs", "unused_imports"), 1),
         (("src/stats.rs", "non_camel_case_types"), 1),
         (("src/stats.rs", "non_upper_case_globals"), 1),
         (("src/theap.rs", "non_camel_case_types"), 1),

@@ -1,4 +1,4 @@
-use mechanical_mimalloc::{internal, track};
+use mechanical_mimalloc::raw::{internal, track};
 
 #[test]
 fn internal_tracking_constants_follow_track_module() {

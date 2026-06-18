@@ -1,5 +1,5 @@
-use mechanical_mimalloc::mimalloc::mi_stats_get_bin_size;
-use mechanical_mimalloc::stats::MI_BIN_HUGE;
+use mechanical_mimalloc::raw::mimalloc::mi_stats_get_bin_size;
+use mechanical_mimalloc::raw::stats::MI_BIN_HUGE;
 
 #[test]
 fn stats_bin_size_export_links_and_handles_bounds() {

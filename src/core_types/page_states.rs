@@ -64,10 +64,34 @@ impl AllFreePage<Active> {
     }
 }
 
+impl AllFreePage<Full> {
+    /// # Safety
+    /// `page` must be a full-queue page whose blocks are all free.
+    #[inline(always)]
+    pub(crate) unsafe fn full_unchecked(page: FullPage) -> Self {
+        Self {
+            page: Page {
+                ptr: page.0,
+                _state: PhantomData,
+            },
+        }
+    }
+}
+
 pub(crate) enum PageFreeOwner {
     Local(LocalPage),
     Foreign(ForeignPage),
     Abandoned(AbandonedPageType),
+}
+
+pub(crate) enum PageForAbandon {
+    Active(ActivePage),
+    Full(FullPage),
+}
+
+pub(crate) enum PageAbandonOutcome {
+    Abandoned(AbandonedPageType),
+    Destroyed(DestroyedPage),
 }
 
 /// A local thread heap representation

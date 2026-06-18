@@ -498,7 +498,12 @@ unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
 
     let theap = mi_page_theap(page);
     if (*theap).allow_page_abandon {
-        _mi_page_abandon(page, pq);
+        let _ = _mi_page_abandon_internal(
+            crate::core_types::PageForAbandon::Active(crate::core_types::ActivePage(
+                crate::core_types::PagePtr::new_unchecked(page),
+            )),
+            crate::core_types::PageQueuePtr::new_unchecked(pq),
+        );
     } else if !mi_page_is_in_full(page) {
         let full = ptr::addr_of_mut!((*theap).pages[MI_BIN_FULL]);
         mi_page_move_to_full_typed(
@@ -538,8 +543,8 @@ pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_
     );
 }
 
-pub(crate) unsafe fn _mi_page_free_internal(
-    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
+pub(crate) unsafe fn _mi_page_free_internal<S>(
+    page_wrapper: crate::core_types::AllFreePage<S>,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::DestroyedPage {
     let page = page_wrapper.page.ptr.as_ptr();
@@ -834,14 +839,46 @@ static MI_PAGE_EXTEND_FREE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_p
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
+    let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
+    let page_wrapper = if mi_page_is_in_full(page) {
+        crate::core_types::PageForAbandon::Full(crate::core_types::FullPage(page_ptr))
+    } else {
+        crate::core_types::PageForAbandon::Active(crate::core_types::ActivePage(page_ptr))
+    };
+    let _ = _mi_page_abandon_internal(
+        page_wrapper,
+        crate::core_types::PageQueuePtr::new_unchecked(pq),
+    );
+}
+
+pub(crate) unsafe fn _mi_page_abandon_internal(
+    page_wrapper: crate::core_types::PageForAbandon,
+    queue: crate::core_types::PageQueuePtr,
+) -> crate::core_types::PageAbandonOutcome {
+    let (page_ptr, was_full) = match page_wrapper {
+        crate::core_types::PageForAbandon::Active(page) => (page.0, false),
+        crate::core_types::PageForAbandon::Full(page) => (page.0, true),
+    };
+    let page = page_ptr.as_ptr();
+    let pq = queue.as_ptr();
     _mi_page_free_collect(page, false);
     if mi_page_all_free(page) {
-        let _ = _mi_page_free_internal(
-            crate::core_types::AllFreePage::active_unchecked(crate::core_types::ActivePage(
-                crate::core_types::PagePtr::new_unchecked(page),
-            )),
-            crate::core_types::PageQueuePtr::new_unchecked(pq),
-        );
+        let destroyed = if was_full {
+            _mi_page_free_internal(
+                crate::core_types::AllFreePage::full_unchecked(crate::core_types::FullPage(
+                    page_ptr,
+                )),
+                queue,
+            )
+        } else {
+            _mi_page_free_internal(
+                crate::core_types::AllFreePage::active_unchecked(crate::core_types::ActivePage(
+                    page_ptr,
+                )),
+                queue,
+            )
+        };
+        crate::core_types::PageAbandonOutcome::Destroyed(destroyed)
     } else {
         mi_page_queue_remove(pq, page);
         let theap = (*page).theap;
@@ -850,6 +887,7 @@ pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut 
         (*page).theap = theap;
         _mi_arenas_page_abandon(page, theap);
         _mi_arenas_collect(false, false, (*theap).tld);
+        crate::core_types::PageAbandonOutcome::Abandoned(crate::core_types::AbandonedPage(page_ptr))
     }
 }
 

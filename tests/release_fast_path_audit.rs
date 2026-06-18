@@ -2117,7 +2117,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_free(")
             && page_rs.contains(
-                "pub(crate) unsafe fn _mi_page_free_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,\n    queue: crate::core_types::PageQueuePtr,"
+                "pub(crate) unsafe fn _mi_page_free_internal<S>(\n    page_wrapper: crate::core_types::AllFreePage<S>,\n    queue: crate::core_types::PageQueuePtr,"
             )
             && page_rs.contains("let _ = _mi_page_free_internal(")
             && page_rs.contains("mi_page_queue_remove(pq, page);")
@@ -2130,18 +2130,26 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_abandon(")
+            && page_rs.contains(
+                "pub(crate) unsafe fn _mi_page_abandon_internal(\n    page_wrapper: crate::core_types::PageForAbandon,\n    queue: crate::core_types::PageQueuePtr,"
+            )
+            && page_rs.contains(") -> crate::core_types::PageAbandonOutcome {")
             && page_rs.contains("_mi_page_free_collect(page, false);")
             && page_rs.contains("if mi_page_all_free(page) {")
             && page_rs.contains(
                 "crate::core_types::AllFreePage::active_unchecked(crate::core_types::ActivePage"
             )
+            && page_rs.contains("crate::core_types::AllFreePage::full_unchecked")
             && page_rs.contains("mi_page_queue_remove(pq, page);")
             && page_rs.contains("mi_page_set_theap(page, ptr::null_mut());")
             && page_rs.contains("_mi_arenas_page_abandon(page, theap);")
             && page_rs.contains("_mi_arenas_collect(false, false, (*theap).tld);")
-            && page_rs.contains("_mi_page_abandon(page, pq);")
+            && page_rs.contains(
+                "crate::core_types::PageAbandonOutcome::Abandoned(crate::core_types::AbandonedPage"
+            )
+            && page_rs.contains("_mi_page_abandon_internal(\n            crate::core_types::PageForAbandon::Active")
             && theap_rs.contains("_mi_page_abandon(page, pq);"),
-        "page abandon should keep C's local helper boundary and collect/free/reclaim sequence"
+        "page abandon should keep C's local helper boundary while using typed active/full abandon witnesses internally"
     );
     assert!(
         page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_free_collect(")

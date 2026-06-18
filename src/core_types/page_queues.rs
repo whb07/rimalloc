@@ -1,6 +1,6 @@
 //! DT-10: Page queue types.
 
-use crate::core_types::page_states::{Active, ActivePage, FullPage, Page};
+use crate::core_types::page_states::{ActivePage, FullPage, Page};
 use crate::core_types::{PagePtr, PageQueuePtr};
 use core::marker::PhantomData;
 
@@ -59,8 +59,8 @@ pub(crate) fn unfull_page(
 }
 
 #[inline]
-pub(crate) fn free_all_free_page_to_arena(
-    page: crate::core_types::page_states::AllFreePage<Active>,
+pub(crate) fn free_all_free_page_to_arena<S>(
+    page: crate::core_types::page_states::AllFreePage<S>,
     _owner: crate::core_types::page_states::ThreadHeapLocal,
 ) -> crate::core_types::page_states::DestroyedPage {
     crate::core_types::page_states::DestroyedPage(page.page.ptr)

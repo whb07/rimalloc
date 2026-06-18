@@ -55,8 +55,9 @@ pub(crate) use memid::{
 pub(crate) use page_states::{
     Abandoned, AbandonedMapped, AbandonedMappedPageType as AbandonedMappedPage,
     AbandonedPageType as AbandonedPage, Active, ActivePage, AllFreePage, AvailablePage, Destroyed,
-    DestroyedPage, ForeignPage, Full, FullPage, LocalPage, OwnedAbandonedPage, Page, PageFreeOwner,
-    Retired, RetiredPage, ThreadHeapLocal, Uninit,
+    DestroyedPage, ForeignPage, Full, FullPage, LocalPage, OwnedAbandonedPage, Page,
+    PageAbandonOutcome, PageForAbandon, PageFreeOwner, Retired, RetiredPage, ThreadHeapLocal,
+    Uninit,
 };
 
 pub(crate) use validation_extra::{AllocatedBlock, FreeBlock};

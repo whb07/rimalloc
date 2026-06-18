@@ -6,6 +6,8 @@
 // Match the crate convention (`src/free.rs` et al.) and allow implicit unsafe
 // in unsafe-fn bodies rather than wrapping every operation in `unsafe {}`.
 #![allow(unsafe_op_in_unsafe_fn)]
+// `core_types` intentionally contains strict typestate/scalar wrappers before
+// every scaffolded state is migrated to a live call site.
 #![allow(dead_code)]
 
 mod arena;

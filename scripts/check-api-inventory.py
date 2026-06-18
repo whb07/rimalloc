@@ -97,10 +97,11 @@ def main() -> int:
         require(item in api_doc, f"docs/api-inventory.md does not mention crate-root item {item}")
 
     for phrase in [
-        "Crate root safe API: Rust SemVer surface.",
-        "`raw`: unstable low-level Rust path surface until explicitly versioned.",
-        "C ABI symbols and layouts: C compatibility surface.",
-        "`core_types`: private design surface, not public SemVer.",
+        "Tier S: safe Rust API, Rust SemVer surface.",
+        "Tier R: raw Rust facade, unsafe and unstable unless explicitly versioned.",
+        "Tier C: exported C ABI and raw layout compatibility surface.",
+        "Tier I: internal implementation surface, not public API.",
+        "The raw Rust module path surface is unstable until explicitly versioned.",
         "symbols/public-symbol-classification.tsv",
     ]:
         require(phrase in api_doc, f"docs/api-inventory.md missing policy phrase: {phrase}")

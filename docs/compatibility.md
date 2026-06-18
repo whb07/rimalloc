@@ -4,9 +4,13 @@ This repository is pre-release and `publish = false`, but compatibility domains
 are tracked now so accidental public commitments do not leak out of the
 mechanical translation.
 
-## Domains
+This crate is a mimalloc-compatible C ABI allocator artifact. It also provides
+a narrow, experimental safe Rust allocation facade. It is not yet a broad safe
+Rust heap, options, or stats abstraction.
 
-### Safe Rust API
+## Public API Tiers
+
+### Tier S: Safe Rust API
 
 The crate-root safe API is the Rust SemVer surface. Today it contains
 `MiMalloc`, `Allocation`, and the allocation error/status types listed in
@@ -17,7 +21,7 @@ changing public method signatures, changing trait implementations, changing
 documented safety or ownership behavior, and changing error variants or their
 meaning.
 
-### Raw Rust Facade
+### Tier R: Raw Rust Facade
 
 `mechanical_mimalloc::raw` is an explicit C-shaped compatibility facade. It is
 not a safe Rust abstraction and is not yet promised as a stable Rust SemVer
@@ -27,7 +31,7 @@ and low-level users may depend on it.
 Raw facade changes require updating `docs/api-inventory.md`, ABI/layout checks,
 and any affected examples or parity tests.
 
-### C ABI
+### Tier C: C ABI
 
 The `cdylib` exports mimalloc-compatible C ABI symbols. Compatibility-sensitive
 changes include exported symbol additions/removals, calling convention changes,
@@ -40,6 +44,23 @@ Use:
 scripts/check-abi-symbols.sh
 scripts/check-c-link-public-api.py
 ```
+
+### Tier I: Internal Implementation
+
+Private allocator implementation modules are not public API. Any new `pub`
+item outside the crate-root facade or documented `raw` allowlist is
+release-blocking until classified. Any new `#[unsafe(no_mangle)]`,
+`#[unsafe(export_name = ...)]`, naked ABI shim, or `global_asm!` export outside
+approved FFI boundary files is release-blocking until classified.
+
+Use:
+
+```sh
+scripts/check-api-inventory.py
+scripts/check-ffi-boundary.py
+```
+
+## Other Compatibility Domains
 
 ### Raw Layout
 

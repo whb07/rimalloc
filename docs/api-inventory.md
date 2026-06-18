@@ -3,13 +3,20 @@
 This inventory separates stable-intent surfaces from compatibility surfaces and
 implementation internals.
 
+## Public API Tiers
+
+- Tier S: safe Rust API, Rust SemVer surface.
+- Tier R: raw Rust facade, unsafe and unstable unless explicitly versioned.
+- Tier C: exported C ABI and raw layout compatibility surface.
+- Tier I: internal implementation surface, not public API.
+
 ## Crate Root
 
-- `MiMalloc`: Rust `GlobalAlloc` facade.
-- `Allocation`: owned byte allocation wrapper backed by `MiMalloc`.
-- `AllocError`, `LayoutError`, `TryAllocError`: Rust-native error/status types
+- `MiMalloc`: Tier S Rust `GlobalAlloc` facade.
+- `Allocation`: Tier S owned byte allocation wrapper backed by `MiMalloc`.
+- `AllocError`, `LayoutError`, `TryAllocError`: Tier S Rust-native error/status types
   for the safe allocation wrapper.
-- `raw`: explicit C-shaped compatibility facade.
+- `raw`: Tier R explicit C-shaped compatibility facade.
 
 Implementation modules such as allocation, page, heap, arena, OS, primitive,
 thread-local, and strict-type internals are crate-private and must not be
@@ -35,6 +42,7 @@ and `repr(C)` layouts for tests, benchmarks, and low-level integration.
 
 The raw facade is a compatibility surface, not a safe abstraction. Most calls
 are unsafe because they inherit mimalloc's C preconditions.
+The raw Rust module path surface is unstable until explicitly versioned.
 
 The source/documentation inventory is checked by:
 
@@ -44,7 +52,7 @@ scripts/check-api-inventory.py
 
 ## C ABI Symbols
 
-The `cdylib` exports mimalloc-compatible C ABI symbols. The authoritative local
+The Tier C `cdylib` exports mimalloc-compatible C ABI symbols. The authoritative local
 checks are:
 
 ```sh
@@ -57,10 +65,14 @@ Extra exported symbols outside the public C headers must be classified in
 
 ## Hidden Internals
 
-Internal C-shaped helper functions may remain `extern "C"` when translated code
+Tier I internal C-shaped helper functions may remain `extern "C"` when translated code
 depends on that shape, but they must not become dynamic ABI exports unless the
 symbol is deliberately classified. `tests/release_fast_path_audit.rs` guards
 known internal helpers against regaining `#[unsafe(no_mangle)]`.
+
+New crate-root public items, new raw modules, or new export attributes outside
+approved FFI boundary files are release-blocking until this inventory and the
+corresponding source-shape checks are updated.
 
 ## SemVer Classification
 

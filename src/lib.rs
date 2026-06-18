@@ -1,5 +1,9 @@
 //! Mechanical Rust translation foundation for mimalloc 3.3.2.
 //!
+//! This crate is a mimalloc-compatible C ABI allocator artifact. It also
+//! provides a narrow, experimental safe Rust allocation facade. It is not yet a
+//! broad safe Rust heap, options, or stats abstraction.
+//!
 //! This crate is currently a dual artifact:
 //!
 //! - a `cdylib` that exports mimalloc-compatible C ABI symbols, and

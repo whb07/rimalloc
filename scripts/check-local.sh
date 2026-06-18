@@ -7,6 +7,7 @@ run scripts/check-fmt.sh
 run cargo test --quiet
 run cargo check --examples --features std
 run scripts/check-api-inventory.py
+run scripts/check-ffi-boundary.py
 run scripts/check-features.sh
 run scripts/check-lints.sh
 run scripts/check-layout.sh

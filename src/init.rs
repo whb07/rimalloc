@@ -1,10 +1,6 @@
 //! Global / thread initialization
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    clippy::missing_safety_doc
-)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
 use core::cell::Cell;
@@ -926,6 +922,8 @@ pub extern "C" fn mi_is_redirected() -> bool {
     unsafe { crate::prim::_mi_is_redirected() }
 }
 
+/// # Safety
+/// `theap` must be null or point to a valid thread heap owned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
     theap: *mut mi_theap_t,
@@ -956,6 +954,8 @@ pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
     }
 }
 
+/// # Safety
+/// `theap` must be null or point to a valid thread heap owned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
     theap: *mut mi_theap_t,

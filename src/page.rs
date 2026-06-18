@@ -494,8 +494,7 @@ unsafe fn mi_page_move_to_full_typed(
     from: crate::core_types::NormalPageQueue,
     to: crate::core_types::FullPageQueue,
 ) -> crate::core_types::FullPage {
-    mi_page_queue_enqueue_from(to.0.as_ptr(), from.0.as_ptr(), page.0.as_ptr());
-    crate::core_types::move_to_full_queue(page, from, to)
+    mi_page_queue_enqueue_from(to, from, page)
 }
 
 #[inline]
@@ -504,8 +503,7 @@ unsafe fn mi_page_unfull_typed(
     from: crate::core_types::FullPageQueue,
     to: crate::core_types::NormalPageQueue,
 ) -> crate::core_types::ActivePage {
-    mi_page_queue_enqueue_from_full(to.0.as_ptr(), from.0.as_ptr(), page.0.as_ptr());
-    crate::core_types::unfull_page(page, from, to)
+    mi_page_queue_enqueue_from_full(to, from, page)
 }
 
 #[inline(never)]
@@ -1396,21 +1394,23 @@ pub unsafe fn mi_page_queue_enqueue_from_ex(
 }
 
 #[inline]
-pub unsafe fn mi_page_queue_enqueue_from(
-    to: *mut mi_page_queue_t,
-    from: *mut mi_page_queue_t,
-    page: *mut mi_page_t,
-) {
-    mi_page_queue_enqueue_from_ex(to, from, true, page);
+pub(crate) unsafe fn mi_page_queue_enqueue_from(
+    to: crate::core_types::FullPageQueue,
+    from: crate::core_types::NormalPageQueue,
+    page: crate::core_types::ActivePage,
+) -> crate::core_types::FullPage {
+    mi_page_queue_enqueue_from_ex(to.0.as_ptr(), from.0.as_ptr(), true, page.0.as_ptr());
+    crate::core_types::move_to_full_queue(page, from, to)
 }
 
 #[inline]
-pub unsafe fn mi_page_queue_enqueue_from_full(
-    to: *mut mi_page_queue_t,
-    from: *mut mi_page_queue_t,
-    page: *mut mi_page_t,
-) {
-    mi_page_queue_enqueue_from_ex(to, from, true, page);
+pub(crate) unsafe fn mi_page_queue_enqueue_from_full(
+    to: crate::core_types::NormalPageQueue,
+    from: crate::core_types::FullPageQueue,
+    page: crate::core_types::FullPage,
+) -> crate::core_types::ActivePage {
+    mi_page_queue_enqueue_from_ex(to.0.as_ptr(), from.0.as_ptr(), true, page.0.as_ptr());
+    crate::core_types::unfull_page(page, from, to)
 }
 
 #[inline(never)]

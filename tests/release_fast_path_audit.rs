@@ -2123,8 +2123,20 @@ fn free_path_internals_are_not_dynamic_exports() {
                 .contains("crate::mi_assert_internal!(!force || (*page).local_free.is_null());")
             && page_rs.contains("unsafe fn mi_page_move_to_full_typed(")
             && page_rs.contains("unsafe fn mi_page_unfull_typed(")
+            && page_rs.contains(
+                "pub(crate) unsafe fn mi_page_queue_enqueue_from(\n    to: crate::core_types::FullPageQueue,\n    from: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
+            )
+            && page_rs.contains(
+                "pub(crate) unsafe fn mi_page_queue_enqueue_from_full(\n    to: crate::core_types::NormalPageQueue,\n    from: crate::core_types::FullPageQueue,\n    page: crate::core_types::FullPage,"
+            )
             && page_rs.contains("crate::core_types::move_to_full_queue(page, from, to)")
             && page_rs.contains("crate::core_types::unfull_page(page, from, to)")
+            && !page_rs.contains(
+                "pub unsafe fn mi_page_queue_enqueue_from(\n    to: *mut mi_page_queue_t,"
+            )
+            && !page_rs.contains(
+                "pub unsafe fn mi_page_queue_enqueue_from_full(\n    to: *mut mi_page_queue_t,"
+            )
             && page_rs.contains("mi_page_unfull_typed(\n        crate::core_types::FullPage")
             && page_rs
                 .contains("mi_page_move_to_full_typed(\n            crate::core_types::ActivePage")

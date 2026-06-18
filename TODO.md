@@ -1150,14 +1150,19 @@ These wrappers should be added only if they can avoid dangling references, globa
     - `cargo clippy --all-targets -- -D warnings` passes.
     - Maximal valid feature-set Clippy runs pass.
 
-- [ ] Ensure docs fail on broken links and doctest regressions.
+- [x] Ensure docs fail on broken links and doctest regressions.
   - Validation:
     - `scripts/check-docs.sh` passes.
     - CI/manual workflow, if used, runs the same command.
+  - Evidence:
+    - `src/lib.rs` denies `rustdoc::broken_intra_doc_links` and warns on `rustdoc::bare_urls`.
+    - `scripts/check-docs.sh` runs `cargo doc --no-deps --features std` and `cargo test --doc --features std`.
+    - `scripts/check-local.sh` runs `scripts/check-docs.sh`.
+    - `scripts/check-docs.sh` passes.
 
 ## H4. Compile-fail tests
 
-- [ ] Add compile-fail tests for public boundary regressions.
+- [x] Add compile-fail tests for public boundary regressions.
   - Cases:
     - Old crate-root modules unavailable.
     - `core_types` unavailable.
@@ -1168,6 +1173,11 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Tests run through rustdoc compile-fail examples or `trybuild`.
     - These tests are part of local check script.
+  - Evidence:
+    - Crate docs include compile-fail examples for old crate-root modules, `core_types`, and unsafe raw calls without an unsafe block.
+    - `Allocation` rustdoc includes a compile-fail use-after-move example proving the wrapper is not `Copy`.
+    - Safe heap API is intentionally absent, so heap lifetime/main-heap compile-fail cases do not apply yet.
+    - `scripts/check-docs.sh` runs these rustdoc compile-fail tests and is part of `scripts/check-local.sh`.
 
 ## H5. ABI/layout tests
 

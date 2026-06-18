@@ -25,7 +25,9 @@ use crate::internal::{
     mi_page_usable_block_size, mi_theap_malloc_use_guarded, mi_unlikely,
 };
 use crate::options::_mi_error_message_fmt;
-use crate::page::{MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size};
+use crate::page::{
+    MI_MAX_ALLOC_SIZE, MI_PADDING_SIZE, MI_PAGE_OSPAGE_BLOCK_ALIGN2, mi_good_size_typed,
+};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{mi_track_align, mi_track_malloc};
 use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_theap_t};
@@ -67,7 +69,7 @@ pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> b
     if alignment > size {
         return false;
     }
-    let bsize = mi_good_size(size);
+    let bsize = mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get();
     let ok = (bsize <= MI_PAGE_MAX_START_BLOCK_ALIGN2 && _mi_is_power_of_two(bsize))
         || (alignment == MI_PAGE_OSPAGE_BLOCK_ALIGN2
             && bsize.is_multiple_of(MI_PAGE_OSPAGE_BLOCK_ALIGN2));

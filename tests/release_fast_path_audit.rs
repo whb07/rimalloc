@@ -1608,6 +1608,19 @@ fn free_path_internals_are_not_dynamic_exports() {
         "internal usable-size routing should carry UsableSize until raw ABI/comparison boundaries"
     );
     assert!(
+        page_rs.contains("pub(crate) fn mi_good_size_typed(")
+            && page_rs.contains(") -> crate::core_types::GoodSize")
+            && page_rs.contains(
+                "mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()"
+            )
+            && alloc_rs.contains("mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()")
+            && alloc_aligned_rs
+                .contains("mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()")
+            && !alloc_rs.contains("use crate::page::{_mi_bin_typed, _mi_malloc_generic_typed, MI_MAX_ALLOC_SIZE, mi_good_size};")
+            && !alloc_aligned_rs.contains("mi_good_size(size)"),
+        "internal good-size routing should carry GoodSize until raw ABI/comparison boundaries"
+    );
+    assert!(
         internal.contains(
             "pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectBin"
         ) && internal.contains("let idx = mi_direct_bin_from_size(size).as_usize();")

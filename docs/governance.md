@@ -12,6 +12,19 @@ performance.
 - Platform changes need platform-specific verification evidence.
 - Upstream synchronization changes need a parity review.
 
+## Ownership Roles
+
+- Maintainers own triage, scope control, and final merge decisions.
+- Unsafe reviewers own proof obligations for pointer validity, ownership,
+  alignment, initialization, aliasing, concurrency, and unwind behavior.
+- Release owners own the release checklist in `docs/release.md`.
+- Security contact is the maintainer group reached through the private process
+  in `SECURITY.md`.
+- Upstream sync owners own baseline updates, `UPSTREAM_DIFF.md`, `PARITY.md`,
+  and ABI/layout/performance rechecks for new mimalloc versions.
+- Benchmark sign-off owners own benchmark scope, noise classification, and the
+  no-regression conclusion recorded in `BENCHMARK_RESULTS.md`.
+
 ## Release Ownership
 
 A release owner must confirm:

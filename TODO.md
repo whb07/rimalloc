@@ -1138,7 +1138,7 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## H3. Rustdoc and lints
 
-- [ ] Add Cargo `[lints]` policy or crate-level lints for safe API/FFI boundary.
+- [x] Add Cargo `[lints]` policy or crate-level lints for safe API/FFI boundary.
   - Desired lints:
     - `unsafe_op_in_unsafe_fn = deny`
     - `rustdoc::broken_intra_doc_links = deny`
@@ -1149,6 +1149,11 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - `cargo clippy --all-targets -- -D warnings` passes.
     - Maximal valid feature-set Clippy runs pass.
+  - Evidence:
+    - `Cargo.toml` centrally denies `unsafe_op_in_unsafe_fn`, denies broken rustdoc links, warns on bare rustdoc URLs, and denies `clippy::missing_safety_doc`.
+    - `missing_docs` remains deferred until raw narrowing so broad compatibility modules do not turn transitional public raw paths into a permanent docs contract.
+    - `clippy::undocumented_unsafe_blocks` remains deferred for the mechanical port; an explicit trial currently reports existing unsafe-block audit debt rather than a clean enforceable policy.
+    - `scripts/check-lints.sh` passes the default, bench, and maximal valid feature-set Clippy runs.
 
 - [x] Ensure docs fail on broken links and doctest regressions.
   - Validation:

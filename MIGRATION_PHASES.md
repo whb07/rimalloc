@@ -67,7 +67,7 @@ Raw `usize` remains at FFI, ABI, and compatibility boundaries, but the internal 
 
 **Goal:** Ensure the final Rust implementation is idiomatic, clean, and free of the `allow` attributes used during the structural port.
 
-**Status:** In progress.
+**Status:** Implemented and guarded by `tests/release_fast_path_audit.rs`, default verification, and valid feature-set Clippy sweeps.
 
 Recent cleanup removed unused `core_types` re-exports, the redundant crate-level `clippy::nonminimal_bool` allowance, the internal helper, allocation override, heap, init, allocation, aligned allocation, free-path, page, bitmap, random, page-map, arena-meta, tracking, options, stats, OS boundary, libc helper, POSIX allocation, atomic/lock, primitive TLS/helper, thread-heap, Emscripten primitive, WASI primitive, macOS primitive, and Unix primitive `clippy::missing_safety_doc` module allowances after documenting their unsafe boundaries, and a redundant thread-local safety-doc allowance. The remaining broad allowances are mostly C-port compatibility (`non_camel_case_types` and C ABI globals) or intentional type scaffolding that is not yet live at every future call site. Remaining localized Clippy allowances are limited to secure/debug feature constant comparisons and C-compatible arena/OS helper arity.
 
@@ -106,6 +106,6 @@ No benchmark rerun was needed for the stats dead-code cleanup, guarded sampling 
 Fresh post-allocation-cleanup benchmark verification nevertheless refreshed `target/bench-allocators/libmimalloc-rust.so` from the release cdylib and ran `mimalloc-bench` `allt` at `-n=3` against the C allocator. The 19-case geomean was `1.004453` (`+0.45%` Rust vs C), still within the `BENCHMARK_RESULTS.md` parity envelope (`0.995237`, `-0.48%`) and below a 1% overall spread. Hot-path cases were tied or Rust-favored in the aggregate (`glibc-simple` `-3.92%`, `glibc-thread` `-0.63%`, `xmalloc-testN` `-0.31%`, cache scratch tied, `alloc-test1` `+0.32%`, `alloc-testN` `+0.76%`). Focused `-n=5` repeats for the noisy cases resolved the largest hot-path outlier: `rptestN` narrowed to `+2.60%` mean and `+1.11%` median, `sh8benchN` was Rust-favored (`-0.78%` mean, `-3.85%` median), and rocksdb was tied/Rust-favored (`-0.06%` mean, `-0.84%` median). Redis (`+2.67%` mean, `+3.72%` median) and `larsonN-sized` (`+2.64%` mean, `+2.89%` median) remain low-single-digit noisy watch items, not allocator hot-path regressions. No hot-path or overall benchmark regression requiring code action was found.
 
 **Action Items:**
-1. **Remove Unused Types:** In progress. Do not delete C ABI aliases still required by `raw`/compat/public module boundaries.
-2. **Resolve Clippy Warnings:** In progress. `cargo clippy --all-targets -- -D warnings` is clean with the remaining intentional allowances.
+1. **Remove Unused Types:** Done for the active Linux allocator surface. Remaining C ABI aliases and non-Linux primitive compatibility definitions are retained intentionally, while `core_types` dead-code expectations are scoped to the staged strict-type scaffold required by `TYPES_SPEC.md`.
+2. **Resolve Clippy Warnings:** Done. `cargo clippy --all-targets -- -D warnings` is clean, and the maximal valid feature sweeps pass with `track-valgrind` and `track-asan` checked separately because they are mutually exclusive.
 3. **Safety Documentation:** Done for the former broad `clippy::missing_safety_doc` allowances. Continue adding local `/// # Safety` docs whenever new public unsafe C-shaped boundaries are introduced or exposed.

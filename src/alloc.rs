@@ -1,6 +1,6 @@
 //! Core allocation / free paths + libc overrides
 
-#![allow(dead_code, unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::mem::size_of;
@@ -609,6 +609,7 @@ pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
     mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()
 }
 
+#[allow(dead_code)]
 unsafe fn mi_theap_mallocn(theap: *mut mi_theap_t, count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
         mi_theap_mallocn_req(theap, req)

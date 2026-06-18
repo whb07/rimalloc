@@ -1,6 +1,6 @@
 //! Mechanical translation of the early `src/free.c` free-path helpers.
 
-#![allow(dead_code, unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_void};
 use core::{cmp, ptr};

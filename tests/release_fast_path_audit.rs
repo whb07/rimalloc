@@ -3023,8 +3023,17 @@ fn free_path_internals_are_not_dynamic_exports() {
         "C++ new retry paths should keep C's separate theap/default-heap/explicit-heap helper boundaries"
     );
     assert!(
-        page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_theap_page_reclaim")
+        page_rs.contains(
+            "#[inline(never)]\npub(crate) unsafe fn _mi_theap_page_reclaim(\n    page: crate::core_types::OwnedAbandonedPage,\n    target: crate::core_types::ThreadHeapLocal,"
+        )
+            && page_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_theap_page_reclaim_raw")
             && page_rs.contains("static MI_THEAP_PAGE_RECLAIM_KEEP")
+            && page_rs.contains("mi_theap_page_reclaim_raw;")
+            && page_rs.contains("_mi_theap_page_reclaim(wrapper, theap_wrapper);")
+            && page_rs.contains(
+                "_mi_theap_page_reclaim(\n            crate::core_types::OwnedAbandonedPage"
+            )
+            && !page_rs.contains("pub unsafe extern \"C\" fn _mi_theap_page_reclaim")
             && page_rs.contains(
                 "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
             )
@@ -3056,7 +3065,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP")
             && free_rs.contains("&& mi_abandoned_page_try_reclaim(page, reclaim_on_free)")
             && free_rs
-                .contains("try_reclaim_abandoned(\n        crate::core_types::OwnedAbandonedPage")
+                .contains("_mi_theap_page_reclaim(\n        crate::core_types::OwnedAbandonedPage")
             && !free_rs.contains("_mi_theap_page_reclaim(theap, page)")
             && free_rs.contains("mi_page_usable_aligned_size_of_typed(page, p)"),
         "abandoned-page reclaim should keep C helper boundaries while routing internal reclaim through typed page/heap witnesses"

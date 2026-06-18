@@ -821,7 +821,12 @@ pub unsafe extern "C" fn mi_page_fresh_alloc(
         return ptr::null_mut();
     }
     if mi_page_is_abandoned(page) {
-        _mi_theap_page_reclaim(theap, page);
+        _mi_theap_page_reclaim(
+            crate::core_types::OwnedAbandonedPage(crate::core_types::PagePtr::new_unchecked(page)),
+            crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(
+                theap,
+            )),
+        );
         if !mi_page_immediate_available(page) {
             if mi_page_is_expandable(page) {
                 if !mi_page_extend_free(theap, page) {
@@ -952,20 +957,29 @@ pub(crate) unsafe fn try_reclaim_abandoned(
     crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page))
 }
 
-/// # Safety
-/// C-ABI boundary for page reclaim. The caller must ensure `theap` and `page` are valid.
 #[inline(never)]
-pub unsafe extern "C" fn _mi_theap_page_reclaim(theap: *mut mi_theap_t, page: *mut mi_page_t) {
+pub(crate) unsafe fn _mi_theap_page_reclaim(
+    page: crate::core_types::OwnedAbandonedPage,
+    target: crate::core_types::ThreadHeapLocal,
+) -> crate::core_types::ActivePage {
+    try_reclaim_abandoned(page, target)
+}
+
+/// # Safety
+/// C-ABI-shaped keep boundary for page reclaim. The caller must ensure `theap`
+/// and `page` are valid, and that `page` is an owned abandoned page.
+#[inline(never)]
+unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mut mi_page_t) {
     let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
     let wrapper = crate::core_types::OwnedAbandonedPage(page_ptr);
     let theap_ptr = crate::core_types::ThreadHeapPtr::new_unchecked(theap);
     let theap_wrapper = crate::core_types::ThreadHeapLocal(theap_ptr);
-    try_reclaim_abandoned(wrapper, theap_wrapper);
+    _mi_theap_page_reclaim(wrapper, theap_wrapper);
 }
 
 #[used]
 static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) =
-    _mi_theap_page_reclaim;
+    mi_theap_page_reclaim_raw;
 
 #[inline]
 pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {

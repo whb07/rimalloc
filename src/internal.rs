@@ -70,10 +70,10 @@ pub(crate) use crate::page::{
 };
 pub use crate::page::{
     _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_queue_append,
-    _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, _mi_theap_page_reclaim,
-    MI_LARGE_MAX_OBJ_SIZE, MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE,
-    MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE, mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge,
-    mi_page_is_in_full, mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
+    _mi_page_queue_is_valid, _mi_page_stats_bin, _mi_page_unfull, MI_LARGE_MAX_OBJ_SIZE,
+    MI_MAX_ALLOC_SIZE, MI_MEDIUM_PAGE_SIZE, MI_OS_PAGE_SIZE, MI_PADDING_SIZE, MI_SMALL_PAGE_SIZE,
+    mi_page_flags_set, mi_page_is_abandoned, mi_page_is_huge, mi_page_is_in_full,
+    mi_page_set_in_full, mi_page_set_theap, mi_page_theap,
 };
 pub(crate) use crate::page_map::{
     _mi_page_map_base, _mi_page_map_init, _mi_page_map_register, _mi_page_map_unregister,

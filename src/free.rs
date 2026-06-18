@@ -31,8 +31,8 @@ use crate::internal::{
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
     _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_retire, _mi_page_unfull,
-    MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned, mi_page_is_huge,
-    try_reclaim_abandoned,
+    _mi_theap_page_reclaim, MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned,
+    mi_page_is_huge,
 };
 use crate::prim::{
     _mi_page_associated_theap_peek, _mi_prim_thread_id, _mi_theap_default,
@@ -920,7 +920,7 @@ unsafe extern "C" fn mi_abandoned_page_try_reclaim(
     }
 
     _mi_arenas_page_unabandon(page, theap);
-    try_reclaim_abandoned(
+    _mi_theap_page_reclaim(
         crate::core_types::OwnedAbandonedPage(crate::core_types::PagePtr::new_unchecked(page)),
         crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(theap)),
     );

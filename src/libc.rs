@@ -1,11 +1,6 @@
 //! Small libc-like string and environment helpers.
 
-#![allow(
-    dead_code,
-    non_camel_case_types,
-    non_upper_case_globals,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 use core::cmp::min;
 use core::ffi::CStr;
@@ -25,6 +20,7 @@ pub const mi_mask_even_bits32: u32 = 0x5555_5555;
 pub const mi_mask_even_nibbles32: u32 = 0x0F0F_0F0F;
 pub const mi_mask_even_bits64: u64 = 0x5555_5555_5555_5555;
 pub const mi_mask_even_nibbles64: u64 = 0x0F0F_0F0F_0F0F_0F0F;
+#[allow(dead_code)]
 const MI_MASK_EVEN_PAIRS32: u32 = 0x3333_3333;
 const MI_MASK_EVEN_PAIRS64: u64 = 0x3333_3333_3333_3333;
 
@@ -238,6 +234,7 @@ fn mi_outc(c: c_char, out: &mut *mut c_char, end: *mut c_char) {
 }
 
 #[inline]
+#[allow(dead_code)]
 unsafe fn mi_outs(s: *const c_char, out: &mut *mut c_char, end: *mut c_char) {
     if s.is_null() {
         return;
@@ -253,6 +250,7 @@ unsafe fn mi_outs(s: *const c_char, out: &mut *mut c_char, end: *mut c_char) {
 }
 
 #[inline]
+#[allow(dead_code)]
 fn mi_out_fill(fill: c_char, len: usize, out: &mut *mut c_char, end: *mut c_char) {
     let mut p = *out;
     for _ in 0..len {
@@ -268,6 +266,7 @@ fn mi_out_fill(fill: c_char, len: usize, out: &mut *mut c_char, end: *mut c_char
 }
 
 #[inline]
+#[allow(dead_code)]
 unsafe fn mi_out_alignright(
     fill: c_char,
     start: *mut c_char,
@@ -333,6 +332,7 @@ unsafe fn mi_out_num(
 static MI_OUT_NUM_KEEP: unsafe fn(u128, usize, c_char, &mut *mut c_char, *mut c_char) = mi_out_num;
 
 #[inline]
+#[allow(dead_code)]
 fn mi_byte_sum32(mut x: u32) -> usize {
     x += x << 8;
     x += x << 16;
@@ -378,6 +378,7 @@ fn mi_clz_generic32(mut x: u32) -> usize {
 }
 
 #[inline]
+#[allow(dead_code)]
 fn mi_popcount_generic32(mut x: u32) -> usize {
     x = x - ((x >> 1) & mi_mask_even_bits32);
     x = (x & MI_MASK_EVEN_PAIRS32) + ((x >> 2) & MI_MASK_EVEN_PAIRS32);

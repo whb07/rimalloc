@@ -1,7 +1,6 @@
 //! Bitmap, page-map, page-queue, arena metadata
 
 #![allow(
-    dead_code,
     non_camel_case_types,
     non_snake_case,
     non_upper_case_globals,
@@ -399,6 +398,7 @@ fn mi_bfield_atomic_try_clear_mask(
 }
 
 #[inline]
+#[allow(dead_code)]
 fn mi_bfield_atomic_try_clear(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bool>) -> bool {
     crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
     let mask = mi_bfield_one() << idx;
@@ -406,6 +406,7 @@ fn mi_bfield_atomic_try_clear(b: &AtomicUsize, idx: usize, all_clear: Option<&mu
 }
 
 #[inline]
+#[allow(dead_code)]
 fn mi_bfield_atomic_try_clear8(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bool>) -> bool {
     crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
     crate::mi_debug_assert!(idx.is_multiple_of(8));
@@ -1274,6 +1275,7 @@ fn mi_chunkbin_inc(bbin: mi_chunkbin_t) -> mi_chunkbin_t {
 }
 
 #[inline]
+#[allow(dead_code)]
 fn mi_chunkbin_dec(bbin: mi_chunkbin_t) -> mi_chunkbin_t {
     crate::mi_debug_assert!((bbin as i32) > (MI_CBIN_NONE as i32));
     match bbin {
@@ -2035,6 +2037,7 @@ pub unsafe fn mi_bbitmap_is_clearN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: us
 type mi_bchunk_try_find_and_clear_fun_t = fn(&mut mi_bchunk_t, usize, &mut usize) -> bool;
 
 #[inline]
+#[allow(dead_code)]
 fn mi_bchunk_try_find_and_clear_1(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
     crate::mi_debug_assert!(n == 1);
     mi_bchunk_try_find_and_clear(chunk, pidx)

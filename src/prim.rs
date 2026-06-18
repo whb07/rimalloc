@@ -4,12 +4,7 @@
 //! - `include/mimalloc/prim.h`
 //! - `src/prim/osx/prim.c`
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    dead_code,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 #[cfg(target_os = "emscripten")]
 pub mod emscripten;

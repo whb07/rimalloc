@@ -358,3 +358,106 @@ pub(crate) struct MetaMemId {
     pub(crate) block_index: BlockIndex,
     pub(crate) block_count: core::num::NonZeroU32,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::ffi::c_void;
+    use core::mem::MaybeUninit;
+
+    #[test]
+    fn memkind_code_maps_known_and_unknown_values() {
+        assert_eq!(MemKind::from(MemKindCode::NONE), MemKind::None);
+        assert_eq!(MemKind::from(MemKindCode::EXTERNAL), MemKind::External);
+        assert_eq!(MemKind::from(MemKindCode::STATIC), MemKind::Static);
+        assert_eq!(MemKind::from(MemKindCode::META), MemKind::Meta);
+        assert_eq!(MemKind::from(MemKindCode::OS), MemKind::Os);
+        assert_eq!(MemKind::from(MemKindCode::OS_HUGE), MemKind::OsHuge);
+        assert_eq!(MemKind::from(MemKindCode::OS_REMAP), MemKind::OsRemap);
+        assert_eq!(MemKind::from(MemKindCode::ARENA), MemKind::Arena);
+        assert_eq!(MemKind::from(MemKindCode::HEAP_MAIN), MemKind::HeapMain);
+        assert_eq!(
+            MemKind::from(MemKindCode(99)),
+            MemKind::Unknown(MemKindCode(99))
+        );
+    }
+
+    #[test]
+    fn os_memid_round_trips_through_view() {
+        let mut byte = 0u8;
+        let base = unsafe { OsMemPtr::new_unchecked((&mut byte as *mut u8).cast::<c_void>()) };
+        let memid = MemId::<OsMem>::os_huge(
+            Some(base),
+            ReservedBytes(4096),
+            InitiallyCommitted(true),
+            InitiallyZero(false),
+            Pinned(true),
+        );
+
+        let MemIdView::Os(view) = MemId::<AnyMem>::view(memid.raw) else {
+            panic!("expected OS memid view");
+        };
+        assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
+        assert_eq!(view.size.0, 4096);
+        assert!(view.initially_committed.0);
+        assert!(!view.initially_zero.0);
+        assert!(view.pinned.0);
+        assert!(matches!(view.kind, OsMemKind::Huge));
+    }
+
+    #[test]
+    fn external_and_meta_memids_round_trip_through_view() {
+        let mut byte = 0u8;
+        let base = unsafe { OsMemPtr::new_unchecked((&mut byte as *mut u8).cast::<c_void>()) };
+        let external = MemId::<ExternalMem>::external(
+            Some(base),
+            ReservedBytes(8192),
+            InitiallyCommitted(false),
+            InitiallyZero(true),
+            Pinned(false),
+        );
+
+        let MemIdView::External(view) = MemId::<AnyMem>::view(external.raw) else {
+            panic!("expected external memid view");
+        };
+        assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
+        assert_eq!(view.size.0, 8192);
+        assert!(!view.initially_committed.0);
+        assert!(view.initially_zero.0);
+        assert!(!view.pinned.0);
+
+        let mut meta_byte = 0u8;
+        let meta_page =
+            unsafe { NonNull::new_unchecked((&mut meta_byte as *mut u8).cast::<c_void>()) };
+        let meta = MemId::<MetaMem>::meta(
+            meta_page,
+            BlockIndex(7),
+            core::num::NonZeroU32::new(3).unwrap(),
+        );
+
+        let MemIdView::Meta(view) = MemId::<AnyMem>::view(meta.raw) else {
+            panic!("expected meta memid view");
+        };
+        assert_eq!(view.meta_page, meta_page);
+        assert_eq!(view.block_index.0, 7);
+        assert_eq!(view.block_count.get(), 3);
+    }
+
+    #[test]
+    fn arena_memid_round_trips_slice_metadata() {
+        let mut arena = MaybeUninit::<crate::types::mi_arena_t>::uninit();
+        let arena_ptr = unsafe { ArenaPtr::new_unchecked(arena.as_mut_ptr()) };
+        let range = SliceRange::new(11, 5, arena_ptr).unwrap();
+        let memid = MemId::<ArenaMem>::arena(arena_ptr, range);
+
+        let MemIdView::Arena(view) = MemId::<AnyMem>::view(memid.raw) else {
+            panic!("expected arena memid view");
+        };
+        assert_eq!(view.arena.as_ptr(), arena_ptr.as_ptr());
+        assert_eq!(view.range.start_usize(), 11);
+        assert_eq!(view.range.count_usize(), 5);
+        assert!(!view.initially_committed.0);
+        assert!(!view.initially_zero.0);
+        assert!(!view.pinned.0);
+    }
+}

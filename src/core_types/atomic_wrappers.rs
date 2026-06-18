@@ -510,3 +510,103 @@ pub(crate) struct MiLockGuard<'a> {
     pub(crate) lock: MiLockPtr,
     pub(crate) _borrow: PhantomData<&'a ()>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize};
+
+    #[test]
+    fn atomic_usize_field_updates_stack_atomic_word() {
+        let atomic = AtomicUsize::new(4);
+        let field = AtomicUsizeField((&atomic as *const AtomicUsize).cast_mut().cast::<usize>());
+
+        assert_eq!(unsafe { field.load(Ordering::Relaxed) }, 4);
+        unsafe { field.store(7, Ordering::Relaxed) };
+        assert_eq!(atomic.load(Ordering::Relaxed), 7);
+        assert_eq!(unsafe { field.fetch_add(5, Ordering::Relaxed) }, 7);
+        assert_eq!(unsafe { field.fetch_sub(2, Ordering::Relaxed) }, 12);
+        assert_eq!(unsafe { field.fetch_or(0b1000, Ordering::Relaxed) }, 10);
+        assert_eq!(unsafe { field.fetch_and(0b1010, Ordering::Relaxed) }, 10);
+
+        let mut expected = 10;
+        assert!(unsafe { field.compare_exchange_acq_rel(&mut expected, 42) });
+        assert_eq!(unsafe { field.load(Ordering::Relaxed) }, 42);
+
+        let mut stale = 10;
+        assert!(!unsafe { field.compare_exchange_acq_rel(&mut stale, 99) });
+        assert_eq!(stale, 42);
+    }
+
+    #[test]
+    fn atomic_i64_field_updates_expected_on_cas_failure() {
+        let atomic = AtomicI64::new(-4);
+        let field = AtomicI64Field((&atomic as *const AtomicI64).cast_mut().cast::<i64>());
+
+        assert_eq!(unsafe { field.load(Ordering::Relaxed) }, -4);
+        unsafe { field.store(11, Ordering::Relaxed) };
+
+        let mut expected = 9;
+        assert!(!unsafe { field.compare_exchange_acq_rel(&mut expected, 12) });
+        assert_eq!(expected, 11);
+        assert_eq!(atomic.load(Ordering::Relaxed), 11);
+
+        assert!(unsafe { field.compare_exchange_acq_rel(&mut expected, 12) });
+        assert_eq!(atomic.load(Ordering::Relaxed), 12);
+    }
+
+    #[test]
+    fn atomic_ptr_field_round_trips_pointer_values() {
+        let mut first = 1u8;
+        let mut second = 2u8;
+        let first_ptr = (&mut first as *mut u8).cast::<c_void>();
+        let second_ptr = (&mut second as *mut u8).cast::<c_void>();
+        let atomic = AtomicPtr::new(first_ptr);
+        let field =
+            || AtomicPtrField::<c_void>((&atomic as *const AtomicPtr<c_void>).cast_mut().cast());
+
+        assert_eq!(unsafe { field().load(Ordering::Acquire) }, first_ptr);
+        assert_eq!(unsafe { field().exchange_acq_rel(second_ptr) }, first_ptr);
+        assert_eq!(atomic.load(Ordering::Acquire), second_ptr);
+
+        let mut expected = first_ptr;
+        assert!(!unsafe { field().compare_exchange_acq_rel(&mut expected, first_ptr) });
+        assert_eq!(expected, second_ptr);
+        assert!(unsafe { field().compare_exchange_release(&mut expected, first_ptr) });
+        assert_eq!(atomic.load(Ordering::Acquire), first_ptr);
+    }
+
+    #[test]
+    fn atomic_thread_free_claims_and_releases_ownership_bit() {
+        let atomic = AtomicUsize::new(0);
+        let field = AtomicThreadFree(AtomicUsizeField(
+            (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
+        ));
+
+        assert!(!field.load_relaxed().is_owned());
+        assert!(unsafe { field.claim_ownership() });
+        assert!(field.load_relaxed().is_owned());
+        assert!(!unsafe { field.claim_ownership() });
+        assert!(unsafe { field.release_ownership(None) });
+        assert!(!field.load_relaxed().is_owned());
+        assert!(!unsafe { field.release_ownership(None) });
+    }
+
+    #[test]
+    fn atomic_thread_free_take_head_preserves_owner_bit() {
+        let mut block = crate::types::mi_block_t::default();
+        let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
+        let word = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
+        let atomic = AtomicUsize::new(word.raw());
+        let field = AtomicThreadFree(AtomicUsizeField(
+            (&atomic as *const AtomicUsize).cast_mut().cast::<usize>(),
+        ));
+
+        let list = unsafe { field.take_head_preserving_owner() };
+        assert_eq!(list.0.map(BlockPtr::as_ptr), Some(head.as_ptr()));
+
+        let remaining = field.load_relaxed();
+        assert!(remaining.is_owned());
+        assert!(remaining.head().is_none());
+    }
+}

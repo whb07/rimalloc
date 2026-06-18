@@ -73,6 +73,8 @@ Recent cleanup removed unused `core_types` re-exports, the redundant crate-level
 
 The typed atomic layer now centralizes thread-free word load, CAS, ownership-claim, and ownership-release operations through `AtomicThreadFree(AtomicUsizeField)`, keeping pointer-to-atomic casts behind the field wrapper required by `TYPES_SPEC.md` while preserving the existing atomic operation shapes. Page queue assertions no longer require the page module's broad `clippy::nonminimal_bool` allowance, bitmap condition/range/multiple-of/saturating-sub helpers no longer require `clippy::collapsible_if`, `clippy::manual_range_contains`, `clippy::manual_is_multiple_of`, or `clippy::implicit_saturating_sub`, bit/random/bitmap helpers no longer require `clippy::missing_const_for_fn`, and TLD/thread-heap sentinels no longer require `clippy::manual_dangling_ptr`.
 
+Benchmark verification after the `AtomicThreadFree(AtomicUsizeField)` cleanup refreshed the release cdylib and ran the full `mimalloc-bench` `allt` suite at `-n=3`: Rust geomean was `0.996245` (`-0.38%` vs C), matching the `BENCHMARK_RESULTS.md` parity envelope (`0.995237`, `-0.48%`). Focused `-n=5` repeats cleared the noisy cache hot path (`cache-scratchN` median tie, mean Rust-favored) and kept glibc/shbench hot-path cases within the established noise range; redis and larson-sized remained small noisy watch items without a stable Rust absolute-time regression against the baseline.
+
 **Action Items:**
 1. **Remove Unused Types:** In progress. Do not delete C ABI aliases still required by `raw`/compat/public module boundaries.
 2. **Resolve Clippy Warnings:** In progress. `cargo clippy --all-targets -- -D warnings` is clean with the remaining intentional allowances.

@@ -2405,7 +2405,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         .find("#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clear(")
         .expect("find mi_bbitmap_try_find_and_clear");
     let bbitmap_find_end = bitmap_rs[bbitmap_find_start..]
-        .find("\n}\n\n#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clear8(")
+        .find("#[inline(never)]\npub unsafe fn mi_bbitmap_try_find_and_clear8(")
         .map(|offset| bbitmap_find_start + offset)
         .expect("find end of mi_bbitmap_try_find_and_clear");
     let bbitmap_find_body = &bitmap_rs[bbitmap_find_start..bbitmap_find_end];

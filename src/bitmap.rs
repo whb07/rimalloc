@@ -10,7 +10,6 @@
     clippy::manual_is_multiple_of,
     clippy::manual_range_contains,
     clippy::missing_const_for_fn,
-    clippy::missing_safety_doc,
     unsafe_op_in_unsafe_fn
 )]
 
@@ -185,21 +184,29 @@ define_bitmap_types!(64);
 #[cfg(target_pointer_width = "32")]
 define_bitmap_types!(32);
 
+/// # Safety
+/// `bitmap` must point to an initialized `mi_bitmap_t`.
 #[inline]
 pub unsafe fn mi_bitmap_chunk_count(bitmap: *const mi_bitmap_t) -> usize {
     (*bitmap).chunk_count.load(Ordering::Relaxed)
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized `mi_bitmap_t`.
 #[inline]
 pub unsafe fn mi_bitmap_max_bits(bitmap: *const mi_bitmap_t) -> usize {
     mi_bitmap_chunk_count(bitmap) * MI_BCHUNK_BITS
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized `mi_bbitmap_t`.
 #[inline]
 pub unsafe fn mi_bbitmap_chunk_count(bbitmap: *const mi_bbitmap_t) -> usize {
     (*bbitmap).chunk_count.load(Ordering::Relaxed)
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized `mi_bbitmap_t`.
 #[inline]
 pub unsafe fn mi_bbitmap_max_bits(bbitmap: *const mi_bbitmap_t) -> usize {
     mi_bbitmap_chunk_count(bbitmap) * MI_BCHUNK_BITS
@@ -1230,6 +1237,9 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
     false
 }
 
+/// # Safety
+/// `bitmap` and `pidx` must be valid for writes, `claim` must be callable, and `arena` must
+/// remain valid for the claim callback.
 #[inline(never)]
 pub unsafe fn mi_bitmap_try_find_and_claim(
     bitmap: *mut mi_bitmap_t,
@@ -1296,6 +1306,9 @@ fn mi_chunkbin_of(slice_count: usize) -> mi_chunkbin_t {
     }
 }
 
+/// # Safety
+/// `chunkmap_bins` must point to at least `MI_CBIN_COUNT - 1` initialized bitmap chunks, and
+/// `chunk_idx` must be a valid bit index for those chunks.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_debug_get_bin(
     chunkmap_bins: *const mi_bchunk_t,
@@ -1312,6 +1325,8 @@ pub unsafe fn mi_bbitmap_debug_get_bin(
     MI_CBIN_NONE
 }
 
+/// # Safety
+/// If non-null, `pchunk_count` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usize {
     if bit_count == 0 {
@@ -1329,6 +1344,9 @@ pub unsafe fn mi_bitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usiz
     (chunk_count + 2) * MI_BCHUNK_SIZE
 }
 
+/// # Safety
+/// `bitmap` must point to enough writable storage for `bit_count` bits rounded up to bitmap
+/// chunk granularity. If `already_zero` is true, that storage must already be zeroed.
 #[inline(never)]
 pub unsafe fn mi_bitmap_init(
     bitmap: *mut mi_bitmap_t,
@@ -1382,6 +1400,8 @@ fn mi_bchunks_unsafe_setN(
     }
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `idx..idx + n` must be within its bit range.
 #[inline(never)]
 pub unsafe fn mi_bitmap_unsafe_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) {
     crate::mi_debug_assert!(n > 0);
@@ -1394,6 +1414,9 @@ pub unsafe fn mi_bitmap_unsafe_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usi
     );
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap. If non-null, `palready_set` must be valid for a
+/// `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bitmap_setN(
     bitmap: *mut mi_bitmap_t,
@@ -1439,6 +1462,8 @@ pub unsafe fn mi_bitmap_setN(
     were_allclear
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_clearN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usize) -> bool {
     crate::mi_debug_assert!(n > 0);
@@ -1476,16 +1501,22 @@ pub unsafe fn mi_bitmap_clearN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usiz
     were_allset
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `idx` must be a valid bit index.
 #[inline(never)]
 pub unsafe fn mi_bitmap_set(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
     mi_bitmap_setN(bitmap, idx, 1, core::ptr::null_mut())
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `idx` must be a valid bit index.
 #[inline(never)]
 pub unsafe fn mi_bitmap_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
     mi_bitmap_clearN(bitmap, idx, 1)
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_popcountN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usize) -> usize {
     crate::mi_debug_assert!(n > 0);
@@ -1514,6 +1545,8 @@ pub unsafe fn mi_bitmap_popcountN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: u
     popcount
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_xsetN(
     set: mi_xset_t,
@@ -1547,31 +1580,44 @@ pub unsafe fn mi_bitmap_is_xsetN(
     xset
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) -> bool {
     mi_bitmap_is_xsetN(MI_BIT_SET, bitmap, idx, n)
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_clearN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) -> bool {
     mi_bitmap_is_xsetN(MI_BIT_CLEAR, bitmap, idx, n)
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `idx` must be a valid bit index.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_set(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
     mi_bitmap_is_setN(bitmap, idx, 1)
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `idx` must be a valid bit index.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
     mi_bitmap_is_clearN(bitmap, idx, 1)
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_all_clear(bitmap: *mut mi_bitmap_t) -> bool {
     mi_bitmap_is_xsetN(MI_BIT_CLEAR, bitmap, 0, mi_bitmap_max_bits(bitmap))
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `idx` must be a valid bit index that will
+/// eventually become set by another thread.
 #[inline(never)]
 pub unsafe fn mi_bitmap_clear_once_set(bitmap: *mut mi_bitmap_t, idx: usize) {
     crate::mi_debug_assert!(idx < unsafe { mi_bitmap_max_bits(bitmap) });
@@ -1581,6 +1627,8 @@ pub unsafe fn mi_bitmap_clear_once_set(bitmap: *mut mi_bitmap_t, idx: usize) {
     mi_bchunk_clear_once_set(&mut (*bitmap).chunks[chunk_idx], cidx);
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap and `idx` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bitmap_bsr(bitmap: *mut mi_bitmap_t, idx: *mut usize) -> bool {
     let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
@@ -1599,6 +1647,8 @@ pub unsafe fn mi_bitmap_bsr(bitmap: *mut mi_bitmap_t, idx: *mut usize) -> bool {
     false
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_popcount(bitmap: *mut mi_bitmap_t) -> usize {
     let mut popcount = 0usize;
@@ -1663,6 +1713,8 @@ static MI_BITMAP_BSR_KEEP: unsafe fn(*mut mi_bitmap_t, *mut usize) -> bool = mi_
 #[used]
 static MI_BITMAP_POPCOUNT_KEEP: unsafe fn(*mut mi_bitmap_t) -> usize = mi_bitmap_popcount;
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `visit` must be callable for each set bit.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_bitmap_forall_set(
     bitmap: *mut mi_bitmap_t,
@@ -1692,6 +1744,8 @@ pub unsafe extern "C" fn _mi_bitmap_forall_set(
     true
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `visit` must be callable for each set range.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_bitmap_forall_setc_ranges(
     bitmap: *mut mi_bitmap_t,
@@ -1736,6 +1790,8 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_ranges(
     true
 }
 
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `visit` must be callable for each set range.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_bitmap_forall_setc_rangesn(
     bitmap: *mut mi_bitmap_t,
@@ -1792,6 +1848,8 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_rangesn(
     true
 }
 
+/// # Safety
+/// If non-null, `pchunk_count` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usize {
     if bit_count == 0 {
@@ -1809,6 +1867,9 @@ pub unsafe fn mi_bbitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usi
     (chunk_count + MI_CBIN_COUNT as usize + 1) * MI_BCHUNK_SIZE
 }
 
+/// # Safety
+/// `bbitmap` must point to enough writable storage for `bit_count` bits rounded up to bitmap
+/// chunk granularity. If `already_zero` is true, that storage must already be zeroed.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_init(
     bbitmap: *mut mi_bbitmap_t,
@@ -1827,6 +1888,9 @@ pub unsafe fn mi_bbitmap_init(
     size
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap, and `idx..idx + n` must be within its bit
+/// range.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_unsafe_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) {
     crate::mi_debug_assert!(n > 0);
@@ -1839,6 +1903,8 @@ pub unsafe fn mi_bbitmap_unsafe_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: 
     );
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap and `idx` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_bsr_inv(bbitmap: *mut mi_bbitmap_t, idx: *mut usize) -> bool {
     let chunk_count = mi_bbitmap_chunk_count(bbitmap);
@@ -1864,6 +1930,8 @@ pub unsafe fn mi_bbitmap_bsr_inv(bbitmap: *mut mi_bbitmap_t, idx: *mut usize) ->
     false
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usize) -> bool {
     crate::mi_debug_assert!(n > 0);
@@ -1893,6 +1961,8 @@ pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usi
     were_allclear
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap, and `idx..idx + n` must fit within one chunk.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_try_clearNC(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
     crate::mi_debug_assert!(n > 0);
@@ -1918,6 +1988,8 @@ pub unsafe fn mi_bbitmap_try_clearNC(bbitmap: *mut mi_bbitmap_t, idx: usize, n: 
     cleared
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_is_xsetN(
     set: mi_xset_t,
@@ -1951,11 +2023,15 @@ pub unsafe fn mi_bbitmap_is_xsetN(
     xset
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap.
 #[inline]
 pub unsafe fn mi_bbitmap_is_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
     mi_bbitmap_is_xsetN(MI_BIT_SET, bbitmap, idx, n)
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap.
 #[inline]
 pub unsafe fn mi_bbitmap_is_clearN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
     mi_bbitmap_is_xsetN(MI_BIT_CLEAR, bbitmap, idx, n)
@@ -2056,6 +2132,8 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
     found
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap and `pidx` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clear(
     bbitmap: *mut mi_bbitmap_t,
@@ -2144,6 +2222,8 @@ pub unsafe fn mi_bbitmap_try_find_and_clear(
     false
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap and `pidx` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clear8(
     bbitmap: *mut mi_bbitmap_t,
@@ -2153,6 +2233,9 @@ pub unsafe fn mi_bbitmap_try_find_and_clear8(
     mi_bbitmap_try_find_and_clear_generic(bbitmap, tseq, 8, pidx, mi_bchunk_try_find_and_clear_8)
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap, `pidx` must be valid for a `usize` write, and
+/// `n` must be no larger than one bitmap field.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clearNX(
     bbitmap: *mut mi_bbitmap_t,
@@ -2164,6 +2247,9 @@ pub unsafe fn mi_bbitmap_try_find_and_clearNX(
     mi_bbitmap_try_find_and_clear_generic(bbitmap, tseq, n, pidx, mi_bchunk_try_find_and_clearNX)
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap, `pidx` must be valid for a `usize` write, and
+/// `n` must be no larger than one bitmap chunk.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clearNC(
     bbitmap: *mut mi_bbitmap_t,
@@ -2211,6 +2297,8 @@ fn mi_bchunk_try_clearN_(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, n: usize)
     true
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap and `pidx` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_try_find_and_clearN_(
     bbitmap: *mut mi_bbitmap_t,
@@ -2253,6 +2341,8 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN_(
     false
 }
 
+/// # Safety
+/// `bbitmap` must point to an initialized bbitmap and `pidx` must be valid for a `usize` write.
 #[inline]
 pub unsafe fn mi_bbitmap_try_find_and_clearN(
     bbitmap: *mut mi_bbitmap_t,

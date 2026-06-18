@@ -2334,14 +2334,16 @@ fn free_path_internals_are_not_dynamic_exports() {
             "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange) -> bool"
         ) && arena_rs.contains(
             "unsafe fn mi_arena_try_purge_range(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> bool"
-        ) && arena_rs.contains("let Some((arena_ptr, range)) = (unsafe { mi_arena_range_from_memid(memid) })")
+        ) && arena_rs.contains("match crate::core_types::MemId::view(memid)")
+            && arena_rs.contains("crate::core_types::MemIdView::Arena(arena_memid)")
+            && arena_rs.contains("let range = arena_memid.range;")
             && !arena_rs.contains(
                 "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize)"
             )
             && !arena_rs.contains(
                 "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize)"
             ),
-        "arena free/purge path should carry SliceRange after decoding arena memids"
+        "arena free/purge path should dispatch through MemIdView and carry SliceRange"
     );
     assert!(
         arena_rs.contains(

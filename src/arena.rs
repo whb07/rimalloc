@@ -3073,68 +3073,64 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
     }
 
     unsafe { mi_track_mem_undefined(p, size) };
-    if mi_memkind_is_os(memid.memkind) {
-        unsafe { _mi_os_free(p, size, memid) };
-    } else if memid.memkind == mi_memkind_t::MI_MEM_ARENA {
-        let Some((arena_ptr, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else {
-            crate::options::_mi_error_message_fmt(
-                EINVAL,
-                format_args!(
-                    "trying to free from an invalid arena: {:p}, size {}\n",
-                    p, size
-                ),
-            );
-            return;
-        };
-        let arena = arena_ptr.as_ptr();
-        let slice_index = range.start_usize();
-        let slice_count = range.count_usize();
-        crate::mi_assert_internal!(size.is_multiple_of(MI_ARENA_SLICE_SIZE));
-        crate::mi_assert_internal!(slice_count * MI_ARENA_SLICE_SIZE == size);
-        crate::mi_assert_internal!(
-            slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
-        );
-        crate::mi_assert_internal!(slice_index >= unsafe { mi_arena_info_slices(arena) });
-        if slice_index < unsafe { mi_arena_info_slices(arena) }
-            || slice_index >= unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
-        {
-            crate::options::_mi_error_message_fmt(
-                EINVAL,
-                format_args!(
-                    "trying to free from an invalid arena block: {:p}, size {}\n",
-                    p, size
-                ),
-            );
-            return;
+    match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::Os(_) => {
+            unsafe { _mi_os_free(p, size, memid) };
         }
+        crate::core_types::MemIdView::Arena(arena_memid) => {
+            let arena = arena_memid.arena.as_ptr();
+            let range = arena_memid.range;
+            let slice_index = range.start_usize();
+            let slice_count = range.count_usize();
+            crate::mi_assert_internal!(size.is_multiple_of(MI_ARENA_SLICE_SIZE));
+            crate::mi_assert_internal!(slice_count * MI_ARENA_SLICE_SIZE == size);
+            crate::mi_assert_internal!(
+                slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
+            );
+            crate::mi_assert_internal!(slice_index >= unsafe { mi_arena_info_slices(arena) });
+            if slice_index < unsafe { mi_arena_info_slices(arena) }
+                || slice_index >= unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
+            {
+                crate::options::_mi_error_message_fmt(
+                    EINVAL,
+                    format_args!(
+                        "trying to free from an invalid arena block: {:p}, size {}\n",
+                        p, size
+                    ),
+                );
+                return;
+            }
 
-        if !unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
-            unsafe { mi_arena_schedule_purge(arena, range) };
-        }
+            if !unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
+                unsafe { mi_arena_schedule_purge(arena, range) };
+            }
 
-        let all_inuse = unsafe {
-            mi_bbitmap_setN(
-                (*arena.cast::<MiArenaPrefix>()).slices_free,
-                slice_index,
-                slice_count,
-            )
-        };
-        if !all_inuse {
-            crate::options::_mi_error_message_fmt(
-                EAGAIN,
-                format_args!(
-                    "trying to free an already freed arena block: {:p}, size {}\n",
-                    p, size
-                ),
-            );
+            let all_inuse = unsafe {
+                mi_bbitmap_setN(
+                    (*arena.cast::<MiArenaPrefix>()).slices_free,
+                    slice_index,
+                    slice_count,
+                )
+            };
+            if !all_inuse {
+                crate::options::_mi_error_message_fmt(
+                    EAGAIN,
+                    format_args!(
+                        "trying to free an already freed arena block: {:p}, size {}\n",
+                        p, size
+                    ),
+                );
+            }
         }
-    } else if memid.memkind == mi_memkind_t::MI_MEM_META {
-        unsafe { _mi_meta_free(p, size, memid) };
-    } else {
-        crate::mi_assert_internal!(matches!(
-            memid.memkind,
-            mi_memkind_t::MI_MEM_NONE | mi_memkind_t::MI_MEM_EXTERNAL | mi_memkind_t::MI_MEM_STATIC
-        ));
+        crate::core_types::MemIdView::Meta(_) => {
+            unsafe { _mi_meta_free(p, size, memid) };
+        }
+        crate::core_types::MemIdView::None(_)
+        | crate::core_types::MemIdView::External(_)
+        | crate::core_types::MemIdView::Static(_) => {}
+        crate::core_types::MemIdView::HeapMain(_) | crate::core_types::MemIdView::Unknown(_) => {
+            crate::mi_assert_internal!(false);
+        }
     }
 }
 

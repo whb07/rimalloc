@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 use std::mem::align_of;
@@ -37,6 +38,13 @@ fn collect_rs_sources(base: &Path, dir: &Path, out: &mut Vec<(String, String)>) 
             out.push((rel, source));
         }
     }
+}
+
+fn dead_code_allowance_count(source: &str) -> usize {
+    source
+        .lines()
+        .filter(|line| line.contains("dead_code"))
+        .count()
 }
 
 #[test]
@@ -808,6 +816,52 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             "pub(crate) unsafe fn mi_page_queue_enqueue_from_full(\n    to: crate::core_types::NormalPageQueue,\n    from: crate::core_types::FullPageQueue,\n    page: crate::core_types::FullPage,"
         ),
         "page queue transitions should require typed queue/page witnesses"
+    );
+}
+
+#[test]
+fn phase6_dead_code_allowances_stay_intentional() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src = root.join("src");
+    let mut sources = Vec::new();
+    collect_rs_sources(root, &src, &mut sources);
+
+    let mut actual = BTreeMap::new();
+    for (rel, source) in &sources {
+        let count = dead_code_allowance_count(source);
+        if count > 0 {
+            actual.insert(rel.as_str(), count);
+        }
+    }
+
+    let expected = BTreeMap::from([
+        ("src/alloc.rs", 1),
+        ("src/bitmap.rs", 4),
+        ("src/core_types/mod.rs", 1),
+        ("src/init.rs", 5),
+        ("src/internal.rs", 1),
+        ("src/libc.rs", 6),
+        ("src/options.rs", 1),
+        ("src/os.rs", 1),
+        ("src/prim/emscripten.rs", 1),
+        ("src/prim/osx.rs", 1),
+        ("src/prim/unix.rs", 2),
+        ("src/prim/wasi.rs", 1),
+        ("src/prim/windows.rs", 3),
+        ("src/stats.rs", 3),
+    ]);
+
+    assert_eq!(
+        actual, expected,
+        "Phase 6 dead_code allowances should stay on the audited compatibility/scaffold allowlist"
+    );
+    assert!(
+        !actual.contains_key("src/arena.rs"),
+        "arena.rs should remain free of dead_code allowances after Phase 6 cleanup"
+    );
+    assert!(
+        !actual.contains_key("src/free.rs") && !actual.contains_key("src/page.rs"),
+        "free/page hot-path modules should not regain dead_code allowances"
     );
 }
 

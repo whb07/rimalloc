@@ -167,12 +167,14 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## A3. Public documentation gates
 
-- [ ] Add `#![warn(missing_docs)]` or a documented staged alternative once root surface is stable.
+- [x] Add `#![warn(missing_docs)]` or a documented staged alternative once root surface is stable.
   - Validation:
     - If enabled: `cargo doc --no-deps --features std` passes without public missing-doc warnings for the safe facade.
     - If staged: `docs/release.md` lists the blockers preventing `missing_docs = warn/deny`.
+  - Evidence:
+    - `docs/release.md` documents the staged `missing_docs` alternative and blockers: narrow/gate raw internals, complete Tier S examples/error notes, add unsafe `# Safety` docs or gate Tier R internals, then run `scripts/check-docs.sh`.
 
-- [ ] Add docs.rs behavior that matches the public story.
+- [x] Add docs.rs behavior that matches the public story.
   - Required behavior:
     - Docs build with `std` for examples and error traits.
     - Bench-only APIs are not presented as normal library APIs.
@@ -181,6 +183,10 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `[package.metadata.docs.rs]` is correct.
     - `cargo doc --no-deps --features std` matches docs.rs expectations.
     - `docs/api-inventory.md` notes any docs.rs-only cfg.
+  - Evidence:
+    - `Cargo.toml` sets docs.rs `features = ["std"]` and `rustdoc-args = ["--cfg", "docsrs"]`.
+    - `docs/api-inventory.md` states that there are no docs.rs-only public APIs and benchmark targets are not normal rustdoc APIs.
+    - `scripts/check-docs.sh` passes.
 
 ---
 

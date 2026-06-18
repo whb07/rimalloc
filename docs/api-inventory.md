@@ -50,6 +50,13 @@ The source/documentation inventory is checked by:
 scripts/check-api-inventory.py
 ```
 
+## docs.rs Behavior
+
+`Cargo.toml` builds docs.rs with the `std` feature so safe error traits and
+examples render normally. There are no docs.rs-only public APIs; `docsrs` is
+reserved for documentation configuration. Benchmarks are separate Cargo bench
+targets and are not presented as normal library APIs in rustdoc.
+
 ## C ABI Symbols
 
 The Tier C `cdylib` exports mimalloc-compatible C ABI symbols. The authoritative local

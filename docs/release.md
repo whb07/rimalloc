@@ -19,6 +19,19 @@ SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.
 `docs/compatibility.md` defines these domains and release classification rules.
 
+## Staged Documentation Gates
+
+The crate denies broken rustdoc links and warns on bare URLs today. A global
+`missing_docs` warning or deny gate is intentionally staged until the default
+`raw` facade no longer exposes broad mechanical-port internals. Before enabling
+that lint globally:
+
+1. Narrow or gate raw internals according to `TODO.md`.
+2. Confirm every Tier S safe Rust item has examples and error/panic notes.
+3. Confirm every public unsafe Tier R item has a `# Safety` section or is moved
+   behind an unstable-internals gate.
+4. Run `scripts/check-docs.sh`.
+
 Related policy documents:
 
 - `docs/api-inventory.md`

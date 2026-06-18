@@ -1,5 +1,71 @@
 # Mimalloc Rust vs C Benchmark Results
 
+## Current-Head Smoke Check
+
+**Date Generated:** 2026-06-18 16:22:21 EDT
+**Commit Hash:** `5676b2d60bf87abd26f10ae5e8ee2ed83ed5bec4`
+
+This smoke check followed documentation-only changes and crate-private
+`#[cfg(test)]` core-type model-test additions. Those changes do not affect
+release allocator hot paths, so a smoke run plus one isolated noisy-scenario
+rerun was used instead of a full 10-run aggregate.
+
+Command:
+
+```bash
+scripts/check-bench-smoke.sh
+```
+
+### Hotpath Criterion Probe
+
+| Probe | Current Rust result | Criterion local-baseline result |
+|---|---:|---|
+| `hotpath/paired_alloc_free/mechanical_mimalloc/16` | 14.536 us median, 281.78 Melem/s | Within noise threshold: -0.59% time |
+
+Conclusion: no hotpath regression was detected in the tight allocator probe.
+
+### Native `mimalloc-bench` Criterion Smoke
+
+The script ran:
+
+```bash
+MIMALLOC_BENCH_SCENARIOS=glibc-thread,malloc-large,cache-scratchN,xmalloc-testN \
+MIMALLOC_BENCH_ALLOCATORS=rust,c \
+MIMALLOC_BENCH_SAMPLE_SIZE=10 \
+MIMALLOC_BENCH_MEASUREMENT_SECS=1 \
+MIMALLOC_BENCH_WARMUP_SECS=1 \
+cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
+```
+
+| Scenario | Rust median | C mimalloc 3.3.2 median | Result |
+|---|---:|---:|---|
+| `glibc-thread-per-1M-malloc-free-pairs` | 936.91 us | 946.56 us | Rust +1.0%; Rust local baseline showed no change |
+| `malloc-large-per-workload` | 902.72 us | 956.19 us | Rust +5.6%; Rust local baseline improved |
+| `xmalloc-testN-per-1M-frees` | 2.1104 ms | 2.0540 ms | C +2.7%; both allocators improved vs local baseline |
+| `cache-scratchN-per-workload` | 122.97 ms initial smoke; 107.28 ms isolated rerun | 106.28 ms initial smoke; 107.06 ms isolated rerun | Initial Rust sample was noisy/regressed; isolated rerun cleared it |
+
+The initial `cache-scratchN` Rust smoke reported a regression with a wide
+interval. Because recent changes were documentation/test-only and the C result
+also moved materially, the scenario was rerun in isolation:
+
+```bash
+MIMALLOC_BENCH_SCENARIOS=cache-scratchN \
+MIMALLOC_BENCH_ALLOCATORS=rust,c \
+MIMALLOC_BENCH_SAMPLE_SIZE=5 \
+MIMALLOC_BENCH_MEASUREMENT_SECS=1 \
+MIMALLOC_BENCH_WARMUP_SECS=1 \
+cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native/cache-scratchN
+```
+
+Criterion still collected 10 samples for the isolated rerun. Rust measured
+107.28 ms median and was marked improved relative to the immediately preceding
+noisy sample; C measured 107.06 ms median and showed no change.
+
+Conclusion: no Rust hotpath regression was detected, and no selected native
+scenario regression remained after isolating the noisy `cache-scratchN` sample.
+The latest full 10-run aggregate remains historical; use this entry as current
+HEAD smoke evidence, not as a replacement for a release aggregate.
+
 ## Post-Documentation/Test Smoke Check
 
 **Date Generated:** 2026-06-18 16:04:29 EDT

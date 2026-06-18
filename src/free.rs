@@ -1,11 +1,6 @@
 //! Mechanical translation of the early `src/free.c` free-path helpers.
 
-#![allow(
-    dead_code,
-    clippy::missing_safety_doc,
-    clippy::if_same_then_else,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(dead_code, clippy::missing_safety_doc, unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_void};
 use core::{cmp, ptr};

@@ -6,7 +6,6 @@
     non_snake_case,
     non_upper_case_globals,
     clippy::collapsible_if,
-    clippy::if_same_then_else,
     clippy::implicit_saturating_sub,
     clippy::manual_is_multiple_of,
     clippy::manual_range_contains,
@@ -611,8 +610,6 @@ fn mi_bchunk_clearN(
     crate::mi_debug_assert!(n > 0 && n <= MI_BCHUNK_BITS);
     if n == 1 {
         mi_bchunk_clear(chunk, cidx, maybe_all_clear)
-    } else if n <= MI_BFIELD_BITS {
-        mi_bchunk_xsetNC(MI_BIT_CLEAR, chunk, cidx, n, None, maybe_all_clear)
     } else {
         mi_bchunk_xsetNC(MI_BIT_CLEAR, chunk, cidx, n, None, maybe_all_clear)
     }

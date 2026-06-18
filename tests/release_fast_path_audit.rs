@@ -792,6 +792,12 @@ fn free_path_internals_are_not_dynamic_exports() {
     let prim_unix_rs =
         fs::read_to_string(root.join("src/prim/unix.rs")).expect("read src/prim/unix.rs");
 
+    assert!(
+        !free_rs.contains("clippy::if_same_then_else")
+            && !bitmap_rs.contains("clippy::if_same_then_else"),
+        "free.rs and bitmap.rs should not retain obsolete if_same_then_else allowances"
+    );
+
     for internal_name in [
         "pub static mut _mi_page_map",
         "pub unsafe extern \"C\" fn _mi_page_map_init",

@@ -156,3 +156,50 @@ pub(crate) enum FreePathKind {
     RemotePlain,
     RemoteSlowFlags,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn page_thread_id_splits_owner_and_flags() {
+        let owner = unsafe { ThreadId::new_unchecked(0x1000) };
+        let tagged = PageThreadId::new(owner.get() | PageFlags::IN_FULL_QUEUE.bits());
+
+        match tagged.owner() {
+            PageOwnerId::Thread(tid) => assert_eq!(tid.get(), owner.get()),
+            PageOwnerId::Abandoned | PageOwnerId::AbandonedMapped => {
+                panic!("expected thread owner")
+            }
+        }
+        assert!(tagged.flags().contains(PageFlags::IN_FULL_QUEUE));
+        assert!(!tagged.is_abandoned());
+        assert!(!tagged.is_abandoned_mapped());
+    }
+
+    #[test]
+    fn page_thread_id_preserves_flags_when_owner_changes() {
+        let tagged = PageThreadId::new(PageFlags::HAS_INTERIOR_POINTERS.bits())
+            .with_owner(PageOwnerId::AbandonedMapped);
+
+        assert!(tagged.is_abandoned_mapped());
+        assert!(tagged.flags().contains(PageFlags::HAS_INTERIOR_POINTERS));
+
+        let abandoned = tagged.with_owner(PageOwnerId::Abandoned);
+        assert!(abandoned.is_abandoned());
+        assert!(abandoned.flags().contains(PageFlags::HAS_INTERIOR_POINTERS));
+    }
+
+    #[test]
+    fn xthread_delta_classifies_fast_and_slow_paths() {
+        let tid = unsafe { ThreadId::new_unchecked(0x2000) };
+        let local = PageThreadId::new(tid.get());
+        assert!(local.xor_current(tid).is_local_fast());
+
+        let flagged = PageThreadId::new(tid.get() | PageFlags::IN_FULL_QUEUE.bits());
+        assert!(flagged.xor_current(tid).needs_local_slow());
+
+        let remote = PageThreadId::new(0x4000);
+        assert!(remote.xor_current(tid).is_remote_plain());
+    }
+}

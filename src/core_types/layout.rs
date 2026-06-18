@@ -341,3 +341,61 @@ impl CallocRequest {
         self.layout
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn malloc_layout_preserves_requested_and_normalizes_effective_size() {
+        let zero = LayoutRequest::malloc(0).expect("zero-size malloc layout");
+        assert_eq!(zero.requested().get(), 0);
+        assert_eq!(zero.effective().get(), 1);
+        assert_eq!(zero.zeroed(), Zeroed::No);
+
+        let nonzero = LayoutRequest::malloc(17).expect("malloc layout");
+        assert_eq!(nonzero.requested().get(), 17);
+        assert_eq!(nonzero.effective().get(), 17);
+        assert!(nonzero.padded().get() >= 17);
+    }
+
+    #[test]
+    fn zeroing_and_alignment_flags_are_explicit() {
+        let zalloc = LayoutRequest::zalloc(8).expect("zalloc layout");
+        assert_eq!(zalloc.zeroed(), Zeroed::Yes);
+
+        let aligned = LayoutRequest::aligned(8, 64).expect("aligned layout");
+        assert_eq!(aligned.alignment().get(), 64);
+
+        assert_eq!(
+            LayoutRequest::aligned(8, 24).err(),
+            Some(LayoutError::AlignmentInvalid)
+        );
+    }
+
+    #[test]
+    fn calloc_request_checks_multiplication_overflow() {
+        let req = CallocRequest::new(4, 32).expect("calloc request");
+        assert_eq!(req.count().get(), 4);
+        assert_eq!(req.item_size().get(), 32);
+        assert_eq!(req.total().get(), 128);
+        assert_eq!(req.layout().zeroed(), Zeroed::Yes);
+
+        assert_eq!(
+            CallocRequest::new(usize::MAX, 2).err(),
+            Some(LayoutError::SizeOverflow)
+        );
+    }
+
+    #[test]
+    fn generic_flags_pack_zero_bit_and_huge_alignment() {
+        let flags = MallocGenericFlags::new(Zeroed::Yes, MaybeHugeAlignment::new(64));
+        assert_eq!(flags.zeroed(), Zeroed::Yes);
+        assert_eq!(flags.huge_alignment().get(), 64);
+        assert_eq!(flags.raw(), 65);
+
+        let raw = MallocGenericFlags::from_raw(128);
+        assert_eq!(raw.zeroed(), Zeroed::No);
+        assert_eq!(raw.huge_alignment().get(), 128);
+    }
+}

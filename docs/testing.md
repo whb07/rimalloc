@@ -88,7 +88,10 @@ unsupported invalid/double-free behavior.
 
 ## Miri
 
-Miri is limited to pure Rust models and small library tests:
+Miri is limited to pure Rust models and small library tests. The crate keeps
+core-type unit tests for layout math, scalar domains, page owner/flag packing,
+and thread-free word packing so those invariants can run without exercising the
+full OS allocator:
 
 ```sh
 scripts/check-miri.sh

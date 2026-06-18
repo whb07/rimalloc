@@ -322,3 +322,39 @@ impl GoodSize {
         self.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn requested_size_padding_checks_overflow() {
+        assert!(RequestedSize::new(16).checked_padded().is_ok());
+        assert_eq!(
+            RequestedSize::new(usize::MAX).checked_padded(),
+            Err(AllocSizeError::Overflow)
+        );
+    }
+
+    #[test]
+    fn block_size_usable_subtracts_padding_domain() {
+        let raw = crate::types::MI_PADDING_SIZE + 64;
+        let block = unsafe { BlockSize::new_unchecked(raw) };
+        assert_eq!(block.usable().get(), 64);
+    }
+
+    #[test]
+    fn alignment_accepts_only_nonzero_power_of_two() {
+        assert_eq!(Alignment::new(1).map(Alignment::get), Some(1));
+        assert_eq!(Alignment::new(64).map(Alignment::get), Some(64));
+        assert!(Alignment::new(0).is_none());
+        assert!(Alignment::new(24).is_none());
+    }
+
+    #[test]
+    fn slice_count_rejects_zero_and_too_large_values() {
+        assert!(SliceCount::from_usize(0).is_none());
+        assert_eq!(SliceCount::from_usize(7).map(SliceCount::get), Some(7));
+        assert!(SliceCount::from_usize(usize::MAX).is_none());
+    }
+}

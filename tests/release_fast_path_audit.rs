@@ -902,7 +902,6 @@ fn phase6_dead_code_allowances_stay_intentional() {
         ("src/internal.rs", 1),
         ("src/prim/emscripten.rs", 1),
         ("src/prim/osx.rs", 1),
-        ("src/prim/unix.rs", 2),
         ("src/prim/wasi.rs", 1),
         ("src/prim/windows.rs", 3),
         ("src/stats.rs", 1),

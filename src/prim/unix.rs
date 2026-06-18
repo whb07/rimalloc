@@ -196,7 +196,15 @@ unsafe extern "C" {
     fn munmap(addr: *mut c_void, len: usize) -> c_int;
     fn access(path: *const c_char, amode: c_int) -> c_int;
     fn sysconf(name: c_int) -> c_long;
-    #[allow(dead_code)]
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    )))]
     fn clock() -> c_long;
     fn mmap(
         addr: *mut c_void,
@@ -256,7 +264,15 @@ const CLOCK_MONOTONIC: c_int = 1;
 const CLOCK_REALTIME: c_int = 0;
 #[cfg(target_os = "macos")]
 const CLOCK_MONOTONIC: c_int = 6;
-#[allow(dead_code)]
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd"
+)))]
 const CLOCKS_PER_SEC: c_long = 1_000_000;
 
 #[cfg(all(

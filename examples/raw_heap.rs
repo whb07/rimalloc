@@ -1,5 +1,6 @@
 use core::ffi::c_void;
 
+// Raw/unsafe heap API example. There is no safe `Heap` facade yet.
 fn main() {
     unsafe {
         let heap = mechanical_mimalloc::raw::mi_heap_new();

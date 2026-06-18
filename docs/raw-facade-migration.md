@@ -14,9 +14,9 @@ the broad raw modules before narrowing or gating default raw internals.
 | `benches/workloads.rs` | `raw::alloc`, `raw::alloc_aligned`, `raw::free` | Allocator workload benchmark shim | Migrate to root `raw::mi_*` C-header functions or safe `MiMalloc` when raw internals narrow. |
 | `examples/aligned.rs` | root `raw::mi_malloc_aligned`, `raw::mi_realloc_aligned`, `raw::mi_free` | Public C API aligned allocation example | Keep as public C API example. |
 | `examples/ffi.rs` | root `raw::mi_malloc`, `raw::mi_usable_size`, `raw::mi_free` | Public C API FFI example | Keep as public C API example. |
-| `examples/heap.rs` | root heap `raw::mi_heap_*`, `raw::mi_free` | Unsafe C heap API example | Keep as raw public C API example unless a safe heap API is stabilized. |
-| `examples/options.rs` | root option functions and `mi_option_t` | Unsafe C option API example | Keep as raw public C API example unless a safe options API is stabilized. |
-| `examples/stats.rs` | root stats functions, `mi_stats_t`, `MI_STAT_VERSION` | Unsafe C stats API example | Keep as raw public C API example unless a safe stats snapshot API is stabilized. |
+| `examples/raw_heap.rs` | root heap `raw::mi_heap_*`, `raw::mi_free` | Unsafe C heap API example | Keep as raw public C API example unless a safe heap API is stabilized. |
+| `examples/raw_options.rs` | root option functions and `mi_option_t` | Unsafe C option API example | Keep as raw public C API example unless a safe options API is stabilized. |
+| `examples/raw_stats.rs` | root stats functions, `mi_stats_t`, `MI_STAT_VERSION` | Unsafe C stats API example | Keep as raw public C API example unless a safe stats snapshot API is stabilized. |
 | `tests/aligned_exports.rs` | `raw::mimalloc::*` | Public C API export behavior | Keep on public C-header facade. |
 | `tests/bitmap_regressions.rs` | `raw::bitmap` | Internal bitmap regression coverage | Move to crate-private unit tests or gate behind unstable raw internals. |
 | `tests/compat_exports.rs` | `raw::mimalloc::*` | Public C API compatibility | Keep on public C-header facade. |

@@ -1,3 +1,4 @@
+// Raw/unsafe options API example. There is no safe `Options` facade yet.
 fn main() {
     let option = mechanical_mimalloc::raw::mi_option_t::mi_option_show_errors;
 

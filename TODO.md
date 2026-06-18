@@ -990,39 +990,62 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## G1. Safe Rust examples
 
-- [ ] Keep `examples/global_allocator.rs` minimal and idiomatic.
+- [x] Keep `examples/global_allocator.rs` minimal and idiomatic.
   - Validation:
     - `cargo run --example global_allocator --features std` passes.
     - Example uses `MiMalloc` from crate root and no raw APIs.
+  - Evidence:
+    - `examples/global_allocator.rs` uses crate-root `MiMalloc`, `Vec`, and `Box` only.
+    - `cargo run --quiet --example global_allocator --features std` passes.
 
-- [ ] Keep `examples/allocation.rs` focused on the safe owned wrapper.
+- [x] Keep `examples/allocation.rs` focused on the safe owned wrapper.
   - Validation:
     - Example uses `Allocation` and Rust errors.
     - It does not read uninitialized memory.
     - It does not use raw `mi_free`.
+  - Evidence:
+    - `examples/allocation.rs` uses crate-root `Allocation` and `TryAllocError`.
+    - It does not read allocation contents and does not call raw `mi_free`.
+    - `cargo run --quiet --example allocation --features std` passes.
 
-- [ ] Add heap example only if safe heap API is complete.
+- [x] Add heap example only if safe heap API is complete.
   - Validation:
     - If no safe heap API exists, `examples/heap.rs` must use `raw` and be clearly labeled unsafe/raw, or be removed until safe API exists.
     - If safe heap API exists, example avoids raw heap pointers.
+  - Evidence:
+    - No safe heap API exists.
+    - The raw heap example is named `examples/raw_heap.rs` and comments identify it as raw/unsafe.
+    - `cargo run --quiet --example raw_heap --features std` passes.
 
-- [ ] Add stats/options examples only if safe APIs exist.
+- [x] Add stats/options examples only if safe APIs exist.
   - Validation:
     - If examples use raw APIs, file names and docs say `raw`/unsafe.
     - README does not present raw examples as safe Rust API.
+  - Evidence:
+    - No safe stats or options API exists.
+    - Raw examples are named `examples/raw_stats.rs` and `examples/raw_options.rs` and comments identify them as raw/unsafe.
+    - README examples present only `MiMalloc`, `Allocation`, and explicitly unsafe raw C-shaped calls.
+    - `cargo run --quiet --example raw_stats --features std` and `cargo run --quiet --example raw_options --features std` pass.
 
 ## G2. FFI/C examples
 
-- [ ] Maintain a C smoke example for cdylib usage.
+- [x] Maintain a C smoke example for cdylib usage.
   - Validation:
     - `examples/c_api.c` compiles and links in documented local command.
     - The example allocates, checks usable size/alignment where useful, and frees.
     - The example does not depend on Rust crate-root paths.
+  - Evidence:
+    - `examples/c_api.c` includes documented build/link commands, calls `mi_malloc`, checks `mi_usable_size`, and calls `mi_free`.
+    - The example includes `<mimalloc.h>` and does not depend on Rust crate-root paths.
+    - The documented C compile/link command succeeds after `cargo build --release`.
 
-- [ ] Add C++ new/delete example or explicit non-goal.
+- [x] Add C++ new/delete example or explicit non-goal.
   - Validation:
     - If example exists, it validates operator new/delete and nothrow behavior.
     - If omitted, `docs/abi.md` points to parity script coverage.
+  - Evidence:
+    - A standalone C++ example is intentionally omitted.
+    - `docs/abi.md` points to `scripts/check-cxx-operator-new-parity.py`, `scripts/check-abi-symbols.sh`, and release-fast-path checks for C++ operator new/delete behavior.
 
 ## G3. Documentation examples and compile-fail examples
 

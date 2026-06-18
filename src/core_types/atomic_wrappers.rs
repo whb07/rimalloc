@@ -45,6 +45,20 @@ impl AtomicUsizeField {
     /// # Safety
     /// See `as_atomic`.
     #[inline(always)]
+    pub(crate) unsafe fn fetch_add(self, value: usize, order: Ordering) -> usize {
+        unsafe { self.as_atomic() }.fetch_add(value, order)
+    }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn fetch_sub(self, value: usize, order: Ordering) -> usize {
+        unsafe { self.as_atomic() }.fetch_sub(value, order)
+    }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
     pub(crate) unsafe fn fetch_or(self, bits: usize, order: Ordering) -> usize {
         unsafe { self.as_atomic() }.fetch_or(bits, order)
     }

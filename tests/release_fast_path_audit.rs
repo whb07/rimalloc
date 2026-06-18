@@ -2538,6 +2538,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && theap_rs.contains("crate::core_types::MemIdView::HeapMain(_)")
             && theap_rs.contains("crate::core_types::MemIdView::Meta(_)")
             && theap_rs.contains("mi_memid_is_refcounted((*theap).memid)")
+            && theap_rs.matches("crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*theap).refcount))").count() == 3
+            && theap_rs.contains(".fetch_add(1, crate::core_types::MemoryOrder::AcqRel)")
+            && theap_rs.contains(".fetch_sub(1, crate::core_types::MemoryOrder::AcqRel)")
+            && !theap_rs.contains("mi_atomic_increment_acq_rel(ptr::addr_of_mut!((*theap).refcount))")
+            && !theap_rs.contains("mi_atomic_fetch_sub_explicit(\n            ptr::addr_of_mut!((*theap).refcount),")
             && !theap_rs.contains("memid.mem.os.")
             && !theap_rs.contains("memid.memkind")
             && init_rs.contains("fn mi_memid_is_static(memid: mi_memid_t) -> bool")
@@ -2818,9 +2823,12 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_theap_init should match C's optimized artifact by calling _mi_random_next directly for the cookie"
     );
     assert!(
-        theap_init_body.contains("mi_atomic_store_explicit(\n        ptr::addr_of_mut!((*theap).refcount),\n        1,\n        mi_memory_order_e::mi_memory_order_seq_cst,\n    );")
+        atomic_types.contains("pub(crate) unsafe fn fetch_add(self, value: usize, order: Ordering) -> usize")
+            && atomic_types.contains("pub(crate) unsafe fn fetch_sub(self, value: usize, order: Ordering) -> usize")
+            && theap_init_body.contains("crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*theap).refcount))\n        .store(1, crate::core_types::MemoryOrder::SeqCst);")
+            && !theap_init_body.contains("mi_atomic_store_explicit(\n        ptr::addr_of_mut!((*theap).refcount),")
             && !theap_init_body.contains("(*theap).refcount = 1;"),
-        "_mi_theap_init should initialize C's atomic refcount through a seq_cst atomic store"
+        "_mi_theap_init should initialize C's atomic refcount through a typed seq_cst atomic store"
     );
     assert!(
         stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into"),

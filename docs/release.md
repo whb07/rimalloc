@@ -16,12 +16,14 @@ Before publishing or tagging a release:
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.
+`docs/compatibility.md` defines these domains and release classification rules.
 
 Related policy documents:
 
 - `docs/api-inventory.md`
 - `docs/abi.md`
 - `docs/assembly-intrinsics.md`
+- `docs/compatibility.md`
 - `docs/features.md`
 - `docs/memory-ordering.md`
 - `docs/platforms.md`

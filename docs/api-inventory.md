@@ -69,3 +69,6 @@ known internal helpers against regaining `#[unsafe(no_mangle)]`.
 - C ABI symbols and layouts: C compatibility surface.
 - `core_types`: private design surface, not public SemVer.
 - Benchmarks, scripts, and docs: release-process surface, not allocator API.
+
+Detailed compatibility domains and release classification rules are documented
+in `docs/compatibility.md`.

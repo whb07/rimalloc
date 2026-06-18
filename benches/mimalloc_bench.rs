@@ -499,6 +499,10 @@ fn scenarios() -> Vec<Scenario> {
             run: barnes::run,
         },
         Scenario {
+            name: "cfrac",
+            run: cfrac::run,
+        },
+        Scenario {
             name: "mleak10",
             run: |alloc| unsafe { mleak::run(alloc, 5) },
         },
@@ -3931,6 +3935,390 @@ mod barnes {
             let start = Instant::now();
             let mut sim = Sim::new(alloc);
             sim.run();
+            start.elapsed()
+        }
+    }
+}
+
+mod cfrac {
+    use super::*;
+    use cfrac_core::Big;
+
+    const ABORTS: usize = 3;
+    const ABORT_PRIMES: [u32; ABORTS] = [13, 67, 557];
+    const ABORT_BOUNDS: [&str; ABORTS] = [
+        "617249251377345069056",
+        "13403669975754766336",
+        "42891225727337992",
+    ];
+
+    struct FactorResult {
+        status: i32,
+        residual: Big,
+        exponents: Vec<u8>,
+    }
+
+    struct Soln {
+        x: Big,
+        t: Big,
+        r: Big,
+        e: Vec<u8>,
+    }
+
+    struct Stats {
+        iterations: u32,
+        early_aborts: u32,
+        total_partials: u32,
+        used_partials: u32,
+        full_solutions: u32,
+        factor_attempts: u32,
+    }
+
+    unsafe fn legendre(n: &Big, prime: u32) -> i32 {
+        unsafe {
+            let p = Big::from_u64(n_alloc(n), prime as u64);
+            let exp = Big::from_u64(n_alloc(n), (prime / 2) as u64);
+            let value = Big::powmod(n, &exp, &p);
+            if value.is_zero() {
+                0
+            } else if value.is_one() {
+                1
+            } else {
+                prime as i32 - 1
+            }
+        }
+    }
+
+    fn n_alloc(n: &Big) -> BenchAllocator {
+        n.allocator()
+    }
+
+    unsafe fn generate_factor_base(alloc: BenchAllocator, n: &Big) -> Vec<u32> {
+        unsafe {
+            let mut out = Vec::with_capacity(cfrac_expected::M);
+            out.push(2);
+            let mut candidate = 3u32;
+            while out.len() < cfrac_expected::M {
+                if is_prime(candidate) && legendre(n, candidate) <= 1 {
+                    out.push(candidate);
+                }
+                candidate += 2;
+            }
+            assert_eq!(out, cfrac_expected::FACTOR_BASE);
+            std::hint::black_box(alloc.name());
+            out
+        }
+    }
+
+    fn is_prime(n: u32) -> bool {
+        if n < 2 {
+            return false;
+        }
+        if n == 2 {
+            return true;
+        }
+        if n.is_multiple_of(2) {
+            return false;
+        }
+        let mut d = 3u32;
+        while d * d <= n {
+            if n.is_multiple_of(d) {
+                return false;
+            }
+            d += 2;
+        }
+        true
+    }
+
+    unsafe fn factor_q(
+        alloc: BenchAllocator,
+        qn: &Big,
+        factor_base: &[u32],
+        abort_bounds: &[Big],
+    ) -> FactorResult {
+        unsafe {
+            let mut t = qn.clone_big();
+            let mut exponents = vec![0u8; factor_base.len() + 1];
+
+            while !t.is_zero() && !t.is_odd() {
+                t = t.div_small(2).0;
+                exponents[1] = exponents[1].wrapping_add(1);
+            }
+
+            let mut abort_index = 0usize;
+            for (i, &prime) in factor_base.iter().enumerate().skip(1) {
+                if abort_index < ABORT_PRIMES.len() && prime == ABORT_PRIMES[abort_index] {
+                    if t.cmp(&abort_bounds[abort_index]) == std::cmp::Ordering::Greater {
+                        return FactorResult {
+                            status: -2,
+                            residual: t,
+                            exponents,
+                        };
+                    }
+                    abort_index += 1;
+                }
+                while t.mod_small(prime) == 0 {
+                    t = t.div_small(prime).0;
+                    exponents[i + 1] = exponents[i + 1].wrapping_add(1);
+                }
+            }
+
+            let status = if t.is_one() {
+                1
+            } else {
+                let (div, q) = t.div_small(*factor_base.last().unwrap());
+                std::hint::black_box(q);
+                if div.cmp_u32(*factor_base.last().unwrap()) != std::cmp::Ordering::Greater {
+                    0
+                } else {
+                    -1
+                }
+            };
+            std::hint::black_box(alloc.name());
+            FactorResult {
+                status,
+                residual: t,
+                exponents,
+            }
+        }
+    }
+
+    unsafe fn combine(
+        alloc: BenchAllocator,
+        x: &mut Big,
+        t: &mut Big,
+        e: &mut [u8],
+        n: &Big,
+        factor_base: &[u32],
+        bp: Option<&Soln>,
+    ) {
+        unsafe {
+            if let Some(bp) = bp {
+                *x = bp.x.mul(x).modulo(n);
+                *t = bp.t.mul(t).modulo(n);
+                *t = bp.r.mul(t).modulo(n);
+                e[0] = e[0].wrapping_add(bp.e[0]);
+            }
+            e[0] &= 1;
+            for j in 1..=factor_base.len() {
+                if let Some(bp) = bp {
+                    e[j] = e[j].wrapping_add(bp.e[j]);
+                }
+                if e[j] > 2 {
+                    let prime = Big::from_u64(alloc, factor_base[j - 1] as u64);
+                    let exp = Big::from_u64(alloc, (e[j] >> 1) as u64);
+                    *t = t.mul(&Big::powmod(&prime, &exp, n)).modulo(n);
+                    e[j] &= 1;
+                } else if e[j] == 2 {
+                    let prime = Big::from_u64(alloc, factor_base[j - 1] as u64);
+                    *t = t.mul(&prime).modulo(n);
+                    e[j] = 0;
+                }
+            }
+        }
+    }
+
+    unsafe fn new_soln(
+        alloc: BenchAllocator,
+        n: &Big,
+        factor_base: &[u32],
+        next: Option<&Soln>,
+        x: &Big,
+        t: &Big,
+        e: &[u8],
+    ) -> Soln {
+        unsafe {
+            let mut soln = Soln {
+                x: x.clone_big(),
+                t: t.clone_big(),
+                r: Big::one(alloc),
+                e: e.to_vec(),
+            };
+            let mut normalized_t = soln.r.clone_big();
+            combine(
+                alloc,
+                &mut soln.x,
+                &mut normalized_t,
+                &mut soln.e,
+                n,
+                factor_base,
+                next,
+            );
+            soln.r = normalized_t;
+            soln
+        }
+    }
+
+    unsafe fn find_soln<'a>(solutions: &'a [Soln], t: &Big) -> Option<&'a Soln> {
+        unsafe {
+            solutions
+                .iter()
+                .find(|soln| soln.t.cmp(t) == std::cmp::Ordering::Equal)
+        }
+    }
+
+    unsafe fn run_fixed(alloc: BenchAllocator) -> (Big, Stats) {
+        unsafe {
+            let n = Big::from_decimal(alloc, cfrac_expected::INPUT_DECIMAL);
+            let factor_base = generate_factor_base(alloc, &n);
+            let abort_bounds: Vec<_> = ABORT_BOUNDS
+                .iter()
+                .map(|bound| Big::from_decimal(alloc, bound))
+                .collect();
+
+            let mut b: Vec<Option<Soln>> = (0..=(factor_base.len() + 1)).map(|_| None).collect();
+            let mut oddt: Vec<Soln> = Vec::new();
+            let mut stats = Stats {
+                iterations: 0,
+                early_aborts: 0,
+                total_partials: 0,
+                used_partials: 0,
+                full_solutions: 0,
+                factor_attempts: 0,
+            };
+
+            let mut t = n.clone_big();
+            let r = t.sqrt_floor();
+            let twog = r.add(&r);
+            let mut u = twog.clone_big();
+            let mut last_u = twog.clone_big();
+            let mut qn = Big::one(alloc);
+            let mut last_qn = t.sub(&r.mul(&r));
+            let mut an = Big::one(alloc);
+            let mut last_an = r.clone_big();
+            let mut quotient = Big::zero(alloc);
+            let mut s = 0u8;
+
+            loop {
+                stats.iterations += 1;
+                let old_an = an;
+                an = quotient.mul(&old_an).add(&last_an).modulo(&n);
+                last_an = old_an;
+
+                let old_qn = qn;
+                qn = quotient.mul(&last_u.sub(&u)).add(&last_qn);
+                last_qn = old_qn;
+                last_u = u;
+
+                quotient = Big::one(alloc);
+                let mut rn = last_u.sub(&qn);
+                if rn.cmp(&qn) != std::cmp::Ordering::Less {
+                    let (q, rem) = last_u.div_rem(&qn);
+                    quotient = q;
+                    rn = rem;
+                }
+                u = twog.sub(&rn);
+                s = 1 - s;
+
+                let mut result = factor_q(alloc, &qn, &factor_base, &abort_bounds);
+                if result.status < -1 {
+                    stats.early_aborts += 1;
+                }
+                assert!(
+                    !qn.is_one(),
+                    "cfrac fixed run unexpectedly encountered a cycle"
+                );
+                if result.status >= 0 {
+                    result.exponents[0] = s;
+                    t = result.residual;
+                    let mut x = an.clone_big();
+                    if result.status == 0 {
+                        if let Some(sp) = find_soln(&oddt, &t) {
+                            let mut square_root = Big::one(alloc);
+                            combine(
+                                alloc,
+                                &mut x,
+                                &mut square_root,
+                                &mut result.exponents,
+                                &n,
+                                &factor_base,
+                                Some(sp),
+                            );
+                            t = square_root;
+                            stats.used_partials += 1;
+                        } else {
+                            stats.total_partials += 1;
+                            oddt.push(new_soln(
+                                alloc,
+                                &n,
+                                &factor_base,
+                                None,
+                                &x,
+                                &t,
+                                &result.exponents,
+                            ));
+                            continue;
+                        }
+                    } else {
+                        combine(
+                            alloc,
+                            &mut x,
+                            &mut t,
+                            &mut result.exponents,
+                            &n,
+                            &factor_base,
+                            None,
+                        );
+                        stats.full_solutions += 1;
+                    }
+
+                    let mut h = factor_base.len() + 1;
+                    loop {
+                        h -= 1;
+                        if result.exponents[h] != 0 {
+                            if let Some(bp) = &b[h] {
+                                combine(
+                                    alloc,
+                                    &mut x,
+                                    &mut t,
+                                    &mut result.exponents,
+                                    &n,
+                                    &factor_base,
+                                    Some(bp),
+                                );
+                            } else {
+                                b[h] = Some(new_soln(
+                                    alloc,
+                                    &n,
+                                    &factor_base,
+                                    None,
+                                    &x,
+                                    &t,
+                                    &result.exponents,
+                                ));
+                                break;
+                            }
+                        }
+                        if h == 0 {
+                            stats.factor_attempts += 1;
+                            let y = t;
+                            let x_plus_y = x.add(&y);
+                            if x.cmp(&y) != std::cmp::Ordering::Equal
+                                && x_plus_y.cmp(&n) != std::cmp::Ordering::Equal
+                            {
+                                let factor = Big::gcd(x_plus_y, n.clone_big());
+                                return (factor, stats);
+                            }
+                            std::hint::black_box(y);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let start = Instant::now();
+            let (factor, stats) = run_fixed(alloc);
+            assert_eq!(factor.to_decimal(), cfrac_expected::EXPECTED_FACTOR_DECIMAL);
+            assert_eq!(stats.iterations, cfrac_expected::ITERATIONS);
+            assert_eq!(stats.early_aborts, cfrac_expected::EARLY_ABORTS);
+            assert_eq!(stats.total_partials, cfrac_expected::TOTAL_PARTIALS);
+            assert_eq!(stats.used_partials, cfrac_expected::USED_PARTIALS);
+            assert_eq!(stats.full_solutions, cfrac_expected::FULL_SOLUTIONS);
+            assert_eq!(stats.factor_attempts, cfrac_expected::FACTOR_ATTEMPTS);
             start.elapsed()
         }
     }

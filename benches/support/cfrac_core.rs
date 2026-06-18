@@ -66,6 +66,28 @@ impl Big {
         unsafe { (*self.ptr & 1) != 0 }
     }
 
+    pub fn allocator(&self) -> BenchAllocator {
+        self.alloc
+    }
+
+    pub unsafe fn cmp(&self, rhs: &Self) -> std::cmp::Ordering {
+        unsafe {
+            match (self.neg, rhs.neg) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                (false, false) => self.cmp_abs(rhs),
+                (true, true) => self.cmp_abs(rhs).reverse(),
+            }
+        }
+    }
+
+    pub unsafe fn cmp_u32(&self, rhs: u32) -> std::cmp::Ordering {
+        unsafe {
+            let rhs = Self::from_u64(self.alloc, rhs as u64);
+            self.cmp(&rhs)
+        }
+    }
+
     pub unsafe fn clone_big(&self) -> Self {
         unsafe {
             let mut out = Self::with_capacity(self.alloc, self.len);
@@ -200,6 +222,17 @@ impl Big {
             out.neg = self.neg;
             out.normalize();
             (out, rem)
+        }
+    }
+
+    pub unsafe fn mod_small(&self, divisor: u32) -> u32 {
+        unsafe {
+            let mut rem = 0u32;
+            for i in (0..self.len).rev() {
+                let cur = (rem << BASE_BITS) | self.digit(i) as u32;
+                rem = cur % divisor;
+            }
+            rem
         }
     }
 

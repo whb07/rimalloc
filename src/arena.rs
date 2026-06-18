@@ -601,12 +601,10 @@ pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usiz
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_info_slices(arena: *mut mi_arena_t) -> usize {
     unsafe { (*arena.cast::<MiArenaPrefix>()).info_slices }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_heap_arena_pages(
     heap: *mut mi_heap_t,
     arena: *mut mi_arena_t,
@@ -619,7 +617,6 @@ unsafe fn mi_heap_arena_pages(
         .cast::<mi_arena_pages_t>()
 }
 
-#[allow(dead_code)]
 unsafe fn mi_page_arena_pages(
     page: *mut mi_page_t,
     slice_index: *mut usize,
@@ -649,7 +646,6 @@ unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool {
     )
 }
 
-#[allow(dead_code)]
 unsafe fn mi_heap_has_page(
     heap: *mut mi_heap_t,
     arena: *mut mi_arena_t,
@@ -689,7 +685,6 @@ unsafe fn mi_set_errno(err: c_int) {
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
 unsafe fn mi_set_errno(_err: c_int) {}
 
-#[allow(dead_code)]
 unsafe fn mi_arena_max_object_size() -> usize {
     let max_size = _mi_align_up(
         mi_option_get_size(mi_option_t::mi_option_arena_max_object_size),
@@ -704,7 +699,6 @@ unsafe fn mi_arena_max_object_size() -> usize {
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_commit(
     arena: *mut mi_arena_t,
     start: *mut c_void,
@@ -733,17 +727,14 @@ unsafe fn mi_arena_commit(
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_size(arena: *mut mi_arena_t) -> usize {
     mi_size_of_slices(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count })
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_start(arena: *mut mi_arena_t) -> *mut u8 {
     arena.cast::<u8>()
 }
 
-#[allow(dead_code)]
 #[inline(never)]
 unsafe fn mi_arena_slice_start(
     arena: *mut mi_arena_t,
@@ -756,7 +747,6 @@ unsafe fn mi_arena_slice_start(
     unsafe { mi_arena_start(arena).add(mi_size_of_slices(slice_index)) }
 }
 
-#[allow(dead_code)]
 #[inline(never)]
 unsafe fn mi_arena_page_at_slice(
     arena: *mut mi_arena_t,
@@ -794,7 +784,6 @@ pub unsafe extern "C" fn mi_arena_area(arena_id: mi_arena_id_t, size: *mut usize
     unsafe { mi_arena_start(arena).cast::<c_void>() }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_strictly_contains(arena: *mut mi_arena_t, p: *const c_void) -> bool {
     let p = p.cast::<u8>();
     !arena.is_null() && {
@@ -808,7 +797,6 @@ unsafe fn mi_arena_strictly_contains(arena: *mut mi_arena_t, p: *const c_void) -
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arenas_contain_ex(p: *const c_void, parent: *mut mi_arena_t) -> bool {
     let subproc = unsafe { _mi_subproc() };
     let max_arena = unsafe { mi_arenas_get_count(subproc) };
@@ -855,7 +843,6 @@ pub unsafe extern "C" fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_memid_create_arena(
     arena: *mut mi_arena_t,
     range: crate::core_types::SliceRange,
@@ -873,7 +860,6 @@ unsafe fn mi_memid_create_arena(
     .raw
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_from_memid(
     memid: mi_memid_t,
     slice_index: *mut usize,
@@ -891,7 +877,6 @@ unsafe fn mi_arena_from_memid(
     arena.as_ptr()
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_range_from_memid(
     memid: mi_memid_t,
 ) -> Option<(crate::core_types::ArenaPtr, crate::core_types::SliceRange)> {
@@ -904,7 +889,6 @@ unsafe fn mi_arena_range_from_memid(
     }
 }
 
-#[allow(dead_code)]
 fn mi_memid_is_os(memid: mi_memid_t) -> bool {
     matches!(
         crate::core_types::MemId::view(memid),
@@ -912,7 +896,6 @@ fn mi_memid_is_os(memid: mi_memid_t) -> bool {
     )
 }
 
-#[allow(dead_code)]
 unsafe fn mi_page_full_size(page: *mut mi_page_t) -> usize {
     let memid = unsafe { (*page).memid };
     match crate::core_types::MemId::view(memid) {

@@ -2603,6 +2603,21 @@ fn free_path_internals_are_not_dynamic_exports() {
         "page-map range helpers should validate raw counts once and carry typed SliceCount internally"
     );
     assert!(
+        atomic_types.contains("pub(crate) struct AtomicPtrField<T>(pub(crate) *mut *mut T);")
+            && atomic_types.contains("pub(crate) unsafe fn load(self, order: Ordering) -> *mut T")
+            && atomic_types.contains("expected: &mut *mut T,")
+            && page_map.contains(
+                "let atomic_submap = crate::core_types::AtomicPtrField(unsafe { _mi_page_map.add(idx) });"
+            )
+            && page_map.contains("atomic_submap.load(crate::core_types::MemoryOrder::Acquire)")
+            && page_map.contains("atomic_submap.compare_exchange_acq_rel(&mut expect, new_sub)")
+            && !page_map.contains("mi_atomic_load_ptr_acquire(_mi_page_map.add(idx))")
+            && !page_map.contains(
+                "mi_atomic_cas_strong_acq_rel(\n                        _mi_page_map.add(idx).cast::<usize>()"
+            ),
+        "page-map submap slot atomics should use AtomicPtrField"
+    );
+    assert!(
         arena_rs.contains(
             "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> mi_memid_t"
         ) && arena_rs.contains("unsafe { *memid = mi_memid_create_arena(arena, range) };")

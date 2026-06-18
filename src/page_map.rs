@@ -11,10 +11,7 @@ use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::arena::MI_ARENA_SLICE_SIZE;
-use crate::atomic::{
-    mi_atomic_cas_strong_acq_rel, mi_atomic_load_ptr_acquire, mi_lock_acquire, mi_lock_done,
-    mi_lock_init, mi_lock_release, mi_lock_t,
-};
+use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release, mi_lock_t};
 use crate::bitmap::MI_BFIELD_BITS;
 #[cfg(target_pointer_width = "32")]
 use crate::bitmap::{
@@ -557,7 +554,8 @@ unsafe fn mi_page_map_ensure_submap_at(idx: usize, submap: *mut mi_submap_t) -> 
     }
     if sub.is_null() {
         unsafe { mi_lock_acquire(&raw mut mi_page_map_lock) };
-        sub = unsafe { mi_atomic_load_ptr_acquire(_mi_page_map.add(idx)) };
+        let atomic_submap = crate::core_types::AtomicPtrField(unsafe { _mi_page_map.add(idx) });
+        sub = unsafe { atomic_submap.load(crate::core_types::MemoryOrder::Acquire) };
         if sub.is_null() {
             let mut memid = unsafe { _mi_memid_none() };
             let new_sub = unsafe { _mi_os_zalloc(MI_PAGE_MAP_SUB_SIZE, &raw mut memid) }
@@ -568,13 +566,7 @@ unsafe fn mi_page_map_ensure_submap_at(idx: usize, submap: *mut mi_submap_t) -> 
                 ));
             } else {
                 let mut expect: mi_submap_t = ptr::null_mut();
-                if !unsafe {
-                    mi_atomic_cas_strong_acq_rel(
-                        _mi_page_map.add(idx).cast::<usize>(),
-                        (&raw mut expect).cast::<usize>(),
-                        new_sub as usize,
-                    )
-                } {
+                if !unsafe { atomic_submap.compare_exchange_acq_rel(&mut expect, new_sub) } {
                     unsafe { _mi_os_free(new_sub.cast::<c_void>(), MI_PAGE_MAP_SUB_SIZE, memid) };
                     sub = expect;
                 } else {

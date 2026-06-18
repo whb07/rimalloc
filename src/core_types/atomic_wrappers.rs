@@ -143,6 +143,51 @@ impl AtomicI64Field {
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
+pub(crate) struct AtomicPtrField<T>(pub(crate) *mut *mut T);
+
+impl<T: 'static> AtomicPtrField<T> {
+    /// # Safety
+    /// `self.0` must be a valid, properly aligned pointer to an atomic-compatible
+    /// pointer field for the lifetime of the access.
+    #[inline(always)]
+    pub(crate) unsafe fn atomic_ref(self) -> &'static AtomicPtr<T> {
+        // SAFETY: caller guarantees `self.0` is valid and aligned. The borrow is
+        // unbounded for the same raw-pointer lifetime model as `AtomicUsizeField`.
+        unsafe { &*self.0.cast::<AtomicPtr<T>>() }
+    }
+
+    /// # Safety
+    /// See `atomic_ref`.
+    #[inline(always)]
+    pub(crate) unsafe fn load(self, order: Ordering) -> *mut T {
+        unsafe { self.atomic_ref() }.load(order)
+    }
+
+    /// # Safety
+    /// See `atomic_ref`.
+    #[inline(always)]
+    pub(crate) unsafe fn compare_exchange_acq_rel(
+        self,
+        expected: &mut *mut T,
+        desired: *mut T,
+    ) -> bool {
+        match unsafe { self.atomic_ref() }.compare_exchange(
+            *expected,
+            desired,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => true,
+            Err(actual) => {
+                *expected = actual;
+                false
+            }
+        }
+    }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy)]
 pub(crate) struct AtomicPageThreadId(pub(crate) AtomicUsizeField);
 
 impl AtomicPageThreadId {

@@ -72,7 +72,7 @@ pub(crate) struct MemId<K = AnyMem> {
 
 pub(crate) enum MemIdView {
     None(MemId<NoneMem>),
-    External(MemId<ExternalMem>),
+    External(ExternalMemId),
     Static(MemId<StaticMem>),
     Meta(MetaMemId),
     Os(OsMemId),
@@ -89,10 +89,16 @@ impl MemId<AnyMem> {
                 raw,
                 _kind: PhantomData,
             }),
-            MemKind::External => MemIdView::External(MemId {
-                raw,
-                _kind: PhantomData,
-            }),
+            MemKind::External => {
+                let os = unsafe { raw.mem.os };
+                MemIdView::External(ExternalMemId {
+                    base: OsMemPtr::new(os.base),
+                    size: ReservedBytes(os.size),
+                    initially_committed: InitiallyCommitted(raw.initially_committed),
+                    initially_zero: InitiallyZero(raw.initially_zero),
+                    pinned: Pinned(raw.is_pinned),
+                })
+            }
             MemKind::Static => MemIdView::Static(MemId {
                 raw,
                 _kind: PhantomData,
@@ -258,6 +264,14 @@ pub(crate) enum OsMemKind {
     Normal,
     Huge,
     Remap,
+}
+
+pub(crate) struct ExternalMemId {
+    pub(crate) base: Option<OsMemPtr>,
+    pub(crate) size: ReservedBytes,
+    pub(crate) initially_committed: InitiallyCommitted,
+    pub(crate) initially_zero: InitiallyZero,
+    pub(crate) pinned: Pinned,
 }
 
 pub(crate) struct ArenaMemId {

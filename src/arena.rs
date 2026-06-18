@@ -929,9 +929,13 @@ unsafe fn mi_page_full_size(page: *mut mi_page_t) -> usize {
                 os_size - presize as usize
             }
         }
-        crate::core_types::MemIdView::External(_) => {
-            let base = unsafe { memid.mem.os.base }.cast::<u8>();
-            let os_size = unsafe { memid.mem.os.size };
+        crate::core_types::MemIdView::External(external) => {
+            let base = external
+                .base
+                .map(|p| p.as_ptr())
+                .unwrap_or(core::ptr::null_mut())
+                .cast::<u8>();
+            let os_size = external.size.0;
 
             let page_ptr = page.cast::<u8>();
             crate::mi_assert_internal!(base <= page_ptr);

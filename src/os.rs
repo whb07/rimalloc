@@ -674,9 +674,13 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
             os.size.0,
             os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()),
         ),
-        crate::core_types::MemIdView::External(_) => {
-            (unsafe { memid.mem.os.size }, unsafe { memid.mem.os.base })
-        }
+        crate::core_types::MemIdView::External(external) => (
+            external.size.0,
+            external
+                .base
+                .map(|p| p.as_ptr())
+                .unwrap_or(core::ptr::null_mut()),
+        ),
         _ => (0, addr),
     };
     if csize == 0 {
@@ -1369,9 +1373,13 @@ unsafe fn mi_os_alloc_aligned_ex(
                 os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()),
                 os.size.0,
             ),
-            crate::core_types::MemIdView::External(_) => {
-                (unsafe { memid.mem.os.base }, unsafe { memid.mem.os.size })
-            }
+            crate::core_types::MemIdView::External(external) => (
+                external
+                    .base
+                    .map(|p| p.as_ptr())
+                    .unwrap_or(core::ptr::null_mut()),
+                external.size.0,
+            ),
             _ => (core::ptr::null_mut(), 0),
         };
         if !base.is_null() {

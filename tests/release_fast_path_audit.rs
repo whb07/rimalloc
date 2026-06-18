@@ -761,6 +761,8 @@ fn free_path_internals_are_not_dynamic_exports() {
     let bitmap_rs = fs::read_to_string(root.join("src/bitmap.rs")).expect("read src/bitmap.rs");
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
+    let memid_rs =
+        fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read core_types/memid.rs");
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
@@ -2342,6 +2344,14 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("let range = arena_memid.range;")
             && arena_rs.contains("fn mi_memid_is_os(memid: mi_memid_t) -> bool")
             && arena_rs.contains("crate::core_types::MemIdView::Os(_)")
+            && memid_rs.contains("pub(crate) struct ExternalMemId")
+            && memid_rs.contains("External(ExternalMemId)")
+            && arena_rs.contains("crate::core_types::MemIdView::External(external)")
+            && os_rs.contains("crate::core_types::MemIdView::External(external)")
+            && arena_rs.contains("let os_size = external.size.0;")
+            && os_rs.contains("external.size.0")
+            && !arena_rs.contains("memid.mem.os.")
+            && !os_rs.contains("memid.mem.os.")
             && !arena_rs.contains("const fn mi_memkind_is_os(memkind: mi_memkind_t)")
             && !arena_rs.contains("mi_memkind_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.memkind })")
             && !arena_rs.contains(

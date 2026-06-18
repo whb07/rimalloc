@@ -398,6 +398,14 @@ fn scenarios() -> Vec<Scenario> {
             run: sh8bench::run,
         },
         Scenario {
+            name: "alloc-test1",
+            run: alloc_test::run_one,
+        },
+        Scenario {
+            name: "alloc-testN",
+            run: alloc_test::run_n,
+        },
+        Scenario {
             name: "mleak10",
             run: |alloc| unsafe { mleak::run(alloc, 5) },
         },
@@ -1869,6 +1877,251 @@ mod sh8bench {
             alloc.free(foreign_slots.cast());
             elapsed
         }
+    }
+}
+
+mod alloc_test {
+    use super::*;
+
+    const ITER_COUNT: usize = 100_000_000;
+    const MAX_ITEMS_TOTAL: usize = 1 << 18;
+    const MAX_ITEM_SIZE_EXP: usize = 10;
+    const RND_SEED: u64 = 41;
+    const PARETO: [f64; 7] = [
+        0.262144, 0.393216, 0.245760, 0.081920, 0.015360, 0.001536, 0.000064,
+    ];
+
+    #[repr(C)]
+    struct TestBin {
+        ptr: *mut u8,
+        size: u32,
+        reincarnation: u32,
+    }
+
+    struct Prng {
+        seed: u64,
+    }
+
+    impl Prng {
+        fn new(seed: u64) -> Self {
+            Self { seed }
+        }
+
+        fn rng32(&mut self) -> u32 {
+            let ret = self.seed.wrapping_mul(0xd989_bcac_c137_dcd5);
+            self.seed ^= self.seed >> 11;
+            self.seed ^= self.seed << 31;
+            self.seed ^= self.seed >> 18;
+            (ret >> 32) as u32
+        }
+
+        fn rng64(&mut self) -> u64 {
+            let hi = self.rng32() as u64;
+            (hi << 32) + self.rng32() as u64
+        }
+    }
+
+    struct ParetoData {
+        probability_ranges: [u32; 6],
+        offsets: [u32; 8],
+    }
+
+    impl ParetoData {
+        fn new(item_count: usize) -> Self {
+            let mut probability_ranges = [0; 6];
+            probability_ranges[0] = (u32::MAX as f64 * PARETO[0]) as u32;
+            probability_ranges[5] = (u32::MAX as f64 * (1.0 - PARETO[6])) as u32;
+            for i in 1..5 {
+                probability_ranges[i] =
+                    probability_ranges[i - 1].wrapping_add((u32::MAX as f64 * PARETO[i]) as u32);
+            }
+
+            let mut offsets = [0; 8];
+            offsets[7] = item_count as u32;
+            for i in 0..6 {
+                offsets[i + 1] = offsets[i] + (item_count as f64 * PARETO[6 - i]) as u32;
+            }
+
+            Self {
+                probability_ranges,
+                offsets,
+            }
+        }
+
+        fn pick(&self, rnum1: u32, rnum2: u32) -> usize {
+            let mut idx = 6;
+            if rnum1 < self.probability_ranges[0] {
+                idx = 0;
+            } else if rnum1 < self.probability_ranges[1] {
+                idx = 1;
+            } else if rnum1 < self.probability_ranges[2] {
+                idx = 2;
+            } else if rnum1 < self.probability_ranges[3] {
+                idx = 3;
+            } else if rnum1 < self.probability_ranges[4] {
+                idx = 4;
+            } else if rnum1 < self.probability_ranges[5] {
+                idx = 5;
+            }
+            let range_size = self.offsets[idx + 1] - self.offsets[idx];
+            self.offsets[idx] as usize + (rnum2 % range_size) as usize
+        }
+    }
+
+    struct ThreadArg {
+        alloc: BenchAllocator,
+        thread_id: usize,
+        iter_count: usize,
+        max_items: usize,
+        dummy: usize,
+    }
+
+    fn calc_size_with_stats_adjustment(mut rand_num: u64, max_size_exp: usize) -> usize {
+        let max_size_exp = max_size_exp - 3;
+        let stat_class_base = (rand_num & ((1u64 << max_size_exp) - 1)) + 1;
+        rand_num >>= max_size_exp;
+        let idx = stat_class_base.trailing_zeros() as usize + 2;
+        let size_mask = (1u64 << idx) - 1;
+        ((rand_num & size_mask) + 1 + (1u64 << idx)) as usize
+    }
+
+    unsafe fn alloc_item(alloc: BenchAllocator, size: usize) -> *mut u8 {
+        unsafe {
+            let p = alloc.malloc(size);
+            assert!(!p.is_null(), "allocation failed in alloc-test");
+            ptr::write_bytes(p, size as u8, size);
+            p
+        }
+    }
+
+    unsafe fn read_full(ptr: *mut u8, size: usize) -> usize {
+        unsafe {
+            let mut dummy = 0usize;
+            let words = size / std::mem::size_of::<usize>();
+            let word_ptr = ptr.cast::<usize>();
+            for i in 0..words {
+                dummy = dummy.wrapping_add(word_ptr.add(i).read_unaligned());
+            }
+            let tail = ptr.add(words * std::mem::size_of::<usize>());
+            for i in 0..(size % std::mem::size_of::<usize>()) {
+                dummy = dummy.wrapping_add(tail.add(i).read() as usize);
+            }
+            dummy
+        }
+    }
+
+    unsafe fn random_pos_random_size(arg: &mut ThreadArg) {
+        unsafe {
+            let alloc = arg.alloc;
+            let max_items = arg.max_items;
+            let pareto = ParetoData::new(max_items);
+            let base = alloc
+                .malloc(max_items * std::mem::size_of::<TestBin>())
+                .cast::<TestBin>();
+            assert!(!base.is_null(), "slot allocation failed in alloc-test");
+            ptr::write_bytes(
+                base.cast::<u8>(),
+                0,
+                max_items * std::mem::size_of::<TestBin>(),
+            );
+
+            let mut rng = Prng::new(RND_SEED);
+            let mut dummy = 0usize;
+
+            for i in 0..(max_items / 32) {
+                let rand_num = rng.rng32();
+                for j in 0..32 {
+                    if ((rand_num >> j) & 1) != 0 {
+                        let size = calc_size_with_stats_adjustment(rng.rng64(), MAX_ITEM_SIZE_EXP);
+                        let slot = base.add(i * 32 + j);
+                        (*slot).size = size as u32;
+                        (*slot).ptr = alloc_item(alloc, size);
+                    }
+                }
+            }
+
+            for _ in 0..32 {
+                for _ in 0..(arg.iter_count >> 5) {
+                    let idx = pareto.pick(rng.rng32(), rng.rng32());
+                    let slot = base.add(idx);
+                    let p = (*slot).ptr;
+                    if !p.is_null() {
+                        dummy = dummy.wrapping_add(read_full(p, (*slot).size as usize));
+                        alloc.free(p);
+                        (*slot).ptr = ptr::null_mut();
+                    } else {
+                        let size = calc_size_with_stats_adjustment(rng.rng64(), MAX_ITEM_SIZE_EXP);
+                        (*slot).size = size as u32;
+                        (*slot).ptr = alloc_item(alloc, size);
+                    }
+                }
+            }
+
+            for idx in 0..max_items {
+                let slot = base.add(idx);
+                let p = (*slot).ptr;
+                if !p.is_null() {
+                    dummy = dummy.wrapping_add(read_full(p, (*slot).size as usize));
+                    alloc.free(p);
+                }
+            }
+
+            alloc.free(base.cast());
+            arg.dummy = dummy;
+        }
+    }
+
+    extern "C" fn thread_entry(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            random_pos_random_size(&mut *arg.cast::<ThreadArg>());
+        }
+        ptr::null_mut()
+    }
+
+    unsafe fn run_threads(alloc: BenchAllocator, thread_count: usize) -> Duration {
+        unsafe {
+            let max_items = MAX_ITEMS_TOTAL / thread_count;
+            let mut threads = vec![0; thread_count];
+            let mut args = Vec::with_capacity(thread_count);
+            for thread_id in 0..thread_count {
+                args.push(ThreadArg {
+                    alloc,
+                    thread_id,
+                    iter_count: ITER_COUNT,
+                    max_items,
+                    dummy: 0,
+                });
+            }
+
+            let start = Instant::now();
+            for i in 0..thread_count {
+                let rc = pthread::pthread_create(
+                    &mut threads[i],
+                    ptr::null(),
+                    thread_entry,
+                    (&mut args[i] as *mut ThreadArg).cast(),
+                );
+                assert_eq!(rc, 0, "pthread_create failed in alloc-test: {rc}");
+            }
+            for thread in threads {
+                let rc = pthread::pthread_join(thread, ptr::null_mut());
+                assert_eq!(rc, 0, "pthread_join failed in alloc-test: {rc}");
+            }
+            let elapsed = start.elapsed();
+            let dummy = args.iter().fold(0usize, |acc, arg| {
+                acc.wrapping_add(arg.dummy).wrapping_add(arg.thread_id)
+            });
+            std::hint::black_box(dummy);
+            elapsed
+        }
+    }
+
+    pub unsafe fn run_one(alloc: BenchAllocator) -> Duration {
+        unsafe { run_threads(alloc, 1) }
+    }
+
+    pub unsafe fn run_n(alloc: BenchAllocator) -> Duration {
+        unsafe { run_threads(alloc, logical_cpus().min(16)) }
     }
 }
 

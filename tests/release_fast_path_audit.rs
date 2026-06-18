@@ -901,7 +901,14 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_deferred_free(")
             && page_rs.contains("(*theap).heartbeat = (*theap).heartbeat.wrapping_add(1);")
-            && page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free))")
+            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n        .load(crate::core_types::MemoryOrder::Acquire);")
+            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n            .load(crate::core_types::MemoryOrder::Acquire);")
+            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n        .store(arg, crate::core_types::MemoryOrder::Release);")
+            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n        .store(f, crate::core_types::MemoryOrder::Release);")
+            && !page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free))")
+            && !page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_arg))")
+            && !page_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_arg)")
+            && !page_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_free)")
             && page_rs.contains("fun(force, (*theap).heartbeat, arg);")
             && page_rs.contains("_mi_deferred_free(theap, false);")
             && theap_rs.contains("_mi_deferred_free(theap, force);"),

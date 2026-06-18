@@ -16,7 +16,7 @@ use crate::arena::{
     _mi_arenas_collect, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free_typed,
     MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
 };
-use crate::atomic::{EFAULT, mi_atomic_load_ptr_acquire, mi_atomic_store_ptr_release};
+use crate::atomic::EFAULT;
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::init::{_mi_page_empty, _mi_theap_empty, _mi_theap_empty_wrong};
 use crate::internal::{
@@ -1732,10 +1732,12 @@ unsafe fn mi_find_free_page(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) ->
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool) {
     (*theap).heartbeat = (*theap).heartbeat.wrapping_add(1);
-    let fun_ptr = mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free));
+    let fun_ptr = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
+        .load(crate::core_types::MemoryOrder::Acquire);
     if !fun_ptr.is_null() && !(*(*theap).tld).recurse {
         (*(*theap).tld).recurse = true;
-        let arg = mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_arg));
+        let arg = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
+            .load(crate::core_types::MemoryOrder::Acquire);
         let fun: mi_deferred_free_fun = core::mem::transmute(fun_ptr);
         fun(force, (*theap).heartbeat, arg);
         (*(*theap).tld).recurse = false;
@@ -1747,9 +1749,11 @@ pub unsafe extern "C" fn mi_register_deferred_free(
     fn_: Option<mi_deferred_free_fun>,
     arg: *mut c_void,
 ) {
-    mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_arg), arg);
+    crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
+        .store(arg, crate::core_types::MemoryOrder::Release);
     let f = fn_.map_or(ptr::null_mut(), |fun| fun as *const () as *mut c_void);
-    mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_free), f);
+    crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
+        .store(f, crate::core_types::MemoryOrder::Release);
 }
 
 #[inline]

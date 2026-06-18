@@ -1,6 +1,6 @@
 //! Primitive OS / platform layer
 
-#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::c_void;
 use core::ptr;
@@ -428,38 +428,40 @@ pub(crate) unsafe extern "C" fn _mi_os_commit_ex(
     is_zero: *mut bool,
     stat_size: usize,
 ) -> bool {
-    if !is_zero.is_null() {
-        unsafe { *is_zero = false };
-    }
-    let subproc = unsafe { _mi_subproc() };
-    if !subproc.is_null() {
-        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.commit_calls), 1);
-    }
+    unsafe {
+        if !is_zero.is_null() {
+            *is_zero = false;
+        }
+        let subproc = _mi_subproc();
+        if !subproc.is_null() {
+            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
+            __mi_stat_counter_increase(ptr::addr_of_mut!(stats.commit_calls), 1);
+        }
 
-    let mut csize = 0;
-    let start = mi_os_page_align_areax(false, addr, size, &mut csize);
-    if csize == 0 {
-        return true;
-    }
+        let mut csize = 0;
+        let start = mi_os_page_align_areax(false, addr, size, &mut csize);
+        if csize == 0 {
+            return true;
+        }
 
-    let mut os_is_zero = false;
-    let err = unsafe { _mi_prim_commit(start, csize, &mut os_is_zero) };
-    if err != 0 {
-        _mi_warning_message_fmt(format_args!(
-            "cannot commit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
-            err, err, start, csize
-        ));
-        return false;
+        let mut os_is_zero = false;
+        let err = _mi_prim_commit(start, csize, &mut os_is_zero);
+        if err != 0 {
+            _mi_warning_message_fmt(format_args!(
+                "cannot commit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
+                err, err, start, csize
+            ));
+            return false;
+        }
+        if os_is_zero && !is_zero.is_null() {
+            *is_zero = true;
+        }
+        if !subproc.is_null() {
+            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
+            __mi_stat_increase(ptr::addr_of_mut!(stats.committed), stat_size);
+        }
+        true
     }
-    if os_is_zero && !is_zero.is_null() {
-        unsafe { *is_zero = true };
-    }
-    if !subproc.is_null() {
-        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_increase(ptr::addr_of_mut!(stats.committed), stat_size);
-    }
-    true
 }
 
 /// # Safety
@@ -480,30 +482,32 @@ unsafe fn mi_os_decommit_ex(
     needs_recommit: *mut bool,
     stat_size: usize,
 ) -> bool {
-    crate::mi_assert_internal!(!needs_recommit.is_null());
+    unsafe {
+        crate::mi_assert_internal!(!needs_recommit.is_null());
 
-    let mut csize = 0;
-    let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
-    if csize == 0 {
-        return true;
-    }
-
-    *needs_recommit = true;
-    let err = unsafe { _mi_prim_decommit(start, csize, needs_recommit) };
-    if err != 0 {
-        _mi_warning_message_fmt(format_args!(
-            "cannot decommit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
-            err, err, start, csize
-        ));
-    } else if *needs_recommit {
-        let subproc = unsafe { _mi_subproc() };
-        if !subproc.is_null() {
-            let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-            __mi_stat_decrease(ptr::addr_of_mut!(stats.committed), stat_size);
+        let mut csize = 0;
+        let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
+        if csize == 0 {
+            return true;
         }
+
+        *needs_recommit = true;
+        let err = _mi_prim_decommit(start, csize, needs_recommit);
+        if err != 0 {
+            _mi_warning_message_fmt(format_args!(
+                "cannot decommit OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
+                err, err, start, csize
+            ));
+        } else if *needs_recommit {
+            let subproc = _mi_subproc();
+            if !subproc.is_null() {
+                let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
+                __mi_stat_decrease(ptr::addr_of_mut!(stats.committed), stat_size);
+            }
+        }
+        crate::mi_assert_internal!(err == 0);
+        err == 0
     }
-    crate::mi_assert_internal!(err == 0);
-    err == 0
 }
 
 /// # Safety
@@ -517,31 +521,33 @@ pub unsafe extern "C" fn _mi_os_decommit(addr: *mut c_void, size: usize) -> bool
 /// # Safety
 /// `addr..addr+size` must designate a valid virtual memory range for the active OS primitive layer.
 pub unsafe extern "C" fn _mi_os_reset(addr: *mut c_void, size: usize) -> bool {
-    let mut csize = 0;
-    let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
-    if csize == 0 {
-        return true;
-    }
+    unsafe {
+        let mut csize = 0;
+        let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
+        if csize == 0 {
+            return true;
+        }
 
-    let subproc = unsafe { _mi_subproc() };
-    if !subproc.is_null() {
-        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.reset), csize);
-        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.reset_calls), 1);
-    }
+        let subproc = _mi_subproc();
+        if !subproc.is_null() {
+            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
+            __mi_stat_counter_increase(ptr::addr_of_mut!(stats.reset), csize);
+            __mi_stat_counter_increase(ptr::addr_of_mut!(stats.reset_calls), 1);
+        }
 
-    if MI_DEBUG > 1 && MI_SECURE == 0 && MI_TRACK_ENABLED == 0 {
-        unsafe { core::ptr::write_bytes(start, 0, csize) };
-    }
+        if MI_DEBUG > 1 && MI_SECURE == 0 && MI_TRACK_ENABLED == 0 {
+            core::ptr::write_bytes(start, 0, csize);
+        }
 
-    let err = unsafe { _mi_prim_reset(start, csize) };
-    if err != 0 {
-        _mi_warning_message_fmt(format_args!(
-            "cannot reset OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
-            err, err, start, csize
-        ));
+        let err = _mi_prim_reset(start, csize);
+        if err != 0 {
+            _mi_warning_message_fmt(format_args!(
+                "cannot reset OS memory (error: {} (0x{:x}), address: {:p}, size: 0x{:x} bytes)\n",
+                err, err, start, csize
+            ));
+        }
+        err == 0
     }
-    err == 0
 }
 
 /// # Safety
@@ -572,27 +578,30 @@ pub(crate) unsafe extern "C" fn _mi_os_purge_ex(
     commit_fun: Option<mi_commit_fun_t>,
     commit_fun_arg: *mut c_void,
 ) -> bool {
-    if mi_option_get(mi_option_t::mi_option_purge_delay) < 0 {
-        return false;
-    }
-    let subproc = unsafe { _mi_subproc() };
-    if !subproc.is_null() {
-        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.purge_calls), 1);
-        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.purged), size);
-    }
-
-    if let Some(commit_fun) = commit_fun {
-        unsafe { commit_fun(false, p, size, core::ptr::null_mut(), commit_fun_arg) }
-    } else if mi_option_is_enabled(mi_option_t::mi_option_purge_decommits) && !_mi_preloading() {
-        let mut needs_recommit = true;
-        unsafe { mi_os_decommit_ex(p, size, &mut needs_recommit, stat_size) };
-        needs_recommit
-    } else {
-        if allow_reset {
-            unsafe { _mi_os_reset(p, size) };
+    unsafe {
+        if mi_option_get(mi_option_t::mi_option_purge_delay) < 0 {
+            return false;
         }
-        false
+        let subproc = _mi_subproc();
+        if !subproc.is_null() {
+            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
+            __mi_stat_counter_increase(ptr::addr_of_mut!(stats.purge_calls), 1);
+            __mi_stat_counter_increase(ptr::addr_of_mut!(stats.purged), size);
+        }
+
+        if let Some(commit_fun) = commit_fun {
+            commit_fun(false, p, size, core::ptr::null_mut(), commit_fun_arg)
+        } else if mi_option_is_enabled(mi_option_t::mi_option_purge_decommits) && !_mi_preloading()
+        {
+            let mut needs_recommit = true;
+            mi_os_decommit_ex(p, size, &mut needs_recommit, stat_size);
+            needs_recommit
+        } else {
+            if allow_reset {
+                _mi_os_reset(p, size);
+            }
+            false
+        }
     }
 }
 
@@ -645,28 +654,30 @@ unsafe fn mi_os_prim_free(
     commit_size: usize,
     subproc: *mut mi_subproc_t,
 ) {
-    crate::mi_assert_internal!(size.is_multiple_of(unsafe { _mi_os_page_size() }));
-    if addr.is_null() {
-        return;
-    }
-    let err = unsafe { _mi_prim_free(addr, size) };
-    if err != 0 {
-        _mi_warning_message_fmt(format_args!(
-            "unable to free OS memory (error: {} (0x{:x}), size: 0x{:x} bytes, address: {:p})\n",
-            err, err, size, addr
-        ));
-    }
-    let subproc = if subproc.is_null() {
-        unsafe { crate::internal::_mi_subproc() }
-    } else {
-        subproc
-    };
-    if !subproc.is_null() {
-        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        if commit_size > 0 {
-            __mi_stat_decrease(ptr::addr_of_mut!(stats.committed), commit_size);
+    unsafe {
+        crate::mi_assert_internal!(size.is_multiple_of(_mi_os_page_size()));
+        if addr.is_null() {
+            return;
         }
-        __mi_stat_decrease(ptr::addr_of_mut!(stats.reserved), size);
+        let err = _mi_prim_free(addr, size);
+        if err != 0 {
+            _mi_warning_message_fmt(format_args!(
+                "unable to free OS memory (error: {} (0x{:x}), size: 0x{:x} bytes, address: {:p})\n",
+                err, err, size, addr
+            ));
+        }
+        let subproc = if subproc.is_null() {
+            crate::internal::_mi_subproc()
+        } else {
+            subproc
+        };
+        if !subproc.is_null() {
+            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
+            if commit_size > 0 {
+                __mi_stat_decrease(ptr::addr_of_mut!(stats.committed), commit_size);
+            }
+            __mi_stat_decrease(ptr::addr_of_mut!(stats.reserved), size);
+        }
     }
 }
 
@@ -736,35 +747,33 @@ unsafe fn mi_os_prim_alloc_at(
     is_large: *mut bool,
     is_zero: *mut bool,
 ) -> *mut c_void {
-    crate::mi_assert_internal!(size > 0 && size.is_multiple_of(unsafe { _mi_os_page_size() }));
-    crate::mi_assert_internal!(!is_zero.is_null());
-    crate::mi_assert_internal!(!is_large.is_null());
-    if size == 0 {
-        return core::ptr::null_mut();
-    }
-    if !commit {
-        allow_large = false;
-    }
-    if try_alignment == 0 {
-        try_alignment = 1;
-    }
-
-    let large_page_size = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
-    if large_page_size > 0
-        && hint_addr.is_null()
-        && size >= 8 * large_page_size
-        && _mi_is_power_of_two(try_alignment)
-        && try_alignment < large_page_size
-    {
-        try_alignment = large_page_size;
-    }
-
     unsafe {
+        crate::mi_assert_internal!(size > 0 && size.is_multiple_of(_mi_os_page_size()));
+        crate::mi_assert_internal!(!is_zero.is_null());
+        crate::mi_assert_internal!(!is_large.is_null());
+        if size == 0 {
+            return core::ptr::null_mut();
+        }
+        if !commit {
+            allow_large = false;
+        }
+        if try_alignment == 0 {
+            try_alignment = 1;
+        }
+
+        let large_page_size = (*mi_os_mem_config_ptr()).large_page_size;
+        if large_page_size > 0
+            && hint_addr.is_null()
+            && size >= 8 * large_page_size
+            && _mi_is_power_of_two(try_alignment)
+            && try_alignment < large_page_size
+        {
+            try_alignment = large_page_size;
+        }
+
         *is_zero = false;
-    }
-    let mut p = core::ptr::null_mut();
-    let err = unsafe {
-        _mi_prim_alloc(
+        let mut p = core::ptr::null_mut();
+        let err = _mi_prim_alloc(
             hint_addr,
             size,
             try_alignment,
@@ -773,27 +782,27 @@ unsafe fn mi_os_prim_alloc_at(
             is_large,
             is_zero,
             &mut p,
-        )
-    };
-    if err != 0 {
-        _mi_warning_message_fmt(format_args!(
-            "unable to allocate OS memory (error: {} (0x{:x}), addr: {:p}, size: 0x{:x} bytes, align: 0x{:x}, commit: {}, allow large: {})\n",
-            err, err, hint_addr, size, try_alignment, commit as i32, allow_large as i32
-        ));
-    }
+        );
+        if err != 0 {
+            _mi_warning_message_fmt(format_args!(
+                "unable to allocate OS memory (error: {} (0x{:x}), addr: {:p}, size: 0x{:x} bytes, align: 0x{:x}, commit: {}, allow large: {})\n",
+                err, err, hint_addr, size, try_alignment, commit as i32, allow_large as i32
+            ));
+        }
 
-    let subproc = unsafe { _mi_subproc() };
-    if !subproc.is_null() {
-        let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-        __mi_stat_counter_increase(ptr::addr_of_mut!(stats.mmap_calls), 1);
-        if !p.is_null() {
-            __mi_stat_increase(ptr::addr_of_mut!(stats.reserved), size);
-            if commit {
-                __mi_stat_increase(ptr::addr_of_mut!(stats.committed), size);
+        let subproc = _mi_subproc();
+        if !subproc.is_null() {
+            let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
+            __mi_stat_counter_increase(ptr::addr_of_mut!(stats.mmap_calls), 1);
+            if !p.is_null() {
+                __mi_stat_increase(ptr::addr_of_mut!(stats.reserved), size);
+                if commit {
+                    __mi_stat_increase(ptr::addr_of_mut!(stats.committed), size);
+                }
             }
         }
+        p
     }
-    p
 }
 
 #[inline]
@@ -1245,103 +1254,99 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
     psize: *mut usize,
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
-    if !memid.is_null() {
-        unsafe { *memid = _mi_memid_none() };
-    }
-    if !psize.is_null() {
-        unsafe { *psize = 0 };
-    }
-    if !pages_reserved.is_null() {
-        unsafe { *pages_reserved = 0 };
-    }
-    let mut size = 0usize;
-    let start = unsafe { mi_os_claim_huge_pages(pages, &mut size) };
-    if start.is_null() {
-        return ptr::null_mut();
-    }
+    unsafe {
+        if !memid.is_null() {
+            *memid = _mi_memid_none();
+        }
+        if !psize.is_null() {
+            *psize = 0;
+        }
+        if !pages_reserved.is_null() {
+            *pages_reserved = 0;
+        }
+        let mut size = 0usize;
+        let start = mi_os_claim_huge_pages(pages, &mut size);
+        if start.is_null() {
+            return ptr::null_mut();
+        }
 
-    let start_t = _mi_clock_start();
-    let mut page = 0usize;
-    let mut all_zero = true;
-    while page < pages {
-        let addr = unsafe { start.add(page * MI_HUGE_OS_PAGE_SIZE) }.cast::<c_void>();
-        let mut is_zero = false;
-        let mut p: *mut c_void = ptr::null_mut();
-        let err = unsafe {
-            _mi_prim_alloc_huge_os_pages(
+        let start_t = _mi_clock_start();
+        let mut page = 0usize;
+        let mut all_zero = true;
+        while page < pages {
+            let addr = start.add(page * MI_HUGE_OS_PAGE_SIZE).cast::<c_void>();
+            let mut is_zero = false;
+            let mut p: *mut c_void = ptr::null_mut();
+            let err = _mi_prim_alloc_huge_os_pages(
                 addr,
                 MI_HUGE_OS_PAGE_SIZE,
                 numa_node,
                 &mut is_zero,
                 &mut p,
-            )
-        };
-        if !is_zero {
-            all_zero = false;
-        }
-        if err != 0 {
-            _mi_warning_message_fmt(format_args!(
-                "unable to allocate huge OS page (error: {} (0x{:x}), address: {:p}, size: {:x} bytes)\n",
-                err, err, addr, MI_HUGE_OS_PAGE_SIZE
-            ));
-            break;
-        }
-        if p != addr {
-            if !p.is_null() {
+            );
+            if !is_zero {
+                all_zero = false;
+            }
+            if err != 0 {
                 _mi_warning_message_fmt(format_args!(
-                    "could not allocate contiguous huge OS page {} at {:p}\n",
-                    page, addr
+                    "unable to allocate huge OS page (error: {} (0x{:x}), address: {:p}, size: {:x} bytes)\n",
+                    err, err, addr, MI_HUGE_OS_PAGE_SIZE
                 ));
-                unsafe {
+                break;
+            }
+            if p != addr {
+                if !p.is_null() {
+                    _mi_warning_message_fmt(format_args!(
+                        "could not allocate contiguous huge OS page {} at {:p}\n",
+                        page, addr
+                    ));
                     mi_os_prim_free(
                         p,
                         MI_HUGE_OS_PAGE_SIZE,
                         MI_HUGE_OS_PAGE_SIZE,
                         ptr::null_mut(),
-                    )
-                };
-            }
-            break;
-        }
-
-        page += 1;
-        let subproc = unsafe { _mi_subproc() };
-        if !subproc.is_null() {
-            let stats = unsafe { &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats };
-            __mi_stat_increase(ptr::addr_of_mut!(stats.committed), MI_HUGE_OS_PAGE_SIZE);
-            __mi_stat_increase(ptr::addr_of_mut!(stats.reserved), MI_HUGE_OS_PAGE_SIZE);
-        }
-
-        if max_msecs > 0 {
-            let mut elapsed = _mi_clock_end(start_t);
-            if page >= 1 {
-                let estimate = (elapsed / (page as i64 + 1)) * pages as i64;
-                if estimate > 2 * max_msecs {
-                    elapsed = max_msecs + 1;
+                    );
                 }
-            }
-            if elapsed > max_msecs {
-                _mi_warning_message_fmt(format_args!(
-                    "huge OS page allocation timed out (after allocating {} page(s))\n",
-                    page
-                ));
                 break;
             }
-        }
-    }
 
-    let allocated = page * MI_HUGE_OS_PAGE_SIZE;
-    crate::mi_assert_internal!(allocated <= size);
-    if !pages_reserved.is_null() {
-        unsafe { *pages_reserved = page };
-    }
-    if !psize.is_null() {
-        unsafe { *psize = allocated };
-    }
-    if page != 0 {
-        crate::mi_assert_internal!(!start.is_null());
-        if !memid.is_null() {
-            unsafe {
+            page += 1;
+            let subproc = _mi_subproc();
+            if !subproc.is_null() {
+                let stats = &mut (*subproc.cast::<MiSubprocStatsPrefix>()).stats;
+                __mi_stat_increase(ptr::addr_of_mut!(stats.committed), MI_HUGE_OS_PAGE_SIZE);
+                __mi_stat_increase(ptr::addr_of_mut!(stats.reserved), MI_HUGE_OS_PAGE_SIZE);
+            }
+
+            if max_msecs > 0 {
+                let mut elapsed = _mi_clock_end(start_t);
+                if page >= 1 {
+                    let estimate = (elapsed / (page as i64 + 1)) * pages as i64;
+                    if estimate > 2 * max_msecs {
+                        elapsed = max_msecs + 1;
+                    }
+                }
+                if elapsed > max_msecs {
+                    _mi_warning_message_fmt(format_args!(
+                        "huge OS page allocation timed out (after allocating {} page(s))\n",
+                        page
+                    ));
+                    break;
+                }
+            }
+        }
+
+        let allocated = page * MI_HUGE_OS_PAGE_SIZE;
+        crate::mi_assert_internal!(allocated <= size);
+        if !pages_reserved.is_null() {
+            *pages_reserved = page;
+        }
+        if !psize.is_null() {
+            *psize = allocated;
+        }
+        if page != 0 {
+            crate::mi_assert_internal!(!start.is_null());
+            if !memid.is_null() {
                 *memid = crate::core_types::MemId::<crate::core_types::OsMem>::os_huge(
                     crate::core_types::OsMemPtr::new(start.cast::<c_void>()),
                     crate::core_types::ReservedBytes(allocated),
@@ -1350,14 +1355,14 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
                     crate::core_types::Pinned(true),
                 )
                 .raw;
+                crate::mi_assert!((*memid).is_pinned);
             }
-            crate::mi_assert!((unsafe { (*memid).is_pinned }));
         }
-    }
-    if page == 0 {
-        ptr::null_mut()
-    } else {
-        start.cast::<c_void>()
+        if page == 0 {
+            ptr::null_mut()
+        } else {
+            start.cast::<c_void>()
+        }
     }
 }
 

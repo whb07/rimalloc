@@ -2497,6 +2497,20 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena free/purge path should dispatch through MemIdView and carry SliceRange"
     );
     assert!(
+        page_map.contains(
+            "unsafe fn mi_page_map_ensure_committed(\n    idx: usize,\n    slice_count: crate::core_types::SliceCount,"
+        ) && page_map.contains(
+            "unsafe fn mi_page_map_set_range_prim(\n    page: *mut mi_page_t,\n    mut idx: usize,\n    mut sub_idx: usize,\n    slice_count: crate::core_types::SliceCount,"
+        ) && page_map.contains(
+            "unsafe fn mi_page_map_set_range(\n    page: *mut mi_page_t,\n    idx: usize,\n    sub_idx: usize,\n    slice_count: crate::core_types::SliceCount,"
+        ) && page_map
+            .contains("let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count)")
+            && !page_map.contains("unsafe fn mi_page_map_ensure_committed(idx: usize, slice_count: usize)")
+            && !page_map.contains("unsafe fn mi_page_map_set_range_prim(\n    page: *mut mi_page_t,\n    mut idx: usize,\n    mut sub_idx: usize,\n    mut slice_count: usize,")
+            && !page_map.contains("unsafe fn mi_page_map_set_range(\n    page: *mut mi_page_t,\n    idx: usize,\n    sub_idx: usize,\n    slice_count: usize,"),
+        "page-map range helpers should validate raw counts once and carry typed SliceCount internally"
+    );
+    assert!(
         arena_rs.contains(
             "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> mi_memid_t"
         ) && arena_rs.contains("unsafe { *memid = mi_memid_create_arena(arena, range) };")

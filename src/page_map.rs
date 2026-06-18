@@ -128,7 +128,11 @@ fn mi_page_map_is_committed(idx: usize, pbit_idx: *mut usize) -> bool {
 const MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT: usize = MI_ARENA_SLICE_SIZE;
 
 #[cfg(target_pointer_width = "32")]
-unsafe fn mi_page_map_ensure_committed(idx: usize, slice_count: usize) -> bool {
+unsafe fn mi_page_map_ensure_committed(
+    idx: usize,
+    slice_count: crate::core_types::SliceCount,
+) -> bool {
+    let slice_count = slice_count.get() as usize;
     if unsafe { !mi_page_map_commit.is_null() } {
         let commit_idx = idx / MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT;
         let commit_idx_hi = (idx + slice_count - 1) / MI_PAGE_MAP_ENTRIES_PER_COMMIT_BIT;
@@ -287,10 +291,14 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
     let mut page_start = ptr::null_mut();
     let mut slice_count = 0usize;
     let idx = unsafe { mi_page_map_get_idx(page, &mut page_start, &mut slice_count) };
+    let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+        crate::mi_assert_internal!(false);
+        return false;
+    };
     if !unsafe { mi_page_map_ensure_committed(idx, slice_count) } {
         return false;
     }
-    for i in 0..slice_count {
+    for i in 0..slice_count.get() as usize {
         crate::mi_assert_internal!(i < 128);
         unsafe { *_mi_page_map.add(idx + i) = (i + 1) as u8 };
     }
@@ -304,18 +312,36 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
     let mut page_start = ptr::null_mut();
     let mut slice_count = 0usize;
     let idx = unsafe { mi_page_map_get_idx(page, &mut page_start, &mut slice_count) };
-    unsafe { _mi_memzero(_mi_page_map.add(idx).cast::<c_void>(), slice_count) };
+    let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+        crate::mi_assert_internal!(false);
+        return;
+    };
+    unsafe {
+        _mi_memzero(
+            _mi_page_map.add(idx).cast::<c_void>(),
+            slice_count.get() as usize,
+        )
+    };
 }
 
 #[cfg(target_pointer_width = "32")]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
     let slice_count = _mi_divide_up(size, MI_ARENA_SLICE_SIZE);
+    let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+        crate::mi_assert_internal!(size == 0);
+        return;
+    };
     let index = _mi_page_map_index(start.cast_const());
     if !unsafe { mi_page_map_ensure_committed(index, slice_count) } {
         return;
     }
-    unsafe { _mi_memzero(_mi_page_map.add(index).cast::<c_void>(), slice_count) };
+    unsafe {
+        _mi_memzero(
+            _mi_page_map.add(index).cast::<c_void>(),
+            slice_count.get() as usize,
+        )
+    };
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -570,8 +596,9 @@ unsafe fn mi_page_map_set_range_prim(
     page: *mut mi_page_t,
     mut idx: usize,
     mut sub_idx: usize,
-    mut slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
 ) -> bool {
+    let mut slice_count = slice_count.get() as usize;
     while slice_count > 0 {
         let mut sub: mi_submap_t = ptr::null_mut();
         if !unsafe { mi_page_map_ensure_submap_at(idx, &mut sub) } {
@@ -594,7 +621,7 @@ unsafe fn mi_page_map_set_range(
     page: *mut mi_page_t,
     idx: usize,
     sub_idx: usize,
-    slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
 ) -> bool {
     if !unsafe { mi_page_map_set_range_prim(page, idx, sub_idx, slice_count) } {
         if !page.is_null() {
@@ -637,6 +664,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
     let mut slice_count = 0usize;
     let mut sub_idx = 0usize;
     let idx = unsafe { mi_page_map_get_idx(page, &mut sub_idx, &mut slice_count) };
+    let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+        crate::mi_assert_internal!(false);
+        return false;
+    };
     unsafe { mi_page_map_set_range(page, idx, sub_idx, slice_count) }
 }
 
@@ -654,6 +685,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
     let mut slice_count = 0usize;
     let mut sub_idx = 0usize;
     let idx = unsafe { mi_page_map_get_idx(page, &mut sub_idx, &mut slice_count) };
+    let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+        crate::mi_assert_internal!(false);
+        return;
+    };
     unsafe { mi_page_map_set_range(ptr::null_mut(), idx, sub_idx, slice_count) };
 }
 
@@ -664,6 +699,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
         return;
     }
     let slice_count = _mi_divide_up(size, MI_ARENA_SLICE_SIZE);
+    let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+        crate::mi_assert_internal!(size == 0);
+        return;
+    };
     let mut sub_idx = 0usize;
     let idx = unsafe { _mi_page_map_index(start.cast_const(), &mut sub_idx) };
     unsafe { mi_page_map_set_range(ptr::null_mut(), idx, sub_idx, slice_count) };

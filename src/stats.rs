@@ -1,11 +1,6 @@
 //! Statistics
 
-#![allow(
-    dead_code,
-    non_camel_case_types,
-    non_upper_case_globals,
-    clippy::missing_safety_doc
-)]
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::{CStr, c_char, c_void};
 use core::str;
@@ -347,6 +342,8 @@ fn mi_stat_update(stat: &mut mi_stat_count_t, amount: i64) {
     }
 }
 
+/// # Safety
+/// `stat` must point to valid writable counter storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_counter_increase_mt(
     stat: *mut mi_stat_counter_t,
@@ -358,6 +355,8 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase_mt(
     }
 }
 
+/// # Safety
+/// `stat` must point to valid writable counter storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
     stat: *mut mi_stat_counter_t,
@@ -368,21 +367,29 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
     }
 }
 
+/// # Safety
+/// `stat` must point to valid writable count storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_increase_mt(stat: *mut mi_stat_count_t, amount: usize) {
     mi_stat_update_mt(unsafe { &mut *stat }, amount as i64);
 }
 
+/// # Safety
+/// `stat` must point to valid writable count storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_increase(stat: *mut mi_stat_count_t, amount: usize) {
     mi_stat_update(unsafe { &mut *stat }, amount as i64);
 }
 
+/// # Safety
+/// `stat` must point to valid writable count storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_decrease_mt(stat: *mut mi_stat_count_t, amount: usize) {
     mi_stat_update_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
+/// # Safety
+/// `stat` must point to valid writable count storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_decrease(stat: *mut mi_stat_count_t, amount: usize) {
     mi_stat_update(unsafe { &mut *stat }, -(amount as i64));
@@ -407,6 +414,8 @@ fn mi_stat_adjust(stat: &mut mi_stat_count_t, amount: i64) {
     stat.total += amount;
 }
 
+/// # Safety
+/// `stat` must point to valid writable count storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase_mt(
     stat: *mut mi_stat_count_t,
@@ -415,6 +424,8 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase_mt(
     mi_stat_adjust_mt(unsafe { &mut *stat }, amount as i64);
 }
 
+/// # Safety
+/// `stat` must point to valid writable count storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase(
     stat: *mut mi_stat_count_t,
@@ -427,6 +438,8 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase(
 static MI_STAT_ADJUST_INCREASE_KEEP: unsafe extern "C" fn(*mut mi_stat_count_t, usize) =
     __mi_stat_adjust_increase;
 
+/// # Safety
+/// `stat` must point to valid writable count storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease_mt(
     stat: *mut mi_stat_count_t,
@@ -435,6 +448,8 @@ pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease_mt(
     mi_stat_adjust_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
+/// # Safety
+/// `stat` must point to valid writable count storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease(
     stat: *mut mi_stat_count_t,
@@ -1114,6 +1129,8 @@ unsafe fn mi_heap_get_stats(mut heap: *mut mi_heap_t) -> *const mi_stats_t {
     }
 }
 
+/// # Safety
+/// `heap` must be null or a valid heap pointer owned by the current subproc.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_subproc(mut heap: *mut mi_heap_t) {
     if heap.is_null() {
@@ -1136,6 +1153,8 @@ pub unsafe extern "C" fn mi_stats_reset() {
     unsafe { mi_heap_stats_merge_to_subproc(heap) };
 }
 
+/// # Safety
+/// Uses process-global stats and heap state and must not race with process teardown.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_merge() {
     if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
@@ -1191,6 +1210,8 @@ static MI_HEAP_PRINT_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_print_visitor;
 #[used]
 static MI_HEAP_AGGREGATE_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_aggregate_visitor;
 
+/// # Safety
+/// `subproc_id` must identify a live subproc and any output callback must obey the C ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
     subproc_id: mi_subproc_id_t,
@@ -1218,6 +1239,8 @@ pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
     }
 }
 
+/// # Safety
+/// `subproc_id` must identify a live subproc and `stats` must point to writable stats storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
     subproc_id: mi_subproc_id_t,
@@ -1233,6 +1256,8 @@ pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
     unsafe { mi_stats_copy(&mut *stats, &(*subproc).stats) }
 }
 
+/// # Safety
+/// `subproc_id` must identify a live subproc and `stats` must point to writable stats storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get(
     subproc_id: mi_subproc_id_t,
@@ -1258,11 +1283,15 @@ pub unsafe extern "C" fn mi_subproc_stats_get(
     true
 }
 
+/// # Safety
+/// `stats` must point to writable stats storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_get(stats: *mut mi_stats_t) -> bool {
     unsafe { mi_subproc_stats_get(mi_subproc_current(), stats) }
 }
 
+/// # Safety
+/// `heap` must be null or a valid heap pointer, and `stats` must point to writable stats storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_get(heap: *mut mi_heap_t, stats: *mut mi_stats_t) -> bool {
     if stats.is_null() {
@@ -1271,11 +1300,15 @@ pub unsafe extern "C" fn mi_heap_stats_get(heap: *mut mi_heap_t, stats: *mut mi_
     unsafe { mi_stats_copy(stats, mi_heap_get_stats(heap)) }
 }
 
+/// # Safety
+/// May collect current-thread allocator state and must not race with allocator teardown.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_collect_reduce(_target_thread_owned: usize) {
     unsafe { crate::theap::mi_collect(false) };
 }
 
+/// # Safety
+/// `subproc_id` must identify a live subproc and any output callback must obey the C ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_print_out(
     subproc_id: mi_subproc_id_t,
@@ -1300,11 +1333,15 @@ pub unsafe extern "C" fn mi_subproc_stats_print_out(
     }
 }
 
+/// # Safety
+/// Any output callback must obey the C ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     unsafe { mi_subproc_stats_print_out(mi_subproc_current(), out, arg) };
 }
 
+/// # Safety
+/// `out`, when non-null, must be a valid `mi_output_fun` callback pointer encoded as `void*`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_print(out: *mut c_void) {
     let out_fun = if out.is_null() {
@@ -1316,6 +1353,8 @@ pub unsafe extern "C" fn mi_stats_print(out: *mut c_void) {
     unsafe { mi_stats_print_out(out_fun, ptr::null_mut()) };
 }
 
+/// # Safety
+/// Any output callback must obey the C ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_thread_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     let theap = unsafe { _mi_theap_default() };
@@ -1796,8 +1835,8 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
 }
 
 /// # Safety
-/// `stats` must point to a valid `mi_stats_t` when non-null. If `buf` is non-null it must be
-/// writable for `buf_size` bytes.
+/// `subproc_id` must identify a live subproc. If `buf` is non-null it must be writable for
+/// `buf_size` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get_json(
     subproc_id: mi_subproc_id_t,
@@ -1813,6 +1852,9 @@ pub unsafe extern "C" fn mi_subproc_stats_get_json(
     }
 }
 
+/// # Safety
+/// `heap` must be null or a valid heap pointer. If `buf` is non-null it must be writable for
+/// `buf_size` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_get_json(
     heap: *mut mi_heap_t,
@@ -1822,11 +1864,16 @@ pub unsafe extern "C" fn mi_heap_stats_get_json(
     unsafe { mi_stats_get_json_from(mi_heap_get_stats(heap), buf_size, buf) }
 }
 
+/// # Safety
+/// If `buf` is non-null it must be writable for `buf_size` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_get_json(buf_size: usize, buf: *mut c_char) -> *mut c_char {
     unsafe { mi_subproc_stats_get_json(mi_subproc_current(), buf_size, buf) }
 }
 
+/// # Safety
+/// `stats` must point to a valid `mi_stats_t` when non-null. If `buf` is non-null it must be
+/// writable for `buf_size` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_as_json(
     stats: *mut mi_stats_t,

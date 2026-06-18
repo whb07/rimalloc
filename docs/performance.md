@@ -12,6 +12,10 @@ performance relative to C mimalloc 3.3.2.
 - Capture `scripts/env-info.sh` output with any committed full benchmark report.
 - Record benchmark evidence in `BENCHMARK_RESULTS.md`, including commit hash,
   allocator versions, feature flags, command lines, and noisy-benchmark notes.
+- Use `scripts/summarize-criterion.py` to summarize Criterion JSON into
+  mean/median/min/p95/max, noisy/stable classification, and Rust/C geomean
+  ratios. Prefer exact `--id-file` inputs for release reports so stale
+  historical Criterion directories cannot leak into the aggregate.
 
 ## Fast Iteration
 

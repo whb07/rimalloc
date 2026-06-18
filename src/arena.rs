@@ -1350,12 +1350,11 @@ unsafe fn mi_arenas_try_find_free(
 }
 
 #[allow(dead_code)]
-unsafe fn mi_arena_pages_size(slice_count: usize, bitmap_base: *mut usize) -> usize {
-    let slice_count = if slice_count == 0 {
-        MI_ARENA_BCHUNK_BITS
-    } else {
-        slice_count
-    };
+unsafe fn mi_arena_pages_size(
+    slice_count: crate::core_types::SliceCount,
+    bitmap_base: *mut usize,
+) -> usize {
+    let slice_count = slice_count.get() as usize;
     crate::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
     let base_size = _mi_align_up(size_of::<mi_arena_pages_t>(), MI_BCHUNK_SIZE);
     let bitmaps_count = 1 + MI_ARENA_BIN_COUNT;
@@ -1368,12 +1367,11 @@ unsafe fn mi_arena_pages_size(slice_count: usize, bitmap_base: *mut usize) -> us
 }
 
 #[allow(dead_code)]
-unsafe fn mi_arena_info_slices_needed(slice_count: usize, bitmap_base: *mut usize) -> usize {
-    let slice_count = if slice_count == 0 {
-        MI_ARENA_BCHUNK_BITS
-    } else {
-        slice_count
-    };
+unsafe fn mi_arena_info_slices_needed(
+    slice_count: crate::core_types::SliceCount,
+    bitmap_base: *mut usize,
+) -> usize {
+    let slice_count = slice_count.get() as usize;
     crate::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
     let base_size = _mi_align_up(size_of::<mi_arena_t>(), MI_BCHUNK_SIZE);
     let bitmaps_count = 4 + MI_ARENA_BIN_COUNT;
@@ -1395,24 +1393,35 @@ unsafe fn mi_arena_info_slices_needed(slice_count: usize, bitmap_base: *mut usiz
 }
 
 #[allow(dead_code)]
-unsafe fn mi_arena_bitmap_init(slice_count: usize, base: *mut *mut u8) -> *mut mi_bitmap_t {
+unsafe fn mi_arena_bitmap_init(
+    slice_count: crate::core_types::SliceCount,
+    base: *mut *mut u8,
+) -> *mut mi_bitmap_t {
     let bitmap = unsafe { *base }.cast::<mi_bitmap_t>();
-    let size = unsafe { mi_bitmap_init(bitmap, slice_count, true) };
+    let size = unsafe { mi_bitmap_init(bitmap, slice_count.get() as usize, true) };
     unsafe { *base = (*base).add(size) };
     bitmap
 }
 
 #[allow(dead_code)]
-unsafe fn mi_arena_bbitmap_init(slice_count: usize, base: *mut *mut u8) -> *mut mi_bbitmap_t {
+unsafe fn mi_arena_bbitmap_init(
+    slice_count: crate::core_types::SliceCount,
+    base: *mut *mut u8,
+) -> *mut mi_bbitmap_t {
     let bbitmap = unsafe { *base }.cast::<mi_bbitmap_t>();
-    let size = unsafe { mi_bbitmap_init(bbitmap, slice_count, true) };
+    let size = unsafe { mi_bbitmap_init(bbitmap, slice_count.get() as usize, true) };
     unsafe { *base = (*base).add(size) };
     bbitmap
 }
 
 #[allow(dead_code)]
 unsafe fn mi_arena_pages_alloc(arena: *mut mi_arena_t) -> *mut mi_arena_pages_t {
-    let slice_count = unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count };
+    let Some(slice_count) = crate::core_types::SliceCount::from_usize(unsafe {
+        (*arena.cast::<MiArenaPrefix>()).slice_count
+    }) else {
+        crate::mi_assert_internal!(false);
+        return ptr::null_mut();
+    };
     let mut bitmap_base = 0usize;
     let size = unsafe { mi_arena_pages_size(slice_count, &mut bitmap_base) };
     let arena_pages = unsafe { mi_heap_zalloc_aligned(mi_heap_main(), size, MI_BCHUNK_SIZE) }
@@ -1555,7 +1564,7 @@ unsafe fn mi_arenas_add(
 unsafe fn mi_arena_initialize(
     subproc: *mut mi_subproc_t,
     start: *mut c_void,
-    slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
     parent: *mut mi_arena_t,
     total_size: usize,
     numa_node: c_int,
@@ -1565,13 +1574,14 @@ unsafe fn mi_arena_initialize(
     commit_fun_arg: *mut c_void,
     arena_id: *mut mi_arena_id_t,
 ) -> *mut mi_arena_t {
+    let slice_count_usize = slice_count.get() as usize;
     crate::mi_assert_internal!((start as usize).is_multiple_of(MI_ARENA_SLICE_ALIGN));
-    crate::mi_assert_internal!(mi_size_of_slices(slice_count) >= MI_ARENA_MIN_SIZE);
+    crate::mi_assert_internal!(mi_size_of_slices(slice_count_usize) >= MI_ARENA_MIN_SIZE);
 
-    if slice_count > MI_BITMAP_MAX_BIT_COUNT {
+    if slice_count_usize > MI_BITMAP_MAX_BIT_COUNT {
         crate::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is too large (size {} MiB, maximum is {} MiB)",
-            mi_size_of_slices(slice_count) / (1024 * 1024),
+            mi_size_of_slices(slice_count_usize) / (1024 * 1024),
             mi_size_of_slices(MI_BITMAP_MAX_BIT_COUNT) / (1024 * 1024)
         ));
         return ptr::null_mut();
@@ -1579,17 +1589,17 @@ unsafe fn mi_arena_initialize(
 
     let mut bitmap_base = 0usize;
     let info_slices = unsafe { mi_arena_info_slices_needed(slice_count, &mut bitmap_base) };
-    if slice_count < info_slices + 1 {
+    if slice_count_usize < info_slices + 1 {
         crate::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is not large enough (size {} KiB, minimum required is {} KiB)",
-            mi_size_of_slices(slice_count) / 1024,
+            mi_size_of_slices(slice_count_usize) / 1024,
             mi_size_of_slices(info_slices + 1) / 1024
         ));
         return ptr::null_mut();
     } else if info_slices >= MI_ARENA_BCHUNK_BITS {
         crate::options::_mi_warning_message_fmt(format_args!(
             "cannot use OS memory since it is too large with respect to the maximum object size (size {} MiB, meta-info slices {}, maximum object slices are {})",
-            mi_size_of_slices(slice_count) / (1024 * 1024),
+            mi_size_of_slices(slice_count_usize) / (1024 * 1024),
             info_slices,
             MI_ARENA_BCHUNK_BITS
         ));
@@ -1645,7 +1655,7 @@ unsafe fn mi_arena_initialize(
         (*arena.cast::<MiArenaPrefix>()).subproc = subproc;
         (*arena.cast::<MiArenaPrefix>()).memid = memid;
         (*arena.cast::<MiArenaPrefix>()).is_exclusive = exclusive;
-        (*arena.cast::<MiArenaPrefix>()).slice_count = slice_count;
+        (*arena.cast::<MiArenaPrefix>()).slice_count = slice_count_usize;
         (*arena.cast::<MiArenaPrefix>()).info_slices = info_slices;
         (*arena.cast::<MiArenaPrefix>()).numa_node =
             if numa_node < 0 && mi_option_is_enabled(mi_option_t::mi_option_arena_is_numa_local) {
@@ -1689,7 +1699,7 @@ unsafe fn mi_arena_initialize(
     if crate::internal::MI_PAGE_META_IS_SEPARATED != 0 {
         unsafe {
             (*arena.cast::<MiArenaPrefix>()).pages_meta = base.cast::<mi_page_t>();
-            base = base.add(slice_count * size_of::<mi_page_t>());
+            base = base.add(slice_count_usize * size_of::<mi_page_t>());
         }
     } else {
         unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta = ptr::null_mut() };
@@ -3601,12 +3611,16 @@ unsafe fn mi_manage_os_memory_ex2(
         if slice_count > MI_BITMAP_MAX_BIT_COUNT {
             slice_count = MI_BITMAP_MAX_BIT_COUNT;
         }
+        let Some(typed_slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+            crate::mi_assert_internal!(false);
+            return false;
+        };
 
         let arena = unsafe {
             mi_arena_initialize(
                 subproc,
                 start,
-                slice_count,
+                typed_slice_count,
                 parent,
                 if parent.is_null() { total_size } else { 0 },
                 numa_node,

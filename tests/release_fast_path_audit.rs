@@ -2514,6 +2514,26 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena allocation helper should accept typed SliceCount from its callers"
     );
     assert!(
+        arena_rs.contains(
+            "unsafe fn mi_arena_pages_size(\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arena_info_slices_needed(\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arena_bitmap_init(\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arena_bbitmap_init(\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arena_initialize(\n    subproc: *mut mi_subproc_t,\n    start: *mut c_void,\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains("let slice_count_usize = slice_count.get() as usize;")
+            && arena_rs.contains("let Some(typed_slice_count) = crate::core_types::SliceCount::from_usize(slice_count)")
+            && arena_rs.contains("mi_arena_initialize(\n                subproc,\n                start,\n                typed_slice_count,")
+            && !arena_rs.contains("unsafe fn mi_arena_pages_size(slice_count: usize")
+            && !arena_rs.contains("unsafe fn mi_arena_info_slices_needed(slice_count: usize")
+            && !arena_rs.contains("unsafe fn mi_arena_bitmap_init(slice_count: usize")
+            && !arena_rs.contains("unsafe fn mi_arena_bbitmap_init(slice_count: usize"),
+        "arena metadata sizing and initialization should receive typed SliceCount"
+    );
+    assert!(
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_end(")

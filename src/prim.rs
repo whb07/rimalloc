@@ -4,7 +4,7 @@
 //! - `include/mimalloc/prim.h`
 //! - `src/prim/osx/prim.c`
 
-#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 #[cfg(target_os = "emscripten")]
 pub mod emscripten;
@@ -311,7 +311,7 @@ pub unsafe fn __mi_theap_empty() -> *mut mi_theap_t {
 unsafe fn mi_prim_tls_slot_theap(slot: usize, expansion_slot: usize) -> *mut mi_theap_t {
     let theap = mi_prim_tls_slot(slot) as *mut mi_theap_t;
     if cfg!(windows) && slot == MI_TLS_EXPANSION_SLOT && !theap.is_null() {
-        (theap as *mut *mut mi_theap_t).add(expansion_slot).read()
+        unsafe { (theap as *mut *mut mi_theap_t).add(expansion_slot).read() }
     } else {
         theap
     }
@@ -341,12 +341,12 @@ pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
     } else if MI_TLS_MODEL_FIXED_SLOT {
         mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_DEFAULT) as *mut mi_theap_t
     } else if MI_TLS_MODEL_DYNAMIC_WIN32 {
-        mi_prim_tls_slot_theap(_mi_theap_default_slot, _mi_theap_default_expansion_slot)
+        unsafe { mi_prim_tls_slot_theap(_mi_theap_default_slot, _mi_theap_default_expansion_slot) }
     } else if MI_TLS_MODEL_DYNAMIC_PTHREADS {
-        if _mi_theap_default_key == 0 {
+        if unsafe { _mi_theap_default_key } == 0 {
             ptr::null_mut()
         } else {
-            _mi_thread_local_get(_mi_theap_default_key) as *mut mi_theap_t
+            unsafe { _mi_thread_local_get(_mi_theap_default_key) as *mut mi_theap_t }
         }
     } else {
         ptr::null_mut()
@@ -407,12 +407,12 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
     } else if MI_TLS_MODEL_FIXED_SLOT {
         mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_CACHED) as *mut mi_theap_t
     } else if MI_TLS_MODEL_DYNAMIC_WIN32 {
-        mi_prim_tls_slot_theap(_mi_theap_cached_slot, _mi_theap_cached_expansion_slot)
+        unsafe { mi_prim_tls_slot_theap(_mi_theap_cached_slot, _mi_theap_cached_expansion_slot) }
     } else if MI_TLS_MODEL_DYNAMIC_PTHREADS {
-        if _mi_theap_cached_key == 0 {
+        if unsafe { _mi_theap_cached_key } == 0 {
             ptr::null_mut()
         } else {
-            _mi_thread_local_get(_mi_theap_cached_key) as *mut mi_theap_t
+            unsafe { _mi_thread_local_get(_mi_theap_cached_key) as *mut mi_theap_t }
         }
     } else {
         ptr::null_mut()
@@ -463,8 +463,8 @@ pub(crate) fn mi_prim_thread_local_cached_set(theap: *mut mi_theap_t) {
 /// thread.
 #[inline]
 pub unsafe fn _mi_thread_is_initialized() -> bool {
-    let theap = _mi_theap_default();
-    !theap.is_null() && crate::internal::mi_theap_is_initialized(theap)
+    let theap = unsafe { _mi_theap_default() };
+    !theap.is_null() && unsafe { crate::internal::mi_theap_is_initialized(theap) }
 }
 
 /// # Safety
@@ -472,11 +472,11 @@ pub unsafe fn _mi_thread_is_initialized() -> bool {
 /// `heap` must be null or point to a heap object managed by this allocator.
 #[inline]
 pub unsafe fn _mi_heap_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
-    let theap = _mi_theap_cached();
-    if !theap.is_null() && crate::internal::_mi_theap_heap(theap) == heap.cast_mut() {
+    let theap = unsafe { _mi_theap_cached() };
+    if !theap.is_null() && unsafe { crate::internal::_mi_theap_heap(theap) } == heap.cast_mut() {
         return theap;
     }
-    _mi_heap_theap_get_or_init(heap)
+    unsafe { _mi_heap_theap_get_or_init(heap) }
 }
 
 /// # Safety
@@ -484,11 +484,11 @@ pub unsafe fn _mi_heap_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
 /// `heap` must be null or point to a heap object managed by this allocator.
 #[inline]
 pub unsafe fn _mi_heap_theap_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
-    let theap = _mi_theap_cached();
-    if !theap.is_null() && crate::internal::_mi_theap_heap(theap) == heap.cast_mut() {
+    let theap = unsafe { _mi_theap_cached() };
+    if !theap.is_null() && unsafe { crate::internal::_mi_theap_heap(theap) } == heap.cast_mut() {
         return theap;
     }
-    _mi_heap_theap_get_peek(heap)
+    unsafe { _mi_heap_theap_get_peek(heap) }
 }
 
 /// # Safety
@@ -496,14 +496,14 @@ pub unsafe fn _mi_heap_theap_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
 /// `page` must point to a valid page object managed by this allocator.
 #[inline]
 pub unsafe fn _mi_page_associated_theap_peek(page: *mut mi_page_t) -> *mut mi_theap_t {
-    let heap = (*page).heap;
+    let heap = unsafe { (*page).heap };
     let theap = if heap.is_null() {
         crate::init::mi_theap_main_tls_peek()
     } else {
-        _mi_heap_theap_peek(heap)
+        unsafe { _mi_heap_theap_peek(heap) }
     };
     crate::mi_assert_internal!(
-        theap.is_null() || crate::init::_mi_thread_id() == (*(*theap).tld).thread_id
+        theap.is_null() || crate::init::_mi_thread_id() == unsafe { (*(*theap).tld).thread_id }
     );
     theap
 }

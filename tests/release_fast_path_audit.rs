@@ -983,7 +983,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "src/options.rs",
         "src/os.rs",
         "src/page.rs",
-        "src/prim.rs",
         "src/prim/emscripten.rs",
         "src/prim/osx.rs",
         "src/prim/unix.rs",
@@ -1000,10 +999,11 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/arena_meta.rs")
             && !actual.contains("src/core_types/mod.rs")
             && !actual.contains("src/libc.rs")
+            && !actual.contains("src/prim.rs")
             && !actual.contains("src/random.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "POSIX allocation shims, arena metadata, core types, libc helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "POSIX allocation shims, arena metadata, core types, libc helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 

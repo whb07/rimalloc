@@ -499,7 +499,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## C3. Safe owned allocation wrapper
 
-- [ ] Decide final owned allocation type shape.
+- [x] Decide final owned allocation type shape.
   - Design decision:
     - Keep one `Allocation` type with raw pointer access only.
     - Or split into `Allocation<Uninit>` and `Allocation<Init>` / `ZeroedAllocation` to avoid safe reads from uninitialized memory.
@@ -508,8 +508,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - The chosen design is documented in rustdoc.
     - There is no safe method that can read uninitialized bytes.
     - Tests cover zeroed allocation reads and uninitialized allocation write-before-read behavior.
+  - Evidence:
+    - `src/safe.rs` rustdoc documents the current one-type `Allocation` design with raw pointer access only.
+    - `Allocation` exposes no safe byte-slice read API; rustdoc includes a compile-fail example for `allocation.as_bytes()`.
+    - Unit tests cover zeroed allocation reads and write-before-read behavior for uninitialized allocation through raw pointers.
 
-- [ ] Audit `Allocation::new` for uninitialized memory soundness.
+- [x] Audit `Allocation::new` for uninitialized memory soundness.
   - Required behavior:
     - Safe code must not be able to observe uninitialized bytes through safe APIs.
     - Any method returning `&[u8]`, `&mut [u8]`, or reading bytes exists only for initialized/zeroed states.
@@ -518,8 +522,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - Search public methods for slice/reference returns.
     - Compile tests prove uninitialized allocation cannot be read safely.
     - Miri/model tests cover initialized paths if applicable.
+  - Evidence:
+    - `Allocation::new` returns uninitialized memory but `Allocation` exposes only metadata and raw pointer escape hatches.
+    - `rg -n "pub .*(&\\[|&mut \\[)|pub .*as_bytes|pub .*as_uninit" src/safe.rs` finds no public slice/reference byte accessors.
+    - Rustdoc compile-fail coverage proves uninitialized allocations cannot be read through a safe `as_bytes` API.
 
-- [ ] Document raw pointer escape hatches.
+- [x] Document raw pointer escape hatches.
   - Required docs for `as_ptr` / `as_non_null` / equivalents:
     - Pointer is valid only while the allocation is alive.
     - Caller must not free it manually.
@@ -529,8 +537,11 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - Rustdoc for every escape hatch has these notes.
     - `cargo doc` and doctests pass.
+  - Evidence:
+    - `Allocation::as_non_null` and `Allocation::as_ptr` rustdoc state lifetime, no manual free, aliasing, no uninitialized reads, and zero-sized sentinel behavior.
+    - `scripts/check-docs.sh` passes.
 
-- [ ] Define zero-sized allocation behavior.
+- [x] Define zero-sized allocation behavior.
   - Required behavior:
     - Zero-sized `Allocation` does not call the allocator.
     - Pointer value is aligned for the requested layout or uses `NonNull::dangling` strategy with equivalent alignment guarantees.
@@ -539,8 +550,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - Unit tests cover multiple alignments for size 0.
     - Tests assert no allocator free is attempted for size 0 if instrumentation is available.
     - Docs state behavior.
+  - Evidence:
+    - `Allocation` rustdoc states zero-sized allocations do not call the allocator, use an aligned sentinel pointer, and drop is a no-op.
+    - Unit tests cover zero-sized allocations at alignments 1, 2, 4, 8, 16, 64, and 4096.
+    - Drop guards on `layout.size() != 0`; no allocator-free instrumentation exists for this wrapper.
 
-- [ ] Define `Allocation` move, drop, and ownership semantics.
+- [x] Define `Allocation` move, drop, and ownership semantics.
   - Required behavior:
     - `Allocation` is move-only, not `Copy` or `Clone` unless clone performs allocation and copy intentionally.
     - Drop never panics.
@@ -550,8 +565,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - Compile tests prove `Allocation: !Copy`.
     - Unit tests move allocation and verify single free through leak/double-free sanitization or debug instrumentation where feasible.
     - Unsafe `from_raw` docs list allocator-origin and layout requirements if implemented.
+  - Evidence:
+    - `Allocation` rustdoc states it is move-only, frees on drop, and has no `Clone`, `Copy`, `from_raw`, `into_raw`, or resize API.
+    - Rustdoc compile-fail coverage proves use-after-move is rejected.
+    - Unit tests move an allocation and then drop the moved owner; debug instrumentation for exact free counts is not currently available.
 
-- [ ] Add safe slice APIs only after initialization semantics are settled.
+- [x] Add safe slice APIs only after initialization semantics are settled.
   - Candidate APIs:
     - `as_bytes(&self) -> &[u8]` only for initialized/zeroed allocation.
     - `as_bytes_mut(&mut self) -> &mut [u8]` only for initialized/zeroed allocation.
@@ -559,8 +578,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - Miri or model tests confirm no uninitialized reads in safe code.
     - Rustdoc examples demonstrate correct initialization before reading.
+  - Evidence:
+    - No safe slice APIs are exposed yet because initialization typestate is not settled.
+    - Rustdoc documents that future slice APIs require an initialization model that cannot expose uninitialized bytes.
+    - Unit coverage demonstrates write-before-read through raw pointers; there is no safe initialized slice API requiring Miri/model coverage.
 
-- [ ] Add `try_resize` or deliberately omit resizing from `Allocation`.
+- [x] Add `try_resize` or deliberately omit resizing from `Allocation`.
   - Required decision:
     - If resize exists, it must preserve contents and update layout correctly.
     - If resize is omitted, docs explain users should allocate/copy manually or use raw API.
@@ -568,8 +591,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - Grow/shrink tests cover initialized data preservation and alignment.
     - Failure path leaves original allocation valid.
     - Error type includes both old and requested layout where useful without allocating.
+  - Evidence:
+    - `Allocation` deliberately omits resize APIs for now.
+    - Rustdoc says users should allocate a new block and copy through raw pointers if resizing is needed before a safe resize API is designed.
+    - No grow/shrink or resize-failure tests apply until a resize API exists.
 
-- [ ] Decide whether `Allocation` is `Send` and/or `Sync`.
+- [x] Decide whether `Allocation` is `Send` and/or `Sync`.
   - Required reasoning:
     - `Send` may be sound if ownership of the allocation can move across threads and allocator free is cross-thread safe.
     - `Sync` is likely not meaningful unless shared references expose no mutation and data initialization semantics are safe.
@@ -577,6 +604,10 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - Trait behavior is explicit in docs and tests.
     - Unsafe audit includes proof if manual impls are added.
+  - Evidence:
+    - `Allocation` has manual `Send` and `Sync` impls with `SAFETY:` comments.
+    - `docs/api-inventory.md`, `docs/safe-api.md`, and `docs/unsafe-audit.md` document the trait behavior and proof.
+    - Unit tests compile-check `Allocation: Send + Sync`.
 
 ## C4. Error and status types
 

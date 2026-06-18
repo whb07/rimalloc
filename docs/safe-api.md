@@ -50,8 +50,9 @@ only where the semantics are correct for the safe abstraction.
 - `MiMalloc` is a zero-sized global allocator facade. It implements
   `GlobalAlloc`, derives `Copy`, `Clone`, `Debug`, and `Default`, and relies on
   auto `Send`/`Sync` traits from having no state.
-- `Allocation` owns memory and releases it on drop. It implements `Debug`, but
-  not `Copy` or `Clone`.
+- `Allocation` owns memory and releases it on drop. It implements `Debug`, has
+  manual `Send`/`Sync` impls because safe shared access exposes no references
+  into allocation contents, and does not implement `Copy` or `Clone`.
 - Error/status types are plain value types and may implement `Copy`, `Clone`,
   `Debug`, `Eq`, and `PartialEq`.
 - Manual unsafe `Send` or `Sync` impls require a `SAFETY:` comment at the impl

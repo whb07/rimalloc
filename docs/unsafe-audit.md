@@ -8,6 +8,11 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
 
 - `alloc/free/realloc`: caller pointer ownership, allocation origin, usable-size
   lookups, page metadata lookup, padding checks, and realloc copy bounds.
+- `Allocation: Send + Sync`: the safe wrapper uniquely owns a mimalloc
+  allocation, mimalloc supports freeing from a different thread, and shared
+  references expose only metadata plus raw pointers. Safe code cannot read or
+  mutate the allocation contents through `&Allocation`; raw pointer dereference
+  remains an unsafe caller boundary.
 - `page/arena/os`: page ownership, commit/decommit/reset/purge state, arena
   slice boundaries, and OS out-parameters.
 - `threadlocal/theap`: thread-local heap pointer lifetime, abandonment, reclaim,

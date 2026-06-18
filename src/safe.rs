@@ -127,6 +127,25 @@ impl std::error::Error for TryAllocError {}
 /// drop. It intentionally does not expose heap handles, options, statistics, or
 /// allocator-owned metadata.
 ///
+/// `Allocation` currently keeps a single move-only type with raw pointer access
+/// only. [`Allocation::new`] returns uninitialized memory; safe code can query
+/// the layout and raw pointer, but it cannot read bytes through a safe slice
+/// API. Callers that use the raw pointer must initialize memory before reading
+/// it.
+///
+/// [`Allocation::zeroed`] returns memory initialized to zero, but this type
+/// still does not expose safe byte-slice access. Future slice APIs will be
+/// added only with an initialization model that cannot expose uninitialized
+/// bytes through safe code.
+///
+/// Zero-sized allocations do not call the allocator. They store an aligned
+/// sentinel pointer and drop is a no-op.
+///
+/// `Allocation` is move-only. Dropping it frees the allocation exactly once;
+/// there is no `Clone`, `Copy`, `from_raw`, `into_raw`, or resize API. Allocate
+/// a new block and copy through raw pointers if resizing is needed before a
+/// safe resize API is designed.
+///
 /// ```rust
 /// use core::alloc::Layout;
 /// use mechanical_mimalloc::Allocation;
@@ -136,10 +155,44 @@ impl std::error::Error for TryAllocError {}
 /// assert_eq!(allocation.len(), 32);
 /// assert!(!allocation.is_empty());
 /// ```
+///
+/// Uninitialized allocations do not expose safe byte-slice reads:
+///
+/// ```rust,compile_fail
+/// use core::alloc::Layout;
+/// use mechanical_mimalloc::Allocation;
+///
+/// let layout = Layout::from_size_align(16, 8).unwrap();
+/// let allocation = Allocation::new(layout).unwrap();
+/// let _bytes = allocation.as_bytes();
+/// ```
+///
+/// `Allocation` is not `Copy`:
+///
+/// ```rust,compile_fail
+/// use core::alloc::Layout;
+/// use mechanical_mimalloc::Allocation;
+///
+/// let layout = Layout::from_size_align(16, 8).unwrap();
+/// let allocation = Allocation::new(layout).unwrap();
+/// let moved = allocation;
+/// let _use_after_move = allocation.len();
+/// drop(moved);
+/// ```
 pub struct Allocation {
     ptr: NonNull<u8>,
     layout: Layout,
 }
+
+// SAFETY: `Allocation` has unique ownership of a block allocated by mimalloc.
+// Mimalloc supports freeing allocations from a different thread, and safe
+// methods do not expose references into the block.
+unsafe impl Send for Allocation {}
+
+// SAFETY: shared references to `Allocation` expose only metadata and raw
+// pointers. Safe code cannot read or mutate allocation contents through
+// `&Allocation`; any raw pointer dereference remains an unsafe caller boundary.
+unsafe impl Sync for Allocation {}
 
 impl Allocation {
     /// Allocates an uninitialized byte block for `layout`.
@@ -193,26 +246,46 @@ impl Allocation {
         Ok(Self { ptr, layout })
     }
 
+    /// Returns the layout used to allocate this block.
     #[inline]
     pub const fn layout(&self) -> Layout {
         self.layout
     }
 
+    /// Returns the requested allocation size in bytes.
+    ///
+    /// This is metadata only; it does not prove that the allocation contents
+    /// are initialized.
     #[inline]
     pub const fn len(&self) -> usize {
         self.layout.size()
     }
 
+    /// Returns whether this is a zero-sized allocation.
     #[inline]
     pub const fn is_empty(&self) -> bool {
         self.layout.size() == 0
     }
 
+    /// Returns the allocation pointer as [`NonNull<u8>`].
+    ///
+    /// The pointer is valid only while this `Allocation` is alive. Callers must
+    /// not free it manually, must not create aliasing references that violate
+    /// Rust's aliasing rules, and must not read uninitialized memory. For
+    /// zero-sized allocations this is an aligned sentinel pointer and must not
+    /// be dereferenced.
     #[inline]
     pub const fn as_non_null(&self) -> NonNull<u8> {
         self.ptr
     }
 
+    /// Returns the allocation pointer.
+    ///
+    /// The pointer is valid only while this `Allocation` is alive. Callers must
+    /// not free it manually, must not create aliasing references that violate
+    /// Rust's aliasing rules, and must not read uninitialized memory. For
+    /// zero-sized allocations this is an aligned sentinel pointer and must not
+    /// be dereferenced.
     #[inline]
     pub const fn as_ptr(&self) -> *mut u8 {
         self.ptr.as_ptr()
@@ -262,11 +335,43 @@ mod tests {
     }
 
     #[test]
+    fn uninitialized_allocation_can_be_written_before_unsafe_read() {
+        let allocation = Allocation::with_size_align(32, 16).expect("allocation");
+        for i in 0..allocation.len() {
+            unsafe { allocation.as_ptr().add(i).write((i % 251) as u8) };
+        }
+
+        let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
+        assert_eq!(bytes[0], 0);
+        assert_eq!(bytes[31], 31);
+    }
+
+    #[test]
     fn zero_sized_allocation_does_not_call_allocator() {
-        let layout = Layout::from_size_align(0, 64).expect("layout");
-        let allocation = Allocation::new(layout).expect("allocation");
-        assert!(allocation.is_empty());
-        assert_eq!(allocation.as_ptr() as usize % 64, 0);
+        for align in [1usize, 2, 4, 8, 16, 64, 4096] {
+            let layout = Layout::from_size_align(0, align).expect("layout");
+            let allocation = Allocation::new(layout).expect("allocation");
+            assert!(allocation.is_empty());
+            assert_eq!(allocation.layout(), layout);
+            assert_eq!(allocation.as_ptr() as usize % align, 0);
+        }
+    }
+
+    #[test]
+    fn allocation_is_move_only_and_drops_once() {
+        let allocation = Allocation::with_size_align(64, 16).expect("allocation");
+        let ptr = allocation.as_ptr();
+        unsafe { ptr.write(42) };
+
+        let moved = allocation;
+        assert_eq!(moved.as_ptr(), ptr);
+        assert_eq!(unsafe { moved.as_ptr().read() }, 42);
+    }
+
+    #[test]
+    fn allocation_has_expected_thread_traits() {
+        fn assert_traits<T: Send + Sync>() {}
+        assert_traits::<Allocation>();
     }
 
     #[test]

@@ -42,7 +42,8 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
 - `MiMalloc`: implements `core::alloc::GlobalAlloc`; derives `Copy`, `Clone`,
   `Debug`, and `Default`; has auto `Send`/`Sync`; no manual unsafe `Send`/`Sync`
   impls.
-- `Allocation`: implements `Drop` and `Debug`; intentionally does not implement
+- `Allocation`: implements `Drop` and `Debug`; has manual `Send`/`Sync` impls
+  documented in `docs/unsafe-audit.md`; intentionally does not implement
   `Copy` or `Clone`.
 - `AllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.

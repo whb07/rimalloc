@@ -658,6 +658,13 @@ pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectB
     crate::core_types::DirectBin::new(idx as u16)
 }
 
+#[inline(always)]
+pub(crate) fn mi_direct_bin_from_padded(
+    padded: crate::core_types::PaddedSize,
+) -> crate::core_types::DirectBin {
+    mi_direct_bin_from_size(padded.get())
+}
+
 #[inline]
 pub fn mi_mul_overflow(count: usize, size: usize, total: &mut usize) -> bool {
     match count.checked_mul(size) {
@@ -704,7 +711,7 @@ pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
     theap: *mut mi_theap_t,
     padded: crate::core_types::PaddedSize,
 ) -> *mut mi_page_t {
-    let idx = mi_direct_bin_from_size(padded.get()).as_usize();
+    let idx = mi_direct_bin_from_padded(padded).as_usize();
     (*theap).pages_free_direct[idx]
 }
 

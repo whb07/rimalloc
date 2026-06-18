@@ -62,7 +62,7 @@ impl EffectiveSize {
     /// `size` must be non-zero.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
-        Self(NonZeroUsize::new_unchecked(size))
+        Self(unsafe { NonZeroUsize::new_unchecked(size) })
     }
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
@@ -80,7 +80,7 @@ impl PaddedSize {
     /// `size` must be non-zero.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
-        Self(NonZeroUsize::new_unchecked(size))
+        Self(unsafe { NonZeroUsize::new_unchecked(size) })
     }
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
@@ -114,7 +114,7 @@ impl BlockSize {
     /// `size` must be non-zero.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(size: usize) -> Self {
-        Self(NonZeroUsize::new_unchecked(size))
+        Self(unsafe { NonZeroUsize::new_unchecked(size) })
     }
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
@@ -164,7 +164,7 @@ impl Alignment {
     /// `align` must be a non-zero power of two.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(align: usize) -> Self {
-        Self(NonZeroUsize::new_unchecked(align))
+        Self(unsafe { NonZeroUsize::new_unchecked(align) })
     }
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
@@ -283,7 +283,7 @@ impl SliceCount {
     /// `count` must be non-zero.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(count: u32) -> Self {
-        Self(NonZeroU32::new_unchecked(count))
+        Self(unsafe { NonZeroU32::new_unchecked(count) })
     }
     #[inline(always)]
     pub(crate) const fn get(self) -> u32 {

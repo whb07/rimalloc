@@ -27,7 +27,7 @@ macro_rules! define_ptr_wrapper {
             /// `ptr` must be non-null and point to valid metadata or data according to the type's invariants.
             #[inline(always)]
             pub(crate) unsafe fn new_unchecked(ptr: *mut $raw_type) -> Self {
-                Self(NonNull::new_unchecked(ptr))
+                Self(unsafe { NonNull::new_unchecked(ptr) })
             }
 
             #[inline(always)]
@@ -79,7 +79,7 @@ impl PageConstPtr {
     /// `ptr` must be non-null and point to valid page metadata.
     #[inline(always)]
     pub(crate) unsafe fn new_unchecked(ptr: *const mi_page_t) -> Self {
-        Self(NonNull::new_unchecked(ptr as *mut mi_page_t))
+        Self(unsafe { NonNull::new_unchecked(ptr as *mut mi_page_t) })
     }
 
     #[inline(always)]

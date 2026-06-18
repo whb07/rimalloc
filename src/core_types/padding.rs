@@ -54,19 +54,21 @@ impl PaddingPtr {
     /// `ptr` must be non-null, properly aligned, and point to live padding metadata.
     #[inline(always)]
     pub(crate) unsafe fn new_unchecked(ptr: *mut mi_padding_t) -> Self {
-        Self(NonNull::new_unchecked(ptr))
+        Self(unsafe { NonNull::new_unchecked(ptr) })
     }
 
     /// # Safety
     /// `block` must point to a block with padding metadata at `block + usable_size`.
     #[inline(always)]
     pub(crate) unsafe fn from_block_usable(block: BlockPtr, usable_size: UsableSize) -> Self {
-        let padding = block
-            .as_ptr()
-            .cast::<u8>()
-            .add(usable_size.get())
-            .cast::<mi_padding_t>();
-        Self::new_unchecked(padding)
+        let padding = unsafe {
+            block
+                .as_ptr()
+                .cast::<u8>()
+                .add(usable_size.get())
+                .cast::<mi_padding_t>()
+        };
+        unsafe { Self::new_unchecked(padding) }
     }
 
     #[inline(always)]
@@ -78,9 +80,10 @@ impl PaddingPtr {
     /// The padding memory must be valid for reads.
     #[inline(always)]
     pub(crate) unsafe fn read(self) -> Padding {
+        let ptr = self.as_ptr();
         Padding {
-            canary: PaddingCanary((*self.as_ptr()).canary),
-            delta: PaddingDelta((*self.as_ptr()).delta),
+            canary: PaddingCanary(unsafe { (*ptr).canary }),
+            delta: PaddingDelta(unsafe { (*ptr).delta }),
         }
     }
 
@@ -88,15 +91,19 @@ impl PaddingPtr {
     /// The padding memory must be valid for writes.
     #[inline(always)]
     pub(crate) unsafe fn write(self, padding: Padding) {
-        (*self.as_ptr()).canary = padding.canary.get();
-        (*self.as_ptr()).delta = padding.delta.get();
+        let ptr = self.as_ptr();
+        unsafe {
+            (*ptr).canary = padding.canary.get();
+            (*ptr).delta = padding.delta.get();
+        }
     }
 
     /// # Safety
     /// The padding memory must be valid for writes.
+    #[cfg(not(mi_c_malloc_fast))]
     #[inline(always)]
     pub(crate) unsafe fn write_delta(self, delta: PaddingDelta) {
-        (*self.as_ptr()).delta = delta.get();
+        unsafe { (*self.as_ptr()).delta = delta.get() };
     }
 }
 

@@ -103,7 +103,7 @@ impl PagePtr {
         self,
         current: crate::core_types::ThreadId,
     ) -> Result<LocalPage, PagePtr> {
-        match self.classify_for_free(current) {
+        match unsafe { self.classify_for_free(current) } {
             PageFreeOwner::Local(lp) => Ok(lp),
             _ => Err(self),
         }
@@ -113,7 +113,7 @@ impl PagePtr {
         self,
         current: crate::core_types::ThreadId,
     ) -> Result<AbandonedPageType, PagePtr> {
-        match self.classify_for_free(current) {
+        match unsafe { self.classify_for_free(current) } {
             PageFreeOwner::Abandoned(ap) => Ok(ap),
             _ => Err(self),
         }

@@ -131,7 +131,7 @@ impl LayoutRequest {
         };
         Self {
             requested: RequestedSize::new(requested_size),
-            effective: EffectiveSize::new_unchecked(effective_size),
+            effective: unsafe { EffectiveSize::new_unchecked(effective_size) },
             padded,
             alignment: MaybeAlignment::new(0),
             zeroed,

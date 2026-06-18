@@ -43,7 +43,7 @@ impl ThreadId {
     /// `id` must be non-zero and must not conflict with `MI_PAGE_FLAG_MASK`.
     #[inline(always)]
     pub(crate) const unsafe fn new_unchecked(id: usize) -> Self {
-        Self(NonZeroUsize::new_unchecked(id))
+        Self(unsafe { NonZeroUsize::new_unchecked(id) })
     }
 
     #[inline(always)]

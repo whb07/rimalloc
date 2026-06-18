@@ -1,11 +1,6 @@
 //! Core types for mechanical_mimalloc.
 //! Includes DT-1 scalar domain types and DT-2 pointer domain types.
 //
-// `core_types` defines thin `#[repr(transparent)]` wrappers whose `unsafe fn`
-// bodies deref raw pointers and call `unsafe` constructors (`new_unchecked`).
-// Match the crate convention (`src/free.rs` et al.) and allow implicit unsafe
-// in unsafe-fn bodies rather than wrapping every operation in `unsafe {}`.
-#![allow(unsafe_op_in_unsafe_fn)]
 #[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod arena;
 mod free_actions;

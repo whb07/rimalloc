@@ -29,6 +29,9 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicPtr, AtomicUsize, Ordering}
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+#[allow(dead_code)]
+#[path = "support/cfrac_core.rs"]
+mod cfrac_core;
 mod rptest_tables;
 
 #[derive(Clone, Copy)]

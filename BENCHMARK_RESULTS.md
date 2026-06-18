@@ -1,5 +1,62 @@
 # Mimalloc Rust vs C Benchmark Results
 
+## Current-Head Regression Check
+
+**Date Generated:** 2026-06-18 15:25:24 EDT
+**Commit Hash:** `40d407c9bd9066c3dee78b1e674805eb3ab57458`
+
+This is a focused current-head regression pass after the public facade/raw ABI
+cleanup. Espresso was intentionally excluded from this pass.
+
+### Hotpath Criterion Probes
+
+Command shape:
+
+```bash
+MIMALLOC_HOTPATH_SAMPLE_SIZE=10 \
+MIMALLOC_HOTPATH_MEASUREMENT_SECS=1 \
+MIMALLOC_HOTPATH_WARMUP_SECS=1 \
+MIMALLOC_HOTPATH_NRESAMPLES=1000 \
+cargo bench --features bench --bench hotpath -- <filter>
+```
+
+| Probe | Current Rust result | Criterion local-baseline result |
+|---|---:|---|
+| `hotpath/paired_alloc_free/mechanical_mimalloc/16` | 14.388 us median, 284.69 Melem/s | Improved: -4.84% time, +5.09% throughput |
+| `hotpath/single_reuse/mechanical_mimalloc/16` | 139.92 us median, 357.35 Melem/s | Within noise threshold |
+
+Conclusion: no hotpath regression was detected in the tight allocator probes.
+
+### Native `mimalloc-bench` Criterion Ports
+
+Command:
+
+```bash
+MIMALLOC_BENCH_SCENARIOS=glibc-thread,malloc-large,cache-scratch1,cache-thrash1,cache-scratchN,cache-thrashN,xmalloc-testN \
+MIMALLOC_BENCH_ALLOCATORS=rust,c \
+MIMALLOC_BENCH_SAMPLE_SIZE=10 \
+MIMALLOC_BENCH_MEASUREMENT_SECS=1 \
+MIMALLOC_BENCH_WARMUP_SECS=1 \
+cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
+```
+
+| Scenario | Rust median | C mimalloc 3.3.2 median | Result |
+|---|---:|---:|---|
+| `glibc-thread-per-1M-malloc-free-pairs` | 947.14 us | 929.05 us | C +1.9%; Rust local baseline showed no change |
+| `malloc-large-per-workload` | 918.27 us | 953.42 us | Rust +3.7%; Rust local baseline showed no change |
+| `cache-scratch1-per-workload` | 2.0716 s | 2.0521 s | Parity band; short-run Rust +1.0% slower |
+| `cache-thrash1-per-workload` | 2.0678 s | 2.0525 s | Parity band; short-run Rust +0.7% slower |
+| `xmalloc-testN-per-1M-frees` | 2.1466 ms | 2.1102 ms | C +1.7% |
+| `cache-scratchN-per-workload` | 115.95 ms | 137.17 ms | Rust +15.5% |
+| `cache-thrashN-per-workload` | 142.93 ms | 117.11 ms | C +18.1%; quick sample only |
+
+Conclusion: the current HEAD remains within the expected Rust/C performance
+profile for the selected non-espresso ports. The only large short-run split is
+`cache-thrashN`; it is not a hotpath regression and should be confirmed with a
+longer aggregate before treating it as authoritative.
+
+## Historical 10-Run Aggregate
+
 **Date Generated:** 2026-06-16 18:12:00 EDT
 **Commit Hash:** `c73267593a5f2ddf727b761ccd3705d9f22cd7a8`
 

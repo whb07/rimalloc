@@ -1,5 +1,53 @@
 # Mimalloc Rust vs C Benchmark Results
 
+## Post-Documentation/Test Smoke Check
+
+**Date Generated:** 2026-06-18 16:04:29 EDT
+**Commit Hash:** `9fde88ec0fa1230a2607ca23ae8774b67c3a6c04`
+
+This smoke check followed documentation, governance-template, property-test, and
+`#[cfg(test)]` core-type model-test changes. Those changes do not affect release
+allocator hot paths, so a smoke run was used instead of a full aggregate.
+
+Command:
+
+```bash
+scripts/check-bench-smoke.sh
+```
+
+### Hotpath Criterion Probe
+
+| Probe | Current Rust result | Criterion local-baseline result |
+|---|---:|---|
+| `hotpath/paired_alloc_free/mechanical_mimalloc/16` | 14.610 us median, 280.35 Melem/s | Within noise threshold: +1.18% time |
+
+Conclusion: no hotpath regression was detected in the tight allocator probe.
+
+### Native `mimalloc-bench` Criterion Smoke
+
+The script ran:
+
+```bash
+MIMALLOC_BENCH_SCENARIOS=glibc-thread,malloc-large,cache-scratchN,xmalloc-testN \
+MIMALLOC_BENCH_ALLOCATORS=rust,c \
+MIMALLOC_BENCH_SAMPLE_SIZE=10 \
+MIMALLOC_BENCH_MEASUREMENT_SECS=1 \
+MIMALLOC_BENCH_WARMUP_SECS=1 \
+cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
+```
+
+| Scenario | Rust median | C mimalloc 3.3.2 median | Result |
+|---|---:|---:|---|
+| `glibc-thread-per-1M-malloc-free-pairs` | 935.43 us | 939.82 us | Rust +0.5%; Rust local baseline showed no change |
+| `malloc-large-per-workload` | 935.53 us | 968.11 us | Rust +3.4%; Rust local baseline within noise |
+| `xmalloc-testN-per-1M-frees` | 2.1582 ms | 2.1599 ms | Tie/Rust +0.1%; C local baseline moved slower |
+| `cache-scratchN-per-workload` | 105.49 ms | 116.84 ms | Rust +9.7%; both allocators improved vs local baseline |
+
+Conclusion: no Rust hotpath or selected native-scenario regression was detected.
+The `xmalloc-testN` Criterion regression marker applied to the C allocator's
+local-baseline comparison, while Rust and C were effectively tied in the
+same run.
+
 ## Current-Head Regression Check
 
 **Date Generated:** 2026-06-18 15:25:24 EDT

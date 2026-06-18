@@ -3289,6 +3289,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && atomic_types.contains(
                 "pub(crate) unsafe fn compare_exchange_release_ownership("
             )
+            && atomic_types.contains("fn field(self) -> AtomicUsizeField")
+            && atomic_types.contains("self.field().compare_exchange_weak(")
+            && atomic_types.contains("self.field().fetch_or(1, Ordering::AcqRel)")
+            && !atomic_types.contains("AtomicUsize::from_ptr(self.0)")
+            && !atomic_types.contains("self.0.cast::<core::sync::atomic::AtomicUsize>()")
             && internal.contains("crate::core_types::ThreadFreeWord(tf)\n        .head()")
             && internal.contains("crate::core_types::ThreadFreeWord(tf).is_owned()")
             && internal.contains("crate::core_types::ThreadFreeWord::from_parts(")

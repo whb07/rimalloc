@@ -1597,6 +1597,16 @@ fn free_path_internals_are_not_dynamic_exports() {
         "internal bin users should consume typed Bin wrappers before raw array indexing"
     );
     assert!(
+        internal.contains(
+            "pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectBin"
+        ) && internal.contains("let idx = mi_direct_bin_from_size(size).as_usize();")
+            && page_rs.contains("let idx = mi_direct_bin_from_size(size).as_usize();")
+            && !internal.contains(
+                "let idx = _mi_wsize_from_size(size);\n    (*theap).pages_free_direct[idx]"
+            ),
+        "direct page-cache indexes should pass through DirectBin before pages_free_direct indexing"
+    );
+    assert!(
         options_rs.contains(
             "#[inline(never)]\npub(crate) extern \"C\" fn _mi_option_get_fast(option: mi_option_t) -> c_long"
         ) && options_rs.contains("mi_option_get_fast_impl(option)")

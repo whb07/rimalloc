@@ -643,6 +643,13 @@ pub const fn _mi_wsize_from_size(size: usize) -> usize {
     size.div_ceil(size_of::<usize>())
 }
 
+#[inline(always)]
+pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectBin {
+    let idx = _mi_wsize_from_size(size);
+    crate::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
+    crate::core_types::DirectBin::new(idx as u16)
+}
+
 #[inline]
 pub fn mi_mul_overflow(count: usize, size: usize, total: &mut usize) -> bool {
     match count.checked_mul(size) {
@@ -686,7 +693,7 @@ pub unsafe fn mi_theap_is_initialized(theap: *const mi_theap_t) -> bool {
 
 #[inline]
 pub unsafe fn _mi_theap_get_free_small_page(theap: *mut mi_theap_t, size: usize) -> *mut mi_page_t {
-    let idx = _mi_wsize_from_size(size);
+    let idx = mi_direct_bin_from_size(size).as_usize();
     (*theap).pages_free_direct[idx]
 }
 

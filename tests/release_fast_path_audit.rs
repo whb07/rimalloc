@@ -3039,7 +3039,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
             && page_rs.contains("remote.collect_into_local(page_wrapper, local);")
-            && page_rs.contains("mi_page_queue_push_at_end(theap, pq, page);"),
+            && page_rs.contains(
+                "unsafe fn mi_page_queue_push_at_end_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
+            )
+            && page_rs.contains("mi_page_queue_push_at_end_typed(\n        crate::core_types::ThreadHeapLocal")
+            && page_rs.contains("crate::core_types::NormalPageQueue")
+            && page_rs.contains("crate::core_types::ActivePage"),
         "_mi_theap_page_reclaim should keep C's local abandoned-page reclaim helper boundary while collecting remote frees through typed wrappers"
     );
     assert!(

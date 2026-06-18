@@ -952,7 +952,11 @@ pub(crate) unsafe fn try_reclaim_abandoned(
 
     _mi_page_free_collect(page, false);
     let pq = mi_theap_page_queue_of(theap, page);
-    mi_page_queue_push_at_end(theap, pq, page);
+    mi_page_queue_push_at_end_typed(
+        crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(theap)),
+        crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pq)),
+        crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
+    );
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
     crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page))
 }
@@ -1344,6 +1348,16 @@ pub unsafe fn mi_page_queue_push_at_end(
         mi_theap_queue_first_update(theap, queue);
     }
     (*theap).page_count += 1;
+}
+
+#[inline]
+unsafe fn mi_page_queue_push_at_end_typed(
+    theap: crate::core_types::ThreadHeapLocal,
+    queue: crate::core_types::NormalPageQueue,
+    page: crate::core_types::ActivePage,
+) -> crate::core_types::ActivePage {
+    mi_page_queue_push_at_end(theap.0.as_ptr(), queue.0.as_ptr(), page.0.as_ptr());
+    page
 }
 
 pub unsafe fn mi_page_queue_move_to_front(

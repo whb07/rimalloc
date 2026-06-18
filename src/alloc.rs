@@ -10,7 +10,7 @@ use core::{
 };
 
 use crate::bits::MI_INTPTR_SIZE;
-use crate::free::_mi_usable_size;
+use crate::free::_mi_usable_size_typed;
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up,
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size, _mi_ptr_page,
@@ -594,8 +594,8 @@ pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_voi
     if page.is_null() {
         return ptr::null_mut();
     }
-    let size = _mi_usable_size(p, page);
-    if newsize > size {
+    let size = _mi_usable_size_typed(p, page);
+    if newsize > size.get() {
         return ptr::null_mut();
     }
     p
@@ -640,11 +640,11 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
         (ptr::null_mut(), 0usize)
     } else {
         let page = mi_validate_ptr_page(p, c"mi_realloc".as_ptr());
-        let size = _mi_usable_size(p, page);
+        let size = _mi_usable_size_typed(p, page);
         if !usable_pre.is_null() {
             *usable_pre = mi_page_usable_block_size(page).get();
         }
-        (page, size)
+        (page, size.get())
     };
 
     if mi_unlikely(

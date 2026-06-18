@@ -1597,6 +1597,17 @@ fn free_path_internals_are_not_dynamic_exports() {
         "internal bin users should consume typed Bin wrappers before raw array indexing"
     );
     assert!(
+        free_rs.contains("pub(crate) unsafe fn mi_page_usable_size_of_typed(")
+            && free_rs.contains(") -> crate::core_types::UsableSize")
+            && free_rs.contains("pub(crate) unsafe fn mi_route_usable_size_typed(")
+            && free_rs.contains("pub(crate) unsafe fn _mi_usable_size_typed(")
+            && free_rs.contains("_mi_usable_size_typed(p, page).get()")
+            && alloc_rs.contains("use crate::free::_mi_usable_size_typed;")
+            && alloc_rs.contains("let size = _mi_usable_size_typed(p, page);")
+            && !alloc_rs.contains("use crate::free::_mi_usable_size;"),
+        "internal usable-size routing should carry UsableSize until raw ABI/comparison boundaries"
+    );
+    assert!(
         internal.contains(
             "pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectBin"
         ) && internal.contains("let idx = mi_direct_bin_from_size(size).as_usize();")
@@ -2736,7 +2747,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs
                 .contains("try_reclaim_abandoned(\n        crate::core_types::OwnedAbandonedPage")
             && !free_rs.contains("_mi_theap_page_reclaim(theap, page)")
-            && free_rs.contains("mi_page_usable_aligned_size_of(page, p)"),
+            && free_rs.contains("mi_page_usable_aligned_size_of_typed(page, p)"),
         "abandoned-page reclaim should keep C helper boundaries while routing internal reclaim through typed page/heap witnesses"
     );
     assert!(

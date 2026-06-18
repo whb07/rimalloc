@@ -255,28 +255,36 @@ pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_b
     false
 }
 
-pub unsafe fn mi_page_usable_size_of(
+pub(crate) unsafe fn mi_page_usable_size_of_typed(
     page: *const mi_page_t,
     block: *const mi_block_t,
     is_guarded: bool,
-) -> usize {
+) -> crate::core_types::UsableSize {
     if MI_PADDING == 0 {
         let _ = block;
         let _ = is_guarded;
-        return mi_page_usable_block_size(page).get();
+        return mi_page_usable_block_size(page);
     }
 
     if is_guarded {
         let bsize = mi_page_block_size(page);
-        bsize - _mi_os_page_size()
+        crate::core_types::UsableSize::new(bsize - _mi_os_page_size())
     } else {
         let mut bsize = 0usize;
         let mut delta = 0usize;
         let ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
         crate::mi_assert_internal!(ok);
         crate::mi_assert_internal!(delta <= bsize);
-        if ok { bsize - delta } else { 0 }
+        crate::core_types::UsableSize::new(if ok { bsize - delta } else { 0 })
     }
+}
+
+pub unsafe fn mi_page_usable_size_of(
+    page: *const mi_page_t,
+    block: *const mi_block_t,
+    is_guarded: bool,
+) -> usize {
+    mi_page_usable_size_of_typed(page, block, is_guarded).get()
 }
 
 pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
@@ -375,7 +383,7 @@ pub(crate) unsafe fn mi_free_block_mt(
     mi_stat_free(page, block);
     mi_track_free_size(
         block.cast::<c_void>(),
-        mi_page_usable_size_of(page, block, was_guarded),
+        mi_page_usable_size_of_typed(page, block, was_guarded).get(),
     );
 
     if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
@@ -718,9 +726,12 @@ pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *
     }
 }
 
-pub(crate) unsafe fn mi_route_usable_size(p: *const c_void, msg: *const c_char) -> usize {
+pub(crate) unsafe fn mi_route_usable_size_typed(
+    p: *const c_void,
+    msg: *const c_char,
+) -> crate::core_types::UsableSize {
     if p.is_null() {
-        return 0;
+        return crate::core_types::UsableSize::new(0);
     }
     match mi_validate_pointer(p.cast_mut(), msg) {
         crate::core_types::PointerLookup::Valid { page, location, .. } => {
@@ -733,11 +744,18 @@ pub(crate) unsafe fn mi_route_usable_size(p: *const c_void, msg: *const c_char) 
                     (block.0, true, offset.0)
                 }
             };
-            mi_page_usable_size_of(page.as_ptr(), block_ptr.as_ptr(), was_guarded)
-                .saturating_sub(adjust)
+            crate::core_types::UsableSize::new(
+                mi_page_usable_size_of_typed(page.as_ptr(), block_ptr.as_ptr(), was_guarded)
+                    .get()
+                    .saturating_sub(adjust),
+            )
         }
-        _ => 0,
+        _ => crate::core_types::UsableSize::new(0),
     }
+}
+
+pub(crate) unsafe fn mi_route_usable_size(p: *const c_void, msg: *const c_char) -> usize {
+    mi_route_usable_size_typed(p, msg).get()
 }
 
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
@@ -912,23 +930,37 @@ pub unsafe extern "C" fn mi_page_usable_aligned_size_of(
     page: *const mi_page_t,
     p: *const c_void,
 ) -> usize {
+    mi_page_usable_aligned_size_of_typed(page, p).get()
+}
+
+pub(crate) unsafe fn mi_page_usable_aligned_size_of_typed(
+    page: *const mi_page_t,
+    p: *const c_void,
+) -> crate::core_types::UsableSize {
     let block = _mi_page_ptr_unalign(page, p);
     let is_guarded = mi_block_ptr_is_guarded(block, p.cast_mut());
-    let size = mi_page_usable_size_of(page, block, is_guarded);
+    let size = mi_page_usable_size_of_typed(page, block, is_guarded).get();
     let adjust = p.cast::<u8>().offset_from(block.cast::<u8>());
     crate::mi_assert_internal!(adjust >= 0 && adjust as usize <= size);
-    size - adjust as usize
+    crate::core_types::UsableSize::new(size - adjust as usize)
+}
+
+pub(crate) unsafe fn _mi_usable_size_typed(
+    p: *const c_void,
+    page: *const mi_page_t,
+) -> crate::core_types::UsableSize {
+    if page.is_null() {
+        return crate::core_types::UsableSize::new(0);
+    }
+    if !mi_page_has_interior_pointers(page) {
+        mi_page_usable_size_of_typed(page, p.cast(), false)
+    } else {
+        mi_page_usable_aligned_size_of_typed(page, p)
+    }
 }
 
 pub unsafe fn _mi_usable_size(p: *const c_void, page: *const mi_page_t) -> usize {
-    if page.is_null() {
-        return 0;
-    }
-    if !mi_page_has_interior_pointers(page) {
-        mi_page_usable_size_of(page, p.cast(), false)
-    } else {
-        mi_page_usable_aligned_size_of(page, p)
-    }
+    _mi_usable_size_typed(p, page).get()
 }
 
 #[used]

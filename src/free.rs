@@ -817,8 +817,10 @@ unsafe fn mi_abandoned_page_try_reabandon_to_mapped(page: *mut mi_page_t) -> boo
     if mi_page_is_mostly_used(page) {
         return false;
     }
-    if (*page).memid.memkind != crate::internal::mi_memkind_t::MI_MEM_ARENA
-        || mi_page_is_abandoned_mapped(page)
+    if !matches!(
+        crate::core_types::MemId::view((*page).memid),
+        crate::core_types::MemIdView::Arena(_)
+    ) || mi_page_is_abandoned_mapped(page)
     {
         return false;
     }

@@ -2340,6 +2340,10 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && arena_rs.contains("match crate::core_types::MemId::view(memid)")
             && arena_rs.contains("crate::core_types::MemIdView::Arena(arena_memid)")
             && arena_rs.contains("let range = arena_memid.range;")
+            && arena_rs.contains("fn mi_memid_is_os(memid: mi_memid_t) -> bool")
+            && arena_rs.contains("crate::core_types::MemIdView::Os(_)")
+            && !arena_rs.contains("const fn mi_memkind_is_os(memkind: mi_memkind_t)")
+            && !arena_rs.contains("mi_memkind_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.memkind })")
             && !arena_rs.contains(
                 "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize)"
             )
@@ -2443,6 +2447,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         )
             && arena_rs.contains("_mi_page_associated_theap_peek(page)")
             && arena_rs.contains("_mi_arenas_page_abandon(page, theap)")
+            && free_rs.contains("crate::core_types::MemId::view((*page).memid)")
+            && free_rs.contains("crate::core_types::MemIdView::Arena(_)")
+            && !free_rs.contains(
+                "(*page).memid.memkind != crate::internal::mi_memkind_t::MI_MEM_ARENA"
+            )
             && free_rs.contains("_mi_arenas_page_try_reabandon_to_mapped(page)"),
         "free path should keep C's arena page reabandon-to-mapped helper boundary"
     );

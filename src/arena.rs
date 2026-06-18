@@ -889,16 +889,11 @@ unsafe fn mi_arena_range_from_memid(
 }
 
 #[allow(dead_code)]
-const fn mi_memkind_is_os(memkind: mi_memkind_t) -> bool {
+fn mi_memid_is_os(memid: mi_memid_t) -> bool {
     matches!(
-        memkind,
-        mi_memkind_t::MI_MEM_OS | mi_memkind_t::MI_MEM_OS_HUGE | mi_memkind_t::MI_MEM_OS_REMAP
+        crate::core_types::MemId::view(memid),
+        crate::core_types::MemIdView::Os(_)
     )
-}
-
-#[allow(dead_code)]
-unsafe fn mi_memid_is_os(memid: mi_memid_t) -> bool {
-    mi_memkind_is_os(memid.memkind)
 }
 
 #[allow(dead_code)]
@@ -1427,7 +1422,7 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: *mut mi_subproc_t) {
                     ptr::null_mut(),
                 );
             }
-            if mi_memkind_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.memkind }) {
+            if mi_memid_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid }) {
                 unsafe {
                     crate::internal::_mi_os_free_ex(
                         mi_arena_start(arena).cast::<c_void>(),

@@ -1,11 +1,6 @@
 //! Dynamic thread-local key management.
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    clippy::missing_safety_doc,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 use core::mem::size_of;
 use core::ptr;

@@ -1,10 +1,6 @@
 //! Page map management.
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    clippy::missing_safety_doc
-)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::c_void;
 use core::ptr;
@@ -53,12 +49,20 @@ pub(crate) static mut _mi_page_map: *mut mi_submap_t = ptr::null_mut();
 #[cfg(target_pointer_width = "32")]
 pub(crate) static mut _mi_page_map: *mut u8 = ptr::null_mut();
 
+/// # Safety
+///
+/// The page map must be initialized before callers dereference the returned
+/// base pointer. Concurrent teardown must be excluded by allocator lifecycle.
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(always)]
 pub(crate) unsafe fn _mi_page_map_base() -> *mut mi_submap_t {
     unsafe { _mi_page_map }
 }
 
+/// # Safety
+///
+/// The page map must be initialized before callers dereference the returned
+/// base pointer. Concurrent teardown must be excluded by allocator lifecycle.
 #[cfg(target_pointer_width = "32")]
 #[inline(always)]
 pub(crate) unsafe fn _mi_page_map_base() -> *mut u8 {
@@ -176,6 +180,10 @@ unsafe fn mi_page_map_get_idx(
     }
 }
 
+/// # Safety
+///
+/// Must be called during allocator initialization before concurrent page-map
+/// use starts.
 #[cfg(target_pointer_width = "32")]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
@@ -256,6 +264,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     true
 }
 
+/// # Safety
+///
+/// `subproc` must point to the live sub-process owning the page-map memory.
+/// No concurrent page-map users may remain.
 #[cfg(target_pointer_width = "32")]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t) {
@@ -274,6 +286,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
     }
 }
 
+/// # Safety
+///
+/// `page` must point to a live page whose page area and slice metadata are
+/// initialized and stable for registration.
 #[cfg(target_pointer_width = "32")]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
@@ -302,6 +318,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
     true
 }
 
+/// # Safety
+///
+/// `page` must point to a previously registered live page whose slice metadata
+/// remains valid for unregistering.
 #[cfg(target_pointer_width = "32")]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
@@ -321,6 +341,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
     };
 }
 
+/// # Safety
+///
+/// `start..start + size` must describe a page-map range previously registered
+/// or otherwise safe to clear during allocator teardown.
 #[cfg(target_pointer_width = "32")]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
@@ -341,6 +365,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
     };
 }
 
+/// # Safety
+///
+/// `p` may be null or arbitrary. The page map must be initialized and not
+/// concurrently destroyed while this lookup runs.
 #[cfg(target_pointer_width = "32")]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
@@ -362,6 +390,10 @@ pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_p
     ((((p as usize) >> MI_ARENA_SLICE_SHIFT) - ofs + 1) << MI_ARENA_SLICE_SHIFT) as *mut mi_page_t
 }
 
+/// # Safety
+///
+/// `p` may be null or arbitrary. The page map must be initialized and not
+/// concurrently destroyed while this lookup runs.
 #[cfg(target_pointer_width = "32")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_is_in_heap_region(p: *const c_void) -> bool {
@@ -397,6 +429,10 @@ unsafe fn mi_page_map_ensure_committed(idx: usize, submap: *mut mi_submap_t) -> 
     true
 }
 
+/// # Safety
+///
+/// Must be called during allocator initialization before concurrent page-map
+/// use starts.
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
@@ -492,6 +528,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     true
 }
 
+/// # Safety
+///
+/// `subproc` must point to the live sub-process owning the page-map memory.
+/// No concurrent page-map users may remain.
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t) {
@@ -642,6 +682,10 @@ unsafe fn mi_page_map_get_idx(
     unsafe { _mi_page_map_index(page_start.cast::<c_void>(), sub_idx) }
 }
 
+/// # Safety
+///
+/// `page` must point to a live page whose page area and slice metadata are
+/// initialized and stable for registration.
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
@@ -663,6 +707,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
     unsafe { mi_page_map_set_range(page, idx, sub_idx, slice_count) }
 }
 
+/// # Safety
+///
+/// `page` must point to a previously registered live page whose slice metadata
+/// remains valid for unregistering.
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
@@ -684,6 +732,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
     unsafe { mi_page_map_set_range(ptr::null_mut(), idx, sub_idx, slice_count) };
 }
 
+/// # Safety
+///
+/// `start..start + size` must describe a page-map range previously registered
+/// or otherwise safe to clear during allocator teardown.
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
@@ -704,6 +756,10 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
 static MI_PAGE_MAP_UNREGISTER_RANGE_KEEP: unsafe extern "C" fn(*mut c_void, usize) =
     _mi_page_map_unregister_range;
 
+/// # Safety
+///
+/// `p` may be null or arbitrary. The page map must be initialized and not
+/// concurrently destroyed while this lookup runs.
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
@@ -725,6 +781,10 @@ pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_p
     unsafe { *sub.add(sub_idx) }
 }
 
+/// # Safety
+///
+/// `p` may be null or arbitrary. The page map must be initialized and not
+/// concurrently destroyed while this lookup runs.
 #[cfg(not(target_pointer_width = "32"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_is_in_heap_region(p: *const c_void) -> bool {

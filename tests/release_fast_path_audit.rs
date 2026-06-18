@@ -975,7 +975,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "src/alloc.rs",
         "src/alloc_aligned.rs",
         "src/alloc_override.rs",
-        "src/alloc_posix.rs",
         "src/arena_meta.rs",
         "src/atomic.rs",
         "src/bitmap.rs",
@@ -1001,8 +1000,10 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "broad unsafe_op_in_unsafe_fn allowances should stay limited to audited mechanical raw-pointer modules"
     );
     assert!(
-        !actual.contains("src/core_types/mod.rs") && !actual.contains("src/track.rs"),
-        "core types and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        !actual.contains("src/alloc_posix.rs")
+            && !actual.contains("src/core_types/mod.rs")
+            && !actual.contains("src/track.rs"),
+        "POSIX allocation shims, core types, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 

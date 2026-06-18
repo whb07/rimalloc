@@ -1,7 +1,5 @@
 //! Mechanical translation of `src/alloc-posix.c`.
 
-#![allow(unsafe_op_in_unsafe_fn)]
-
 use crate::internal::{
     _mi_align_up, _mi_is_aligned, _mi_is_power_of_two, _mi_memcpy, _mi_os_page_size,
     mi_mul_overflow,
@@ -24,7 +22,7 @@ unsafe fn mi_set_errno(err: c_int) {
     unsafe extern "C" {
         fn __errno_location() -> *mut c_int;
     }
-    *__errno_location() = err;
+    unsafe { *__errno_location() = err };
 }
 
 #[cfg(target_vendor = "apple")]
@@ -32,7 +30,7 @@ unsafe fn mi_set_errno(err: c_int) {
     unsafe extern "C" {
         fn __error() -> *mut c_int;
     }
-    *__error() = err;
+    unsafe { *__error() = err };
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
@@ -148,13 +146,13 @@ pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut
 /// be released through mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_reallocarray(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
-        let newp = mi_realloc(p, req.total().get());
+        let newp = unsafe { mi_realloc(p, req.total().get()) };
         if newp.is_null() {
-            mi_set_errno(ENOMEM);
+            unsafe { mi_set_errno(ENOMEM) };
         }
         newp
     } else {
-        mi_set_errno(EOVERFLOW);
+        unsafe { mi_set_errno(EOVERFLOW) };
         ptr::null_mut()
     }
 }
@@ -168,28 +166,30 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
     crate::mi_assert!(size != 0);
     crate::mi_assert!(!ptrp.is_null());
     if ptrp.is_null() || size == 0 {
-        mi_set_errno(EINVAL);
+        unsafe { mi_set_errno(EINVAL) };
         return EINVAL;
     }
 
     let Ok(req) = crate::core_types::CallocRequest::new(count, size) else {
-        mi_set_errno(EOVERFLOW);
+        unsafe { mi_set_errno(EOVERFLOW) };
         return EOVERFLOW;
     };
     let total = req.total().get();
 
     if total == 0 {
-        mi_free(*ptrp);
-        *ptrp = ptr::null_mut();
+        unsafe {
+            mi_free(*ptrp);
+            *ptrp = ptr::null_mut();
+        }
         return 0;
     }
 
-    let newp = mi_realloc(*ptrp, total);
+    let newp = unsafe { mi_realloc(*ptrp, total) };
     if newp.is_null() {
-        mi_set_errno(ENOMEM);
+        unsafe { mi_set_errno(ENOMEM) };
         return ENOMEM;
     }
-    *ptrp = newp;
+    unsafe { *ptrp = newp };
     0
 }
 
@@ -301,22 +301,23 @@ pub unsafe extern "C" fn mi_dupenv_s(
     name: *const i8,
 ) -> c_int {
     if !size.is_null() {
-        *size = 0;
+        unsafe { *size = 0 };
     }
     if buf.is_null() || name.is_null() {
         return EINVAL;
     }
-    let value = getenv(name);
+    let value = unsafe { getenv(name) };
     if value.is_null() {
-        *buf = ptr::null_mut();
+        unsafe { *buf = ptr::null_mut() };
         return 0;
     }
-    *buf = mi_strdup(value);
-    if (*buf).is_null() {
+    let dup = unsafe { mi_strdup(value) };
+    unsafe { *buf = dup };
+    if dup.is_null() {
         return ENOMEM;
     }
     if !size.is_null() {
-        *size = CStr::from_ptr(value).to_bytes_with_nul().len();
+        unsafe { *size = CStr::from_ptr(value).to_bytes_with_nul().len() };
     }
     0
 }

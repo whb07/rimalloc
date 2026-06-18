@@ -3290,11 +3290,8 @@ unsafe extern "C" fn mi_arena_try_purge_visitor(
             (*vinfo).all_purged = true;
         }
     } else if slice_count > 1 {
-        for i in 0..slice_count {
-            let Some(single) = crate::core_types::SliceRange::new(slice_index + i, 1, unsafe {
-                crate::core_types::ArenaPtr::new_unchecked(arena)
-            })
-            .ok() else {
+        for i in 0..range.count_usize() {
+            let Ok(single) = range.single_at_offset(i) else {
                 crate::mi_assert_internal!(false);
                 unsafe { (*vinfo).all_purged = false };
                 continue;

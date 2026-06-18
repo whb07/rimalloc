@@ -42,6 +42,22 @@ impl SliceRange {
         }
     }
 
+    pub(crate) fn single_at_offset(self, offset: usize) -> Result<Self, SliceError> {
+        if offset >= self.count_usize() {
+            return Err(SliceError::OutOfBounds);
+        }
+        let start = self
+            .start_usize()
+            .checked_add(offset)
+            .ok_or(SliceError::Overflow)?;
+        let start_u32: u32 = start.try_into().map_err(|_| SliceError::Overflow)?;
+
+        Ok(Self {
+            start: SliceIndex(start_u32 as usize),
+            count: unsafe { SliceCount::new_unchecked(1) },
+        })
+    }
+
     pub(crate) fn start(self) -> SliceIndex {
         self.start
     }

@@ -772,6 +772,8 @@ fn free_path_internals_are_not_dynamic_exports() {
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let memid_rs =
         fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read core_types/memid.rs");
+    let arena_types =
+        fs::read_to_string(root.join("src/core_types/arena.rs")).expect("read core_types/arena.rs");
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
@@ -2439,6 +2441,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !arena_rs.contains("mi_arena_page_at_slice(arena, slice_index)")
             && !arena_rs.contains("mi_arena_slice_start(arena, slice_index).cast::<c_void>()"),
         "arena slice address/page helpers should receive typed SliceIndex values"
+    );
+    assert!(
+        arena_types.contains(
+            "pub(crate) fn single_at_offset(self, offset: usize) -> Result<Self, SliceError>"
+        ) && arena_rs.contains("let Ok(single) = range.single_at_offset(i) else")
+            && !arena_rs.contains("SliceRange::new(slice_index + i, 1"),
+        "arena purge fallback should split SliceRange values without reopening raw slice arithmetic"
     );
     assert!(
         arena_rs.contains(

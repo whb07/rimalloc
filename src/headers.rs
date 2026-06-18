@@ -1,7 +1,5 @@
 //! Mechanical translation of header-level override macros.
 
-#![allow(dead_code)]
-
 #[macro_export]
 macro_rules! malloc {
     ($n:expr) => {

@@ -1,6 +1,6 @@
 //! Mechanical translation of `include/mimalloc.h`.
 
-#![allow(non_camel_case_types, non_upper_case_globals, dead_code)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::{c_char, c_int, c_long, c_void};
 

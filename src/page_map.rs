@@ -89,6 +89,24 @@ static mut mi_page_map_commit: *mut mi_bitmap_t = ptr::null_mut();
 static mi_page_map_commit: AtomicUsize = AtomicUsize::new(0);
 
 #[inline]
+fn mi_memid_os_base_size(memid: mi_memid_t) -> (*mut c_void, usize) {
+    match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::Os(os) => (
+            os.base.map(|p| p.as_ptr()).unwrap_or(ptr::null_mut()),
+            os.size.0,
+        ),
+        crate::core_types::MemIdView::External(external) => (
+            external.base.map(|p| p.as_ptr()).unwrap_or(ptr::null_mut()),
+            external.size.0,
+        ),
+        _ => {
+            crate::mi_assert_internal!(false);
+            (ptr::null_mut(), 0)
+        }
+    }
+}
+
+#[inline]
 fn mi_page_map_cannot_commit() {
     _mi_warning_message_fmt(format_args!(
         "unable to commit the allocation page-map on-demand\n"
@@ -245,14 +263,9 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
     if unsafe { _mi_page_map }.is_null() {
         return;
     }
+    let (base, size) = mi_memid_os_base_size(unsafe { mi_page_map_memid });
     unsafe {
-        _mi_os_free_ex(
-            mi_page_map_memid.mem.os.base,
-            mi_page_map_memid.mem.os.size,
-            true,
-            mi_page_map_memid,
-            subproc,
-        );
+        _mi_os_free_ex(base, size, true, mi_page_map_memid, subproc);
         _mi_page_map = ptr::null_mut();
         mi_page_map_commit = ptr::null_mut();
         mi_page_map_max_address = ptr::null_mut();
@@ -480,16 +493,23 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
                     )
                 };
                 unsafe {
-                    _mi_os_free_ex(memid.mem.os.base, memid.mem.os.size, true, memid, subproc);
+                    _mi_os_free_ex(
+                        sub.cast::<c_void>(),
+                        MI_PAGE_MAP_SUB_SIZE,
+                        true,
+                        memid,
+                        subproc,
+                    );
                     *_mi_page_map.add(idx) = ptr::null_mut();
                 }
             }
         }
     }
+    let (_, size) = mi_memid_os_base_size(unsafe { mi_page_map_memid });
     unsafe {
         _mi_os_free_ex(
             _mi_page_map.cast::<c_void>(),
-            mi_page_map_memid.mem.os.size,
+            size,
             true,
             mi_page_map_memid,
             subproc,

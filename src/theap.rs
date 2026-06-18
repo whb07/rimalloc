@@ -585,7 +585,15 @@ pub(crate) unsafe extern "C" fn _mi_theap_create(
         )
         .cast::<mi_theap_t>();
         if !theap.is_null() {
-            crate::mi_assert_internal!(memid.mem.os.size >= size);
+            let allocated_size = match crate::core_types::MemId::view(memid) {
+                crate::core_types::MemIdView::Arena(a) => {
+                    a.range.count_usize() * crate::arena::MI_ARENA_SLICE_SIZE
+                }
+                crate::core_types::MemIdView::Os(os) => os.size.0,
+                crate::core_types::MemIdView::External(external) => external.size.0,
+                _ => 0,
+            };
+            crate::mi_assert_internal!(allocated_size >= size);
         }
         theap
     };

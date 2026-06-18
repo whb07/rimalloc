@@ -17,9 +17,8 @@ use crate::arena::{
     MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
 };
 use crate::atomic::{
-    EFAULT, mi_atomic_and_relaxed, mi_atomic_cas_weak_release, mi_atomic_load_explicit,
-    mi_atomic_load_ptr_acquire, mi_atomic_or_relaxed, mi_atomic_store_ptr_release,
-    mi_memory_order_e,
+    EFAULT, mi_atomic_and_relaxed, mi_atomic_cas_weak_release, mi_atomic_load_ptr_acquire,
+    mi_atomic_or_relaxed, mi_atomic_store_ptr_release,
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::init::{_mi_page_empty, _mi_theap_empty, _mi_theap_empty_wrong};
@@ -431,11 +430,15 @@ pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head
         }
     }
     if (*page).used == 1 {
+        let atomic_tf =
+            crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
         crate::mi_assert_internal!(
-            crate::internal::mi_tf_block(mi_atomic_load_explicit(
-                ptr::addr_of!((*page).xthread_free).cast(),
-                mi_memory_order_e::mi_memory_order_relaxed,
-            )) == head
+            atomic_tf
+                .load_relaxed()
+                .head()
+                .map(|block| block.as_ptr())
+                .unwrap_or(ptr::null_mut())
+                == head
         );
         crate::mi_assert_internal!(mi_block_next(page, head).is_null());
         _mi_page_free_collect(page, false);

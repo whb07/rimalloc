@@ -2114,7 +2114,6 @@ unsafe extern "C" fn mi_arena_try_claim_abandoned(
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_heap_ensure_arena_pages(
     heap: *mut mi_heap_t,
     arena: *mut mi_arena_t,

@@ -2592,7 +2592,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         .find("unsafe extern \"C\" fn mi_arena_try_claim_abandoned(")
         .expect("find mi_arena_try_claim_abandoned");
     let claim_end = arena_rs[claim_start..]
-        .find("\n}\n\n#[allow(dead_code)]\nunsafe fn mi_heap_ensure_arena_pages(")
+        .find("\n}\n\nunsafe fn mi_heap_ensure_arena_pages(")
         .map(|offset| claim_start + offset)
         .expect("find end of mi_arena_try_claim_abandoned");
     let claim_body = &arena_rs[claim_start..claim_end];

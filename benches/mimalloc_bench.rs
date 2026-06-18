@@ -10,7 +10,7 @@
 //!   MIMALLOC_BENCH_SCENARIOS=mleak10 cargo bench --features bench --bench mimalloc_bench
 //!
 //! Useful environment variables:
-//!   MIMALLOC_BENCH_SCENARIOS=glibc-simple,mleak10
+//!   MIMALLOC_BENCH_SCENARIOS=glibc-simple,mleak10,xmalloc-testN
 //!   MIMALLOC_BENCH_ALLOCATORS=rust,c
 //!   MIMALLOC_RUST_LIB=/path/to/libmechanical_mimalloc.so
 //!   MIMALLOC_C_LIB=/path/to/libmimalloc.so
@@ -25,8 +25,8 @@ use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr;
-use std::sync::OnceLock;
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy)]
@@ -86,7 +86,7 @@ impl BenchAllocator {
 
 struct Scenario {
     name: &'static str,
-    run: unsafe fn(BenchAllocator),
+    run: unsafe fn(BenchAllocator) -> Duration,
 }
 
 fn workspace_root() -> PathBuf {
@@ -339,10 +339,31 @@ fn allocators(root: &Path) -> Vec<BenchAllocator> {
 }
 
 fn scenarios() -> Vec<Scenario> {
-    let scenarios = vec![
+    let procs = logical_cpus();
+    let mut scenarios = vec![
         Scenario {
             name: "glibc-simple",
             run: glibc_simple::run,
+        },
+        Scenario {
+            name: "glibc-thread",
+            run: glibc_thread::run,
+        },
+        Scenario {
+            name: "malloc-large",
+            run: malloc_large::run,
+        },
+        Scenario {
+            name: "cache-scratch1",
+            run: cache_workloads::run_scratch1,
+        },
+        Scenario {
+            name: "cache-thrash1",
+            run: cache_workloads::run_thrash1,
+        },
+        Scenario {
+            name: "xmalloc-testN",
+            run: xmalloc_test::run,
         },
         Scenario {
             name: "mleak10",
@@ -353,6 +374,17 @@ fn scenarios() -> Vec<Scenario> {
             run: |alloc| unsafe { mleak::run(alloc, 50) },
         },
     ];
+
+    if procs != 1 {
+        scenarios.push(Scenario {
+            name: "cache-scratchN",
+            run: cache_workloads::run_scratch_n,
+        });
+        scenarios.push(Scenario {
+            name: "cache-thrashN",
+            run: cache_workloads::run_thrash_n,
+        });
+    }
 
     let selected = csv_env("MIMALLOC_BENCH_SCENARIOS");
     if selected.is_empty() {
@@ -378,6 +410,114 @@ mod pthread {
             arg: *mut c_void,
         ) -> c_int;
         pub fn pthread_join(thread: PthreadT, retval: *mut *mut c_void) -> c_int;
+        pub fn pthread_setconcurrency(new_level: c_int) -> c_int;
+    }
+}
+
+struct Mt19937 {
+    state: [u32; 624],
+    index: usize,
+}
+
+impl Mt19937 {
+    fn new(seed: u32) -> Self {
+        let mut state = [0; 624];
+        state[0] = seed;
+        for i in 1..624 {
+            state[i] = 1812433253u32
+                .wrapping_mul(state[i - 1] ^ (state[i - 1] >> 30))
+                .wrapping_add(i as u32);
+        }
+        Self { state, index: 624 }
+    }
+
+    fn twist(&mut self) {
+        const UPPER_MASK: u32 = 0x8000_0000;
+        const LOWER_MASK: u32 = 0x7fff_ffff;
+        const MATRIX_A: u32 = 0x9908_b0df;
+
+        for i in 0..624 {
+            let x = (self.state[i] & UPPER_MASK) | (self.state[(i + 1) % 624] & LOWER_MASK);
+            let mut xa = x >> 1;
+            if (x & 1) != 0 {
+                xa ^= MATRIX_A;
+            }
+            self.state[i] = self.state[(i + 397) % 624] ^ xa;
+        }
+        self.index = 0;
+    }
+
+    fn next_u32(&mut self) -> u32 {
+        if self.index >= 624 {
+            self.twist();
+        }
+        let mut y = self.state[self.index];
+        self.index += 1;
+        y ^= y >> 11;
+        y ^= (y << 7) & 0x9d2c_5680;
+        y ^= (y << 15) & 0xefc6_0000;
+        y ^= y >> 18;
+        y
+    }
+
+    fn range_inclusive(&mut self, min: usize, max: usize) -> usize {
+        let urange = (max - min) as u64;
+        let urngrange = u32::MAX as u64;
+        assert!(
+            urange <= urngrange,
+            "malloc-large distribution range exceeds mt19937 output range"
+        );
+        if urngrange == urange {
+            return min + self.next_u32() as usize;
+        }
+
+        let uerange = urange + 1;
+        let scaling = urngrange / uerange;
+        let past = uerange * scaling;
+        loop {
+            let ret = self.next_u32() as u64;
+            if ret < past {
+                return min + (ret / scaling) as usize;
+            }
+        }
+    }
+}
+
+struct Lran2 {
+    x: i64,
+    y: i64,
+    v: [i64; 97],
+}
+
+impl Lran2 {
+    fn new(seed: i64) -> Self {
+        const LRAN2_MAX: i64 = 714_025;
+        const IA: i64 = 1366;
+        const IC: i64 = 150_889;
+
+        let mut v = [0; 97];
+        let mut x = (IC - seed) % LRAN2_MAX;
+        if x < 0 {
+            x = -x;
+        }
+        for item in &mut v {
+            x = (IA * x + IC) % LRAN2_MAX;
+            *item = x;
+        }
+        x = (IA * x + IC) % LRAN2_MAX;
+        Self { x, y: x, v }
+    }
+
+    fn next(&mut self) -> i64 {
+        const LRAN2_MAX: i64 = 714_025;
+        const IA: i64 = 1366;
+        const IC: i64 = 150_889;
+
+        let j = (self.y % 97) as usize;
+        self.y = self.v[j];
+        self.x = (IA * self.x + IC) % LRAN2_MAX;
+        self.v[j] = self.x;
+        self.y
     }
 }
 
@@ -470,11 +610,589 @@ mod glibc_simple {
         }
     }
 
-    pub unsafe fn run(alloc: BenchAllocator) {
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
         unsafe {
+            let start = Instant::now();
             bench_size(alloc, 16);
             bench_size(alloc, 32);
             bench_size(alloc, 64);
+            start.elapsed()
+        }
+    }
+}
+
+mod glibc_thread {
+    use super::*;
+
+    const BENCHMARK_DURATION_SECS: c_uint = 2;
+    const RAND_MAX_VALUE: f32 = 2_147_483_647.0;
+    const WORKING_SET_SIZE: usize = 1024;
+    const MIN_ALLOCATION_SIZE: f32 = 4.0;
+    const MAX_ALLOCATION_SIZE: f32 = 32_768.0;
+    const NUM_BLOCK_SIZES: usize = 8000;
+    const NUM_OFFSETS: usize = WORKING_SET_SIZE * 4;
+
+    static TIMEOUT: AtomicBool = AtomicBool::new(false);
+
+    struct RandomValues {
+        block_sizes: [usize; NUM_BLOCK_SIZES],
+        offsets: [usize; NUM_OFFSETS],
+    }
+
+    struct ThreadArgs {
+        alloc: BenchAllocator,
+        random: *const RandomValues,
+        working_set: *mut *mut u8,
+        iters: usize,
+    }
+
+    unsafe extern "C" {
+        fn signal(signum: c_int, handler: extern "C" fn(c_int)) -> usize;
+        fn alarm(seconds: c_uint) -> c_uint;
+        fn srand(seed: c_uint);
+        fn rand() -> c_int;
+    }
+
+    extern "C" fn alarm_handler(_: c_int) {
+        TIMEOUT.store(true, Ordering::SeqCst);
+    }
+
+    fn get_block_size(rand_data: c_int) -> usize {
+        let exponent = -2.0f32;
+        let min_pow = MIN_ALLOCATION_SIZE.powf(exponent + 1.0);
+        let max_pow = MAX_ALLOCATION_SIZE.powf(exponent + 1.0);
+        let r = rand_data as f32 / RAND_MAX_VALUE;
+        ((max_pow - min_pow) * r + min_pow).powf(1.0 / (exponent + 1.0)) as usize
+    }
+
+    unsafe fn init_random_values() -> RandomValues {
+        unsafe {
+            srand(1);
+            let mut block_sizes = [0; NUM_BLOCK_SIZES];
+            let mut offsets = [0; NUM_OFFSETS];
+            for size in &mut block_sizes {
+                *size = get_block_size(rand());
+            }
+            for offset in &mut offsets {
+                *offset = rand() as usize % WORKING_SET_SIZE;
+            }
+            RandomValues {
+                block_sizes,
+                offsets,
+            }
+        }
+    }
+
+    fn next_index(state: &mut usize, limit: usize) -> usize {
+        if *state >= limit - 1 {
+            *state = 0;
+        } else {
+            *state += 1;
+        }
+        *state
+    }
+
+    unsafe fn malloc_benchmark_loop(
+        alloc: BenchAllocator,
+        random: &RandomValues,
+        ptr_arr: *mut *mut u8,
+    ) -> usize {
+        unsafe {
+            let mut offset_state = 0;
+            let mut block_state = 0;
+            let mut iters = 0;
+
+            while !TIMEOUT.load(Ordering::SeqCst) {
+                let next_idx = random.offsets[next_index(&mut offset_state, NUM_OFFSETS)];
+                let next_block = random.block_sizes[next_index(&mut block_state, NUM_BLOCK_SIZES)];
+
+                alloc.free(*ptr_arr.add(next_idx));
+
+                let p = alloc.malloc(next_block);
+                assert!(!p.is_null(), "allocation failed in glibc-thread");
+                for i in 0..next_block {
+                    p.add(i).write_volatile(i as u8);
+                }
+                *ptr_arr.add(next_idx) = p;
+                iters += 1;
+            }
+
+            for i in 0..WORKING_SET_SIZE {
+                alloc.free(*ptr_arr.add(i));
+                *ptr_arr.add(i) = ptr::null_mut();
+            }
+            iters
+        }
+    }
+
+    extern "C" fn thread_entry(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            let args = &mut *arg.cast::<ThreadArgs>();
+            args.iters = malloc_benchmark_loop(args.alloc, &*args.random, args.working_set);
+        }
+        ptr::null_mut()
+    }
+
+    unsafe fn do_benchmark(
+        alloc: BenchAllocator,
+        num_threads: usize,
+        random: &RandomValues,
+    ) -> usize {
+        unsafe {
+            if num_threads == 1 {
+                let mut working_set = Box::new([ptr::null_mut(); WORKING_SET_SIZE]);
+                return malloc_benchmark_loop(alloc, random, working_set.as_mut_ptr());
+            }
+
+            let mut working_sets = Vec::with_capacity(num_threads);
+            let mut args = Vec::with_capacity(num_threads);
+            let mut threads = Vec::with_capacity(num_threads);
+
+            for _ in 0..num_threads {
+                working_sets.push(Box::new([ptr::null_mut(); WORKING_SET_SIZE]));
+                args.push(ThreadArgs {
+                    alloc,
+                    random,
+                    working_set: ptr::null_mut(),
+                    iters: 0,
+                });
+                threads.push(0);
+            }
+
+            for i in 0..num_threads {
+                args[i].working_set = working_sets[i].as_mut_ptr();
+                let rc = pthread::pthread_create(
+                    &mut threads[i],
+                    ptr::null(),
+                    thread_entry,
+                    (&mut args[i] as *mut ThreadArgs).cast(),
+                );
+                assert_eq!(rc, 0, "pthread_create failed in glibc-thread: {rc}");
+            }
+
+            let mut iters = 0;
+            for i in 0..num_threads {
+                let rc = pthread::pthread_join(threads[i], ptr::null_mut());
+                assert_eq!(rc, 0, "pthread_join failed in glibc-thread: {rc}");
+                iters += args[i].iters;
+            }
+            iters
+        }
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let random = init_random_values();
+            TIMEOUT.store(false, Ordering::SeqCst);
+            signal(14, alarm_handler);
+            alarm(BENCHMARK_DURATION_SECS);
+            let iters = do_benchmark(alloc, logical_cpus(), &random);
+            alarm(0);
+            assert!(iters > 0, "glibc-thread produced zero iterations");
+            Duration::from_secs_f64(1_000_000_000.0 / iters as f64)
+        }
+    }
+}
+
+mod malloc_large {
+    use super::*;
+
+    const NUM_BUFFERS: usize = 20;
+    const MIN_BUFFER_SIZE: usize = 5 * 1024 * 1024;
+    const MAX_BUFFER_SIZE: usize = 25 * 1024 * 1024;
+    const NUM_ITERATIONS: usize = 2000;
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let mut rng = Mt19937::new(42);
+            let mut buffers = [ptr::null_mut(); NUM_BUFFERS];
+            let start = Instant::now();
+            for _ in 0..NUM_ITERATIONS {
+                let buffer_idx = rng.range_inclusive(0, NUM_BUFFERS - 1);
+                let new_size = rng.range_inclusive(MIN_BUFFER_SIZE, MAX_BUFFER_SIZE);
+                let new_buffer = alloc.malloc(new_size);
+                assert!(!new_buffer.is_null(), "allocation failed in malloc-large");
+                ptr::write_bytes(new_buffer, 0, new_size);
+                let old = std::mem::replace(&mut buffers[buffer_idx], new_buffer);
+                alloc.free(old);
+            }
+            let elapsed = start.elapsed();
+            for buffer in buffers {
+                alloc.free(buffer);
+            }
+            elapsed
+        }
+    }
+}
+
+mod cache_workloads {
+    use super::*;
+
+    const ITERATIONS: usize = 1000;
+    const OBJ_SIZE: usize = 1;
+    const REPETITIONS: usize = 2_000_000;
+
+    struct WorkerArg {
+        alloc: BenchAllocator,
+        object: *mut u8,
+        obj_size: usize,
+        iterations: usize,
+        repetitions: usize,
+    }
+
+    unsafe fn touch_object(obj: *mut u8, obj_size: usize, repetitions: usize) {
+        unsafe {
+            // The optimized upstream C++ binary keeps this touch loop on a volatile stack byte.
+            let _ = obj;
+            for _ in 0..repetitions {
+                for k in 0..obj_size {
+                    let mut ch = k as u8;
+                    ptr::write_volatile(&mut ch, ch);
+                    ch = ptr::read_volatile(&ch).wrapping_add(1);
+                    ptr::write_volatile(&mut ch, ch);
+                }
+            }
+        }
+    }
+
+    extern "C" fn scratch_worker(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            let w = &*(arg.cast::<WorkerArg>());
+            w.alloc.free(w.object);
+            for _ in 0..w.iterations {
+                let obj = w.alloc.malloc(w.obj_size);
+                assert!(!obj.is_null(), "allocation failed in cache-scratch");
+                touch_object(obj, w.obj_size, w.repetitions);
+                w.alloc.free(obj);
+            }
+        }
+        ptr::null_mut()
+    }
+
+    extern "C" fn thrash_worker(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            let w = &*(arg.cast::<WorkerArg>());
+            for _ in 0..w.iterations {
+                let obj = w.alloc.malloc(w.obj_size);
+                assert!(!obj.is_null(), "allocation failed in cache-thrash");
+                touch_object(obj, w.obj_size, w.repetitions);
+                w.alloc.free(obj);
+            }
+        }
+        ptr::null_mut()
+    }
+
+    unsafe fn run_case(alloc: BenchAllocator, nthreads: usize, scratch: bool) -> Duration {
+        unsafe {
+            let _ = pthread::pthread_setconcurrency(logical_cpus() as c_int);
+            let threads = alloc.calloc(nthreads, std::mem::size_of::<pthread::PthreadT>());
+            assert!(
+                !threads.is_null(),
+                "thread handle allocation failed in cache workload"
+            );
+            let threads = threads.cast::<pthread::PthreadT>();
+
+            let mut args = Vec::with_capacity(nthreads);
+            let reps_per_thread = REPETITIONS / nthreads;
+
+            for _ in 0..nthreads {
+                let object = if scratch {
+                    let p = alloc.malloc(OBJ_SIZE);
+                    assert!(
+                        !p.is_null(),
+                        "initial object allocation failed in cache-scratch"
+                    );
+                    p
+                } else {
+                    ptr::null_mut()
+                };
+                args.push(WorkerArg {
+                    alloc,
+                    object,
+                    obj_size: OBJ_SIZE,
+                    iterations: ITERATIONS,
+                    repetitions: reps_per_thread,
+                });
+            }
+
+            let start = Instant::now();
+            for i in 0..nthreads {
+                let entry = if scratch {
+                    scratch_worker
+                } else {
+                    thrash_worker
+                };
+                let rc = pthread::pthread_create(
+                    threads.add(i),
+                    ptr::null(),
+                    entry,
+                    (&mut args[i] as *mut WorkerArg).cast(),
+                );
+                assert_eq!(rc, 0, "pthread_create failed in cache workload: {rc}");
+            }
+
+            for i in 0..nthreads {
+                let rc = pthread::pthread_join(*threads.add(i), ptr::null_mut());
+                assert_eq!(rc, 0, "pthread_join failed in cache workload: {rc}");
+            }
+            let elapsed = start.elapsed();
+
+            alloc.free(threads.cast());
+            elapsed
+        }
+    }
+
+    pub unsafe fn run_scratch1(alloc: BenchAllocator) -> Duration {
+        unsafe { run_case(alloc, 1, true) }
+    }
+
+    pub unsafe fn run_scratch_n(alloc: BenchAllocator) -> Duration {
+        unsafe { run_case(alloc, logical_cpus(), true) }
+    }
+
+    pub unsafe fn run_thrash1(alloc: BenchAllocator) -> Duration {
+        unsafe { run_case(alloc, 1, false) }
+    }
+
+    pub unsafe fn run_thrash_n(alloc: BenchAllocator) -> Duration {
+        unsafe { run_case(alloc, logical_cpus(), false) }
+    }
+}
+
+mod xmalloc_test {
+    use super::*;
+
+    const OBJECT_SIZE: usize = 64;
+    const RUN_TIME: Duration = Duration::from_secs(5);
+    const OBJECTS_PER_BATCH: usize = 4096;
+    const BATCH_COUNT_LIMIT: usize = 100;
+    const POSSIBLE_SIZES: [usize; 17] = [
+        8,
+        12,
+        16,
+        24,
+        32,
+        48,
+        64,
+        96,
+        128,
+        192,
+        256,
+        (256 * 3) / 2,
+        512,
+        (512 * 3) / 2,
+        1024,
+        (1024 * 3) / 2,
+        2048,
+    ];
+
+    #[repr(C)]
+    struct Batch {
+        next_batch: *mut Batch,
+        objects: [*mut u8; OBJECTS_PER_BATCH],
+    }
+
+    struct Queue {
+        batches: *mut Batch,
+        batch_count: usize,
+    }
+
+    struct State {
+        alloc: BenchAllocator,
+        done: AtomicBool,
+        queue: Mutex<Queue>,
+        empty_cv: Condvar,
+        full_cv: Condvar,
+        counters: Vec<AtomicUsize>,
+    }
+
+    struct ThreadArg {
+        id: usize,
+        state: *const State,
+    }
+
+    unsafe fn free_batch(alloc: BenchAllocator, batch: *mut Batch) {
+        unsafe {
+            for &object in &(*batch).objects {
+                alloc.free(object);
+            }
+            alloc.free(batch.cast());
+        }
+    }
+
+    fn enqueue_batch(state: &State, batch: *mut Batch) {
+        let mut queue = state.queue.lock().unwrap();
+        while queue.batch_count >= BATCH_COUNT_LIMIT && !state.done.load(Ordering::Acquire) {
+            queue = state.full_cv.wait(queue).unwrap();
+        }
+        unsafe {
+            (*batch).next_batch = queue.batches;
+        }
+        queue.batches = batch;
+        queue.batch_count += 1;
+        state.empty_cv.notify_one();
+    }
+
+    fn dequeue_batch(state: &State) -> *mut Batch {
+        let mut queue = state.queue.lock().unwrap();
+        while queue.batches.is_null() && !state.done.load(Ordering::Acquire) {
+            queue = state.empty_cv.wait(queue).unwrap();
+        }
+        let result = queue.batches;
+        if !result.is_null() {
+            unsafe {
+                queue.batches = (*result).next_batch;
+            }
+            queue.batch_count -= 1;
+            state.full_cv.notify_one();
+        }
+        result
+    }
+
+    extern "C" fn allocator_thread(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            let thread_arg = &*arg.cast::<ThreadArg>();
+            let state = &*thread_arg.state;
+            let mut rng = Lran2::new(thread_arg.id as i64);
+
+            while !state.done.load(Ordering::Acquire) {
+                let batch = state
+                    .alloc
+                    .malloc(std::mem::size_of::<Batch>())
+                    .cast::<Batch>();
+                assert!(!batch.is_null(), "batch allocation failed in xmalloc-testN");
+                (*batch).next_batch = ptr::null_mut();
+                for i in 0..OBJECTS_PER_BATCH {
+                    let size = if OBJECT_SIZE > 0 {
+                        OBJECT_SIZE
+                    } else {
+                        POSSIBLE_SIZES[rng.next() as usize % POSSIBLE_SIZES.len()]
+                    };
+                    let object = state.alloc.malloc(size);
+                    assert!(
+                        !object.is_null(),
+                        "object allocation failed in xmalloc-testN"
+                    );
+                    ptr::write_bytes(object, i as u8, size.min(128));
+                    (*batch).objects[i] = object;
+                }
+                enqueue_batch(state, batch);
+            }
+        }
+        ptr::null_mut()
+    }
+
+    extern "C" fn releaser_thread(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            let thread_arg = &*arg.cast::<ThreadArg>();
+            let state = &*thread_arg.state;
+
+            while !state.done.load(Ordering::Acquire) {
+                let batch = dequeue_batch(state);
+                if !batch.is_null() {
+                    free_batch(state.alloc, batch);
+                }
+                state.counters[thread_arg.id].fetch_add(OBJECTS_PER_BATCH, Ordering::Relaxed);
+            }
+        }
+        ptr::null_mut()
+    }
+
+    unsafe fn cleanup_remaining(state: &State) {
+        unsafe {
+            loop {
+                let batch = {
+                    let mut queue = state.queue.lock().unwrap();
+                    let batch = queue.batches;
+                    if batch.is_null() {
+                        ptr::null_mut()
+                    } else {
+                        queue.batches = (*batch).next_batch;
+                        queue.batch_count -= 1;
+                        batch
+                    }
+                };
+                if batch.is_null() {
+                    break;
+                }
+                free_batch(state.alloc, batch);
+            }
+        }
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let num_workers = logical_cpus();
+            let mut threads = vec![0; num_workers * 2];
+            let mut args = Vec::with_capacity(num_workers);
+            let state = State {
+                alloc,
+                done: AtomicBool::new(false),
+                queue: Mutex::new(Queue {
+                    batches: ptr::null_mut(),
+                    batch_count: 0,
+                }),
+                empty_cv: Condvar::new(),
+                full_cv: Condvar::new(),
+                counters: (0..num_workers).map(|_| AtomicUsize::new(0)).collect(),
+            };
+
+            for i in 0..num_workers {
+                args.push(ThreadArg {
+                    id: i,
+                    state: &state,
+                });
+            }
+
+            let begin = Instant::now();
+            for i in 0..num_workers {
+                let rc = pthread::pthread_create(
+                    &mut threads[i * 2],
+                    ptr::null(),
+                    releaser_thread,
+                    (&mut args[i] as *mut ThreadArg).cast(),
+                );
+                assert_eq!(
+                    rc, 0,
+                    "pthread_create releaser failed in xmalloc-testN: {rc}"
+                );
+
+                let rc = pthread::pthread_create(
+                    &mut threads[i * 2 + 1],
+                    ptr::null(),
+                    allocator_thread,
+                    (&mut args[i] as *mut ThreadArg).cast(),
+                );
+                assert_eq!(
+                    rc, 0,
+                    "pthread_create allocator failed in xmalloc-testN: {rc}"
+                );
+            }
+
+            while begin.elapsed() <= RUN_TIME {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+
+            state.done.store(true, Ordering::Release);
+            state.empty_cv.notify_all();
+            state.full_cv.notify_all();
+
+            for thread in threads {
+                let rc = pthread::pthread_join(thread, ptr::null_mut());
+                assert_eq!(rc, 0, "pthread_join failed in xmalloc-testN: {rc}");
+            }
+
+            let elapsed = begin.elapsed().as_secs_f64();
+            let total: usize = state
+                .counters
+                .iter()
+                .map(|counter| counter.load(Ordering::Relaxed))
+                .sum();
+            cleanup_remaining(&state);
+
+            let mfree_per_sec = (total as f64 / elapsed) * 1e-6;
+            assert!(mfree_per_sec > 0.0, "xmalloc-testN produced zero free rate");
+            Duration::from_secs_f64(100.0 / mfree_per_sec)
         }
     }
 }
@@ -548,8 +1266,9 @@ mod mleak {
         }
     }
 
-    pub unsafe fn run(alloc: BenchAllocator, iter: usize) {
+    pub unsafe fn run(alloc: BenchAllocator, iter: usize) -> Duration {
         unsafe {
+            let start = Instant::now();
             srand(0x1ce4e5b9);
             let mut transfer: [AtomicPtr<u8>; TRANSFERS] =
                 std::array::from_fn(|_| AtomicPtr::new(ptr::null_mut()));
@@ -567,6 +1286,7 @@ mod mleak {
             for slot in &transfer {
                 alloc.free(slot.load(Ordering::SeqCst));
             }
+            start.elapsed()
         }
     }
 }
@@ -615,9 +1335,7 @@ fn bench_native_ports(c: &mut Criterion) {
                 b.iter_custom(|iters| {
                     let mut total = Duration::ZERO;
                     for _ in 0..iters {
-                        let start = Instant::now();
-                        unsafe { (scenario.run)(allocator) };
-                        total += start.elapsed();
+                        total += unsafe { (scenario.run)(allocator) };
                     }
                     total
                 });

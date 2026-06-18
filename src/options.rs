@@ -1,6 +1,6 @@
 //! Options, stats, random, thread, init helpers
 
-#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 #[cfg(not(target_os = "linux"))]
 use core::cell::Cell;

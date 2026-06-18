@@ -79,7 +79,7 @@ pub mod memory {
 }
 
 pub mod mimalloc {
-    pub use crate::mimalloc::*;
+    pub use crate::abi::*;
 }
 
 pub mod options {

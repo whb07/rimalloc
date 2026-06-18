@@ -429,6 +429,32 @@ fn crate_root_exposes_only_curated_rust_facade() {
 }
 
 #[test]
+fn abi_module_owns_c_header_declarations() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
+    let mimalloc_rs =
+        fs::read_to_string(root.join("src/mimalloc.rs")).expect("read src/mimalloc.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+
+    assert!(
+        abi_rs.contains("Mechanical translation of `include/mimalloc.h`")
+            && abi_rs.contains("unsafe extern \"C\"")
+            && abi_rs.contains("pub fn mi_malloc(size: usize) -> *mut c_void;")
+            && abi_rs.contains("pub fn mi_heap_new() -> *mut mi_heap_t;"),
+        "src/abi.rs should own the raw mimalloc C header declarations"
+    );
+    assert!(
+        mimalloc_rs.contains("pub(crate) use crate::abi::*;")
+            && !mimalloc_rs.contains("unsafe extern \"C\""),
+        "src/mimalloc.rs should stay an internal compatibility alias, not the public header mirror"
+    );
+    assert!(
+        raw_rs.contains("pub mod abi") && raw_rs.contains("pub use crate::abi::*;"),
+        "raw facade should expose ABI declarations through the ABI owner"
+    );
+}
+
+#[test]
 fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");
@@ -1081,6 +1107,8 @@ fn phase6_c_compat_allowances_stay_intentional() {
         "improper_ctypes_definitions",
     ];
     let expected = BTreeMap::from([
+        (("src/abi.rs", "non_camel_case_types"), 1),
+        (("src/abi.rs", "non_upper_case_globals"), 1),
         (("src/alloc.rs", "non_snake_case"), 1),
         (("src/alloc_aligned.rs", "non_camel_case_types"), 1),
         (("src/alloc_aligned.rs", "non_upper_case_globals"), 1),
@@ -1109,8 +1137,6 @@ fn phase6_c_compat_allowances_stay_intentional() {
         (("src/internal.rs", "unused_imports"), 1),
         (("src/libc.rs", "non_camel_case_types"), 1),
         (("src/libc.rs", "non_upper_case_globals"), 1),
-        (("src/mimalloc.rs", "non_camel_case_types"), 1),
-        (("src/mimalloc.rs", "non_upper_case_globals"), 1),
         (("src/options.rs", "non_camel_case_types"), 1),
         (("src/options.rs", "non_upper_case_globals"), 1),
         (("src/os.rs", "non_camel_case_types"), 1),

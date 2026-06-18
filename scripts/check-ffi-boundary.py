@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify exported ABI attributes stay in approved boundary files."""
+"""Verify exported ABI attributes stay in classified boundary files."""
 
 from __future__ import annotations
 
@@ -9,25 +9,25 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-APPROVED_EXPORT_FILES = {
-    "src/alloc.rs",
-    "src/alloc_aligned.rs",
-    "src/alloc_override.rs",
-    "src/alloc_posix.rs",
-    "src/arena.rs",
-    "src/free.rs",
-    "src/heap.rs",
-    "src/init.rs",
-    "src/lib.rs",
-    "src/options.rs",
-    "src/os.rs",
-    "src/page.rs",
-    "src/page_map.rs",
-    "src/prim.rs",
-    "src/prim/osx.rs",
-    "src/prim/unix.rs",
-    "src/stats.rs",
-    "src/theap.rs",
+EXPORT_FILE_CLASSIFICATION = {
+    "src/alloc.rs": "c-abi",
+    "src/alloc_aligned.rs": "c-abi",
+    "src/alloc_override.rs": "malloc-cxx-override",
+    "src/alloc_posix.rs": "c-abi",
+    "src/arena.rs": "c-abi-internal-classified",
+    "src/free.rs": "c-abi",
+    "src/heap.rs": "c-abi",
+    "src/init.rs": "runtime-boundary",
+    "src/lib.rs": "panic-runtime-boundary",
+    "src/options.rs": "c-abi",
+    "src/os.rs": "c-abi-internal-classified",
+    "src/page.rs": "c-abi-internal-classified",
+    "src/page_map.rs": "c-abi-internal-classified",
+    "src/prim.rs": "runtime-boundary",
+    "src/prim/osx.rs": "malloc-cxx-override",
+    "src/prim/unix.rs": "runtime-boundary",
+    "src/stats.rs": "c-abi",
+    "src/theap.rs": "c-abi-internal-classified",
 }
 
 EXPORT_PATTERNS = [
@@ -38,24 +38,69 @@ EXPORT_PATTERNS = [
     re.compile(r"\bnaked_asm!\s*\("),
 ]
 
+VERSION_SCRIPT_PATTERNS = [
+    "_Zda*;",
+    "_Zdl*;",
+    "_Zna*;",
+    "_Znw*;",
+    "__libc_*;",
+    "__posix_memalign*;",
+    "_aligned_malloc*;",
+    "aligned_alloc*;",
+    "calloc*;",
+    "cfree*;",
+    "free*;",
+    "malloc*;",
+    "memalign*;",
+    "posix_memalign*;",
+    "pvalloc*;",
+    "realloc*;",
+    "valloc*;",
+    "mi_*;",
+]
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
 
 def main() -> int:
     offenders: list[str] = []
+    classified: dict[str, int] = {}
     for path in sorted((ROOT / "src").rglob("*.rs")):
         rel = path.relative_to(ROOT).as_posix()
         text = path.read_text()
         if not any(pattern.search(text) for pattern in EXPORT_PATTERNS):
             continue
-        if rel not in APPROVED_EXPORT_FILES:
+        classification = EXPORT_FILE_CLASSIFICATION.get(rel)
+        if classification is None:
             offenders.append(rel)
+            continue
+        classified[classification] = classified.get(classification, 0) + 1
 
-    if offenders:
-        raise AssertionError(
-            "export ABI attributes outside approved boundary files: "
-            + ", ".join(offenders)
+    require(
+        not offenders,
+        "export ABI attributes outside classified boundary files: " + ", ".join(offenders),
+    )
+
+    build_rs = (ROOT / "build.rs").read_text()
+    require(
+        "version_script" in build_rs and "--version-script" in build_rs,
+        "build.rs must emit the Linux cdylib linker version script",
+    )
+    for pattern in VERSION_SCRIPT_PATTERNS:
+        require(
+            pattern in build_rs,
+            f"Linux linker version script missing public export pattern {pattern}",
         )
 
-    print(f"ok: FFI/export boundary attributes limited to {len(APPROVED_EXPORT_FILES)} approved files")
+    summary = ", ".join(f"{name}={count}" for name, count in sorted(classified.items()))
+    print(
+        "ok: FFI/export boundary attributes limited to "
+        f"{len(EXPORT_FILE_CLASSIFICATION)} classified files ({summary}); "
+        f"version script covers {len(VERSION_SCRIPT_PATTERNS)} public patterns"
+    )
     return 0
 
 

@@ -1112,7 +1112,7 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## H2. FFI export enforcement
 
-- [ ] Add or update script to inventory export attributes.
+- [x] Add or update script to inventory export attributes.
   - Search targets:
     - `#[unsafe(no_mangle)]`
     - `#[export_name = ...]`
@@ -1122,11 +1122,19 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Script maps each export to C ABI, malloc override, C++ override, or internal-classified exception.
     - Script fails on unclassified new export.
+  - Evidence:
+    - `scripts/check-ffi-boundary.py` classifies export-attribute files as `c-abi`, `malloc-cxx-override`, `runtime-boundary`, `panic-runtime-boundary`, or `c-abi-internal-classified`.
+    - The script searches `#[unsafe(no_mangle)]`, `#[unsafe(export_name = ...)]`, `global_asm!`, `#[unsafe(naked)]`, and `naked_asm!`.
+    - The script verifies the Linux linker version script public patterns in `build.rs` and passes.
 
-- [ ] Enforce no internal helper regains dynamic export accidentally.
+- [x] Enforce no internal helper regains dynamic export accidentally.
   - Validation:
     - Existing release fast-path audit or new script covers known helpers.
     - `scripts/check-abi-symbols.sh` catches extra dynamic symbols.
+  - Evidence:
+    - `scripts/check-ffi-boundary.py` fails if export attributes appear outside classified boundary files.
+    - `tests/release_fast_path_audit.rs` guards known internal helpers against regaining `#[unsafe(no_mangle)]`.
+    - `scripts/check-abi-symbols.sh` passes and catches extra dynamic symbols.
 
 ## H3. Rustdoc and lints
 

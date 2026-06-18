@@ -32,11 +32,16 @@ Run:
 
 ```sh
 scripts/check-abi-symbols.sh
+scripts/check-ffi-boundary.py
 ```
 
 This check fails if a public-header symbol is missing or if an extra relevant
 `mi_*`, `_mi_*`, malloc-family, or C++ operator symbol is exported without a
 classification.
+The FFI boundary check classifies source files containing export attributes as
+C ABI, malloc/C++ override, runtime boundary, or internal-classified exception,
+and verifies that the Linux linker version script keeps the expected public
+symbol patterns global.
 
 ## Hidden Symbols
 

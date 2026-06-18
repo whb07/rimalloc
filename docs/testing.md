@@ -13,12 +13,21 @@ sequences:
 ```sh
 cargo test --quiet
 cargo test --quiet --test property_alloc_sequences
+cargo test --quiet --test fuzz_alloc_sequences
 ```
 
 The property sequence test is intentionally deterministic. It exercises bounded
 random malloc, calloc, aligned allocation, heap allocation, realloc, free,
 usable-size, zero-fill, alignment, preservation, and heap-containment
 properties without requiring an external fuzzing engine.
+
+`tests/fuzz_alloc_sequences.rs` adds a byte-stream operation interpreter over a
+fixed corpus. It covers malloc, zalloc, calloc, aligned allocation, heap
+allocation, heap-aligned allocation, realloc, rezalloc, collect, null realloc,
+overflow-sized request rejection, usable-size lower bounds, zero-fill,
+alignment, preservation, and heap ownership. The interpreter is deterministic
+in normal tests but keeps the operation model close to a future cargo-fuzz
+target.
 
 ## Sanitizers
 
@@ -71,9 +80,9 @@ Known unresolved baseline mismatches remain documented in `PARITY.md`.
 
 ## Fuzzing Policy
 
-The current repository has deterministic property tests but does not yet claim a
-maintained libFuzzer, AFL, or cargo-fuzz target. A future fuzz target should
-generate operation sequences over:
+The current repository has deterministic property and byte-stream fuzz-corpus
+tests but does not yet claim a maintained libFuzzer, AFL, or cargo-fuzz target.
+A future external fuzz target should generate operation sequences over:
 
 - malloc, calloc, zalloc, realloc, aligned allocation, heap allocation, collect,
   and free,

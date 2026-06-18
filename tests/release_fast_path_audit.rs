@@ -2618,6 +2618,15 @@ fn free_path_internals_are_not_dynamic_exports() {
         "page-map submap slot atomics should use AtomicPtrField"
     );
     assert!(
+        internal.contains(
+            "crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())\n        .load(crate::core_types::MemoryOrder::Acquire)"
+        ) && internal.contains(
+            "crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))\n        .load(crate::core_types::MemoryOrder::Acquire)"
+        ) && !internal.contains("crate::atomic::mi_atomic_load_ptr_acquire(&(*theap).heap)")
+            && !internal.contains("crate::atomic::mi_atomic_load_ptr_acquire(_mi_page_map_base().add(idx))"),
+        "internal thread-heap and page-map pointer loads should use AtomicPtrField"
+    );
+    assert!(
         arena_rs.contains(
             "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> mi_memid_t"
         ) && arena_rs.contains("unsafe { *memid = mi_memid_create_arena(arena, range) };")

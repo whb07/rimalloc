@@ -698,7 +698,8 @@ pub unsafe fn mi_count_size_overflow(count: usize, size: usize, total: &mut usiz
 
 #[inline]
 pub unsafe fn _mi_theap_heap(theap: *const mi_theap_t) -> *mut mi_heap_t {
-    crate::atomic::mi_atomic_load_ptr_acquire(&(*theap).heap)
+    crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())
+        .load(crate::core_types::MemoryOrder::Acquire)
 }
 
 #[inline]
@@ -734,7 +735,8 @@ pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize
 #[cfg(not(target_pointer_width = "32"))]
 #[inline]
 pub unsafe fn _mi_page_map_at(idx: usize) -> mi_submap_t {
-    crate::atomic::mi_atomic_load_ptr_acquire(_mi_page_map_base().add(idx))
+    crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))
+        .load(crate::core_types::MemoryOrder::Acquire)
 }
 
 #[cfg(target_pointer_width = "32")]

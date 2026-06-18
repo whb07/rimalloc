@@ -1,6 +1,6 @@
 //! Mechanical translation of the early `src/theap.c` helper slice.
 
-#![allow(dead_code, non_camel_case_types, unsafe_op_in_unsafe_fn)]
+#![allow(non_camel_case_types, unsafe_op_in_unsafe_fn)]
 
 use core::{ffi::c_void, mem::size_of, ptr};
 

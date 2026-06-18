@@ -1,11 +1,6 @@
 //! Primitive OS / platform layer
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    unsafe_op_in_unsafe_fn,
-    clippy::missing_safety_doc
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_void;
 use core::ptr;
@@ -128,6 +123,8 @@ pub(crate) unsafe extern "C" fn _mi_os_page_size() -> usize {
     unsafe { (*mi_os_mem_config_ptr()).page_size }
 }
 
+/// # Safety
+/// The OS memory configuration must have been initialized before this is called concurrently.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_large_page_size() -> usize {
     let large = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
@@ -138,6 +135,8 @@ pub unsafe extern "C" fn _mi_os_large_page_size() -> usize {
     }
 }
 
+/// # Safety
+/// The OS memory configuration and options state must be initialized.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
     let minsize = mi_option_get_size(mi_option_t::mi_option_minimal_purge_size);
@@ -152,6 +151,8 @@ pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
     }
 }
 
+/// # Safety
+/// The OS memory configuration must have been initialized.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
     let gsize = unsafe { _mi_os_page_size() };
@@ -159,6 +160,8 @@ pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
     gsize
 }
 
+/// # Safety
+/// The OS memory configuration must have been initialized.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
     let vbits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
@@ -166,6 +169,8 @@ pub(crate) unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
     vbits
 }
 
+/// # Safety
+/// The OS memory configuration must have been initialized.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize) -> bool {
     let large_page_size = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
@@ -194,11 +199,16 @@ pub(crate) unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
     }
 }
 
+/// # Safety
+/// Must be called during process initialization before concurrent OS allocation use.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_init() {
     unsafe { _mi_prim_mem_init(core::ptr::addr_of_mut!(mi_os_mem_config)) };
 }
 
+/// # Safety
+/// The OS memory configuration must be initialized; secure/release randomized hints also require
+/// an initialized default theap.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usize) -> *mut c_void {
     if MI_INTPTR_SIZE < 8 || try_alignment <= unsafe { (*mi_os_mem_config_ptr()).alloc_granularity }
@@ -290,6 +300,8 @@ fn mi_os_page_align_area_conservative(
     mi_os_page_align_areax(true, addr, size, newsize)
 }
 
+/// # Safety
+/// The OS memory configuration must have been initialized.
 #[inline(never)]
 #[allow(clippy::absurd_extreme_comparisons)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_size() -> usize {
@@ -300,6 +312,8 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_size() -> usize {
     }
 }
 
+/// # Safety
+/// `addr`, when non-null, must designate the guard page associated with `memid`.
 #[inline(never)]
 #[allow(clippy::absurd_extreme_comparisons)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
@@ -333,6 +347,9 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_at(
     true
 }
 
+/// # Safety
+/// `addr` must be at least one secure guard page past the page to protect, and `memid` must
+/// describe that allocation.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_set_before(
     addr: *mut c_void,
@@ -348,6 +365,8 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_set_before(
     }
 }
 
+/// # Safety
+/// `addr`, when non-null, must designate the guard page associated with `memid`.
 #[inline(never)]
 #[allow(clippy::absurd_extreme_comparisons)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
@@ -383,6 +402,9 @@ pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_at(
     true
 }
 
+/// # Safety
+/// `addr` must be at least one secure guard page past the page to reset, and `memid` must
+/// describe that allocation.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_secure_guard_page_reset_before(
     addr: *mut c_void,
@@ -960,6 +982,8 @@ pub(crate) unsafe extern "C" fn _mi_os_zalloc(size: usize, memid: *mut mi_memid_
     unsafe { mi_os_ensure_zero(p, size, memid) }
 }
 
+/// # Safety
+/// `memid` must point to writable memory-id storage.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_alloc_aligned(
     size: usize,
@@ -1025,6 +1049,8 @@ static MI_OS_SECURE_GUARD_PAGE_RESET_BEFORE_KEEP: unsafe extern "C" fn(
     mi_memid_t,
 ) -> bool = _mi_os_secure_guard_page_reset_before;
 
+/// # Safety
+/// `memid` must point to writable memory-id storage. `offset` must be within `size`.
 pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     size: usize,
     alignment: usize,
@@ -1151,6 +1177,8 @@ unsafe fn mi_os_free_huge_os_pages(p: *mut c_void, mut size: usize, subproc: *mu
     }
 }
 
+/// # Safety
+/// Reads process-wide NUMA configuration and may initialize its cached value.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_numa_node_count() -> i32 {
     let mut count = MI_NUMA_NODE_COUNT.load(Ordering::Acquire);
@@ -1192,6 +1220,8 @@ unsafe fn mi_os_numa_node_get() -> i32 {
     numa_node
 }
 
+/// # Safety
+/// Reads process-wide NUMA configuration and may query the OS primitive layer.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_numa_node() -> i32 {
     if MI_NUMA_NODE_COUNT.load(Ordering::Relaxed) == 1 {
@@ -1201,6 +1231,9 @@ pub unsafe extern "C" fn _mi_os_numa_node() -> i32 {
     }
 }
 
+/// # Safety
+/// Any non-null output pointers must be writable. The returned memory must be released through
+/// the matching OS huge-page free path.
 pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
     pages: usize,
     numa_node: i32,

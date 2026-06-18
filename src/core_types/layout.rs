@@ -149,6 +149,7 @@ impl CallocRequest {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct OldAllocation {
     ptr: UserPtr,
     usable: UsableSize,
@@ -170,6 +171,22 @@ impl OldAllocation {
             page,
             block,
         }
+    }
+
+    pub(crate) fn ptr(self) -> UserPtr {
+        self.ptr
+    }
+
+    pub(crate) fn usable(self) -> UsableSize {
+        self.usable
+    }
+
+    pub(crate) fn page(self) -> PagePtr {
+        self.page
+    }
+
+    pub(crate) fn block(self) -> BlockPtr {
+        self.block
     }
 }
 

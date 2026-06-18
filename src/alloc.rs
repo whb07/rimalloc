@@ -606,6 +606,33 @@ unsafe fn mi_validate_ptr_page(
     crate::free::mi_validate_pointer(p.cast_mut(), msg)
 }
 
+unsafe fn mi_realloc_old_allocation(
+    p: *mut c_void,
+    msg: *const c_char,
+) -> Option<crate::core_types::OldAllocation> {
+    match mi_validate_ptr_page(p, msg) {
+        crate::core_types::PointerLookup::Valid {
+            user,
+            page,
+            location,
+        } => {
+            let block = match location {
+                crate::core_types::PointerLocation::BlockStart(block)
+                | crate::core_types::PointerLocation::Interior { block, .. } => block,
+                crate::core_types::PointerLocation::Guarded { block, .. } => block.0,
+            };
+            let usable = _mi_usable_size_typed(user.as_ptr(), page.as_ptr());
+            // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and
+            // supplies the block start derived by the validation boundary.
+            Some(crate::core_types::OldAllocation::new(
+                user, usable, page, block,
+            ))
+        }
+        crate::core_types::PointerLookup::Null
+        | crate::core_types::PointerLookup::Invalid { .. } => None,
+    }
+}
+
 pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -620,17 +647,14 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
         }
         (ptr::null_mut(), 0usize)
     } else {
-        let page = match mi_validate_ptr_page(p, c"mi_realloc".as_ptr()) {
-            crate::core_types::PointerLookup::Valid { page, .. } => page.as_ptr(),
-            crate::core_types::PointerLookup::Null
-            | crate::core_types::PointerLookup::Invalid { .. } => {
-                if !usable_pre.is_null() {
-                    *usable_pre = 0;
-                }
-                return ptr::null_mut();
+        let Some(old) = mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) else {
+            if !usable_pre.is_null() {
+                *usable_pre = 0;
             }
+            return ptr::null_mut();
         };
-        let size = _mi_usable_size_typed(p, page);
+        let page = old.page().as_ptr();
+        let size = old.usable();
         if !usable_pre.is_null() {
             *usable_pre = mi_page_usable_block_size(page).get();
         }

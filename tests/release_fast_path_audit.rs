@@ -620,16 +620,26 @@ fn allocation_product_paths_use_typed_requests() {
 fn realloc_validation_uses_pointer_lookup_boundary() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
+    let layout_rs =
+        fs::read_to_string(root.join("src/core_types/layout.rs")).expect("read layout.rs");
 
     assert!(
         alloc_rs.contains(
             "unsafe fn mi_validate_ptr_page(\n    p: *const c_void,\n    msg: *const c_char,\n) -> crate::core_types::PointerLookup"
         ) && alloc_rs.contains("crate::free::mi_validate_pointer(p.cast_mut(), msg)")
-            && alloc_rs.contains("crate::core_types::PointerLookup::Valid { page, .. } => page.as_ptr()")
+            && alloc_rs.contains("unsafe fn mi_realloc_old_allocation(")
+            && alloc_rs.contains("crate::core_types::PointerLookup::Valid {\n            user,\n            page,\n            location,")
+            && alloc_rs.contains("Some(crate::core_types::OldAllocation::new(")
+            && alloc_rs.contains("let Some(old) = mi_realloc_old_allocation(p, c\"mi_realloc\".as_ptr())")
+            && alloc_rs.contains("let page = old.page().as_ptr();")
+            && alloc_rs.contains("let size = old.usable();")
             && alloc_rs.contains("crate::core_types::PointerLookup::Invalid { .. }")
+            && layout_rs.contains("pub(crate) struct OldAllocation")
+            && layout_rs.contains("pub(crate) fn usable(self) -> UsableSize")
+            && layout_rs.contains("pub(crate) fn page(self) -> PagePtr")
             && !alloc_rs.contains("unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const c_char) -> *mut mi_page_t")
             && !alloc_rs.contains("_mi_safe_ptr_page"),
-        "realloc must use the typed PointerLookup validation boundary instead of a raw page-pointer validator"
+        "realloc must use PointerLookup and construct OldAllocation only after validation"
     );
 }
 

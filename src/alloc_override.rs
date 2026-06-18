@@ -6,7 +6,6 @@
     non_upper_case_globals,
     dead_code,
     unused_macros,
-    clippy::missing_safety_doc,
     unsafe_op_in_unsafe_fn
 )]
 
@@ -29,6 +28,8 @@ macro_rules! MI_FORWARD1 {
     }};
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(mi_c_malloc_fast)]
 #[unsafe(naked)]
 #[unsafe(export_name = "_Znwm")]
@@ -434,6 +435,8 @@ pub static _mi_cxx_interposes: [mi_interpose_s; 8] = [
     MI_INTERPOSE_FUN!(_ZnamRKSt9nothrow_t, crate::mimalloc::mi_new_nothrow),
 ];
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_size_checked(p: *mut c_void) -> usize {
     if !unsafe { crate::mimalloc::mi_is_in_heap_region(p.cast_const()) } {
@@ -442,11 +445,15 @@ pub unsafe extern "C" fn mi_malloc_size_checked(p: *mut c_void) -> usize {
     unsafe { crate::mimalloc::mi_usable_size(p.cast_const()) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_forward1<R, A>(fun: unsafe extern "C" fn(A) -> R, x: A) -> R {
     unsafe { fun(x) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_forward3<R, A, B, C>(
     fun: unsafe extern "C" fn(A, B, C) -> R,
@@ -457,6 +464,8 @@ pub unsafe fn mi_forward3<R, A, B, C>(
     unsafe { fun(x, y, z) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_forward02<A, B>(fun: unsafe extern "C" fn(A, B), x: A, y: B) {
     unsafe { fun(x, y) }
@@ -477,93 +486,125 @@ pub const fn MI_INTERPOSE_DECLS<const N: usize>(
     entries
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[allow(improper_ctypes_definitions)]
 #[inline]
 pub unsafe fn mi_malloc_good_size_forward(size: usize) -> usize {
     unsafe { crate::mimalloc::mi_malloc_good_size(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_vfree_forward(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_malloc_size_forward(p: *const c_void) -> usize {
     unsafe { crate::mimalloc::mi_usable_size(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_aligned_alloc_forward(alignment: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_aligned_alloc(alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _expand(block: *mut c_void, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_expand(block, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _msize_base(block: *mut c_void) -> usize {
     unsafe { crate::mimalloc::mi_malloc_size(block) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _msize(block: *mut c_void) -> usize {
     unsafe { crate::mimalloc::mi_malloc_size(block) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _free_base(block: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(block) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free(block: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(block) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _malloc_base(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _realloc_base(block: *mut c_void, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_realloc(block, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn realloc(block: *mut c_void, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_realloc(block, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _calloc_base(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _recalloc_base(
@@ -574,24 +615,32 @@ pub unsafe extern "C" fn _recalloc_base(
     unsafe { crate::mimalloc::mi_recalloc(block, count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _recalloc(block: *mut c_void, count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_recalloc(block, count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_free(block: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(block) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_malloc(size: usize, alignment: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc_aligned(size, alignment) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_offset_malloc(
@@ -602,6 +651,8 @@ pub unsafe extern "C" fn _aligned_offset_malloc(
     unsafe { crate::mimalloc::mi_malloc_aligned_at(size, alignment, offset) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_msize(
@@ -614,6 +665,8 @@ pub unsafe extern "C" fn _aligned_msize(
     unsafe { crate::mimalloc::mi_malloc_size(block) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_offset_realloc(
@@ -625,6 +678,8 @@ pub unsafe extern "C" fn _aligned_offset_realloc(
     unsafe { crate::mimalloc::mi_realloc_aligned_at(block, size, alignment, offset) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_offset_recalloc(
@@ -637,6 +692,8 @@ pub unsafe extern "C" fn _aligned_offset_recalloc(
     unsafe { crate::mimalloc::mi_recalloc_aligned_at(block, count, size, alignment, offset) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_realloc(
@@ -647,6 +704,8 @@ pub unsafe extern "C" fn _aligned_realloc(
     unsafe { crate::mimalloc::mi_realloc_aligned(block, size, alignment) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_recalloc(
@@ -658,54 +717,72 @@ pub unsafe extern "C" fn _aligned_recalloc(
     unsafe { crate::mimalloc::mi_recalloc_aligned(block, count, size, alignment) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "_ZdlPv")]
 pub unsafe extern "C" fn mi_cxx_delete(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "_ZdaPv")]
 pub unsafe extern "C" fn mi_cxx_delete_array(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdlPvm")]
 pub unsafe extern "C" fn mi_cxx_delete_sized(p: *mut c_void, n: usize) {
     unsafe { crate::mimalloc::mi_free_size(p, n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdaPvm")]
 pub unsafe extern "C" fn mi_cxx_delete_array_sized(p: *mut c_void, n: usize) {
     unsafe { crate::mimalloc::mi_free_size(p, n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdlPvSt11align_val_t")]
 pub unsafe extern "C" fn mi_cxx_delete_aligned(p: *mut c_void, al: usize) {
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdaPvSt11align_val_t")]
 pub unsafe extern "C" fn mi_cxx_delete_array_aligned(p: *mut c_void, al: usize) {
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdlPvmSt11align_val_t")]
 pub unsafe extern "C" fn mi_cxx_delete_sized_aligned(p: *mut c_void, n: usize, al: usize) {
     unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdaPvmSt11align_val_t")]
 pub unsafe extern "C" fn mi_cxx_delete_array_sized_aligned(p: *mut c_void, n: usize, al: usize) {
     unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdlPvRKSt9nothrow_t")]
 pub unsafe extern "C" fn mi_cxx_delete_nothrow(p: *mut c_void, tag: mi_nothrow_t) {
@@ -713,6 +790,8 @@ pub unsafe extern "C" fn mi_cxx_delete_nothrow(p: *mut c_void, tag: mi_nothrow_t
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdaPvRKSt9nothrow_t")]
 pub unsafe extern "C" fn mi_cxx_delete_array_nothrow(p: *mut c_void, tag: mi_nothrow_t) {
@@ -720,6 +799,8 @@ pub unsafe extern "C" fn mi_cxx_delete_array_nothrow(p: *mut c_void, tag: mi_not
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdlPvSt11align_val_tRKSt9nothrow_t")]
 pub unsafe extern "C" fn mi_cxx_delete_aligned_nothrow(
@@ -731,6 +812,8 @@ pub unsafe extern "C" fn mi_cxx_delete_aligned_nothrow(
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_ZdaPvSt11align_val_tRKSt9nothrow_t")]
 pub unsafe extern "C" fn mi_cxx_delete_array_aligned_nothrow(
@@ -742,6 +825,8 @@ pub unsafe extern "C" fn mi_cxx_delete_array_aligned_nothrow(
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(any(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
@@ -754,6 +839,8 @@ pub unsafe extern "C" fn mi_cxx_new_64(n: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new(n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(any(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
@@ -766,6 +853,8 @@ pub unsafe extern "C" fn mi_cxx_new_array_64(n: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new(n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(any(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
@@ -776,6 +865,8 @@ pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(any(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
@@ -786,6 +877,8 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_nothrow(n: usize, tag: mi_nothrow_t
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(any(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
@@ -795,6 +888,8 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned(n: usize, al: usize) -> *mut c_vo
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(any(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
@@ -804,6 +899,8 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_aligned(n: usize, al: usize) -> *mu
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(any(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
@@ -821,6 +918,8 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned_nothrow(
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(any(
     target_pointer_width = "64",
     all(target_pointer_width = "32", target_os = "emscripten")
@@ -838,18 +937,24 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_aligned_nothrow(
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(not(windows), unsafe(export_name = "_Znwj"))]
 pub unsafe extern "C" fn mi_cxx_new_32(n: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new(n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(not(windows), unsafe(export_name = "_Znaj"))]
 pub unsafe extern "C" fn mi_cxx_new_array_32(n: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new(n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(not(windows), unsafe(export_name = "_ZnwjRKSt9nothrow_t"))]
 pub unsafe extern "C" fn mi_cxx_new_32_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
@@ -857,6 +962,8 @@ pub unsafe extern "C" fn mi_cxx_new_32_nothrow(n: usize, tag: mi_nothrow_t) -> *
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(not(windows), unsafe(export_name = "_ZnajRKSt9nothrow_t"))]
 pub unsafe extern "C" fn mi_cxx_new_array_32_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
@@ -864,18 +971,24 @@ pub unsafe extern "C" fn mi_cxx_new_array_32_nothrow(n: usize, tag: mi_nothrow_t
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(not(windows), unsafe(export_name = "_ZnwjSt11align_val_t"))]
 pub unsafe extern "C" fn mi_cxx_new_32_aligned(n: usize, al: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(not(windows), unsafe(export_name = "_ZnajSt11align_val_t"))]
 pub unsafe extern "C" fn mi_cxx_new_array_32_aligned(n: usize, al: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
     not(windows),
@@ -890,6 +1003,8 @@ pub unsafe extern "C" fn mi_cxx_new_32_aligned_nothrow(
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
     not(windows),
@@ -904,43 +1019,59 @@ pub unsafe extern "C" fn mi_cxx_new_array_32_aligned_nothrow(
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_new_array_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
     crate::MI_UNUSED!(tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_delete_sized(p: *mut c_void, n: usize) {
     unsafe { crate::mimalloc::mi_free_size(p, n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_delete_array_sized(p: *mut c_void, n: usize) {
     unsafe { crate::mimalloc::mi_free_size(p, n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_delete_array_aligned(p: *mut c_void, al: usize) {
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_delete_sized_aligned(p: *mut c_void, n: usize, al: usize) {
     unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_delete_array_sized_aligned(p: *mut c_void, n: usize, al: usize) {
     unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_delete_aligned_nothrow(p: *mut c_void, al: usize, tag: mi_nothrow_t) {
     crate::MI_UNUSED!(tag);
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_delete_array_aligned_nothrow(
     p: *mut c_void,
@@ -951,16 +1082,22 @@ pub unsafe fn mi_operator_delete_array_aligned_nothrow(
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_new_aligned(n: usize, al: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_new_array_aligned(n: usize, al: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_new_aligned(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_new_aligned_nothrow(
     n: usize,
@@ -971,6 +1108,8 @@ pub unsafe fn mi_operator_new_aligned_nothrow(
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_new_array_aligned_nothrow(
     n: usize,
@@ -981,143 +1120,195 @@ pub unsafe fn mi_operator_new_array_aligned_nothrow(
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_malloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "malloc")]
 pub unsafe extern "C" fn mi_unix_malloc_export(size: usize) -> *mut c_void {
     unsafe { mi_unix_malloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_calloc(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "calloc")]
 pub unsafe extern "C" fn mi_unix_calloc_export(count: usize, size: usize) -> *mut c_void {
     unsafe { mi_unix_calloc(count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_realloc(p, newsize) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "realloc")]
 pub unsafe extern "C" fn mi_unix_realloc_export(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe { mi_unix_realloc(p, newsize) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_free(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "free")]
 pub unsafe extern "C" fn mi_unix_free_export(p: *mut c_void) {
     unsafe { mi_unix_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_strdup(s: *const c_char) -> *mut c_char {
     unsafe { crate::mimalloc::mi_strdup(s) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "strdup")]
 pub unsafe extern "C" fn mi_unix_strdup_export(s: *const c_char) -> *mut c_char {
     unsafe { mi_unix_strdup(s) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_strndup(s: *const c_char, n: usize) -> *mut c_char {
     unsafe { crate::mimalloc::mi_strndup(s, n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "strndup")]
 pub unsafe extern "C" fn mi_unix_strndup_export(s: *const c_char, n: usize) -> *mut c_char {
     unsafe { mi_unix_strndup(s, n) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_reallocf(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_reallocf(p, newsize) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "reallocf")]
 pub unsafe extern "C" fn mi_unix_reallocf_export(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe { mi_unix_reallocf(p, newsize) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_malloc_size(p: *const c_void) -> usize {
     unsafe { crate::mimalloc::mi_usable_size(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "malloc_size")]
 pub unsafe extern "C" fn mi_unix_malloc_size_export(p: *const c_void) -> usize {
     unsafe { mi_unix_malloc_size(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_malloc_usable_size(p: *const c_void) -> usize {
     unsafe { crate::mimalloc::mi_usable_size(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_malloc_good_size(size: usize) -> usize {
     crate::mimalloc::mi_malloc_good_size(size)
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "malloc_good_size")]
 pub unsafe extern "C" fn mi_unix_malloc_good_size_export(size: usize) -> usize {
     unsafe { mi_unix_malloc_good_size(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "malloc_usable_size")]
 pub unsafe extern "C" fn mi_unix_malloc_usable_size_export(p: *const c_void) -> usize {
     unsafe { mi_unix_malloc_usable_size(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_valloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_valloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "valloc")]
 pub unsafe extern "C" fn mi_unix_valloc_export(size: usize) -> *mut c_void {
     unsafe { mi_unix_valloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_vfree(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "vfree")]
 pub unsafe extern "C" fn mi_unix_vfree_export(p: *mut c_void) {
     unsafe { mi_unix_vfree(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> c_int {
     unsafe { crate::mimalloc::mi_posix_memalign(p, alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "posix_memalign")]
 pub unsafe extern "C" fn mi_unix_posix_memalign_export(
@@ -1128,11 +1319,15 @@ pub unsafe extern "C" fn mi_unix_posix_memalign_export(
     unsafe { mi_unix_posix_memalign(p, alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_aligned_alloc(alignment: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_aligned_alloc(alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "aligned_alloc")]
 pub unsafe extern "C" fn mi_unix_aligned_alloc_export(
@@ -1142,44 +1337,60 @@ pub unsafe extern "C" fn mi_unix_aligned_alloc_export(
     unsafe { mi_unix_aligned_alloc(alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_cfree(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "cfree")]
 pub unsafe extern "C" fn mi_unix_cfree_export(p: *mut c_void) {
     unsafe { mi_unix_cfree(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_pvalloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_pvalloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "pvalloc")]
 pub unsafe extern "C" fn mi_unix_pvalloc_export(size: usize) -> *mut c_void {
     unsafe { mi_unix_pvalloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_memalign(alignment: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_memalign(alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "memalign")]
 pub unsafe extern "C" fn mi_unix_memalign_export(alignment: usize, size: usize) -> *mut c_void {
     unsafe { mi_unix_memalign(alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_aligned_malloc(size: usize, alignment: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc_aligned(size, alignment) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "_aligned_malloc")]
 pub unsafe extern "C" fn mi_unix_aligned_malloc_export(
@@ -1189,11 +1400,15 @@ pub unsafe extern "C" fn mi_unix_aligned_malloc_export(
     unsafe { mi_unix_aligned_malloc(size, alignment) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_reallocarray(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_reallocarray(p, count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(not(windows))]
 #[unsafe(export_name = "reallocarray")]
 pub unsafe extern "C" fn mi_unix_reallocarray_export(
@@ -1204,6 +1419,8 @@ pub unsafe extern "C" fn mi_unix_reallocarray_export(
     unsafe { mi_unix_reallocarray(p, count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_reallocarr(ptrp: *mut *mut c_void, count: usize, size: usize) -> c_int {
     unsafe { crate::mimalloc::mi_reallocarr(ptrp, count, size) }
@@ -1216,55 +1433,75 @@ core::arch::global_asm!(
     ".set reallocarr, mi_reallocarr",
 );
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_wasi_libc_malloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "wasi", not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "__libc_malloc")]
 pub unsafe extern "C" fn mi_wasi_libc_malloc_export(size: usize) -> *mut c_void {
     unsafe { mi_wasi_libc_malloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_wasi_libc_calloc(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "wasi", not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "__libc_calloc")]
 pub unsafe extern "C" fn mi_wasi_libc_calloc_export(count: usize, size: usize) -> *mut c_void {
     unsafe { mi_wasi_libc_calloc(count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_wasi_libc_realloc(p: *mut c_void, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_realloc(p, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(target_os = "wasi")]
 #[unsafe(export_name = "__libc_realloc")]
 pub unsafe extern "C" fn mi_wasi_libc_realloc_export(p: *mut c_void, size: usize) -> *mut c_void {
     unsafe { mi_wasi_libc_realloc(p, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_wasi_libc_free(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "wasi", not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "__libc_free")]
 pub unsafe extern "C" fn mi_wasi_libc_free_export(p: *mut c_void) {
     unsafe { mi_wasi_libc_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_wasi_libc_memalign(alignment: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_memalign(alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(target_os = "wasi")]
 #[unsafe(export_name = "__libc_memalign")]
 pub unsafe extern "C" fn mi_wasi_libc_memalign_export(
@@ -1274,88 +1511,120 @@ pub unsafe extern "C" fn mi_wasi_libc_memalign_export(
     unsafe { mi_wasi_libc_memalign(alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_malloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "linux", not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "__libc_malloc")]
 pub unsafe extern "C" fn mi_linux_libc_malloc_export(size: usize) -> *mut c_void {
     unsafe { mi_linux_libc_malloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_calloc(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "linux", not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "__libc_calloc")]
 pub unsafe extern "C" fn mi_linux_libc_calloc_export(count: usize, size: usize) -> *mut c_void {
     unsafe { mi_linux_libc_calloc(count, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_realloc(p: *mut c_void, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_realloc(p, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(target_os = "linux")]
 #[unsafe(export_name = "__libc_realloc")]
 pub unsafe extern "C" fn mi_linux_libc_realloc_export(p: *mut c_void, size: usize) -> *mut c_void {
     unsafe { mi_linux_libc_realloc(p, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_free(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_os = "linux", not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "__libc_free")]
 pub unsafe extern "C" fn mi_linux_libc_free_export(p: *mut c_void) {
     unsafe { mi_linux_libc_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_cfree(p: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(target_os = "linux")]
 #[unsafe(export_name = "__libc_cfree")]
 pub unsafe extern "C" fn mi_linux_libc_cfree_export(p: *mut c_void) {
     unsafe { mi_linux_libc_cfree(p) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_valloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_valloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(target_os = "linux")]
 #[unsafe(export_name = "__libc_valloc")]
 pub unsafe extern "C" fn mi_linux_libc_valloc_export(size: usize) -> *mut c_void {
     unsafe { mi_linux_libc_valloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_pvalloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_pvalloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(target_os = "linux")]
 #[unsafe(export_name = "__libc_pvalloc")]
 pub unsafe extern "C" fn mi_linux_libc_pvalloc_export(size: usize) -> *mut c_void {
     unsafe { mi_linux_libc_pvalloc(size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_libc_memalign(alignment: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_memalign(alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(target_os = "linux")]
 #[unsafe(export_name = "__libc_memalign")]
 pub unsafe extern "C" fn mi_linux_libc_memalign_export(
@@ -1365,11 +1634,15 @@ pub unsafe extern "C" fn mi_linux_libc_memalign_export(
     unsafe { mi_linux_libc_memalign(alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_linux_posix_memalign(p: *mut *mut c_void, alignment: usize, size: usize) -> c_int {
     unsafe { crate::mimalloc::mi_posix_memalign(p, alignment, size) }
 }
 
+/// # Safety
+/// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(target_os = "linux")]
 #[unsafe(export_name = "__posix_memalign")]
 pub unsafe extern "C" fn mi_linux_posix_memalign_export(

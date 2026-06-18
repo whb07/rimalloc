@@ -75,6 +75,8 @@ The typed atomic layer now centralizes thread-free word load, CAS, ownership-cla
 
 Benchmark verification after the `AtomicThreadFree(AtomicUsizeField)` cleanup refreshed the release cdylib and ran the full `mimalloc-bench` `allt` suite at `-n=3`: Rust geomean was `0.996245` (`-0.38%` vs C), matching the `BENCHMARK_RESULTS.md` parity envelope (`0.995237`, `-0.48%`). Focused `-n=5` repeats cleared the noisy cache hot path (`cache-scratchN` median tie, mean Rust-favored) and kept glibc/shbench hot-path cases within the established noise range; redis and larson-sized remained small noisy watch items without a stable Rust absolute-time regression against the baseline.
 
+`tests/release_fast_path_audit.rs` now includes a cross-cutting data-type acceptance audit for the `TYPES_SPEC.md` Section 18 invariants that are enforceable from source shape: `core_types` module ownership, memid union access limited to `MemId::view`/constructors, pointer-to-atomic casts limited to typed atomic field wrappers, no `Deref`/`DerefMut` on core metadata wrappers, block-link raw field access limited to the free-list wrapper layer, and typed free/reclaim/page-queue signatures.
+
 **Action Items:**
 1. **Remove Unused Types:** In progress. Do not delete C ABI aliases still required by `raw`/compat/public module boundaries.
 2. **Resolve Clippy Warnings:** In progress. `cargo clippy --all-targets -- -D warnings` is clean with the remaining intentional allowances.

@@ -613,15 +613,6 @@ pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
     mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()
 }
 
-#[allow(dead_code)]
-unsafe fn mi_theap_mallocn(theap: *mut mi_theap_t, count: usize, size: usize) -> *mut c_void {
-    if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
-        mi_theap_mallocn_req(theap, req)
-    } else {
-        ptr::null_mut()
-    }
-}
-
 unsafe fn mi_theap_mallocn_req(
     theap: *mut mi_theap_t,
     req: crate::core_types::CallocRequest,

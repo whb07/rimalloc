@@ -2577,6 +2577,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && internal.contains("crate::core_types::MemIdView::External(_)")
             && internal.contains("crate::core_types::MemIdView::Static(_)")
             && internal.contains("crate::core_types::MemIdView::Arena(_)")
+            && !internal.contains("pub unsafe fn _mi_memid_create(")
+            && !internal.contains("raw.memkind = memkind")
             && internal.contains("mi_page_is_in_arena(page)")
             && internal.contains("crate::core_types::MemId::<crate::core_types::MetaMem>::meta(")
             && internal.contains("core::num::NonZeroU32::new_unchecked(block_count as u32)")

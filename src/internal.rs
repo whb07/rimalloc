@@ -12,7 +12,7 @@
 )]
 
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::{size_of, zeroed};
+use core::mem::size_of;
 use core::ptr;
 
 pub(crate) use crate::alloc::{
@@ -1197,13 +1197,6 @@ pub const fn mi_slice_count_of_size(size: usize) -> usize {
 #[inline]
 pub const fn mi_size_of_slices(bcount: usize) -> usize {
     bcount * MI_ARENA_SLICE_SIZE
-}
-
-#[inline]
-pub unsafe fn _mi_memid_create(memkind: mi_memkind_t) -> mi_memid_t {
-    let mut raw: mi_memid_t = zeroed();
-    raw.memkind = memkind;
-    raw
 }
 
 #[inline]

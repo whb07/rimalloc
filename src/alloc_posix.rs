@@ -1,6 +1,6 @@
 //! Mechanical translation of `src/alloc-posix.c`.
 
-#![allow(dead_code, clippy::missing_safety_doc, unsafe_op_in_unsafe_fn)]
+#![allow(dead_code, unsafe_op_in_unsafe_fn)]
 
 use crate::internal::{
     _mi_align_up, _mi_is_aligned, _mi_is_power_of_two, _mi_memcpy, _mi_os_page_size,
@@ -39,16 +39,28 @@ unsafe fn mi_set_errno(err: c_int) {
 unsafe fn mi_set_errno(_err: c_int) {}
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `p` may be null or must be a pointer previously returned by mimalloc or a
+/// compatible allocation entry point.
 pub unsafe extern "C" fn mi_malloc_usable_size(p: *const c_void) -> usize {
     unsafe { mi_usable_size(p) }
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `p` may be null or must be a pointer previously returned by mimalloc or a
+/// compatible allocation entry point.
 pub unsafe extern "C" fn mi_malloc_size(p: *const c_void) -> usize {
     unsafe { mi_usable_size(p) }
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `p` may be null. A non-null pointer must be suitable for mimalloc heap-region
+/// inspection and, when owned by mimalloc, valid to free.
 pub unsafe extern "C" fn mi_cfree(p: *mut c_void) {
     if unsafe { mi_is_in_heap_region(p.cast_const()) } {
         unsafe { mi_free(p) };
@@ -56,6 +68,10 @@ pub unsafe extern "C" fn mi_cfree(p: *mut c_void) {
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `p` must be valid for writing one pointer. On success the written pointer
+/// must be released through mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_posix_memalign(
     p: *mut *mut c_void,
     alignment: usize,
@@ -80,6 +96,10 @@ pub unsafe extern "C" fn mi_posix_memalign(
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// The returned pointer, when non-null, must be released through
+/// mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_memalign(alignment: usize, size: usize) -> *mut c_void {
     let p = unsafe { mi_malloc_aligned(size, alignment) };
     crate::mi_assert_internal!(_mi_is_aligned(p, alignment));
@@ -87,11 +107,19 @@ pub unsafe extern "C" fn mi_memalign(alignment: usize, size: usize) -> *mut c_vo
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// The returned pointer, when non-null, must be released through
+/// mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_valloc(size: usize) -> *mut c_void {
     unsafe { mi_memalign(_mi_os_page_size(), size) }
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// The returned pointer, when non-null, must be released through
+/// mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_pvalloc(size: usize) -> *mut c_void {
     let psize = unsafe { _mi_os_page_size() };
     if size >= usize::MAX - psize {
@@ -102,6 +130,10 @@ pub unsafe extern "C" fn mi_pvalloc(size: usize) -> *mut c_void {
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// The returned pointer, when non-null, must be released through
+/// mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut c_void {
     let p = unsafe { mi_malloc_aligned(size, alignment) };
     crate::mi_assert_internal!(_mi_is_aligned(p, alignment));
@@ -109,6 +141,11 @@ pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `p` may be null or must be a pointer previously returned by mimalloc or a
+/// compatible allocation entry point. The returned pointer, when non-null, must
+/// be released through mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_reallocarray(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
         let newp = mi_realloc(p, req.total().get());
@@ -123,6 +160,10 @@ pub unsafe extern "C" fn mi_reallocarray(p: *mut c_void, count: usize, size: usi
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `ptrp` must be valid for reading and writing one pointer. `*ptrp` may be
+/// null or must be a mimalloc-compatible allocation pointer.
 pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, size: usize) -> c_int {
     crate::mi_assert!(size != 0);
     crate::mi_assert!(!ptrp.is_null());
@@ -153,6 +194,10 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `p` may be null or must be a pointer previously returned by mimalloc or a
+/// compatible allocation entry point.
 pub unsafe extern "C" fn mi__expand(p: *mut c_void, newsize: usize) -> *mut c_void {
     let res = unsafe { mi_expand(p, newsize) };
     if res.is_null() {
@@ -162,11 +207,19 @@ pub unsafe extern "C" fn mi__expand(p: *mut c_void, newsize: usize) -> *mut c_vo
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `s` may be null or must point to a readable nul-terminated multibyte string.
+/// The returned pointer, when non-null, must be freed through mimalloc.
 pub unsafe extern "C" fn mi_mbsdup(s: *const u8) -> *mut u8 {
     unsafe { mi_strdup(s.cast::<i8>()).cast::<u8>() }
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `s` may be null or must point to a readable nul-terminated wide string. The
+/// returned pointer, when non-null, must be freed through mimalloc.
 pub unsafe extern "C" fn mi_wcsdup(s: *const c_wchar) -> *mut c_wchar {
     if s.is_null() {
         return ptr::null_mut();
@@ -187,6 +240,10 @@ pub unsafe extern "C" fn mi_wcsdup(s: *const c_wchar) -> *mut c_wchar {
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `buf` and `size`, when non-null, must be valid for writing one value.
+/// `_name`, when non-null, must point to a readable nul-terminated wide string.
 pub unsafe extern "C" fn mi_wdupenv_s(
     buf: *mut *mut c_wchar,
     size: *mut usize,
@@ -203,6 +260,11 @@ pub unsafe extern "C" fn mi_wdupenv_s(
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `p` may be null or must be a mimalloc-compatible allocation pointer. The
+/// returned pointer, when non-null, must be released through mimalloc-compatible
+/// free APIs.
 pub unsafe extern "C" fn mi_aligned_offset_recalloc(
     p: *mut c_void,
     newcount: usize,
@@ -214,6 +276,11 @@ pub unsafe extern "C" fn mi_aligned_offset_recalloc(
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `p` may be null or must be a mimalloc-compatible allocation pointer. The
+/// returned pointer, when non-null, must be released through mimalloc-compatible
+/// free APIs.
 pub unsafe extern "C" fn mi_aligned_recalloc(
     p: *mut c_void,
     newcount: usize,
@@ -224,6 +291,10 @@ pub unsafe extern "C" fn mi_aligned_recalloc(
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// `buf` and `size`, when non-null, must be valid for writing one value. `name`
+/// must point to a readable nul-terminated C string.
 pub unsafe extern "C" fn mi_dupenv_s(
     buf: *mut *mut i8,
     size: *mut usize,

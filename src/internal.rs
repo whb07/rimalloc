@@ -1022,25 +1022,38 @@ pub unsafe fn mi_page_clear_abandoned_mapped(page: *mut mi_page_t) {
 
 #[inline]
 pub fn mi_tf_block(tf: mi_thread_free_t) -> *mut mi_block_t {
-    (tf & !1usize) as *mut mi_block_t
+    crate::core_types::ThreadFreeWord(tf)
+        .head()
+        .map(|block| block.as_ptr())
+        .unwrap_or(ptr::null_mut())
 }
 
 #[inline]
 pub const fn mi_tf_is_owned(tf: mi_thread_free_t) -> bool {
-    (tf & 1) == 1
+    crate::core_types::ThreadFreeWord(tf).is_owned()
 }
 
 #[inline]
 pub fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_free_t {
-    block as usize | if owned { 1 } else { 0 }
+    let owner = if owned {
+        crate::core_types::ThreadFreeOwner::Owned
+    } else {
+        crate::core_types::ThreadFreeOwner::Unowned
+    };
+    crate::core_types::ThreadFreeWord::from_parts(crate::core_types::BlockPtr::new(block), owner)
+        .raw()
 }
 
 #[inline]
 pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
-    mi_tf_block(crate::atomic::mi_atomic_load_explicit(
-        &(*page).xthread_free,
-        crate::atomic::mi_memory_order_e::mi_memory_order_relaxed,
-    ))
+    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!(
+        (*(page as *mut mi_page_t)).xthread_free
+    ));
+    atomic_tf
+        .load_relaxed()
+        .head()
+        .map(|block| block.as_ptr())
+        .unwrap_or(ptr::null_mut())
 }
 
 #[inline]
@@ -1051,20 +1064,16 @@ pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
 
 #[inline]
 pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
-    mi_tf_is_owned(crate::atomic::mi_atomic_load_explicit(
-        &(*(page as *mut mi_page_t)).xthread_free,
-        crate::atomic::mi_memory_order_e::mi_memory_order_relaxed,
-    ))
+    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!(
+        (*(page as *mut mi_page_t)).xthread_free
+    ));
+    atomic_tf.load_relaxed().is_owned()
 }
 
 #[inline]
 pub unsafe fn mi_page_claim_ownership(page: *mut mi_page_t) -> bool {
-    let old = crate::atomic::mi_atomic_fetch_or_explicit(
-        &mut (*page).xthread_free,
-        1,
-        crate::atomic::mi_memory_order_e::mi_memory_order_acq_rel,
-    );
-    (old & 1) == 0
+    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+    unsafe { atomic_tf.claim_ownership() }
 }
 
 #[inline]

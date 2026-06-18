@@ -35,7 +35,7 @@ impl ThreadFreeWord {
     }
 
     #[inline(always)]
-    pub(crate) fn is_owned(self) -> bool {
+    pub(crate) const fn is_owned(self) -> bool {
         (self.0 & Self::OWNED_BIT) != 0
     }
 

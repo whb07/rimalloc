@@ -3114,6 +3114,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && atomic_types.contains(
                 "pub(crate) unsafe fn compare_exchange_release_ownership("
             )
+            && internal.contains("crate::core_types::ThreadFreeWord(tf)\n        .head()")
+            && internal.contains("crate::core_types::ThreadFreeWord(tf).is_owned()")
+            && internal.contains("crate::core_types::ThreadFreeWord::from_parts(")
+            && internal.contains("let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!(")
+            && internal.contains("unsafe { atomic_tf.claim_ownership() }")
             && free_rs.contains(
                 "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
             )

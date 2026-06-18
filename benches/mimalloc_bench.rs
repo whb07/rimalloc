@@ -390,6 +390,10 @@ fn scenarios() -> Vec<Scenario> {
             run: mstress::run,
         },
         Scenario {
+            name: "sh6benchN",
+            run: sh6bench::run,
+        },
+        Scenario {
             name: "mleak10",
             run: |alloc| unsafe { mleak::run(alloc, 5) },
         },
@@ -1492,6 +1496,146 @@ mod mstress {
                         free_items(alloc, p);
                     }
                 }
+            }
+            start.elapsed()
+        }
+    }
+}
+
+mod sh6bench {
+    use super::*;
+
+    const CALL_COUNT: usize = 10_000;
+    const MIN_BLOCK_SIZE: usize = 1;
+    const MAX_BLOCK_SIZE: usize = 1000;
+
+    struct ThreadArg {
+        alloc: BenchAllocator,
+        call_count: usize,
+    }
+
+    unsafe fn free_slot(alloc: BenchAllocator, slot: *mut *mut u8) {
+        unsafe {
+            let p = slot.read();
+            if !p.is_null() {
+                alloc.free(p);
+                slot.write(ptr::null_mut());
+            }
+        }
+    }
+
+    unsafe fn do_bench(alloc: BenchAllocator, call_count: usize) {
+        unsafe {
+            let memory = alloc
+                .calloc(call_count, std::mem::size_of::<*mut u8>())
+                .cast::<*mut u8>();
+            assert!(
+                !memory.is_null(),
+                "pointer array allocation failed in sh6benchN"
+            );
+
+            let mut mp = 0usize;
+            let mut save_start = call_count;
+            let mut save_end = call_count;
+
+            for _ in 0..call_count {
+                let mut size_base = MIN_BLOCK_SIZE;
+                while size_base < MAX_BLOCK_SIZE {
+                    let mut size = size_base;
+                    while size != 0 {
+                        let mut iterations = 1;
+                        if size < 10000 {
+                            iterations = 10;
+                        }
+                        if size < 1000 {
+                            iterations *= 5;
+                        }
+                        if size < 100 {
+                            iterations *= 5;
+                        }
+
+                        for _ in 0..iterations {
+                            let p = alloc.malloc(size);
+                            assert!(!p.is_null(), "allocation failed in sh6benchN");
+                            p.write(0);
+                            p.add(size - 1).write(0);
+                            memory.add(mp).write(p);
+                            mp += 1;
+
+                            if mp == save_start {
+                                mp = save_end;
+                            }
+
+                            if mp >= call_count {
+                                mp = 0;
+                                save_start = save_end;
+                                if save_start >= call_count {
+                                    save_start = 0;
+                                }
+                                save_end = save_start + (call_count / 5);
+                                if save_end > call_count {
+                                    save_end = call_count;
+                                }
+
+                                while mp < save_start {
+                                    free_slot(alloc, memory.add(mp));
+                                    mp += 1;
+                                }
+
+                                mp = call_count;
+                                while mp > save_end {
+                                    mp -= 1;
+                                    free_slot(alloc, memory.add(mp));
+                                }
+
+                                mp = 0;
+                            }
+                        }
+
+                        size /= 2;
+                    }
+                    size_base = size_base * 3 / 2 + 1;
+                }
+            }
+
+            for i in 0..call_count {
+                free_slot(alloc, memory.add(i));
+            }
+            alloc.free(memory.cast());
+        }
+    }
+
+    extern "C" fn thread_entry(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            let arg = &*arg.cast::<ThreadArg>();
+            do_bench(arg.alloc, arg.call_count);
+        }
+        ptr::null_mut()
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let nthreads = logical_cpus() * 2;
+            let call_count = (CALL_COUNT / nthreads).max(1);
+            let mut threads = vec![0; nthreads];
+            let mut args = Vec::with_capacity(nthreads);
+            for _ in 0..nthreads {
+                args.push(ThreadArg { alloc, call_count });
+            }
+
+            let start = Instant::now();
+            for i in 0..nthreads {
+                let rc = pthread::pthread_create(
+                    &mut threads[i],
+                    ptr::null(),
+                    thread_entry,
+                    (&mut args[i] as *mut ThreadArg).cast(),
+                );
+                assert_eq!(rc, 0, "pthread_create failed in sh6benchN: {rc}");
+            }
+            for thread in threads {
+                let rc = pthread::pthread_join(thread, ptr::null_mut());
+                assert_eq!(rc, 0, "pthread_join failed in sh6benchN: {rc}");
             }
             start.elapsed()
         }

@@ -5,7 +5,6 @@
     non_camel_case_types,
     non_snake_case,
     non_upper_case_globals,
-    clippy::collapsible_if,
     clippy::missing_const_for_fn,
     unsafe_op_in_unsafe_fn
 )]
@@ -848,17 +847,17 @@ fn mi_bchunk_try_find_and_clear_at(
     crate::mi_debug_assert!(chunk_idx < MI_BCHUNK_FIELDS);
     let b = chunk.bfields[chunk_idx].load(Ordering::Acquire);
     let mut idx = 0usize;
-    if mi_bfield_find_least_bit(b, &mut idx) {
-        if mi_bfield_atomic_try_clear_mask_of(
+    if mi_bfield_find_least_bit(b, &mut idx)
+        && mi_bfield_atomic_try_clear_mask_of(
             &chunk.bfields[chunk_idx],
             mi_bfield_mask(1, idx),
             b,
             None,
-        ) {
-            *pidx = (chunk_idx * MI_BFIELD_BITS) + idx;
-            crate::mi_debug_assert!(*pidx < MI_BCHUNK_BITS);
-            return true;
-        }
+        )
+    {
+        *pidx = (chunk_idx * MI_BFIELD_BITS) + idx;
+        crate::mi_debug_assert!(*pidx < MI_BCHUNK_BITS);
+        return true;
     }
     false
 }
@@ -2319,15 +2318,13 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN_(
                 break;
             }
         }
-        if count == chunk_req {
-            if mi_bchunk_try_clearN_(&mut *bbitmap, chunk_idx, n) {
-                *pidx = chunk_idx * MI_BCHUNK_BITS;
-                for i in 0..count {
-                    mi_bbitmap_set_chunk_bin(&mut *bbitmap, chunk_idx + i, MI_CBIN_HUGE);
-                }
-                crate::mi_debug_assert!(*pidx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
-                return true;
+        if count == chunk_req && mi_bchunk_try_clearN_(&mut *bbitmap, chunk_idx, n) {
+            *pidx = chunk_idx * MI_BCHUNK_BITS;
+            for i in 0..count {
+                mi_bbitmap_set_chunk_bin(&mut *bbitmap, chunk_idx + i, MI_CBIN_HUGE);
             }
+            crate::mi_debug_assert!(*pidx + n <= unsafe { mi_bbitmap_max_bits(bbitmap) });
+            return true;
         }
         chunk_idx += count + 1;
     }

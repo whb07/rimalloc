@@ -58,6 +58,7 @@ impl AtomicUsizeField {
 }
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub(crate) struct AtomicPageThreadId(pub(crate) AtomicUsizeField);
 
 impl AtomicPageThreadId {
@@ -66,7 +67,7 @@ impl AtomicPageThreadId {
     ///
     /// # Safety
     /// `self.0` must point to a valid page's `xthread_id` field.
-    #[inline]
+    #[inline(always)]
     pub(crate) unsafe fn load_relaxed(self) -> PageThreadId {
         PageThreadId::new(unsafe { self.0.load(Ordering::Relaxed) })
     }
@@ -78,7 +79,7 @@ impl AtomicPageThreadId {
     ///
     /// # Safety
     /// `self.0` must point to a valid page's `xthread_id` field.
-    #[inline]
+    #[inline(always)]
     pub(crate) unsafe fn set_flags(self, flags: PageFlags, set: bool) -> PageThreadId {
         let old = if set {
             unsafe { self.0.fetch_or(flags.bits(), Ordering::Relaxed) }
@@ -96,13 +97,39 @@ impl AtomicPageThreadId {
     /// `self.0` must point to a valid page's `xthread_id` field, and the caller
     /// must hold the page in a state where a relaxed store is safe (no
     /// concurrent free-path readers that require Acq/Rel ordering).
-    #[inline]
+    #[inline(always)]
     pub(crate) unsafe fn set_owner_release(self, owner: PageOwnerId) {
         let current = unsafe { self.0.load(Ordering::Relaxed) };
         // `with_owner` preserves the existing flag bits, so no separate
         // `.with_flags(...)` is needed.
         let new = PageThreadId::new(current).with_owner(owner);
         unsafe { self.0.store(new.raw(), Ordering::Relaxed) };
+    }
+
+    /// Release-CAS the page's tagged thread id from `expected` to `new`.
+    /// On failure, updates `expected` with the observed typed value.
+    ///
+    /// # Safety
+    /// `self.0` must point to a valid page's `xthread_id` field.
+    #[inline(always)]
+    pub(crate) unsafe fn compare_exchange_release(
+        self,
+        expected: &mut PageThreadId,
+        new: PageThreadId,
+    ) -> bool {
+        let atomic = unsafe { self.0.as_atomic() };
+        match atomic.compare_exchange_weak(
+            expected.raw(),
+            new.raw(),
+            Ordering::Release,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => true,
+            Err(value) => {
+                *expected = PageThreadId::new(value);
+                false
+            }
+        }
     }
 }
 

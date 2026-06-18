@@ -93,18 +93,23 @@ impl PageThreadId {
     }
 
     #[inline(always)]
+    pub(crate) fn owner_bits(self) -> usize {
+        self.0 & !MI_PAGE_FLAG_MASK
+    }
+
+    #[inline(always)]
     pub(crate) fn is_abandoned(self) -> bool {
-        (self.0 & !MI_PAGE_FLAG_MASK) == 0
+        self.owner_bits() == 0
     }
 
     #[inline(always)]
     pub(crate) fn is_abandoned_mapped(self) -> bool {
-        (self.0 & !MI_PAGE_FLAG_MASK) == MI_THREADID_ABANDONED_MAPPED
+        self.owner_bits() == MI_THREADID_ABANDONED_MAPPED
     }
 
     #[inline(always)]
     pub(crate) fn with_flags(self, flags: PageFlags) -> Self {
-        Self((self.0 & !MI_PAGE_FLAG_MASK) | flags.bits())
+        Self(self.owner_bits() | flags.bits())
     }
 
     #[inline(always)]

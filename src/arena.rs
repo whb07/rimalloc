@@ -55,10 +55,9 @@ use crate::theap::{_mi_heap_area_init, _mi_theap_area_visit_blocks};
 use crate::track::{mi_track_mem_defined, mi_track_mem_undefined};
 use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
-    MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX,
-    MI_THREADID_ABANDONED_MAPPED, mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t,
-    mi_heap_area_t, mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_local_t,
-    mi_tld_t,
+    MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, mi_arena_id_t,
+    mi_arena_t, mi_block_visit_fun, mi_commit_fun_t, mi_heap_area_t, mi_heap_t, mi_msecs_t,
+    mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_local_t, mi_tld_t,
 };
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
@@ -2864,9 +2863,11 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
             )
         });
 
-        // Preserve current page flags while switching the abandoned thread id state.
-        let flags = unsafe { crate::internal::mi_page_flags(page) };
-        unsafe { (*page).xthread_id = MI_THREADID_ABANDONED_MAPPED | flags };
+        let atomic_tid =
+            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(unsafe {
+                ptr::addr_of_mut!((*page).xthread_id)
+            }));
+        unsafe { atomic_tid.set_owner_release(crate::core_types::PageOwnerId::AbandonedMapped) };
         let was_clear = unsafe { mi_bitmap_set((*arena_pages).pages_abandoned[bin], slice_index) };
         crate::MI_UNUSED!(was_clear);
         crate::mi_assert_internal!(was_clear);

@@ -3106,6 +3106,21 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "_mi_theap_page_reclaim(\n            crate::core_types::OwnedAbandonedPage"
             )
             && !page_rs.contains("pub unsafe extern \"C\" fn _mi_theap_page_reclaim")
+            && atomic_types.contains("pub(crate) unsafe fn compare_exchange_release(\n        self,\n        expected: &mut PageThreadId,")
+            && internal.contains("let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(")
+            && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);")
+            && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);")
+            && page_rs.contains("let flag = crate::core_types::PageFlags::from_low_bits(newflag);")
+            && page_rs.contains("let old = unsafe { atomic_tid.set_flags(flag, set) };")
+            && page_rs.contains("let xtid = xtid_old.with_owner(owner);")
+            && page_rs.contains("atomic_tid.compare_exchange_release(&mut xtid_old, xtid)")
+            && arena_rs.contains("unsafe { atomic_tid.set_owner_release(crate::core_types::PageOwnerId::AbandonedMapped) };")
+            && !internal.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
+            && !internal.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
+            && !page_rs.contains("mi_atomic_cas_weak_release(&mut (*page).xthread_id")
+            && !page_rs.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
+            && !page_rs.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
+            && !arena_rs.contains("MI_THREADID_ABANDONED_MAPPED | flags")
             && page_rs.contains(
                 "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
             )

@@ -980,44 +980,63 @@ pub unsafe fn mi_page_set_has_interior_pointers(page: *mut mi_page_t, has_aligne
 
 #[inline]
 pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
-    crate::atomic::mi_atomic_load_explicit(
-        &(*page).xthread_id,
-        crate::atomic::mi_memory_order_e::mi_memory_order_relaxed,
-    )
+    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_id),
+    ));
+    unsafe { atomic_tid.load_relaxed() }.raw()
 }
 
 #[inline]
 pub unsafe fn mi_page_thread_id(page: *const mi_page_t) -> mi_threadid_t {
-    let xthread_id = unsafe { mi_page_xthread_id(page) };
-    xthread_id & !MI_PAGE_FLAG_MASK
+    let xthread_id = crate::core_types::PageThreadId::new(unsafe { mi_page_xthread_id(page) });
+    xthread_id.owner_bits()
 }
 
 #[inline]
 pub unsafe fn mi_page_flags(page: *const mi_page_t) -> mi_page_flags_t {
-    let xthread_id = unsafe { mi_page_xthread_id(page) };
-    xthread_id & MI_PAGE_FLAG_MASK
+    let xthread_id = crate::core_types::PageThreadId::new(unsafe { mi_page_xthread_id(page) });
+    xthread_id.flags().bits()
 }
 
 #[inline]
 pub unsafe fn mi_page_has_interior_pointers(page: *const mi_page_t) -> bool {
-    (mi_page_flags(page) & MI_PAGE_HAS_INTERIOR_POINTERS) != 0
+    crate::core_types::PageFlags::from_low_bits(unsafe { mi_page_flags(page) })
+        .contains(crate::core_types::PageFlags::HAS_INTERIOR_POINTERS)
 }
 
 #[inline]
 pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
-    mi_page_thread_id(page) == MI_THREADID_ABANDONED_MAPPED
+    crate::core_types::PageThreadId::new(unsafe { mi_page_xthread_id(page) }).is_abandoned_mapped()
 }
 
 #[inline]
 pub unsafe fn mi_page_set_abandoned_mapped(page: *mut mi_page_t) {
     crate::mi_assert_internal!(crate::page::mi_page_is_abandoned(page));
-    crate::atomic::mi_atomic_or_relaxed(&mut (*page).xthread_id, MI_THREADID_ABANDONED_MAPPED);
+    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_id),
+    ));
+    let mut old = unsafe { atomic_tid.load_relaxed() };
+    loop {
+        let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);
+        if unsafe { atomic_tid.compare_exchange_release(&mut old, new) } {
+            break;
+        }
+    }
 }
 
 #[inline]
 pub unsafe fn mi_page_clear_abandoned_mapped(page: *mut mi_page_t) {
     crate::mi_assert_internal!(mi_page_is_abandoned_mapped(page));
-    crate::atomic::mi_atomic_and_relaxed(&mut (*page).xthread_id, MI_PAGE_FLAG_MASK);
+    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_id),
+    ));
+    let mut old = unsafe { atomic_tid.load_relaxed() };
+    loop {
+        let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);
+        if unsafe { atomic_tid.compare_exchange_release(&mut old, new) } {
+            break;
+        }
+    }
 }
 
 #[inline]

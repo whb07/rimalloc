@@ -16,10 +16,7 @@ use crate::arena::{
     _mi_arenas_collect, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free_typed,
     MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
 };
-use crate::atomic::{
-    EFAULT, mi_atomic_and_relaxed, mi_atomic_cas_weak_release, mi_atomic_load_ptr_acquire,
-    mi_atomic_or_relaxed, mi_atomic_store_ptr_release,
-};
+use crate::atomic::{EFAULT, mi_atomic_load_ptr_acquire, mi_atomic_store_ptr_release};
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::init::{_mi_page_empty, _mi_theap_empty, _mi_theap_empty_wrong};
 use crate::internal::{
@@ -44,8 +41,8 @@ use crate::track::{
 use crate::types::{
     ENOMEM, EOVERFLOW, MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_LARGE_MAX_OBJ_WSIZE,
     MI_PAGE_FLAG_MASK, MI_PAGE_IN_FULL_QUEUE, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, MI_STAT,
-    MI_THREADID_ABANDONED, MI_THREADID_ABANDONED_MAPPED, mi_block_t, mi_deferred_free_fun,
-    mi_page_flags_t, mi_page_queue_t, mi_page_t, mi_theap_t,
+    MI_THREADID_ABANDONED, mi_block_t, mi_deferred_free_fun, mi_page_flags_t, mi_page_queue_t,
+    mi_page_t, mi_theap_t,
 };
 
 pub use crate::types::MI_PADDING_SIZE;
@@ -1080,17 +1077,18 @@ pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {
 
 #[inline]
 pub unsafe fn mi_page_flags_set(page: *mut mi_page_t, set: bool, newflag: mi_page_flags_t) -> bool {
-    let old = if set {
-        mi_atomic_or_relaxed(&mut (*page).xthread_id, newflag)
-    } else {
-        mi_atomic_and_relaxed(&mut (*page).xthread_id, !newflag)
-    };
-    (old & newflag) == newflag
+    let flag = crate::core_types::PageFlags::from_low_bits(newflag);
+    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_id),
+    ));
+    let old = unsafe { atomic_tid.set_flags(flag, set) };
+    old.flags().contains(flag)
 }
 
 #[inline]
 pub unsafe fn mi_page_is_in_full(page: *const mi_page_t) -> bool {
-    (mi_page_flags(page) & MI_PAGE_IN_FULL_QUEUE) != 0
+    crate::core_types::PageFlags::from_low_bits(mi_page_flags(page))
+        .contains(crate::core_types::PageFlags::IN_FULL_QUEUE)
 }
 
 #[inline]
@@ -1118,8 +1116,11 @@ pub unsafe fn mi_page_set_in_full(page: *mut mi_page_t, in_full: bool) {
 
 #[inline]
 pub unsafe fn mi_page_is_abandoned(page: *const mi_page_t) -> bool {
-    let thread_id = (*page).xthread_id & !MI_PAGE_FLAG_MASK;
-    thread_id <= MI_THREADID_ABANDONED_MAPPED
+    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_id),
+    ));
+    let tid = unsafe { atomic_tid.load_relaxed() };
+    tid.is_abandoned() || tid.is_abandoned_mapped()
 }
 
 #[inline]
@@ -1132,10 +1133,20 @@ pub unsafe fn mi_page_set_theap(page: *mut mi_page_t, theap: *mut mi_theap_t) {
     };
     crate::mi_assert_internal!((tid & MI_PAGE_FLAG_MASK) == 0);
 
-    let mut xtid_old = (*page).xthread_id;
+    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_id),
+    ));
+    let mut xtid_old = unsafe { atomic_tid.load_relaxed() };
     loop {
-        let xtid = tid | (xtid_old & MI_PAGE_FLAG_MASK);
-        if mi_atomic_cas_weak_release(&mut (*page).xthread_id, &mut xtid_old, xtid) {
+        let owner = if tid == MI_THREADID_ABANDONED {
+            crate::core_types::PageOwnerId::Abandoned
+        } else {
+            crate::core_types::PageOwnerId::Thread(unsafe {
+                crate::core_types::ThreadId::new_unchecked(tid)
+            })
+        };
+        let xtid = xtid_old.with_owner(owner);
+        if unsafe { atomic_tid.compare_exchange_release(&mut xtid_old, xtid) } {
             break;
         }
     }

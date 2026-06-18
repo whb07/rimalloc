@@ -8,6 +8,12 @@
 //!
 //! Run with: `cargo bench --features bench --bench hotpath`
 //! Compare against system: `cargo bench --features bench,compare --bench hotpath`
+//!
+//! Quick iteration controls:
+//!   MIMALLOC_HOTPATH_SAMPLE_SIZE=10
+//!   MIMALLOC_HOTPATH_MEASUREMENT_SECS=1
+//!   MIMALLOC_HOTPATH_WARMUP_SECS=1
+//!   MIMALLOC_HOTPATH_NRESAMPLES=1000
 
 // The GlobalAlloc shim calls unsafe extern "C" fns; bodies are unsafe by intent.
 #![allow(unsafe_op_in_unsafe_fn)]
@@ -16,6 +22,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, 
 #[cfg(feature = "compare")]
 use std::alloc::System;
 use std::alloc::{GlobalAlloc, Layout};
+use std::env;
 use std::hint::black_box as hint_black_box;
 use std::time::Duration;
 
@@ -69,6 +76,40 @@ const POOL_SIZE: usize = 4096;
 ///   32768 — direct/large allocation (OS-backed)
 const HOT_SIZES: &[usize] = &[16, 64, 256, 1024, 4096, 32768];
 
+fn env_usize(name: &str, default: usize, min: usize) -> usize {
+    env::var(name)
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(default)
+        .max(min)
+}
+
+fn env_secs(name: &str, default: u64) -> Duration {
+    Duration::from_secs(
+        env::var(name)
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(default)
+            .max(1),
+    )
+}
+
+fn hotpath_sample_size(default: usize) -> usize {
+    env_usize("MIMALLOC_HOTPATH_SAMPLE_SIZE", default, 10)
+}
+
+fn hotpath_nresamples(default: usize) -> usize {
+    env_usize("MIMALLOC_HOTPATH_NRESAMPLES", default, 1)
+}
+
+fn hotpath_measurement_time(default_secs: u64) -> Duration {
+    env_secs("MIMALLOC_HOTPATH_MEASUREMENT_SECS", default_secs)
+}
+
+fn hotpath_warmup_time() -> Duration {
+    env_secs("MIMALLOC_HOTPATH_WARMUP_SECS", 3)
+}
+
 /// Fixed-capacity pointer pool, grown once via the system allocator so it never
 /// perturbs the allocator under test. Slots hold `(ptr, layout)`; an empty slot
 /// is `(null, Layout::new::<u8>())`.
@@ -118,10 +159,11 @@ fn paired_alloc_free<A: GlobalAlloc>(alloc: &A, size: usize, pool: &mut PtrPool)
 
 fn bench_paired_alloc_free(c: &mut Criterion) {
     let mut group = c.benchmark_group("hotpath/paired_alloc_free");
-    group.sample_size(120);
-    group.measurement_time(Duration::from_secs(8));
+    group.sample_size(hotpath_sample_size(120));
+    group.measurement_time(hotpath_measurement_time(8));
+    group.warm_up_time(hotpath_warmup_time());
     group.noise_threshold(0.02);
-    group.nresamples(200_000);
+    group.nresamples(hotpath_nresamples(200_000));
 
     for &size in HOT_SIZES {
         group.throughput(Throughput::Elements(POOL_SIZE as u64));
@@ -157,10 +199,11 @@ fn free_routine<A: GlobalAlloc>(alloc: &A, pool: &mut PtrPool) -> usize {
 
 fn bench_free_only(c: &mut Criterion) {
     let mut group = c.benchmark_group("hotpath/free_only");
-    group.sample_size(120);
-    group.measurement_time(Duration::from_secs(8));
+    group.sample_size(hotpath_sample_size(120));
+    group.measurement_time(hotpath_measurement_time(8));
+    group.warm_up_time(hotpath_warmup_time());
     group.noise_threshold(0.02);
-    group.nresamples(200_000);
+    group.nresamples(hotpath_nresamples(200_000));
 
     for &size in HOT_SIZES {
         group.throughput(Throughput::Elements(POOL_SIZE as u64));
@@ -221,10 +264,11 @@ fn lifo_stack<A: GlobalAlloc>(alloc: &A, size: usize, depth: usize) -> usize {
 
 fn bench_lifo_stack(c: &mut Criterion) {
     let mut group = c.benchmark_group("hotpath/lifo_stack");
-    group.sample_size(150);
-    group.measurement_time(Duration::from_secs(6));
+    group.sample_size(hotpath_sample_size(150));
+    group.measurement_time(hotpath_measurement_time(6));
+    group.warm_up_time(hotpath_warmup_time());
     group.noise_threshold(0.02);
-    group.nresamples(200_000);
+    group.nresamples(hotpath_nresamples(200_000));
 
     // Depth chosen to stay within a single small page's block count for the
     // small sizes (so we measure the per-page free-list, not page-queue churn).
@@ -268,10 +312,11 @@ fn single_reuse<A: GlobalAlloc>(alloc: &A, size: usize, ops: usize) -> usize {
 
 fn bench_single_reuse(c: &mut Criterion) {
     let mut group = c.benchmark_group("hotpath/single_reuse");
-    group.sample_size(300);
-    group.measurement_time(Duration::from_secs(6));
+    group.sample_size(hotpath_sample_size(300));
+    group.measurement_time(hotpath_measurement_time(6));
+    group.warm_up_time(hotpath_warmup_time());
     group.noise_threshold(0.02);
-    group.nresamples(300_000);
+    group.nresamples(hotpath_nresamples(300_000));
 
     const OPS: usize = 50_000;
     for &size in &[16usize, 64, 256, 1024] {

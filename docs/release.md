@@ -36,6 +36,7 @@ Related policy documents:
 
 - `docs/api-inventory.md`
 - `docs/abi.md`
+- `docs/raw-facade-migration.md`
 - `docs/assembly-intrinsics.md`
 - `docs/compatibility.md`
 - `docs/features.md`

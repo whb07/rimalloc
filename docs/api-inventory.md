@@ -50,6 +50,9 @@ The source/documentation inventory is checked by:
 scripts/check-api-inventory.py
 ```
 
+Current raw users and raw module classifications are tracked in
+`docs/raw-facade-migration.md` before the default raw facade is narrowed.
+
 ## docs.rs Behavior
 
 `Cargo.toml` builds docs.rs with the `std` feature so safe error traits and

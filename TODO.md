@@ -999,12 +999,15 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## I1. Inventory current raw users
 
-- [ ] List all uses of `mechanical_mimalloc::raw::*` in tests, benches, examples, and docs.
+- [x] List all uses of `mechanical_mimalloc::raw::*` in tests, benches, examples, and docs.
   - Validation:
     - Produce a table with caller file, raw path used, reason, and migration target.
     - Check the table into `docs/api-inventory.md` or a raw migration doc.
+  - Evidence:
+    - `docs/raw-facade-migration.md` lists current raw users across README, crate docs, examples, benches, tests, and `src/abi.rs` macros with reason and migration target.
+    - `docs/api-inventory.md` links to the migration inventory.
 
-- [ ] Classify each current raw module.
+- [x] Classify each current raw module.
   - Categories:
     - Public C header surface.
     - Public C ABI implementation/testing convenience.
@@ -1014,6 +1017,9 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Every `pub mod` inside `raw` has a category.
     - Accidental leftovers are removed.
+  - Evidence:
+    - `docs/raw-facade-migration.md` classifies each current `raw` module as public C header surface, public C ABI implementation/testing convenience, internal helper, platform/internal implementation, or compatibility macro/type surface.
+    - No module is classified as an accidental leftover yet; narrowing/gating remains tracked by the following I1/I2 and B2 items.
 
 - [ ] Migrate tests that only need behavior to public APIs.
   - Validation:

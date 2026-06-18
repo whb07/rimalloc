@@ -548,6 +548,15 @@ pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_
 const MI_RETIRE_CYCLES: u8 = 16;
 
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
+    _mi_page_retire_internal(crate::core_types::AllFreePage::active_unchecked(
+        crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
+    ));
+}
+
+pub(crate) unsafe fn _mi_page_retire_internal(
+    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
+) {
+    let page = page_wrapper.page.ptr.as_ptr();
     crate::mi_assert_internal!(!page.is_null());
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
     crate::mi_assert_internal!(mi_page_all_free(page));

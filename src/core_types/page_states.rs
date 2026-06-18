@@ -50,6 +50,20 @@ pub(crate) struct AllFreePage<S> {
     pub(crate) page: Page<S>,
 }
 
+impl AllFreePage<Active> {
+    /// # Safety
+    /// `page` must be an active page whose blocks are all free.
+    #[inline(always)]
+    pub(crate) unsafe fn active_unchecked(page: ActivePage) -> Self {
+        Self {
+            page: Page {
+                ptr: page.0,
+                _state: PhantomData,
+            },
+        }
+    }
+}
+
 pub(crate) enum PageFreeOwner {
     Local(LocalPage),
     Foreign(ForeignPage),

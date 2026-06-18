@@ -2146,6 +2146,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(
                 "#[inline(never)]\npub(crate) unsafe fn _mi_page_unfull_internal(\n    page_wrapper: crate::core_types::FullPage,"
             )
+            && page_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_page_retire(page: *mut mi_page_t)")
+            && page_rs.contains(
+                "pub(crate) unsafe fn _mi_page_retire_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,"
+            )
+            && page_rs.contains("crate::core_types::AllFreePage::active_unchecked")
             && page_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_init(")
             && page_rs
@@ -2190,6 +2195,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("mi_page_unfull_typed(\n        page_wrapper,")
             && page_rs
                 .contains("mi_page_move_to_full_typed(\n            crate::core_types::ActivePage")
+            && free_rs.contains("_mi_page_retire_internal(crate::core_types::AllFreePage::active_unchecked")
             && free_rs.contains("_mi_page_unfull_internal(crate::core_types::FullPage")
             && free_rs.contains("_mi_page_free_collect(page, false);")
             && free_rs.contains("_mi_page_free_collect_partly(page, mt_free);")

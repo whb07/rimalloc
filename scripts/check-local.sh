@@ -5,6 +5,7 @@ cd_repo_root
 
 run scripts/check-fmt.sh
 run cargo test --quiet
+run cargo check --examples --features std
 run scripts/check-features.sh
 run scripts/check-lints.sh
 run scripts/check-layout.sh

@@ -76,6 +76,16 @@ are documented in `docs/performance.md`. Performance-sensitive changes should
 include fresh results for the changed benchmark set and a full report when hot
 paths or allocator-wide behavior can move.
 
+## Examples
+
+Compiled examples live under `examples/` and cover the small Rust facade plus
+the explicit raw C-shaped API:
+
+```sh
+cargo check --examples --features std
+cargo run --example global_allocator --features std
+```
+
 ## Safety Model
 
 `raw` mirrors a C allocator API. Calling it is unsafe unless the caller respects

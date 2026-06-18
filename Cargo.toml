@@ -21,6 +21,7 @@ include = [
   "/CONTRIBUTING.md",
   "/src/**",
   "/tests/**",
+  "/examples/**",
   "/benches/**",
   "/docs/**",
   "/scripts/**",

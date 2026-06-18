@@ -6,8 +6,8 @@ use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{
-    EFAULT, mi_atomic_cas_ptr_strong_release, mi_atomic_cas_strong_acq_rel, mi_atomic_guard_t,
-    mi_atomic_load_ptr_acquire, mi_atomic_store_ptr_release, mi_lock_acquire, mi_lock_release,
+    EFAULT, mi_atomic_cas_ptr_strong_release, mi_atomic_guard_t, mi_atomic_load_ptr_acquire,
+    mi_atomic_store_ptr_release, mi_lock_acquire, mi_lock_release,
 };
 use crate::bitmap::{
     _mi_bitmap_forall_set, _mi_bitmap_forall_setc_rangesn, MI_BCHUNK_BITS, MI_BCHUNK_FIELDS,
@@ -1476,11 +1476,10 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: *mut mi_subproc_t) {
     }
     let mut expected = arena_count;
     let _ = unsafe {
-        mi_atomic_cas_strong_acq_rel(
+        crate::core_types::AtomicUsizeField(
             ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
-            &mut expected,
-            0,
         )
+        .compare_exchange_acq_rel(&mut expected, 0)
     };
 }
 
@@ -1525,12 +1524,12 @@ unsafe fn mi_arenas_add(
     }
 
     while count < MI_MAX_ARENAS {
+        let next_count = count + 1;
         if unsafe {
-            mi_atomic_cas_strong_acq_rel(
+            crate::core_types::AtomicUsizeField(
                 ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
-                &mut count,
-                count + 1,
             )
+            .compare_exchange_acq_rel(&mut count, next_count)
         } {
             unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx = count };
             let mut expected = ptr::null_mut::<mi_arena_t>();

@@ -69,6 +69,28 @@ impl AtomicUsizeField {
     pub(crate) unsafe fn fetch_and(self, bits: usize, order: Ordering) -> usize {
         unsafe { self.as_atomic() }.fetch_and(bits, order)
     }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn compare_exchange_acq_rel(
+        self,
+        expected: &mut usize,
+        desired: usize,
+    ) -> bool {
+        match unsafe { self.as_atomic() }.compare_exchange(
+            *expected,
+            desired,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => true,
+            Err(actual) => {
+                *expected = actual;
+                false
+            }
+        }
+    }
 }
 
 #[repr(transparent)]

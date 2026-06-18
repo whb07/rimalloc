@@ -2702,6 +2702,25 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena purge expiry should use typed atomic i64 field wrappers"
     );
     assert!(
+        atomic_types.contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")
+            && atomic_types.contains("desired: usize,")
+            && atomic_types.contains("Ordering::AcqRel,\n            Ordering::Acquire,")
+            && arena_rs
+                .matches("ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count)")
+                .count()
+                == 2
+            && arena_rs.contains(".compare_exchange_acq_rel(&mut expected, 0)")
+            && arena_rs.contains("let next_count = count + 1;")
+            && arena_rs.contains(".compare_exchange_acq_rel(&mut count, next_count)")
+            && !arena_rs.contains(
+                "mi_atomic_cas_strong_acq_rel(\n            ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count)"
+            )
+            && !arena_rs.contains(
+                "mi_atomic_cas_strong_acq_rel(\n                ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count)"
+            ),
+        "arena_count compare-exchange should use AtomicUsizeField"
+    );
+    assert!(
         free_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign")
             && free_rs.contains("crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());")

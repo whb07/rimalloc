@@ -2377,9 +2377,18 @@ fn free_path_internals_are_not_dynamic_exports() {
         free_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign")
             && free_rs.contains("crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());")
-            && free_rs.contains("let block = if mi_page_has_interior_pointers(page) {")
-            && free_rs.contains("let block = _mi_page_ptr_unalign(page, p);"),
-        "free and usable-size paths should keep C's _mi_page_ptr_unalign call boundary"
+            && free_rs.contains(
+                "pub(crate) unsafe fn mi_validate_block_from_ptr(\n    page: *const mi_page_t,\n    p: *mut c_void,\n) -> crate::core_types::PointerLookup"
+            )
+            && free_rs.contains("let block = if mi_page_has_interior_pointers(page) || MI_SECURE > 0")
+            && free_rs.contains("PointerLocation::Guarded")
+            && free_rs.contains("unsafe fn mi_block_for_free_from_lookup(")
+            && free_rs.contains("crate::core_types::BlockForFree::new(block, was_guarded)")
+            && free_rs.contains(
+                "mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))"
+            )
+            && !free_rs.contains("pub unsafe fn mi_validate_block_from_ptr(\n    page: *const mi_page_t,\n    p: *mut c_void,\n) -> *mut mi_block_t"),
+        "free validation should keep _mi_page_ptr_unalign while returning PointerLookup and BlockForFree"
     );
     assert!(
         !heap_rs.contains("fn _mi_theap_cached_set(")

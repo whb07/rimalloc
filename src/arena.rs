@@ -637,6 +637,14 @@ unsafe fn mi_page_arena_pages(
     arena
 }
 
+#[inline]
+unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool {
+    matches!(
+        crate::core_types::MemId::view(unsafe { (*page).memid }),
+        crate::core_types::MemIdView::Arena(_)
+    )
+}
+
 #[allow(dead_code)]
 unsafe fn mi_heap_has_page(
     heap: *mut mi_heap_t,
@@ -2694,7 +2702,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
     }
 
     if MI_DEBUG > 1
-        && unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA }
+        && unsafe { mi_page_memid_is_arena(page) }
         && !unsafe { mi_page_is_full_local(page) }
     {
         let bin = _mi_bin_typed(unsafe { mi_page_block_size(page) }).as_usize();
@@ -2730,7 +2738,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
     }
 
     unsafe { _mi_page_map_unregister(page) };
-    if unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA } {
+    if unsafe { mi_page_memid_is_arena(page) } {
         let mut arena_pages = ptr::null_mut();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
@@ -2803,9 +2811,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
 
     let heap = unsafe { mi_page_heap(page) };
     crate::mi_assert_internal!(heap == unsafe { _mi_theap_heap(current_theap) });
-    if unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA }
-        && !unsafe { mi_page_is_full_local(page) }
-    {
+    if unsafe { mi_page_memid_is_arena(page) } && !unsafe { mi_page_is_full_local(page) } {
         let bin = _mi_bin_typed(unsafe { mi_page_block_size(page) }).as_usize();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
@@ -2851,7 +2857,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
         };
         unsafe { __mi_stat_increase(ptr::addr_of_mut!((*current_theap).stats.pages_abandoned), 1) };
     } else {
-        if unsafe { (*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA }
+        if !unsafe { mi_page_memid_is_arena(page) }
             && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
         {
             unsafe {
@@ -2900,7 +2906,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
 
     if unsafe { mi_page_is_full_local(page) }
         || unsafe { mi_page_is_abandoned_mapped(page) }
-        || unsafe { (*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA }
+        || !unsafe { mi_page_memid_is_arena(page) }
     {
         return false;
     }
@@ -2940,7 +2946,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
 
     let heap = unsafe { mi_page_heap(page) };
     if unsafe { mi_page_is_abandoned_mapped(page) } {
-        crate::mi_assert_internal!(unsafe { (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA });
+        crate::mi_assert_internal!(unsafe { mi_page_memid_is_arena(page) });
         let bin = _mi_bin_typed(unsafe { mi_page_block_size(page) }).as_usize();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
@@ -2971,7 +2977,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
         unsafe {
             (*heap.cast::<MiHeapPrefix>()).abandoned_count[bin].fetch_sub(1, Ordering::Relaxed)
         };
-    } else if unsafe { (*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA }
+    } else if !unsafe { mi_page_memid_is_arena(page) }
         && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
     {
         unsafe {

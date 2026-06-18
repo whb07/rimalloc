@@ -2445,6 +2445,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         arena_rs.contains(
             "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_page_try_reabandon_to_mapped"
         )
+            && arena_rs.contains("unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool")
+            && arena_rs.contains("crate::core_types::MemId::view(unsafe { (*page).memid })")
+            && arena_rs.contains("crate::core_types::MemIdView::Arena(_)")
+            && !arena_rs.contains("(*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA")
+            && !arena_rs.contains("(*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA")
             && arena_rs.contains("_mi_page_associated_theap_peek(page)")
             && arena_rs.contains("_mi_arenas_page_abandon(page, theap)")
             && free_rs.contains("crate::core_types::MemId::view((*page).memid)")

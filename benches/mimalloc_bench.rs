@@ -503,6 +503,10 @@ fn scenarios() -> Vec<Scenario> {
             run: cfrac::run,
         },
         Scenario {
+            name: "espresso",
+            run: espresso::run,
+        },
+        Scenario {
             name: "mleak10",
             run: |alloc| unsafe { mleak::run(alloc, 5) },
         },
@@ -4319,6 +4323,343 @@ mod cfrac {
             assert_eq!(stats.used_partials, cfrac_expected::USED_PARTIALS);
             assert_eq!(stats.full_solutions, cfrac_expected::FULL_SOLUTIONS);
             assert_eq!(stats.factor_attempts, cfrac_expected::FACTOR_ATTEMPTS);
+            start.elapsed()
+        }
+    }
+}
+
+mod espresso {
+    use super::*;
+
+    const ITERATIONS: usize = 20;
+    const INPUTS: usize = 16;
+    const OUTPUTS: usize = 40;
+    const EXPECTED_ROWS: usize = 2810;
+    const EXPECTED_ONES: u32 = 13_747;
+    const EXPECTED_DASHES: u32 = 6_489;
+    const SIMPLIFY_ROUNDS: usize = 45;
+
+    #[derive(Clone, Copy)]
+    struct Cube {
+        zeros: u32,
+        ones: u32,
+        outputs: u64,
+    }
+
+    struct Cover {
+        alloc: BenchAllocator,
+        ptr: *mut Cube,
+        len: usize,
+        cap: usize,
+    }
+
+    impl Cover {
+        unsafe fn with_capacity(alloc: BenchAllocator, cap: usize) -> Self {
+            unsafe {
+                let bytes = cap * std::mem::size_of::<Cube>();
+                let ptr = alloc.malloc(bytes).cast::<Cube>();
+                assert!(!ptr.is_null(), "espresso cover allocation failed");
+                Self {
+                    alloc,
+                    ptr,
+                    len: 0,
+                    cap,
+                }
+            }
+        }
+
+        unsafe fn push(&mut self, cube: Cube) {
+            unsafe {
+                if self.len == self.cap {
+                    let next_cap = self.cap * 2;
+                    let bytes = next_cap * std::mem::size_of::<Cube>();
+                    let ptr = self
+                        .alloc
+                        .realloc(self.ptr.cast::<u8>(), bytes)
+                        .cast::<Cube>();
+                    assert!(!ptr.is_null(), "espresso cover growth failed");
+                    self.ptr = ptr;
+                    self.cap = next_cap;
+                }
+                self.ptr.add(self.len).write(cube);
+                self.len += 1;
+            }
+        }
+
+        unsafe fn get(&self, index: usize) -> Cube {
+            unsafe { *self.ptr.add(index) }
+        }
+
+        unsafe fn set(&mut self, index: usize, cube: Cube) {
+            unsafe {
+                self.ptr.add(index).write(cube);
+            }
+        }
+
+        unsafe fn clear(&mut self) {
+            self.len = 0;
+        }
+
+        unsafe fn duplicate(&self) -> Self {
+            unsafe {
+                let mut out = Cover::with_capacity(self.alloc, self.len.max(1));
+                std::ptr::copy_nonoverlapping(self.ptr, out.ptr, self.len);
+                out.len = self.len;
+                out
+            }
+        }
+    }
+
+    impl Drop for Cover {
+        fn drop(&mut self) {
+            unsafe {
+                self.alloc.free(self.ptr.cast::<u8>());
+            }
+        }
+    }
+
+    struct ParsedPla {
+        cover: Cover,
+        rows: u32,
+        ones: u32,
+        dashes: u32,
+    }
+
+    fn input_path() -> PathBuf {
+        if let Some(path) = env::var_os("MIMALLOC_BENCH_ESPRESSO_INPUT") {
+            return PathBuf::from(path);
+        }
+        workspace_root()
+            .join("mimalloc-bench")
+            .join("bench")
+            .join("espresso")
+            .join("largest.espresso")
+    }
+
+    fn source() -> &'static str {
+        static SOURCE: OnceLock<String> = OnceLock::new();
+        SOURCE.get_or_init(|| {
+            std::fs::read_to_string(input_path())
+                .expect("failed to read mimalloc-bench/bench/espresso/largest.espresso")
+        })
+    }
+
+    unsafe fn parse_pla(alloc: BenchAllocator) -> ParsedPla {
+        unsafe {
+            let mut cover = Cover::with_capacity(alloc, EXPECTED_ROWS);
+            let mut rows = 0u32;
+            let mut output_ones = 0u32;
+            let mut input_dashes = 0u32;
+
+            for line in source().lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('.') {
+                    continue;
+                }
+                let Some((input, output)) = line.split_once(' ') else {
+                    continue;
+                };
+                assert_eq!(input.len(), INPUTS);
+                assert_eq!(output.len(), OUTPUTS);
+
+                let mut zeros = 0u32;
+                let mut ones = 0u32;
+                for (idx, byte) in input.bytes().enumerate() {
+                    let bit = 1u32 << idx;
+                    match byte {
+                        b'0' => zeros |= bit,
+                        b'1' => ones |= bit,
+                        b'-' => input_dashes += 1,
+                        _ => panic!("invalid espresso input bit"),
+                    }
+                }
+
+                let mut outputs = 0u64;
+                for (idx, byte) in output.bytes().enumerate() {
+                    match byte {
+                        b'0' | b'-' => {}
+                        b'1' => {
+                            outputs |= 1u64 << idx;
+                            output_ones += 1;
+                        }
+                        _ => panic!("invalid espresso output bit"),
+                    }
+                }
+                if outputs != 0 {
+                    cover.push(Cube {
+                        zeros,
+                        ones,
+                        outputs,
+                    });
+                }
+                rows += 1;
+            }
+
+            ParsedPla {
+                cover,
+                rows,
+                ones: output_ones,
+                dashes: input_dashes,
+            }
+        }
+    }
+
+    fn contains(a: Cube, b: Cube) -> bool {
+        (a.zeros & !b.zeros) == 0 && (a.ones & !b.ones) == 0 && (b.outputs & !a.outputs) == 0
+    }
+
+    fn merge_distance_one(a: Cube, b: Cube) -> Option<Cube> {
+        if a.outputs != b.outputs {
+            return None;
+        }
+        let changed_zeros = a.zeros ^ b.zeros;
+        let changed_ones = a.ones ^ b.ones;
+        let changed = changed_zeros | changed_ones;
+        if changed.count_ones() != 1 {
+            return None;
+        }
+        if (changed_zeros & changed_ones) != 0 {
+            return None;
+        }
+        Some(Cube {
+            zeros: a.zeros & !changed,
+            ones: a.ones & !changed,
+            outputs: a.outputs,
+        })
+    }
+
+    unsafe fn compact_unique(input: &Cover, output: &mut Cover) {
+        unsafe {
+            output.clear();
+            for i in 0..input.len {
+                let cube = input.get(i);
+                let mut duplicate = false;
+                for j in 0..output.len {
+                    let other = output.get(j);
+                    if cube.zeros == other.zeros
+                        && cube.ones == other.ones
+                        && cube.outputs == other.outputs
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if !duplicate {
+                    output.push(cube);
+                }
+            }
+        }
+    }
+
+    unsafe fn remove_contained(input: &Cover, output: &mut Cover) {
+        unsafe {
+            output.clear();
+            for i in 0..input.len {
+                let cube = input.get(i);
+                let mut covered = false;
+                for j in 0..input.len {
+                    if i != j && contains(input.get(j), cube) {
+                        covered = true;
+                        break;
+                    }
+                }
+                if !covered {
+                    output.push(cube);
+                }
+            }
+        }
+    }
+
+    unsafe fn distance_merge(input: &Cover, output: &mut Cover) {
+        unsafe {
+            output.clear();
+            for i in 0..input.len {
+                output.push(input.get(i));
+            }
+            for i in 0..input.len {
+                let a = input.get(i);
+                for j in (i + 1)..input.len {
+                    if let Some(merged) = merge_distance_one(a, input.get(j)) {
+                        output.push(merged);
+                    }
+                }
+            }
+        }
+    }
+
+    unsafe fn expand_outputs(input: &mut Cover) {
+        unsafe {
+            for i in 0..input.len {
+                let mut cube = input.get(i);
+                for j in 0..input.len {
+                    if i == j {
+                        continue;
+                    }
+                    let other = input.get(j);
+                    if cube.zeros == other.zeros && cube.ones == other.ones {
+                        cube.outputs |= other.outputs;
+                    }
+                }
+                input.set(i, cube);
+            }
+        }
+    }
+
+    unsafe fn checksum(cover: &Cover) -> u64 {
+        unsafe {
+            let mut hash = 0xcbf29ce484222325u64;
+            for i in 0..cover.len {
+                let cube = cover.get(i);
+                hash ^= cube.zeros as u64;
+                hash = hash.wrapping_mul(0x100000001b3);
+                hash ^= cube.ones as u64;
+                hash = hash.wrapping_mul(0x100000001b3);
+                hash ^= cube.outputs;
+                hash = hash.wrapping_mul(0x100000001b3);
+            }
+            hash
+        }
+    }
+
+    unsafe fn run_one(alloc: BenchAllocator) -> (usize, u64, ParsedPla) {
+        unsafe {
+            let parsed = parse_pla(alloc);
+            assert_eq!(parsed.rows as usize, EXPECTED_ROWS);
+            assert_eq!(parsed.ones, EXPECTED_ONES);
+            assert_eq!(parsed.dashes, EXPECTED_DASHES);
+
+            let mut current = parsed.cover.duplicate();
+            let mut scratch = Cover::with_capacity(alloc, current.len * 2);
+            let mut unique = Cover::with_capacity(alloc, current.len * 2);
+
+            for _ in 0..SIMPLIFY_ROUNDS {
+                remove_contained(&current, &mut scratch);
+                std::mem::swap(&mut current, &mut scratch);
+                distance_merge(&current, &mut scratch);
+                compact_unique(&scratch, &mut unique);
+                std::mem::swap(&mut current, &mut unique);
+                expand_outputs(&mut current);
+            }
+
+            let count = current.len;
+            let hash = checksum(&current);
+            (count, hash, parsed)
+        }
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let start = Instant::now();
+            let mut total_count = 0usize;
+            let mut total_hash = 0u64;
+            for _ in 0..ITERATIONS {
+                let (count, hash, parsed) = run_one(alloc);
+                total_count += count;
+                total_hash ^= hash;
+                std::hint::black_box(parsed.cover.len);
+            }
+            std::hint::black_box(total_count);
+            std::hint::black_box(total_hash);
             start.elapsed()
         }
     }

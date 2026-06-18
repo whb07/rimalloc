@@ -980,7 +980,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "src/prim/emscripten.rs",
         "src/prim/osx.rs",
         "src/prim/wasi.rs",
-        "src/theap.rs",
     ]);
 
     assert_eq!(
@@ -1000,9 +999,10 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/prim.rs")
             && !actual.contains("src/prim/unix.rs")
             && !actual.contains("src/random.rs")
+            && !actual.contains("src/theap.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, heap helpers, libc helpers, options helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, heap helpers, libc helpers, options helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 
@@ -3359,11 +3359,12 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_init")
-            && theap_rs.contains("_mi_theap_init(theap, heap, tld);\n    theap"),
+            && theap_rs.contains("unsafe {\n        crate::mi_assert_internal!(!tld.is_null());")
+            && theap_rs.contains("_mi_theap_init(theap, heap, tld);\n        theap"),
         "_mi_theap_create should keep C's _mi_theap_init call boundary"
     );
     assert!(
-        theap_rs.contains("_mi_memcpy_aligned(\n        theap.cast(),")
+        theap_rs.contains("_mi_memcpy_aligned(\n            theap.cast(),")
             && internal.contains("unsafe fn mi_cpu_movsb_max() -> usize")
             && internal.contains("\"mov {max}, qword ptr [rip + _mi_cpu_movsb_max]\"")
             && internal.contains("if n <= mi_cpu_movsb_max()")
@@ -3392,7 +3393,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         atomic_types.contains("pub(crate) unsafe fn fetch_add(self, value: usize, order: Ordering) -> usize")
             && atomic_types.contains("pub(crate) unsafe fn fetch_sub(self, value: usize, order: Ordering) -> usize")
-            && theap_init_body.contains("crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*theap).refcount))\n        .store(1, crate::core_types::MemoryOrder::SeqCst);")
+            && theap_init_body.contains("crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*theap).refcount))\n            .store(1, crate::core_types::MemoryOrder::SeqCst);")
             && !theap_init_body.contains("mi_atomic_store_explicit(\n        ptr::addr_of_mut!((*theap).refcount),")
             && !theap_init_body.contains("(*theap).refcount = 1;"),
         "_mi_theap_init should initialize C's atomic refcount through a typed seq_cst atomic store"
@@ -3401,7 +3402,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         atomic_types.contains(
             "pub(crate) unsafe fn exchange_acq_rel(self, value: *mut T) -> *mut T"
         ) && theap_rs.contains(
-            "crate::core_types::AtomicPtrField(ptr::addr_of_mut!((*theap).heap))\n        .exchange_acq_rel(ptr::null_mut())"
+            "crate::core_types::AtomicPtrField(ptr::addr_of_mut!((*theap).heap))\n            .exchange_acq_rel(ptr::null_mut())"
         ) && !theap_rs.contains("mi_atomic_exchange_ptr_acq_rel"),
         "_mi_theap_free should clear the heap pointer through AtomicPtrField"
     );
@@ -3847,7 +3848,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && theap_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_decref")
             && theap_rs.contains("#[inline(always)]\nunsafe fn mi_theap_decref_inline")
-            && theap_rs.contains("mi_theap_decref_inline(theap);\n    true")
+            && theap_rs.contains("mi_theap_decref_inline(theap);\n        true")
             && !theap_rs.contains("    _mi_theap_decref(theap);\n    true"),
         "_mi_theap_free should inline C's decref tail while preserving the standalone _mi_theap_decref helper for other call sites"
     );

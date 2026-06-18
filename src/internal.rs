@@ -1184,14 +1184,12 @@ pub unsafe fn _mi_memid_create_meta(
     block_idx: usize,
     block_count: usize,
 ) -> mi_memid_t {
-    let mut memid = _mi_memid_create(mi_memkind_t::MI_MEM_META);
-    memid.mem.meta.meta_page = mpage;
-    memid.mem.meta.block_index = block_idx as u32;
-    memid.mem.meta.block_count = block_count as u32;
-    memid.initially_committed = true;
-    memid.initially_zero = true;
-    memid.is_pinned = true;
-    memid
+    crate::core_types::MemId::<crate::core_types::MetaMem>::meta(
+        core::ptr::NonNull::new_unchecked(mpage),
+        crate::core_types::BlockIndex(block_idx as u32),
+        core::num::NonZeroU32::new_unchecked(block_count as u32),
+    )
+    .raw
 }
 
 #[inline]

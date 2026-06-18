@@ -2402,9 +2402,18 @@ fn free_path_internals_are_not_dynamic_exports() {
             && internal.contains("crate::core_types::MemIdView::Static(_)")
             && internal.contains("crate::core_types::MemIdView::Arena(_)")
             && internal.contains("mi_page_is_in_arena(page)")
+            && internal.contains("crate::core_types::MemId::<crate::core_types::MetaMem>::meta(")
+            && internal.contains("core::num::NonZeroU32::new_unchecked(block_count as u32)")
+            && memid_rs.contains("impl MemId<MetaMem>")
+            && memid_rs.contains("is_pinned: true")
+            && memid_rs.contains("initially_committed: true")
+            && memid_rs.contains("initially_zero: true")
             && !internal.contains("crate::types::mi_memkind_is_os(memid.memkind)")
             && !internal.contains("crate::types::mi_memkind_needs_no_free(memid.memkind)")
             && !internal.contains("(*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA")
+            && !internal.contains("memid.mem.meta.meta_page = mpage")
+            && !internal.contains("memid.mem.meta.block_index = block_idx as u32")
+            && !internal.contains("memid.mem.meta.block_count = block_count as u32")
             && arena_meta_rs.contains(
                 "if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid)"
             )

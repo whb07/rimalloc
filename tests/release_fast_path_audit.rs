@@ -112,7 +112,7 @@ fn huge_allocation_stats_are_release_gated_like_c_mimalloc() {
 
     assert!(
         body.contains(
-            "if MI_STAT > 0 {\n            __mi_stat_increase(\n                ptr::addr_of_mut!((*theap).stats.malloc_huge),"
+            "if MI_STAT > 0 {\n                __mi_stat_increase(\n                    ptr::addr_of_mut!((*theap).stats.malloc_huge),"
         ) && body.contains(
             "__mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);"
         ),
@@ -972,7 +972,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         })
         .collect::<BTreeSet<_>>();
     let expected = BTreeSet::from([
-        "src/page.rs",
         "src/prim/emscripten.rs",
         "src/prim/osx.rs",
         "src/prim/wasi.rs",
@@ -997,13 +996,14 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/libc.rs")
             && !actual.contains("src/options.rs")
             && !actual.contains("src/os.rs")
+            && !actual.contains("src/page.rs")
             && !actual.contains("src/prim.rs")
             && !actual.contains("src/prim/unix.rs")
             && !actual.contains("src/random.rs")
             && !actual.contains("src/theap.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "allocation helpers, aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, free-path helpers, heap helpers, internal helpers, libc helpers, options helpers, OS boundary helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "allocation helpers, aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, free-path helpers, heap helpers, internal helpers, libc helpers, options helpers, OS boundary helpers, page helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 
@@ -1321,10 +1321,10 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_deferred_free(")
             && page_rs.contains("(*theap).heartbeat = (*theap).heartbeat.wrapping_add(1);")
-            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n        .load(crate::core_types::MemoryOrder::Acquire);")
-            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n            .load(crate::core_types::MemoryOrder::Acquire);")
-            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n        .store(arg, crate::core_types::MemoryOrder::Release);")
-            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n        .store(f, crate::core_types::MemoryOrder::Release);")
+            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .load(crate::core_types::MemoryOrder::Acquire);")
+            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n                .load(crate::core_types::MemoryOrder::Acquire);")
+            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n            .store(arg, crate::core_types::MemoryOrder::Release);")
+            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .store(f, crate::core_types::MemoryOrder::Release);")
             && !page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free))")
             && !page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_arg))")
             && !page_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_arg)")
@@ -2110,7 +2110,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("let bin = mi_page_bin_typed(page).as_usize();")
             && page_rs.contains("let bin = _mi_page_stats_bin_typed(page).as_usize();")
             && page_rs.contains("let bin = mi_bin_from_block_size(block_size).as_usize();")
-            && page_rs.contains("== mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(\n                (*prev).block_size,")
+            && page_rs.contains("== mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(\n                    (*prev).block_size,")
             && !page_rs.contains("pub(crate) fn _mi_bin_typed(size: usize)")
             && !alloc_rs.contains("_mi_bin_typed(")
             && !free_rs.contains("_mi_bin_typed(")
@@ -2616,7 +2616,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(
                 "crate::core_types::PageAbandonOutcome::Abandoned(crate::core_types::AbandonedPage"
             )
-            && page_rs.contains("_mi_page_abandon_internal(\n            crate::core_types::PageForAbandon::Active")
+            && page_rs.contains("let page_ptr = crate::core_types::PagePtr::new_unchecked(page);")
+            && page_rs.contains(
+                "crate::core_types::PageForAbandon::Full(crate::core_types::FullPage(page_ptr))"
+            )
+            && page_rs.contains(
+                "crate::core_types::PageForAbandon::Active(crate::core_types::ActivePage(page_ptr))"
+            )
             && theap_rs.contains("_mi_page_abandon(page, pq);"),
         "page abandon should keep C's local helper boundary while using typed active/full abandon witnesses internally"
     );
@@ -2645,13 +2651,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("static MI_PAGE_QUEUE_APPEND_KEEP")
             && page_rs.contains("mi_page_thread_free_collect(page);")
             && page_rs.contains(
-                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n        ptr::addr_of_mut!((*page).xthread_free),\n    ));"
+                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),\n        ));"
             )
             && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
             && page_rs.contains("let Some(head) = remote.0.map(|b| b.as_ptr()) else")
             && page_rs.contains(".map(|block| block.as_ptr())")
-            && page_rs.contains("let thread_free = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n        ptr::addr_of_mut!((*page).xthread_free),\n    ))")
-            && page_rs.contains("crate::core_types::ThreadFreeWord::from_parts(\n                None,\n                crate::core_types::ThreadFreeOwner::Owned")
+            && page_rs.contains("let thread_free = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),\n        ))")
+            && page_rs.contains("crate::core_types::ThreadFreeWord::from_parts(\n                    None,\n                    crate::core_types::ThreadFreeOwner::Owned")
             && !page_rs.contains("crate::internal::mi_tf_create(ptr::null_mut()")
             && !page_rs.contains("crate::internal::mi_tf_block(mi_atomic_load_explicit")
             && !page_rs.contains("(*page).xthread_free == 1")
@@ -2700,11 +2706,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("crate::core_types::MemIdView::Os(os) => os")
             && !page_rs.contains("(*page).memid.mem.os.base")
             && page_rs.contains(
-                "let _ = _mi_page_unfull_internal(crate::core_types::FullPage(\n        crate::core_types::PagePtr::new_unchecked(page),"
+                "let _ = _mi_page_unfull_internal(crate::core_types::FullPage(\n            crate::core_types::PagePtr::new_unchecked(page),"
             )
-            && page_rs.contains("mi_page_unfull_typed(\n        page_wrapper,")
+            && page_rs.contains("mi_page_unfull_typed(\n            page_wrapper,")
             && page_rs
-                .contains("mi_page_move_to_full_typed(\n            crate::core_types::ActivePage")
+                .contains("mi_page_move_to_full_typed(\n                crate::core_types::ActivePage")
             && free_rs.contains("_mi_page_retire_internal(crate::core_types::AllFreePage::active_unchecked")
             && free_rs.contains("_mi_page_unfull_internal(crate::core_types::FullPage")
             && free_rs.contains("_mi_page_free_collect(page, false);")
@@ -3704,16 +3710,14 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("static MI_THEAP_PAGE_RECLAIM_KEEP")
             && page_rs.contains("mi_theap_page_reclaim_raw;")
             && page_rs.contains("_mi_theap_page_reclaim(wrapper, theap_wrapper);")
-            && page_rs.contains(
-                "_mi_theap_page_reclaim(\n            crate::core_types::OwnedAbandonedPage"
-            )
+            && page_rs.contains("let wrapper = crate::core_types::OwnedAbandonedPage(page_ptr);")
             && !page_rs.contains("pub unsafe extern \"C\" fn _mi_theap_page_reclaim")
             && atomic_types.contains("pub(crate) unsafe fn compare_exchange_release(\n        self,\n        expected: &mut PageThreadId,")
             && internal.contains("let atomic_tid = crate::core_types::AtomicPageThreadId(\n            crate::core_types::AtomicUsizeField(")
             && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);")
             && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);")
             && page_rs.contains("let flag = crate::core_types::PageFlags::from_low_bits(newflag);")
-            && page_rs.contains("let old = unsafe { atomic_tid.set_flags(flag, set) };")
+            && page_rs.contains("let old = atomic_tid.set_flags(flag, set);")
             && page_rs.contains("let xtid = xtid_old.with_owner(owner);")
             && page_rs.contains("atomic_tid.compare_exchange_release(&mut xtid_old, xtid)")
             && arena_rs.contains("unsafe { atomic_tid.set_owner_release(crate::core_types::PageOwnerId::AbandonedMapped) };")
@@ -3724,7 +3728,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !page_rs.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
             && !arena_rs.contains("MI_THREADID_ABANDONED_MAPPED | flags")
             && page_rs.contains(
-                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n        ptr::addr_of_mut!((*page).xthread_free),\n    ));"
+                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),\n        ));"
             )
             && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
             && page_rs.contains("remote.collect_into_local(page_wrapper, local);")
@@ -3761,7 +3765,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(
                 "unsafe fn mi_page_queue_push_at_end_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
             )
-            && page_rs.contains("mi_page_queue_push_at_end_typed(\n        crate::core_types::ThreadHeapLocal")
+            && page_rs.contains("mi_page_queue_push_at_end_typed(\n            crate::core_types::ThreadHeapLocal")
             && page_rs.contains("crate::core_types::NormalPageQueue")
             && page_rs.contains("crate::core_types::ActivePage"),
         "_mi_theap_page_reclaim should keep C's local abandoned-page reclaim helper boundary while collecting remote frees through typed wrappers"
@@ -4065,15 +4069,15 @@ fn release_page_stat_writes_follow_c_mimalloc_gates() {
     for (stat, needle) in [
         (
             "pages_retire",
-            "if MI_STAT > 0 {\n            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);",
+            "if MI_STAT > 0 {\n                __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);",
         ),
         (
             "pages_extended",
-            "if MI_STAT > 0 {\n        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_extended), 1);",
+            "if MI_STAT > 0 {\n            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_extended), 1);",
         ),
         (
             "page_committed",
-            "if MI_STAT > 0 {\n        __mi_stat_increase(\n            ptr::addr_of_mut!((*theap).stats.page_committed),",
+            "if MI_STAT > 0 {\n            __mi_stat_increase(\n                ptr::addr_of_mut!((*theap).stats.page_committed),",
         ),
     ] {
         assert!(

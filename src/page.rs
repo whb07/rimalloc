@@ -1,6 +1,6 @@
 //! Page management
 
-#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::{c_long, c_void};
 use core::mem::size_of;
@@ -204,10 +204,10 @@ pub unsafe fn mi_page_block_at(
     block_size: usize,
     i: usize,
 ) -> *mut mi_block_t {
-    crate::MI_UNUSED!(page);
-    crate::mi_assert_internal!(!page.is_null());
-    crate::mi_assert_internal!(i <= (*page).reserved as usize);
     unsafe {
+        crate::MI_UNUSED!(page);
+        crate::mi_assert_internal!(!page.is_null());
+        crate::mi_assert_internal!(i <= (*page).reserved as usize);
         page_start
             .cast::<u8>()
             .add(i * block_size)
@@ -219,244 +219,262 @@ pub unsafe fn mi_page_block_at(
 /// `page` must be valid, and `head` must be null or a block list belonging to `page`.
 #[inline]
 pub unsafe fn mi_page_list_count(page: *mut mi_page_t, mut head: *mut mi_block_t) -> usize {
-    crate::mi_assert_internal!(_mi_ptr_page((*page).page_start.cast()) == page);
-    let slice_start = mi_page_slice_start(page);
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
-        slice_start.cast(),
-        MI_PAGE_ALIGN
-    ));
-    let mut count = 0usize;
-    while !head.is_null() {
-        crate::mi_assert_internal!(
-            (head as usize).wrapping_sub(slice_start as usize) > MI_LARGE_PAGE_SIZE
-                || page == _mi_ptr_page(head.cast())
-        );
-        count += 1;
-        head = mi_block_next(page, head);
+    unsafe {
+        crate::mi_assert_internal!(_mi_ptr_page((*page).page_start.cast()) == page);
+        let slice_start = mi_page_slice_start(page);
+        crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+            slice_start.cast(),
+            MI_PAGE_ALIGN
+        ));
+        let mut count = 0usize;
+        while !head.is_null() {
+            crate::mi_assert_internal!(
+                (head as usize).wrapping_sub(slice_start as usize) > MI_LARGE_PAGE_SIZE
+                    || page == _mi_ptr_page(head.cast())
+            );
+            count += 1;
+            head = mi_block_next(page, head);
+        }
+        count
     }
-    count
 }
 
 /// # Safety
 /// `page` must be valid, and `p` must be null or a block list belonging to `page`.
 #[inline]
 pub unsafe fn mi_page_list_is_valid(page: *mut mi_page_t, mut p: *mut mi_block_t) -> bool {
-    let mut psize = 0usize;
-    let page_area = mi_page_area(page, &mut psize).cast::<mi_block_t>();
-    let end = unsafe { page_area.cast::<u8>().add(psize).cast::<mi_block_t>() };
-    while !p.is_null() {
-        if p < page_area || p >= end {
-            return false;
+    unsafe {
+        let mut psize = 0usize;
+        let page_area = mi_page_area(page, &mut psize).cast::<mi_block_t>();
+        let end = page_area.cast::<u8>().add(psize).cast::<mi_block_t>();
+        while !p.is_null() {
+            if p < page_area || p >= end {
+                return false;
+            }
+            p = mi_block_next(page, p);
         }
-        p = mi_block_next(page, p);
-    }
-    if MI_DEBUG > 3 && (*page).free_is_zero {
-        let ubsize = mi_page_usable_block_size(page);
-        let mut block = (*page).free;
-        while !block.is_null() {
-            crate::mi_assert_expensive!(mi_mem_is_zero(
-                block.add(1).cast(),
-                ubsize.get() - size_of::<mi_block_t>()
-            ));
-            block = mi_block_next(page, block);
+        if MI_DEBUG > 3 && (*page).free_is_zero {
+            let ubsize = mi_page_usable_block_size(page);
+            let mut block = (*page).free;
+            while !block.is_null() {
+                crate::mi_assert_expensive!(mi_mem_is_zero(
+                    block.add(1).cast(),
+                    ubsize.get() - size_of::<mi_block_t>()
+                ));
+                block = mi_block_next(page, block);
+            }
         }
+        true
     }
-    true
 }
 
 /// # Safety
 /// `page` must point to page metadata initialized or being initialized by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_valid_init(page: *mut mi_page_t) -> bool {
-    crate::mi_assert_internal!(mi_page_block_size(page) > 0);
-    crate::mi_assert_internal!((*page).used <= (*page).capacity);
-    crate::mi_assert_internal!((*page).capacity <= (*page).reserved);
-    crate::mi_assert_internal!(mi_page_list_is_valid(page, (*page).free));
-    crate::mi_assert_internal!(mi_page_list_is_valid(page, (*page).local_free));
+    unsafe {
+        crate::mi_assert_internal!(mi_page_block_size(page) > 0);
+        crate::mi_assert_internal!((*page).used <= (*page).capacity);
+        crate::mi_assert_internal!((*page).capacity <= (*page).reserved);
+        crate::mi_assert_internal!(mi_page_list_is_valid(page, (*page).free));
+        crate::mi_assert_internal!(mi_page_list_is_valid(page, (*page).local_free));
 
-    if MI_DEBUG > 3 && (*page).free_is_zero {
-        let ubsize = mi_page_usable_block_size(page);
-        let mut block = (*page).free;
-        while !block.is_null() {
-            crate::mi_assert_expensive!(mi_mem_is_zero(
-                block.add(1).cast(),
-                ubsize.get() - size_of::<mi_block_t>()
-            ));
-            block = mi_block_next(page, block);
+        if MI_DEBUG > 3 && (*page).free_is_zero {
+            let ubsize = mi_page_usable_block_size(page);
+            let mut block = (*page).free;
+            while !block.is_null() {
+                crate::mi_assert_expensive!(mi_mem_is_zero(
+                    block.add(1).cast(),
+                    ubsize.get() - size_of::<mi_block_t>()
+                ));
+                block = mi_block_next(page, block);
+            }
         }
-    }
 
-    if MI_TRACK_ENABLED == 0 {
-        let tfree = mi_page_thread_free(page);
-        crate::mi_assert_internal!(mi_page_list_is_valid(page, tfree));
-    }
+        if MI_TRACK_ENABLED == 0 {
+            let tfree = mi_page_thread_free(page);
+            crate::mi_assert_internal!(mi_page_list_is_valid(page, tfree));
+        }
 
-    let free_count =
-        mi_page_list_count(page, (*page).free) + mi_page_list_count(page, (*page).local_free);
-    crate::mi_assert_internal!((*page).used as usize + free_count == (*page).capacity as usize);
-    true
+        let free_count =
+            mi_page_list_count(page, (*page).free) + mi_page_list_count(page, (*page).local_free);
+        crate::mi_assert_internal!((*page).used as usize + free_count == (*page).capacity as usize);
+        true
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
-    crate::mi_assert_internal!(mi_page_is_valid_init(page));
-    #[cfg(any(
-        feature = "secure",
-        debug_assertions,
-        feature = "track-valgrind",
-        feature = "track-asan"
-    ))]
-    if MI_SECURE != 0 {
-        crate::mi_assert_internal!((*page).keys[0] != 0);
+    unsafe {
+        crate::mi_assert_internal!(mi_page_is_valid_init(page));
+        #[cfg(any(
+            feature = "secure",
+            debug_assertions,
+            feature = "track-valgrind",
+            feature = "track-asan"
+        ))]
+        if MI_SECURE != 0 {
+            crate::mi_assert_internal!((*page).keys[0] != 0);
+        }
+        if !mi_page_is_abandoned(page) {
+            let pq = mi_page_queue_of(page);
+            crate::mi_assert_internal!(mi_page_queue_contains(pq, page));
+            crate::mi_assert_internal!(
+                (*pq).block_size == mi_page_block_size(page)
+                    || mi_page_is_huge(page)
+                    || mi_page_is_in_full(page)
+            );
+            crate::mi_assert_internal!(mi_page_contains_address(page, page.cast()));
+        }
+        true
     }
-    if !mi_page_is_abandoned(page) {
-        let pq = mi_page_queue_of(page);
-        crate::mi_assert_internal!(mi_page_queue_contains(pq, page));
-        crate::mi_assert_internal!(
-            (*pq).block_size == mi_page_block_size(page)
-                || mi_page_is_huge(page)
-                || mi_page_is_in_full(page)
-        );
-        crate::mi_assert_internal!(mi_page_contains_address(page, page.cast()));
-    }
-    true
 }
 
 /// # Safety
 /// `page` must be valid, and `head` must be a detached thread-free list for that page.
 #[inline]
 pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut mi_block_t) {
-    if head.is_null() {
-        return;
-    }
-
-    let max_count = (*page).capacity as usize;
-    let mut count = 1usize;
-    let mut last = head;
-    loop {
-        let next = mi_block_next(page, last);
-        if next.is_null() || count > max_count {
-            break;
+    unsafe {
+        if head.is_null() {
+            return;
         }
-        count += 1;
-        last = next;
+
+        let max_count = (*page).capacity as usize;
+        let mut count = 1usize;
+        let mut last = head;
+        loop {
+            let next = mi_block_next(page, last);
+            if next.is_null() || count > max_count {
+                break;
+            }
+            count += 1;
+            last = next;
+        }
+
+        if count > max_count {
+            _mi_error_message(EFAULT, c"corrupted thread-free list\n".as_ptr());
+            return;
+        } else if count > (*page).used as usize {
+            _mi_error_message(
+                EFAULT,
+                c"corrupted meta-data in thread-free list\n".as_ptr(),
+            );
+            return;
+        }
+
+        mi_block_set_next(page, last, (*page).local_free);
+        (*page).local_free = head;
+
+        crate::mi_assert_internal!(u16::try_from(count).is_ok());
+        crate::mi_assert_internal!((*page).used >= count as u16);
+        (*page).used -= count as u16;
     }
-
-    if count > max_count {
-        _mi_error_message(EFAULT, c"corrupted thread-free list\n".as_ptr());
-        return;
-    } else if count > (*page).used as usize {
-        _mi_error_message(
-            EFAULT,
-            c"corrupted meta-data in thread-free list\n".as_ptr(),
-        );
-        return;
-    }
-
-    mi_block_set_next(page, last, (*page).local_free);
-    (*page).local_free = head;
-
-    crate::mi_assert_internal!(u16::try_from(count).is_ok());
-    crate::mi_assert_internal!((*page).used >= count as u16);
-    (*page).used -= count as u16;
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
-    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_free),
-    ));
-    let remote = atomic_tf.take_head_preserving_owner();
-    let Some(head) = remote.0.map(|b| b.as_ptr()) else {
-        return;
-    };
-    crate::mi_assert_internal!(!head.is_null());
-    mi_page_thread_collect_to_local(page, head);
+    unsafe {
+        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*page).xthread_free),
+        ));
+        let remote = atomic_tf.take_head_preserving_owner();
+        let Some(head) = remote.0.map(|b| b.as_ptr()) else {
+            return;
+        };
+        crate::mi_assert_internal!(!head.is_null());
+        mi_page_thread_collect_to_local(page, head);
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
-    if !(*page).free.is_null() {
-        return true;
+    unsafe {
+        if !(*page).free.is_null() {
+            return true;
+        }
+        if (*page).local_free.is_null() {
+            return false;
+        }
+        (*page).free = (*page).local_free;
+        (*page).local_free = ptr::null_mut();
+        (*page).free_is_zero = false;
+        true
     }
-    if (*page).local_free.is_null() {
-        return false;
-    }
-    (*page).free = (*page).local_free;
-    (*page).local_free = ptr::null_mut();
-    (*page).free_is_zero = false;
-    true
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
-    crate::mi_assert_internal!(!page.is_null());
+    unsafe {
+        crate::mi_assert_internal!(!page.is_null());
 
-    mi_page_thread_free_collect(page);
+        mi_page_thread_free_collect(page);
 
-    if !(*page).local_free.is_null() {
-        if (*page).free.is_null() {
-            (*page).free = (*page).local_free;
-            (*page).local_free = ptr::null_mut();
-            (*page).free_is_zero = false;
-        } else if force {
-            let mut tail = (*page).local_free;
-            loop {
-                let next = mi_block_next(page, tail);
-                if next.is_null() {
-                    break;
+        if !(*page).local_free.is_null() {
+            if (*page).free.is_null() {
+                (*page).free = (*page).local_free;
+                (*page).local_free = ptr::null_mut();
+                (*page).free_is_zero = false;
+            } else if force {
+                let mut tail = (*page).local_free;
+                loop {
+                    let next = mi_block_next(page, tail);
+                    if next.is_null() {
+                        break;
+                    }
+                    tail = next;
                 }
-                tail = next;
+                mi_block_set_next(page, tail, (*page).free);
+                (*page).free = (*page).local_free;
+                (*page).local_free = ptr::null_mut();
+                (*page).free_is_zero = false;
             }
-            mi_block_set_next(page, tail, (*page).free);
-            (*page).free = (*page).local_free;
-            (*page).local_free = ptr::null_mut();
-            (*page).free_is_zero = false;
         }
-    }
 
-    crate::mi_assert_internal!(!force || (*page).local_free.is_null());
+        crate::mi_assert_internal!(!force || (*page).local_free.is_null());
+    }
 }
 
 /// # Safety
 /// `page` must be valid, and `head` must be null or a detached block list belonging to `page`.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
-    if head.is_null() {
-        return;
-    }
-    let next = mi_block_next(page, head);
-    if !next.is_null() {
-        mi_block_set_next(page, head, ptr::null());
-        mi_page_thread_collect_to_local(page, next);
-        if !(*page).local_free.is_null() && (*page).free.is_null() {
-            (*page).free = (*page).local_free;
-            (*page).local_free = ptr::null_mut();
-            (*page).free_is_zero = false;
+    unsafe {
+        if head.is_null() {
+            return;
         }
-    }
-    if (*page).used == 1 {
-        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-            ptr::addr_of_mut!((*page).xthread_free),
-        ));
-        crate::mi_assert_internal!(
-            atomic_tf
-                .load_relaxed()
-                .head()
-                .map(|block| block.as_ptr())
-                .unwrap_or(ptr::null_mut())
-                == head
-        );
-        crate::mi_assert_internal!(mi_block_next(page, head).is_null());
-        _mi_page_free_collect(page, false);
+        let next = mi_block_next(page, head);
+        if !next.is_null() {
+            mi_block_set_next(page, head, ptr::null());
+            mi_page_thread_collect_to_local(page, next);
+            if !(*page).local_free.is_null() && (*page).free.is_null() {
+                (*page).free = (*page).local_free;
+                (*page).local_free = ptr::null_mut();
+                (*page).free_is_zero = false;
+            }
+        }
+        if (*page).used == 1 {
+            let atomic_tf = crate::core_types::AtomicThreadFree(
+                crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*page).xthread_free)),
+            );
+            crate::mi_assert_internal!(
+                atomic_tf
+                    .load_relaxed()
+                    .head()
+                    .map(|block| block.as_ptr())
+                    .unwrap_or(ptr::null_mut())
+                    == head
+            );
+            crate::mi_assert_internal!(mi_block_next(page, head).is_null());
+            _mi_page_free_collect(page, false);
+        }
     }
 }
 
@@ -464,58 +482,70 @@ pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head
 /// `page` must point to a page currently owned by a full queue.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
-    let _ = _mi_page_unfull_internal(crate::core_types::FullPage(
-        crate::core_types::PagePtr::new_unchecked(page),
-    ));
+    unsafe {
+        let _ = _mi_page_unfull_internal(crate::core_types::FullPage(
+            crate::core_types::PagePtr::new_unchecked(page),
+        ));
+    }
 }
 
 #[inline(never)]
 pub(crate) unsafe fn _mi_page_unfull_internal(
     page_wrapper: crate::core_types::FullPage,
 ) -> crate::core_types::ActivePage {
-    let page = page_wrapper.0.as_ptr();
-    crate::mi_assert_internal!(!page.is_null());
-    crate::mi_assert_expensive!(_mi_page_is_valid(page));
-    crate::mi_assert_internal!(mi_page_is_in_full(page));
-    crate::mi_assert_internal!(!(*mi_page_theap(page)).allow_page_abandon);
-    if !mi_page_is_in_full(page) {
-        return crate::core_types::ActivePage(page_wrapper.0);
-    }
+    unsafe {
+        let page = page_wrapper.0.as_ptr();
+        crate::mi_assert_internal!(!page.is_null());
+        crate::mi_assert_expensive!(_mi_page_is_valid(page));
+        crate::mi_assert_internal!(mi_page_is_in_full(page));
+        crate::mi_assert_internal!(!(*mi_page_theap(page)).allow_page_abandon);
+        if !mi_page_is_in_full(page) {
+            return crate::core_types::ActivePage(page_wrapper.0);
+        }
 
-    let theap = mi_page_theap(page);
-    let pqfull = ptr::addr_of_mut!((*theap).pages[MI_BIN_FULL]);
-    mi_page_set_in_full(page, false);
-    let pq = mi_theap_page_queue_of(theap, page);
-    mi_page_set_in_full(page, true);
-    mi_page_unfull_typed(
-        page_wrapper,
-        crate::core_types::FullPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pqfull)),
-        crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pq)),
-    )
+        let theap = mi_page_theap(page);
+        let pqfull = ptr::addr_of_mut!((*theap).pages[MI_BIN_FULL]);
+        mi_page_set_in_full(page, false);
+        let pq = mi_theap_page_queue_of(theap, page);
+        mi_page_set_in_full(page, true);
+        mi_page_unfull_typed(
+            page_wrapper,
+            crate::core_types::FullPageQueue(crate::core_types::PageQueuePtr::new_unchecked(
+                pqfull,
+            )),
+            crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pq)),
+        )
+    }
 }
 
 #[inline]
 unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    crate::mi_assert_internal!(pq == mi_page_queue_of(page));
-    crate::mi_assert_internal!(!mi_page_immediate_available(page));
-    crate::mi_assert_internal!(!mi_page_is_in_full(page));
+    unsafe {
+        crate::mi_assert_internal!(pq == mi_page_queue_of(page));
+        crate::mi_assert_internal!(!mi_page_immediate_available(page));
+        crate::mi_assert_internal!(!mi_page_is_in_full(page));
 
-    let theap = mi_page_theap(page);
-    if (*theap).allow_page_abandon {
-        let _ = _mi_page_abandon_internal(
-            crate::core_types::PageForAbandon::Active(crate::core_types::ActivePage(
-                crate::core_types::PagePtr::new_unchecked(page),
-            )),
-            crate::core_types::PageQueuePtr::new_unchecked(pq),
-        );
-    } else if !mi_page_is_in_full(page) {
-        let full = ptr::addr_of_mut!((*theap).pages[MI_BIN_FULL]);
-        mi_page_move_to_full_typed(
-            crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
-            crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pq)),
-            crate::core_types::FullPageQueue(crate::core_types::PageQueuePtr::new_unchecked(full)),
-        );
-        _mi_page_free_collect(page, false);
+        let theap = mi_page_theap(page);
+        if (*theap).allow_page_abandon {
+            let _ = _mi_page_abandon_internal(
+                crate::core_types::PageForAbandon::Active(crate::core_types::ActivePage(
+                    crate::core_types::PagePtr::new_unchecked(page),
+                )),
+                crate::core_types::PageQueuePtr::new_unchecked(pq),
+            );
+        } else if !mi_page_is_in_full(page) {
+            let full = ptr::addr_of_mut!((*theap).pages[MI_BIN_FULL]);
+            mi_page_move_to_full_typed(
+                crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
+                crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(
+                    pq,
+                )),
+                crate::core_types::FullPageQueue(crate::core_types::PageQueuePtr::new_unchecked(
+                    full,
+                )),
+            );
+            _mi_page_free_collect(page, false);
+        }
     }
 }
 
@@ -525,7 +555,7 @@ unsafe fn mi_page_move_to_full_typed(
     from: crate::core_types::NormalPageQueue,
     to: crate::core_types::FullPageQueue,
 ) -> crate::core_types::FullPage {
-    mi_page_queue_enqueue_from(to, from, page)
+    unsafe { mi_page_queue_enqueue_from(to, from, page) }
 }
 
 #[inline]
@@ -534,127 +564,139 @@ unsafe fn mi_page_unfull_typed(
     from: crate::core_types::FullPageQueue,
     to: crate::core_types::NormalPageQueue,
 ) -> crate::core_types::ActivePage {
-    mi_page_queue_enqueue_from_full(to, from, page)
+    unsafe { mi_page_queue_enqueue_from_full(to, from, page) }
 }
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    let _ = _mi_page_free_internal(
-        crate::core_types::AllFreePage::active_unchecked(crate::core_types::ActivePage(
-            crate::core_types::PagePtr::new_unchecked(page),
-        )),
-        crate::core_types::PageQueuePtr::new_unchecked(pq),
-    );
+    unsafe {
+        let _ = _mi_page_free_internal(
+            crate::core_types::AllFreePage::active_unchecked(crate::core_types::ActivePage(
+                crate::core_types::PagePtr::new_unchecked(page),
+            )),
+            crate::core_types::PageQueuePtr::new_unchecked(pq),
+        );
+    }
 }
 
 pub(crate) unsafe fn _mi_page_free_internal<S>(
     page_wrapper: crate::core_types::AllFreePage<S>,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::DestroyedPage {
-    let page = page_wrapper.page.ptr.as_ptr();
-    let pq = queue.as_ptr();
-    crate::mi_assert_internal!(!page.is_null());
-    crate::mi_assert_expensive!(_mi_page_is_valid(page));
-    crate::mi_assert_internal!(pq == mi_page_queue_of(page));
-    crate::mi_assert_internal!(mi_page_all_free(page));
+    unsafe {
+        let page = page_wrapper.page.ptr.as_ptr();
+        let pq = queue.as_ptr();
+        crate::mi_assert_internal!(!page.is_null());
+        crate::mi_assert_expensive!(_mi_page_is_valid(page));
+        crate::mi_assert_internal!(pq == mi_page_queue_of(page));
+        crate::mi_assert_internal!(mi_page_all_free(page));
 
-    mi_page_set_has_interior_pointers(page, false);
-    mi_page_queue_remove(pq, page);
+        mi_page_set_has_interior_pointers(page, false);
+        mi_page_queue_remove(pq, page);
 
-    let theap = mi_page_theap(page);
-    crate::mi_assert_internal!(!theap.is_null());
-    let owner =
-        crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(theap));
-    mi_page_set_theap(page, ptr::null_mut());
-    let destroyed = _mi_arenas_page_free_typed(page_wrapper, owner);
-    _mi_arenas_collect(false, false, (*theap).tld);
-    destroyed
+        let theap = mi_page_theap(page);
+        crate::mi_assert_internal!(!theap.is_null());
+        let owner = crate::core_types::ThreadHeapLocal(
+            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+        );
+        mi_page_set_theap(page, ptr::null_mut());
+        let destroyed = _mi_arenas_page_free_typed(page_wrapper, owner);
+        _mi_arenas_collect(false, false, (*theap).tld);
+        destroyed
+    }
 }
 
 const MI_RETIRE_CYCLES: u8 = 16;
 
 pub(crate) unsafe extern "C" fn _mi_page_retire(page: *mut mi_page_t) {
-    _mi_page_retire_internal(crate::core_types::AllFreePage::active_unchecked(
-        crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
-    ));
+    unsafe {
+        _mi_page_retire_internal(crate::core_types::AllFreePage::active_unchecked(
+            crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
+        ));
+    }
 }
 
 pub(crate) unsafe fn _mi_page_retire_internal(
     page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
 ) {
-    let page = page_wrapper.page.ptr.as_ptr();
-    crate::mi_assert_internal!(!page.is_null());
-    crate::mi_assert_expensive!(_mi_page_is_valid(page));
-    crate::mi_assert_internal!(mi_page_all_free(page));
-
-    if (*page).retire_expire != 0 {
-        return;
-    }
-    mi_page_set_has_interior_pointers(page, false);
-
-    let pq = mi_page_queue_of(page);
-    if !mi_page_queue_is_special(pq) && ptr::eq((*pq).first, page) && ptr::eq((*pq).last, page) {
-        let theap = mi_page_theap(page);
-        if MI_STAT > 0 {
-            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);
-        }
-        let bsize = mi_page_block_size(page);
-        (*page).retire_expire = if bsize <= MI_SMALL_MAX_OBJ_SIZE {
-            MI_RETIRE_CYCLES
-        } else {
-            MI_RETIRE_CYCLES / 4
-        };
-        let index = pq.offset_from(ptr::addr_of!((*theap).pages[0])) as usize;
-        crate::mi_assert_internal!(index < MI_BIN_FULL);
-        if index < (*theap).page_retired_min {
-            (*theap).page_retired_min = index;
-        }
-        if index > (*theap).page_retired_max {
-            (*theap).page_retired_max = index;
-        }
+    unsafe {
+        let page = page_wrapper.page.ptr.as_ptr();
+        crate::mi_assert_internal!(!page.is_null());
+        crate::mi_assert_expensive!(_mi_page_is_valid(page));
         crate::mi_assert_internal!(mi_page_all_free(page));
-        return;
-    }
 
-    let _ = _mi_page_free_internal(
-        page_wrapper,
-        crate::core_types::PageQueuePtr::new_unchecked(pq),
-    );
+        if (*page).retire_expire != 0 {
+            return;
+        }
+        mi_page_set_has_interior_pointers(page, false);
+
+        let pq = mi_page_queue_of(page);
+        if !mi_page_queue_is_special(pq) && ptr::eq((*pq).first, page) && ptr::eq((*pq).last, page)
+        {
+            let theap = mi_page_theap(page);
+            if MI_STAT > 0 {
+                __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_retire), 1);
+            }
+            let bsize = mi_page_block_size(page);
+            (*page).retire_expire = if bsize <= MI_SMALL_MAX_OBJ_SIZE {
+                MI_RETIRE_CYCLES
+            } else {
+                MI_RETIRE_CYCLES / 4
+            };
+            let index = pq.offset_from(ptr::addr_of!((*theap).pages[0])) as usize;
+            crate::mi_assert_internal!(index < MI_BIN_FULL);
+            if index < (*theap).page_retired_min {
+                (*theap).page_retired_min = index;
+            }
+            if index > (*theap).page_retired_max {
+                (*theap).page_retired_max = index;
+            }
+            crate::mi_assert_internal!(mi_page_all_free(page));
+            return;
+        }
+
+        let _ = _mi_page_free_internal(
+            page_wrapper,
+            crate::core_types::PageQueuePtr::new_unchecked(pq),
+        );
+    }
 }
 
 pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool) {
-    let mut min = MI_BIN_FULL;
-    let mut max = 0usize;
-    for bin in (*theap).page_retired_min..=(*theap).page_retired_max {
-        let pq = ptr::addr_of_mut!((*theap).pages[bin]);
-        let page = (*pq).first;
-        if !page.is_null() && (*page).retire_expire != 0 {
-            if mi_page_all_free(page) {
-                (*page).retire_expire -= 1;
-                if (*page).retire_expire == 0 || force {
-                    let _ = _mi_page_free_internal(
-                        crate::core_types::AllFreePage::active_unchecked(
-                            crate::core_types::ActivePage(
-                                crate::core_types::PagePtr::new_unchecked(page),
+    unsafe {
+        let mut min = MI_BIN_FULL;
+        let mut max = 0usize;
+        for bin in (*theap).page_retired_min..=(*theap).page_retired_max {
+            let pq = ptr::addr_of_mut!((*theap).pages[bin]);
+            let page = (*pq).first;
+            if !page.is_null() && (*page).retire_expire != 0 {
+                if mi_page_all_free(page) {
+                    (*page).retire_expire -= 1;
+                    if (*page).retire_expire == 0 || force {
+                        let _ = _mi_page_free_internal(
+                            crate::core_types::AllFreePage::active_unchecked(
+                                crate::core_types::ActivePage(
+                                    crate::core_types::PagePtr::new_unchecked(page),
+                                ),
                             ),
-                        ),
-                        crate::core_types::PageQueuePtr::new_unchecked(pq),
-                    );
+                            crate::core_types::PageQueuePtr::new_unchecked(pq),
+                        );
+                    } else {
+                        if bin < min {
+                            min = bin;
+                        }
+                        if bin > max {
+                            max = bin;
+                        }
+                    }
                 } else {
-                    if bin < min {
-                        min = bin;
-                    }
-                    if bin > max {
-                        max = bin;
-                    }
+                    (*page).retire_expire = 0;
                 }
-            } else {
-                (*page).retire_expire = 0;
             }
         }
+        (*theap).page_retired_min = min;
+        (*theap).page_retired_max = max;
     }
-    (*theap).page_retired_min = min;
-    (*theap).page_retired_max = max;
 }
 
 #[inline]
@@ -664,87 +706,91 @@ unsafe fn mi_page_free_list_extend_secure(
     bsize: usize,
     extend: usize,
 ) {
-    if MI_SECURE < 3 {
-        crate::mi_assert_internal!((*page).free.is_null());
-        crate::mi_assert_internal!((*page).local_free.is_null());
-    }
-    crate::mi_assert_internal!((*page).capacity as usize + extend <= (*page).reserved as usize);
-    crate::mi_assert_internal!(bsize == mi_page_block_size(page));
-    let page_area = mi_page_start(page).cast::<c_void>();
-
-    let mut shift = MI_MAX_SLICE_SHIFT;
-    while (extend >> shift) == 0 {
-        shift -= 1;
-    }
-    let slice_count = 1usize << shift;
-    let slice_extend = extend / slice_count;
-    crate::mi_assert_internal!(slice_extend >= 1);
-
-    let mut blocks = [ptr::null_mut::<mi_block_t>(); 1 << MI_MAX_SLICE_SHIFT];
-    let mut counts = [0usize; 1 << MI_MAX_SLICE_SHIFT];
-    for i in 0..slice_count {
-        blocks[i] = mi_page_block_at(
-            page,
-            page_area,
-            bsize,
-            (*page).capacity as usize + i * slice_extend,
-        );
-        counts[i] = slice_extend;
-    }
-    counts[slice_count - 1] += extend % slice_count;
-
-    let r = _mi_theap_random_next(theap);
-    let mut current = r % slice_count;
-    counts[current] -= 1;
-    let free_start = blocks[current];
-
-    let mut rnd = crate::random::_mi_random_shuffle(r | 1);
-    for i in 1..extend {
-        let round = i % size_of::<usize>();
-        if round == 0 {
-            rnd = crate::random::_mi_random_shuffle(rnd);
+    unsafe {
+        if MI_SECURE < 3 {
+            crate::mi_assert_internal!((*page).free.is_null());
+            crate::mi_assert_internal!((*page).local_free.is_null());
         }
-        let mut next = (rnd >> (8 * round)) & (slice_count - 1);
-        while counts[next] == 0 {
-            next += 1;
-            if next == slice_count {
-                next = 0;
+        crate::mi_assert_internal!((*page).capacity as usize + extend <= (*page).reserved as usize);
+        crate::mi_assert_internal!(bsize == mi_page_block_size(page));
+        let page_area = mi_page_start(page).cast::<c_void>();
+
+        let mut shift = MI_MAX_SLICE_SHIFT;
+        while (extend >> shift) == 0 {
+            shift -= 1;
+        }
+        let slice_count = 1usize << shift;
+        let slice_extend = extend / slice_count;
+        crate::mi_assert_internal!(slice_extend >= 1);
+
+        let mut blocks = [ptr::null_mut::<mi_block_t>(); 1 << MI_MAX_SLICE_SHIFT];
+        let mut counts = [0usize; 1 << MI_MAX_SLICE_SHIFT];
+        for i in 0..slice_count {
+            blocks[i] = mi_page_block_at(
+                page,
+                page_area,
+                bsize,
+                (*page).capacity as usize + i * slice_extend,
+            );
+            counts[i] = slice_extend;
+        }
+        counts[slice_count - 1] += extend % slice_count;
+
+        let r = _mi_theap_random_next(theap);
+        let mut current = r % slice_count;
+        counts[current] -= 1;
+        let free_start = blocks[current];
+
+        let mut rnd = crate::random::_mi_random_shuffle(r | 1);
+        for i in 1..extend {
+            let round = i % size_of::<usize>();
+            if round == 0 {
+                rnd = crate::random::_mi_random_shuffle(rnd);
             }
+            let mut next = (rnd >> (8 * round)) & (slice_count - 1);
+            while counts[next] == 0 {
+                next += 1;
+                if next == slice_count {
+                    next = 0;
+                }
+            }
+            counts[next] -= 1;
+            let block = blocks[current];
+            blocks[current] = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
+            mi_block_set_next(page, block, blocks[next]);
+            current = next;
         }
-        counts[next] -= 1;
-        let block = blocks[current];
-        blocks[current] = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
-        mi_block_set_next(page, block, blocks[next]);
-        current = next;
+        mi_block_set_next(page, blocks[current], (*page).free);
+        (*page).free = free_start;
     }
-    mi_block_set_next(page, blocks[current], (*page).free);
-    (*page).free = free_start;
 }
 
 #[inline(never)]
 unsafe extern "C" fn mi_page_free_list_extend(page: *mut mi_page_t, bsize: usize, extend: usize) {
-    if MI_SECURE < 3 {
-        crate::mi_assert_internal!((*page).free.is_null());
-        crate::mi_assert_internal!((*page).local_free.is_null());
+    unsafe {
+        if MI_SECURE < 3 {
+            crate::mi_assert_internal!((*page).free.is_null());
+            crate::mi_assert_internal!((*page).local_free.is_null());
+        }
+        crate::mi_assert_internal!((*page).capacity as usize + extend <= (*page).reserved as usize);
+        crate::mi_assert_internal!(bsize == mi_page_block_size(page));
+        let page_area = mi_page_start(page).cast::<c_void>();
+        let start = mi_page_block_at(page, page_area, bsize, (*page).capacity as usize);
+        let last = mi_page_block_at(
+            page,
+            page_area,
+            bsize,
+            (*page).capacity as usize + extend - 1,
+        );
+        let mut block = start;
+        while block <= last {
+            let next = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
+            mi_block_set_next(page, block, next);
+            block = next;
+        }
+        mi_block_set_next(page, last, (*page).free);
+        (*page).free = start;
     }
-    crate::mi_assert_internal!((*page).capacity as usize + extend <= (*page).reserved as usize);
-    crate::mi_assert_internal!(bsize == mi_page_block_size(page));
-    let page_area = mi_page_start(page).cast::<c_void>();
-    let start = mi_page_block_at(page, page_area, bsize, (*page).capacity as usize);
-    let last = mi_page_block_at(
-        page,
-        page_area,
-        bsize,
-        (*page).capacity as usize + extend - 1,
-    );
-    let mut block = start;
-    while block <= last {
-        let next = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
-        mi_block_set_next(page, block, next);
-        block = next;
-    }
-    mi_block_set_next(page, last, (*page).free);
-    (*page).free = start;
 }
 
 #[used]
@@ -753,88 +799,90 @@ static MI_PAGE_FREE_LIST_EXTEND_KEEP: unsafe extern "C" fn(*mut mi_page_t, usize
 
 #[inline(never)]
 unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
-    crate::mi_assert_expensive!(mi_page_is_valid_init(page));
-    if MI_SECURE < 3 {
-        crate::mi_assert!((*page).free.is_null());
-        crate::mi_assert!((*page).local_free.is_null());
-        if !(*page).free.is_null() {
+    unsafe {
+        crate::mi_assert_expensive!(mi_page_is_valid_init(page));
+        if MI_SECURE < 3 {
+            crate::mi_assert!((*page).free.is_null());
+            crate::mi_assert!((*page).local_free.is_null());
+            if !(*page).free.is_null() {
+                return true;
+            }
+        }
+        if (*page).capacity >= (*page).reserved {
             return true;
         }
-    }
-    if (*page).capacity >= (*page).reserved {
-        return true;
-    }
 
-    let bsize = mi_page_block_size(page);
-    let mut extend = (*page).reserved as usize - (*page).capacity as usize;
-    crate::mi_assert_internal!(extend > 0);
+        let bsize = mi_page_block_size(page);
+        let mut extend = (*page).reserved as usize - (*page).capacity as usize;
+        crate::mi_assert_internal!(extend > 0);
 
-    let mut max_extend = if bsize >= MI_MAX_EXTEND_SIZE {
-        MI_MIN_EXTEND
-    } else {
-        MI_MAX_EXTEND_SIZE / bsize
-    };
-    if max_extend < MI_MIN_EXTEND {
-        max_extend = MI_MIN_EXTEND;
-    }
-    crate::mi_assert_internal!(max_extend > 0);
-    if extend > max_extend {
-        extend = max_extend;
-    }
-
-    crate::mi_assert_internal!(extend > 0);
-    crate::mi_assert_internal!(extend + (*page).capacity as usize <= (*page).reserved as usize);
-    crate::mi_assert_internal!(u16::try_from(extend).is_ok());
-
-    if (*page).slice_committed > 0 {
-        let needed_size = ((*page).capacity as usize + extend) * bsize;
-        let needed_commit = _mi_align_up(
-            mi_page_slice_offset_of(page, needed_size),
-            MI_PAGE_MIN_COMMIT_SIZE,
-        );
-        if needed_commit > (*page).slice_committed {
-            crate::mi_assert_internal!(
-                (needed_commit - (*page).slice_committed).is_multiple_of(_mi_os_page_size())
-            );
-            if !_mi_os_commit(
-                mi_page_slice_start(page)
-                    .cast::<u8>()
-                    .add((*page).slice_committed)
-                    .cast::<c_void>(),
-                needed_commit - (*page).slice_committed,
-                ptr::null_mut(),
-            ) {
-                return false;
-            }
-            (*page).slice_committed = needed_commit;
+        let mut max_extend = if bsize >= MI_MAX_EXTEND_SIZE {
+            MI_MIN_EXTEND
+        } else {
+            MI_MAX_EXTEND_SIZE / bsize
+        };
+        if max_extend < MI_MIN_EXTEND {
+            max_extend = MI_MIN_EXTEND;
         }
-    }
+        crate::mi_assert_internal!(max_extend > 0);
+        if extend > max_extend {
+            extend = max_extend;
+        }
 
-    if MI_STAT > 0 {
-        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_extended), 1);
-    }
+        crate::mi_assert_internal!(extend > 0);
+        crate::mi_assert_internal!(extend + (*page).capacity as usize <= (*page).reserved as usize);
+        crate::mi_assert_internal!(u16::try_from(extend).is_ok());
 
-    if extend < MI_MIN_SLICES || MI_SECURE < 2 {
-        mi_page_free_list_extend(page, bsize, extend);
-    } else {
-        mi_page_free_list_extend_secure(theap, page, bsize, extend);
-    }
-    (*page).capacity += extend as u16;
-    if MI_STAT > 0 {
-        __mi_stat_increase(
-            ptr::addr_of_mut!((*theap).stats.page_committed),
-            extend * bsize,
-        );
-    }
+        if (*page).slice_committed > 0 {
+            let needed_size = ((*page).capacity as usize + extend) * bsize;
+            let needed_commit = _mi_align_up(
+                mi_page_slice_offset_of(page, needed_size),
+                MI_PAGE_MIN_COMMIT_SIZE,
+            );
+            if needed_commit > (*page).slice_committed {
+                crate::mi_assert_internal!(
+                    (needed_commit - (*page).slice_committed).is_multiple_of(_mi_os_page_size())
+                );
+                if !_mi_os_commit(
+                    mi_page_slice_start(page)
+                        .cast::<u8>()
+                        .add((*page).slice_committed)
+                        .cast::<c_void>(),
+                    needed_commit - (*page).slice_committed,
+                    ptr::null_mut(),
+                ) {
+                    return false;
+                }
+                (*page).slice_committed = needed_commit;
+            }
+        }
 
-    if MI_TRACK_ENABLED != 0 {
-        let mut page_size = 0usize;
-        let page_start = mi_page_area(page, &mut page_size);
-        mi_track_mem_undefined(page_start.cast(), page_size);
-        mi_track_mem_noaccess(page_start.cast(), page_size);
+        if MI_STAT > 0 {
+            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_extended), 1);
+        }
+
+        if extend < MI_MIN_SLICES || MI_SECURE < 2 {
+            mi_page_free_list_extend(page, bsize, extend);
+        } else {
+            mi_page_free_list_extend_secure(theap, page, bsize, extend);
+        }
+        (*page).capacity += extend as u16;
+        if MI_STAT > 0 {
+            __mi_stat_increase(
+                ptr::addr_of_mut!((*theap).stats.page_committed),
+                extend * bsize,
+            );
+        }
+
+        if MI_TRACK_ENABLED != 0 {
+            let mut page_size = 0usize;
+            let page_start = mi_page_area(page, &mut page_size);
+            mi_track_mem_undefined(page_start.cast(), page_size);
+            mi_track_mem_noaccess(page_start.cast(), page_size);
+        }
+        crate::mi_assert_expensive!(mi_page_is_valid_init(page));
+        true
     }
-    crate::mi_assert_expensive!(mi_page_is_valid_init(page));
-    true
 }
 
 #[used]
@@ -843,55 +891,61 @@ static MI_PAGE_EXTEND_FREE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_p
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
-    let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
-    let page_wrapper = if mi_page_is_in_full(page) {
-        crate::core_types::PageForAbandon::Full(crate::core_types::FullPage(page_ptr))
-    } else {
-        crate::core_types::PageForAbandon::Active(crate::core_types::ActivePage(page_ptr))
-    };
-    let _ = _mi_page_abandon_internal(
-        page_wrapper,
-        crate::core_types::PageQueuePtr::new_unchecked(pq),
-    );
+    unsafe {
+        let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
+        let page_wrapper = if mi_page_is_in_full(page) {
+            crate::core_types::PageForAbandon::Full(crate::core_types::FullPage(page_ptr))
+        } else {
+            crate::core_types::PageForAbandon::Active(crate::core_types::ActivePage(page_ptr))
+        };
+        let _ = _mi_page_abandon_internal(
+            page_wrapper,
+            crate::core_types::PageQueuePtr::new_unchecked(pq),
+        );
+    }
 }
 
 pub(crate) unsafe fn _mi_page_abandon_internal(
     page_wrapper: crate::core_types::PageForAbandon,
     queue: crate::core_types::PageQueuePtr,
 ) -> crate::core_types::PageAbandonOutcome {
-    let (page_ptr, was_full) = match page_wrapper {
-        crate::core_types::PageForAbandon::Active(page) => (page.0, false),
-        crate::core_types::PageForAbandon::Full(page) => (page.0, true),
-    };
-    let page = page_ptr.as_ptr();
-    let pq = queue.as_ptr();
-    _mi_page_free_collect(page, false);
-    if mi_page_all_free(page) {
-        let destroyed = if was_full {
-            _mi_page_free_internal(
-                crate::core_types::AllFreePage::full_unchecked(crate::core_types::FullPage(
-                    page_ptr,
-                )),
-                queue,
-            )
-        } else {
-            _mi_page_free_internal(
-                crate::core_types::AllFreePage::active_unchecked(crate::core_types::ActivePage(
-                    page_ptr,
-                )),
-                queue,
-            )
+    unsafe {
+        let (page_ptr, was_full) = match page_wrapper {
+            crate::core_types::PageForAbandon::Active(page) => (page.0, false),
+            crate::core_types::PageForAbandon::Full(page) => (page.0, true),
         };
-        crate::core_types::PageAbandonOutcome::Destroyed(destroyed)
-    } else {
-        mi_page_queue_remove(pq, page);
-        let theap = (*page).theap;
-        mi_page_set_theap(page, ptr::null_mut());
-        // Preserve the original theap pointer so same-theap reclaim-on-free can still work.
-        (*page).theap = theap;
-        _mi_arenas_page_abandon(page, theap);
-        _mi_arenas_collect(false, false, (*theap).tld);
-        crate::core_types::PageAbandonOutcome::Abandoned(crate::core_types::AbandonedPage(page_ptr))
+        let page = page_ptr.as_ptr();
+        let pq = queue.as_ptr();
+        _mi_page_free_collect(page, false);
+        if mi_page_all_free(page) {
+            let destroyed = if was_full {
+                _mi_page_free_internal(
+                    crate::core_types::AllFreePage::full_unchecked(crate::core_types::FullPage(
+                        page_ptr,
+                    )),
+                    queue,
+                )
+            } else {
+                _mi_page_free_internal(
+                    crate::core_types::AllFreePage::active_unchecked(
+                        crate::core_types::ActivePage(page_ptr),
+                    ),
+                    queue,
+                )
+            };
+            crate::core_types::PageAbandonOutcome::Destroyed(destroyed)
+        } else {
+            mi_page_queue_remove(pq, page);
+            let theap = (*page).theap;
+            mi_page_set_theap(page, ptr::null_mut());
+            // Preserve the original theap pointer so same-theap reclaim-on-free can still work.
+            (*page).theap = theap;
+            _mi_arenas_page_abandon(page, theap);
+            _mi_arenas_collect(false, false, (*theap).tld);
+            crate::core_types::PageAbandonOutcome::Abandoned(crate::core_types::AbandonedPage(
+                page_ptr,
+            ))
+        }
     }
 }
 
@@ -904,40 +958,44 @@ pub unsafe extern "C" fn mi_page_fresh_alloc(
     block_size: usize,
     page_alignment: usize,
 ) -> *mut mi_page_t {
-    crate::mi_assert_internal!(pq.is_null() || mi_theap_contains_queue(theap, pq));
-    crate::mi_assert_internal!(
-        page_alignment > 0
-            || block_size > MI_LARGE_MAX_OBJ_SIZE
-            || pq.is_null()
-            || block_size == (*pq).block_size
-    );
-    let page = _mi_arenas_page_alloc(theap, block_size, page_alignment);
-    if page.is_null() {
-        return ptr::null_mut();
-    }
-    if mi_page_is_abandoned(page) {
-        _mi_theap_page_reclaim(
-            crate::core_types::OwnedAbandonedPage(crate::core_types::PagePtr::new_unchecked(page)),
-            crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(
-                theap,
-            )),
+    unsafe {
+        crate::mi_assert_internal!(pq.is_null() || mi_theap_contains_queue(theap, pq));
+        crate::mi_assert_internal!(
+            page_alignment > 0
+                || block_size > MI_LARGE_MAX_OBJ_SIZE
+                || pq.is_null()
+                || block_size == (*pq).block_size
         );
-        if !mi_page_immediate_available(page) {
-            if mi_page_is_expandable(page) {
-                if !mi_page_extend_free(theap, page) {
+        let page = _mi_arenas_page_alloc(theap, block_size, page_alignment);
+        if page.is_null() {
+            return ptr::null_mut();
+        }
+        if mi_page_is_abandoned(page) {
+            _mi_theap_page_reclaim(
+                crate::core_types::OwnedAbandonedPage(crate::core_types::PagePtr::new_unchecked(
+                    page,
+                )),
+                crate::core_types::ThreadHeapLocal(
+                    crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+                ),
+            );
+            if !mi_page_immediate_available(page) {
+                if mi_page_is_expandable(page) {
+                    if !mi_page_extend_free(theap, page) {
+                        return ptr::null_mut();
+                    }
+                } else {
+                    crate::mi_assert!(false);
                     return ptr::null_mut();
                 }
-            } else {
-                crate::mi_assert!(false);
-                return ptr::null_mut();
             }
+        } else if !pq.is_null() {
+            mi_page_queue_push(theap, pq, page);
         }
-    } else if !pq.is_null() {
-        mi_page_queue_push(theap, pq, page);
+        crate::mi_assert_internal!(pq.is_null() || mi_page_block_size(page) >= block_size);
+        crate::mi_assert_expensive!(_mi_page_is_valid(page));
+        page
     }
-    crate::mi_assert_internal!(pq.is_null() || mi_page_block_size(page) >= block_size);
-    crate::mi_assert_expensive!(_mi_page_is_valid(page));
-    page
 }
 
 #[used]
@@ -953,86 +1011,90 @@ pub(crate) unsafe extern "C" fn _mi_page_init(
     theap: *mut mi_theap_t,
     page: *mut mi_page_t,
 ) -> bool {
-    crate::mi_assert!(!page.is_null());
-    crate::mi_assert!(!theap.is_null());
+    unsafe {
+        crate::mi_assert!(!page.is_null());
+        crate::mi_assert!(!theap.is_null());
 
-    let heap = _mi_theap_heap(theap);
-    (*page).heap = if _mi_is_heap_main(heap) {
-        ptr::null_mut()
-    } else {
-        heap
-    };
-    mi_page_set_theap(page, theap);
+        let heap = _mi_theap_heap(theap);
+        (*page).heap = if _mi_is_heap_main(heap) {
+            ptr::null_mut()
+        } else {
+            heap
+        };
+        mi_page_set_theap(page, theap);
 
-    let mut page_size = 0usize;
-    let page_start = mi_page_area(page, &mut page_size);
-    mi_track_mem_noaccess(page_start.cast(), page_size);
-    crate::mi_assert_internal!(page_size / mi_page_block_size(page) < (1usize << 16));
-    crate::mi_assert_internal!((*page).reserved > 0);
+        let mut page_size = 0usize;
+        let page_start = mi_page_area(page, &mut page_size);
+        mi_track_mem_noaccess(page_start.cast(), page_size);
+        crate::mi_assert_internal!(page_size / mi_page_block_size(page) < (1usize << 16));
+        crate::mi_assert_internal!((*page).reserved > 0);
 
-    mi_page_set_keys(
-        page,
-        _mi_theap_random_next(theap),
-        _mi_theap_random_next(theap),
-    );
+        mi_page_set_keys(
+            page,
+            _mi_theap_random_next(theap),
+            _mi_theap_random_next(theap),
+        );
 
-    if MI_DEBUG > 2 && (*page).memid.initially_zero {
-        mi_track_mem_defined((*page).page_start.cast(), mi_page_committed(page));
-        crate::mi_assert_expensive!(mi_mem_is_zero(page_start.cast(), mi_page_committed(page)));
+        if MI_DEBUG > 2 && (*page).memid.initially_zero {
+            mi_track_mem_defined((*page).page_start.cast(), mi_page_committed(page));
+            crate::mi_assert_expensive!(mi_mem_is_zero(page_start.cast(), mi_page_committed(page)));
+        }
+
+        crate::mi_assert_internal!(!(*page).theap.is_null());
+        crate::mi_assert_internal!((*page).theap == mi_page_theap(page));
+        crate::mi_assert_internal!((*page).capacity == 0);
+        crate::mi_assert_internal!((*page).free.is_null());
+        crate::mi_assert_internal!((*page).used == 0);
+        crate::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
+        let thread_free = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*page).xthread_free),
+        ))
+        .load_relaxed();
+        crate::mi_assert_internal!(
+            thread_free
+                == crate::core_types::ThreadFreeWord::from_parts(
+                    None,
+                    crate::core_types::ThreadFreeOwner::Owned
+                )
+        );
+        crate::mi_assert_internal!((*page).next.is_null());
+        crate::mi_assert_internal!((*page).prev.is_null());
+        crate::mi_assert_internal!((*page).retire_expire == 0);
+        crate::mi_assert_internal!(!mi_page_has_interior_pointers(page));
+        #[cfg(any(
+            feature = "secure",
+            debug_assertions,
+            feature = "track-valgrind",
+            feature = "track-asan"
+        ))]
+        {
+            crate::mi_assert_internal!((*page).keys[0] != 0);
+            crate::mi_assert_internal!((*page).keys[1] != 0);
+        }
+        crate::mi_assert_expensive!(mi_page_is_valid_init(page));
+
+        if !mi_page_extend_free(theap, page) {
+            return false;
+        }
+        crate::mi_assert!(mi_page_immediate_available(page));
+        true
     }
-
-    crate::mi_assert_internal!(!(*page).theap.is_null());
-    crate::mi_assert_internal!((*page).theap == mi_page_theap(page));
-    crate::mi_assert_internal!((*page).capacity == 0);
-    crate::mi_assert_internal!((*page).free.is_null());
-    crate::mi_assert_internal!((*page).used == 0);
-    crate::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
-    let thread_free = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_free),
-    ))
-    .load_relaxed();
-    crate::mi_assert_internal!(
-        thread_free
-            == crate::core_types::ThreadFreeWord::from_parts(
-                None,
-                crate::core_types::ThreadFreeOwner::Owned
-            )
-    );
-    crate::mi_assert_internal!((*page).next.is_null());
-    crate::mi_assert_internal!((*page).prev.is_null());
-    crate::mi_assert_internal!((*page).retire_expire == 0);
-    crate::mi_assert_internal!(!mi_page_has_interior_pointers(page));
-    #[cfg(any(
-        feature = "secure",
-        debug_assertions,
-        feature = "track-valgrind",
-        feature = "track-asan"
-    ))]
-    {
-        crate::mi_assert_internal!((*page).keys[0] != 0);
-        crate::mi_assert_internal!((*page).keys[1] != 0);
-    }
-    crate::mi_assert_expensive!(mi_page_is_valid_init(page));
-
-    if !mi_page_extend_free(theap, page) {
-        return false;
-    }
-    crate::mi_assert!(mi_page_immediate_available(page));
-    true
 }
 
 /// # Safety
 /// `theap` must be valid, and `pq` must be a page queue belonging to `theap`.
 #[inline]
 pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
-    crate::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
-    let page = mi_page_fresh_alloc(theap, pq, (*pq).block_size, 0);
-    if page.is_null() {
-        return ptr::null_mut();
+    unsafe {
+        crate::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
+        let page = mi_page_fresh_alloc(theap, pq, (*pq).block_size, 0);
+        if page.is_null() {
+            return ptr::null_mut();
+        }
+        crate::mi_assert_internal!((*pq).block_size == mi_page_block_size(page));
+        crate::mi_assert_internal!(pq == mi_theap_page_queue_of(theap, page));
+        page
     }
-    crate::mi_assert_internal!((*pq).block_size == mi_page_block_size(page));
-    crate::mi_assert_internal!(pq == mi_theap_page_queue_of(theap, page));
-    page
 }
 
 #[inline(never)]
@@ -1040,34 +1102,38 @@ pub(crate) unsafe fn try_reclaim_abandoned(
     page_wrapper: crate::core_types::OwnedAbandonedPage,
     target: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::ActivePage {
-    let page = page_wrapper.0.as_ptr();
-    let theap = target.0.as_ptr();
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
-        mi_page_slice_start(page).cast(),
-        MI_PAGE_ALIGN,
-    ));
-    crate::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
-    crate::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
-    crate::mi_assert_internal!(mi_page_is_abandoned(page));
+    unsafe {
+        let page = page_wrapper.0.as_ptr();
+        let theap = target.0.as_ptr();
+        crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+            mi_page_slice_start(page).cast(),
+            MI_PAGE_ALIGN,
+        ));
+        crate::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
+        crate::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
+        crate::mi_assert_internal!(mi_page_is_abandoned(page));
 
-    mi_page_set_theap(page, theap);
+        mi_page_set_theap(page, theap);
 
-    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_free),
-    ));
-    let remote = atomic_tf.take_head_preserving_owner();
-    let local = crate::core_types::LocalFreeList::from_raw((*page).local_free);
-    remote.collect_into_local(page_wrapper, local);
+        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*page).xthread_free),
+        ));
+        let remote = atomic_tf.take_head_preserving_owner();
+        let local = crate::core_types::LocalFreeList::from_raw((*page).local_free);
+        remote.collect_into_local(page_wrapper, local);
 
-    _mi_page_free_collect(page, false);
-    let pq = mi_theap_page_queue_of(theap, page);
-    mi_page_queue_push_at_end_typed(
-        crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(theap)),
-        crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pq)),
-        crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
-    );
-    crate::mi_assert_expensive!(_mi_page_is_valid(page));
-    crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page))
+        _mi_page_free_collect(page, false);
+        let pq = mi_theap_page_queue_of(theap, page);
+        mi_page_queue_push_at_end_typed(
+            crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(
+                theap,
+            )),
+            crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pq)),
+            crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
+        );
+        crate::mi_assert_expensive!(_mi_page_is_valid(page));
+        crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page))
+    }
 }
 
 #[inline(never)]
@@ -1075,7 +1141,7 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
     page: crate::core_types::OwnedAbandonedPage,
     target: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::ActivePage {
-    try_reclaim_abandoned(page, target)
+    unsafe { try_reclaim_abandoned(page, target) }
 }
 
 /// # Safety
@@ -1083,11 +1149,13 @@ pub(crate) unsafe fn _mi_theap_page_reclaim(
 /// and `page` are valid, and that `page` is an owned abandoned page.
 #[inline(never)]
 unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mut mi_page_t) {
-    let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
-    let wrapper = crate::core_types::OwnedAbandonedPage(page_ptr);
-    let theap_ptr = crate::core_types::ThreadHeapPtr::new_unchecked(theap);
-    let theap_wrapper = crate::core_types::ThreadHeapLocal(theap_ptr);
-    _mi_theap_page_reclaim(wrapper, theap_wrapper);
+    unsafe {
+        let page_ptr = crate::core_types::PagePtr::new_unchecked(page);
+        let wrapper = crate::core_types::OwnedAbandonedPage(page_ptr);
+        let theap_ptr = crate::core_types::ThreadHeapPtr::new_unchecked(theap);
+        let theap_wrapper = crate::core_types::ThreadHeapLocal(theap_ptr);
+        _mi_theap_page_reclaim(wrapper, theap_wrapper);
+    }
 }
 
 #[used]
@@ -1098,17 +1166,19 @@ static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {
-    if !mi_page_is_singleton(page) {
-        return false;
-    }
-    if mi_page_block_size(page) > MI_LARGE_MAX_OBJ_SIZE {
-        return true;
-    }
-    match crate::core_types::MemId::view((*page).memid) {
-        crate::core_types::MemIdView::Os(os) => os
-            .base
-            .is_some_and(|base| base.as_ptr() < page.cast_mut().cast::<c_void>()),
-        _ => false,
+    unsafe {
+        if !mi_page_is_singleton(page) {
+            return false;
+        }
+        if mi_page_block_size(page) > MI_LARGE_MAX_OBJ_SIZE {
+            return true;
+        }
+        match crate::core_types::MemId::view((*page).memid) {
+            crate::core_types::MemIdView::Os(os) => os
+                .base
+                .is_some_and(|base| base.as_ptr() < page.cast_mut().cast::<c_void>()),
+            _ => false,
+        }
     }
 }
 
@@ -1116,44 +1186,50 @@ pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {
 /// `page` must point to mutable page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_flags_set(page: *mut mi_page_t, set: bool, newflag: mi_page_flags_t) -> bool {
-    let flag = crate::core_types::PageFlags::from_low_bits(newflag);
-    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_id),
-    ));
-    let old = unsafe { atomic_tid.set_flags(flag, set) };
-    old.flags().contains(flag)
+    unsafe {
+        let flag = crate::core_types::PageFlags::from_low_bits(newflag);
+        let atomic_tid = crate::core_types::AtomicPageThreadId(
+            crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*page).xthread_id)),
+        );
+        let old = atomic_tid.set_flags(flag, set);
+        old.flags().contains(flag)
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_in_full(page: *const mi_page_t) -> bool {
-    crate::core_types::PageFlags::from_low_bits(mi_page_flags(page))
-        .contains(crate::core_types::PageFlags::IN_FULL_QUEUE)
+    unsafe {
+        crate::core_types::PageFlags::from_low_bits(mi_page_flags(page))
+            .contains(crate::core_types::PageFlags::IN_FULL_QUEUE)
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
-    !mi_page_immediate_available(page) && !mi_page_is_expandable(page)
+    unsafe { !mi_page_immediate_available(page) && !mi_page_is_expandable(page) }
 }
 
 /// # Safety
 /// `page` must point to mutable page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_set_in_full(page: *mut mi_page_t, in_full: bool) {
-    let was_in_full = mi_page_flags_set(page, in_full, MI_PAGE_IN_FULL_QUEUE);
-    if was_in_full != in_full {
-        let theap = (*page).theap;
-        crate::mi_assert_internal!(!theap.is_null());
-        if !theap.is_null() {
-            let size = (*page).capacity as usize * mi_page_block_size(page);
-            if in_full {
-                (*theap).pages_full_size += size;
-            } else {
-                crate::mi_assert_internal!(size <= (*theap).pages_full_size);
-                (*theap).pages_full_size -= size;
+    unsafe {
+        let was_in_full = mi_page_flags_set(page, in_full, MI_PAGE_IN_FULL_QUEUE);
+        if was_in_full != in_full {
+            let theap = (*page).theap;
+            crate::mi_assert_internal!(!theap.is_null());
+            if !theap.is_null() {
+                let size = (*page).capacity as usize * mi_page_block_size(page);
+                if in_full {
+                    (*theap).pages_full_size += size;
+                } else {
+                    crate::mi_assert_internal!(size <= (*theap).pages_full_size);
+                    (*theap).pages_full_size -= size;
+                }
             }
         }
     }
@@ -1163,40 +1239,45 @@ pub unsafe fn mi_page_set_in_full(page: *mut mi_page_t, in_full: bool) {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_abandoned(page: *const mi_page_t) -> bool {
-    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_id),
-    ));
-    let tid = unsafe { atomic_tid.load_relaxed() };
-    tid.is_abandoned() || tid.is_abandoned_mapped()
+    unsafe {
+        let atomic_tid =
+            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+                ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_id),
+            ));
+        let tid = atomic_tid.load_relaxed();
+        tid.is_abandoned() || tid.is_abandoned_mapped()
+    }
 }
 
 /// # Safety
 /// `page` must be valid. `theap` must be null or a valid thread heap for this allocator.
 #[inline]
 pub unsafe fn mi_page_set_theap(page: *mut mi_page_t, theap: *mut mi_theap_t) {
-    (*page).theap = theap;
-    let tid = if theap.is_null() {
-        MI_THREADID_ABANDONED
-    } else {
-        (*(*theap).tld).thread_id
-    };
-    crate::mi_assert_internal!((tid & MI_PAGE_FLAG_MASK) == 0);
-
-    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_id),
-    ));
-    let mut xtid_old = unsafe { atomic_tid.load_relaxed() };
-    loop {
-        let owner = if tid == MI_THREADID_ABANDONED {
-            crate::core_types::PageOwnerId::Abandoned
+    unsafe {
+        (*page).theap = theap;
+        let tid = if theap.is_null() {
+            MI_THREADID_ABANDONED
         } else {
-            crate::core_types::PageOwnerId::Thread(unsafe {
-                crate::core_types::ThreadId::new_unchecked(tid)
-            })
+            (*(*theap).tld).thread_id
         };
-        let xtid = xtid_old.with_owner(owner);
-        if unsafe { atomic_tid.compare_exchange_release(&mut xtid_old, xtid) } {
-            break;
+        crate::mi_assert_internal!((tid & MI_PAGE_FLAG_MASK) == 0);
+
+        let atomic_tid = crate::core_types::AtomicPageThreadId(
+            crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*page).xthread_id)),
+        );
+        let mut xtid_old = atomic_tid.load_relaxed();
+        loop {
+            let owner = if tid == MI_THREADID_ABANDONED {
+                crate::core_types::PageOwnerId::Abandoned
+            } else {
+                crate::core_types::PageOwnerId::Thread(crate::core_types::ThreadId::new_unchecked(
+                    tid,
+                ))
+            };
+            let xtid = xtid_old.with_owner(owner);
+            if atomic_tid.compare_exchange_release(&mut xtid_old, xtid) {
+                break;
+            }
         }
     }
 }
@@ -1205,26 +1286,30 @@ pub unsafe fn mi_page_set_theap(page: *mut mi_page_t, theap: *mut mi_theap_t) {
 /// `page` must be valid and must not be abandoned.
 #[inline]
 pub unsafe fn mi_page_theap(page: *const mi_page_t) -> *mut mi_theap_t {
-    crate::mi_assert_internal!(!mi_page_is_abandoned(page));
-    crate::mi_assert_internal!(!(*page).theap.is_null());
-    (*page).theap
+    unsafe {
+        crate::mi_assert_internal!(!mi_page_is_abandoned(page));
+        crate::mi_assert_internal!(!(*page).theap.is_null());
+        (*page).theap
+    }
 }
 
 /// # Safety
 /// `queue` must be valid, and `page` must be null or page metadata compatible with that queue.
 #[inline]
 pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const mi_page_t) -> bool {
-    crate::mi_assert_internal!(!page.is_null());
-    let mut list = (*queue).first;
-    while !list.is_null() {
-        crate::mi_assert_internal!((*list).next.is_null() || (*(*list).next).prev == list);
-        crate::mi_assert_internal!((*list).prev.is_null() || (*(*list).prev).next == list);
-        if ptr::eq(list, page.cast_mut()) {
-            break;
+    unsafe {
+        crate::mi_assert_internal!(!page.is_null());
+        let mut list = (*queue).first;
+        while !list.is_null() {
+            crate::mi_assert_internal!((*list).next.is_null() || (*(*list).next).prev == list);
+            crate::mi_assert_internal!((*list).prev.is_null() || (*(*list).prev).next == list);
+            if ptr::eq(list, page.cast_mut()) {
+                break;
+            }
+            list = (*list).next;
         }
-        list = (*list).next;
+        ptr::eq(list, page.cast_mut())
     }
-    ptr::eq(list, page.cast_mut())
 }
 
 /// # Safety
@@ -1235,10 +1320,12 @@ pub unsafe fn mi_theap_contains_queue(
     theap: *const mi_theap_t,
     pq: *const mi_page_queue_t,
 ) -> bool {
-    let start = ptr::addr_of!((*theap).pages[0]) as usize;
-    let end = ptr::addr_of!((*theap).pages[MI_BIN_FULL]) as usize;
-    let queue = pq as usize;
-    queue >= start && queue <= end
+    unsafe {
+        let start = ptr::addr_of!((*theap).pages[0]) as usize;
+        let end = ptr::addr_of!((*theap).pages[MI_BIN_FULL]) as usize;
+        let queue = pq as usize;
+        queue >= start && queue <= end
+    }
 }
 
 /// # Safety
@@ -1248,38 +1335,40 @@ pub unsafe extern "C" fn _mi_page_queue_is_valid(
     theap: *mut mi_theap_t,
     pq: *const mi_page_queue_t,
 ) -> bool {
-    crate::MI_UNUSED_RELEASE!(theap);
-    if pq.is_null() {
-        return false;
-    }
-    let mut count = 0usize;
-    crate::MI_UNUSED_RELEASE!(count);
-    let mut prev = ptr::null_mut();
-    crate::MI_UNUSED_RELEASE!(prev);
-    let mut page = (*pq).first;
-    while !page.is_null() {
-        crate::mi_assert_internal!((*page).prev == prev);
-        if mi_page_is_in_full(page) {
-            crate::mi_assert_internal!(
-                _mi_wsize_from_size((*pq).block_size) == MI_LARGE_MAX_OBJ_WSIZE + 2
-            );
-        } else if mi_page_is_huge(page) {
-            crate::mi_assert_internal!(
-                _mi_wsize_from_size((*pq).block_size) == MI_LARGE_MAX_OBJ_WSIZE + 1
-            );
-        } else {
-            crate::mi_assert_internal!(mi_page_block_size(page) == (*pq).block_size);
+    unsafe {
+        crate::MI_UNUSED_RELEASE!(theap);
+        if pq.is_null() {
+            return false;
         }
-        crate::mi_assert_internal!((*page).theap == theap);
-        if (*page).next.is_null() {
-            crate::mi_assert_internal!((*pq).last == page);
+        let mut count = 0usize;
+        crate::MI_UNUSED_RELEASE!(count);
+        let mut prev = ptr::null_mut();
+        crate::MI_UNUSED_RELEASE!(prev);
+        let mut page = (*pq).first;
+        while !page.is_null() {
+            crate::mi_assert_internal!((*page).prev == prev);
+            if mi_page_is_in_full(page) {
+                crate::mi_assert_internal!(
+                    _mi_wsize_from_size((*pq).block_size) == MI_LARGE_MAX_OBJ_WSIZE + 2
+                );
+            } else if mi_page_is_huge(page) {
+                crate::mi_assert_internal!(
+                    _mi_wsize_from_size((*pq).block_size) == MI_LARGE_MAX_OBJ_WSIZE + 1
+                );
+            } else {
+                crate::mi_assert_internal!(mi_page_block_size(page) == (*pq).block_size);
+            }
+            crate::mi_assert_internal!((*page).theap == theap);
+            if (*page).next.is_null() {
+                crate::mi_assert_internal!((*pq).last == page);
+            }
+            count += 1;
+            prev = page;
+            page = (*page).next;
         }
-        count += 1;
-        prev = page;
-        page = (*page).next;
+        crate::mi_assert_internal!((*pq).count == count);
+        true
     }
-    crate::mi_assert_internal!((*pq).count == count);
-    true
 }
 
 #[used]
@@ -1290,52 +1379,58 @@ static MI_PAGE_QUEUE_IS_VALID_KEEP: unsafe extern "C" fn(
 
 #[inline]
 pub(crate) unsafe fn mi_page_bin_typed(page: *const mi_page_t) -> crate::core_types::Bin {
-    let bin = if mi_page_is_in_full(page) {
-        MI_BIN_FULL
-    } else if mi_page_is_huge(page) {
-        MI_BIN_HUGE
-    } else {
-        mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
-            mi_page_block_size(page),
-        ))
-        .as_usize()
-    };
-    crate::mi_assert_internal!(bin <= MI_BIN_FULL);
-    crate::mi_debug_assert!(u16::try_from(bin).is_ok());
-    crate::core_types::Bin::new(bin as u16)
+    unsafe {
+        let bin = if mi_page_is_in_full(page) {
+            MI_BIN_FULL
+        } else if mi_page_is_huge(page) {
+            MI_BIN_HUGE
+        } else {
+            mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
+                mi_page_block_size(page),
+            ))
+            .as_usize()
+        };
+        crate::mi_assert_internal!(bin <= MI_BIN_FULL);
+        crate::mi_debug_assert!(u16::try_from(bin).is_ok());
+        crate::core_types::Bin::new(bin as u16)
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
-    mi_page_bin_typed(page).as_usize()
+    unsafe { mi_page_bin_typed(page).as_usize() }
 }
 
 #[inline]
 pub(crate) unsafe fn _mi_page_stats_bin_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::StatsBin {
-    let bin = if mi_page_is_huge(page) {
-        MI_BIN_HUGE
-    } else {
-        mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
-            mi_page_block_size(page),
-        ))
-        .as_usize()
-    };
-    crate::mi_assert_internal!(bin <= MI_BIN_HUGE);
-    crate::mi_debug_assert!(u16::try_from(bin).is_ok());
-    crate::core_types::StatsBin::new(bin as u16)
+    unsafe {
+        let bin = if mi_page_is_huge(page) {
+            MI_BIN_HUGE
+        } else {
+            mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
+                mi_page_block_size(page),
+            ))
+            .as_usize()
+        };
+        crate::mi_assert_internal!(bin <= MI_BIN_HUGE);
+        crate::mi_debug_assert!(u16::try_from(bin).is_ok());
+        crate::core_types::StatsBin::new(bin as u16)
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_stats_bin(page: *const mi_page_t) -> usize {
-    let bin = _mi_page_stats_bin_typed(page).as_usize();
-    crate::mi_assert_internal!(bin <= MI_BIN_HUGE);
-    bin
+    unsafe {
+        let bin = _mi_page_stats_bin_typed(page).as_usize();
+        crate::mi_assert_internal!(bin <= MI_BIN_HUGE);
+        bin
+    }
 }
 
 /// # Safety
@@ -1345,104 +1440,112 @@ pub unsafe fn mi_theap_page_queue_of(
     theap: *mut mi_theap_t,
     page: *const mi_page_t,
 ) -> *mut mi_page_queue_t {
-    crate::mi_assert_internal!(!theap.is_null());
-    let bin = mi_page_bin_typed(page).as_usize();
-    let pq = ptr::addr_of_mut!((*theap).pages[bin]);
-    crate::mi_assert_internal!(
-        (mi_page_block_size(page) == (*pq).block_size)
-            || (mi_page_is_huge(page) && mi_page_queue_is_huge(pq))
-            || (mi_page_is_in_full(page) && mi_page_queue_is_full(pq))
-    );
-    pq
+    unsafe {
+        crate::mi_assert_internal!(!theap.is_null());
+        let bin = mi_page_bin_typed(page).as_usize();
+        let pq = ptr::addr_of_mut!((*theap).pages[bin]);
+        crate::mi_assert_internal!(
+            (mi_page_block_size(page) == (*pq).block_size)
+                || (mi_page_is_huge(page) && mi_page_queue_is_huge(pq))
+                || (mi_page_is_in_full(page) && mi_page_queue_is_full(pq))
+        );
+        pq
+    }
 }
 
 /// # Safety
 /// `page` must point to non-abandoned page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
-    let theap = mi_page_theap(page);
-    let pq = mi_theap_page_queue_of(theap, page);
-    crate::mi_assert_expensive!(mi_page_queue_contains(pq, page));
-    pq
+    unsafe {
+        let theap = mi_page_theap(page);
+        let pq = mi_theap_page_queue_of(theap, page);
+        crate::mi_assert_expensive!(mi_page_queue_contains(pq, page));
+        pq
+    }
 }
 
 /// # Safety
 /// `theap` must be valid, and `pq` must point to one of its page queues.
 pub unsafe fn mi_theap_queue_first_update(theap: *mut mi_theap_t, pq: *const mi_page_queue_t) {
-    crate::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
-    let size = (*pq).block_size;
-    if size > MI_SMALL_SIZE_MAX {
-        return;
-    }
-
-    let mut page = (*pq).first;
-    if page.is_null() {
-        page = ptr::addr_of!(_mi_page_empty).cast_mut();
-    }
-
-    let idx = mi_direct_bin_from_size(size).as_usize();
-    let pages_free = ptr::addr_of_mut!((*theap).pages_free_direct).cast::<*mut mi_page_t>();
-    if *pages_free.add(idx) == page {
-        return;
-    }
-
-    let start = if idx <= 1 {
-        0
-    } else {
-        crate::mi_assert_internal!(pq > ptr::addr_of!((*theap).pages[0]));
-        let block_size = crate::core_types::BlockSize::new_unchecked(size);
-        let bin = mi_bin_from_block_size(block_size).as_usize();
-        let mut prev = pq.sub(1);
-        while bin
-            == mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
-                (*prev).block_size,
-            ))
-            .as_usize()
-            && prev > ptr::addr_of!((*theap).pages[0])
-        {
-            prev = prev.sub(1);
+    unsafe {
+        crate::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
+        let size = (*pq).block_size;
+        if size > MI_SMALL_SIZE_MAX {
+            return;
         }
-        let start = 1 + _mi_wsize_from_size((*prev).block_size);
-        start.min(idx)
-    };
 
-    crate::mi_assert_internal!(start <= idx);
-    for sz in start..=idx {
-        *pages_free.add(sz) = page;
+        let mut page = (*pq).first;
+        if page.is_null() {
+            page = ptr::addr_of!(_mi_page_empty).cast_mut();
+        }
+
+        let idx = mi_direct_bin_from_size(size).as_usize();
+        let pages_free = ptr::addr_of_mut!((*theap).pages_free_direct).cast::<*mut mi_page_t>();
+        if *pages_free.add(idx) == page {
+            return;
+        }
+
+        let start = if idx <= 1 {
+            0
+        } else {
+            crate::mi_assert_internal!(pq > ptr::addr_of!((*theap).pages[0]));
+            let block_size = crate::core_types::BlockSize::new_unchecked(size);
+            let bin = mi_bin_from_block_size(block_size).as_usize();
+            let mut prev = pq.sub(1);
+            while bin
+                == mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
+                    (*prev).block_size,
+                ))
+                .as_usize()
+                && prev > ptr::addr_of!((*theap).pages[0])
+            {
+                prev = prev.sub(1);
+            }
+            let start = 1 + _mi_wsize_from_size((*prev).block_size);
+            start.min(idx)
+        };
+
+        crate::mi_assert_internal!(start <= idx);
+        for sz in start..=idx {
+            *pages_free.add(sz) = page;
+        }
     }
 }
 
 /// # Safety
 /// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
 pub unsafe fn mi_page_queue_remove(queue: *mut mi_page_queue_t, page: *mut mi_page_t) {
-    crate::mi_assert_internal!(!page.is_null());
-    crate::mi_assert_expensive!(mi_page_queue_contains(queue, page));
-    crate::mi_assert_internal!((*queue).count >= 1);
-    crate::mi_assert_internal!(
-        mi_page_block_size(page) == (*queue).block_size
-            || (mi_page_is_huge(page) && mi_page_queue_is_huge(queue))
-            || (mi_page_is_in_full(page) && mi_page_queue_is_full(queue))
-    );
-    let theap = mi_page_theap(page);
-    if !(*page).prev.is_null() {
-        (*(*page).prev).next = (*page).next;
+    unsafe {
+        crate::mi_assert_internal!(!page.is_null());
+        crate::mi_assert_expensive!(mi_page_queue_contains(queue, page));
+        crate::mi_assert_internal!((*queue).count >= 1);
+        crate::mi_assert_internal!(
+            mi_page_block_size(page) == (*queue).block_size
+                || (mi_page_is_huge(page) && mi_page_queue_is_huge(queue))
+                || (mi_page_is_in_full(page) && mi_page_queue_is_full(queue))
+        );
+        let theap = mi_page_theap(page);
+        if !(*page).prev.is_null() {
+            (*(*page).prev).next = (*page).next;
+        }
+        if !(*page).next.is_null() {
+            (*(*page).next).prev = (*page).prev;
+        }
+        if ptr::eq(page, (*queue).last) {
+            (*queue).last = (*page).prev;
+        }
+        if ptr::eq(page, (*queue).first) {
+            (*queue).first = (*page).next;
+            crate::mi_assert_internal!(mi_theap_contains_queue(theap, queue));
+            mi_theap_queue_first_update(theap, queue);
+        }
+        (*theap).page_count -= 1;
+        (*queue).count -= 1;
+        (*page).next = ptr::null_mut();
+        (*page).prev = ptr::null_mut();
+        mi_page_set_in_full(page, false);
     }
-    if !(*page).next.is_null() {
-        (*(*page).next).prev = (*page).prev;
-    }
-    if ptr::eq(page, (*queue).last) {
-        (*queue).last = (*page).prev;
-    }
-    if ptr::eq(page, (*queue).first) {
-        (*queue).first = (*page).next;
-        crate::mi_assert_internal!(mi_theap_contains_queue(theap, queue));
-        mi_theap_queue_first_update(theap, queue);
-    }
-    (*theap).page_count -= 1;
-    (*queue).count -= 1;
-    (*page).next = ptr::null_mut();
-    (*page).prev = ptr::null_mut();
-    mi_page_set_in_full(page, false);
 }
 
 /// # Safety
@@ -1453,29 +1556,31 @@ pub unsafe fn mi_page_queue_push(
     queue: *mut mi_page_queue_t,
     page: *mut mi_page_t,
 ) {
-    crate::mi_assert_internal!(mi_page_theap(page) == theap);
-    crate::mi_assert_internal!(!mi_page_queue_contains(queue, page));
-    crate::mi_assert_internal!(
-        mi_page_block_size(page) == (*queue).block_size
-            || (mi_page_is_huge(page) && mi_page_queue_is_huge(queue))
-            || (mi_page_is_in_full(page) && mi_page_queue_is_full(queue))
-    );
+    unsafe {
+        crate::mi_assert_internal!(mi_page_theap(page) == theap);
+        crate::mi_assert_internal!(!mi_page_queue_contains(queue, page));
+        crate::mi_assert_internal!(
+            mi_page_block_size(page) == (*queue).block_size
+                || (mi_page_is_huge(page) && mi_page_queue_is_huge(queue))
+                || (mi_page_is_in_full(page) && mi_page_queue_is_full(queue))
+        );
 
-    mi_page_set_in_full(page, mi_page_queue_is_full(queue));
+        mi_page_set_in_full(page, mi_page_queue_is_full(queue));
 
-    (*page).next = (*queue).first;
-    (*page).prev = ptr::null_mut();
-    if !(*queue).first.is_null() {
-        crate::mi_assert_internal!((*(*queue).first).prev.is_null());
-        (*(*queue).first).prev = page;
-        (*queue).first = page;
-    } else {
-        (*queue).first = page;
-        (*queue).last = page;
+        (*page).next = (*queue).first;
+        (*page).prev = ptr::null_mut();
+        if !(*queue).first.is_null() {
+            crate::mi_assert_internal!((*(*queue).first).prev.is_null());
+            (*(*queue).first).prev = page;
+            (*queue).first = page;
+        } else {
+            (*queue).first = page;
+            (*queue).last = page;
+        }
+        (*queue).count += 1;
+        mi_theap_queue_first_update(theap, queue);
+        (*theap).page_count += 1;
     }
-    (*queue).count += 1;
-    mi_theap_queue_first_update(theap, queue);
-    (*theap).page_count += 1;
 }
 
 /// # Safety
@@ -1486,32 +1591,34 @@ pub unsafe fn mi_page_queue_push_at_end(
     queue: *mut mi_page_queue_t,
     page: *mut mi_page_t,
 ) {
-    crate::mi_assert_internal!(mi_page_theap(page) == theap);
-    crate::mi_assert_internal!(!mi_page_queue_contains(queue, page));
-    crate::mi_assert_internal!(
-        mi_page_block_size(page) == (*queue).block_size
-            || (mi_page_is_huge(page) && mi_page_queue_is_huge(queue))
-            || (mi_page_is_in_full(page) && mi_page_queue_is_full(queue))
-    );
+    unsafe {
+        crate::mi_assert_internal!(mi_page_theap(page) == theap);
+        crate::mi_assert_internal!(!mi_page_queue_contains(queue, page));
+        crate::mi_assert_internal!(
+            mi_page_block_size(page) == (*queue).block_size
+                || (mi_page_is_huge(page) && mi_page_queue_is_huge(queue))
+                || (mi_page_is_in_full(page) && mi_page_queue_is_full(queue))
+        );
 
-    mi_page_set_in_full(page, mi_page_queue_is_full(queue));
+        mi_page_set_in_full(page, mi_page_queue_is_full(queue));
 
-    (*page).prev = (*queue).last;
-    (*page).next = ptr::null_mut();
-    if !(*queue).last.is_null() {
-        crate::mi_assert_internal!((*(*queue).last).next.is_null());
-        (*(*queue).last).next = page;
-        (*queue).last = page;
-    } else {
-        (*queue).first = page;
-        (*queue).last = page;
+        (*page).prev = (*queue).last;
+        (*page).next = ptr::null_mut();
+        if !(*queue).last.is_null() {
+            crate::mi_assert_internal!((*(*queue).last).next.is_null());
+            (*(*queue).last).next = page;
+            (*queue).last = page;
+        } else {
+            (*queue).first = page;
+            (*queue).last = page;
+        }
+        (*queue).count += 1;
+
+        if ptr::eq((*queue).first, page) {
+            mi_theap_queue_first_update(theap, queue);
+        }
+        (*theap).page_count += 1;
     }
-    (*queue).count += 1;
-
-    if ptr::eq((*queue).first, page) {
-        mi_theap_queue_first_update(theap, queue);
-    }
-    (*theap).page_count += 1;
 }
 
 #[inline]
@@ -1520,8 +1627,10 @@ unsafe fn mi_page_queue_push_at_end_typed(
     queue: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
 ) -> crate::core_types::ActivePage {
-    mi_page_queue_push_at_end(theap.0.as_ptr(), queue.0.as_ptr(), page.0.as_ptr());
-    page
+    unsafe {
+        mi_page_queue_push_at_end(theap.0.as_ptr(), queue.0.as_ptr(), page.0.as_ptr());
+        page
+    }
 }
 
 /// # Safety
@@ -1531,14 +1640,16 @@ pub unsafe fn mi_page_queue_move_to_front(
     queue: *mut mi_page_queue_t,
     page: *mut mi_page_t,
 ) {
-    crate::mi_assert_internal!(mi_page_theap(page) == theap);
-    crate::mi_assert_internal!(mi_page_queue_contains(queue, page));
-    if ptr::eq((*queue).first, page) {
-        return;
+    unsafe {
+        crate::mi_assert_internal!(mi_page_theap(page) == theap);
+        crate::mi_assert_internal!(mi_page_queue_contains(queue, page));
+        if ptr::eq((*queue).first, page) {
+            return;
+        }
+        mi_page_queue_remove(queue, page);
+        mi_page_queue_push(theap, queue, page);
+        crate::mi_assert_internal!(ptr::eq((*queue).first, page));
     }
-    mi_page_queue_remove(queue, page);
-    mi_page_queue_push(theap, queue, page);
-    crate::mi_assert_internal!(ptr::eq((*queue).first, page));
 }
 
 unsafe fn mi_page_queue_enqueue_from_raw(
@@ -1547,72 +1658,76 @@ unsafe fn mi_page_queue_enqueue_from_raw(
     enqueue_at_end: bool,
     page: crate::core_types::PagePtr,
 ) {
-    let to = to.as_ptr();
-    let from = from.as_ptr();
-    let page = page.as_ptr();
-    crate::mi_assert_internal!(!page.is_null());
-    crate::mi_assert_internal!((*from).count >= 1);
-    crate::mi_assert_expensive!(mi_page_queue_contains(from, page));
-    crate::mi_assert_expensive!(!mi_page_queue_contains(to, page));
-    let bsize = mi_page_block_size(page);
-    crate::MI_UNUSED!(bsize);
-    crate::mi_assert_internal!(
-        (bsize == (*to).block_size && (bsize == (*from).block_size || mi_page_queue_is_full(from)))
-            || (bsize == (*from).block_size && mi_page_queue_is_full(to))
-            || (mi_page_is_huge(page) && (mi_page_queue_is_huge(to) || mi_page_queue_is_full(to)))
-    );
+    unsafe {
+        let to = to.as_ptr();
+        let from = from.as_ptr();
+        let page = page.as_ptr();
+        crate::mi_assert_internal!(!page.is_null());
+        crate::mi_assert_internal!((*from).count >= 1);
+        crate::mi_assert_expensive!(mi_page_queue_contains(from, page));
+        crate::mi_assert_expensive!(!mi_page_queue_contains(to, page));
+        let bsize = mi_page_block_size(page);
+        crate::MI_UNUSED!(bsize);
+        crate::mi_assert_internal!(
+            (bsize == (*to).block_size
+                && (bsize == (*from).block_size || mi_page_queue_is_full(from)))
+                || (bsize == (*from).block_size && mi_page_queue_is_full(to))
+                || (mi_page_is_huge(page)
+                    && (mi_page_queue_is_huge(to) || mi_page_queue_is_full(to)))
+        );
 
-    let theap = mi_page_theap(page);
+        let theap = mi_page_theap(page);
 
-    if !(*page).prev.is_null() {
-        (*(*page).prev).next = (*page).next;
-    }
-    if !(*page).next.is_null() {
-        (*(*page).next).prev = (*page).prev;
-    }
-    if ptr::eq(page, (*from).last) {
-        (*from).last = (*page).prev;
-    }
-    if ptr::eq(page, (*from).first) {
-        (*from).first = (*page).next;
-        crate::mi_assert_internal!(mi_theap_contains_queue(theap, from));
-        mi_theap_queue_first_update(theap, from);
-    }
-    (*from).count -= 1;
+        if !(*page).prev.is_null() {
+            (*(*page).prev).next = (*page).next;
+        }
+        if !(*page).next.is_null() {
+            (*(*page).next).prev = (*page).prev;
+        }
+        if ptr::eq(page, (*from).last) {
+            (*from).last = (*page).prev;
+        }
+        if ptr::eq(page, (*from).first) {
+            (*from).first = (*page).next;
+            crate::mi_assert_internal!(mi_theap_contains_queue(theap, from));
+            mi_theap_queue_first_update(theap, from);
+        }
+        (*from).count -= 1;
 
-    (*to).count += 1;
-    if enqueue_at_end {
-        (*page).prev = (*to).last;
-        (*page).next = ptr::null_mut();
-        if !(*to).last.is_null() {
-            crate::mi_assert_internal!(theap == mi_page_theap((*to).last));
-            (*(*to).last).next = page;
-            (*to).last = page;
+        (*to).count += 1;
+        if enqueue_at_end {
+            (*page).prev = (*to).last;
+            (*page).next = ptr::null_mut();
+            if !(*to).last.is_null() {
+                crate::mi_assert_internal!(theap == mi_page_theap((*to).last));
+                (*(*to).last).next = page;
+                (*to).last = page;
+            } else {
+                (*to).first = page;
+                (*to).last = page;
+                mi_theap_queue_first_update(theap, to);
+            }
+        } else if !(*to).first.is_null() {
+            crate::mi_assert_internal!(theap == mi_page_theap((*to).first));
+            let next = (*(*to).first).next;
+            (*page).prev = (*to).first;
+            (*page).next = next;
+            (*(*to).first).next = page;
+            if !next.is_null() {
+                (*next).prev = page;
+            } else {
+                (*to).last = page;
+            }
         } else {
+            (*page).prev = ptr::null_mut();
+            (*page).next = ptr::null_mut();
             (*to).first = page;
             (*to).last = page;
             mi_theap_queue_first_update(theap, to);
         }
-    } else if !(*to).first.is_null() {
-        crate::mi_assert_internal!(theap == mi_page_theap((*to).first));
-        let next = (*(*to).first).next;
-        (*page).prev = (*to).first;
-        (*page).next = next;
-        (*(*to).first).next = page;
-        if !next.is_null() {
-            (*next).prev = page;
-        } else {
-            (*to).last = page;
-        }
-    } else {
-        (*page).prev = ptr::null_mut();
-        (*page).next = ptr::null_mut();
-        (*to).first = page;
-        (*to).last = page;
-        mi_theap_queue_first_update(theap, to);
-    }
 
-    mi_page_set_in_full(page, mi_page_queue_is_full(to));
+        mi_page_set_in_full(page, mi_page_queue_is_full(to));
+    }
 }
 
 #[inline]
@@ -1621,8 +1736,10 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from(
     from: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
 ) -> crate::core_types::FullPage {
-    mi_page_queue_enqueue_from_raw(to.0, from.0, true, page.0);
-    crate::core_types::move_to_full_queue(page, from, to)
+    unsafe {
+        mi_page_queue_enqueue_from_raw(to.0, from.0, true, page.0);
+        crate::core_types::move_to_full_queue(page, from, to)
+    }
 }
 
 #[inline]
@@ -1631,8 +1748,10 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_full(
     from: crate::core_types::FullPageQueue,
     page: crate::core_types::FullPage,
 ) -> crate::core_types::ActivePage {
-    mi_page_queue_enqueue_from_raw(to.0, from.0, true, page.0);
-    crate::core_types::unfull_page(page, from, to)
+    unsafe {
+        mi_page_queue_enqueue_from_raw(to.0, from.0, true, page.0);
+        crate::core_types::unfull_page(page, from, to)
+    }
 }
 
 /// # Safety
@@ -1643,37 +1762,39 @@ pub unsafe extern "C" fn _mi_page_queue_append(
     pq: *mut mi_page_queue_t,
     append: *mut mi_page_queue_t,
 ) -> usize {
-    crate::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
-    crate::mi_assert_internal!((*pq).block_size == (*append).block_size);
+    unsafe {
+        crate::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
+        crate::mi_assert_internal!((*pq).block_size == (*append).block_size);
 
-    if (*append).first.is_null() {
-        return 0;
+        if (*append).first.is_null() {
+            return 0;
+        }
+
+        let mut count = 0usize;
+        let mut page = (*append).first;
+        while !page.is_null() {
+            mi_page_set_theap(page, theap);
+            count += 1;
+            page = (*page).next;
+        }
+        crate::mi_assert_internal!(count == (*append).count);
+
+        if (*pq).last.is_null() {
+            crate::mi_assert_internal!((*pq).first.is_null());
+            (*pq).first = (*append).first;
+            (*pq).last = (*append).last;
+            mi_theap_queue_first_update(theap, pq);
+        } else {
+            crate::mi_assert_internal!(!(*pq).last.is_null());
+            crate::mi_assert_internal!(!(*append).first.is_null());
+            (*(*pq).last).next = (*append).first;
+            (*(*append).first).prev = (*pq).last;
+            (*pq).last = (*append).last;
+        }
+        (*pq).count += (*append).count;
+
+        count
     }
-
-    let mut count = 0usize;
-    let mut page = (*append).first;
-    while !page.is_null() {
-        mi_page_set_theap(page, theap);
-        count += 1;
-        page = (*page).next;
-    }
-    crate::mi_assert_internal!(count == (*append).count);
-
-    if (*pq).last.is_null() {
-        crate::mi_assert_internal!((*pq).first.is_null());
-        (*pq).first = (*append).first;
-        (*pq).last = (*append).last;
-        mi_theap_queue_first_update(theap, pq);
-    } else {
-        crate::mi_assert_internal!(!(*pq).last.is_null());
-        crate::mi_assert_internal!(!(*append).first.is_null());
-        (*(*pq).last).next = (*append).first;
-        (*(*append).first).prev = (*pq).last;
-        (*pq).last = (*append).last;
-    }
-    (*pq).count += (*append).count;
-
-    count
 }
 
 #[used]
@@ -1689,128 +1810,135 @@ unsafe fn mi_page_queue_find_free_ex(
     pq: *mut mi_page_queue_t,
     first_try: bool,
 ) -> *mut mi_page_t {
-    let mut count = 0usize;
-    let mut candidate_limit: c_long = 0;
-    let mut page_full_retain = if (*pq).block_size > MI_SMALL_MAX_OBJ_SIZE {
-        0
-    } else {
-        (*theap).page_full_retain
-    };
-    let mut page_candidate = ptr::null_mut::<mi_page_t>();
-    let mut page = (*pq).first;
-
-    while !page.is_null() {
-        let next = (*page).next;
-        count += 1;
-        candidate_limit -= 1;
-
-        let mut immediate_available = mi_page_immediate_available(page);
-        if !immediate_available {
-            _mi_page_free_collect(page, false);
-            immediate_available = mi_page_immediate_available(page);
-        }
-
-        if !immediate_available && !mi_page_is_expandable(page) {
-            page_full_retain -= 1;
-            if page_full_retain < 0 {
-                crate::mi_assert_internal!(
-                    !mi_page_is_in_full(page) && !mi_page_immediate_available(page)
-                );
-                mi_page_to_full(page, pq);
-            }
+    unsafe {
+        let mut count = 0usize;
+        let mut candidate_limit: c_long = 0;
+        let mut page_full_retain = if (*pq).block_size > MI_SMALL_MAX_OBJ_SIZE {
+            0
         } else {
-            if page_candidate.is_null() {
-                page_candidate = page;
-                candidate_limit = _mi_option_get_fast(mi_option_t::mi_option_page_max_candidates);
-            } else if mi_page_all_free(page_candidate) {
-                let _ = _mi_page_free_internal(
-                    crate::core_types::AllFreePage::active_unchecked(
-                        crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(
-                            page_candidate,
-                        )),
-                    ),
-                    crate::core_types::PageQueuePtr::new_unchecked(pq),
-                );
-                page_candidate = page;
-            } else if (*page).used >= (*page_candidate).used && !mi_page_is_mostly_used(page) {
-                page_candidate = page;
+            (*theap).page_full_retain
+        };
+        let mut page_candidate = ptr::null_mut::<mi_page_t>();
+        let mut page = (*pq).first;
+
+        while !page.is_null() {
+            let next = (*page).next;
+            count += 1;
+            candidate_limit -= 1;
+
+            let mut immediate_available = mi_page_immediate_available(page);
+            if !immediate_available {
+                _mi_page_free_collect(page, false);
+                immediate_available = mi_page_immediate_available(page);
             }
-            if immediate_available || candidate_limit <= 0 {
-                crate::mi_assert_internal!(!page_candidate.is_null());
-                break;
+
+            if !immediate_available && !mi_page_is_expandable(page) {
+                page_full_retain -= 1;
+                if page_full_retain < 0 {
+                    crate::mi_assert_internal!(
+                        !mi_page_is_in_full(page) && !mi_page_immediate_available(page)
+                    );
+                    mi_page_to_full(page, pq);
+                }
+            } else {
+                if page_candidate.is_null() {
+                    page_candidate = page;
+                    candidate_limit =
+                        _mi_option_get_fast(mi_option_t::mi_option_page_max_candidates);
+                } else if mi_page_all_free(page_candidate) {
+                    let _ = _mi_page_free_internal(
+                        crate::core_types::AllFreePage::active_unchecked(
+                            crate::core_types::ActivePage(
+                                crate::core_types::PagePtr::new_unchecked(page_candidate),
+                            ),
+                        ),
+                        crate::core_types::PageQueuePtr::new_unchecked(pq),
+                    );
+                    page_candidate = page;
+                } else if (*page).used >= (*page_candidate).used && !mi_page_is_mostly_used(page) {
+                    page_candidate = page;
+                }
+                if immediate_available || candidate_limit <= 0 {
+                    crate::mi_assert_internal!(!page_candidate.is_null());
+                    break;
+                }
             }
+
+            page = next;
         }
 
-        page = next;
-    }
+        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.page_searches), count);
+        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.page_searches_count), 1);
 
-    __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.page_searches), count);
-    __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.page_searches_count), 1);
-
-    if !page_candidate.is_null() {
-        page = page_candidate;
-    }
-    if !page.is_null() {
-        if !mi_page_immediate_available(page) {
-            crate::mi_assert_internal!(mi_page_is_expandable(page));
-            if !mi_page_extend_free(theap, page) {
-                page = ptr::null_mut();
-            }
+        if !page_candidate.is_null() {
+            page = page_candidate;
         }
-        crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
-    }
-
-    if page.is_null() {
-        _mi_theap_collect_retired(theap, false);
-        page = mi_page_fresh(theap, pq);
-        crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
-        if page.is_null() && first_try {
-            page = mi_page_queue_find_free_ex(theap, pq, false);
+        if !page.is_null() {
+            if !mi_page_immediate_available(page) {
+                crate::mi_assert_internal!(mi_page_is_expandable(page));
+                if !mi_page_extend_free(theap, page) {
+                    page = ptr::null_mut();
+                }
+            }
             crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
         }
-    } else {
-        crate::mi_assert_internal!(mi_page_immediate_available(page));
-        mi_page_queue_move_to_front(theap, pq, page);
-        (*page).retire_expire = 0;
-    }
-    crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
 
-    page
+        if page.is_null() {
+            _mi_theap_collect_retired(theap, false);
+            page = mi_page_fresh(theap, pq);
+            crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
+            if page.is_null() && first_try {
+                page = mi_page_queue_find_free_ex(theap, pq, false);
+                crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
+            }
+        } else {
+            crate::mi_assert_internal!(mi_page_immediate_available(page));
+            mi_page_queue_move_to_front(theap, pq, page);
+            (*page).retire_expire = 0;
+        }
+        crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
+
+        page
+    }
 }
 
 #[inline]
 #[allow(clippy::absurd_extreme_comparisons)]
 unsafe fn mi_find_free_page(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
-    crate::mi_assert_internal!(!mi_page_queue_is_huge(pq));
+    unsafe {
+        crate::mi_assert_internal!(!mi_page_queue_is_huge(pq));
 
-    let page = (*pq).first;
-    if !page.is_null() && mi_page_free_quick_collect(page) {
-        if MI_SECURE >= 2
-            && (*page).capacity < (*page).reserved
-            && ((_mi_theap_random_next(theap) & 1) == 1)
-        {
-            let _ = mi_page_extend_free(theap, page);
-            crate::mi_assert_internal!(mi_page_immediate_available(page));
+        let page = (*pq).first;
+        if !page.is_null() && mi_page_free_quick_collect(page) {
+            if MI_SECURE >= 2
+                && (*page).capacity < (*page).reserved
+                && ((_mi_theap_random_next(theap) & 1) == 1)
+            {
+                let _ = mi_page_extend_free(theap, page);
+                crate::mi_assert_internal!(mi_page_immediate_available(page));
+            }
+            (*page).retire_expire = 0;
+            page
+        } else {
+            mi_page_queue_find_free_ex(theap, pq, true)
         }
-        (*page).retire_expire = 0;
-        page
-    } else {
-        mi_page_queue_find_free_ex(theap, pq, true)
     }
 }
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool) {
-    (*theap).heartbeat = (*theap).heartbeat.wrapping_add(1);
-    let fun_ptr = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
-        .load(crate::core_types::MemoryOrder::Acquire);
-    if !fun_ptr.is_null() && !(*(*theap).tld).recurse {
-        (*(*theap).tld).recurse = true;
-        let arg = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
+    unsafe {
+        (*theap).heartbeat = (*theap).heartbeat.wrapping_add(1);
+        let fun_ptr = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
             .load(crate::core_types::MemoryOrder::Acquire);
-        let fun: mi_deferred_free_fun = core::mem::transmute(fun_ptr);
-        fun(force, (*theap).heartbeat, arg);
-        (*(*theap).tld).recurse = false;
+        if !fun_ptr.is_null() && !(*(*theap).tld).recurse {
+            (*(*theap).tld).recurse = true;
+            let arg = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
+                .load(crate::core_types::MemoryOrder::Acquire);
+            let fun: mi_deferred_free_fun = core::mem::transmute(fun_ptr);
+            fun(force, (*theap).heartbeat, arg);
+            (*(*theap).tld).recurse = false;
+        }
     }
 }
 
@@ -1822,11 +1950,13 @@ pub unsafe extern "C" fn mi_register_deferred_free(
     fn_: Option<mi_deferred_free_fun>,
     arg: *mut c_void,
 ) {
-    crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
-        .store(arg, crate::core_types::MemoryOrder::Release);
-    let f = fn_.map_or(ptr::null_mut(), |fun| fun as *const () as *mut c_void);
-    crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
-        .store(f, crate::core_types::MemoryOrder::Release);
+    unsafe {
+        crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
+            .store(arg, crate::core_types::MemoryOrder::Release);
+        let f = fn_.map_or(ptr::null_mut(), |fun| fun as *const () as *mut c_void);
+        crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
+            .store(f, crate::core_types::MemoryOrder::Release);
+    }
 }
 
 #[inline]
@@ -1836,23 +1966,25 @@ unsafe fn mi_huge_page_alloc(
     page_alignment: usize,
     pq: *mut mi_page_queue_t,
 ) -> *mut mi_page_t {
-    let block_size = _mi_os_good_alloc_size(size);
-    crate::mi_assert_internal!(mi_page_queue_is_huge(pq));
-    let page = mi_page_fresh_alloc(theap, pq, block_size, page_alignment);
-    if !page.is_null() {
-        crate::mi_assert_internal!(mi_page_block_size(page) >= size);
-        crate::mi_assert_internal!(mi_page_immediate_available(page));
-        crate::mi_assert_internal!(mi_page_is_huge(page));
-        crate::mi_assert_internal!(mi_page_is_singleton(page));
-        if MI_STAT > 0 {
-            __mi_stat_increase(
-                ptr::addr_of_mut!((*theap).stats.malloc_huge),
-                mi_page_block_size(page),
-            );
-            __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);
+    unsafe {
+        let block_size = _mi_os_good_alloc_size(size);
+        crate::mi_assert_internal!(mi_page_queue_is_huge(pq));
+        let page = mi_page_fresh_alloc(theap, pq, block_size, page_alignment);
+        if !page.is_null() {
+            crate::mi_assert_internal!(mi_page_block_size(page) >= size);
+            crate::mi_assert_internal!(mi_page_immediate_available(page));
+            crate::mi_assert_internal!(mi_page_is_huge(page));
+            crate::mi_assert_internal!(mi_page_is_singleton(page));
+            if MI_STAT > 0 {
+                __mi_stat_increase(
+                    ptr::addr_of_mut!((*theap).stats.malloc_huge),
+                    mi_page_block_size(page),
+                );
+                __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_huge_count), 1);
+            }
         }
+        page
     }
-    page
 }
 
 #[inline(always)]
@@ -1861,28 +1993,30 @@ unsafe fn mi_find_page(
     size: usize,
     huge_alignment: usize,
 ) -> *mut mi_page_t {
-    let req_size = size.wrapping_sub(MI_PADDING_SIZE);
-    if req_size > MI_MAX_ALLOC_SIZE {
-        _mi_error_message_fmt(
-            EOVERFLOW,
-            format_args!("allocation request is too large ({req_size} bytes)\n"),
-        );
-        return ptr::null_mut();
-    }
+    unsafe {
+        let req_size = size.wrapping_sub(MI_PADDING_SIZE);
+        if req_size > MI_MAX_ALLOC_SIZE {
+            _mi_error_message_fmt(
+                EOVERFLOW,
+                format_args!("allocation request is too large ({req_size} bytes)\n"),
+            );
+            return ptr::null_mut();
+        }
 
-    let queue_block_size = if huge_alignment > 0 {
-        MI_LARGE_MAX_OBJ_SIZE + 1
-    } else {
-        size
-    };
-    let pq = mi_page_queue(
-        theap,
-        crate::core_types::BlockSize::new_unchecked(queue_block_size),
-    );
-    if mi_page_queue_is_huge(pq) || req_size > MI_MAX_ALLOC_SIZE {
-        mi_huge_page_alloc(theap, size, huge_alignment, pq)
-    } else {
-        mi_find_free_page(theap, pq)
+        let queue_block_size = if huge_alignment > 0 {
+            MI_LARGE_MAX_OBJ_SIZE + 1
+        } else {
+            size
+        };
+        let pq = mi_page_queue(
+            theap,
+            crate::core_types::BlockSize::new_unchecked(queue_block_size),
+        );
+        if mi_page_queue_is_huge(pq) || req_size > MI_MAX_ALLOC_SIZE {
+            mi_huge_page_alloc(theap, size, huge_alignment, pq)
+        } else {
+            mi_find_free_page(theap, pq)
+        }
     }
 }
 
@@ -1892,15 +2026,17 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
     zero_huge_alignment: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    let flags = crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment);
-    if size == 0 {
-        return ptr::null_mut();
+    unsafe {
+        let flags = crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment);
+        if size == 0 {
+            return ptr::null_mut();
+        }
+        let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
+            crate::core_types::PaddedSize::new_unchecked(size),
+            flags.zeroed(),
+        );
+        _mi_malloc_generic_typed(theap, layout, flags, usable)
     }
-    let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
-        crate::core_types::PaddedSize::new_unchecked(size),
-        flags.zeroed(),
-    );
-    _mi_malloc_generic_typed(theap, layout, flags, usable)
 }
 
 pub(crate) unsafe fn _mi_malloc_generic_typed(
@@ -1909,72 +2045,74 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
     flags: crate::core_types::MallocGenericFlags,
     usable: *mut usize,
 ) -> *mut c_void {
-    let size = layout.padded().get();
-    let zero = flags.zeroed() == crate::core_types::Zeroed::Yes;
-    let huge_alignment = flags.huge_alignment().get();
+    unsafe {
+        let size = layout.padded().get();
+        let zero = flags.zeroed() == crate::core_types::Zeroed::Yes;
+        let huge_alignment = flags.huge_alignment().get();
 
-    if !mi_theap_is_initialized(theap) {
-        if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
-            return ptr::null_mut();
-        }
-        crate::mimalloc::mi_thread_init();
-        theap = crate::prim::_mi_theap_default();
         if !mi_theap_is_initialized(theap) {
+            if ptr::eq(theap, ptr::addr_of!(_mi_theap_empty_wrong).cast_mut()) {
+                return ptr::null_mut();
+            }
+            crate::mimalloc::mi_thread_init();
+            theap = crate::prim::_mi_theap_default();
+            if !mi_theap_is_initialized(theap) {
+                return ptr::null_mut();
+            }
+            crate::mi_assert_internal!(crate::prim::_mi_theap_default() == theap);
+        }
+        crate::mi_assert_internal!(mi_theap_is_initialized(theap));
+
+        (*theap).generic_count += 1;
+        if (*theap).generic_count >= 1000 {
+            (*theap).generic_collect_count += (*theap).generic_count;
+            (*theap).generic_count = 0;
+            _mi_deferred_free(theap, false);
+            _mi_theap_collect_retired(theap, false);
+
+            let generic_collect =
+                mi_option_get_clamp(mi_option_t::mi_option_generic_collect, 1, 1_000_000);
+            if (*theap).generic_collect_count >= generic_collect {
+                (*theap).generic_collect_count = 0;
+                crate::mimalloc::mi_theap_collect(theap, false);
+            }
+        }
+
+        let mut page = mi_find_page(theap, size, huge_alignment);
+        if page.is_null() {
+            crate::mimalloc::mi_theap_collect(theap, true);
+            page = mi_find_page(theap, size, huge_alignment);
+        }
+
+        if page.is_null() {
+            let req_size = size.wrapping_sub(MI_PADDING_SIZE);
+            _mi_error_message_fmt(
+                ENOMEM,
+                format_args!("unable to allocate memory ({req_size} bytes)\n"),
+            );
             return ptr::null_mut();
         }
-        crate::mi_assert_internal!(crate::prim::_mi_theap_default() == theap);
-    }
-    crate::mi_assert_internal!(mi_theap_is_initialized(theap));
 
-    (*theap).generic_count += 1;
-    if (*theap).generic_count >= 1000 {
-        (*theap).generic_collect_count += (*theap).generic_count;
-        (*theap).generic_count = 0;
-        _mi_deferred_free(theap, false);
-        _mi_theap_collect_retired(theap, false);
+        crate::mi_assert_internal!(mi_page_immediate_available(page));
+        crate::mi_assert_internal!(mi_page_block_size(page) >= size);
+        crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+            mi_page_slice_start(page).cast(),
+            MI_PAGE_ALIGN
+        ));
+        crate::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
 
-        let generic_collect =
-            mi_option_get_clamp(mi_option_t::mi_option_generic_collect, 1, 1_000_000);
-        if (*theap).generic_collect_count >= generic_collect {
-            (*theap).generic_collect_count = 0;
-            crate::mimalloc::mi_theap_collect(theap, false);
+        if !usable.is_null() {
+            *usable = mi_page_usable_block_size(page).get();
         }
-    }
+        let p = _mi_page_malloc_zero_typed(theap, page, layout.padded(), zero, ptr::null_mut());
+        crate::mi_assert_internal!(!p.is_null());
 
-    let mut page = mi_find_page(theap, size, huge_alignment);
-    if page.is_null() {
-        crate::mimalloc::mi_theap_collect(theap, true);
-        page = mi_find_page(theap, size, huge_alignment);
+        if mi_page_block_size(page) > MI_SMALL_MAX_OBJ_SIZE
+            && !mi_page_immediate_available(page)
+            && !mi_page_is_expandable(page)
+        {
+            mi_page_to_full(page, mi_page_queue_of(page));
+        }
+        p
     }
-
-    if page.is_null() {
-        let req_size = size.wrapping_sub(MI_PADDING_SIZE);
-        _mi_error_message_fmt(
-            ENOMEM,
-            format_args!("unable to allocate memory ({req_size} bytes)\n"),
-        );
-        return ptr::null_mut();
-    }
-
-    crate::mi_assert_internal!(mi_page_immediate_available(page));
-    crate::mi_assert_internal!(mi_page_block_size(page) >= size);
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
-        mi_page_slice_start(page).cast(),
-        MI_PAGE_ALIGN
-    ));
-    crate::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
-
-    if !usable.is_null() {
-        *usable = mi_page_usable_block_size(page).get();
-    }
-    let p = _mi_page_malloc_zero_typed(theap, page, layout.padded(), zero, ptr::null_mut());
-    crate::mi_assert_internal!(!p.is_null());
-
-    if mi_page_block_size(page) > MI_SMALL_MAX_OBJ_SIZE
-        && !mi_page_immediate_available(page)
-        && !mi_page_is_expandable(page)
-    {
-        mi_page_to_full(page, mi_page_queue_of(page));
-    }
-    p
 }

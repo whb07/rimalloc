@@ -398,23 +398,6 @@ fn mi_bfield_atomic_try_clear_mask(
 }
 
 #[inline]
-#[allow(dead_code)]
-fn mi_bfield_atomic_try_clear(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bool>) -> bool {
-    crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
-    let mask = mi_bfield_one() << idx;
-    mi_bfield_atomic_try_clear_mask(b, mask, all_clear)
-}
-
-#[inline]
-#[allow(dead_code)]
-fn mi_bfield_atomic_try_clear8(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bool>) -> bool {
-    crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
-    crate::mi_debug_assert!(idx.is_multiple_of(8));
-    let mask = (0xFFusize) << idx;
-    mi_bfield_atomic_try_clear_mask(b, mask, all_clear)
-}
-
-#[inline]
 fn mi_bfield_atomic_try_clearX(b: &AtomicUsize, all_clear: Option<&mut bool>) -> bool {
     let old = mi_bfield_all_set();
     match b.compare_exchange(old, mi_bfield_zero(), Ordering::AcqRel, Ordering::Acquire) {
@@ -1275,20 +1258,6 @@ fn mi_chunkbin_inc(bbin: mi_chunkbin_t) -> mi_chunkbin_t {
 }
 
 #[inline]
-#[allow(dead_code)]
-fn mi_chunkbin_dec(bbin: mi_chunkbin_t) -> mi_chunkbin_t {
-    crate::mi_debug_assert!((bbin as i32) > (MI_CBIN_NONE as i32));
-    match bbin {
-        MI_CBIN_NONE => MI_CBIN_HUGE,
-        MI_CBIN_HUGE => MI_CBIN_LARGE,
-        MI_CBIN_LARGE => MI_CBIN_MEDIUM,
-        MI_CBIN_MEDIUM => MI_CBIN_OTHER,
-        MI_CBIN_OTHER => MI_CBIN_SMALL,
-        MI_CBIN_SMALL | MI_CBIN_COUNT => unreachable!(),
-    }
-}
-
-#[inline]
 fn mi_chunkbin_of(slice_count: usize) -> mi_chunkbin_t {
     if slice_count == 1 {
         MI_CBIN_SMALL
@@ -2035,13 +2004,6 @@ pub unsafe fn mi_bbitmap_is_clearN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: us
 }
 
 type mi_bchunk_try_find_and_clear_fun_t = fn(&mut mi_bchunk_t, usize, &mut usize) -> bool;
-
-#[inline]
-#[allow(dead_code)]
-fn mi_bchunk_try_find_and_clear_1(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
-    crate::mi_debug_assert!(n == 1);
-    mi_bchunk_try_find_and_clear(chunk, pidx)
-}
 
 #[inline]
 fn mi_bchunk_try_find_and_clear_8(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {

@@ -897,7 +897,6 @@ fn phase6_dead_code_allowances_stay_intentional() {
     }
 
     let expected = BTreeMap::from([
-        ("src/bitmap.rs", 4),
         ("src/core_types/mod.rs", 13),
         ("src/init.rs", 5),
         ("src/internal.rs", 1),

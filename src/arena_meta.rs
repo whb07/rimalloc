@@ -4,7 +4,6 @@
     dead_code,
     non_camel_case_types,
     non_upper_case_globals,
-    clippy::missing_safety_doc,
     unsafe_op_in_unsafe_fn
 )]
 
@@ -47,6 +46,10 @@ pub type mi_meta_page_t = mi_meta_page_s;
 
 static mi_meta_pages: AtomicPtr<mi_meta_page_t> = AtomicPtr::new(ptr::null_mut());
 
+/// # Safety
+///
+/// `p` must point inside a meta allocation managed by the arena-meta allocator.
+/// If `block_idx` is non-null, it must be valid for writing one `usize`.
 #[inline]
 pub unsafe fn mi_meta_page_of_ptr(p: *mut c_void, block_idx: *mut usize) -> *mut mi_meta_page_t {
     let mpage = (_mi_align_down_ptr(p, MI_ARENA_SLICE_ALIGN).cast::<u8>())
@@ -58,11 +61,18 @@ pub unsafe fn mi_meta_page_of_ptr(p: *mut c_void, block_idx: *mut usize) -> *mut
     mpage
 }
 
+/// # Safety
+///
+/// `mpage` must point to a live meta page.
 #[inline]
 pub unsafe fn mi_meta_page_next(mpage: *mut mi_meta_page_t) -> *mut mi_meta_page_t {
     (*mpage).next
 }
 
+/// # Safety
+///
+/// `mpage` must point to a live meta page, and `block_idx` must be within the
+/// page's meta block range.
 #[inline]
 pub unsafe fn mi_meta_block_start(mpage: *mut mi_meta_page_t, block_idx: usize) -> *mut c_void {
     crate::mi_assert_internal!(_mi_is_aligned(
@@ -140,6 +150,10 @@ unsafe fn mi_meta_page_zalloc() -> *mut mi_meta_page_t {
     }
 }
 
+/// # Safety
+///
+/// `pmemid` must be valid for writing one `mi_memid_t`. The returned pointer,
+/// when non-null, must be released with `_mi_meta_free` using the returned memid.
 pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
     size: usize,
     pmemid: *mut mi_memid_t,
@@ -189,6 +203,10 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
     _mi_os_alloc(size, pmemid)
 }
 
+/// # Safety
+///
+/// `p` may be null. Otherwise `p`, `size`, and `memid` must describe a live
+/// allocation returned by `_mi_meta_zalloc` or its arena fallback.
 pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
     if p.is_null() {
         return;
@@ -219,6 +237,10 @@ pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid
     }
 }
 
+/// # Safety
+///
+/// `p` may be any pointer-sized value. The meta-page list must not be
+/// concurrently destroyed while the lookup runs.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
     let mut mpage = mi_meta_pages.load(Ordering::Acquire);

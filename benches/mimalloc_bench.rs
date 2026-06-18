@@ -33,6 +33,7 @@ use std::time::{Duration, Instant};
 struct DylibAllocator {
     malloc: unsafe extern "C" fn(usize) -> *mut c_void,
     calloc: unsafe extern "C" fn(usize, usize) -> *mut c_void,
+    realloc: unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void,
     free: unsafe extern "C" fn(*mut c_void),
 }
 
@@ -65,6 +66,16 @@ impl BenchAllocator {
             match self {
                 BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
                     (alloc.calloc)(count, size).cast()
+                }
+            }
+        }
+    }
+
+    unsafe fn realloc(self, ptr: *mut u8, size: usize) -> *mut u8 {
+        unsafe {
+            match self {
+                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
+                    (alloc.realloc)(ptr.cast(), size).cast()
                 }
             }
         }
@@ -276,6 +287,7 @@ mod dylib {
 
             let malloc = symbol(handle, c"malloc");
             let calloc = symbol(handle, c"calloc");
+            let realloc = symbol(handle, c"realloc");
             let free = symbol(handle, c"free");
 
             DylibAllocator {
@@ -287,6 +299,10 @@ mod dylib {
                     *mut c_void,
                     unsafe extern "C" fn(usize, usize) -> *mut c_void,
                 >(calloc),
+                realloc: std::mem::transmute::<
+                    *mut c_void,
+                    unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void,
+                >(realloc),
                 free: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void)>(free),
             }
         }
@@ -354,6 +370,10 @@ fn scenarios() -> Vec<Scenario> {
             run: malloc_large::run,
         },
         Scenario {
+            name: "malloc-large-old",
+            run: malloc_large_old::run,
+        },
+        Scenario {
             name: "cache-scratch1",
             run: cache_workloads::run_scratch1,
         },
@@ -364,6 +384,10 @@ fn scenarios() -> Vec<Scenario> {
         Scenario {
             name: "xmalloc-testN",
             run: xmalloc_test::run,
+        },
+        Scenario {
+            name: "mstressN",
+            run: mstress::run,
         },
         Scenario {
             name: "mleak10",
@@ -825,6 +849,50 @@ mod malloc_large {
     }
 }
 
+mod malloc_large_old {
+    use super::*;
+
+    const N: usize = 5000;
+    const SIZE: usize = 1 << 21;
+
+    struct ThreadArg {
+        alloc: BenchAllocator,
+    }
+
+    extern "C" fn thread_entry(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            let alloc = (*arg.cast::<ThreadArg>()).alloc;
+            for _ in 0..N {
+                let p = alloc.malloc(SIZE);
+                assert!(!p.is_null(), "allocation failed in malloc-large-old");
+                for k in 0..SIZE {
+                    p.add(k).write(k as u8);
+                }
+                alloc.free(p);
+            }
+        }
+        ptr::null_mut()
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let start = Instant::now();
+            let mut thread = 0;
+            let mut arg = ThreadArg { alloc };
+            let rc = pthread::pthread_create(
+                &mut thread,
+                ptr::null(),
+                thread_entry,
+                (&mut arg as *mut ThreadArg).cast(),
+            );
+            assert_eq!(rc, 0, "pthread_create failed in malloc-large-old: {rc}");
+            let rc = pthread::pthread_join(thread, ptr::null_mut());
+            assert_eq!(rc, 0, "pthread_join failed in malloc-large-old: {rc}");
+            start.elapsed()
+        }
+    }
+}
+
 mod cache_workloads {
     use super::*;
 
@@ -1193,6 +1261,239 @@ mod xmalloc_test {
             let mfree_per_sec = (total as f64 / elapsed) * 1e-6;
             assert!(mfree_per_sec > 0.0, "xmalloc-testN produced zero free rate");
             Duration::from_secs_f64(100.0 / mfree_per_sec)
+        }
+    }
+}
+
+mod mstress {
+    use super::*;
+
+    const SCALE: usize = 50;
+    const ITER: usize = 25;
+    const TRANSFERS: usize = 1000;
+    const COOKIE: usize = if usize::BITS == 64 {
+        0xbf58_476d_1ce4_e5b9
+    } else {
+        0x1ce4_e5b9
+    };
+
+    struct State {
+        alloc: BenchAllocator,
+        transfers: Vec<AtomicPtr<u8>>,
+    }
+
+    struct ThreadArg {
+        state: *const State,
+        tid: usize,
+    }
+
+    fn pick(r: &mut usize) -> usize {
+        let mut x = *r;
+        if usize::BITS > 32 {
+            x ^= x >> 30;
+            x = x.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            x ^= x >> 27;
+            x = x.wrapping_mul(0x94d0_49bb_1331_11eb);
+            x ^= x >> 31;
+        } else {
+            x ^= x >> 16;
+            x = x.wrapping_mul(0x7feb_352d);
+            x ^= x >> 15;
+            x = x.wrapping_mul(0x846c_a68b);
+            x ^= x >> 16;
+        }
+        *r = x;
+        x
+    }
+
+    fn chance(percent: usize, r: &mut usize) -> bool {
+        pick(r) % 100 <= percent
+    }
+
+    unsafe fn alloc_items(alloc: BenchAllocator, mut items: usize, r: &mut usize) -> *mut u8 {
+        unsafe {
+            if chance(1, r) {
+                if chance(1, r) {
+                    items *= 10000;
+                } else if chance(10, r) {
+                    items *= 1000;
+                } else {
+                    items *= 100;
+                }
+            }
+            if items == 40 {
+                items += 1;
+            }
+
+            let bytes = items * std::mem::size_of::<usize>();
+            let p = alloc.malloc(bytes).cast::<usize>();
+            if !p.is_null() {
+                for i in 0..items {
+                    p.add(i).write((items - i) ^ COOKIE);
+                }
+            }
+            p.cast()
+        }
+    }
+
+    unsafe fn free_items(alloc: BenchAllocator, p: *mut u8) {
+        unsafe {
+            if !p.is_null() {
+                let q = p.cast::<usize>();
+                let items = q.read() ^ COOKIE;
+                for i in 0..items {
+                    assert_eq!(
+                        q.add(i).read() ^ COOKIE,
+                        items - i,
+                        "memory corruption in mstressN at block {p:p}, item {i}"
+                    );
+                }
+            }
+            alloc.free(p);
+        }
+    }
+
+    unsafe fn stress(state: &State, tid: usize) {
+        unsafe {
+            let alloc = state.alloc;
+            let mut r = (tid + 1) * 43;
+            let max_item_shift = 5;
+            let max_item_retained_shift = max_item_shift + 2;
+            let mut allocs = 100 * SCALE * (tid % 8 + 1);
+            let mut retain = allocs / 2;
+            let retain_cap = retain;
+            let mut data = ptr::null_mut::<*mut u8>();
+            let mut data_size = 0;
+            let mut data_top = 0;
+            let retained = alloc
+                .malloc(retain_cap * std::mem::size_of::<*mut u8>())
+                .cast::<*mut u8>();
+            assert!(
+                !retained.is_null(),
+                "retained pointer allocation failed in mstressN"
+            );
+            let mut retain_top = 0;
+
+            while allocs > 0 || retain > 0 {
+                if retain == 0 || (chance(50, &mut r) && allocs > 0) {
+                    allocs -= 1;
+                    if data_top >= data_size {
+                        data_size += 100000;
+                        data = alloc
+                            .realloc(data.cast(), data_size * std::mem::size_of::<*mut u8>())
+                            .cast::<*mut u8>();
+                        assert!(
+                            !data.is_null(),
+                            "data pointer allocation failed in mstressN"
+                        );
+                    }
+                    data.add(data_top).write(alloc_items(
+                        alloc,
+                        1usize << (pick(&mut r) % max_item_shift),
+                        &mut r,
+                    ));
+                    data_top += 1;
+                } else {
+                    retained.add(retain_top).write(alloc_items(
+                        alloc,
+                        1usize << (pick(&mut r) % max_item_retained_shift),
+                        &mut r,
+                    ));
+                    retain_top += 1;
+                    retain -= 1;
+                }
+
+                if chance(66, &mut r) && data_top > 0 {
+                    let idx = pick(&mut r) % data_top;
+                    free_items(alloc, data.add(idx).read());
+                    data.add(idx).write(ptr::null_mut());
+                }
+
+                if chance(25, &mut r) && data_top > 0 {
+                    let data_idx = pick(&mut r) % data_top;
+                    let transfer_idx = pick(&mut r) % TRANSFERS;
+                    let p = data.add(data_idx).read();
+                    let q = state.transfers[transfer_idx].swap(p, Ordering::Acquire);
+                    data.add(data_idx).write(q);
+                }
+            }
+
+            for i in 0..retain_top {
+                free_items(alloc, retained.add(i).read());
+            }
+            for i in 0..data_top {
+                free_items(alloc, data.add(i).read());
+            }
+            alloc.free(retained.cast());
+            alloc.free(data.cast());
+        }
+    }
+
+    extern "C" fn thread_entry(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            let arg = &*arg.cast::<ThreadArg>();
+            stress(&*arg.state, arg.tid);
+        }
+        ptr::null_mut()
+    }
+
+    unsafe fn run_os_threads(state: &State, nthreads: usize) {
+        unsafe {
+            let threads = state
+                .alloc
+                .malloc(nthreads * std::mem::size_of::<pthread::PthreadT>())
+                .cast::<pthread::PthreadT>();
+            assert!(!threads.is_null(), "thread allocation failed in mstressN");
+            ptr::write_bytes(threads, 0, nthreads);
+
+            let mut args = Vec::with_capacity(nthreads);
+            for tid in 0..nthreads {
+                args.push(ThreadArg { state, tid });
+            }
+
+            for tid in 1..nthreads {
+                let rc = pthread::pthread_create(
+                    threads.add(tid),
+                    ptr::null(),
+                    thread_entry,
+                    (&mut args[tid] as *mut ThreadArg).cast(),
+                );
+                assert_eq!(rc, 0, "pthread_create failed in mstressN: {rc}");
+            }
+
+            stress(state, 0);
+
+            for tid in 1..nthreads {
+                let rc = pthread::pthread_join(*threads.add(tid), ptr::null_mut());
+                assert_eq!(rc, 0, "pthread_join failed in mstressN: {rc}");
+            }
+
+            state.alloc.free(threads.cast());
+        }
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let nthreads = logical_cpus();
+            let state = State {
+                alloc,
+                transfers: (0..TRANSFERS)
+                    .map(|_| AtomicPtr::new(ptr::null_mut()))
+                    .collect(),
+            };
+            let mut r = 43 * 43;
+
+            let start = Instant::now();
+            for n in 0..ITER {
+                run_os_threads(&state, nthreads);
+                for transfer in &state.transfers {
+                    if chance(50, &mut r) || n + 1 == ITER {
+                        let p = transfer.swap(ptr::null_mut(), Ordering::Acquire);
+                        free_items(alloc, p);
+                    }
+                }
+            }
+            start.elapsed()
         }
     }
 }

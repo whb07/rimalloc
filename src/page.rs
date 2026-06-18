@@ -1,11 +1,6 @@
 //! Page management
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    unsafe_op_in_unsafe_fn,
-    clippy::nonminimal_bool
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{c_long, c_void};
 use core::mem::size_of;
@@ -1556,11 +1551,9 @@ unsafe fn mi_page_queue_enqueue_from_raw(
     let bsize = mi_page_block_size(page);
     crate::MI_UNUSED!(bsize);
     crate::mi_assert_internal!(
-        (bsize == (*to).block_size && bsize == (*from).block_size)
-            || (bsize == (*to).block_size && mi_page_queue_is_full(from))
+        (bsize == (*to).block_size && (bsize == (*from).block_size || mi_page_queue_is_full(from)))
             || (bsize == (*from).block_size && mi_page_queue_is_full(to))
-            || (mi_page_is_huge(page) && mi_page_queue_is_huge(to))
-            || (mi_page_is_huge(page) && mi_page_queue_is_full(to))
+            || (mi_page_is_huge(page) && (mi_page_queue_is_huge(to) || mi_page_queue_is_full(to)))
     );
 
     let theap = mi_page_theap(page);

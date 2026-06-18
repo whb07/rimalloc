@@ -27,6 +27,15 @@ Formatting uses `rustfmt.toml` and is checked by:
 scripts/check-fmt.sh
 ```
 
+## Linting
+
+Clippy uses `clippy.toml` with the crate MSRV from `Cargo.toml` and
+`rust-toolchain.toml`. Lints are checked by:
+
+```sh
+scripts/check-lints.sh
+```
+
 ## Benchmark Reproduction
 
 Benchmark command lines and environment variables must be preserved in

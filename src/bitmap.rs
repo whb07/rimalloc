@@ -8,7 +8,6 @@
     clippy::collapsible_if,
     clippy::implicit_saturating_sub,
     clippy::manual_is_multiple_of,
-    clippy::manual_range_contains,
     clippy::missing_const_for_fn,
     unsafe_op_in_unsafe_fn
 )]
@@ -1770,7 +1769,7 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_ranges(
                     let rng = mi_ctz(!(b >> bidx));
                     rngcount += rng;
                     let idx = base_idx + bidx;
-                    crate::mi_debug_assert!(rng >= 1 && rng <= MI_BFIELD_BITS);
+                    crate::mi_debug_assert!((1..=MI_BFIELD_BITS).contains(&rng));
                     crate::mi_debug_assert!((idx % MI_BFIELD_BITS) + rng <= MI_BFIELD_BITS);
                     crate::mi_debug_assert!(
                         (idx / MI_BCHUNK_BITS) < unsafe { mi_bitmap_chunk_count(bitmap) }

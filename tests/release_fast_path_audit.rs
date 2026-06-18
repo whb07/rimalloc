@@ -900,7 +900,6 @@ fn phase6_dead_code_allowances_stay_intentional() {
         ("src/core_types/mod.rs", 13),
         ("src/init.rs", 5),
         ("src/internal.rs", 1),
-        ("src/libc.rs", 3),
         ("src/os.rs", 1),
         ("src/prim/emscripten.rs", 1),
         ("src/prim/osx.rs", 1),

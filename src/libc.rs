@@ -20,7 +20,7 @@ pub const mi_mask_even_bits32: u32 = 0x5555_5555;
 pub const mi_mask_even_nibbles32: u32 = 0x0F0F_0F0F;
 pub const mi_mask_even_bits64: u64 = 0x5555_5555_5555_5555;
 pub const mi_mask_even_nibbles64: u64 = 0x0F0F_0F0F_0F0F_0F0F;
-#[allow(dead_code)]
+#[cfg(target_pointer_width = "32")]
 const MI_MASK_EVEN_PAIRS32: u32 = 0x3333_3333;
 const MI_MASK_EVEN_PAIRS64: u64 = 0x3333_3333_3333_3333;
 
@@ -281,7 +281,7 @@ unsafe fn mi_out_num(
 static MI_OUT_NUM_KEEP: unsafe fn(u128, usize, c_char, &mut *mut c_char, *mut c_char) = mi_out_num;
 
 #[inline]
-#[allow(dead_code)]
+#[cfg(target_pointer_width = "32")]
 fn mi_byte_sum32(mut x: u32) -> usize {
     x += x << 8;
     x += x << 16;
@@ -327,7 +327,7 @@ fn mi_clz_generic32(mut x: u32) -> usize {
 }
 
 #[inline]
-#[allow(dead_code)]
+#[cfg(target_pointer_width = "32")]
 fn mi_popcount_generic32(mut x: u32) -> usize {
     x = x - ((x >> 1) & mi_mask_even_bits32);
     x = (x & MI_MASK_EVEN_PAIRS32) + ((x >> 2) & MI_MASK_EVEN_PAIRS32);

@@ -1347,12 +1347,15 @@ pub unsafe fn mi_page_queue_move_to_front(
     crate::mi_assert_internal!(ptr::eq((*queue).first, page));
 }
 
-pub unsafe fn mi_page_queue_enqueue_from_ex(
-    to: *mut mi_page_queue_t,
-    from: *mut mi_page_queue_t,
+unsafe fn mi_page_queue_enqueue_from_raw(
+    to: crate::core_types::PageQueuePtr,
+    from: crate::core_types::PageQueuePtr,
     enqueue_at_end: bool,
-    page: *mut mi_page_t,
+    page: crate::core_types::PagePtr,
 ) {
+    let to = to.as_ptr();
+    let from = from.as_ptr();
+    let page = page.as_ptr();
     crate::mi_assert_internal!(!page.is_null());
     crate::mi_assert_internal!((*from).count >= 1);
     crate::mi_assert_expensive!(mi_page_queue_contains(from, page));
@@ -1426,7 +1429,7 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from(
     from: crate::core_types::NormalPageQueue,
     page: crate::core_types::ActivePage,
 ) -> crate::core_types::FullPage {
-    mi_page_queue_enqueue_from_ex(to.0.as_ptr(), from.0.as_ptr(), true, page.0.as_ptr());
+    mi_page_queue_enqueue_from_raw(to.0, from.0, true, page.0);
     crate::core_types::move_to_full_queue(page, from, to)
 }
 
@@ -1436,7 +1439,7 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_full(
     from: crate::core_types::FullPageQueue,
     page: crate::core_types::FullPage,
 ) -> crate::core_types::ActivePage {
-    mi_page_queue_enqueue_from_ex(to.0.as_ptr(), from.0.as_ptr(), true, page.0.as_ptr());
+    mi_page_queue_enqueue_from_raw(to.0, from.0, true, page.0);
     crate::core_types::unfull_page(page, from, to)
 }
 

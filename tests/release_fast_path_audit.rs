@@ -2163,8 +2163,15 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(
                 "pub(crate) unsafe fn mi_page_queue_enqueue_from_full(\n    to: crate::core_types::NormalPageQueue,\n    from: crate::core_types::FullPageQueue,\n    page: crate::core_types::FullPage,"
             )
+            && page_rs.contains(
+                "unsafe fn mi_page_queue_enqueue_from_raw(\n    to: crate::core_types::PageQueuePtr,\n    from: crate::core_types::PageQueuePtr,"
+            )
             && page_rs.contains("crate::core_types::move_to_full_queue(page, from, to)")
             && page_rs.contains("crate::core_types::unfull_page(page, from, to)")
+            && !page_rs.contains("pub unsafe fn mi_page_queue_enqueue_from_ex(")
+            && !page_rs.contains(
+                "pub unsafe fn mi_page_queue_enqueue_from_ex(\n    to: *mut mi_page_queue_t,"
+            )
             && !page_rs.contains(
                 "pub unsafe fn mi_page_queue_enqueue_from(\n    to: *mut mi_page_queue_t,"
             )

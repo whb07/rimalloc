@@ -32,11 +32,11 @@ use crate::internal::{
     _mi_os_commit, _mi_os_commit_ex, _mi_os_free, _mi_os_free_ex, _mi_os_has_overcommit,
     _mi_os_has_virtual_reserve, _mi_os_reuse, _mi_preloading, _mi_subproc, _mi_theap_heap,
     _mi_thread_id, _mi_toupper, MI_DEBUG, mi_mem_is_zero, mi_memid_t, mi_memkind_t,
-    mi_mul_overflow, mi_page_all_free, mi_page_block_size, mi_page_claim_ownership,
-    mi_page_clear_abandoned_mapped, mi_page_committed, mi_page_heap, mi_page_is_abandoned,
-    mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned, mi_page_is_singleton,
-    mi_page_meta_is_separated, mi_page_slice_start, mi_page_start, mi_size_of_slices,
-    mi_slice_count_of_size, mi_tf_block, mi_tf_create, mi_tf_is_owned,
+    mi_mul_overflow, mi_page_all_free, mi_page_block_size, mi_page_block_size_typed,
+    mi_page_claim_ownership, mi_page_clear_abandoned_mapped, mi_page_committed, mi_page_heap,
+    mi_page_is_abandoned, mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned,
+    mi_page_is_singleton, mi_page_meta_is_separated, mi_page_slice_start, mi_page_start,
+    mi_size_of_slices, mi_slice_count_of_size, mi_tf_block, mi_tf_create, mi_tf_is_owned,
 };
 use crate::mimalloc::{mi_heap_main, mi_heap_theap, mi_heap_zalloc_aligned};
 use crate::options::{mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t};
@@ -2735,10 +2735,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
         && unsafe { mi_page_memid_is_arena(page) }
         && !unsafe { mi_page_is_full_local(page) }
     {
-        let bin = mi_bin_from_block_size(unsafe {
-            crate::core_types::BlockSize::new_unchecked(mi_page_block_size(page))
-        })
-        .as_usize();
+        let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) }).as_usize();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
@@ -2856,10 +2853,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
     let heap = unsafe { mi_page_heap(page) };
     crate::mi_assert_internal!(heap == unsafe { _mi_theap_heap(current_theap) });
     if unsafe { mi_page_memid_is_arena(page) } && !unsafe { mi_page_is_full_local(page) } {
-        let bin = mi_bin_from_block_size(unsafe {
-            crate::core_types::BlockSize::new_unchecked(mi_page_block_size(page))
-        })
-        .as_usize();
+        let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) }).as_usize();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
@@ -2994,10 +2988,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     let heap = unsafe { mi_page_heap(page) };
     if unsafe { mi_page_is_abandoned_mapped(page) } {
         crate::mi_assert_internal!(unsafe { mi_page_memid_is_arena(page) });
-        let bin = mi_bin_from_block_size(unsafe {
-            crate::core_types::BlockSize::new_unchecked(mi_page_block_size(page))
-        })
-        .as_usize();
+        let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) }).as_usize();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();

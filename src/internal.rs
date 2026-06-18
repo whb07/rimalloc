@@ -794,9 +794,16 @@ pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
 }
 
 #[inline]
-pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
+pub(crate) unsafe fn mi_page_block_size_typed(
+    page: *const mi_page_t,
+) -> crate::core_types::BlockSize {
     crate::mi_assert_internal!((*page).block_size > 0);
-    (*page).block_size
+    crate::core_types::BlockSize::new_unchecked((*page).block_size)
+}
+
+#[inline]
+pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
+    mi_page_block_size_typed(page).get()
 }
 
 #[inline]
@@ -864,9 +871,7 @@ pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
 pub(crate) unsafe fn mi_page_usable_block_size(
     page: *const mi_page_t,
 ) -> crate::core_types::UsableSize {
-    // SAFETY: mi_page_block_size is never zero for an initialized page.
-    let block_size = crate::core_types::BlockSize::new_unchecked(mi_page_block_size(page));
-    block_size.usable()
+    mi_page_block_size_typed(page).usable()
 }
 
 #[inline]

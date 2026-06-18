@@ -1652,6 +1652,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains(
                 "mi_bin_from_block_size(unsafe { crate::core_types::BlockSize::new_unchecked(block_size) })"
             )
+            && internal.contains("pub(crate) unsafe fn mi_page_block_size_typed(")
+            && internal.contains(") -> crate::core_types::BlockSize")
+            && internal.contains("mi_page_block_size_typed(page).get()")
+            && internal.contains("mi_page_block_size_typed(page).usable()")
+            && arena_rs.contains("mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) })")
             && internal.contains(
                 "block_size: crate::core_types::BlockSize,\n) -> *mut mi_page_queue_t {\n    let size = block_size.get();"
             )

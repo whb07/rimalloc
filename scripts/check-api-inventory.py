@@ -77,7 +77,10 @@ def raw_modules(raw_rs: str) -> set[str]:
 def main() -> int:
     lib_rs = (ROOT / "src/lib.rs").read_text()
     raw_rs = (ROOT / "src/raw.rs").read_text()
+    abi_rs = (ROOT / "src/abi.rs").read_text()
+    mimalloc_rs = (ROOT / "src/mimalloc.rs").read_text()
     api_doc = (ROOT / "docs/api-inventory.md").read_text()
+    abi_doc = (ROOT / "docs/abi.md").read_text()
 
     actual_root = root_public_items(lib_rs)
     require(
@@ -110,6 +113,22 @@ def main() -> int:
         (ROOT / "symbols/public-symbol-classification.tsv").exists(),
         "missing symbols/public-symbol-classification.tsv",
     )
+    require(
+        'unsafe extern "C"' in abi_rs and "pub fn mi_malloc" in abi_rs,
+        "src/abi.rs must own the public C header declarations",
+    )
+    require(
+        'unsafe extern "C"' not in mimalloc_rs,
+        "src/mimalloc.rs must remain an internal alias, not a C header mirror",
+    )
+    for phrase in [
+        "## Module Taxonomy",
+        "C header declarations and layouts",
+        "Exported C ABI implementations",
+        "Internal compatibility aliases",
+        "Allocator internals",
+    ]:
+        require(phrase in abi_doc, f"docs/abi.md missing module taxonomy phrase: {phrase}")
 
     print(
         f"ok: public API inventory covers {len(actual_root)} crate-root items "

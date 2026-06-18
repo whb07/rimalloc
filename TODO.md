@@ -215,7 +215,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - File layout is documented in `docs/abi.md`.
     - There is no ambiguity about where to add a new C ABI declaration or exported function.
 
-- [ ] Move raw C header declarations into one owner.
+- [x] Move raw C header declarations into one owner.
   - Required owner:
     - Public `mi_*` function declarations.
     - Public C constants.
@@ -225,6 +225,10 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `src/abi.rs` or replacement owner contains the declarations.
     - `src/mimalloc.rs` does not contain its own `unsafe extern "C"` public header mirror.
     - Audit test verifies this.
+  - Evidence:
+    - `src/abi.rs` owns public C header declarations, constants, callback aliases, and layout aliases.
+    - `src/mimalloc.rs` is an internal compatibility alias and contains no `unsafe extern "C"` header mirror.
+    - `scripts/check-api-inventory.py` verifies the ownership split and requires the `docs/abi.md` module taxonomy section.
 
 ## B2. Narrow the default `raw` facade
 

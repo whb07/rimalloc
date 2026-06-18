@@ -1,11 +1,6 @@
 //! Options, stats, random, thread, init helpers
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    clippy::missing_safety_doc,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 #[cfg(not(target_os = "linux"))]
 use core::cell::Cell;
@@ -818,6 +813,10 @@ fn mi_recurse_exit() {
     mi_recurse_exit_prim();
 }
 
+/// # Safety
+///
+/// `prefix` and `message`, when non-null, must point to valid nul-terminated
+/// C strings. If `out` is supplied, it must be callable with `arg`.
 #[allow(dead_code)]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_fputs(
@@ -1537,6 +1536,10 @@ pub extern "C" fn mi_options_print() {
     mi_options_print_out(None, ptr::null_mut());
 }
 
+/// # Safety
+///
+/// `assertion`, `fname`, and `func`, when non-null, must point to valid
+/// nul-terminated C strings. This function aborts and does not return.
 #[cold]
 pub unsafe extern "C" fn _mi_assert_fail(
     assertion: *const c_char,

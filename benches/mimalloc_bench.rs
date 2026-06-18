@@ -25,9 +25,11 @@ use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr;
-use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicPtr, AtomicUsize, Ordering};
 use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
+
+mod rptest_tables;
 
 #[derive(Clone, Copy)]
 struct DylibAllocator {
@@ -35,6 +37,7 @@ struct DylibAllocator {
     calloc: unsafe extern "C" fn(usize, usize) -> *mut c_void,
     realloc: unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void,
     free: unsafe extern "C" fn(*mut c_void),
+    memalign: unsafe extern "C" fn(usize, usize) -> *mut c_void,
     new_array: unsafe extern "C" fn(usize) -> *mut c_void,
     delete_array: unsafe extern "C" fn(*mut c_void),
     delete_array_sized: unsafe extern "C" fn(*mut c_void, usize),
@@ -92,6 +95,16 @@ impl BenchAllocator {
             match self {
                 BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
                     (alloc.free)(ptr.cast());
+                }
+            }
+        }
+    }
+
+    unsafe fn memalign(self, alignment: usize, size: usize) -> *mut u8 {
+        unsafe {
+            match self {
+                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
+                    (alloc.memalign)(alignment, size).cast()
                 }
             }
         }
@@ -328,6 +341,7 @@ mod dylib {
             let calloc = symbol(handle, c"calloc");
             let realloc = symbol(handle, c"realloc");
             let free = symbol(handle, c"free");
+            let memalign = symbol(handle, c"memalign");
             let new_array = symbol(handle, c"_Znam");
             let delete_array = symbol(handle, c"_ZdaPv");
             let delete_array_sized = symbol(handle, c"_ZdaPvm");
@@ -346,6 +360,10 @@ mod dylib {
                     unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void,
                 >(realloc),
                 free: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void)>(free),
+                memalign: std::mem::transmute::<
+                    *mut c_void,
+                    unsafe extern "C" fn(usize, usize) -> *mut c_void,
+                >(memalign),
                 new_array: std::mem::transmute::<
                     *mut c_void,
                     unsafe extern "C" fn(usize) -> *mut c_void,
@@ -465,6 +483,10 @@ fn scenarios() -> Vec<Scenario> {
         Scenario {
             name: "larsonN-sized",
             run: larson::run_sized,
+        },
+        Scenario {
+            name: "rptestN",
+            run: rptest::run,
         },
         Scenario {
             name: "mleak10",
@@ -2393,6 +2415,508 @@ mod larson {
 
     pub unsafe fn run_sized(alloc: BenchAllocator) -> Duration {
         unsafe { run_case(alloc, true) }
+    }
+}
+
+mod rptest {
+    use super::*;
+
+    const CROSS_RATE: usize = 2;
+    const LOOP_COUNT: usize = 500;
+    const ALLOC_COUNT: usize = 1000;
+    const OP_COUNT: usize = 100;
+    const MIN_SIZE: usize = 8;
+    const MAX_SIZE: usize = 16000;
+    const ALIGNMENT: [usize; 3] = [0, 8, 16];
+
+    struct Tables {
+        random_size_lin: Vec<usize>,
+        alloc_ops: Vec<usize>,
+        free_ops: Vec<usize>,
+        alloc_scatter: usize,
+        free_scatter: usize,
+    }
+
+    struct RunState {
+        start: AtomicBool,
+        sync: AtomicI32,
+        cross_thread_counter: AtomicI32,
+        tables: Tables,
+    }
+
+    struct ThreadPointers {
+        pointers: *mut *mut u8,
+        count: usize,
+        next: *mut ThreadPointers,
+        allocated: *const AtomicI32,
+    }
+
+    struct ThreadArg {
+        state: *const RunState,
+        alloc: BenchAllocator,
+        args: *mut ThreadArg,
+        num_threads: usize,
+        index: usize,
+        cross_rate: usize,
+        loop_count: usize,
+        alloc_count: usize,
+        foreign: AtomicUsize,
+        allocated: AtomicI32,
+        peak_allocated: i32,
+        ticks: f64,
+        mops: u64,
+        accumulator: u64,
+    }
+
+    fn build_tables() -> Tables {
+        let size_range = MAX_SIZE - MIN_SIZE;
+        let random_size: Vec<_> = rptest_tables::RANDOM_SIZE
+            .iter()
+            .map(|&size| {
+                MIN_SIZE + ((size_range as f64) * ((size as f64) / 100_000.0)).round() as usize
+            })
+            .collect();
+
+        let effective_range = size_range.max(1);
+        let random_size_lin: Vec<_> = (0..random_size.len())
+            .map(|i| {
+                let w0 = 1.0 - (random_size[i] - MIN_SIZE) as f64 / effective_range as f64;
+                let w1 = 1.0
+                    - (random_size[(i + 1) % random_size.len()] - MIN_SIZE) as f64
+                        / effective_range as f64;
+                let even = (random_size[(i + 2) % random_size.len()] - MIN_SIZE) as f64;
+                MIN_SIZE + (even * ((w0 + w1) - 1.0).abs()) as usize
+            })
+            .collect();
+
+        let alloc_ops = rptest_tables::NUM_ALLOC_OPS
+            .iter()
+            .map(|&ops| (OP_COUNT as f64 * (ops as f64 / 100.0)) as usize)
+            .collect();
+        let free_ops = rptest_tables::NUM_FREE_OPS
+            .iter()
+            .map(|&ops| (0.8 * OP_COUNT as f64 * (ops as f64 / 100.0)) as usize)
+            .collect();
+
+        let mut iprime = 0;
+        let mut alloc_scatter = rptest_tables::PRIMES[iprime];
+        while ALLOC_COUNT.is_multiple_of(alloc_scatter) {
+            iprime += 1;
+            alloc_scatter = rptest_tables::PRIMES[iprime];
+        }
+        iprime += 1;
+        let mut free_scatter = rptest_tables::PRIMES[iprime];
+        while ALLOC_COUNT.is_multiple_of(free_scatter) {
+            iprime += 1;
+            free_scatter = rptest_tables::PRIMES[iprime];
+        }
+
+        Tables {
+            random_size_lin,
+            alloc_ops,
+            free_ops,
+            alloc_scatter,
+            free_scatter,
+        }
+    }
+
+    unsafe fn benchmark_malloc(alloc: BenchAllocator, alignment: usize, size: usize) -> *mut u8 {
+        unsafe {
+            let ptr = if alignment == 0 {
+                alloc.calloc(1, size)
+            } else {
+                let ptr = alloc.memalign(alignment, size);
+                if !ptr.is_null() {
+                    ptr::write_bytes(ptr, 0xcd, size);
+                }
+                ptr
+            };
+            assert!(!ptr.is_null(), "allocation failed in rptestN");
+            if alignment != 0 {
+                assert_eq!(
+                    (ptr as usize) % alignment,
+                    0,
+                    "rptestN allocation was not {alignment}-byte aligned"
+                );
+            }
+            ptr
+        }
+    }
+
+    unsafe fn benchmark_free(alloc: BenchAllocator, ptr: *mut u8) {
+        unsafe { alloc.free(ptr) }
+    }
+
+    unsafe fn put_cross_thread_memory(
+        state: &RunState,
+        ptr: &AtomicUsize,
+        pointers: *mut ThreadPointers,
+    ) {
+        unsafe {
+            loop {
+                let prev = ptr.load(Ordering::SeqCst);
+                (*pointers).next = (prev & !0xf) as *mut ThreadPointers;
+                let tag = state.cross_thread_counter.fetch_add(1, Ordering::SeqCst) + 1;
+                let newval = (pointers as usize) | ((tag as usize) & 0xf);
+                if ptr
+                    .compare_exchange(prev, newval, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    fn get_cross_thread_memory(state: &RunState, ptr: &AtomicUsize) -> *mut ThreadPointers {
+        loop {
+            let prev = ptr.load(Ordering::SeqCst);
+            let current = (prev & !0xf) as *mut ThreadPointers;
+            if current.is_null() {
+                return ptr::null_mut();
+            }
+            let tag = state.cross_thread_counter.fetch_add(1, Ordering::SeqCst) + 1;
+            let newval = (tag as usize) & 0xf;
+            if ptr
+                .compare_exchange(prev, newval, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return current;
+            }
+        }
+    }
+
+    unsafe fn touch_allocation(ptr: *mut u8, size: usize) {
+        unsafe {
+            *(ptr.cast::<i32>()) = size as i32;
+            let num_pages = (size - 1) / 4096;
+            for page in 1..num_pages {
+                *ptr.add(page * 4096) = 1;
+            }
+            *ptr.add(size - 1) = 1;
+        }
+    }
+
+    unsafe fn free_foreign(
+        alloc: BenchAllocator,
+        mut foreign: *mut ThreadPointers,
+        timed: bool,
+        ticks: &mut f64,
+        mops: &mut u64,
+    ) {
+        unsafe {
+            let start = timed.then(Instant::now);
+            while !foreign.is_null() {
+                let mut allocated = 0i32;
+                for i in 0..(*foreign).count {
+                    let ptr = *(*foreign).pointers.add(i);
+                    allocated -= *(ptr.cast::<i32>());
+                    benchmark_free(alloc, ptr);
+                    *mops += 1;
+                }
+
+                let next = (*foreign).next;
+                allocated -= ((*foreign).count * std::mem::size_of::<*mut u8>()
+                    + std::mem::size_of::<ThreadPointers>()) as i32;
+                (&*(*foreign).allocated).fetch_add(allocated, Ordering::SeqCst);
+                benchmark_free(alloc, (*foreign).pointers.cast());
+                benchmark_free(alloc, foreign.cast());
+                *mops += 2;
+                foreign = next;
+            }
+            if let Some(start) = start {
+                *ticks += start.elapsed().as_secs_f64();
+            }
+        }
+    }
+
+    unsafe fn allocate_block(
+        alloc: BenchAllocator,
+        size_index: usize,
+        iop: usize,
+        size: usize,
+    ) -> *mut u8 {
+        unsafe {
+            let alignment = if size < 4096 {
+                ALIGNMENT[(size_index + iop) % ALIGNMENT.len()]
+            } else {
+                0
+            };
+            let ptr = benchmark_malloc(alloc, alignment, size);
+            touch_allocation(ptr, size);
+            ptr
+        }
+    }
+
+    unsafe fn benchmark_worker(argptr: *mut ThreadArg) {
+        unsafe {
+            let arg = &mut *argptr;
+            let state = &*arg.state;
+            let tables = &state.tables;
+            let random_sizes = &tables.random_size_lin;
+
+            let pointers_size = std::mem::size_of::<*mut u8>() * arg.alloc_count;
+            let pointers = benchmark_malloc(arg.alloc, 16, pointers_size).cast::<*mut u8>();
+            ptr::write_bytes(pointers, 0, arg.alloc_count);
+            arg.allocated
+                .fetch_add(pointers_size as i32, Ordering::SeqCst);
+
+            while !state.start.load(Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+
+            arg.ticks = 0.0;
+            arg.mops = 0;
+            let mut alloc_idx = 0usize;
+            let mut free_idx = 0usize;
+            let mut cross_index = 0usize;
+            for iter in 0..2 {
+                let mut size_index = ((arg.index + 1) * ((iter + 1) * 37)) % random_sizes.len();
+                let mut iter_ticks_elapsed = 0.0;
+                let mut do_foreign = true;
+
+                for iloop in 0..arg.loop_count {
+                    let foreign = get_cross_thread_memory(state, &arg.foreign);
+                    let start = Instant::now();
+                    let mut allocated = 0i32;
+                    let free_op_count = tables.free_ops[(iter + iloop) % tables.free_ops.len()];
+                    let alloc_op_count = tables.alloc_ops[(iter + iloop) % tables.alloc_ops.len()];
+
+                    for _ in 0..free_op_count {
+                        let ptr = *pointers.add(free_idx);
+                        if !ptr.is_null() {
+                            allocated -= *(ptr.cast::<i32>());
+                            benchmark_free(arg.alloc, ptr);
+                            arg.mops += 1;
+                            *pointers.add(free_idx) = ptr::null_mut();
+                        }
+                        free_idx = (free_idx + tables.free_scatter) % arg.alloc_count;
+                    }
+
+                    free_foreign(arg.alloc, foreign, false, &mut arg.ticks, &mut arg.mops);
+
+                    for iop in 0..alloc_op_count {
+                        let old = *pointers.add(alloc_idx);
+                        if !old.is_null() {
+                            allocated -= *(old.cast::<i32>());
+                            benchmark_free(arg.alloc, old);
+                            arg.mops += 1;
+                        }
+                        let size = random_sizes[(size_index + 2) % random_sizes.len()];
+                        let ptr = allocate_block(arg.alloc, size_index, iop, size);
+                        *pointers.add(alloc_idx) = ptr;
+                        allocated += size as i32;
+                        arg.mops += 1;
+
+                        alloc_idx = (alloc_idx + tables.alloc_scatter) % arg.alloc_count;
+                        size_index = (size_index + 1) % random_sizes.len();
+                    }
+
+                    let mut foreign = ptr::null_mut();
+                    if arg.cross_rate != 0 && (iloop % arg.cross_rate) == 0 && do_foreign {
+                        foreign =
+                            benchmark_malloc(arg.alloc, 16, std::mem::size_of::<ThreadPointers>())
+                                .cast::<ThreadPointers>();
+                        let foreign_pointers = benchmark_malloc(
+                            arg.alloc,
+                            16,
+                            std::mem::size_of::<*mut u8>() * alloc_op_count,
+                        )
+                        .cast::<*mut u8>();
+                        (*foreign).count = alloc_op_count;
+                        (*foreign).pointers = foreign_pointers;
+                        (*foreign).allocated = &arg.allocated;
+                        (*foreign).next = ptr::null_mut();
+                        allocated += (alloc_op_count * std::mem::size_of::<*mut u8>()
+                            + std::mem::size_of::<ThreadPointers>())
+                            as i32;
+                        arg.mops += 2;
+
+                        for iop in 0..alloc_op_count {
+                            let size = random_sizes[(size_index + 2) % random_sizes.len()];
+                            let ptr = allocate_block(arg.alloc, size_index, iop, size);
+                            *foreign_pointers.add(iop) = ptr;
+                            allocated += size as i32;
+                            arg.mops += 1;
+                            size_index = (size_index + 1) % random_sizes.len();
+                        }
+                    }
+
+                    let ticks_elapsed = start.elapsed().as_secs_f64();
+                    iter_ticks_elapsed += ticks_elapsed;
+                    arg.ticks += ticks_elapsed;
+
+                    let current_allocated =
+                        arg.allocated.fetch_add(allocated, Ordering::SeqCst) + allocated;
+                    if arg.peak_allocated < current_allocated {
+                        arg.peak_allocated = current_allocated;
+                    }
+
+                    if !foreign.is_null() {
+                        cross_index = (cross_index + 1) % arg.num_threads;
+                        if arg.num_threads > 1 && cross_index == arg.index {
+                            cross_index = (cross_index + 1) % arg.num_threads;
+                        }
+                        let cross_arg = &*arg.args.add(cross_index);
+                        put_cross_thread_memory(state, &cross_arg.foreign, foreign);
+                    }
+
+                    if state.sync.load(Ordering::SeqCst) > 0 {
+                        do_foreign = false;
+                    }
+
+                    if iter_ticks_elapsed > 120.0 {
+                        break;
+                    }
+                }
+
+                state.sync.fetch_add(1, Ordering::SeqCst);
+                while state.sync.load(Ordering::SeqCst) != 0 {
+                    let foreign = get_cross_thread_memory(state, &arg.foreign);
+                    if !foreign.is_null() {
+                        free_foreign(arg.alloc, foreign, true, &mut arg.ticks, &mut arg.mops);
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+
+                let start = Instant::now();
+                let mut allocated = 0i32;
+                for iptr in 0..arg.alloc_count {
+                    let ptr = *pointers.add(iptr);
+                    if !ptr.is_null() {
+                        allocated -= *(ptr.cast::<i32>());
+                        benchmark_free(arg.alloc, ptr);
+                        arg.mops += 1;
+                        *pointers.add(iptr) = ptr::null_mut();
+                    }
+                }
+                arg.ticks += start.elapsed().as_secs_f64();
+                arg.allocated.fetch_add(allocated, Ordering::SeqCst);
+
+                std::thread::sleep(Duration::from_millis(10));
+                let foreign = get_cross_thread_memory(state, &arg.foreign);
+                free_foreign(arg.alloc, foreign, false, &mut arg.ticks, &mut arg.mops);
+            }
+
+            std::thread::sleep(Duration::from_secs(1));
+            state.sync.fetch_add(1, Ordering::SeqCst);
+            while state.sync.load(Ordering::SeqCst) != 0 {
+                let foreign = get_cross_thread_memory(state, &arg.foreign);
+                if !foreign.is_null() {
+                    free_foreign(arg.alloc, foreign, true, &mut arg.ticks, &mut arg.mops);
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+
+            benchmark_free(arg.alloc, pointers.cast());
+            arg.allocated
+                .fetch_sub(pointers_size as i32, Ordering::SeqCst);
+            arg.accumulator += arg.mops;
+        }
+    }
+
+    extern "C" fn thread_entry(arg: *mut c_void) -> *mut c_void {
+        unsafe { benchmark_worker(arg.cast()) };
+        ptr::null_mut()
+    }
+
+    unsafe fn run_iteration(alloc: BenchAllocator, num_threads: usize) -> (u64, f64) {
+        unsafe {
+            let mut state = RunState {
+                start: AtomicBool::new(false),
+                sync: AtomicI32::new(0),
+                cross_thread_counter: AtomicI32::new(0),
+                tables: build_tables(),
+            };
+            let state_ptr = &mut state as *mut RunState;
+            let cross_rate = if num_threads == 1 { 0 } else { CROSS_RATE };
+
+            let mut args = Vec::with_capacity(num_threads);
+            for index in 0..num_threads {
+                args.push(ThreadArg {
+                    state: state_ptr,
+                    alloc,
+                    args: ptr::null_mut(),
+                    num_threads,
+                    index,
+                    cross_rate,
+                    loop_count: LOOP_COUNT,
+                    alloc_count: ALLOC_COUNT,
+                    foreign: AtomicUsize::new(0),
+                    allocated: AtomicI32::new(0),
+                    peak_allocated: 0,
+                    ticks: 0.0,
+                    mops: 0,
+                    accumulator: 0,
+                });
+            }
+            let args_ptr = args.as_mut_ptr();
+            for arg in &mut args {
+                arg.args = args_ptr;
+            }
+
+            let mut threads = vec![0; num_threads];
+            for (i, thread) in threads.iter_mut().enumerate() {
+                let rc = pthread::pthread_create(
+                    thread,
+                    ptr::null(),
+                    thread_entry,
+                    args_ptr.add(i).cast(),
+                );
+                assert_eq!(rc, 0, "pthread_create failed in rptestN: {rc}");
+            }
+
+            std::thread::sleep(Duration::from_secs(1));
+            state.start.store(true, Ordering::SeqCst);
+
+            while state.sync.load(Ordering::SeqCst) < num_threads as i32 {
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            std::thread::sleep(Duration::from_secs(1));
+            state.sync.store(0, Ordering::SeqCst);
+
+            std::thread::sleep(Duration::from_secs(1));
+            while state.sync.load(Ordering::SeqCst) < num_threads as i32 {
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            std::thread::sleep(Duration::from_secs(1));
+            state.sync.store(0, Ordering::SeqCst);
+
+            std::thread::sleep(Duration::from_secs(1));
+            while state.sync.load(Ordering::SeqCst) < num_threads as i32 {
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            std::thread::sleep(Duration::from_secs(1));
+            state.sync.store(0, Ordering::SeqCst);
+
+            for thread in threads {
+                let rc = pthread::pthread_join(thread, ptr::null_mut());
+                assert_eq!(rc, 0, "pthread_join failed in rptestN: {rc}");
+            }
+
+            let mops = args.iter().map(|arg| arg.mops).sum();
+            let ticks = args.iter().map(|arg| arg.ticks).sum();
+            assert!(args.iter().all(|arg| arg.accumulator != 0));
+            (mops, ticks)
+        }
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let num_threads = logical_cpus();
+            let mut mops = 0u64;
+            let mut ticks = 0.0;
+            for _ in 0..2 {
+                let (iter_mops, iter_ticks) = run_iteration(alloc, num_threads);
+                mops += iter_mops;
+                ticks += iter_ticks;
+            }
+            if ticks == 0.0 {
+                ticks = 1.0;
+            }
+            let average_mops = mops as f64 / ticks;
+            Duration::from_secs_f64(2_000_000.0 / average_mops)
+        }
     }
 }
 

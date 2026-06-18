@@ -3645,7 +3645,6 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 #[unsafe(no_mangle)]
 /// # Safety
 /// `start..start+size` must describe caller-owned memory suitable for arena management.

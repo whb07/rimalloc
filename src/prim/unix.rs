@@ -976,7 +976,6 @@ pub(crate) unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
     )))]
     {
         let ticks = clock() as mi_msecs_t;
-        #[allow(clippy::if_same_then_else)]
         if CLOCKS_PER_SEC == 1000 || CLOCKS_PER_SEC == 0 {
             ticks
         } else if CLOCKS_PER_SEC < 1000 {

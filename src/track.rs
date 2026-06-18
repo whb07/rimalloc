@@ -4,7 +4,6 @@
     non_camel_case_types,
     non_upper_case_globals,
     dead_code,
-    clippy::missing_safety_doc,
     unsafe_op_in_unsafe_fn
 )]
 
@@ -56,6 +55,10 @@ unsafe extern "C" {
     fn _mi_track_mem_noaccess_shim(p: *mut c_void, size: usize);
 }
 
+/// # Safety
+///
+/// `p..p + size` must describe the allocation that should be reported to the
+/// enabled tracking backend. `reqsize` must be the requested user size.
 #[inline]
 pub unsafe fn mi_track_malloc_size(p: *mut c_void, reqsize: usize, size: usize, zero: bool) {
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -69,6 +72,10 @@ pub unsafe fn mi_track_malloc_size(p: *mut c_void, reqsize: usize, size: usize, 
     }
 }
 
+/// # Safety
+///
+/// `p..p + size` must describe the allocation being released from the enabled
+/// tracking backend.
 #[inline]
 pub unsafe fn mi_track_free_size(p: *mut c_void, size: usize) {
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -82,6 +89,9 @@ pub unsafe fn mi_track_free_size(p: *mut c_void, size: usize) {
     }
 }
 
+/// # Safety
+///
+/// `p..p + size` must be a valid tracked memory range to mark as defined.
 #[inline]
 pub unsafe fn mi_track_mem_defined(p: *mut c_void, size: usize) {
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -95,6 +105,9 @@ pub unsafe fn mi_track_mem_defined(p: *mut c_void, size: usize) {
     }
 }
 
+/// # Safety
+///
+/// `p..p + size` must be a valid tracked memory range to mark as undefined.
 #[inline]
 pub unsafe fn mi_track_mem_undefined(p: *mut c_void, size: usize) {
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -108,6 +121,9 @@ pub unsafe fn mi_track_mem_undefined(p: *mut c_void, size: usize) {
     }
 }
 
+/// # Safety
+///
+/// `p..p + size` must be a valid tracked memory range to mark as inaccessible.
 #[inline]
 pub unsafe fn mi_track_mem_noaccess(p: *mut c_void, size: usize) {
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -121,6 +137,10 @@ pub unsafe fn mi_track_mem_noaccess(p: *mut c_void, size: usize) {
     }
 }
 
+/// # Safety
+///
+/// `p..p + oldsize` must describe the old tracked allocation, and
+/// `p..p + newsize` must describe its resized range.
 #[inline]
 pub unsafe fn mi_track_resize(p: *mut c_void, oldsize: usize, newsize: usize) {
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -135,17 +155,32 @@ pub unsafe fn mi_track_resize(p: *mut c_void, oldsize: usize, newsize: usize) {
     }
 }
 
+/// # Safety
+///
+/// `p..p + offset` must describe the leading inaccessible part of an aligned
+/// allocation reported to the tracking backend.
 #[inline]
 pub unsafe fn mi_track_align(p: *mut c_void, _alignedp: *mut c_void, offset: usize, _size: usize) {
     unsafe { mi_track_mem_noaccess(p, offset) };
 }
 
+/// # Safety
+///
+/// Must be called according to the allocator tracking backend lifecycle.
 #[inline]
 pub unsafe fn mi_track_init() {}
 
+/// # Safety
+///
+/// Must be called according to the allocator tracking backend lifecycle, after
+/// tracking users have stopped.
 #[inline]
 pub unsafe fn mi_track_done() {}
 
+/// # Safety
+///
+/// `p` may be null. A non-null pointer must refer to a live allocation whose
+/// usable size is at least `reqsize`.
 #[inline]
 pub unsafe fn mi_track_malloc(p: *mut c_void, reqsize: usize, zero: bool) {
     if p.is_null() {

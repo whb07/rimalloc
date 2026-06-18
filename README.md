@@ -95,6 +95,8 @@ Additional policy documents live under `docs/`, including API inventory, ABI,
 assembly and platform intrinsics, compatibility, features, memory ordering,
 performance, release, testing and hardening, strict types, unsafe audit,
 reproducibility, governance, upstream synchronization, and dependency policy.
+Concrete local differences from upstream mimalloc are tracked in
+`UPSTREAM_DIFF.md`.
 
 ## Examples
 

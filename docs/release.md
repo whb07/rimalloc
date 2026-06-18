@@ -34,4 +34,5 @@ Related policy documents:
 - `docs/governance.md`
 - `docs/limitations.md`
 - `docs/upstream.md`
+- `../UPSTREAM_DIFF.md`
 - `docs/dependencies.md`

@@ -1106,7 +1106,7 @@ pub unsafe fn mi_block_ptr_is_guarded(block: *const mi_block_t, p: *const c_void
     }
     let offset = p.cast::<u8>().offset_from(block.cast::<u8>());
     offset >= size_of::<mi_block_t>() as isize
-        && crate::core_types::BlockTag::read_from_raw(block).is_guarded()
+        && crate::core_types::BlockLink::read_tag_from_raw(block).is_guarded_tag()
 }
 
 #[inline]

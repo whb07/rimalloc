@@ -428,7 +428,9 @@ unsafe fn mi_block_unguard(page: *mut mi_page_t, block: *mut mi_block_t, p: *mut
         p.cast::<u8>().offset_from(block.cast::<u8>())
             >= core::mem::size_of::<mi_block_t>() as isize
     );
-    crate::mi_assert_internal!(crate::core_types::BlockTag::read_from_raw(block).is_guarded());
+    crate::mi_assert_internal!(
+        crate::core_types::BlockLink::read_tag_from_raw(block).is_guarded_tag()
+    );
 
     let bsize = mi_page_block_size(page);
     let psize = _mi_os_page_size();

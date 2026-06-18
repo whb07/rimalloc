@@ -190,7 +190,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     }
 
     if !zero {
-        crate::core_types::BlockTag::ALIGNED
+        crate::core_types::BlockLink::tagged(crate::core_types::BlockTag::ALIGNED)
             .write_to(crate::core_types::BlockPtr::new_unchecked(block));
         if cfg!(debug_assertions) && MI_TRACK_ENABLED == 0 {
             memset_nonhuge(page, block.cast(), bsize);
@@ -198,7 +198,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     } else if !(*page).free_is_zero {
         _mi_memzero_aligned(block.cast(), bsize);
     } else {
-        crate::core_types::BlockTag::ALIGNED
+        crate::core_types::BlockLink::tagged(crate::core_types::BlockTag::ALIGNED)
             .write_to(crate::core_types::BlockPtr::new_unchecked(block));
         mi_track_mem_defined(block.cast(), bsize);
     }
@@ -1267,7 +1267,7 @@ unsafe fn mi_block_ptr_set_guarded(block: *mut mi_block_t, obj_size: usize) -> *
     }
     let page = _mi_ptr_page(block.cast());
     mi_page_set_has_interior_pointers(page, true);
-    crate::core_types::BlockTag::GUARDED
+    crate::core_types::BlockLink::tagged(crate::core_types::BlockTag::GUARDED)
         .write_to(crate::core_types::BlockPtr::new_unchecked(block));
 
     let block_size = mi_page_block_size(page);

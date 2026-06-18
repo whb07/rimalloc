@@ -179,7 +179,7 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
         mi_page_set_has_interior_pointers(page, true);
         if MI_GUARDED != 0 && adjust >= size_of::<mi_block_t>() {
             let block = p.cast::<mi_block_t>();
-            crate::core_types::BlockTag::ALIGNED
+            crate::core_types::BlockLink::tagged(crate::core_types::BlockTag::ALIGNED)
                 .write_to(crate::core_types::BlockPtr::new_unchecked(block));
         }
         mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size);

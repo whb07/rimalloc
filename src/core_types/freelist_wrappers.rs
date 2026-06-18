@@ -166,12 +166,12 @@ impl BlockTag {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn read_from_raw(block: *const mi_block_t) -> Self {
+    unsafe fn read_from_raw(block: *const mi_block_t) -> Self {
         Self(unsafe { (*block.cast_mut()).next })
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn write_to(self, block: BlockPtr) {
+    unsafe fn write_to(self, block: BlockPtr) {
         unsafe { (*block.as_ptr()).next = self.0 };
     }
 }
@@ -179,6 +179,34 @@ impl BlockTag {
 pub(crate) enum BlockLink {
     FreeList(EncodedPtr<crate::types::mi_block_t>),
     Guarded(BlockTag),
+}
+
+impl BlockLink {
+    #[inline(always)]
+    pub(crate) const fn tagged(tag: BlockTag) -> Self {
+        Self::Guarded(tag)
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn read_tag_from_raw(block: *const mi_block_t) -> Self {
+        Self::Guarded(unsafe { BlockTag::read_from_raw(block) })
+    }
+
+    #[inline(always)]
+    pub(crate) const fn is_guarded_tag(&self) -> bool {
+        match self {
+            Self::Guarded(tag) => tag.is_guarded(),
+            Self::FreeList(_) => false,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn write_to(self, block: BlockPtr) {
+        match self {
+            Self::FreeList(link) => unsafe { link.write_word_to_raw(block) },
+            Self::Guarded(tag) => unsafe { tag.write_to(block) },
+        }
+    }
 }
 
 /// The available free list of a page. This is `page.free`: the LIFO stack of

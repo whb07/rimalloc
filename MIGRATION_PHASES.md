@@ -77,6 +77,8 @@ Benchmark verification after the `AtomicThreadFree(AtomicUsizeField)` cleanup re
 
 `tests/release_fast_path_audit.rs` now includes a cross-cutting data-type acceptance audit for the `TYPES_SPEC.md` Section 18 invariants that are enforceable from source shape: `core_types` module ownership, memid union access limited to `MemId::view`/constructors, pointer-to-atomic casts limited to typed atomic field wrappers, no `Deref`/`DerefMut` on core metadata wrappers, block-link raw field access limited to the free-list wrapper layer, and typed free/reclaim/page-queue signatures.
 
+A Phase 6 dead-code probe confirmed the remaining broad `core_types` `dead_code` allowance covers required staged typestate/scalar scaffolding from `TYPES_SPEC.md`, not accidental live-code silence. The unused pointer-wrapper `as_non_null` escape hatch was removed so pointer wrappers expose only the constructor/raw-pointer surface required by the spec.
+
 **Action Items:**
 1. **Remove Unused Types:** In progress. Do not delete C ABI aliases still required by `raw`/compat/public module boundaries.
 2. **Resolve Clippy Warnings:** In progress. `cargo clippy --all-targets -- -D warnings` is clean with the remaining intentional allowances.

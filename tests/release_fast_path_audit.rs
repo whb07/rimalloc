@@ -1010,7 +1010,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
 }
 
 #[test]
-fn phase6_c_naming_allowances_stay_intentional() {
+fn phase6_c_compat_allowances_stay_intentional() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let src = root.join("src");
     let mut sources = Vec::new();
@@ -1021,6 +1021,7 @@ fn phase6_c_naming_allowances_stay_intentional() {
         "non_upper_case_globals",
         "non_snake_case",
         "unused_macros",
+        "unused_imports",
         "improper_ctypes_definitions",
     ];
     let expected = BTreeMap::from([
@@ -1051,6 +1052,7 @@ fn phase6_c_naming_allowances_stay_intentional() {
         (("src/internal.rs", "non_camel_case_types"), 1),
         (("src/internal.rs", "non_snake_case"), 1),
         (("src/internal.rs", "non_upper_case_globals"), 1),
+        (("src/internal.rs", "unused_imports"), 1),
         (("src/libc.rs", "non_camel_case_types"), 1),
         (("src/libc.rs", "non_upper_case_globals"), 1),
         (("src/mimalloc.rs", "non_camel_case_types"), 1),
@@ -1070,6 +1072,7 @@ fn phase6_c_naming_allowances_stay_intentional() {
         (("src/prim/osx.rs", "non_camel_case_types"), 1),
         (("src/prim/osx.rs", "non_snake_case"), 1),
         (("src/prim/osx.rs", "non_upper_case_globals"), 1),
+        (("src/prim/osx.rs", "unused_imports"), 1),
         (("src/prim/osx.rs", "unused_macros"), 1),
         (("src/prim/unix.rs", "non_camel_case_types"), 1),
         (("src/prim/unix.rs", "non_upper_case_globals"), 1),
@@ -1093,7 +1096,7 @@ fn phase6_c_naming_allowances_stay_intentional() {
     assert_eq!(
         rust_allowance_counts(&sources, LINTS),
         expected,
-        "C naming/macro/ctypes allowances should stay limited to audited ABI and mechanical-translation surfaces"
+        "C compatibility allowances should stay limited to audited ABI, re-export, and mechanical-translation surfaces"
     );
     for cleaned in ["src/static.rs", "src/track.rs"] {
         assert!(

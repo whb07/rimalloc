@@ -13,8 +13,8 @@ use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_decrease, _mi_align_down_ptr,
     _mi_arena_memid_is_suitable, _mi_is_power_of_two, _mi_memset_aligned, _mi_option_get_fast,
     _mi_os_page_size, _mi_ptr_page, _mi_safe_ptr_page, _mi_theap_heap, EAGAIN, EFAULT, EINVAL,
-    MI_BLOCK_TAG_GUARDED, MI_DEBUG, MI_ENCODE_FREELIST, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB,
-    MI_PADDING, MI_PADDING_CHECK, MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx,
+    MI_DEBUG, MI_ENCODE_FREELIST, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING,
+    MI_PADDING_CHECK, MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx,
     mi_block_ptr_is_guarded, mi_block_set_next, mi_is_in_same_page, mi_page_all_free,
     mi_page_block_size, mi_page_contains_address, mi_page_has_interior_pointers,
     mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned,
@@ -428,7 +428,7 @@ unsafe fn mi_block_unguard(page: *mut mi_page_t, block: *mut mi_block_t, p: *mut
         p.cast::<u8>().offset_from(block.cast::<u8>())
             >= core::mem::size_of::<mi_block_t>() as isize
     );
-    crate::mi_assert_internal!((*block).next == MI_BLOCK_TAG_GUARDED);
+    crate::mi_assert_internal!(crate::core_types::BlockTag::read_from_raw(block).is_guarded());
 
     let bsize = mi_page_block_size(page);
     let psize = _mi_os_page_size();

@@ -21,8 +21,8 @@ use crate::free::_mi_padding_shrink;
 use crate::init::_mi_theap_empty_get;
 use crate::internal::{
     _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero, _mi_ptr_page,
-    MI_BLOCK_TAG_ALIGNED, MI_GUARDED, mi_likely, mi_page_set_has_interior_pointers,
-    mi_page_usable_block_size, mi_theap_malloc_use_guarded, mi_unlikely,
+    MI_GUARDED, mi_likely, mi_page_set_has_interior_pointers, mi_page_usable_block_size,
+    mi_theap_malloc_use_guarded, mi_unlikely,
 };
 use crate::options::_mi_error_message_fmt;
 use crate::page::{
@@ -179,7 +179,8 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
         mi_page_set_has_interior_pointers(page, true);
         if MI_GUARDED != 0 && adjust >= size_of::<mi_block_t>() {
             let block = p.cast::<mi_block_t>();
-            (*block).next = MI_BLOCK_TAG_ALIGNED;
+            crate::core_types::BlockTag::ALIGNED
+                .write_to(crate::core_types::BlockPtr::new_unchecked(block));
         }
         mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size);
     }

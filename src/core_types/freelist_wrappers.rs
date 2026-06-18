@@ -89,6 +89,21 @@ impl BlockTag {
     pub(crate) const ALIGNED: Self = Self(0);
     // Note: MI_BLOCK_TAG_GUARDED typically is !0 in C
     pub(crate) const GUARDED: Self = Self(!0);
+
+    #[inline(always)]
+    pub(crate) const fn is_guarded(self) -> bool {
+        self.0 == Self::GUARDED.0
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn read_from_raw(block: *const mi_block_t) -> Self {
+        Self(unsafe { (*block.cast_mut()).next })
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn write_to(self, block: BlockPtr) {
+        unsafe { (*block.as_ptr()).next = self.0 };
+    }
 }
 
 pub(crate) enum BlockLink {

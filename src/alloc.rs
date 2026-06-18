@@ -14,10 +14,10 @@ use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up,
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size, _mi_ptr_page,
     _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page_typed, _mi_theap_heap, _mi_thread_id,
-    MI_BLOCK_TAG_GUARDED, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_PADDING, MI_PADDING_CHECK,
-    mi_likely, mi_page_block_size, mi_page_heap, mi_page_keys, mi_page_set_has_interior_pointers,
-    mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_ptr_encode_canary,
-    mi_theap_is_initialized, mi_theap_malloc_use_guarded, mi_unlikely,
+    MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_PADDING, MI_PADDING_CHECK, mi_likely, mi_page_block_size,
+    mi_page_heap, mi_page_keys, mi_page_set_has_interior_pointers, mi_page_slice_start,
+    mi_page_start, mi_page_usable_block_size, mi_ptr_encode_canary, mi_theap_is_initialized,
+    mi_theap_malloc_use_guarded, mi_unlikely,
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
@@ -190,14 +190,16 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     }
 
     if !zero {
-        (*block).next = 0;
+        crate::core_types::BlockTag::ALIGNED
+            .write_to(crate::core_types::BlockPtr::new_unchecked(block));
         if cfg!(debug_assertions) && MI_TRACK_ENABLED == 0 {
             memset_nonhuge(page, block.cast(), bsize);
         }
     } else if !(*page).free_is_zero {
         _mi_memzero_aligned(block.cast(), bsize);
     } else {
-        (*block).next = 0;
+        crate::core_types::BlockTag::ALIGNED
+            .write_to(crate::core_types::BlockPtr::new_unchecked(block));
         mi_track_mem_defined(block.cast(), bsize);
     }
 
@@ -1265,7 +1267,8 @@ unsafe fn mi_block_ptr_set_guarded(block: *mut mi_block_t, obj_size: usize) -> *
     }
     let page = _mi_ptr_page(block.cast());
     mi_page_set_has_interior_pointers(page, true);
-    (*block).next = MI_BLOCK_TAG_GUARDED;
+    crate::core_types::BlockTag::GUARDED
+        .write_to(crate::core_types::BlockPtr::new_unchecked(block));
 
     let block_size = mi_page_block_size(page);
     let os_page_size = _mi_os_page_size();

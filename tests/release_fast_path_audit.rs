@@ -772,6 +772,8 @@ fn free_path_internals_are_not_dynamic_exports() {
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let memid_rs =
         fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read core_types/memid.rs");
+    let freelist_types = fs::read_to_string(root.join("src/core_types/freelist_wrappers.rs"))
+        .expect("read core_types/freelist_wrappers.rs");
     let arena_types =
         fs::read_to_string(root.join("src/core_types/arena.rs")).expect("read core_types/arena.rs");
     let atomic_types = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
@@ -2208,6 +2210,18 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !page_rs.contains("crate::internal::mi_tf_create(ptr::null_mut()")
             && !page_rs.contains("crate::internal::mi_tf_block(mi_atomic_load_explicit")
             && !page_rs.contains("(*page).xthread_free == 1")
+            && freelist_types.contains("pub(crate) unsafe fn read_from_raw(block: *const mi_block_t) -> Self")
+            && freelist_types.contains("pub(crate) unsafe fn write_to(self, block: BlockPtr)")
+            && alloc_rs.contains("crate::core_types::BlockTag::ALIGNED\n            .write_to")
+            && alloc_rs.contains("crate::core_types::BlockTag::GUARDED\n        .write_to")
+            && alloc_aligned_rs.contains("crate::core_types::BlockTag::ALIGNED\n                .write_to")
+            && internal.contains("crate::core_types::BlockTag::read_from_raw(block).is_guarded()")
+            && free_rs.contains("crate::core_types::BlockTag::read_from_raw(block).is_guarded()")
+            && !alloc_rs.contains("(*block).next = 0")
+            && !alloc_rs.contains("(*block).next = MI_BLOCK_TAG_GUARDED")
+            && !alloc_aligned_rs.contains("(*block).next = MI_BLOCK_TAG_ALIGNED")
+            && !free_rs.contains("(*block).next == MI_BLOCK_TAG_GUARDED")
+            && !internal.contains("(*block.cast_mut()).next == MI_BLOCK_TAG_GUARDED")
             && page_rs
                 .contains("crate::mi_assert_internal!(!force || (*page).local_free.is_null());")
             && page_rs.contains("unsafe fn mi_page_move_to_full_typed(")

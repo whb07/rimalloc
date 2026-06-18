@@ -1103,7 +1103,8 @@ pub unsafe fn mi_block_ptr_is_guarded(block: *const mi_block_t, p: *const c_void
         return false;
     }
     let offset = p.cast::<u8>().offset_from(block.cast::<u8>());
-    offset >= size_of::<mi_block_t>() as isize && (*block.cast_mut()).next == MI_BLOCK_TAG_GUARDED
+    offset >= size_of::<mi_block_t>() as isize
+        && crate::core_types::BlockTag::read_from_raw(block).is_guarded()
 }
 
 #[inline]

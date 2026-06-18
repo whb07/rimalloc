@@ -1168,13 +1168,14 @@ pub unsafe fn _mi_memid_create_os(
     is_zero: bool,
     is_large: bool,
 ) -> mi_memid_t {
-    let mut memid = _mi_memid_create(mi_memkind_t::MI_MEM_OS);
-    memid.mem.os.base = base;
-    memid.mem.os.size = size;
-    memid.initially_committed = committed;
-    memid.initially_zero = is_zero;
-    memid.is_pinned = is_large;
-    memid
+    crate::core_types::MemId::<crate::core_types::OsMem>::os(
+        crate::core_types::OsMemPtr::new(base),
+        crate::core_types::ReservedBytes(size),
+        crate::core_types::InitiallyCommitted(committed),
+        crate::core_types::InitiallyZero(is_zero),
+        crate::core_types::Pinned(is_large),
+    )
+    .raw
 }
 
 #[inline]

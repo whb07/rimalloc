@@ -1306,9 +1306,14 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
         crate::mi_assert_internal!(!start.is_null());
         if !memid.is_null() {
             unsafe {
-                *memid =
-                    _mi_memid_create_os(start.cast::<c_void>(), allocated, true, all_zero, true);
-                (*memid).memkind = crate::internal::mi_memkind_t::MI_MEM_OS_HUGE;
+                *memid = crate::core_types::MemId::<crate::core_types::OsMem>::os_huge(
+                    crate::core_types::OsMemPtr::new(start.cast::<c_void>()),
+                    crate::core_types::ReservedBytes(allocated),
+                    crate::core_types::InitiallyCommitted(true),
+                    crate::core_types::InitiallyZero(all_zero),
+                    crate::core_types::Pinned(true),
+                )
+                .raw;
             }
             crate::mi_assert!((unsafe { (*memid).is_pinned }));
         }

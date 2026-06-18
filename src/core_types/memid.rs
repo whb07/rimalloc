@@ -176,6 +176,27 @@ impl MemId<OsMem> {
         zero: InitiallyZero,
         pinned: Pinned,
     ) -> Self {
+        Self::os_with_kind(base, size, committed, zero, pinned, OsMemKind::Normal)
+    }
+
+    pub(crate) fn os_huge(
+        base: Option<OsMemPtr>,
+        size: ReservedBytes,
+        committed: InitiallyCommitted,
+        zero: InitiallyZero,
+        pinned: Pinned,
+    ) -> Self {
+        Self::os_with_kind(base, size, committed, zero, pinned, OsMemKind::Huge)
+    }
+
+    fn os_with_kind(
+        base: Option<OsMemPtr>,
+        size: ReservedBytes,
+        committed: InitiallyCommitted,
+        zero: InitiallyZero,
+        pinned: Pinned,
+        kind: OsMemKind,
+    ) -> Self {
         Self {
             raw: crate::internal::mi_memid_t {
                 mem: crate::internal::mi_memid_mem_t {
@@ -187,7 +208,11 @@ impl MemId<OsMem> {
                 is_pinned: pinned.0,
                 initially_committed: committed.0,
                 initially_zero: zero.0,
-                memkind: crate::internal::mi_memkind_t::MI_MEM_OS as _,
+                memkind: match kind {
+                    OsMemKind::Normal => crate::internal::mi_memkind_t::MI_MEM_OS,
+                    OsMemKind::Huge => crate::internal::mi_memkind_t::MI_MEM_OS_HUGE,
+                    OsMemKind::Remap => crate::internal::mi_memkind_t::MI_MEM_OS_REMAP,
+                },
             },
             _kind: PhantomData,
         }

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 use std::mem::align_of;
@@ -902,6 +902,57 @@ fn phase6_clippy_allowances_stay_intentional() {
         clippy_allowance_counts(&sources),
         expected,
         "localized Clippy allowances should remain limited to audited C-shaped arity and secure/debug constant comparisons"
+    );
+}
+
+#[test]
+fn phase6_unsafe_op_allowances_stay_intentional() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src = root.join("src");
+    let mut sources = Vec::new();
+    collect_rs_sources(root, &src, &mut sources);
+
+    let actual = sources
+        .iter()
+        .filter_map(|(rel, source)| {
+            source
+                .contains("unsafe_op_in_unsafe_fn")
+                .then_some(rel.as_str())
+        })
+        .collect::<BTreeSet<_>>();
+    let expected = BTreeSet::from([
+        "src/alloc.rs",
+        "src/alloc_aligned.rs",
+        "src/alloc_override.rs",
+        "src/alloc_posix.rs",
+        "src/arena_meta.rs",
+        "src/atomic.rs",
+        "src/bitmap.rs",
+        "src/core_types/mod.rs",
+        "src/free.rs",
+        "src/heap.rs",
+        "src/internal.rs",
+        "src/libc.rs",
+        "src/options.rs",
+        "src/os.rs",
+        "src/page.rs",
+        "src/prim.rs",
+        "src/prim/emscripten.rs",
+        "src/prim/osx.rs",
+        "src/prim/unix.rs",
+        "src/prim/wasi.rs",
+        "src/random.rs",
+        "src/theap.rs",
+        "src/threadlocal.rs",
+    ]);
+
+    assert_eq!(
+        actual, expected,
+        "broad unsafe_op_in_unsafe_fn allowances should stay limited to audited mechanical raw-pointer modules"
+    );
+    assert!(
+        !actual.contains("src/track.rs"),
+        "tracking shims should not regain unsafe_op_in_unsafe_fn after their explicit unsafe cleanup"
     );
 }
 

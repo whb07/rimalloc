@@ -179,6 +179,14 @@ shape are part of the C/malloc override contract or release fast path audit.
 Moving them requires ABI symbol checks, release fast-path checks, and benchmark
 evidence.
 
+Internal allocator code must not call `raw::mi_*` or `abi::mi_*` public entry
+points to reach implementation logic. It should call crate-private helpers so
+Rust-side invariants, typed wrappers, and non-ABI call paths remain visible.
+The only current allowlisted source re-entry is the public C header macro group
+in `src/abi.rs`; those macros intentionally expand through root `raw::mi_*` so
+downstream macro users see C-header behavior. `scripts/check-ffi-boundary.py`
+fails if any other source file re-enters the public raw/ABI `mi_*` facade.
+
 ## Callback ABI
 
 Callback types mirror upstream mimalloc C callback signatures. Callbacks must

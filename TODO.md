@@ -337,13 +337,21 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `docs/abi.md` documents the explicit export boundary classes and explains why
       naked shims or assembly aliases may remain near allocation/free/runtime code.
 
-- [ ] Stop internal Rust code from re-entering exported C ABI functions except when preserving C semantics requires it.
+- [x] Stop internal Rust code from re-entering exported C ABI functions except when preserving C semantics requires it.
   - Required behavior:
     - Internal code calls crate-private implementation functions, not raw public extern declarations.
     - Re-entry through C ABI is classified as compatibility-required, benchmark-required, or removed.
   - Validation:
     - Source audit searches for calls from internals to `raw::mi_*` or `abi::mi_*` and fails unless allowlisted.
     - Each allowlisted re-entry has a comment explaining why internal direct calls are not correct.
+  - Evidence:
+    - `scripts/check-ffi-boundary.py` fails on `crate::raw::mi_*`,
+      `$crate::raw::mi_*`, `crate::abi::mi_*`, or `$crate::abi::mi_*` source
+      re-entry outside the explicit allowlist.
+    - The only current allowlist is `src/abi.rs` C-header compatibility macros,
+      documented with `SAFETY[AUDIT:c-header-macro-reentry]`.
+    - `docs/abi.md` states internal allocator code must call crate-private helpers
+      and documents the C-header macro exception.
 
 - [ ] Create typed internal request/result conversion at the FFI boundary.
   - Required conversions:

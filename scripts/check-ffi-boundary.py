@@ -60,10 +60,27 @@ VERSION_SCRIPT_PATTERNS = [
     "mi_*;",
 ]
 
+REENTRY_PATTERNS = [
+    re.compile(r"\b(?:crate|\$crate)::raw::mi_[A-Za-z0-9_]+\s*\("),
+    re.compile(r"\b(?:crate|\$crate)::abi::mi_[A-Za-z0-9_]+\s*\("),
+]
+
+REENTRY_ALLOWLIST = {
+    "src/abi.rs": "SAFETY[AUDIT:c-header-macro-reentry]",
+}
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def source_lines(text: str) -> list[tuple[int, str]]:
+    return [
+        (line_number, line)
+        for line_number, line in enumerate(text.splitlines(), start=1)
+        if not line.strip().startswith("//")
+    ]
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,23 +100,40 @@ def main() -> int:
     offenders: list[str] = []
     classified: dict[str, int] = {}
     occurrences: list[tuple[str, int, str, str]] = []
+    reentry_offenders: list[str] = []
+    reentry_allowlisted: list[tuple[str, int, str]] = []
     for path in sorted((ROOT / "src").rglob("*.rs")):
         rel = path.relative_to(ROOT).as_posix()
         text = path.read_text()
         if not any(pattern.search(text) for pattern in EXPORT_PATTERNS):
-            continue
-        classification = EXPORT_FILE_CLASSIFICATION.get(rel)
-        if classification is None:
-            offenders.append(rel)
-            continue
-        classified[classification] = classified.get(classification, 0) + 1
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            if any(pattern.search(line) for pattern in EXPORT_PATTERNS):
-                occurrences.append((rel, line_number, classification, line.strip()))
+            classification = None
+        else:
+            classification = EXPORT_FILE_CLASSIFICATION.get(rel)
+            if classification is None:
+                offenders.append(rel)
+            else:
+                classified[classification] = classified.get(classification, 0) + 1
+                for line_number, line in source_lines(text):
+                    if any(pattern.search(line) for pattern in EXPORT_PATTERNS):
+                        occurrences.append((rel, line_number, classification, line.strip()))
+
+        reentry_marker = REENTRY_ALLOWLIST.get(rel)
+        for line_number, line in source_lines(text):
+            if not any(pattern.search(line) for pattern in REENTRY_PATTERNS):
+                continue
+            if reentry_marker is not None and reentry_marker in text:
+                reentry_allowlisted.append((rel, line_number, line.strip()))
+            else:
+                reentry_offenders.append(f"{rel}:{line_number}: {line.strip()}")
 
     require(
         not offenders,
         "export ABI attributes outside classified boundary files: " + ", ".join(offenders),
+    )
+    require(
+        not reentry_offenders,
+        "internal source re-enters public raw/ABI mi_* functions outside allowlist:\n"
+        + "\n".join(reentry_offenders),
     )
 
     build_rs = (ROOT / "build.rs").read_text()
@@ -116,12 +150,15 @@ def main() -> int:
     if args.list:
         for rel, line_number, classification, line in occurrences:
             print(f"{rel}:{line_number}: {classification}: {line}")
+        for rel, line_number, line in reentry_allowlisted:
+            print(f"{rel}:{line_number}: c-header-macro-reentry: {line}")
 
     summary = ", ".join(f"{name}={count}" for name, count in sorted(classified.items()))
     print(
         "ok: FFI/export boundary attributes limited to "
         f"{len(EXPORT_FILE_CLASSIFICATION)} classified files ({summary}); "
         f"{len(occurrences)} export sites checked; "
+        f"{len(reentry_allowlisted)} public raw/ABI re-entry sites allowlisted; "
         f"version script covers {len(VERSION_SCRIPT_PATTERNS)} public patterns"
     )
     return 0

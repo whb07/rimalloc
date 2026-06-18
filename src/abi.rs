@@ -37,6 +37,10 @@ pub const mi_attr_alloc_size2: () = ();
 pub const mi_attr_alloc_align: () = ();
 pub const MI_HAS_HEAP_STL_ALLOCATOR: usize = 1;
 
+// SAFETY[AUDIT:c-header-macro-reentry]: these are public C header compatibility
+// macros. They intentionally expand through the public raw C-shaped facade, not
+// crate-private internals, so downstream macro expansion observes header-like
+// allocation semantics.
 #[macro_export]
 macro_rules! mi_malloc_tp {
     ($tp:ty) => {{ unsafe { $crate::raw::mi_malloc(core::mem::size_of::<$tp>()) as *mut $tp } }};

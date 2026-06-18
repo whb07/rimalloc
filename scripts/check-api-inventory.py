@@ -162,12 +162,26 @@ def main() -> int:
     )
     for phrase in [
         "## Module Taxonomy",
+        "## Current File Layout",
         "C header declarations and layouts",
+        "Raw C-shaped Rust facade",
         "Exported C ABI implementations",
         "Internal compatibility aliases",
         "Allocator internals",
+        "raw::abi",
+        "raw::mimalloc",
+        "raw::headers",
+        "unstable-raw-internals",
+        "src/abi.rs",
+        "New public C ABI declarations",
+        "New exported C ABI implementations",
+        "scripts/check-ffi-boundary.py",
     ]:
         require(phrase in abi_doc, f"docs/abi.md missing module taxonomy phrase: {phrase}")
+    require(
+        "raw::{alloc, free, heap, stats, options, ...}" not in abi_doc,
+        "docs/abi.md still describes broad implementation modules as default raw facade",
+    )
 
     print(
         f"ok: public API inventory covers {len(actual_root)} crate-root items "

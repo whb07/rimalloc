@@ -194,7 +194,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## B1. Define the final module taxonomy
 
-- [ ] Split raw/FFI responsibilities into named layers.
+- [x] Split raw/FFI responsibilities into named layers.
   - Target taxonomy:
     - `raw::abi`: `repr(C)` layouts, C-compatible aliases, constants, callback type aliases, and extern declarations that mirror public C headers.
     - `raw::c_api` or `raw::mimalloc`: direct unsafe C-shaped functions intended for low-level Rust callers.
@@ -205,8 +205,14 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - A module diagram in `docs/abi.md` or `docs/architecture.md` matches the actual tree.
     - `raw.rs` no longer acts as an unstructured re-export bucket.
     - `scripts/check-api-inventory.py` enforces the taxonomy.
+  - Evidence:
+    - `docs/abi.md` documents the safe facade, default raw facade, raw C-shaped facade,
+      exported C ABI implementation layer, internal compatibility aliases, allocator internals,
+      and a module flow diagram matching `src/raw.rs`.
+    - `scripts/check-api-inventory.py` enforces the default raw modules, the
+      `unstable-raw-internals` module set, and required taxonomy phrases.
 
-- [ ] Decide final file layout.
+- [x] Decide final file layout.
   - Acceptable layout examples:
     - `src/raw.rs` plus `src/raw/abi.rs`, `src/raw/c_api.rs`, `src/raw/types.rs`.
     - `src/ffi.rs` plus `src/ffi/exports.rs`, `src/ffi/callbacks.rs`, `src/ffi/layout.rs`.
@@ -214,6 +220,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - File layout is documented in `docs/abi.md`.
     - There is no ambiguity about where to add a new C ABI declaration or exported function.
+  - Evidence:
+    - `docs/abi.md` has a `Current File Layout` table mapping new public C ABI declarations
+      to `src/abi.rs` and exported C ABI implementations to files classified by
+      `scripts/check-ffi-boundary.py`.
+    - `scripts/check-api-inventory.py` requires the file-layout section and rejects the old
+      broad default raw facade wording.
 
 - [x] Move raw C header declarations into one owner.
   - Required owner:

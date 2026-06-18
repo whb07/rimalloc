@@ -151,6 +151,34 @@ impl AtomicThreadFree {
         }
     }
 
+    /// Clear the owned bit if `expected` still matches the live thread-free
+    /// word, preserving the expected remote-list head. On failure, updates
+    /// `expected` with the current typed word for the caller's collect/retry
+    /// protocol.
+    ///
+    /// # Safety
+    /// `self` must point to a valid page's `xthread_free` field.
+    #[inline]
+    pub(crate) unsafe fn compare_exchange_release_ownership(
+        self,
+        expected: &mut ThreadFreeWord,
+    ) -> bool {
+        let new = ThreadFreeWord::from_parts(expected.head(), ThreadFreeOwner::Unowned);
+        let atomic = unsafe { &*self.0.cast::<core::sync::atomic::AtomicUsize>() };
+        match atomic.compare_exchange_weak(
+            expected.raw(),
+            new.raw(),
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => true,
+            Err(value) => {
+                *expected = ThreadFreeWord(value);
+                false
+            }
+        }
+    }
+
     /// Atomically detach the current remote free-list head while preserving the
     /// ownership bit in `xthread_free`.
     ///

@@ -8,7 +8,6 @@ use core::{cmp, ptr};
 use crate::arena::{
     _mi_arenas_page_free, _mi_arenas_page_try_reabandon_to_mapped, _mi_arenas_page_unabandon,
 };
-use crate::atomic::{mi_atomic_cas_weak_acq_rel, mi_atomic_load_explicit, mi_memory_order_e};
 use crate::bits::MI_INTPTR_SIZE;
 use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_decrease, _mi_align_down_ptr,
@@ -20,8 +19,7 @@ use crate::internal::{
     mi_page_block_size, mi_page_contains_address, mi_page_has_interior_pointers,
     mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned,
     mi_page_is_singleton, mi_page_keys, mi_page_queue, mi_page_start, mi_page_thread_free,
-    mi_page_usable_block_size, mi_page_xthread_id, mi_ptr_encode_canary, mi_tf_block, mi_tf_create,
-    mi_tf_is_owned, mi_theap_is_initialized,
+    mi_page_usable_block_size, mi_page_xthread_id, mi_ptr_encode_canary, mi_theap_is_initialized,
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
@@ -816,15 +814,21 @@ unsafe fn mi_abandoned_page_unown_from_free(
     crate::mi_assert_internal!(mi_page_is_abandoned(page));
     crate::mi_assert_internal!(!mi_page_all_free(page));
 
-    let mut tf_expect = mi_tf_create(expected_thread_free, true);
-    let mut tf_new = mi_tf_create(expected_thread_free, false);
-    while !mi_atomic_cas_weak_acq_rel(
-        ptr::addr_of_mut!((*page).xthread_free).cast(),
-        &mut tf_expect,
-        tf_new,
-    ) {
-        crate::mi_assert_internal!(mi_tf_is_owned(tf_expect));
-        while !mi_tf_block(tf_expect).is_null() {
+    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+    let expected_head = if expected_thread_free.is_null() {
+        None
+    } else {
+        Some(crate::core_types::BlockPtr::new_unchecked(
+            expected_thread_free,
+        ))
+    };
+    let mut tf_expect = crate::core_types::ThreadFreeWord::from_parts(
+        expected_head,
+        crate::core_types::ThreadFreeOwner::Owned,
+    );
+    while !atomic_tf.compare_exchange_release_ownership(&mut tf_expect) {
+        crate::mi_assert_internal!(tf_expect.is_owned());
+        while tf_expect.head().is_some() {
             _mi_page_free_collect(page, false);
             if mi_abandoned_page_try_free(page) {
                 return;
@@ -832,13 +836,9 @@ unsafe fn mi_abandoned_page_unown_from_free(
             if mi_abandoned_page_try_reabandon_to_mapped(page) {
                 return;
             }
-            tf_expect = mi_atomic_load_explicit(
-                ptr::addr_of!((*page).xthread_free).cast(),
-                mi_memory_order_e::mi_memory_order_relaxed,
-            );
+            tf_expect = atomic_tf.load_relaxed();
         }
-        crate::mi_assert_internal!(mi_tf_block(tf_expect).is_null());
-        tf_new = crate::internal::mi_tf_create(ptr::null_mut(), false);
+        crate::mi_assert_internal!(tf_expect.head().is_none());
     }
 }
 

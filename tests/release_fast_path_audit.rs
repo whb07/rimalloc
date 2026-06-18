@@ -774,6 +774,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read core_types/memid.rs");
     let arena_types =
         fs::read_to_string(root.join("src/core_types/arena.rs")).expect("read core_types/arena.rs");
+    let atomic_types = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
+        .expect("read core_types/atomic_wrappers.rs");
     let validation_types = fs::read_to_string(root.join("src/core_types/validation.rs"))
         .expect("read core_types/validation.rs");
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
@@ -3101,6 +3103,17 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
             && page_rs.contains("remote.collect_into_local(page_wrapper, local);")
+            && atomic_types.contains(
+                "pub(crate) unsafe fn compare_exchange_release_ownership("
+            )
+            && free_rs.contains(
+                "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
+            )
+            && free_rs.contains(
+                "while !atomic_tf.compare_exchange_release_ownership(&mut tf_expect)"
+            )
+            && free_rs.contains("tf_expect = atomic_tf.load_relaxed();")
+            && !free_rs.contains("mi_tf_create(expected_thread_free")
             && page_rs.contains(
                 "unsafe fn mi_page_queue_push_at_end_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
             )

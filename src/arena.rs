@@ -1155,7 +1155,6 @@ pub unsafe extern "C" fn mi_arena_from_index(
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_start_idx(heap: *mut mi_heap_t, tseq: usize, arena_cycle: usize) -> usize {
     let heap = heap.cast::<MiHeapPrefix>();
     let subproc = unsafe { (*heap).subproc.cast::<MiSubprocPrefix>() };
@@ -1184,7 +1183,6 @@ unsafe fn mi_arena_start_idx(heap: *mut mi_heap_t, tseq: usize, arena_cycle: usi
     start
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_is_suitable_ex(
     arena: *mut mi_arena_t,
     req_arena: *mut mi_arena_t,
@@ -1212,7 +1210,6 @@ unsafe fn mi_arena_is_suitable_ex(
     true
 }
 
-#[allow(dead_code)]
 unsafe fn mi_forall_arenas<F>(
     heap: *mut mi_heap_t,
     req_arena: *mut mi_arena_t,
@@ -1249,7 +1246,6 @@ unsafe fn mi_forall_arenas<F>(
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_forall_suitable_arenas<F>(
     heap: *mut mi_heap_t,
     req_arena: *mut mi_arena_t,
@@ -1349,7 +1345,6 @@ unsafe fn mi_arena_pages_size(
     size
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_info_slices_needed(
     slice_count: crate::core_types::SliceCount,
     bitmap_base: *mut usize,
@@ -1375,7 +1370,6 @@ unsafe fn mi_arena_info_slices_needed(
     info_slices
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_bitmap_init(
     slice_count: crate::core_types::SliceCount,
     base: *mut *mut u8,
@@ -1386,7 +1380,6 @@ unsafe fn mi_arena_bitmap_init(
     bitmap
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_bbitmap_init(
     slice_count: crate::core_types::SliceCount,
     base: *mut *mut u8,
@@ -1397,7 +1390,6 @@ unsafe fn mi_arena_bbitmap_init(
     bbitmap
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_pages_alloc(arena: *mut mi_arena_t) -> *mut mi_arena_pages_t {
     let Some(slice_count) = crate::core_types::SliceCount::from_usize(unsafe {
         (*arena.cast::<MiArenaPrefix>()).slice_count
@@ -1421,7 +1413,6 @@ unsafe fn mi_arena_pages_alloc(arena: *mut mi_arena_t) -> *mut mi_arena_pages_t 
     arena_pages
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arenas_unsafe_destroy(subproc: *mut mi_subproc_t) {
     crate::mi_assert_internal!(!subproc.is_null());
     let arena_count = unsafe { mi_arenas_get_count(subproc) };
@@ -1469,7 +1460,6 @@ pub(crate) unsafe extern "C" fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_s
     unsafe { mi_arenas_unsafe_destroy(subproc) };
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arenas_add(
     subproc: *mut mi_subproc_t,
     arena: *mut mi_arena_t,

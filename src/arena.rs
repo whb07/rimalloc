@@ -7,10 +7,9 @@ use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{
     EFAULT, mi_atomic_cas_ptr_strong_release, mi_atomic_cas_strong_acq_rel,
-    mi_atomic_cas_weak_acq_rel, mi_atomic_casi64_strong_acq_rel, mi_atomic_guard_t,
-    mi_atomic_load_explicit, mi_atomic_load_ptr_acquire, mi_atomic_loadi64_acquire,
-    mi_atomic_loadi64_explicit, mi_atomic_store_ptr_release, mi_atomic_storei64_release,
-    mi_lock_acquire, mi_lock_release, mi_memory_order_e,
+    mi_atomic_casi64_strong_acq_rel, mi_atomic_guard_t, mi_atomic_load_ptr_acquire,
+    mi_atomic_loadi64_acquire, mi_atomic_loadi64_explicit, mi_atomic_store_ptr_release,
+    mi_atomic_storei64_release, mi_lock_acquire, mi_lock_release, mi_memory_order_e,
 };
 use crate::bitmap::{
     _mi_bitmap_forall_set, _mi_bitmap_forall_setc_rangesn, MI_BCHUNK_BITS, MI_BCHUNK_FIELDS,
@@ -36,7 +35,7 @@ use crate::internal::{
     mi_page_claim_ownership, mi_page_clear_abandoned_mapped, mi_page_committed, mi_page_heap,
     mi_page_is_abandoned, mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_owned,
     mi_page_is_singleton, mi_page_meta_is_separated, mi_page_slice_start, mi_page_start,
-    mi_size_of_slices, mi_slice_count_of_size, mi_tf_block, mi_tf_create, mi_tf_is_owned,
+    mi_size_of_slices, mi_slice_count_of_size,
 };
 use crate::mimalloc::{mi_heap_main, mi_heap_theap, mi_heap_zalloc_aligned};
 use crate::options::{mi_option_get, mi_option_get_size, mi_option_is_enabled, mi_option_t};
@@ -58,8 +57,8 @@ use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
     MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX,
     MI_THREADID_ABANDONED_MAPPED, mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t,
-    mi_heap_area_t, mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_free_t,
-    mi_thread_local_t, mi_tld_t,
+    mi_heap_area_t, mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_local_t,
+    mi_tld_t,
 };
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
@@ -2077,41 +2076,24 @@ unsafe fn mi_abandoned_page_unown(page: *mut mi_page_t, current_theap: *mut mi_t
     crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::mi_assert_internal!(unsafe { _mi_thread_id() == (*(*current_theap).tld).thread_id });
 
-    let mut tf_old: mi_thread_free_t = unsafe {
-        mi_atomic_load_explicit(
-            ptr::addr_of!((*page).xthread_free).cast(),
-            mi_memory_order_e::mi_memory_order_relaxed,
-        )
-    };
+    let atomic_tf =
+        crate::core_types::AtomicThreadFree(unsafe { ptr::addr_of_mut!((*page).xthread_free) });
+    let mut tf_old = atomic_tf.load_relaxed();
     loop {
-        crate::mi_assert_internal!(mi_tf_is_owned(tf_old));
-        while !mi_tf_block(tf_old).is_null() {
+        crate::mi_assert_internal!(tf_old.is_owned());
+        while tf_old.head().is_some() {
             unsafe { _mi_page_free_collect(page, false) };
             if unsafe { mi_page_all_free(page) } {
                 unsafe { _mi_arenas_page_unabandon(page, current_theap) };
                 unsafe { _mi_arenas_page_free(page, current_theap) };
                 return true;
             }
-            tf_old = unsafe {
-                mi_atomic_load_explicit(
-                    ptr::addr_of!((*page).xthread_free).cast(),
-                    mi_memory_order_e::mi_memory_order_relaxed,
-                )
-            };
+            tf_old = atomic_tf.load_relaxed();
         }
-        crate::mi_assert_internal!(mi_tf_block(tf_old).is_null());
-        let tf_new = mi_tf_create(ptr::null_mut(), false);
-        let mut expected = tf_old;
-        if unsafe {
-            mi_atomic_cas_weak_acq_rel(
-                ptr::addr_of_mut!((*page).xthread_free).cast(),
-                &mut expected,
-                tf_new,
-            )
-        } {
+        crate::mi_assert_internal!(tf_old.head().is_none());
+        if unsafe { atomic_tf.compare_exchange_release_ownership(&mut tf_old) } {
             return false;
         }
-        tf_old = expected;
     }
 }
 

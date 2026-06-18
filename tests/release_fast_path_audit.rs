@@ -3120,6 +3120,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && free_rs.contains("tf_expect = atomic_tf.load_relaxed();")
             && !free_rs.contains("mi_tf_create(expected_thread_free")
+            && arena_rs.contains(
+                "let atomic_tf =\n        crate::core_types::AtomicThreadFree(unsafe { ptr::addr_of_mut!((*page).xthread_free) });"
+            )
+            && arena_rs.contains("let mut tf_old = atomic_tf.load_relaxed();")
+            && arena_rs.contains("while tf_old.head().is_some()")
+            && arena_rs.contains("if unsafe { atomic_tf.compare_exchange_release_ownership(&mut tf_old) }")
+            && !arena_rs.contains("mi_tf_create(ptr::null_mut(), false)")
             && page_rs.contains(
                 "unsafe fn mi_page_queue_push_at_end_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
             )

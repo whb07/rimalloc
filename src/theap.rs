@@ -10,7 +10,7 @@
 use core::{ffi::c_void, mem::size_of, ptr};
 
 use crate::arena::_mi_arenas_collect;
-use crate::atomic::{mi_atomic_exchange_ptr_acq_rel, mi_lock_acquire, mi_lock_release};
+use crate::atomic::{mi_lock_acquire, mi_lock_release};
 use crate::bits::{MI_INTPTR_BITS, MI_SIZE_BITS, mi_clz, mi_ctz};
 use crate::internal::{
     _mi_align_up, _mi_arenas_alloc, _mi_arenas_free, _mi_deferred_free, _mi_divide_up,
@@ -685,7 +685,8 @@ pub(crate) unsafe extern "C" fn _mi_theap_free(
         return true;
     }
 
-    let heap = mi_atomic_exchange_ptr_acq_rel(ptr::addr_of_mut!((*theap).heap), ptr::null_mut());
+    let heap = crate::core_types::AtomicPtrField(ptr::addr_of_mut!((*theap).heap))
+        .exchange_acq_rel(ptr::null_mut());
     if heap.is_null() {
         return false;
     }

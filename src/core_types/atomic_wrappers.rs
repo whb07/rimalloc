@@ -173,6 +173,13 @@ impl<T: 'static> AtomicPtrField<T> {
     /// # Safety
     /// See `atomic_ref`.
     #[inline(always)]
+    pub(crate) unsafe fn exchange_acq_rel(self, value: *mut T) -> *mut T {
+        unsafe { self.atomic_ref() }.swap(value, Ordering::AcqRel)
+    }
+
+    /// # Safety
+    /// See `atomic_ref`.
+    #[inline(always)]
     pub(crate) unsafe fn compare_exchange_release(
         self,
         expected: &mut *mut T,

@@ -2920,6 +2920,14 @@ fn free_path_internals_are_not_dynamic_exports() {
         "_mi_theap_init should initialize C's atomic refcount through a typed seq_cst atomic store"
     );
     assert!(
+        atomic_types.contains(
+            "pub(crate) unsafe fn exchange_acq_rel(self, value: *mut T) -> *mut T"
+        ) && theap_rs.contains(
+            "crate::core_types::AtomicPtrField(ptr::addr_of_mut!((*theap).heap))\n        .exchange_acq_rel(ptr::null_mut())"
+        ) && !theap_rs.contains("mi_atomic_exchange_ptr_acq_rel"),
+        "_mi_theap_free should clear the heap pointer through AtomicPtrField"
+    );
+    assert!(
         stats_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_stats_merge_into"),
         "heap cleanup should keep C's stats merge call boundary instead of inlining it into _mi_theap_free"
     );

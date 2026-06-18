@@ -3,7 +3,7 @@
 use core::ffi::c_void;
 use core::marker::PhantomData;
 use core::ptr::NonNull;
-use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::core_types::{
     BlockPtr, PageFlags, PageOwnerId, PageThreadId, RemoteFreeList, ThreadFreeOwner, ThreadFreeWord,
@@ -68,6 +68,54 @@ impl AtomicUsizeField {
     #[inline(always)]
     pub(crate) unsafe fn fetch_and(self, bits: usize, order: Ordering) -> usize {
         unsafe { self.as_atomic() }.fetch_and(bits, order)
+    }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub(crate) struct AtomicI64Field(pub(crate) *mut i64);
+
+impl AtomicI64Field {
+    /// # Safety
+    /// `self.0` must be a valid, properly aligned pointer to an atomic-compatible
+    /// `i64` field for the lifetime of the access.
+    #[inline(always)]
+    pub(crate) unsafe fn as_atomic(self) -> &'static AtomicI64 {
+        // SAFETY: caller guarantees `self.0` is valid and aligned. The borrow is
+        // unbounded for the same raw-pointer lifetime model as `AtomicUsizeField`.
+        unsafe { &*self.0.cast::<AtomicI64>() }
+    }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn load(self, order: Ordering) -> i64 {
+        unsafe { self.as_atomic() }.load(order)
+    }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn store(self, value: i64, order: Ordering) {
+        unsafe { self.as_atomic() }.store(value, order);
+    }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn compare_exchange_acq_rel(self, expected: &mut i64, desired: i64) -> bool {
+        match unsafe { self.as_atomic() }.compare_exchange(
+            *expected,
+            desired,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => true,
+            Err(actual) => {
+                *expected = actual;
+                false
+            }
+        }
     }
 }
 

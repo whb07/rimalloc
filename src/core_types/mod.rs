@@ -87,9 +87,9 @@ pub(crate) use heap::{
 mod atomic_wrappers;
 
 pub(crate) use atomic_wrappers::{
-    AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicPageThreadId, AtomicThreadFree,
-    AtomicUsizeField, MemoryOrder, MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr,
-    RemotePushOutcome,
+    AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicI64Field, AtomicPageThreadId,
+    AtomicThreadFree, AtomicUsizeField, MemoryOrder, MiLockGuard, MiLockPtr, OnceGuard,
+    OnceStatePtr, RemotePushOutcome,
 };
 mod padding;
 

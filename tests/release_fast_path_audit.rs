@@ -2678,6 +2678,30 @@ fn free_path_internals_are_not_dynamic_exports() {
         "clock helpers should keep C's timing helper boundaries and main callers"
     );
     assert!(
+        atomic_types.contains("pub(crate) struct AtomicI64Field(pub(crate) *mut i64);")
+            && atomic_types.contains("pub(crate) unsafe fn compare_exchange_acq_rel(self, expected: &mut i64, desired: i64) -> bool")
+            && arena_rs.matches("crate::core_types::AtomicI64Field(").count() == 7
+            && arena_rs
+                .matches(".compare_exchange_acq_rel(&mut expire0, expire)")
+                .count()
+                == 2
+            && arena_rs.contains(".load(crate::core_types::MemoryOrder::Relaxed)")
+            && arena_rs.contains(".load(crate::core_types::MemoryOrder::Acquire)")
+            && arena_rs
+                .matches(".store(0, crate::core_types::MemoryOrder::Release)")
+                .count()
+                == 2
+            && arena_rs.contains(
+                "now + ((delay as mi_msecs_t) / 10),\n                    crate::core_types::MemoryOrder::Release,"
+            )
+            && !arena_rs.contains("mi_atomic_casi64_strong_acq_rel")
+            && !arena_rs.contains("mi_atomic_loadi64_explicit")
+            && !arena_rs.contains("mi_atomic_loadi64_acquire")
+            && !arena_rs.contains("mi_atomic_storei64_release")
+            && !arena_rs.contains("mi_memory_order_e::mi_memory_order_relaxed"),
+        "arena purge expiry should use typed atomic i64 field wrappers"
+    );
+    assert!(
         free_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign")
             && free_rs.contains("crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());")

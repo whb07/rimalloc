@@ -6,10 +6,8 @@ use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::atomic::{
-    EFAULT, mi_atomic_cas_ptr_strong_release, mi_atomic_cas_strong_acq_rel,
-    mi_atomic_casi64_strong_acq_rel, mi_atomic_guard_t, mi_atomic_load_ptr_acquire,
-    mi_atomic_loadi64_acquire, mi_atomic_loadi64_explicit, mi_atomic_store_ptr_release,
-    mi_atomic_storei64_release, mi_lock_acquire, mi_lock_release, mi_memory_order_e,
+    EFAULT, mi_atomic_cas_ptr_strong_release, mi_atomic_cas_strong_acq_rel, mi_atomic_guard_t,
+    mi_atomic_load_ptr_acquire, mi_atomic_store_ptr_release, mi_lock_acquire, mi_lock_release,
 };
 use crate::bitmap::{
     _mi_bitmap_forall_set, _mi_bitmap_forall_setc_rangesn, MI_BCHUNK_BITS, MI_BCHUNK_FIELDS,
@@ -3065,20 +3063,18 @@ unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, range: crate::core_typ
     let expire = crate::stats::_mi_clock_now() + delay as i64;
     let mut expire0 = 0i64;
     if unsafe {
-        mi_atomic_casi64_strong_acq_rel(
+        crate::core_types::AtomicI64Field(
             ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
-            &mut expire0,
-            expire,
         )
+        .compare_exchange_acq_rel(&mut expire0, expire)
     } {
         crate::mi_assert_internal!(expire0 == 0);
         let subproc = unsafe { (*arena.cast::<MiArenaPrefix>()).subproc };
         unsafe {
-            mi_atomic_casi64_strong_acq_rel(
+            crate::core_types::AtomicI64Field(
                 ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast::<i64>(),
-                &mut expire0,
-                expire,
             )
+            .compare_exchange_acq_rel(&mut expire0, expire)
         };
     }
     unsafe {
@@ -3297,10 +3293,10 @@ unsafe fn mi_arena_try_purge(arena: *mut mi_arena_t, now: mi_msecs_t, force: boo
     }
 
     let expire = unsafe {
-        mi_atomic_loadi64_explicit(
-            ptr::addr_of!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast(),
-            mi_memory_order_e::mi_memory_order_relaxed,
+        crate::core_types::AtomicI64Field(
+            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
         )
+        .load(crate::core_types::MemoryOrder::Relaxed)
     };
     if !force {
         if expire == 0 {
@@ -3312,10 +3308,10 @@ unsafe fn mi_arena_try_purge(arena: *mut mi_arena_t, now: mi_msecs_t, force: boo
     }
 
     unsafe {
-        mi_atomic_storei64_release(
-            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast(),
-            0,
+        crate::core_types::AtomicI64Field(
+            ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
         )
+        .store(0, crate::core_types::MemoryOrder::Release)
     };
     unsafe {
         __mi_stat_counter_increase_mt(
@@ -3362,9 +3358,10 @@ unsafe fn mi_arenas_try_purge(
 
     let now = crate::stats::_mi_clock_now();
     let arenas_expire = unsafe {
-        mi_atomic_loadi64_acquire(
-            ptr::addr_of!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast(),
+        crate::core_types::AtomicI64Field(
+            ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast::<i64>(),
         )
+        .load(crate::core_types::MemoryOrder::Acquire)
     };
     if !visit_all && !force && (arenas_expire == 0 || arenas_expire > now) {
         return;
@@ -3379,9 +3376,13 @@ unsafe fn mi_arenas_try_purge(
     crate::mi_atomic_guard!(ptr::addr_of!(PURGE_GUARD).cast_mut(), {
         if arenas_expire > now {
             unsafe {
-                mi_atomic_storei64_release(
-                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast(),
+                crate::core_types::AtomicI64Field(
+                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
+                        .cast::<i64>(),
+                )
+                .store(
                     now + ((delay as mi_msecs_t) / 10),
+                    crate::core_types::MemoryOrder::Release,
                 )
             };
         }
@@ -3415,10 +3416,11 @@ unsafe fn mi_arenas_try_purge(
         }
         if all_visited && !any_purged {
             unsafe {
-                mi_atomic_storei64_release(
-                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast(),
-                    0,
+                crate::core_types::AtomicI64Field(
+                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
+                        .cast::<i64>(),
                 )
+                .store(0, crate::core_types::MemoryOrder::Release)
             };
         }
     });

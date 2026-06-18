@@ -1103,7 +1103,6 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     p
 }
 
-#[allow(dead_code)]
 #[inline]
 unsafe fn mi_os_claim_huge_pages(pages: usize, total_size: *mut usize) -> *mut u8 {
     #[cfg(target_pointer_width = "32")]

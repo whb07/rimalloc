@@ -494,7 +494,6 @@ pub(crate) unsafe fn _mi_page_unfull_internal(
     )
 }
 
-#[allow(dead_code)]
 #[inline]
 unsafe fn mi_page_to_full(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     crate::mi_assert_internal!(pq == mi_page_queue_of(page));

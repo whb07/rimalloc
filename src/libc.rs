@@ -455,7 +455,6 @@ pub(crate) extern "C" fn _mi_popcount_generic(x: usize) -> usize {
 #[used]
 static MI_POPCOUNT_GENERIC_KEEP: extern "C" fn(usize) -> usize = _mi_popcount_generic;
 
-#[allow(dead_code)]
 pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arguments<'_>) -> i32 {
     if buf.is_null() || bufsize == 0 {
         return 0;
@@ -532,7 +531,6 @@ pub(crate) unsafe extern "C" fn _mi_vsnprintf(
     }
 }
 
-#[allow(dead_code)]
 #[inline(never)]
 pub(crate) fn _mi_snprintf(buf: *mut c_char, buflen: usize, args: fmt::Arguments<'_>) -> i32 {
     mi_vsnprintf_args(buf, buflen, args)

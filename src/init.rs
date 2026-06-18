@@ -93,6 +93,14 @@ pub const fn MI_MEMID_INIT(kind: mi_memkind_t) -> mi_memid_t {
     }
 }
 
+#[inline]
+fn mi_memid_is_static(memid: mi_memid_t) -> bool {
+    matches!(
+        crate::core_types::MemId::view(memid),
+        crate::core_types::MemIdView::Static(_)
+    )
+}
+
 #[allow(non_snake_case)]
 pub const fn QNULL(sz: usize) -> mi_page_queue_t {
     mi_page_queue_t {
@@ -640,7 +648,7 @@ fn mi_subproc_main_init() {
     unsafe {
         let main = mi_subproc_main_addr();
         let main_prefix = mi_subproc_prefix(main);
-        if (*main_prefix).memid.memkind != mi_memkind_t::MI_MEM_STATIC {
+        if !mi_memid_is_static((*main_prefix).memid) {
             _mi_options_init();
             (*main_prefix).memid = crate::internal::_mi_memid_create(mi_memkind_t::MI_MEM_STATIC);
             (*main_prefix).heaps = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
@@ -1030,7 +1038,7 @@ fn mi_tld_main_init() {
 fn mi_theap_main_init() {
     // SAFETY: mutates the statically allocated main theap during one-time lazy init.
     unsafe {
-        if theap_main.memid.memkind != mi_memkind_t::MI_MEM_STATIC {
+        if !mi_memid_is_static(theap_main.memid) {
             theap_main.memid = crate::internal::_mi_memid_create(mi_memkind_t::MI_MEM_STATIC);
             #[cfg(any(target_os = "macos", windows))]
             crate::internal::_mi_random_init_weak(ptr::addr_of_mut!(theap_main.random));

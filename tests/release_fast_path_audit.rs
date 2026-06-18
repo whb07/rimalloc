@@ -2372,6 +2372,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             && theap_rs.contains("mi_memid_is_refcounted((*theap).memid)")
             && !theap_rs.contains("memid.mem.os.")
             && !theap_rs.contains("memid.memkind")
+            && init_rs.contains("fn mi_memid_is_static(memid: mi_memid_t) -> bool")
+            && init_rs.contains("crate::core_types::MemIdView::Static(_)")
+            && init_rs.contains("!mi_memid_is_static((*main_prefix).memid)")
+            && init_rs.contains("!mi_memid_is_static(theap_main.memid)")
+            && !init_rs.contains("(*main_prefix).memid.memkind != mi_memkind_t::MI_MEM_STATIC")
+            && !init_rs.contains("theap_main.memid.memkind != mi_memkind_t::MI_MEM_STATIC")
             && arena_meta_rs.contains(
                 "if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid)"
             )

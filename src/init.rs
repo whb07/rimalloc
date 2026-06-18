@@ -1198,21 +1198,6 @@ unsafe fn mi_win_tls_slot_alloc(
     }
 }
 
-#[cfg(not(windows))]
-#[allow(dead_code)]
-unsafe fn mi_win_tls_slot_alloc(
-    slot: *mut usize,
-    extended: *mut usize,
-    raw_index: *mut u32,
-) -> bool {
-    unsafe {
-        raw_index.write(TLS_OUT_OF_INDEXES);
-        extended.write(0);
-        slot.write(0);
-    }
-    false
-}
-
 #[cfg(windows)]
 unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
     let index = unsafe { raw_index.read() };
@@ -1222,12 +1207,6 @@ unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
             raw_index.write(TLS_OUT_OF_INDEXES);
         }
     }
-}
-
-#[cfg(not(windows))]
-#[allow(dead_code)]
-unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
-    unsafe { raw_index.write(TLS_OUT_OF_INDEXES) };
 }
 
 #[cfg(windows)]
@@ -1256,13 +1235,6 @@ unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
         unsafe { pkey.write(key) };
         0
     }
-}
-
-#[cfg(not(any(target_os = "openbsd", target_os = "android")))]
-#[allow(dead_code)]
-unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
-    unsafe { pkey.write(0) };
-    0
 }
 
 fn mi_tls_slots_init() {

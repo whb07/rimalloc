@@ -13,7 +13,7 @@ use core::mem::size_of;
 use core::ptr;
 
 use crate::arena::{
-    _mi_arenas_collect, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free,
+    _mi_arenas_collect, _mi_arenas_page_abandon, _mi_arenas_page_alloc, _mi_arenas_page_free_typed,
     MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
 };
 use crate::atomic::{
@@ -562,9 +562,9 @@ pub(crate) unsafe fn _mi_page_free_internal<S>(
     let owner =
         crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(theap));
     mi_page_set_theap(page, ptr::null_mut());
-    _mi_arenas_page_free(page, theap);
+    let destroyed = _mi_arenas_page_free_typed(page_wrapper, owner);
     _mi_arenas_collect(false, false, (*theap).tld);
-    crate::core_types::free_all_free_page_to_arena(page_wrapper, owner)
+    destroyed
 }
 
 const MI_RETIRE_CYCLES: u8 = 16;

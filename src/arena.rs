@@ -2825,6 +2825,17 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
 }
 
 /// # Safety
+/// `page` must be an all-free page that has been removed from its page queue.
+/// `owner` must be the thread heap that owned the page before release.
+pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(
+    page: crate::core_types::AllFreePage<S>,
+    owner: crate::core_types::ThreadHeapLocal,
+) -> crate::core_types::DestroyedPage {
+    unsafe { _mi_arenas_page_free(page.page.ptr.as_ptr(), owner.0.as_ptr()) };
+    crate::core_types::free_all_free_page_to_arena(page, owner)
+}
+
+/// # Safety
 /// Internal arena abandon path matching the C ABI.
 pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
     page: *mut mi_page_t,

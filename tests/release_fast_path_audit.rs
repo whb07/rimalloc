@@ -2122,9 +2122,14 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("let _ = _mi_page_free_internal(")
             && page_rs.contains("mi_page_queue_remove(pq, page);")
             && page_rs.contains("mi_page_set_theap(page, ptr::null_mut());")
-            && page_rs.contains("_mi_arenas_page_free(page, theap);")
+            && page_rs.contains("let destroyed = _mi_arenas_page_free_typed(page_wrapper, owner);")
             && page_rs.contains("_mi_arenas_collect(false, false, (*theap).tld);")
-            && page_rs.contains("crate::core_types::free_all_free_page_to_arena(page_wrapper, owner)")
+            && arena_rs.contains(
+                "pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(\n    page: crate::core_types::AllFreePage<S>,\n    owner: crate::core_types::ThreadHeapLocal,"
+            )
+            && arena_rs
+                .contains("unsafe { _mi_arenas_page_free(page.page.ptr.as_ptr(), owner.0.as_ptr()) };")
+            && arena_rs.contains("crate::core_types::free_all_free_page_to_arena(page, owner)")
             && theap_rs.contains("_mi_page_free(page, pq);"),
         "page release should keep C's local _mi_page_free helper boundary while using typed all-free page witnesses internally"
     );

@@ -124,7 +124,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## A2. Stabilize the crate-root facade shape
 
-- [ ] Keep crate-root public items deliberately small.
+- [x] Keep crate-root public items deliberately small.
   - Intended default root surface:
     - `pub mod raw;`
     - `pub struct MiMalloc;`
@@ -137,15 +137,22 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `scripts/check-api-inventory.py` passes.
     - `cargo doc --no-deps --features std` shows only the curated items at crate root.
     - Compile-fail docs prove old modules such as `mechanical_mimalloc::alloc` and `mechanical_mimalloc::page` are unavailable.
+  - Evidence:
+    - `src/lib.rs` exposes `raw`, `MiMalloc`, `Allocation`, `AllocError`, `LayoutError`, and `TryAllocError` only.
+    - `scripts/check-api-inventory.py` validates that exact crate-root allowlist.
+    - Crate docs include compile-fail examples for inaccessible implementation modules.
 
-- [ ] Do not export internal modules from crate root.
+- [x] Do not export internal modules from crate root.
   - Modules that must remain non-public at crate root:
     - `abi`, `alloc`, `alloc_aligned`, `alloc_override`, `alloc_posix`, `arena`, `arena_meta`, `atomic`, `bitmap`, `bits`, `core_types`, `free`, `headers`, `heap`, `init`, `internal`, `libc`, `memory`, `mimalloc`, `options`, `os`, `page`, `page_map`, `prim`, `random`, `static_c`, `stats`, `theap`, `threadlocal`, `track`, `types`.
   - Validation:
     - Release audit searches `src/lib.rs` for `pub mod` declarations for these names and fails if found.
     - Compile-fail tests cover at least five representative old paths.
+  - Evidence:
+    - `cargo test --quiet --test release_fast_path_audit crate_root_exposes_only_curated_rust_facade` passes.
+    - Crate docs include compile-fail coverage for `alloc`, `page`, `heap`, `internal`, `options`, and `os` paths.
 
-- [ ] Decide whether `raw` is documented at crate root as unstable, unsafe, or both.
+- [x] Decide whether `raw` is documented at crate root as unstable, unsafe, or both.
   - Required policy:
     - `raw` is unsafe because most operations inherit C pointer/lifetime/threading requirements.
     - `raw` is unstable as a Rust module path surface until explicitly versioned.
@@ -153,6 +160,10 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - `src/lib.rs` docs and `docs/api-inventory.md` both say this.
     - `raw` module docs include a warning before listing re-exports.
+  - Evidence:
+    - `src/lib.rs` documents `raw` as unsafe because callers must uphold C pointer ownership, layout, alignment, threading, and lifetime requirements.
+    - `docs/api-inventory.md` documents `raw` as Tier R and unstable until explicitly versioned.
+    - `src/raw.rs` documents that raw module paths are unstable and that C ABI symbol compatibility is tracked separately.
 
 ## A3. Public documentation gates
 

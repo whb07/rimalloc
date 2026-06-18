@@ -86,6 +86,10 @@
 //! let _ = mechanical_mimalloc::alloc::mi_malloc(64);
 //! ```
 //!
+//! ```rust,compile_fail
+//! use mechanical_mimalloc::{heap, internal, options, os, page};
+//! ```
+//!
 //! Internal typestate witnesses are also not public API. External users cannot
 //! forge allocator-core states such as local pages, foreign pages, abandoned
 //! pages, or validated free requests:

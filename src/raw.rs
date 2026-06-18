@@ -7,6 +7,8 @@
 //!
 //! The APIs here are not safe Rust abstractions. Most functions accept or
 //! return raw pointers and inherit mimalloc's C ABI preconditions.
+//! The Rust module paths in this facade are also unstable until explicitly
+//! versioned; C ABI symbol compatibility is tracked separately.
 
 #![allow(unused_imports)]
 

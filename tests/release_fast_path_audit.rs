@@ -2364,6 +2364,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && theap_rs.contains("crate::core_types::MemIdView::Arena(a)")
             && theap_rs.contains("a.range.count_usize() * crate::arena::MI_ARENA_SLICE_SIZE")
             && !theap_rs.contains("memid.mem.os.")
+            && arena_meta_rs.contains(
+                "if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid)"
+            )
+            && arena_meta_rs.contains("let block_count = meta.block_count.get() as usize;")
+            && arena_meta_rs.contains("let block_idx = meta.block_index.0 as usize;")
+            && !arena_meta_rs.contains("memid.mem.meta.")
+            && !arena_meta_rs.contains("memid.memkind == crate::internal::mi_memkind_t::MI_MEM_META")
             && !arena_rs.contains("const fn mi_memkind_is_os(memkind: mi_memkind_t)")
             && !arena_rs.contains("mi_memkind_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.memkind })")
             && !arena_rs.contains(

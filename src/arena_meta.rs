@@ -193,13 +193,11 @@ pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid
     if p.is_null() {
         return;
     }
-    if memid.memkind == crate::internal::mi_memkind_t::MI_MEM_META {
-        crate::mi_assert_internal!(
-            _mi_divide_up(size, MI_META_BLOCK_SIZE) == memid.mem.meta.block_count as usize
-        );
-        let block_count = memid.mem.meta.block_count as usize;
-        let block_idx = memid.mem.meta.block_index as usize;
-        let mpage = memid.mem.meta.meta_page.cast::<mi_meta_page_t>();
+    if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid) {
+        let block_count = meta.block_count.get() as usize;
+        let block_idx = meta.block_index.0 as usize;
+        let mpage = meta.meta_page.as_ptr().cast::<mi_meta_page_t>();
+        crate::mi_assert_internal!(_mi_divide_up(size, MI_META_BLOCK_SIZE) == block_count);
         crate::mi_assert_internal!(mi_meta_page_of_ptr(p, ptr::null_mut()) == mpage);
         crate::mi_assert_internal!(block_idx + block_count <= MI_META_BLOCKS_PER_PAGE);
         crate::mi_assert_internal!(mi_bbitmap_is_clearN(

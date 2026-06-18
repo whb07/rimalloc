@@ -137,8 +137,8 @@ pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
 }
 
 #[inline(always)]
-fn mi_good_size_small(size: usize) -> usize {
-    _mi_bin_size(mi_bin(size + MI_PADDING_SIZE))
+fn mi_good_size_small(padded: crate::core_types::PaddedSize) -> crate::core_types::GoodSize {
+    crate::core_types::GoodSize::new(_mi_bin_size(_mi_bin_typed(padded.get()).as_usize()))
 }
 
 pub(crate) fn mi_good_size_typed(
@@ -152,8 +152,7 @@ pub(crate) fn mi_good_size_typed(
         let Ok(padded) = size.checked_padded() else {
             return crate::core_types::GoodSize::new(sz);
         };
-        let _ = padded;
-        crate::core_types::GoodSize::new(mi_good_size_small(sz))
+        mi_good_size_small(padded)
     } else if sz <= MI_MAX_ALLOC_SIZE {
         let Ok(padded) = size.checked_padded() else {
             return crate::core_types::GoodSize::new(sz);

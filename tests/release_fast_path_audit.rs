@@ -1585,7 +1585,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("mi_bin(size)")
             && page_rs.contains("_mi_theap_empty")
             && page_rs.contains(".pages[bin].block_size")
-            && page_rs.contains("_mi_bin_size(mi_bin(size + MI_PADDING_SIZE))")
+            && page_rs.contains("_mi_bin_size(_mi_bin_typed(padded.get()).as_usize())")
             && stats_rs.contains("_mi_bin_size(bin)"),
         "bin lookup helpers should keep C's mi_bin/_mi_bin/_mi_bin_size boundaries and empty-theap table dependency"
     );
@@ -1624,6 +1624,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && alloc_rs.contains("mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()")
             && alloc_aligned_rs
                 .contains("mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()")
+            && stats_rs.contains("mi_good_size_typed(RequestedSize::new(12 * 1024)).get()")
+            && !stats_rs.contains("use crate::mimalloc::{mi_good_size")
             && !alloc_rs.contains("use crate::page::{_mi_bin_typed, _mi_malloc_generic_typed, MI_MAX_ALLOC_SIZE, mi_good_size};")
             && !alloc_aligned_rs.contains("mi_good_size(size)"),
         "internal good-size routing should carry GoodSize until raw ABI/comparison boundaries"

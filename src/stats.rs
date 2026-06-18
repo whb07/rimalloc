@@ -15,15 +15,16 @@ use core::{mem::size_of, ptr};
 use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed, mi_lock_t,
 };
+use crate::core_types::RequestedSize;
 use crate::init::_mi_subproc_main;
 use crate::internal::{_mi_memzero, _mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
-use crate::mimalloc::{mi_good_size, mi_rezalloc};
+use crate::mimalloc::mi_rezalloc;
 use crate::mimalloc::{mi_heap_main, mi_subproc_current, mi_subproc_visit_heaps};
 use crate::options::{_mi_fprintf, _mi_fputs};
 use crate::os::_mi_os_numa_node_count;
 use crate::page::{
     _mi_bin_size, MI_LARGE_MAX_OBJ_SIZE, MI_LARGE_PAGE_SIZE, MI_MEDIUM_MAX_OBJ_SIZE,
-    MI_MEDIUM_PAGE_SIZE, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE,
+    MI_MEDIUM_PAGE_SIZE, MI_SMALL_MAX_OBJ_SIZE, MI_SMALL_PAGE_SIZE, mi_good_size_typed,
 };
 use crate::prim::{
     _mi_heap_theap_peek, _mi_prim_clock_now, _mi_prim_process_info, _mi_theap_default,
@@ -1483,7 +1484,7 @@ fn mi_json_buf_expand(hbuf: &mut mi_json_buf_t) -> bool {
         return false;
     }
     let newsize = if hbuf.size == 0 {
-        unsafe { mi_good_size(12 * 1024) }
+        mi_good_size_typed(RequestedSize::new(12 * 1024)).get()
     } else {
         2 * hbuf.size
     };

@@ -8,7 +8,6 @@
     non_upper_case_globals,
     dead_code,
     unused_imports,
-    clippy::missing_safety_doc,
     unsafe_op_in_unsafe_fn
 )]
 
@@ -300,26 +299,41 @@ fn mi_last_errno() -> c_int {
     unsafe { *__errno_location() }
 }
 
+/// # Safety
+///
+/// `fpath` must point to a valid NUL-terminated path string.
 #[inline]
 pub unsafe extern "C" fn mi_prim_open(fpath: *const c_char, open_flags: c_int) -> c_int {
     open(fpath, open_flags)
 }
 
+/// # Safety
+///
+/// `buf` must be valid writable storage for `bufsize` bytes.
 #[inline]
 pub unsafe extern "C" fn mi_prim_read(fd: c_int, buf: *mut c_void, bufsize: usize) -> ssize_t {
     read(fd, buf, bufsize)
 }
 
+/// # Safety
+///
+/// `fd` must be a file descriptor that can be passed to `close`.
 #[inline]
 pub unsafe extern "C" fn mi_prim_close(fd: c_int) -> c_int {
     close(fd)
 }
 
+/// # Safety
+///
+/// `fpath` must point to a valid NUL-terminated path string.
 #[inline]
 pub unsafe extern "C" fn mi_prim_access(fpath: *const c_char, mode: c_int) -> c_int {
     access(fpath, mode)
 }
 
+/// # Safety
+///
+/// `tv`, when non-null, must point to a valid `mi_timeval`.
 #[inline]
 pub unsafe fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
     if tv.is_null() {
@@ -328,6 +342,10 @@ pub unsafe fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
     ((*tv).tv_sec as mi_msecs_t * 1000) + ((*tv).tv_usec as mi_msecs_t / 1000)
 }
 
+/// # Safety
+///
+/// `addr..addr + size` must describe a range previously returned by the Unix
+/// primitive allocator.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
     if size == 0 {
@@ -392,6 +410,10 @@ unsafe fn unix_detect_physical_memory(page_size: usize, physical_memory_in_kib: 
     }
 }
 
+/// # Safety
+///
+/// `config`, when non-null, must point to writable primitive memory
+/// configuration storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     if config.is_null() {
@@ -572,6 +594,10 @@ unsafe fn unix_mmap(
     p
 }
 
+/// # Safety
+///
+/// `is_large`, `is_zero`, and `addr`, when non-null, must be valid writable
+/// out-pointers for the duration of the call.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_alloc(
@@ -613,6 +639,10 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc(
 #[inline]
 unsafe fn unix_mprotect_hint(_err: c_int) {}
 
+/// # Safety
+///
+/// `start..start + size` must describe a range managed by the Unix primitive
+/// allocator. `is_zero`, when non-null, must be a valid writable out-pointer.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_commit(
@@ -634,6 +664,10 @@ pub(crate) unsafe extern "C" fn _mi_prim_commit(
     err
 }
 
+/// # Safety
+///
+/// `start..start + size` must describe a range managed by the Unix primitive
+/// allocator.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) -> c_int {
     let _ = start;
@@ -641,6 +675,11 @@ pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) 
     0
 }
 
+/// # Safety
+///
+/// `start..start + size` must describe a range managed by the Unix primitive
+/// allocator. `needs_recommit`, when non-null, must be a valid writable
+/// out-pointer.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_decommit(
     start: *mut c_void,
@@ -659,6 +698,10 @@ pub(crate) unsafe extern "C" fn _mi_prim_decommit(
     err
 }
 
+/// # Safety
+///
+/// `start..start + size` must describe a range managed by the Unix primitive
+/// allocator.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_int {
@@ -678,6 +721,10 @@ pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) 
     err
 }
 
+/// # Safety
+///
+/// `start..start + size` must describe a range managed by the Unix primitive
+/// allocator.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_protect(
@@ -699,6 +746,10 @@ pub(crate) unsafe extern "C" fn _mi_prim_protect(
     err
 }
 
+/// # Safety
+///
+/// `start..start + len` must describe a valid memory range. `nmask`, when
+/// non-null, must be valid for the kernel `mbind` call.
 #[inline]
 pub unsafe extern "C" fn mi_prim_mbind(
     start: *mut c_void,
@@ -725,6 +776,10 @@ pub unsafe extern "C" fn mi_prim_mbind(
     }
 }
 
+/// # Safety
+///
+/// `is_zero` and `addr`, when non-null, must be valid writable out-pointers for
+/// the duration of the call.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     hint_addr: *mut c_void,
@@ -795,6 +850,10 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     }
 }
 
+/// # Safety
+///
+/// Must be called only in primitive-layer contexts where querying the current
+/// NUMA node is permitted.
 pub(crate) unsafe extern "C" fn _mi_prim_numa_node() -> usize {
     #[cfg(target_os = "linux")]
     {
@@ -844,6 +903,10 @@ fn mi_prim_numa_node_path(node: usize, buf: &mut [c_char; 128]) -> *const c_char
     buf.as_ptr()
 }
 
+/// # Safety
+///
+/// Must be called only in primitive-layer contexts where querying NUMA topology
+/// is permitted.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     #[cfg(target_os = "linux")]
@@ -865,6 +928,10 @@ pub(crate) unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     }
 }
 
+/// # Safety
+///
+/// Must be called only in primitive-layer contexts where querying the platform
+/// clock is permitted.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
     #[cfg(any(
@@ -919,6 +986,9 @@ pub(crate) unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
     }
 }
 
+/// # Safety
+///
+/// `pinfo`, when non-null, must point to writable process-info storage.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
     if pinfo.is_null() {
@@ -934,6 +1004,9 @@ pub(crate) unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_inf
     (*pinfo).peak_rss = (usage.ru_maxrss as usize).saturating_mul(1024);
 }
 
+/// # Safety
+///
+/// `msg` must be null or point to a valid NUL-terminated C string.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
     if msg.is_null() {
@@ -955,17 +1028,27 @@ pub(crate) unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
 }
 
 #[cfg(target_os = "macos")]
+/// # Safety
+///
+/// Must be called only when the platform `environ` pointer is valid.
 #[inline]
 pub unsafe extern "C" fn mi_get_environ() -> *mut *mut c_char {
     *_NSGetEnviron()
 }
 
 #[cfg(not(target_os = "macos"))]
+/// # Safety
+///
+/// Must be called only when the platform `environ` pointer is valid.
 #[inline]
 pub unsafe extern "C" fn mi_get_environ() -> *mut *mut c_char {
     environ
 }
 
+/// # Safety
+///
+/// `name` must point to a valid NUL-terminated C string. `result`, when
+/// non-null, must point to writable storage for `result_size` bytes.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_getenv(
     name: *const c_char,
@@ -1022,6 +1105,9 @@ pub(crate) unsafe extern "C" fn _mi_prim_getenv(
     true
 }
 
+/// # Safety
+///
+/// `buf` must point to writable storage for `buf_len` bytes.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: usize) -> bool {
     if buf_len == 0 {
@@ -1102,6 +1188,10 @@ pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: u
     }
 }
 
+/// # Safety
+///
+/// `value`, when non-null, must be a thread heap pointer previously associated
+/// with the pthread destructor key.
 #[inline]
 pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
     if !value.is_null() {
@@ -1109,12 +1199,20 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
     }
 }
 
+/// # Safety
+///
+/// Must be called during primitive thread initialization before a destructor key
+/// has been registered.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     crate::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
     let _ = pthread_key_create(&raw mut _mi_heap_default_key, Some(mi_pthread_done));
 }
 
+/// # Safety
+///
+/// Must be called during primitive thread teardown or process teardown after the
+/// destructor key has been initialized.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
     if _mi_heap_default_key != PTHREAD_KEY_INVALID {
@@ -1122,6 +1220,10 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
     }
 }
 
+/// # Safety
+///
+/// `theap` must be null or a valid thread heap pointer whose lifetime covers
+/// subsequent pthread destructor callbacks.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
     if _mi_heap_default_key != PTHREAD_KEY_INVALID {
@@ -1129,11 +1231,18 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *
     }
 }
 
+/// # Safety
+///
+/// Must be called only from primitive thread-state queries.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
     false
 }
 
+/// # Safety
+///
+/// Must be called only in contexts where yielding the current thread is
+/// permitted.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_yield() {
     let _ = sleep(0);

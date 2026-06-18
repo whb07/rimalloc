@@ -973,7 +973,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         .collect::<BTreeSet<_>>();
     let expected = BTreeSet::from([
         "src/alloc.rs",
-        "src/alloc_aligned.rs",
         "src/bitmap.rs",
         "src/free.rs",
         "src/heap.rs",
@@ -992,7 +991,8 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "broad unsafe_op_in_unsafe_fn allowances should stay limited to audited mechanical raw-pointer modules"
     );
     assert!(
-        !actual.contains("src/alloc_posix.rs")
+        !actual.contains("src/alloc_aligned.rs")
+            && !actual.contains("src/alloc_posix.rs")
             && !actual.contains("src/alloc_override.rs")
             && !actual.contains("src/arena_meta.rs")
             && !actual.contains("src/atomic.rs")
@@ -1003,7 +1003,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/random.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, libc helpers, options helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, libc helpers, options helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 
@@ -2056,9 +2056,10 @@ fn free_path_internals_are_not_dynamic_exports() {
             && alloc_aligned_rs.contains("#[cfg(mi_c_malloc_fast)]")
             && alloc_aligned_rs.contains("\"call _mi_padding_shrink\"")
             && alloc_aligned_rs.contains("fn mi_padding_shrink_call(")
-            && alloc_aligned_rs.contains("_mi_padding_shrink(page, block, min_size);")
-            && alloc_aligned_rs
-                .contains("mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size);"),
+            && alloc_aligned_rs.contains("unsafe { _mi_padding_shrink(page, block, min_size) };")
+            && alloc_aligned_rs.contains(
+                "unsafe { mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size) };"
+            ),
         "aligned allocation should keep C's _mi_padding_shrink helper boundary"
     );
     assert!(
@@ -2712,9 +2713,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             && internal.contains("pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(\n    theap: *mut mi_theap_t,\n    padded: crate::core_types::PaddedSize,")
             && internal.contains("let idx = mi_direct_bin_from_padded(padded).as_usize();")
             && alloc_rs.contains("let page = _mi_theap_get_free_small_page_typed(theap, padded);")
-            && alloc_aligned_rs
-                .contains("let page = crate::internal::_mi_theap_get_free_small_page_typed(theap, padded);")
-            && alloc_aligned_rs.contains("_mi_page_malloc_zero_typed(theap, page, padded, zero")
+            && alloc_aligned_rs.contains(
+                "let page = unsafe { crate::internal::_mi_theap_get_free_small_page_typed(theap, padded) };"
+            )
+            && alloc_aligned_rs.contains(
+                "_mi_page_malloc_zero_typed(theap, page, padded, zero, core::ptr::null_mut())"
+            )
             && alloc_aligned_rs.contains(
                 "let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();"
             )

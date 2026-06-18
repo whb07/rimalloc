@@ -267,7 +267,7 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at(
         && mi_likely(size <= MI_SMALL_SIZE_MAX && alignment <= size)
     {
         let align_mask = alignment - 1;
-        let padded = crate::core_types::PaddedSize::new_unchecked(size + MI_PADDING_SIZE);
+        let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
         let page = crate::internal::_mi_theap_get_free_small_page_typed(theap, padded);
         if mi_likely(!page.is_null() && !(*page).free.is_null()) {
             let is_aligned = (((*page).free as usize) + offset) & align_mask == 0;

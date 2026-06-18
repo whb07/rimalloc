@@ -2248,7 +2248,7 @@ fn free_path_internals_are_not_dynamic_exports() {
                 .contains("let page = crate::internal::_mi_theap_get_free_small_page_typed(theap, padded);")
             && alloc_aligned_rs.contains("_mi_page_malloc_zero_typed(theap, page, padded, zero")
             && alloc_aligned_rs.contains(
-                "let padded = crate::core_types::PaddedSize::new_unchecked(size + MI_PADDING_SIZE);"
+                "let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();"
             )
             && !page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")
             && !alloc_aligned_rs

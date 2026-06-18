@@ -2382,6 +2382,17 @@ fn free_path_internals_are_not_dynamic_exports() {
             && init_rs.contains("!mi_memid_is_static(theap_main.memid)")
             && !init_rs.contains("(*main_prefix).memid.memkind != mi_memkind_t::MI_MEM_STATIC")
             && !init_rs.contains("theap_main.memid.memkind != mi_memkind_t::MI_MEM_STATIC")
+            && internal.contains("pub fn mi_memid_is_os(memid: mi_memid_t) -> bool")
+            && internal.contains("pub fn mi_memid_needs_no_free(memid: mi_memid_t) -> bool")
+            && internal.contains("pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool")
+            && internal.contains("crate::core_types::MemIdView::None(_)")
+            && internal.contains("crate::core_types::MemIdView::External(_)")
+            && internal.contains("crate::core_types::MemIdView::Static(_)")
+            && internal.contains("crate::core_types::MemIdView::Arena(_)")
+            && internal.contains("mi_page_is_in_arena(page)")
+            && !internal.contains("crate::types::mi_memkind_is_os(memid.memkind)")
+            && !internal.contains("crate::types::mi_memkind_needs_no_free(memid.memkind)")
+            && !internal.contains("(*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA")
             && arena_meta_rs.contains(
                 "if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid)"
             )

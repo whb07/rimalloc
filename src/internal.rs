@@ -493,13 +493,21 @@ pub struct mi_memid_t {
 }
 
 #[inline]
-pub const fn mi_memid_is_os(memid: mi_memid_t) -> bool {
-    crate::types::mi_memkind_is_os(memid.memkind)
+pub fn mi_memid_is_os(memid: mi_memid_t) -> bool {
+    matches!(
+        crate::core_types::MemId::view(memid),
+        crate::core_types::MemIdView::Os(_)
+    )
 }
 
 #[inline]
-pub const fn mi_memid_needs_no_free(memid: mi_memid_t) -> bool {
-    crate::types::mi_memkind_needs_no_free(memid.memkind)
+pub fn mi_memid_needs_no_free(memid: mi_memid_t) -> bool {
+    matches!(
+        crate::core_types::MemId::view(memid),
+        crate::core_types::MemIdView::None(_)
+            | crate::core_types::MemIdView::External(_)
+            | crate::core_types::MemIdView::Static(_)
+    )
 }
 
 #[inline]
@@ -831,7 +839,10 @@ pub unsafe fn mi_page_contains_address(page: *const mi_page_t, p: *const c_void)
 
 #[inline]
 pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
-    (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA
+    matches!(
+        crate::core_types::MemId::view((*page).memid),
+        crate::core_types::MemIdView::Arena(_)
+    )
 }
 
 #[inline]
@@ -851,7 +862,7 @@ pub(crate) unsafe fn mi_page_usable_block_size(
 #[inline]
 pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
     if MI_PAGE_META_IS_SEPARATED != 0 {
-        (*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA
+        mi_page_is_in_arena(page)
             && page.cast_mut().cast::<c_void>()
                 != _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN)
     } else {

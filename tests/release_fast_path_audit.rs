@@ -1934,6 +1934,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub unsafe extern \"C\" fn _mi_theap_collect_retired",
         ),
         (
+            "src/alloc.rs",
+            &alloc_rs,
+            "pub(crate) unsafe extern \"C\" fn mi_theap_alloc_new",
+        ),
+        (
             "src/theap.rs",
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_collect_abandon",

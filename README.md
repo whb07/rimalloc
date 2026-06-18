@@ -64,16 +64,12 @@ claimed as maintained Rust targets until parity and CI evidence exists.
 Common local checks:
 
 ```sh
-cargo fmt --check
-cargo test
-cargo test --test release_fast_path_audit --quiet
-cargo check --features std
-cargo check --features secure
-cargo check --features guarded
-cargo check --features track-valgrind
-cargo check --features track-asan
-cargo check --benches --features bench
+scripts/check-local.sh
 ```
+
+Individual entrypoints are available under `scripts/` for formatting, lints,
+feature sweeps, ABI symbols, layout, docs, packaging, benchmark smoke/full
+runs, Miri, sanitizers, and environment capture.
 
 Benchmark evidence is tracked in `BENCHMARK_RESULTS.md`. Performance-sensitive
 changes should include fresh results for the changed benchmark set and a full
@@ -85,4 +81,3 @@ report when hot paths or allocator-wide behavior can move.
 ownership, allocation origin, alignment, object lifetime, nullability, and
 threading requirements. Rust safe wrappers are added only where those invariants
 can be upheld without relying on caller discipline.
-

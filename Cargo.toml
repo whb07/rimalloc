@@ -23,6 +23,7 @@ include = [
   "/tests/**",
   "/benches/**",
   "/docs/**",
+  "/scripts/**",
   "/build.rs",
   "/PARITY.md",
   "/BENCHMARK_RESULTS.md",

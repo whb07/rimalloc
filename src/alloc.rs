@@ -1335,7 +1335,6 @@ unsafe extern "C" fn mi_heap_try_new(
     unsafe { mi_theap_try_new(_mi_heap_theap(heap), size, nothrow) }
 }
 
-#[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn mi_theap_alloc_new(
     theap: *mut mi_theap_t,
     size: usize,

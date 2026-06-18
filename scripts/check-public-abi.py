@@ -136,7 +136,7 @@ def public_header_symbols() -> list[str]:
 
 
 def facade_symbols() -> list[str]:
-    text = (ROOT / "src/mimalloc.rs").read_text()
+    text = (ROOT / "src/abi.rs").read_text()
     symbols: list[str] = []
     for match in re.finditer(r"pub fn\s+(mi_[A-Za-z0-9_]+)\s*\(", text):
         symbol = match.group(1)
@@ -274,12 +274,12 @@ def rust_source() -> str:
     return f"""\
 use std::mem::{{align_of, offset_of, size_of}};
 
-use mechanical_mimalloc::mimalloc::{{
+use mechanical_mimalloc::raw::mimalloc::{{
     MI_MALLOC_VERSION, MI_SMALL_SIZE_MAX, MI_SMALL_WSIZE_MAX, mi_arena_id_t, mi_heap_area_t,
     mi_heap_t, mi_subproc_id_t, mi_theap_t,
 }};
-use mechanical_mimalloc::options::{{{", ".join(OPTION_NAMES[48:])}, mi_option_t}};
-use mechanical_mimalloc::stats::{{
+use mechanical_mimalloc::raw::options::{{{", ".join(OPTION_NAMES[48:])}, mi_option_t}};
+use mechanical_mimalloc::raw::stats::{{
     MI_BIN_HUGE, MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_NONE,
     MI_CBIN_OTHER, MI_CBIN_SMALL, MI_STAT_VERSION, mi_chunkbin_t, mi_stat_count_t,
     mi_stat_counter_t, mi_stats_header_init, mi_stats_init, mi_stats_t,
@@ -374,7 +374,11 @@ def run(command: list[str]) -> str:
 def rust_rlib() -> pathlib.Path:
     subprocess.run(["cargo", "build", "--lib"], cwd=ROOT, check=True)
     libs = sorted(
-        (ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.rlib"),
+        [
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.rlib"),
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc.rlib"),
+            *(ROOT / "target/debug").glob("libmechanical_mimalloc.rlib"),
+        ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

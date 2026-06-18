@@ -1680,7 +1680,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         internal.contains(
             "pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectBin"
-        ) && internal.contains("let idx = mi_direct_bin_from_size(size).as_usize();")
+        ) && internal.contains("let idx = mi_direct_bin_from_size(padded.get()).as_usize();")
             && page_rs.contains("let idx = mi_direct_bin_from_size(size).as_usize();")
             && !internal.contains(
                 "let idx = _mi_wsize_from_size(size);\n    (*theap).pages_free_direct[idx]"
@@ -2175,13 +2175,21 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(
                 "let p = _mi_page_malloc_zero_typed(theap, page, layout.padded(), zero, ptr::null_mut());"
             )
-            && alloc_aligned_rs.contains("let p = _mi_page_malloc_zero_typed(")
+            && internal.contains("pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(\n    theap: *mut mi_theap_t,\n    padded: crate::core_types::PaddedSize,")
+            && internal.contains("let idx = mi_direct_bin_from_size(padded.get()).as_usize();")
+            && alloc_rs.contains("let page = _mi_theap_get_free_small_page_typed(theap, padded);")
             && alloc_aligned_rs
-                .contains("crate::core_types::PaddedSize::new_unchecked(padsize)")
+                .contains("let page = crate::internal::_mi_theap_get_free_small_page_typed(theap, padded);")
+            && alloc_aligned_rs.contains("_mi_page_malloc_zero_typed(theap, page, padded, zero")
+            && alloc_aligned_rs.contains(
+                "let padded = crate::core_types::PaddedSize::new_unchecked(size + MI_PADDING_SIZE);"
+            )
             && !page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")
             && !alloc_aligned_rs
-                .contains("let p = _mi_page_malloc_zero(theap, page, padsize, zero);"),
-        "page and aligned allocation should use typed padded-size page allocation internally"
+                .contains("let p = _mi_page_malloc_zero(theap, page, padsize, zero);")
+            && !alloc_rs.contains("_mi_theap_get_free_small_page(theap, padded.get())")
+            && !alloc_aligned_rs.contains("_mi_theap_get_free_small_page(theap, padsize)"),
+        "page and aligned allocation should use typed padded-size helpers internally"
     );
     assert!(
         atomic_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_atomic_once_enter")

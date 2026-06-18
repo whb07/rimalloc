@@ -13,7 +13,7 @@ use crate::free::_mi_usable_size_typed;
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up,
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size, _mi_ptr_page,
-    _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page, _mi_theap_heap, _mi_thread_id,
+    _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page_typed, _mi_theap_heap, _mi_thread_id,
     MI_BLOCK_TAG_GUARDED, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_PADDING, MI_PADDING_CHECK,
     mi_likely, mi_page_block_size, mi_page_heap, mi_page_keys, mi_page_set_has_interior_pointers,
     mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_ptr_encode_canary,
@@ -268,7 +268,7 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
     // path: `size <= MI_SMALL_SIZE_MAX` (≤ 1024, guarded upstream) and is
     // normalized to non-zero above, so the sum cannot overflow or yield zero.
     let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
-    let page = _mi_theap_get_free_small_page(theap, padded.get());
+    let page = _mi_theap_get_free_small_page_typed(theap, padded);
     let p = _mi_page_malloc_zero_typed(theap, page, padded, zero, usable);
     mi_track_malloc(p, size, zero);
 

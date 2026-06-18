@@ -700,8 +700,11 @@ pub unsafe fn mi_theap_is_initialized(theap: *const mi_theap_t) -> bool {
 }
 
 #[inline]
-pub unsafe fn _mi_theap_get_free_small_page(theap: *mut mi_theap_t, size: usize) -> *mut mi_page_t {
-    let idx = mi_direct_bin_from_size(size).as_usize();
+pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
+    theap: *mut mi_theap_t,
+    padded: crate::core_types::PaddedSize,
+) -> *mut mi_page_t {
+    let idx = mi_direct_bin_from_size(padded.get()).as_usize();
     (*theap).pages_free_direct[idx]
 }
 

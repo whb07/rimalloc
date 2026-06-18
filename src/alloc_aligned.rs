@@ -267,21 +267,16 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at(
         && mi_likely(size <= MI_SMALL_SIZE_MAX && alignment <= size)
     {
         let align_mask = alignment - 1;
-        let padsize = size + MI_PADDING_SIZE;
-        let page = crate::internal::_mi_theap_get_free_small_page(theap, padsize);
+        let padded = crate::core_types::PaddedSize::new_unchecked(size + MI_PADDING_SIZE);
+        let page = crate::internal::_mi_theap_get_free_small_page_typed(theap, padded);
         if mi_likely(!page.is_null() && !(*page).free.is_null()) {
             let is_aligned = (((*page).free as usize) + offset) & align_mask == 0;
             if mi_likely(is_aligned) {
                 if !usable.is_null() {
                     *usable = mi_page_usable_block_size(page).get();
                 }
-                let p = _mi_page_malloc_zero_typed(
-                    theap,
-                    page,
-                    crate::core_types::PaddedSize::new_unchecked(padsize),
-                    zero,
-                    core::ptr::null_mut(),
-                );
+                let p =
+                    _mi_page_malloc_zero_typed(theap, page, padded, zero, core::ptr::null_mut());
                 crate::mi_assert_internal!(!p.is_null());
                 crate::mi_assert_internal!(((p as usize) + offset).is_multiple_of(alignment));
                 mi_track_malloc(p, size, zero);

@@ -32,28 +32,20 @@ struct MechanicalMiMalloc;
 unsafe impl GlobalAlloc for MechanicalMiMalloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         if layout.align() <= 16 {
-            mechanical_mimalloc::raw::alloc::mi_malloc(layout.size()).cast()
+            mechanical_mimalloc::raw::mi_malloc(layout.size()).cast()
         } else {
-            mechanical_mimalloc::raw::alloc_aligned::mi_malloc_aligned(
-                layout.size(),
-                layout.align(),
-            )
-            .cast()
+            mechanical_mimalloc::raw::mi_malloc_aligned(layout.size(), layout.align()).cast()
         }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        mechanical_mimalloc::raw::free::mi_free(ptr.cast());
+        mechanical_mimalloc::raw::mi_free(ptr.cast());
     }
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         if layout.align() <= 16 {
-            mechanical_mimalloc::raw::alloc::mi_realloc(ptr.cast(), new_size).cast()
+            mechanical_mimalloc::raw::mi_realloc(ptr.cast(), new_size).cast()
         } else {
-            mechanical_mimalloc::raw::alloc_aligned::mi_realloc_aligned(
-                ptr.cast(),
-                new_size,
-                layout.align(),
-            )
-            .cast()
+            mechanical_mimalloc::raw::mi_realloc_aligned(ptr.cast(), new_size, layout.align())
+                .cast()
         }
     }
 }

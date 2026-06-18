@@ -10,8 +10,8 @@ the broad raw modules before narrowing or gating default raw internals.
 | `README.md` | root `raw::mi_malloc`, `raw::mi_free` | Raw usage example | Keep as public C API example. |
 | `src/lib.rs` crate docs | root `raw::mi_malloc`, `raw::mi_free` | Raw usage and compile-fail examples | Keep as public C API examples. |
 | `src/abi.rs` macros | root `raw::mi_*`, `raw::mi_heap_*` | C header-style allocation helper macros | Keep only if macros remain public C-header compatibility; otherwise move through `raw::abi`/`raw::mimalloc`. |
-| `benches/hotpath.rs` | `raw::alloc`, `raw::alloc_aligned`, `raw::free` | Allocator hot-path benchmark shim | Migrate to root `raw::mi_*` C-header functions or safe `MiMalloc` when raw internals narrow. |
-| `benches/workloads.rs` | `raw::alloc`, `raw::alloc_aligned`, `raw::free` | Allocator workload benchmark shim | Migrate to root `raw::mi_*` C-header functions or safe `MiMalloc` when raw internals narrow. |
+| `benches/hotpath.rs` | root `raw::mi_*` allocation functions | Allocator hot-path benchmark shim | Keep on public C-header facade. |
+| `benches/workloads.rs` | root `raw::mi_*` allocation functions | Allocator workload benchmark shim | Keep on public C-header facade. |
 | `examples/aligned.rs` | root `raw::mi_malloc_aligned`, `raw::mi_realloc_aligned`, `raw::mi_free` | Public C API aligned allocation example | Keep as public C API example. |
 | `examples/ffi.rs` | root `raw::mi_malloc`, `raw::mi_usable_size`, `raw::mi_free` | Public C API FFI example | Keep as public C API example. |
 | `examples/raw_heap.rs` | root heap `raw::mi_heap_*`, `raw::mi_free` | Unsafe C heap API example | Keep as raw public C API example unless a safe heap API is stabilized. |

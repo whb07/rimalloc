@@ -1214,10 +1214,14 @@ These wrappers should be added only if they can avoid dangling references, globa
     - Tests use `raw::abi`/public C API where testing C behavior.
     - Tests use crate-private unit tests for allocator internals.
 
-- [ ] Migrate benchmarks to stable surfaces.
+- [x] Migrate benchmarks to stable surfaces.
   - Validation:
     - Benchmark harnesses call safe `MiMalloc` or public C ABI/raw C-header functions.
     - They do not require `raw::internal` by default.
+  - Evidence:
+    - `benches/hotpath.rs` and `benches/workloads.rs` use root `raw::mi_*` C-header functions instead of `raw::alloc`, `raw::alloc_aligned`, or `raw::free` modules.
+    - `cargo check --benches --features bench` passes.
+    - `scripts/check-bench-smoke.sh` passes.
 
 ## I2. Provide transition compatibility if needed
 

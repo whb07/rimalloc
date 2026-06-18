@@ -1,6 +1,6 @@
 //! Mechanical translation of the early `src/free.c` free-path helpers.
 
-#![allow(dead_code, clippy::missing_safety_doc, unsafe_op_in_unsafe_fn)]
+#![allow(dead_code, unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{CStr, c_char, c_void};
 use core::{cmp, ptr};
@@ -216,6 +216,8 @@ unsafe fn mi_verify_padding(
     ok
 }
 
+/// # Safety
+/// `page` and `block` must refer to a valid block owned by that page.
 pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t) {
     if MI_PADDING == 0 || MI_PADDING_CHECK == 0 {
         return;
@@ -233,6 +235,8 @@ pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t)
     }
 }
 
+/// # Safety
+/// `page` and `block` must refer to a valid block owned by that page.
 pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_block_t) -> bool {
     if MI_ENCODE_FREELIST == 0 || (crate::internal::MI_SECURE < 4 && MI_DEBUG == 0) {
         return false;
@@ -272,6 +276,8 @@ pub(crate) unsafe fn mi_page_usable_size_of_typed(
     }
 }
 
+/// # Safety
+/// `page` and `block` must refer to a valid block owned by that page.
 pub unsafe fn mi_page_usable_size_of(
     page: *const mi_page_t,
     block: *const mi_block_t,
@@ -280,6 +286,8 @@ pub unsafe fn mi_page_usable_size_of(
     mi_page_usable_size_of_typed(page, block, is_guarded).get()
 }
 
+/// # Safety
+/// `page` and `block` must refer to a valid block being freed.
 pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
     let _ = block;
     if crate::types::MI_STAT == 0 {
@@ -442,6 +450,8 @@ unsafe fn mi_block_unguard(page: *mut mi_page_t, block: *mut mi_block_t, p: *mut
     crate::os::_mi_os_unprotect(gpage, psize);
 }
 
+/// # Safety
+/// `page`, `block`, and `p` must describe the same allocated block.
 pub unsafe fn mi_block_check_unguard(
     page: *mut mi_page_t,
     block: *mut mi_block_t,
@@ -778,6 +788,8 @@ pub(crate) unsafe fn mi_route_usable_size(p: *const c_void, msg: *const c_char) 
     mi_route_usable_size_typed(p, msg).get()
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator and not yet freed.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free(p: *mut c_void) {
     mi_route_free(p, c"mi_free".as_ptr(), ptr::null_mut());
@@ -955,6 +967,8 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
     mi_abandoned_page_unown_from_free(page, mt_free);
 }
 
+/// # Safety
+/// `page` must be the page containing `p`.
 #[inline(never)]
 pub unsafe extern "C" fn mi_page_usable_aligned_size_of(
     page: *const mi_page_t,
@@ -989,6 +1003,8 @@ pub(crate) unsafe fn _mi_usable_size_typed(
     }
 }
 
+/// # Safety
+/// `page` must be null or the page containing `p`.
 pub unsafe fn _mi_usable_size(p: *const c_void, page: *const mi_page_t) -> usize {
     _mi_usable_size_typed(p, page).get()
 }
@@ -1005,11 +1021,15 @@ static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP: unsafe extern "C" fn(
     *const c_void,
 ) -> usize = mi_page_usable_aligned_size_of;
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_usable_size(p: *const c_void) -> usize {
     mi_route_usable_size(p, c"mi_usable_size".as_ptr())
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator and not yet freed.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
     let _ = size;
@@ -1020,23 +1040,32 @@ pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
     mi_free(p);
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator with the given alignment.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size_aligned(p: *mut c_void, size: usize, alignment: usize) {
     crate::mi_assert!(alignment != 0 && (p as usize).is_multiple_of(alignment));
     mi_free_size(p, size);
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator with the given alignment.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_aligned(p: *mut c_void, alignment: usize) {
     crate::mi_assert!(alignment != 0 && (p as usize).is_multiple_of(alignment));
     mi_free(p);
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator and not yet freed. If
+/// `usable` is non-null it must be writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_ufree(p: *mut c_void, usable: *mut usize) {
     mi_route_free(p, c"mi_ufree".as_ptr(), usable);
 }
 
+/// # Safety
+/// `p` must be null or a small allocation pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_free_small(p: *mut c_void) {
     if MI_PAGE_META_ALIGNED_FREE_SMALL == 0 || MI_GUARDED != 0 {

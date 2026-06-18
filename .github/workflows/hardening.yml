@@ -1,0 +1,27 @@
+name: Hardening
+
+on:
+  workflow_dispatch:
+
+jobs:
+  address-sanitizer:
+    name: AddressSanitizer
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly Rust with rust-src
+        run: rustup toolchain install nightly --component rust-src
+      - name: Run ASan test sweep
+        run: SANITIZER_TOOLCHAIN=nightly scripts/check-sanitizers.sh
+
+  valgrind-tracking:
+    name: Valgrind tracking parity
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+      - name: Run Valgrind tracking parity
+        run: scripts/check-valgrind-tracking-parity.py

@@ -42,6 +42,8 @@ the `std` feature. Sanitizer runs are expected to be Linux x86_64 GNU evidence
 unless the report says otherwise. TSan and UBSan are not currently part of the
 maintained signoff set; claims about those tools require adding explicit scripts
 and documenting known false positives.
+Maintainers can also run the manual GitHub Actions hardening workflow for ASan
+evidence.
 
 `track-asan` is allocator tracking instrumentation, not a substitute for running
 the sanitizer toolchain. `track-asan` and `track-valgrind` are mutually
@@ -58,6 +60,8 @@ scripts/check-valgrind-tracking-parity.py
 This check builds C and Rust probes and compares the tracked reports. It
 requires `valgrind` on the host. The normal Rust test suite does not imply
 Valgrind evidence.
+Maintainers can also run the manual GitHub Actions hardening workflow for
+Valgrind tracking evidence.
 
 ## Differential Tests Against C mimalloc
 

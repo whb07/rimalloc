@@ -2352,6 +2352,10 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("bit_of_page = match crate::core_types::MemId::view(unsafe { (*page).memid })")
             && arena_rs.contains("crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize")
             && os_rs.contains("external.size.0")
+            && os_rs.contains(
+                "let crate::core_types::MemIdView::Os(os) = crate::core_types::MemId::view(memid)"
+            )
+            && !os_rs.contains("mi_memkind_is_os(memid.memkind)")
             && !arena_rs.contains("memid.mem.os.")
             && !arena_rs.contains("memid.mem.arena.")
             && !os_rs.contains("memid.mem.os.")

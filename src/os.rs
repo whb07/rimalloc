@@ -648,16 +648,6 @@ unsafe fn mi_os_prim_free(
     }
 }
 
-#[inline]
-const fn mi_memkind_is_os(memkind: crate::internal::mi_memkind_t) -> bool {
-    matches!(
-        memkind,
-        crate::internal::mi_memkind_t::MI_MEM_OS
-            | crate::internal::mi_memkind_t::MI_MEM_OS_HUGE
-            | crate::internal::mi_memkind_t::MI_MEM_OS_REMAP
-    )
-}
-
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_free_ex(
     addr: *mut c_void,
@@ -666,23 +656,13 @@ pub(crate) unsafe extern "C" fn _mi_os_free_ex(
     memid: mi_memid_t,
     subproc: *mut mi_subproc_t,
 ) {
-    if !mi_memkind_is_os(memid.memkind) {
+    let crate::core_types::MemIdView::Os(os) = crate::core_types::MemId::view(memid) else {
         return;
-    }
-    let (mut csize, base) = match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::Os(os) => (
-            os.size.0,
-            os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()),
-        ),
-        crate::core_types::MemIdView::External(external) => (
-            external.size.0,
-            external
-                .base
-                .map(|p| p.as_ptr())
-                .unwrap_or(core::ptr::null_mut()),
-        ),
-        _ => (0, addr),
     };
+    let (mut csize, base) = (
+        os.size.0,
+        os.base.map(|p| p.as_ptr()).unwrap_or(core::ptr::null_mut()),
+    );
     if csize == 0 {
         csize = unsafe { _mi_os_good_alloc_size(size) };
     }

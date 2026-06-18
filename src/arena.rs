@@ -2071,7 +2071,9 @@ unsafe fn mi_abandoned_page_unown(page: *mut mi_page_t, current_theap: *mut mi_t
     crate::mi_assert_internal!(unsafe { _mi_thread_id() == (*(*current_theap).tld).thread_id });
 
     let atomic_tf =
-        crate::core_types::AtomicThreadFree(unsafe { ptr::addr_of_mut!((*page).xthread_free) });
+        crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(unsafe {
+            ptr::addr_of_mut!((*page).xthread_free)
+        }));
     let mut tf_old = atomic_tf.load_relaxed();
     loop {
         crate::mi_assert_internal!(tf_old.is_owned());

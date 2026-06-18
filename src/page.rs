@@ -367,7 +367,9 @@ pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut m
 /// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
-    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_free),
+    ));
     let remote = atomic_tf.take_head_preserving_owner();
     let Some(head) = remote.0.map(|b| b.as_ptr()) else {
         return;
@@ -442,8 +444,9 @@ pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head
         }
     }
     if (*page).used == 1 {
-        let atomic_tf =
-            crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*page).xthread_free),
+        ));
         crate::mi_assert_internal!(
             atomic_tf
                 .load_relaxed()
@@ -985,8 +988,10 @@ pub(crate) unsafe extern "C" fn _mi_page_init(
     crate::mi_assert_internal!((*page).free.is_null());
     crate::mi_assert_internal!((*page).used == 0);
     crate::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
-    let thread_free =
-        crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free)).load_relaxed();
+    let thread_free = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_free),
+    ))
+    .load_relaxed();
     crate::mi_assert_internal!(
         thread_free
             == crate::core_types::ThreadFreeWord::from_parts(
@@ -1048,7 +1053,9 @@ pub(crate) unsafe fn try_reclaim_abandoned(
 
     mi_page_set_theap(page, theap);
 
-    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_free),
+    ));
     let remote = atomic_tf.take_head_preserving_owner();
     let local = crate::core_types::LocalFreeList::from_raw((*page).local_free);
     remote.collect_into_local(page_wrapper, local);

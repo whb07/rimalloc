@@ -1149,8 +1149,8 @@ pub fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_free_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
-    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!(
-        (*(page as *mut mi_page_t)).xthread_free
+    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
     ));
     atomic_tf
         .load_relaxed()
@@ -1171,8 +1171,8 @@ pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
-    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!(
-        (*(page as *mut mi_page_t)).xthread_free
+    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
     ));
     atomic_tf.load_relaxed().is_owned()
 }
@@ -1181,7 +1181,9 @@ pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
 /// `page` must point to mutable page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_claim_ownership(page: *mut mi_page_t) -> bool {
-    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_free),
+    ));
     unsafe { atomic_tf.claim_ownership() }
 }
 

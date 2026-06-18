@@ -2207,12 +2207,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("static MI_PAGE_QUEUE_APPEND_KEEP")
             && page_rs.contains("mi_page_thread_free_collect(page);")
             && page_rs.contains(
-                "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
+                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n        ptr::addr_of_mut!((*page).xthread_free),\n    ));"
             )
             && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
             && page_rs.contains("let Some(head) = remote.0.map(|b| b.as_ptr()) else")
             && page_rs.contains(".map(|block| block.as_ptr())")
-            && page_rs.contains("let thread_free =\n        crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free)).load_relaxed();")
+            && page_rs.contains("let thread_free = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n        ptr::addr_of_mut!((*page).xthread_free),\n    ))")
             && page_rs.contains("crate::core_types::ThreadFreeWord::from_parts(\n                None,\n                crate::core_types::ThreadFreeOwner::Owned")
             && !page_rs.contains("crate::internal::mi_tf_create(ptr::null_mut()")
             && !page_rs.contains("crate::internal::mi_tf_block(mi_atomic_load_explicit")
@@ -3282,7 +3282,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !page_rs.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
             && !arena_rs.contains("MI_THREADID_ABANDONED_MAPPED | flags")
             && page_rs.contains(
-                "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
+                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n        ptr::addr_of_mut!((*page).xthread_free),\n    ));"
             )
             && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
             && page_rs.contains("remote.collect_into_local(page_wrapper, local);")
@@ -3297,12 +3297,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             && internal.contains("crate::core_types::ThreadFreeWord(tf)\n        .head()")
             && internal.contains("crate::core_types::ThreadFreeWord(tf).is_owned()")
             && internal.contains("crate::core_types::ThreadFreeWord::from_parts(")
-            && internal.contains("let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!(")
+            && internal.contains("let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(")
             && internal.contains("unsafe { atomic_tf.claim_ownership() }")
             && arena_rs.contains("(*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(\n            None,\n            crate::core_types::ThreadFreeOwner::Unowned,")
             && !arena_rs.contains("(*page).xthread_free = 0")
             && free_rs.contains(
-                "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
+                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n        ptr::addr_of_mut!((*page).xthread_free),\n    ));"
             )
             && free_rs.contains(
                 "while !atomic_tf.compare_exchange_release_ownership(&mut tf_expect)"
@@ -3310,7 +3310,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("tf_expect = atomic_tf.load_relaxed();")
             && !free_rs.contains("mi_tf_create(expected_thread_free")
             && arena_rs.contains(
-                "let atomic_tf =\n        crate::core_types::AtomicThreadFree(unsafe { ptr::addr_of_mut!((*page).xthread_free) });"
+                "let atomic_tf =\n        crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(unsafe {\n            ptr::addr_of_mut!((*page).xthread_free)\n        }));"
             )
             && arena_rs.contains("let mut tf_old = atomic_tf.load_relaxed();")
             && arena_rs.contains("while tf_old.head().is_some()")

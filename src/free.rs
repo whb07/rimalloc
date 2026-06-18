@@ -397,7 +397,9 @@ pub(crate) unsafe fn mi_free_block_mt(
         _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
     }
 
-    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_free),
+    ));
 
     let mut tf_old = atomic_tf.load_relaxed();
     loop {
@@ -828,7 +830,9 @@ unsafe fn mi_abandoned_page_unown_from_free(
     crate::mi_assert_internal!(mi_page_is_abandoned(page));
     crate::mi_assert_internal!(!mi_page_all_free(page));
 
-    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+        ptr::addr_of_mut!((*page).xthread_free),
+    ));
     let expected_head = if expected_thread_free.is_null() {
         None
     } else {

@@ -326,12 +326,12 @@ pub(crate) enum RemotePushOutcome {
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);
+pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);
 
 impl AtomicThreadFree {
     #[inline(always)]
     fn field(self) -> AtomicUsizeField {
-        AtomicUsizeField(self.0)
+        self.0
     }
 
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord {

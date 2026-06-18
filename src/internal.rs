@@ -6,8 +6,7 @@
     non_upper_case_globals,
     dead_code,
     uninhabited_static,
-    unused_imports,
-    unsafe_op_in_unsafe_fn
+    unused_imports
 )]
 
 use core::ffi::{c_char, c_int, c_void};
@@ -540,7 +539,9 @@ pub const fn MI_UNUSED_RELEASE<T>(_x: &T) {}
 /// `x` must be valid for writes of one `T`.
 #[inline]
 pub unsafe fn _mi_memzero_var<T>(x: *mut T) {
-    ptr::write_bytes(x, 0, 1);
+    unsafe {
+        ptr::write_bytes(x, 0, 1);
+    }
 }
 
 unsafe extern "C" {
@@ -638,15 +639,17 @@ pub const fn _mi_clamp(sz: usize, min: usize, max: usize) -> usize {
 /// `p..p + size` must be valid for reads.
 #[inline]
 pub unsafe fn mi_mem_is_zero(p: *const c_void, size: usize) -> bool {
-    let bytes = p.cast::<u8>();
-    let mut i = 0;
-    while i < size {
-        if *bytes.add(i) != 0 {
-            return false;
+    unsafe {
+        let bytes = p.cast::<u8>();
+        let mut i = 0;
+        while i < size {
+            if *bytes.add(i) != 0 {
+                return false;
+            }
+            i += 1;
         }
-        i += 1;
+        true
     }
-    true
 }
 
 #[inline]
@@ -705,8 +708,10 @@ pub unsafe fn mi_count_size_overflow(count: usize, size: usize, total: &mut usiz
 /// `theap` must point to initialized thread-heap metadata.
 #[inline]
 pub unsafe fn _mi_theap_heap(theap: *const mi_theap_t) -> *mut mi_heap_t {
-    crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())
-        .load(crate::core_types::MemoryOrder::Acquire)
+    unsafe {
+        crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())
+            .load(crate::core_types::MemoryOrder::Acquire)
+    }
 }
 
 /// # Safety
@@ -721,8 +726,10 @@ pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(
     theap: *mut mi_theap_t,
     padded: crate::core_types::PaddedSize,
 ) -> *mut mi_page_t {
-    let idx = mi_direct_bin_from_padded(padded).as_usize();
-    (*theap).pages_free_direct[idx]
+    unsafe {
+        let idx = mi_direct_bin_from_padded(padded).as_usize();
+        (*theap).pages_free_direct[idx]
+    }
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -748,8 +755,10 @@ pub unsafe fn _mi_page_map_index(p: *const c_void, sub_idx: *mut usize) -> usize
 /// `idx` must be within the initialized page-map base range.
 #[inline]
 pub unsafe fn _mi_page_map_at(idx: usize) -> mi_submap_t {
-    crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))
-        .load(crate::core_types::MemoryOrder::Acquire)
+    unsafe {
+        crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))
+            .load(crate::core_types::MemoryOrder::Acquire)
+    }
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -788,9 +797,11 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be a pointer in the allocator's page-map domain.
 #[inline]
 pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    let mut sub_idx = 0usize;
-    let idx = _mi_page_map_index(p, &mut sub_idx);
-    _mi_page_map_at(idx).add(sub_idx).read()
+    unsafe {
+        let mut sub_idx = 0usize;
+        let idx = _mi_page_map_index(p, &mut sub_idx);
+        _mi_page_map_at(idx).add(sub_idx).read()
+    }
 }
 
 #[cfg(not(target_pointer_width = "32"))]
@@ -798,13 +809,15 @@ pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be a pointer in the allocator's page-map domain.
 #[inline]
 pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    let mut sub_idx = 0usize;
-    let idx = _mi_page_map_index(p, &mut sub_idx);
-    let sub = _mi_page_map_at(idx);
-    if sub.is_null() {
-        ptr::null_mut()
-    } else {
-        *sub.add(sub_idx)
+    unsafe {
+        let mut sub_idx = 0usize;
+        let idx = _mi_page_map_index(p, &mut sub_idx);
+        let sub = _mi_page_map_at(idx);
+        if sub.is_null() {
+            ptr::null_mut()
+        } else {
+            *sub.add(sub_idx)
+        }
     }
 }
 
@@ -812,11 +825,13 @@ pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 /// `p` must be null or a pointer allocated by this allocator.
 #[inline]
 pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
-    crate::mi_assert_internal!(p.is_null() || crate::mimalloc::mi_is_in_heap_region(p));
-    if MI_DEBUG != 0 || MI_SECURE != 0 || cfg!(target_vendor = "apple") {
-        unsafe { _mi_checked_ptr_page(p) }
-    } else {
-        unsafe { _mi_unchecked_ptr_page(p) }
+    unsafe {
+        crate::mi_assert_internal!(p.is_null() || crate::mimalloc::mi_is_in_heap_region(p));
+        if MI_DEBUG != 0 || MI_SECURE != 0 || cfg!(target_vendor = "apple") {
+            _mi_checked_ptr_page(p)
+        } else {
+            _mi_unchecked_ptr_page(p)
+        }
     }
 }
 
@@ -824,51 +839,59 @@ pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
 pub(crate) unsafe fn mi_page_block_size_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::BlockSize {
-    crate::mi_assert_internal!((*page).block_size > 0);
-    crate::core_types::BlockSize::new_unchecked((*page).block_size)
+    unsafe {
+        crate::mi_assert_internal!((*page).block_size > 0);
+        crate::core_types::BlockSize::new_unchecked((*page).block_size)
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
-    mi_page_block_size_typed(page).get()
+    unsafe { mi_page_block_size_typed(page).get() }
 }
 
 /// # Safety
 /// `page` must point to non-abandoned page metadata with a valid owning thread heap.
 #[inline]
 pub unsafe fn mi_page_tld(page: *const mi_page_t) -> *mut mi_tld_t {
-    crate::mi_assert_internal!(!crate::page::mi_page_is_abandoned(page));
-    crate::mi_assert_internal!(!(*page).theap.is_null());
-    (*(*page).theap).tld
+    unsafe {
+        crate::mi_assert_internal!(!crate::page::mi_page_is_abandoned(page));
+        crate::mi_assert_internal!(!(*page).theap.is_null());
+        (*(*page).theap).tld
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_heap(page: *const mi_page_t) -> *mut mi_heap_t {
-    let mut heap = (*page).heap;
-    if mi_likely(heap.is_null()) {
-        heap = crate::mimalloc::mi_heap_main();
+    unsafe {
+        let mut heap = (*page).heap;
+        if mi_likely(heap.is_null()) {
+            heap = crate::mimalloc::mi_heap_main();
+        }
+        crate::mi_assert_internal!(!heap.is_null());
+        heap
     }
-    crate::mi_assert_internal!(!heap.is_null());
-    heap
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
-    (*page).page_start
+    unsafe { (*page).page_start }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_size(page: *const mi_page_t) -> usize {
-    let block_size = unsafe { mi_page_block_size(page) };
-    block_size * ((*page).reserved as usize)
+    unsafe {
+        let block_size = mi_page_block_size(page);
+        block_size * ((*page).reserved as usize)
+    }
 }
 
 /// # Safety
@@ -876,10 +899,12 @@ pub unsafe fn mi_page_size(page: *const mi_page_t) -> usize {
 /// for a `usize` write.
 #[inline]
 pub unsafe fn mi_page_area(page: *const mi_page_t, size: *mut usize) -> *mut u8 {
-    if !size.is_null() {
-        *size = unsafe { mi_page_size(page) };
+    unsafe {
+        if !size.is_null() {
+            *size = mi_page_size(page);
+        }
+        mi_page_start(page)
     }
-    unsafe { mi_page_start(page) }
 }
 
 #[inline]
@@ -891,45 +916,51 @@ pub const fn mi_page_info_size() -> usize {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_contains_address(page: *const mi_page_t, p: *const c_void) -> bool {
-    let mut psize = 0usize;
-    let start = unsafe { mi_page_area(page, &mut psize) };
-    start <= p.cast_mut().cast::<u8>() && p.cast::<u8>() < start.add(psize)
+    unsafe {
+        let mut psize = 0usize;
+        let start = mi_page_area(page, &mut psize);
+        start <= p.cast_mut().cast::<u8>() && p.cast::<u8>() < start.add(psize)
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
-    matches!(
-        crate::core_types::MemId::view((*page).memid),
-        crate::core_types::MemIdView::Arena(_)
-    )
+    unsafe {
+        matches!(
+            crate::core_types::MemId::view((*page).memid),
+            crate::core_types::MemIdView::Arena(_)
+        )
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
-    (*page).reserved == 1
+    unsafe { (*page).reserved == 1 }
 }
 
 #[inline]
 pub(crate) unsafe fn mi_page_usable_block_size(
     page: *const mi_page_t,
 ) -> crate::core_types::UsableSize {
-    mi_page_block_size_typed(page).usable()
+    unsafe { mi_page_block_size_typed(page).usable() }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
-    if MI_PAGE_META_IS_SEPARATED != 0 {
-        mi_page_is_in_arena(page)
-            && page.cast_mut().cast::<c_void>()
-                != _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN)
-    } else {
-        false
+    unsafe {
+        if MI_PAGE_META_IS_SEPARATED != 0 {
+            mi_page_is_in_arena(page)
+                && page.cast_mut().cast::<c_void>()
+                    != _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN)
+        } else {
+            false
+        }
     }
 }
 
@@ -937,10 +968,12 @@ pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_slice_start(page: *const mi_page_t) -> *mut u8 {
-    if mi_page_meta_is_separated(page) {
-        _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN).cast::<u8>()
-    } else {
-        page.cast_mut().cast::<u8>()
+    unsafe {
+        if mi_page_meta_is_separated(page) {
+            _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN).cast::<u8>()
+        } else {
+            page.cast_mut().cast::<u8>()
+        }
     }
 }
 
@@ -951,18 +984,22 @@ pub unsafe fn mi_page_slice_offset_of(
     page: *const mi_page_t,
     offset_relative_to_page_start: usize,
 ) -> usize {
-    ((*page).page_start as usize - unsafe { mi_page_slice_start(page) } as usize)
-        + offset_relative_to_page_start
+    unsafe {
+        ((*page).page_start as usize - mi_page_slice_start(page) as usize)
+            + offset_relative_to_page_start
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_committed(page: *const mi_page_t) -> usize {
-    if (*page).slice_committed == 0 {
-        unsafe { mi_page_size(page) }
-    } else {
-        (*page).slice_committed - unsafe { mi_page_slice_offset_of(page, 0) }
+    unsafe {
+        if (*page).slice_committed == 0 {
+            mi_page_size(page)
+        } else {
+            (*page).slice_committed - mi_page_slice_offset_of(page, 0)
+        }
     }
 }
 
@@ -970,56 +1007,68 @@ pub unsafe fn mi_page_committed(page: *const mi_page_t) -> usize {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
-    crate::mi_assert_internal!(!page.is_null());
-    (*page).used == 0
+    unsafe {
+        crate::mi_assert_internal!(!page.is_null());
+        (*page).used == 0
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
-    crate::mi_assert_internal!(!page.is_null());
-    !(*page).free.is_null()
+    unsafe {
+        crate::mi_assert_internal!(!page.is_null());
+        !(*page).free.is_null()
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
-    crate::mi_assert_internal!(!page.is_null());
-    crate::mi_assert_internal!((*page).capacity <= (*page).reserved);
-    (*page).capacity < (*page).reserved
+    unsafe {
+        crate::mi_assert_internal!(!page.is_null());
+        crate::mi_assert_internal!((*page).capacity <= (*page).reserved);
+        (*page).capacity < (*page).reserved
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
-    let full = (*page).reserved == (*page).used;
-    crate::mi_assert_internal!(!full || (*page).free.is_null());
-    full
+    unsafe {
+        let full = (*page).reserved == (*page).used;
+        crate::mi_assert_internal!(!full || (*page).free.is_null());
+        full
+    }
 }
 
 /// # Safety
 /// `page` must be null or point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
-    if page.is_null() {
-        return true;
+    unsafe {
+        if page.is_null() {
+            return true;
+        }
+        let frac = (*page).reserved / 8u16;
+        (*page).reserved - (*page).used <= frac
     }
-    let frac = (*page).reserved / 8u16;
-    (*page).reserved - (*page).used <= frac
 }
 
 /// # Safety
 /// `page` must be null or point to page metadata owned by this allocator. `n` must be nonzero.
 #[inline]
 pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
-    if page.is_null() {
-        return true;
+    unsafe {
+        if page.is_null() {
+            return true;
+        }
+        let frac = (*page).reserved / n;
+        (*page).reserved - (*page).used <= frac
     }
-    let frac = (*page).reserved / n;
-    (*page).reserved - (*page).used <= frac
 }
 
 #[inline]
@@ -1027,33 +1076,40 @@ pub(crate) unsafe fn mi_page_queue(
     theap: *const mi_theap_t,
     block_size: crate::core_types::BlockSize,
 ) -> *mut mi_page_queue_t {
-    let size = block_size.get();
-    let pq = ptr::addr_of!(
-        (*(theap as *mut mi_theap_t)).pages
-            [crate::page::mi_bin_from_block_size(block_size).as_usize()]
-    )
-    .cast_mut();
-    if size <= MI_LARGE_MAX_OBJ_SIZE {
-        crate::mi_assert_internal!((*pq).block_size <= MI_LARGE_MAX_OBJ_SIZE);
+    unsafe {
+        let size = block_size.get();
+        let pq = ptr::addr_of!(
+            (*(theap as *mut mi_theap_t)).pages
+                [crate::page::mi_bin_from_block_size(block_size).as_usize()]
+        )
+        .cast_mut();
+        if size <= MI_LARGE_MAX_OBJ_SIZE {
+            crate::mi_assert_internal!((*pq).block_size <= MI_LARGE_MAX_OBJ_SIZE);
+        }
+        pq
     }
-    pq
 }
 
 /// # Safety
 /// `page` must point to mutable page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_set_has_interior_pointers(page: *mut mi_page_t, has_aligned: bool) {
-    crate::page::mi_page_flags_set(page, has_aligned, MI_PAGE_HAS_INTERIOR_POINTERS);
+    unsafe {
+        crate::page::mi_page_flags_set(page, has_aligned, MI_PAGE_HAS_INTERIOR_POINTERS);
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_xthread_id(page: *const mi_page_t) -> mi_threadid_t {
-    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_id),
-    ));
-    unsafe { atomic_tid.load_relaxed() }.raw()
+    unsafe {
+        let atomic_tid =
+            crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
+                ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_id),
+            ));
+        atomic_tid.load_relaxed().raw()
+    }
 }
 
 /// # Safety
@@ -1091,15 +1147,17 @@ pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
 /// `page` must point to mutable abandoned page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_set_abandoned_mapped(page: *mut mi_page_t) {
-    crate::mi_assert_internal!(crate::page::mi_page_is_abandoned(page));
-    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_id),
-    ));
-    let mut old = unsafe { atomic_tid.load_relaxed() };
-    loop {
-        let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);
-        if unsafe { atomic_tid.compare_exchange_release(&mut old, new) } {
-            break;
+    unsafe {
+        crate::mi_assert_internal!(crate::page::mi_page_is_abandoned(page));
+        let atomic_tid = crate::core_types::AtomicPageThreadId(
+            crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*page).xthread_id)),
+        );
+        let mut old = atomic_tid.load_relaxed();
+        loop {
+            let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);
+            if atomic_tid.compare_exchange_release(&mut old, new) {
+                break;
+            }
         }
     }
 }
@@ -1108,15 +1166,17 @@ pub unsafe fn mi_page_set_abandoned_mapped(page: *mut mi_page_t) {
 /// `page` must point to mutable abandoned-mapped page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_clear_abandoned_mapped(page: *mut mi_page_t) {
-    crate::mi_assert_internal!(mi_page_is_abandoned_mapped(page));
-    let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_id),
-    ));
-    let mut old = unsafe { atomic_tid.load_relaxed() };
-    loop {
-        let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);
-        if unsafe { atomic_tid.compare_exchange_release(&mut old, new) } {
-            break;
+    unsafe {
+        crate::mi_assert_internal!(mi_page_is_abandoned_mapped(page));
+        let atomic_tid = crate::core_types::AtomicPageThreadId(
+            crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*page).xthread_id)),
+        );
+        let mut old = atomic_tid.load_relaxed();
+        loop {
+            let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);
+            if atomic_tid.compare_exchange_release(&mut old, new) {
+                break;
+            }
         }
     }
 }
@@ -1149,56 +1209,66 @@ pub fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_free_t {
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
-    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
-    ));
-    atomic_tf
-        .load_relaxed()
-        .head()
-        .map(|block| block.as_ptr())
-        .unwrap_or(ptr::null_mut())
+    unsafe {
+        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
+        ));
+        atomic_tf
+            .load_relaxed()
+            .head()
+            .map(|block| block.as_ptr())
+            .unwrap_or(ptr::null_mut())
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
-    crate::mi_assert_internal!(!page.is_null() && (*page).reserved > 0);
-    (*page).used < (*page).reserved || !mi_page_thread_free(page).is_null()
+    unsafe {
+        crate::mi_assert_internal!(!page.is_null() && (*page).reserved > 0);
+        (*page).used < (*page).reserved || !mi_page_thread_free(page).is_null()
+    }
 }
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool {
-    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
-    ));
-    atomic_tf.load_relaxed().is_owned()
+    unsafe {
+        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
+        ));
+        atomic_tf.load_relaxed().is_owned()
+    }
 }
 
 /// # Safety
 /// `page` must point to mutable page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_claim_ownership(page: *mut mi_page_t) -> bool {
-    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_free),
-    ));
-    unsafe { atomic_tf.claim_ownership() }
+    unsafe {
+        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*page).xthread_free),
+        ));
+        atomic_tf.claim_ownership()
+    }
 }
 
 /// # Safety
 /// `block` and `p` must refer to the same allocated block when guarded allocation is enabled.
 #[inline]
 pub unsafe fn mi_block_ptr_is_guarded(block: *const mi_block_t, p: *const c_void) -> bool {
-    if MI_GUARDED == 0 {
-        MI_UNUSED(&block);
-        MI_UNUSED(&p);
-        return false;
+    unsafe {
+        if MI_GUARDED == 0 {
+            MI_UNUSED(&block);
+            MI_UNUSED(&p);
+            return false;
+        }
+        let offset = p.cast::<u8>().offset_from(block.cast::<u8>());
+        offset >= size_of::<mi_block_t>() as isize
+            && crate::core_types::BlockLink::read_tag_from_raw(block).is_guarded_tag()
     }
-    let offset = p.cast::<u8>().offset_from(block.cast::<u8>());
-    offset >= size_of::<mi_block_t>() as isize
-        && crate::core_types::BlockLink::read_tag_from_raw(block).is_guarded_tag()
 }
 
 /// # Safety
@@ -1239,19 +1309,21 @@ pub unsafe fn mi_theap_malloc_use_guarded(theap: *mut mi_theap_t, size: usize) -
 /// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges.
 #[inline(always)]
 pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
-    #[cfg(target_arch = "x86_64")]
-    {
-        core::arch::asm!(
-            "rep movsb",
-            inout("rdi") dst => _,
-            inout("rcx") n => _,
-            inout("rsi") src => _,
-            options(nostack, preserves_flags),
-        );
-    }
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
+    unsafe {
+        #[cfg(target_arch = "x86_64")]
+        {
+            core::arch::asm!(
+                "rep movsb",
+                inout("rdi") dst => _,
+                inout("rcx") n => _,
+                inout("rsi") src => _,
+                options(nostack, preserves_flags),
+            );
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
+        }
     }
 }
 
@@ -1259,32 +1331,36 @@ pub unsafe fn mi_rep_movsb(dst: *mut c_void, src: *const c_void, n: usize) {
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize) {
-    #[cfg(target_arch = "x86_64")]
-    {
-        core::arch::asm!(
-            "rep stosb",
-            inout("rdi") dst => _,
-            inout("rcx") n => _,
-            in("al") val,
-            options(nostack, preserves_flags),
-        );
-    }
-    #[cfg(not(target_arch = "x86_64"))]
-    {
-        ptr::write_bytes(dst.cast::<u8>(), val, n);
+    unsafe {
+        #[cfg(target_arch = "x86_64")]
+        {
+            core::arch::asm!(
+                "rep stosb",
+                inout("rdi") dst => _,
+                inout("rcx") n => _,
+                in("al") val,
+                options(nostack, preserves_flags),
+            );
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            ptr::write_bytes(dst.cast::<u8>(), val, n);
+        }
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 #[inline(always)]
 unsafe fn mi_rep_movsq(dst: *mut c_void, src: *const c_void, count: usize) {
-    core::arch::asm!(
-        "rep movsq",
-        inout("rdi") dst => _,
-        inout("rcx") count => _,
-        inout("rsi") src => _,
-        options(nostack, preserves_flags),
-    );
+    unsafe {
+        core::arch::asm!(
+            "rep movsq",
+            inout("rdi") dst => _,
+            inout("rcx") count => _,
+            inout("rsi") src => _,
+            options(nostack, preserves_flags),
+        );
+    }
 }
 
 #[inline]
@@ -1333,12 +1409,14 @@ pub unsafe fn _mi_memid_create_meta(
     block_idx: usize,
     block_count: usize,
 ) -> mi_memid_t {
-    crate::core_types::MemId::<crate::core_types::MetaMem>::meta(
-        core::ptr::NonNull::new_unchecked(mpage),
-        crate::core_types::BlockIndex(block_idx as u32),
-        core::num::NonZeroU32::new_unchecked(block_count as u32),
-    )
-    .raw
+    unsafe {
+        crate::core_types::MemId::<crate::core_types::MetaMem>::meta(
+            core::ptr::NonNull::new_unchecked(mpage),
+            crate::core_types::BlockIndex(block_idx as u32),
+            core::num::NonZeroU32::new_unchecked(block_count as u32),
+        )
+        .raw
+    }
 }
 
 #[inline]
@@ -1509,23 +1587,25 @@ pub unsafe fn mi_block_set_nextx(
 /// `page` must be valid, and `block` must point to a block list node belonging to that page.
 #[inline]
 pub unsafe fn mi_block_next(page: *const mi_page_t, block: *const mi_block_t) -> *mut mi_block_t {
-    let keys = unsafe { mi_page_keys(page) };
-    if MI_ENCODE_FREELIST == 0 {
-        return unsafe { mi_block_nextx(page.cast(), block, &keys) };
+    unsafe {
+        let keys = mi_page_keys(page);
+        if MI_ENCODE_FREELIST == 0 {
+            return mi_block_nextx(page.cast(), block, &keys);
+        }
+        let mut next = mi_block_nextx(page.cast(), block, &keys);
+        if !next.is_null() && !mi_is_in_same_page(block.cast(), next.cast()) {
+            _mi_error_message_fmt(
+                14,
+                format_args!(
+                    "corrupted free list entry of size {}b at {block:p}: value 0x{:x}\n",
+                    mi_page_block_size(page),
+                    next as usize
+                ),
+            );
+            next = ptr::null_mut();
+        }
+        next
     }
-    let mut next = unsafe { mi_block_nextx(page.cast(), block, &keys) };
-    if !next.is_null() && !mi_is_in_same_page(block.cast(), next.cast()) {
-        _mi_error_message_fmt(
-            14,
-            format_args!(
-                "corrupted free list entry of size {}b at {block:p}: value 0x{:x}\n",
-                mi_page_block_size(page),
-                next as usize
-            ),
-        );
-        next = ptr::null_mut();
-    }
-    next
 }
 
 /// # Safety
@@ -1585,28 +1665,32 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 /// `dst..dst + n` and `src..src + n` must be valid non-overlapping byte ranges.
 #[inline]
 pub unsafe fn _mi_memcpy(dst: *mut c_void, src: *const c_void, n: usize) {
-    #[cfg(target_arch = "x86_64")]
-    {
-        if n <= mi_cpu_movsb_max() {
-            mi_rep_movsb(dst, src, n);
-            return;
+    unsafe {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if n <= mi_cpu_movsb_max() {
+                mi_rep_movsb(dst, src, n);
+                return;
+            }
         }
+        ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
     }
-    ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
 }
 
 /// # Safety
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
-    #[cfg(target_arch = "x86_64")]
-    {
-        if n <= mi_cpu_stosb_max() {
-            mi_rep_stosb(dst, val as u8, n);
-            return;
+    unsafe {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if n <= mi_cpu_stosb_max() {
+                mi_rep_stosb(dst, val as u8, n);
+                return;
+            }
         }
+        ptr::write_bytes(dst, val as u8, n);
     }
-    ptr::write_bytes(dst, val as u8, n);
 }
 
 /// # Safety
@@ -1614,19 +1698,21 @@ pub unsafe fn _mi_memset(dst: *mut c_void, val: i32, n: usize) {
 /// by callers of the aligned helper.
 #[inline]
 pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize) {
-    #[cfg(target_arch = "x86_64")]
-    {
-        let movsb_max = mi_cpu_movsb_max();
-        if n > movsb_max && n.is_multiple_of(size_of::<usize>()) {
-            mi_rep_movsq(dst, src, n / size_of::<usize>());
-            return;
+    unsafe {
+        #[cfg(target_arch = "x86_64")]
+        {
+            let movsb_max = mi_cpu_movsb_max();
+            if n > movsb_max && n.is_multiple_of(size_of::<usize>()) {
+                mi_rep_movsq(dst, src, n / size_of::<usize>());
+                return;
+            }
+            if n <= movsb_max {
+                mi_rep_movsb(dst, src, n);
+                return;
+            }
         }
-        if n <= movsb_max {
-            mi_rep_movsb(dst, src, n);
-            return;
-        }
+        ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
     }
-    ptr::copy_nonoverlapping(src.cast::<u8>(), dst.cast::<u8>(), n);
 }
 
 /// # Safety
@@ -1634,14 +1720,18 @@ pub unsafe fn _mi_memcpy_aligned(dst: *mut c_void, src: *const c_void, n: usize)
 /// helper.
 #[inline]
 pub unsafe fn _mi_memset_aligned(dst: *mut c_void, val: i32, n: usize) {
-    _mi_memset(dst, val, n);
+    unsafe {
+        _mi_memset(dst, val, n);
+    }
 }
 
 /// # Safety
 /// `dst..dst + n` must be valid for writes.
 #[inline]
 pub unsafe fn _mi_memzero(dst: *mut c_void, n: usize) {
-    _mi_memset(dst, 0, n);
+    unsafe {
+        _mi_memset(dst, 0, n);
+    }
 }
 
 /// # Safety
@@ -1649,5 +1739,7 @@ pub unsafe fn _mi_memzero(dst: *mut c_void, n: usize) {
 /// helper.
 #[inline]
 pub unsafe fn _mi_memzero_aligned(dst: *mut c_void, n: usize) {
-    _mi_memset_aligned(dst, 0, n);
+    unsafe {
+        _mi_memset_aligned(dst, 0, n);
+    }
 }

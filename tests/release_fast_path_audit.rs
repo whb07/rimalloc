@@ -974,7 +974,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "src/alloc.rs",
         "src/bitmap.rs",
         "src/free.rs",
-        "src/internal.rs",
         "src/os.rs",
         "src/page.rs",
         "src/prim/emscripten.rs",
@@ -994,6 +993,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/atomic.rs")
             && !actual.contains("src/core_types/mod.rs")
             && !actual.contains("src/heap.rs")
+            && !actual.contains("src/internal.rs")
             && !actual.contains("src/libc.rs")
             && !actual.contains("src/options.rs")
             && !actual.contains("src/prim.rs")
@@ -1002,7 +1002,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/theap.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, heap helpers, libc helpers, options helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, heap helpers, internal helpers, libc helpers, options helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 
@@ -2099,7 +2099,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && internal.contains("mi_page_block_size_typed(page).usable()")
             && arena_rs.contains("mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) })")
             && internal.contains(
-                "block_size: crate::core_types::BlockSize,\n) -> *mut mi_page_queue_t {\n    let size = block_size.get();"
+                "block_size: crate::core_types::BlockSize,\n) -> *mut mi_page_queue_t {\n    unsafe {\n        let size = block_size.get();"
             )
             && internal.contains("crate::page::mi_bin_from_block_size(block_size).as_usize()")
             && page_rs.contains("pub(crate) unsafe fn mi_page_bin_typed(")
@@ -3084,9 +3084,9 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         internal.contains(
-            "crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())\n        .load(crate::core_types::MemoryOrder::Acquire)"
+            "crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())\n            .load(crate::core_types::MemoryOrder::Acquire)"
         ) && internal.contains(
-            "crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))\n        .load(crate::core_types::MemoryOrder::Acquire)"
+            "crate::core_types::AtomicPtrField(_mi_page_map_base().add(idx))\n            .load(crate::core_types::MemoryOrder::Acquire)"
         ) && !internal.contains("crate::atomic::mi_atomic_load_ptr_acquire(&(*theap).heap)")
             && !internal.contains("crate::atomic::mi_atomic_load_ptr_acquire(_mi_page_map_base().add(idx))"),
         "internal thread-heap and page-map pointer loads should use AtomicPtrField"
@@ -3708,7 +3708,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && !page_rs.contains("pub unsafe extern \"C\" fn _mi_theap_page_reclaim")
             && atomic_types.contains("pub(crate) unsafe fn compare_exchange_release(\n        self,\n        expected: &mut PageThreadId,")
-            && internal.contains("let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(")
+            && internal.contains("let atomic_tid = crate::core_types::AtomicPageThreadId(\n            crate::core_types::AtomicUsizeField(")
             && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);")
             && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);")
             && page_rs.contains("let flag = crate::core_types::PageFlags::from_low_bits(newflag);")
@@ -3738,8 +3738,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && internal.contains("crate::core_types::ThreadFreeWord(tf)\n        .head()")
             && internal.contains("crate::core_types::ThreadFreeWord(tf).is_owned()")
             && internal.contains("crate::core_types::ThreadFreeWord::from_parts(")
-            && internal.contains("let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(")
-            && internal.contains("unsafe { atomic_tf.claim_ownership() }")
+            && internal.contains("let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),")
+            && internal.contains("atomic_tf.claim_ownership()")
             && arena_rs.contains("(*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(\n            None,\n            crate::core_types::ThreadFreeOwner::Unowned,")
             && !arena_rs.contains("(*page).xthread_free = 0")
             && free_rs.contains(
@@ -3969,7 +3969,7 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         internal.contains("\"rep stosb\"")
             && internal.contains("pub unsafe fn mi_rep_stosb(dst: *mut c_void, val: u8, n: usize)")
-            && internal.contains("if n <= mi_cpu_stosb_max() {\n            mi_rep_stosb(dst, val as u8, n);\n            return;\n        }"),
+            && internal.contains("if n <= mi_cpu_stosb_max() {\n                mi_rep_stosb(dst, val as u8, n);\n                return;\n            }"),
         "_mi_memset should keep C's CPU-thresholded rep stosb shape instead of always lowering to external memset"
     );
     for internal_static in [

@@ -7,7 +7,6 @@
     non_upper_case_globals,
     clippy::collapsible_if,
     clippy::implicit_saturating_sub,
-    clippy::manual_is_multiple_of,
     clippy::missing_const_for_fn,
     unsafe_op_in_unsafe_fn
 )]
@@ -412,7 +411,7 @@ fn mi_bfield_atomic_try_clear(b: &AtomicUsize, idx: usize, all_clear: Option<&mu
 #[inline]
 fn mi_bfield_atomic_try_clear8(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bool>) -> bool {
     crate::mi_debug_assert!(idx < MI_BFIELD_BITS);
-    crate::mi_debug_assert!((idx % 8) == 0);
+    crate::mi_debug_assert!(idx.is_multiple_of(8));
     let mask = (0xFFusize) << idx;
     mi_bfield_atomic_try_clear_mask(b, mask, all_clear)
 }
@@ -886,7 +885,7 @@ fn mi_bchunk_try_find_and_clear8_at(
     let mut idx = 0usize;
     if mi_bfield_find_least_bit(has_set8, &mut idx) {
         crate::mi_debug_assert!(idx <= MI_BFIELD_BITS - 8);
-        crate::mi_debug_assert!((idx % 8) == 0);
+        crate::mi_debug_assert!(idx.is_multiple_of(8));
         if mi_bfield_atomic_try_clear_mask_of(&chunk.bfields[chunk_idx], 0xFFusize << idx, b, None)
         {
             *pidx = (chunk_idx * MI_BFIELD_BITS) + idx;

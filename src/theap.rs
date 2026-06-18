@@ -1,11 +1,6 @@
 //! Mechanical translation of the early `src/theap.c` helper slice.
 
-#![allow(
-    dead_code,
-    non_camel_case_types,
-    clippy::missing_safety_doc,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(dead_code, non_camel_case_types, unsafe_op_in_unsafe_fn)]
 
 use core::{ffi::c_void, mem::size_of, ptr};
 
@@ -43,6 +38,10 @@ enum mi_collect_t {
 
 pub const MI_MAX_BLOCKS: usize = MI_SMALL_PAGE_SIZE / core::mem::size_of::<*const c_void>();
 
+/// # Safety
+///
+/// The callback receives allocator-owned thread-heap, queue, and page pointers
+/// that must remain valid for the duration of the visit.
 pub type theap_page_visitor_fun = unsafe extern "C" fn(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -60,6 +59,10 @@ pub struct mi_theap_area_ex_s {
 
 pub type mi_theap_area_ex_t = mi_theap_area_ex_s;
 
+/// # Safety
+///
+/// The callback receives allocator-owned thread-heap and area pointers that
+/// must remain valid for the duration of the visit.
 pub type mi_theap_area_visit_fun = unsafe extern "C" fn(
     theap: *const mi_theap_t,
     area: *const mi_theap_area_ex_t,
@@ -75,6 +78,10 @@ pub struct mi_visit_blocks_args_s {
 
 pub type mi_visit_blocks_args_t = mi_visit_blocks_args_s;
 
+/// # Safety
+///
+/// `area` must point to writable heap-area storage and `page` must point to a
+/// valid page owned by this allocator.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_area_init(
     area: *mut mi_heap_area_t,
@@ -97,6 +104,10 @@ unsafe fn mi_get_fast_divisor(divisor: usize, magic: *mut u64, shift: *mut usize
     *magic = (((1u64 << 32) * ((1u64 << *shift) - divisor as u64)) / divisor as u64) + 1;
 }
 
+/// # Safety
+///
+/// `magic` and `shift` must come from `mi_get_fast_divisor` for the divisor
+/// used to derive `n`'s quotient.
 #[inline]
 pub unsafe fn mi_fast_divide(n: usize, magic: u64, shift: usize) -> usize {
     crate::mi_assert_internal!(u32::try_from(n).is_ok());
@@ -104,6 +115,10 @@ pub unsafe fn mi_fast_divide(n: usize, magic: u64, shift: usize) -> usize {
     ((hi + n as u64) >> shift) as usize
 }
 
+/// # Safety
+///
+/// `area` and `page` must describe the same valid allocator page. `visitor`
+/// must be valid to call for each live block in the page.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_area_visit_blocks(
     area: *const mi_heap_area_t,
@@ -285,6 +300,10 @@ unsafe extern "C" fn mi_theap_area_visitor(
 #[used]
 static MI_THEAP_AREA_VISITOR_KEEP: mi_theap_area_visit_fun = mi_theap_area_visitor;
 
+/// # Safety
+///
+/// `theap`, when non-null, must point to a valid thread heap. `visitor`, when
+/// present, must be valid for every visited heap area and block.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_visit_blocks(
     theap: *const mi_theap_t,
@@ -307,6 +326,10 @@ pub unsafe extern "C" fn mi_theap_visit_blocks(
     )
 }
 
+/// # Safety
+///
+/// `theap` must point to a valid initialized thread heap. `fn_page`, when
+/// present, must be valid for every page visited from that heap.
 pub unsafe fn mi_theap_visit_pages(
     theap: *mut mi_theap_t,
     fn_page: Option<theap_page_visitor_fun>,
@@ -348,6 +371,10 @@ pub unsafe fn mi_theap_visit_pages(
     true
 }
 
+/// # Safety
+///
+/// `theap`, `pq`, and `page` must be valid allocator objects from the same
+/// thread heap.
 pub unsafe extern "C" fn mi_theap_page_is_valid(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -363,6 +390,10 @@ pub unsafe extern "C" fn mi_theap_page_is_valid(
     true
 }
 
+/// # Safety
+///
+/// `theap`, `pq`, and `page` must be valid allocator objects from the same
+/// thread heap. `arg_collect` must point to a valid `mi_collect_t` value.
 pub unsafe extern "C" fn mi_theap_page_collect(
     theap: *mut mi_theap_t,
     pq: *mut mi_page_queue_t,
@@ -394,6 +425,9 @@ pub unsafe extern "C" fn mi_theap_page_collect(
     true
 }
 
+/// # Safety
+///
+/// `theap` must point to an initialized thread heap.
 pub unsafe fn mi_theap_is_valid(theap: *mut mi_theap_t) -> bool {
     crate::mi_assert_internal!(!theap.is_null());
     mi_theap_visit_pages(
@@ -412,6 +446,10 @@ pub unsafe fn mi_theap_is_valid(theap: *mut mi_theap_t) -> bool {
     true
 }
 
+/// # Safety
+///
+/// `theap` must point to an initialized thread heap whose backing heap remains
+/// valid for stats merging.
 pub unsafe fn mi_theap_merge_stats(theap: *mut mi_theap_t) {
     crate::mi_assert_internal!(mi_theap_is_initialized(theap));
     _mi_stats_merge_into(
@@ -444,11 +482,19 @@ unsafe fn mi_theap_collect_ex(theap: *mut mi_theap_t, mut collect: mi_collect_t)
     mi_theap_merge_stats(theap);
 }
 
+/// # Safety
+///
+/// `theap` must be null or point to an initialized thread heap that can be
+/// collected and abandoned.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_collect_abandon(theap: *mut mi_theap_t) {
     mi_theap_collect_ex(theap, mi_collect_t::MI_ABANDON);
 }
 
+/// # Safety
+///
+/// `theap` must be null or point to an initialized thread heap owned by this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_collect(theap: *mut mi_theap_t, force: bool) {
     mi_theap_collect_ex(
@@ -461,16 +507,27 @@ pub unsafe extern "C" fn mi_theap_collect(theap: *mut mi_theap_t, force: bool) {
     );
 }
 
+/// # Safety
+///
+/// Must be called only after allocator process/thread initialization has made
+/// the default thread heap accessible.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_collect(force: bool) {
     mi_theap_collect(_mi_theap_default(), force);
 }
 
+/// # Safety
+///
+/// `heap` must be null or point to a heap managed by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_collect(heap: *mut mi_heap_t, force: bool) {
     mi_theap_collect(crate::heap::mi_heap_theap(heap), force);
 }
 
+/// # Safety
+///
+/// Must be called only after allocator process/thread initialization has made
+/// the default thread heap accessible.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_get_default() -> *mut mi_theap_t {
     let mut theap = _mi_theap_default();
@@ -482,6 +539,10 @@ pub unsafe extern "C" fn mi_theap_get_default() -> *mut mi_theap_t {
     theap
 }
 
+/// # Safety
+///
+/// `theap`, when non-null, must point to a valid initialized thread heap whose
+/// lifetime covers subsequent default-thread-heap use.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_set_default(theap: *mut mi_theap_t) -> *mut mi_theap_t {
     let old = mi_theap_get_default();
@@ -491,6 +552,10 @@ pub unsafe extern "C" fn mi_theap_set_default(theap: *mut mi_theap_t) -> *mut mi
     old
 }
 
+/// # Safety
+///
+/// `theap`, `heap`, and `tld` must point to valid writable allocator metadata
+/// objects that are not concurrently initialized elsewhere.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_init(
     theap: *mut mi_theap_t,
@@ -554,6 +619,10 @@ pub(crate) unsafe extern "C" fn _mi_theap_init(
     mi_lock_release(ptr::addr_of_mut!((*heap).theaps_lock));
 }
 
+/// # Safety
+///
+/// `heap` and `tld` must point to valid allocator metadata objects used to own
+/// the new thread heap.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_create(
     heap: *mut mi_heap_t,
@@ -602,6 +671,9 @@ pub(crate) unsafe extern "C" fn _mi_theap_create(
     theap
 }
 
+/// # Safety
+///
+/// `theap` must point to a valid initialized thread heap.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) -> usize {
     _mi_random_next(ptr::addr_of_mut!((*theap).random))
@@ -649,6 +721,9 @@ unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
     }
 }
 
+/// # Safety
+///
+/// `theap` must be null or point to a valid thread heap metadata object.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_incref(theap: *mut mi_theap_t) {
     if !theap.is_null() && mi_memid_is_refcounted((*theap).memid) {
@@ -669,11 +744,18 @@ unsafe fn mi_theap_decref_inline(theap: *mut mi_theap_t) {
     }
 }
 
+/// # Safety
+///
+/// `theap` must be null or point to a valid thread heap metadata object.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_decref(theap: *mut mi_theap_t) {
     mi_theap_decref_inline(theap);
 }
 
+/// # Safety
+///
+/// `theap` must point to a valid thread heap. Lock flags must accurately reflect
+/// whether the caller already holds the corresponding heap and TLD locks.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_free(
     theap: *mut mi_theap_t,
@@ -737,6 +819,11 @@ pub(crate) unsafe extern "C" fn _mi_theap_free(
     true
 }
 
+/// # Safety
+///
+/// `theap` must point to a valid initialized thread heap with no concurrent
+/// users. `acquire_tld_theaps_lock` must reflect whether the caller already
+/// holds the TLD thread-heap list lock.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_delete(
     theap: *mut mi_theap_t,

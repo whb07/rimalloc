@@ -1,48 +1,6 @@
 //! Bit operation helpers and platform-size definitions
 
-#![allow(non_camel_case_types, non_upper_case_globals, unused_macros)]
-
-macro_rules! __has_builtin {
-    ($x:expr) => {
-        false
-    };
-}
-
-macro_rules! mi_builtin {
-    ($name:ident) => {
-        $name
-    };
-}
-
-macro_rules! mi_builtin32 {
-    ($name:ident) => {
-        mi_builtin!($name)
-    };
-}
-
-macro_rules! mi_builtin64 {
-    ($name:ident) => {
-        mi_builtin!($name)
-    };
-}
-
-macro_rules! mi_builtinz {
-    ($name:ident) => {
-        mi_builtin32!($name)
-    };
-}
-
-macro_rules! mi_msc_builtinz {
-    ($name:ident) => {
-        $name
-    };
-}
-
-macro_rules! MI_PU {
-    ($x:expr) => {
-        $x
-    };
-}
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 macro_rules! MI_ZU {
     ($x:expr) => {

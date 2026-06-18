@@ -1044,7 +1044,6 @@ fn phase6_c_compat_allowances_stay_intentional() {
         (("src/bitmap.rs", "non_upper_case_globals"), 1),
         (("src/bits.rs", "non_camel_case_types"), 1),
         (("src/bits.rs", "non_upper_case_globals"), 1),
-        (("src/bits.rs", "unused_macros"), 1),
         (("src/headers.rs", "non_upper_case_globals"), 14),
         (("src/init.rs", "non_camel_case_types"), 1),
         (("src/init.rs", "non_snake_case"), 8),

@@ -1284,18 +1284,20 @@ pub unsafe fn mi_theap_malloc_use_guarded(theap: *mut mi_theap_t, size: usize) -
     }
     #[cfg(feature = "guarded")]
     {
-        let count = (*theap).guarded_sample_count.wrapping_sub(1);
-        if mi_likely(count != 0) {
-            (*theap).guarded_sample_count = count;
-            false
-        } else if size >= (*theap).guarded_size_min && size <= (*theap).guarded_size_max {
-            (*theap).guarded_sample_count = (*theap).guarded_sample_rate;
-            (*theap).guarded_sample_rate != 0
-        } else {
-            if (*theap).guarded_sample_rate != 0 {
-                (*theap).guarded_sample_count = 1;
+        unsafe {
+            let count = (*theap).guarded_sample_count.wrapping_sub(1);
+            if mi_likely(count != 0) {
+                (*theap).guarded_sample_count = count;
+                false
+            } else if size >= (*theap).guarded_size_min && size <= (*theap).guarded_size_max {
+                (*theap).guarded_sample_count = (*theap).guarded_sample_rate;
+                (*theap).guarded_sample_rate != 0
+            } else {
+                if (*theap).guarded_sample_rate != 0 {
+                    (*theap).guarded_sample_count = 1;
+                }
+                false
             }
-            false
         }
     }
     #[cfg(not(feature = "guarded"))]

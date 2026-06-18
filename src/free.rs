@@ -522,17 +522,14 @@ unsafe fn mi_block_for_free_from_lookup(
     let crate::core_types::PointerLookup::Valid { location, .. } = lookup else {
         return None;
     };
-    let (block, was_guarded) = match location {
-        crate::core_types::PointerLocation::BlockStart(block)
-        | crate::core_types::PointerLocation::Interior { block, .. } => {
-            (block, crate::core_types::WasGuarded::No)
-        }
-        crate::core_types::PointerLocation::Guarded { block, .. } => {
-            mi_block_check_unguard(page, block.0.as_ptr(), p);
-            (block.0, crate::core_types::WasGuarded::Yes)
-        }
-    };
-    Some(crate::core_types::BlockForFree::new(block, was_guarded))
+    let located = location.located_block();
+    if located.was_guarded() == crate::core_types::WasGuarded::Yes {
+        mi_block_check_unguard(page, located.block().as_ptr(), p);
+    }
+    Some(crate::core_types::BlockForFree::new(
+        located.block(),
+        located.was_guarded(),
+    ))
 }
 
 #[cold]
@@ -745,25 +742,14 @@ pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *
         location,
     } = mi_validate_pointer(p, msg)
     {
-        let (block_ptr, was_guarded) = match location {
-            crate::core_types::PointerLocation::BlockStart(b) => (b, false),
-            crate::core_types::PointerLocation::Interior { block, .. } => (block, false),
-            crate::core_types::PointerLocation::Guarded { block, .. } => {
-                mi_block_check_unguard(page.as_ptr(), block.0.as_ptr(), p);
-                (block.0, true)
-            }
-        };
+        let located = location.located_block();
+        if located.was_guarded() == crate::core_types::WasGuarded::Yes {
+            mi_block_check_unguard(page.as_ptr(), located.block().as_ptr(), p);
+        }
         let validated = crate::core_types::ValidatedFree::new(
             user,
             page,
-            crate::core_types::BlockForFree::new(
-                block_ptr,
-                if was_guarded {
-                    crate::core_types::WasGuarded::Yes
-                } else {
-                    crate::core_types::WasGuarded::No
-                },
-            ),
+            crate::core_types::BlockForFree::new(located.block(), located.was_guarded()),
         );
         mi_free_validated(validated, usable);
     }
@@ -778,19 +764,15 @@ pub(crate) unsafe fn mi_route_usable_size_typed(
     }
     match mi_validate_pointer(p.cast_mut(), msg) {
         crate::core_types::PointerLookup::Valid { page, location, .. } => {
-            let (block_ptr, was_guarded, adjust) = match location {
-                crate::core_types::PointerLocation::BlockStart(b) => (b, false, 0),
-                crate::core_types::PointerLocation::Interior { block, offset } => {
-                    (block, false, offset.0)
-                }
-                crate::core_types::PointerLocation::Guarded { block, offset } => {
-                    (block.0, true, offset.0)
-                }
-            };
+            let located = location.located_block();
             crate::core_types::UsableSize::new(
-                mi_page_usable_size_of_typed(page.as_ptr(), block_ptr.as_ptr(), was_guarded)
-                    .get()
-                    .saturating_sub(adjust),
+                mi_page_usable_size_of_typed(
+                    page.as_ptr(),
+                    located.block().as_ptr(),
+                    located.was_guarded() == crate::core_types::WasGuarded::Yes,
+                )
+                .get()
+                .saturating_sub(located.offset().0),
             )
         }
         _ => crate::core_types::UsableSize::new(0),

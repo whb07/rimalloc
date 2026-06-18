@@ -634,11 +634,7 @@ unsafe fn mi_realloc_old_allocation(
             page,
             location,
         } => {
-            let block = match location {
-                crate::core_types::PointerLocation::BlockStart(block)
-                | crate::core_types::PointerLocation::Interior { block, .. } => block,
-                crate::core_types::PointerLocation::Guarded { block, .. } => block.0,
-            };
+            let block = location.block();
             let usable = _mi_usable_size_typed(user.as_ptr(), page.as_ptr());
             // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and
             // supplies the block start derived by the validation boundary.

@@ -42,8 +42,8 @@ pub(crate) use page::{FreePathKind, PageFlags, PageOwnerId, PageThreadId, Thread
 pub(crate) use freelist::{ThreadFreeOwner, ThreadFreeSnapshot, ThreadFreeWord};
 
 pub(crate) use validation::{
-    BlockForFree, BlockOffset, GuardedBlock, PointerInvalidReason, PointerLocation, PointerLookup,
-    ValidatedFree, WasGuarded,
+    BlockForFree, BlockOffset, GuardedBlock, LocatedBlock, PointerInvalidReason, PointerLocation,
+    PointerLookup, ValidatedFree, WasGuarded,
 };
 
 pub(crate) use memid::{

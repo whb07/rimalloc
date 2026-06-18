@@ -34,6 +34,59 @@ pub(crate) enum PointerLocation {
     },
 }
 
+/// Block facts derived from a validated pointer location.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct LocatedBlock {
+    block: BlockPtr,
+    was_guarded: WasGuarded,
+    offset: BlockOffset,
+}
+
+impl LocatedBlock {
+    #[inline(always)]
+    pub(crate) fn block(self) -> BlockPtr {
+        self.block
+    }
+
+    #[inline(always)]
+    pub(crate) fn was_guarded(self) -> WasGuarded {
+        self.was_guarded
+    }
+
+    #[inline(always)]
+    pub(crate) fn offset(self) -> BlockOffset {
+        self.offset
+    }
+}
+
+impl PointerLocation {
+    #[inline(always)]
+    pub(crate) fn located_block(self) -> LocatedBlock {
+        match self {
+            PointerLocation::BlockStart(block) => LocatedBlock {
+                block,
+                was_guarded: WasGuarded::No,
+                offset: BlockOffset(0),
+            },
+            PointerLocation::Interior { block, offset } => LocatedBlock {
+                block,
+                was_guarded: WasGuarded::No,
+                offset,
+            },
+            PointerLocation::Guarded { block, offset } => LocatedBlock {
+                block: block.0,
+                was_guarded: WasGuarded::Yes,
+                offset,
+            },
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn block(self) -> BlockPtr {
+        self.located_block().block()
+    }
+}
+
 /// Result of a user pointer lookup.
 pub(crate) enum PointerLookup {
     Null,

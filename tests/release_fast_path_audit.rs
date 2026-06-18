@@ -774,6 +774,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read core_types/memid.rs");
     let arena_types =
         fs::read_to_string(root.join("src/core_types/arena.rs")).expect("read core_types/arena.rs");
+    let validation_types = fs::read_to_string(root.join("src/core_types/validation.rs"))
+        .expect("read core_types/validation.rs");
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
@@ -2643,11 +2645,17 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && free_rs.contains("let block = if mi_page_has_interior_pointers(page) || MI_SECURE > 0")
             && free_rs.contains("PointerLocation::Guarded")
+            && validation_types.contains("pub(crate) struct LocatedBlock")
+            && validation_types.contains("impl PointerLocation")
+            && validation_types.contains("pub(crate) fn located_block(self) -> LocatedBlock")
             && free_rs.contains("unsafe fn mi_block_for_free_from_lookup(")
-            && free_rs.contains("crate::core_types::BlockForFree::new(block, was_guarded)")
+            && free_rs.contains("let located = location.located_block();")
+            && free_rs.contains("crate::core_types::BlockForFree::new(\n        located.block(),\n        located.was_guarded(),\n    )")
+            && alloc_rs.contains("let block = location.block();")
             && free_rs.contains(
                 "mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))"
             )
+            && !free_rs.contains("PointerLocation::BlockStart(b) => (b, false)")
             && !free_rs.contains("pub unsafe fn mi_validate_block_from_ptr(\n    page: *const mi_page_t,\n    p: *mut c_void,\n) -> *mut mi_block_t"),
         "free validation should keep _mi_page_ptr_unalign while returning PointerLookup and BlockForFree"
     );

@@ -1628,30 +1628,47 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "#[inline(never)]\npub extern \"C\" fn _mi_bin_size(bin: usize) -> usize"
             )
             && page_rs
-                .contains("pub(crate) fn _mi_bin_typed(size: usize) -> crate::core_types::Bin")
+                .contains("fn mi_bin_from_raw_size(size: usize) -> crate::core_types::Bin")
+            && page_rs.contains(
+                "pub(crate) fn mi_bin_from_padded(padded: crate::core_types::PaddedSize)"
+            )
+            && page_rs.contains(
+                "pub(crate) fn mi_bin_from_block_size(\n    block_size: crate::core_types::BlockSize,"
+            )
+            && page_rs.contains(
+                "pub(crate) fn mi_bin_from_usable(usable: crate::core_types::UsableSize)"
+            )
             && page_rs.contains("mi_bin(size)")
             && page_rs.contains("_mi_theap_empty")
             && page_rs.contains(".pages[bin].block_size")
-            && page_rs.contains("_mi_bin_size(_mi_bin_typed(padded.get()).as_usize())")
+            && page_rs.contains("_mi_bin_size(mi_bin_from_padded(padded).as_usize())")
             && stats_rs.contains("_mi_bin_size(bin)"),
         "bin lookup helpers should keep C's mi_bin/_mi_bin/_mi_bin_size boundaries and empty-theap table dependency"
     );
     assert!(
-        alloc_rs.contains("let bin = _mi_bin_typed(bsize).as_usize();")
-            && free_rs.contains("_mi_bin_typed(bsize.get()).as_usize()")
-            && arena_rs.contains("let bin = _mi_bin_typed(block_size).as_usize();")
+        alloc_rs.contains("let usable_size = mi_page_usable_block_size(page);")
+            && alloc_rs.contains("let bin = mi_bin_from_usable(usable_size).as_usize();")
+            && free_rs.contains("mi_bin_from_usable(bsize).as_usize()")
+            && arena_rs.contains(
+                "mi_bin_from_block_size(unsafe { crate::core_types::BlockSize::new_unchecked(block_size) })"
+            )
             && internal.contains(
                 "block_size: crate::core_types::BlockSize,\n) -> *mut mi_page_queue_t {\n    let size = block_size.get();"
             )
-            && internal.contains("crate::page::_mi_bin_typed(size).as_usize()")
+            && internal.contains("crate::page::mi_bin_from_block_size(block_size).as_usize()")
             && page_rs.contains("pub(crate) unsafe fn mi_page_bin_typed(")
             && page_rs.contains(") -> crate::core_types::Bin")
             && page_rs.contains("pub(crate) unsafe fn _mi_page_stats_bin_typed(")
             && page_rs.contains(") -> crate::core_types::StatsBin")
             && page_rs.contains("let bin = mi_page_bin_typed(page).as_usize();")
             && page_rs.contains("let bin = _mi_page_stats_bin_typed(page).as_usize();")
-            && page_rs.contains("let bin = _mi_bin_typed(size).as_usize();")
-            && page_rs.contains("bin == _mi_bin_typed((*prev).block_size).as_usize()"),
+            && page_rs.contains("let bin = mi_bin_from_block_size(block_size).as_usize();")
+            && page_rs.contains("== mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(\n                (*prev).block_size,")
+            && !page_rs.contains("pub(crate) fn _mi_bin_typed(size: usize)")
+            && !alloc_rs.contains("_mi_bin_typed(")
+            && !free_rs.contains("_mi_bin_typed(")
+            && !arena_rs.contains("_mi_bin_typed(")
+            && !internal.contains("_mi_bin_typed("),
         "internal bin users should consume typed Bin wrappers before raw array indexing"
     );
     assert!(

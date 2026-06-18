@@ -119,15 +119,27 @@ pub extern "C" fn _mi_bin(size: usize) -> usize {
 }
 
 #[inline(always)]
-pub(crate) fn mi_bin_typed(size: usize) -> crate::core_types::Bin {
+fn mi_bin_from_raw_size(size: usize) -> crate::core_types::Bin {
     let bin = mi_bin(size);
     crate::mi_debug_assert!(u16::try_from(bin).is_ok());
     crate::core_types::Bin::new(bin as u16)
 }
 
 #[inline(always)]
-pub(crate) fn _mi_bin_typed(size: usize) -> crate::core_types::Bin {
-    mi_bin_typed(size)
+pub(crate) fn mi_bin_from_padded(padded: crate::core_types::PaddedSize) -> crate::core_types::Bin {
+    mi_bin_from_raw_size(padded.get())
+}
+
+#[inline(always)]
+pub(crate) fn mi_bin_from_block_size(
+    block_size: crate::core_types::BlockSize,
+) -> crate::core_types::Bin {
+    mi_bin_from_raw_size(block_size.get())
+}
+
+#[inline(always)]
+pub(crate) fn mi_bin_from_usable(usable: crate::core_types::UsableSize) -> crate::core_types::Bin {
+    mi_bin_from_raw_size(usable.get())
 }
 
 #[inline(never)]
@@ -138,7 +150,7 @@ pub extern "C" fn _mi_bin_size(bin: usize) -> usize {
 
 #[inline(always)]
 fn mi_good_size_small(padded: crate::core_types::PaddedSize) -> crate::core_types::GoodSize {
-    crate::core_types::GoodSize::new(_mi_bin_size(_mi_bin_typed(padded.get()).as_usize()))
+    crate::core_types::GoodSize::new(_mi_bin_size(mi_bin_from_padded(padded).as_usize()))
 }
 
 pub(crate) fn mi_good_size_typed(
@@ -1119,7 +1131,10 @@ pub(crate) unsafe fn mi_page_bin_typed(page: *const mi_page_t) -> crate::core_ty
     } else if mi_page_is_huge(page) {
         MI_BIN_HUGE
     } else {
-        _mi_bin_typed(mi_page_block_size(page)).as_usize()
+        mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
+            mi_page_block_size(page),
+        ))
+        .as_usize()
     };
     crate::mi_assert_internal!(bin <= MI_BIN_FULL);
     crate::mi_debug_assert!(u16::try_from(bin).is_ok());
@@ -1138,7 +1153,10 @@ pub(crate) unsafe fn _mi_page_stats_bin_typed(
     let bin = if mi_page_is_huge(page) {
         MI_BIN_HUGE
     } else {
-        _mi_bin_typed(mi_page_block_size(page)).as_usize()
+        mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
+            mi_page_block_size(page),
+        ))
+        .as_usize()
     };
     crate::mi_assert_internal!(bin <= MI_BIN_HUGE);
     crate::mi_debug_assert!(u16::try_from(bin).is_ok());
@@ -1198,9 +1216,14 @@ pub unsafe fn mi_theap_queue_first_update(theap: *mut mi_theap_t, pq: *const mi_
         0
     } else {
         crate::mi_assert_internal!(pq > ptr::addr_of!((*theap).pages[0]));
-        let bin = _mi_bin_typed(size).as_usize();
+        let block_size = crate::core_types::BlockSize::new_unchecked(size);
+        let bin = mi_bin_from_block_size(block_size).as_usize();
         let mut prev = pq.sub(1);
-        while bin == _mi_bin_typed((*prev).block_size).as_usize()
+        while bin
+            == mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
+                (*prev).block_size,
+            ))
+            .as_usize()
             && prev > ptr::addr_of!((*theap).pages[0])
         {
             prev = prev.sub(1);

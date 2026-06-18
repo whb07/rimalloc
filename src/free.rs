@@ -30,8 +30,8 @@ use crate::internal::{
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
-    _mi_bin_typed, _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_retire,
-    _mi_page_unfull, MI_MEDIUM_MAX_OBJ_SIZE, mi_page_is_abandoned, mi_page_is_huge,
+    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_retire, _mi_page_unfull,
+    MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned, mi_page_is_huge,
     try_reclaim_abandoned,
 };
 use crate::prim::{
@@ -303,9 +303,7 @@ pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
         __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize.get());
         if crate::types::MI_STAT > 1 {
             __mi_stat_decrease(
-                ptr::addr_of_mut!(
-                    (*theap).stats.malloc_bins[_mi_bin_typed(bsize.get()).as_usize()]
-                ),
+                ptr::addr_of_mut!((*theap).stats.malloc_bins[mi_bin_from_usable(bsize).as_usize()]),
                 1,
             );
         }

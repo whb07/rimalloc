@@ -958,7 +958,8 @@ pub(crate) unsafe fn mi_page_queue(
 ) -> *mut mi_page_queue_t {
     let size = block_size.get();
     let pq = ptr::addr_of!(
-        (*(theap as *mut mi_theap_t)).pages[crate::page::_mi_bin_typed(size).as_usize()]
+        (*(theap as *mut mi_theap_t)).pages
+            [crate::page::mi_bin_from_block_size(block_size).as_usize()]
     )
     .cast_mut();
     if size <= MI_LARGE_MAX_OBJ_SIZE {

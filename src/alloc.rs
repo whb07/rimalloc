@@ -21,7 +21,9 @@ use crate::internal::{
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
-use crate::page::{_mi_bin_typed, _mi_malloc_generic_typed, MI_MAX_ALLOC_SIZE, mi_good_size_typed};
+use crate::page::{
+    _mi_malloc_generic_typed, MI_MAX_ALLOC_SIZE, mi_bin_from_usable, mi_good_size_typed,
+};
 use crate::prim::{_mi_heap_theap, _mi_theap_default, MI_THEAP_INITASNULL};
 use crate::track::{
     MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
@@ -170,14 +172,15 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
         ));
     }
 
-    let bsize = mi_page_usable_block_size(page).get();
+    let usable_size = mi_page_usable_block_size(page);
+    let bsize = usable_size.get();
     mi_track_mem_undefined(block.cast(), bsize);
 
     if MI_STAT > 0 && bsize <= MI_LARGE_MAX_OBJ_SIZE {
         __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize);
         if MI_STAT > 1 {
             __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.malloc_normal_count), 1);
-            let bin = _mi_bin_typed(bsize).as_usize();
+            let bin = mi_bin_from_usable(usable_size).as_usize();
             __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.malloc_bins[bin]), 1);
             __mi_stat_increase(
                 ptr::addr_of_mut!((*theap).stats.malloc_requested),

@@ -17,11 +17,11 @@ pub use crate::options::{
     mi_option_max_segment_reclaim, mi_option_purge_extend_delay, mi_option_reset_decommits,
     mi_option_reset_delay, mi_option_t,
 };
-pub use crate::stats::{MI_STAT_VERSION, mi_stats_t};
+pub use crate::stats::{MI_BIN_HUGE, MI_STAT_VERSION, mi_stats_t};
 pub use crate::types::{
-    MI_MALLOC_VERSION, MI_SMALL_SIZE_MAX, MI_SMALL_WSIZE_MAX, mi_arena_id_t, mi_block_visit_fun,
-    mi_commit_fun_t, mi_deferred_free_fun, mi_error_fun, mi_heap_area_t, mi_heap_t,
-    mi_heap_visit_fun, mi_output_fun, mi_subproc_id_t, mi_theap_t,
+    MI_MALLOC_VERSION, MI_MAX_ALIGN_SIZE, MI_SMALL_SIZE_MAX, MI_SMALL_WSIZE_MAX, mi_arena_id_t,
+    mi_block_visit_fun, mi_commit_fun_t, mi_deferred_free_fun, mi_error_fun, mi_heap_area_t,
+    mi_heap_t, mi_heap_visit_fun, mi_output_fun, mi_subproc_id_t, mi_theap_t,
 };
 
 pub const _mi_option_last: mi_option_t = crate::options::mi_option_e::_mi_option_last;

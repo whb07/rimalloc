@@ -394,8 +394,11 @@ mod tests {
 
     #[test]
     fn allocation_has_expected_thread_traits() {
-        fn assert_traits<T: Send + Sync>() {}
-        assert_traits::<Allocation>();
+        fn assert_traits<T: Send + Sync>() -> bool {
+            let _ = core::marker::PhantomData::<T>;
+            true
+        }
+        assert!(assert_traits::<Allocation>());
     }
 
     #[test]
@@ -424,10 +427,13 @@ mod tests {
 
     #[test]
     fn error_types_are_copy_clone_and_format_without_owned_strings() {
-        fn assert_traits<T: Copy + Clone + core::fmt::Debug + Eq>() {}
-        assert_traits::<AllocError>();
-        assert_traits::<LayoutError>();
-        assert_traits::<TryAllocError>();
+        fn assert_traits<T: Copy + Clone + core::fmt::Debug + Eq>() -> bool {
+            let _ = core::marker::PhantomData::<T>;
+            true
+        }
+        assert!(assert_traits::<AllocError>());
+        assert!(assert_traits::<LayoutError>());
+        assert!(assert_traits::<TryAllocError>());
 
         let layout = Layout::from_size_align(64, 16).expect("layout");
         let alloc = AllocError { layout };

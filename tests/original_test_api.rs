@@ -1,10 +1,9 @@
-use mechanical_mimalloc::raw::alloc_aligned::mi_zalloc_aligned;
-use mechanical_mimalloc::raw::free::mi_free;
 use mechanical_mimalloc::raw::headers::{
     mi_stl_allocator, mi_stl_allocator_operator_eq, mi_stl_allocator_operator_ne,
 };
-use mechanical_mimalloc::raw::options::{mi_option_disable, mi_option_t};
-use mechanical_mimalloc::raw::types::MI_MAX_ALIGN_SIZE;
+use mechanical_mimalloc::raw::{
+    MI_MAX_ALIGN_SIZE, mi_free, mi_option_disable, mi_option_t, mi_zalloc_aligned,
+};
 
 #[derive(Clone, Copy, Default)]
 struct SomeStruct {
@@ -48,7 +47,7 @@ fn mem_is_zero(p: *const u8, size: usize) -> bool {
 }
 
 fn test_api_main() -> i32 {
-    mi_option_disable(mi_option_t::mi_option_verbose);
+    unsafe { mi_option_disable(mi_option_t::mi_option_verbose) };
     let mut ok = true;
     ok = ok && test_stl_allocator1();
     ok = ok && test_stl_allocator2();

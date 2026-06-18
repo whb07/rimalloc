@@ -10,7 +10,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
-use mechanical_mimalloc::raw::{alloc, alloc_aligned, free, headers, heap, mimalloc, options};
+use mechanical_mimalloc::raw::{self, headers};
 
 unsafe extern "C" {
     fn malloc(size: usize) -> *mut c_void;
@@ -74,7 +74,7 @@ impl Drop for MTest {
 
 thread_local! {
     static TL_VARIABLE: MTest = MTest::new();
-    static S_PTR: *mut c_void = unsafe { alloc::mi_malloc(1) };
+    static S_PTR: *mut c_void = unsafe { raw::mi_malloc(1) };
 }
 
 fn msleep(msecs: u64) {
@@ -109,18 +109,18 @@ fn original_main_override_c_main() -> i32 {
 
     unsafe {
         let mut p1 = malloc(78);
-        let in_heap_1 = !p1.is_null() && mimalloc::mi_is_in_heap_region(p1.cast_const());
+        let in_heap_1 = !p1.is_null() && raw::mi_is_in_heap_region(p1.cast_const());
         let _ = original_testhelper::check("main-override.c:malloc78", in_heap_1);
 
         let mut p2 = malloc(24);
-        let in_heap_2 = !p2.is_null() && mimalloc::mi_is_in_heap_region(p2.cast_const());
+        let in_heap_2 = !p2.is_null() && raw::mi_is_in_heap_region(p2.cast_const());
         let _ = original_testhelper::check("main-override.c:malloc24", in_heap_2);
 
         free(p1);
         p1 = malloc(8);
 
         let hello = CString::new("hello\n").expect("CString literal");
-        let s = alloc::mi_strdup(hello.as_ptr());
+        let s = raw::mi_strdup(hello.as_ptr());
         let strdup_ok = if s.is_null() {
             false
         } else {
@@ -136,15 +136,15 @@ fn original_main_override_c_main() -> i32 {
         }
         free(p1);
         free(p2);
-        free::mi_free(s.cast());
+        raw::mi_free(s.cast());
 
-        p1 = alloc::mi_malloc(32);
+        p1 = raw::mi_malloc(32);
         free(p1);
         p2 = malloc(32);
-        free::mi_free(p2);
+        raw::mi_free(p2);
 
-        let _ = original_testhelper::check("main-override.c:mi_version", options::mi_version() > 0);
-        mimalloc::mi_stats_print(ptr::null_mut());
+        let _ = original_testhelper::check("main-override.c:mi_version", raw::mi_version() > 0);
+        raw::mi_stats_print(ptr::null_mut());
     }
 
     original_testhelper::print_test_summary()
@@ -162,17 +162,17 @@ fn various_tests() {
 
     unsafe {
         let mut p1 = malloc(78);
-        let p2 = alloc_aligned::mi_malloc_aligned(24, 16);
+        let p2 = raw::mi_malloc_aligned(24, 16);
         assert!(!p1.is_null());
         assert!(!p2.is_null());
         free(p1);
 
         p1 = malloc(8);
         let hello = CString::new("hello\n").expect("CString literal");
-        let s = alloc::mi_strdup(hello.as_ptr());
+        let s = raw::mi_strdup(hello.as_ptr());
         assert!(!s.is_null());
 
-        free::mi_free(p2);
+        raw::mi_free(p2);
         let p2 = malloc(16);
         assert!(!p2.is_null());
 
@@ -182,27 +182,27 @@ fn various_tests() {
         }
         free(p1);
         free(p2);
-        free::mi_free(s.cast());
+        raw::mi_free(s.cast());
 
         let t = Box::new(Test::new(42));
         assert_eq!(t.i, 42);
         drop(t);
 
-        let t2 = alloc::mi_new_nothrow(mem::size_of::<Test>()).cast::<Test>();
+        let t2 = raw::mi_new_nothrow(mem::size_of::<Test>()).cast::<Test>();
         if !t2.is_null() {
             ptr::write(t2, Test::new(42));
             assert_eq!((*t2).i, 42);
             ptr::drop_in_place(t2);
-            free::mi_free(t2.cast());
+            raw::mi_free(t2.cast());
         }
 
-        let tbuf = alloc::mi_new_n(1, mem::size_of::<Test>()).cast::<u8>();
+        let tbuf = raw::mi_new_n(1, mem::size_of::<Test>()).cast::<u8>();
         assert!(!tbuf.is_null());
         let t3 = tbuf.cast::<Test>();
         ptr::write(t3, Test::new(42));
         assert_eq!((*t3).i, 42);
         ptr::drop_in_place(t3);
-        free::mi_free(tbuf.cast());
+        raw::mi_free(tbuf.cast());
     }
 
     free_p();
@@ -225,17 +225,17 @@ fn test_dep() {
     #[cfg(windows)]
     {
         let s = CString::new("test_dep GetString").expect("CString literal");
-        let dup = unsafe { alloc::mi_strdup(s.as_ptr()) };
+        let dup = unsafe { raw::mi_strdup(s.as_ptr()) };
         assert!(!dup.is_null());
-        unsafe { free::mi_free(dup.cast()) };
+        unsafe { raw::mi_free(dup.cast()) };
 
-        let test_heap = unsafe { heap::mi_heap_new() };
+        let test_heap = unsafe { raw::mi_heap_new() };
         assert!(!test_heap.is_null());
-        let p = unsafe { alloc::mi_heap_malloc(test_heap, 64) };
+        let p = unsafe { raw::mi_heap_malloc(test_heap, 64) };
         assert!(!p.is_null());
         unsafe {
-            free::mi_free(p);
-            heap::mi_heap_delete(test_heap);
+            raw::mi_free(p);
+            raw::mi_heap_delete(test_heap);
         }
     }
 }
@@ -305,7 +305,7 @@ fn test_stl_allocator6() -> bool {
 fn test_stl_allocators() {
     assert!(test_stl_allocator1());
     assert!(test_stl_allocator2());
-    if mimalloc::MI_HAS_HEAP_STL_ALLOCATOR != 0 {
+    if raw::MI_HAS_HEAP_STL_ALLOCATOR != 0 {
         assert!(test_stl_allocator3());
         assert!(test_stl_allocator4());
         assert!(test_stl_allocator5());
@@ -314,18 +314,18 @@ fn test_stl_allocators() {
 }
 
 fn thread1_allocate() {
-    let p = unsafe { alloc::mi_calloc(1, 256) };
+    let p = unsafe { raw::mi_calloc(1, 256) };
     assert!(!p.is_null());
     let old = CPTR.swap(p, Ordering::AcqRel);
     if !old.is_null() {
-        unsafe { free::mi_free(old) };
+        unsafe { raw::mi_free(old) };
     }
 }
 
 fn thread2_free() {
     let p = CPTR.swap(ptr::null_mut(), Ordering::AcqRel);
     if !p.is_null() {
-        unsafe { free::mi_free(p) };
+        unsafe { raw::mi_free(p) };
     }
 }
 
@@ -338,9 +338,9 @@ fn test_large_migrate() {
 
 fn strdup_test() {
     let s = CString::new("hello\n").expect("CString literal");
-    let dup = unsafe { alloc::mi_strdup(s.as_ptr()) };
+    let dup = unsafe { raw::mi_strdup(s.as_ptr()) };
     assert!(!dup.is_null());
-    unsafe { free::mi_free(dup.cast()) };
+    unsafe { raw::mi_free(dup.cast()) };
 
     #[cfg(windows)]
     {
@@ -350,9 +350,9 @@ fn strdup_test() {
 
 fn heap_no_delete() {
     let t = thread::spawn(|| unsafe {
-        let test_heap = heap::mi_heap_new();
+        let test_heap = raw::mi_heap_new();
         assert!(!test_heap.is_null());
-        let q = alloc::mi_heap_malloc(test_heap, 1024);
+        let q = raw::mi_heap_malloc(test_heap, 1024);
         assert!(!q.is_null());
         let _ = core::hint::black_box(q);
     });
@@ -361,12 +361,12 @@ fn heap_no_delete() {
 
 fn t1main() {
     unsafe {
-        let test_heap = heap::mi_heap_new();
+        let test_heap = raw::mi_heap_new();
         assert!(!test_heap.is_null());
-        let p = alloc::mi_heap_malloc(test_heap, 1024);
+        let p = raw::mi_heap_malloc(test_heap, 1024);
         assert!(!p.is_null());
         GLOBAL_P.store(p, Ordering::Release);
-        heap::mi_heap_delete(test_heap);
+        raw::mi_heap_delete(test_heap);
     }
 }
 
@@ -375,16 +375,16 @@ fn theap_late_free() {
     msleep(2000);
     let p = GLOBAL_P.swap(ptr::null_mut(), Ordering::AcqRel);
     assert!(!p.is_null());
-    unsafe { free::mi_free(p) };
+    unsafe { raw::mi_free(p) };
     t.join().expect("t1main");
 }
 
 fn alloc0() {
-    let p = unsafe { alloc::mi_malloc(8) };
+    let p = unsafe { raw::mi_malloc(8) };
     assert!(!p.is_null());
     let old = SHARED_P.swap(p, Ordering::AcqRel);
     if !old.is_null() {
-        unsafe { free::mi_free(old) };
+        unsafe { raw::mi_free(old) };
     }
 }
 
@@ -393,21 +393,21 @@ fn padding_shrink() {
     t.join().expect("alloc0");
     let p = SHARED_P.swap(ptr::null_mut(), Ordering::AcqRel);
     assert!(!p.is_null());
-    unsafe { free::mi_free(p) };
+    unsafe { raw::mi_free(p) };
 }
 
 fn theap_thread_free_large() {
     for _ in 0..4 {
-        let p = unsafe { alloc_aligned::mi_malloc_aligned(2 * 1024 * 1024 + 1, 8) };
+        let p = unsafe { raw::mi_malloc_aligned(2 * 1024 * 1024 + 1, 8) };
         assert!(!p.is_null());
         let old = SHARED_P.swap(p, Ordering::AcqRel);
         if !old.is_null() {
-            unsafe { free::mi_free(old) };
+            unsafe { raw::mi_free(old) };
         }
         let t = thread::spawn(|| {
             let p = SHARED_P.swap(ptr::null_mut(), Ordering::AcqRel);
             if !p.is_null() {
-                unsafe { free::mi_free(p) };
+                unsafe { raw::mi_free(p) };
             }
         });
         t.join().expect("theap_thread_free_large_worker");
@@ -417,16 +417,16 @@ fn theap_thread_free_large() {
 fn theap_thread_free_huge_worker() {
     let p = SHARED_P.swap(ptr::null_mut(), Ordering::AcqRel);
     if !p.is_null() {
-        unsafe { free::mi_free(p) };
+        unsafe { raw::mi_free(p) };
     }
 }
 
 fn theap_thread_free_huge_smoke() {
-    let p = unsafe { alloc::mi_malloc(4096) };
+    let p = unsafe { raw::mi_malloc(4096) };
     assert!(!p.is_null());
     let old = SHARED_P.swap(p, Ordering::AcqRel);
     if !old.is_null() {
-        unsafe { free::mi_free(old) };
+        unsafe { raw::mi_free(old) };
     }
     let t = thread::spawn(theap_thread_free_huge_worker);
     t.join().expect("theap_thread_free_huge_worker");
@@ -466,7 +466,7 @@ fn test_mt_shutdown() {
         tasks.push(thread::spawn(|| {
             let mut ps = Vec::with_capacity(64);
             for _ in 0..64 {
-                let p = unsafe { alloc::mi_new_n(1, 1) };
+                let p = unsafe { raw::mi_new_n(1, 1) };
                 assert!(!p.is_null());
                 ps.push(p as usize);
             }
@@ -476,7 +476,7 @@ fn test_mt_shutdown() {
 
     for task in tasks {
         for p in task.join().expect("test_mt_shutdown worker") {
-            unsafe { free::mi_free(p as *mut c_void) };
+            unsafe { raw::mi_free(p as *mut c_void) };
         }
     }
 }
@@ -495,14 +495,14 @@ fn test_perf_local_alloc() {
     for _ in 0..PERF_ITERS {
         let len = LEN[(lcg_next(&mut state) as usize) % LEN.len()];
         let p = unsafe {
-            alloc_aligned::mi_zalloc_aligned(len * mem::size_of::<i32>(), mem::align_of::<i32>())
+            raw::mi_zalloc_aligned(len * mem::size_of::<i32>(), mem::align_of::<i32>())
                 .cast::<i32>()
         };
         assert!(!p.is_null());
         unsafe {
             *p = 1;
             sum += i64::from(*p.add((lcg_next(&mut state) as usize) % len));
-            free::mi_free(p.cast());
+            raw::mi_free(p.cast());
         }
     }
     GSUM.fetch_add(sum, Ordering::Relaxed);
@@ -586,7 +586,7 @@ fn local_alloc5() {
     let mut sum = 0_i64;
     for i in 0..PERF5_ITERS {
         let n = i % 1000;
-        let p = unsafe { alloc::mi_malloc(n.max(1)).cast::<u8>() };
+        let p = unsafe { raw::mi_malloc(n.max(1)).cast::<u8>() };
         assert!(!p.is_null());
         escape5(p, n);
         if i % 4 > 0 {
@@ -595,7 +595,7 @@ fn local_alloc5() {
                     sum += i64::from(*p.add(n - 1));
                 }
             }
-            unsafe { free::mi_free(p.cast()) };
+            unsafe { raw::mi_free(p.cast()) };
         }
     }
     GSUM5.fetch_add(sum, Ordering::Relaxed);
@@ -612,7 +612,7 @@ fn test_perf5() {
 }
 
 fn original_main_override_cpp_main() -> i32 {
-    unsafe { mimalloc::mi_stats_reset() };
+    unsafe { raw::mi_stats_reset() };
     various_tests();
     test_dep();
     test_large_migrate();
@@ -631,7 +631,7 @@ fn original_main_override_cpp_main() -> i32 {
     test_perf4();
     test_perf5();
     theap_thread_free_huge_smoke();
-    unsafe { mimalloc::mi_stats_print(ptr::null_mut()) };
+    unsafe { raw::mi_stats_print(ptr::null_mut()) };
     0
 }
 

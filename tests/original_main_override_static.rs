@@ -4,11 +4,11 @@ use std::ffi::CString;
 
 use mechanical_mimalloc::raw::bits::{MI_INTPTR_SIZE, MI_SIZE_BITS, mi_clz};
 use mechanical_mimalloc::raw::internal::_mi_wsize_from_size;
-use mechanical_mimalloc::raw::mimalloc;
-use mechanical_mimalloc::raw::options::{self, mi_option_t};
 use mechanical_mimalloc::raw::page;
-use mechanical_mimalloc::raw::stats::{MI_BIN_HUGE, MI_STAT_VERSION, mi_stats_t};
-use mechanical_mimalloc::raw::types::{mi_arena_id_t, mi_heap_area_t, mi_heap_t};
+use mechanical_mimalloc::raw::{
+    self, MI_BIN_HUGE, MI_STAT_VERSION, mi_arena_id_t, mi_heap_area_t, mi_heap_t, mi_option_t,
+    mi_stats_t,
+};
 
 const HUGE_ALLOC_SIZE: usize = 67_108_872;
 const LARGE_WSIZE_MAX: usize = (4 * 1024 * 1024) / MI_INTPTR_SIZE;
@@ -29,13 +29,13 @@ fn initialized_stats() -> mi_stats_t {
 
 unsafe fn current_stats() -> mi_stats_t {
     let mut stats = initialized_stats();
-    assert!(unsafe { mimalloc::mi_stats_get(&mut stats) });
+    assert!(unsafe { raw::mi_stats_get(&mut stats) });
     stats
 }
 
 unsafe fn alloc_huge() {
-    let p = unsafe { mimalloc::mi_malloc(HUGE_ALLOC_SIZE) };
-    unsafe { mimalloc::mi_free(p) };
+    let p = unsafe { raw::mi_malloc(HUGE_ALLOC_SIZE) };
+    unsafe { raw::mi_free(p) };
 }
 
 unsafe extern "C" fn test_visit(
@@ -53,23 +53,23 @@ unsafe extern "C" fn test_visit(
     } else {
         state.blocks += 1;
         let _ = block_size;
-        let _ = unsafe { mimalloc::mi_usable_size(block) };
+        let _ = unsafe { raw::mi_usable_size(block) };
     }
     true
 }
 
 unsafe fn test_heap_walk() {
-    let heap = unsafe { mimalloc::mi_heap_new() };
+    let heap = unsafe { raw::mi_heap_new() };
     assert!(!heap.is_null());
 
-    let _p1 = unsafe { mimalloc::mi_heap_malloc(heap, 16 * 2_097_152) };
-    let _p2 = unsafe { mimalloc::mi_heap_malloc(heap, 2_067_152) };
-    let _p3 = unsafe { mimalloc::mi_heap_malloc(heap, 2_097_160) };
-    let _p4 = unsafe { mimalloc::mi_heap_malloc(heap, 24_576) };
+    let _p1 = unsafe { raw::mi_heap_malloc(heap, 16 * 2_097_152) };
+    let _p2 = unsafe { raw::mi_heap_malloc(heap, 2_067_152) };
+    let _p3 = unsafe { raw::mi_heap_malloc(heap, 2_097_160) };
+    let _p4 = unsafe { raw::mi_heap_malloc(heap, 24_576) };
 
     let mut state = VisitState::default();
     let ok = unsafe {
-        mimalloc::mi_heap_visit_blocks(
+        raw::mi_heap_visit_blocks(
             heap,
             true,
             Some(test_visit),
@@ -80,7 +80,7 @@ unsafe fn test_heap_walk() {
     assert!(state.areas > 0);
     assert!(state.blocks > 0);
 
-    unsafe { mimalloc::mi_heap_delete(heap) };
+    unsafe { raw::mi_heap_delete(heap) };
 }
 
 #[cfg(windows)]
@@ -94,25 +94,24 @@ unsafe fn test_manage_os_memory() {
         i32,
         bool,
         *mut mi_arena_id_t,
-    ) -> bool = mimalloc::mi_manage_os_memory_ex;
+    ) -> bool = raw::mi_manage_os_memory_ex;
 
-    let heap = unsafe { mimalloc::mi_heap_new_in_arena(ptr::null_mut()) };
+    let heap = unsafe { raw::mi_heap_new_in_arena(ptr::null_mut()) };
     assert!(!heap.is_null());
 
-    let p1 = unsafe { mimalloc::mi_heap_malloc(heap, 8) };
-    let p2 = unsafe { mimalloc::mi_heap_malloc(heap, core::mem::size_of::<i32>()) }.cast::<i32>();
+    let p1 = unsafe { raw::mi_heap_malloc(heap, 8) };
+    let p2 = unsafe { raw::mi_heap_malloc(heap, core::mem::size_of::<i32>()) }.cast::<i32>();
     assert!(!p2.is_null());
     unsafe { *p2 = 42 };
 
-    let prev_default_theap =
-        unsafe { mimalloc::mi_theap_set_default(mimalloc::mi_heap_theap(heap)) };
-    let p3 = unsafe { mimalloc::mi_malloc(8) };
-    unsafe { mimalloc::mi_free(p3) };
-    unsafe { mimalloc::mi_theap_set_default(prev_default_theap) };
+    let prev_default_theap = unsafe { raw::mi_theap_set_default(raw::mi_heap_theap(heap)) };
+    let p3 = unsafe { raw::mi_malloc(8) };
+    unsafe { raw::mi_free(p3) };
+    unsafe { raw::mi_theap_set_default(prev_default_theap) };
 
-    unsafe { mimalloc::mi_free(p1) };
-    unsafe { mimalloc::mi_free(p2.cast()) };
-    unsafe { mimalloc::mi_heap_delete(heap) };
+    unsafe { raw::mi_free(p1) };
+    unsafe { raw::mi_free(p2.cast()) };
+    unsafe { raw::mi_heap_delete(heap) };
 }
 
 #[cfg(not(windows))]
@@ -126,50 +125,53 @@ unsafe fn test_manage_os_memory() {
         i32,
         bool,
         *mut mi_arena_id_t,
-    ) -> bool = mimalloc::mi_manage_os_memory_ex;
+    ) -> bool = raw::mi_manage_os_memory_ex;
 
-    let heap = unsafe { mimalloc::mi_heap_new_in_arena(ptr::null_mut()) };
+    let heap = unsafe { raw::mi_heap_new_in_arena(ptr::null_mut()) };
     assert!(!heap.is_null());
 
-    let p = unsafe { mimalloc::mi_heap_malloc(heap, 8) };
+    let p = unsafe { raw::mi_heap_malloc(heap, 8) };
     assert!(!p.is_null());
-    assert!(unsafe { mimalloc::mi_heap_contains(heap, p) });
+    assert!(unsafe { raw::mi_heap_contains(heap, p) });
 
-    unsafe { mimalloc::mi_free(p) };
-    unsafe { mimalloc::mi_heap_delete(heap) };
+    unsafe { raw::mi_free(p) };
+    unsafe { raw::mi_heap_delete(heap) };
 }
 
 unsafe fn test_large_pages() {
     let mut arena_id: mi_arena_id_t = ptr::null_mut();
-    let err = unsafe { mimalloc::mi_reserve_huge_os_pages_at_ex(0, -1, 0, false, &mut arena_id) };
+    let err = unsafe { raw::mi_reserve_huge_os_pages_at_ex(0, -1, 0, false, &mut arena_id) };
     assert_eq!(err, 0);
     assert!(arena_id.is_null());
 }
 
 unsafe fn test_internal_arena_purge_does_not_recommit() {
-    let original_purge_delay = options::mi_option_get(mi_option_t::mi_option_purge_delay);
-    let original_purge_decommits = options::mi_option_get(mi_option_t::mi_option_purge_decommits);
+    let original_purge_delay = unsafe { raw::mi_option_get(mi_option_t::mi_option_purge_delay) };
+    let original_purge_decommits =
+        unsafe { raw::mi_option_get(mi_option_t::mi_option_purge_decommits) };
 
-    options::mi_option_set(mi_option_t::mi_option_purge_delay, 0);
-    options::mi_option_set(mi_option_t::mi_option_purge_decommits, 1);
+    unsafe { raw::mi_option_set(mi_option_t::mi_option_purge_delay, 0) };
+    unsafe { raw::mi_option_set(mi_option_t::mi_option_purge_decommits, 1) };
 
     let size = 8 * 1024 * 1024;
-    let p = unsafe { mimalloc::mi_malloc(size) }.cast::<u8>();
+    let p = unsafe { raw::mi_malloc(size) }.cast::<u8>();
     assert!(!p.is_null());
     for offset in (0..size).step_by(4096) {
         unsafe { p.add(offset).write(0xA5) };
     }
 
     let before_free = unsafe { current_stats() };
-    unsafe { mimalloc::mi_free(p.cast()) };
-    unsafe { mimalloc::mi_collect(true) };
+    unsafe { raw::mi_free(p.cast()) };
+    unsafe { raw::mi_collect(true) };
     let after_collect = unsafe { current_stats() };
 
-    options::mi_option_set(mi_option_t::mi_option_purge_delay, original_purge_delay);
-    options::mi_option_set(
-        mi_option_t::mi_option_purge_decommits,
-        original_purge_decommits,
-    );
+    unsafe { raw::mi_option_set(mi_option_t::mi_option_purge_delay, original_purge_delay) };
+    unsafe {
+        raw::mi_option_set(
+            mi_option_t::mi_option_purge_decommits,
+            original_purge_decommits,
+        )
+    };
 
     assert!(
         after_collect.purge_calls.total > before_free.purge_calls.total,
@@ -224,40 +226,40 @@ fn mi_bins() {
 }
 
 unsafe fn test_canary_leak() {
-    let p = unsafe { mimalloc::mi_mallocn(22, core::mem::size_of::<u8>()) }.cast::<u8>();
+    let p = unsafe { raw::mi_mallocn(22, core::mem::size_of::<u8>()) }.cast::<u8>();
     assert!(!p.is_null());
     for i in 0..22usize {
         unsafe { *p.add(i) = b'0'.wrapping_add(i as u8) };
     }
-    assert!(unsafe { mimalloc::mi_usable_size(p.cast()) } >= 22);
-    unsafe { mimalloc::mi_free(p.cast()) };
+    assert!(unsafe { raw::mi_usable_size(p.cast()) } >= 22);
+    unsafe { raw::mi_free(p.cast()) };
 }
 
 fn test_dep() {
-    assert!(unsafe { mimalloc::mi_is_redirected() } || unsafe { mimalloc::mi_version() } == 30302);
+    assert!(unsafe { raw::mi_is_redirected() } || unsafe { raw::mi_version() } == 30302);
 }
 
 unsafe fn main_override_static_body() {
-    assert!(unsafe { mimalloc::mi_version() } > 0);
-    unsafe { mimalloc::mi_stats_reset() };
+    assert!(unsafe { raw::mi_version() } > 0);
+    unsafe { raw::mi_stats_reset() };
 
     test_dep();
     unsafe { test_canary_leak() };
 
-    let mut p1 = unsafe { mimalloc::mi_malloc(78) };
-    let mut p2 = unsafe { mimalloc::mi_malloc(24) };
-    unsafe { mimalloc::mi_free(p1) };
-    p1 = unsafe { mimalloc::mi_malloc(8) };
+    let mut p1 = unsafe { raw::mi_malloc(78) };
+    let mut p2 = unsafe { raw::mi_malloc(24) };
+    unsafe { raw::mi_free(p1) };
+    p1 = unsafe { raw::mi_malloc(8) };
 
     let hello = CString::new("hello\n").expect("static string must be valid C string");
-    let s = unsafe { mimalloc::mi_strdup(hello.as_ptr()) };
+    let s = unsafe { raw::mi_strdup(hello.as_ptr()) };
 
-    unsafe { mimalloc::mi_free(p2) };
-    p2 = unsafe { mimalloc::mi_malloc(16) };
-    p1 = unsafe { mimalloc::mi_realloc(p1, 32) };
-    unsafe { mimalloc::mi_free(p1) };
-    unsafe { mimalloc::mi_free(p2) };
-    unsafe { mimalloc::mi_free(s.cast()) };
+    unsafe { raw::mi_free(p2) };
+    p2 = unsafe { raw::mi_malloc(16) };
+    p1 = unsafe { raw::mi_realloc(p1, 32) };
+    unsafe { raw::mi_free(p1) };
+    unsafe { raw::mi_free(p2) };
+    unsafe { raw::mi_free(s.cast()) };
 }
 
 #[test]

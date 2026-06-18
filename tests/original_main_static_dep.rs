@@ -5,7 +5,7 @@ mod original_testhelper;
 
 use std::ffi::c_void;
 
-use mechanical_mimalloc::raw::{alloc, free};
+use mechanical_mimalloc::raw;
 
 struct Static {
     p: *mut c_void,
@@ -14,7 +14,7 @@ struct Static {
 impl Static {
     fn new() -> Self {
         eprintln!("static-dep: static constructor");
-        let p = unsafe { alloc::mi_malloc(64) };
+        let p = unsafe { raw::mi_malloc(64) };
         assert!(!p.is_null());
         Self { p }
     }
@@ -23,7 +23,7 @@ impl Static {
 impl Drop for Static {
     fn drop(&mut self) {
         unsafe {
-            free::mi_free(self.p);
+            raw::mi_free(self.p);
         }
         eprintln!("static-dep: static destructor");
     }

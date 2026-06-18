@@ -1231,11 +1231,16 @@ These wrappers should be added only if they can avoid dangling references, globa
     - `docs/raw-facade-migration.md` classifies each current `raw` module as public C header surface, public C ABI implementation/testing convenience, internal helper, platform/internal implementation, or compatibility macro/type surface.
     - No module is classified as an accidental leftover yet; narrowing/gating remains tracked by the following I1/I2 and B2 items.
 
-- [ ] Migrate tests that only need behavior to public APIs.
+- [x] Migrate tests that only need behavior to public APIs.
   - Validation:
     - Tests use safe API where testing safe API.
     - Tests use `raw::abi`/public C API where testing C behavior.
     - Tests use crate-private unit tests for allocator internals.
+  - Evidence:
+    - Public C behavior in `original_main`, `original_main_static_dep`, `original_test_stress`, stats/lifecycle tests, and the public allocation portions of upstream API/override tests now uses root `raw::mi_*` C-header functions and C-header types/constants.
+    - `src/abi.rs` exposes the public C constants needed by those tests (`MI_BIN_HUGE`, `MI_MAX_ALIGN_SIZE`) through the raw C-header facade.
+    - Remaining `raw::{internal,bitmap,bits,page,track,types,headers}` test uses are internal-invariant, debug/tracking, source-shape, or C++ header-placeholder checks tracked for unstable-internals gating/crate-private movement.
+    - `cargo test --quiet --features std` passes.
 
 - [x] Migrate benchmarks to stable surfaces.
   - Validation:

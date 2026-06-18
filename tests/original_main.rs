@@ -3,38 +3,38 @@ mod original_testhelper;
 
 use std::ffi::c_void;
 
-use mechanical_mimalloc::raw::{alloc, free, heap};
+use mechanical_mimalloc::raw;
 
 fn test_heap(p_out: *mut *mut c_void) {
     unsafe {
-        let test_heap = heap::mi_heap_new();
+        let test_heap = raw::mi_heap_new();
         assert!(!test_heap.is_null());
 
-        let p = alloc::mi_heap_malloc(test_heap, 256);
+        let p = raw::mi_heap_malloc(test_heap, 256);
         assert!(!p.is_null());
-        assert!(heap::mi_heap_contains(test_heap, p));
-        assert!(heap::mi_heap_check_owned(test_heap, p));
+        assert!(raw::mi_heap_contains(test_heap, p));
+        assert!(raw::mi_check_owned(p));
 
         if !p_out.is_null() {
             *p_out = p;
         }
 
-        free::mi_free(p);
-        heap::mi_heap_delete(test_heap);
+        raw::mi_free(p);
+        raw::mi_heap_delete(test_heap);
     }
 }
 
 fn test_large() {
     let size = 8 * 1024 * 1024;
     unsafe {
-        let p = alloc::mi_malloc(size) as *mut u8;
+        let p = raw::mi_malloc(size) as *mut u8;
         assert!(!p.is_null());
         *p = 0xA5;
         *p.add(size - 1) = 0x5A;
         assert_eq!(*p, 0xA5);
         assert_eq!(*p.add(size - 1), 0x5A);
-        assert!(free::mi_usable_size(p.cast()) >= size);
-        free::mi_free(p.cast());
+        assert!(raw::mi_usable_size(p.cast()) >= size);
+        raw::mi_free(p.cast());
     }
 }
 

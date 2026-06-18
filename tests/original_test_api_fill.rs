@@ -3,20 +3,14 @@ mod original_testhelper;
 
 use std::slice;
 
-use mechanical_mimalloc::raw::alloc::{
-    mi_calloc, mi_malloc_small, mi_mallocn, mi_reallocn, mi_recalloc, mi_rezalloc, mi_zalloc,
-    mi_zalloc_small,
-};
-use mechanical_mimalloc::raw::alloc_aligned::{
-    mi_calloc_aligned, mi_malloc_aligned, mi_realloc_aligned, mi_recalloc_aligned,
-    mi_rezalloc_aligned, mi_zalloc_aligned,
-};
-use mechanical_mimalloc::raw::free::mi_free;
 use mechanical_mimalloc::raw::internal::MI_DEBUG;
-use mechanical_mimalloc::raw::options::{mi_option_disable, mi_option_t};
 use mechanical_mimalloc::raw::track::{MI_TRACK_ASAN, MI_TRACK_VALGRIND};
-use mechanical_mimalloc::raw::types::{
-    MI_DEBUG_FREED, MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_SMALL_SIZE_MAX,
+use mechanical_mimalloc::raw::types::{MI_DEBUG_FREED, MI_DEBUG_UNINIT};
+use mechanical_mimalloc::raw::{
+    MI_MAX_ALIGN_SIZE, MI_SMALL_SIZE_MAX, mi_calloc, mi_calloc_aligned, mi_free, mi_malloc_aligned,
+    mi_malloc_small, mi_mallocn, mi_option_disable, mi_option_t, mi_realloc_aligned, mi_reallocn,
+    mi_recalloc, mi_recalloc_aligned, mi_rezalloc, mi_rezalloc_aligned, mi_zalloc,
+    mi_zalloc_aligned, mi_zalloc_small,
 };
 
 fn check_zero_init(p: *const u8, size: usize) -> bool {
@@ -102,7 +96,7 @@ where
 
 fn original_test_api_fill_main() -> i32 {
     original_testhelper::reset_test_summary();
-    mi_option_disable(mi_option_t::mi_option_verbose);
+    unsafe { mi_option_disable(mi_option_t::mi_option_verbose) };
 
     unsafe {
         let small = MI_SMALL_SIZE_MAX / 2;

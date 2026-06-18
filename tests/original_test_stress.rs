@@ -10,8 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::thread;
 
-use mechanical_mimalloc::raw::mimalloc::{mi_heap_area_t, mi_heap_t, mi_theap_t};
-use mechanical_mimalloc::raw::{alloc, free, heap, mimalloc, options};
+use mechanical_mimalloc::raw::{self, mi_heap_area_t, mi_heap_t, mi_theap_t};
 
 const USE_HEAPS: usize = 4;
 const TRANSFERS: usize = 32;
@@ -52,12 +51,12 @@ fn reset_runtime_state() {
     main_participates.store(false, Ordering::SeqCst);
     let active = current_heap.swap(ptr::null_mut(), Ordering::SeqCst);
     if !active.is_null() {
-        unsafe { heap::mi_heap_delete(active) };
+        unsafe { raw::mi_heap_delete(active) };
     }
     for slot in &transfer {
         let p = slot.swap(ptr::null_mut(), Ordering::SeqCst);
         if !p.is_null() {
-            unsafe { free::mi_free(p) };
+            unsafe { raw::mi_free(p) };
         }
     }
 }
@@ -65,23 +64,23 @@ fn reset_runtime_state() {
 unsafe fn custom_calloc(count: usize, size: usize) -> *mut c_void {
     let heap_ptr = current_heap.load(Ordering::SeqCst);
     if !heap_ptr.is_null() {
-        unsafe { alloc::mi_heap_calloc(heap_ptr, count, size) }
+        unsafe { raw::mi_heap_calloc(heap_ptr, count, size) }
     } else {
-        unsafe { alloc::mi_calloc(count, size) }
+        unsafe { raw::mi_calloc(count, size) }
     }
 }
 
 unsafe fn custom_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     let heap_ptr = current_heap.load(Ordering::SeqCst);
     if !heap_ptr.is_null() {
-        unsafe { alloc::mi_heap_realloc(heap_ptr, p, newsize) }
+        unsafe { raw::mi_heap_realloc(heap_ptr, p, newsize) }
     } else {
-        unsafe { alloc::mi_realloc(p, newsize) }
+        unsafe { raw::mi_realloc(p, newsize) }
     }
 }
 
 unsafe fn custom_free(p: *mut c_void) {
-    unsafe { free::mi_free(p) };
+    unsafe { raw::mi_free(p) };
 }
 
 fn atomic_exchange_ptr(slot: &AtomicPtr<c_void>, newval: *mut c_void) -> *mut c_void {
@@ -215,8 +214,8 @@ fn stress(tid: isize) {
 
     let mut total = 0usize;
     unsafe {
-        mimalloc::mi_theap_visit_blocks(
-            mimalloc::mi_theap_get_default() as *const mi_theap_t,
+        raw::mi_theap_visit_blocks(
+            raw::mi_theap_get_default() as *const mi_theap_t,
             true,
             Some(visit_blocks),
             (&mut total as *mut usize).cast(),
@@ -276,7 +275,7 @@ fn test_stress() {
 
     for n in 0..iterations {
         if !prev_heaps[USE_HEAPS - 1].is_null() {
-            unsafe { heap::mi_heap_delete(prev_heaps[USE_HEAPS - 1]) };
+            unsafe { raw::mi_heap_delete(prev_heaps[USE_HEAPS - 1]) };
         }
         for i in (1..USE_HEAPS).rev() {
             prev_heaps[i] = prev_heaps[i - 1];
@@ -284,7 +283,7 @@ fn test_stress() {
 
         let old = current_heap.load(Ordering::SeqCst);
         prev_heaps[0] = old;
-        let new_heap = unsafe { heap::mi_heap_new() };
+        let new_heap = unsafe { raw::mi_heap_new() };
         assert!(!new_heap.is_null());
         current_heap.store(new_heap, Ordering::SeqCst);
 
@@ -292,7 +291,7 @@ fn test_stress() {
 
         let mut total = 0usize;
         unsafe {
-            mimalloc::mi_heap_visit_blocks(
+            raw::mi_heap_visit_blocks(
                 current_heap.load(Ordering::SeqCst),
                 true,
                 Some(visit_blocks),
@@ -308,16 +307,16 @@ fn test_stress() {
         }
     }
 
-    unsafe { mimalloc::mi_stats_print(ptr::null_mut()) };
+    unsafe { raw::mi_stats_print(ptr::null_mut()) };
 
     for heap_ptr in prev_heaps {
         if !heap_ptr.is_null() {
-            unsafe { heap::mi_heap_delete(heap_ptr) };
+            unsafe { raw::mi_heap_delete(heap_ptr) };
         }
     }
     let active = current_heap.swap(ptr::null_mut(), Ordering::SeqCst);
     if !active.is_null() {
-        unsafe { heap::mi_heap_delete(active) };
+        unsafe { raw::mi_heap_delete(active) };
     }
 
     for slot in &transfer {
@@ -331,7 +330,7 @@ fn test_leak() {
     let nthreads = THREADS.load(Ordering::Relaxed);
     for _ in 0..iterations {
         run_os_threads(nthreads, leak);
-        unsafe { mimalloc::mi_collect(false) };
+        unsafe { raw::mi_collect(false) };
     }
 }
 
@@ -340,15 +339,15 @@ fn main(argc: usize, argv: &[&str]) -> i32 {
     reset_runtime_state();
     original_testhelper::reset_test_summary();
 
-    unsafe { mimalloc::mi_version() };
-    options::mi_option_enable(options::mi_option_t::mi_option_visit_abandoned);
+    unsafe { raw::mi_version() };
+    unsafe { raw::mi_option_enable(raw::mi_option_t::mi_option_visit_abandoned) };
     unsafe {
-        options::mi_option_set(
-            options::mi_option_t::mi_option_arena_reserve,
-            (mimalloc::mi_arena_min_size() / 1024) as c_long,
+        raw::mi_option_set(
+            raw::mi_option_t::mi_option_arena_reserve,
+            (raw::mi_arena_min_size() / 1024) as c_long,
         );
     }
-    options::mi_option_set(options::mi_option_t::mi_option_purge_delay, 1);
+    unsafe { raw::mi_option_set(raw::mi_option_t::mi_option_purge_delay, 1) };
 
     if argc >= 2
         && let Ok(n) = argv[1].parse::<usize>()
@@ -372,7 +371,7 @@ fn main(argc: usize, argv: &[&str]) -> i32 {
         allow_large_objects.store(true, Ordering::SeqCst);
     }
 
-    unsafe { mimalloc::mi_stats_reset() };
+    unsafe { raw::mi_stats_reset() };
 
     let stress_ok = std::panic::catch_unwind(|| {
         if STRESS {
@@ -385,8 +384,8 @@ fn main(argc: usize, argv: &[&str]) -> i32 {
     let _ = original_testhelper::check("test-stress.c:main", stress_ok);
 
     unsafe {
-        mimalloc::mi_collect(true);
-        mimalloc::mi_stats_print(ptr::null_mut());
+        raw::mi_collect(true);
+        raw::mi_stats_print(ptr::null_mut());
     }
 
     original_testhelper::print_test_summary()

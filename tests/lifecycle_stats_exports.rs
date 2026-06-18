@@ -2,8 +2,7 @@ use core::ffi::c_void;
 use core::ptr;
 use std::time::{Duration, Instant};
 
-use mechanical_mimalloc::raw::mimalloc::*;
-use mechanical_mimalloc::raw::stats::{MI_STAT_VERSION, mi_stats_t};
+use mechanical_mimalloc::raw::*;
 
 fn initialized_stats() -> mi_stats_t {
     mi_stats_t {

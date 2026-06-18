@@ -23,21 +23,21 @@ the broad raw modules before narrowing or gating default raw internals.
 | `tests/ffi_panic_audit.rs` | `raw::options::_mi_assert_fail` | Internal panic/abort boundary audit | Move to crate-private unit test or approved unstable internals. |
 | `tests/freelist_encoding.rs` | `raw::internal`, `raw::types` | Internal free-list encoding coverage | Move to crate-private unit tests or gate behind unstable raw internals. |
 | `tests/fuzz_alloc_sequences.rs` | `raw::mimalloc::*` | Public C API fuzz-style operation sequences | Keep on public C-header facade. |
-| `tests/lifecycle_stats_exports.rs` | `raw::mimalloc::*`, `raw::stats` | Public C stats/lifecycle export behavior | Keep on public C-header facade. |
+| `tests/lifecycle_stats_exports.rs` | root `raw::*` public C-header facade | Public C stats/lifecycle export behavior | Migrated to public C-header facade. |
 | `tests/no_allocation_critical_paths.rs` | `raw::mimalloc::*` | Public C API behavior under no-allocation constraints | Keep on public C-header facade. |
 | `tests/options_exports.rs` | `raw::mimalloc::*` | Public C option export behavior | Keep on public C-header facade. |
-| `tests/original_main.rs` | `raw::alloc`, `raw::free`, `raw::heap` | Port of upstream C test using module internals | Migrate to root `raw::mi_*`/heap public C-header facade. |
-| `tests/original_main_override.rs` | `raw::alloc`, `raw::alloc_aligned`, `raw::free`, `raw::headers`, `raw::heap`, `raw::mimalloc`, `raw::options` | Port of upstream C override test | Migrate public API calls to root/`raw::mimalloc`; gate header/internal helpers if still needed. |
-| `tests/original_main_override_static.rs` | `raw::bits`, `raw::internal`, `raw::mimalloc`, `raw::options`, `raw::page`, `raw::stats`, `raw::types` | Static override regression coverage and internal invariants | Split public C API checks from crate-private/internal checks. |
-| `tests/original_main_static_dep.rs` | `raw::alloc`, `raw::free` | Public allocation behavior | Migrate to root `raw::mi_malloc`/`raw::mi_free`. |
-| `tests/original_test_api.rs` | `raw::alloc_aligned`, `raw::free`, `raw::headers`, `raw::options`, `raw::types` | Port of upstream API test | Migrate public API calls to root/`raw::mimalloc`; gate header/type internals if still needed. |
-| `tests/original_test_api_fill.rs` | `raw::alloc`, `raw::alloc_aligned`, `raw::free`, `raw::internal`, `raw::options`, `raw::track`, `raw::types` | Debug fill/tracking parity | Split public C API behavior from unstable tracking/internal checks. |
-| `tests/original_test_stress.rs` | `raw::alloc`, `raw::free`, `raw::heap`, `raw::mimalloc`, `raw::options` | Port of upstream stress test | Migrate to root/`raw::mimalloc` public C-header facade. |
+| `tests/original_main.rs` | root `raw::mi_*` public C-header facade | Port of upstream C heap/allocation behavior | Migrated to public C-header facade. |
+| `tests/original_main_override.rs` | root `raw::mi_*`, `raw::headers` | Port of upstream C override test plus C++ header placeholders | Public C calls migrated; header placeholders remain compatibility surface. |
+| `tests/original_main_override_static.rs` | root `raw::mi_*`, `raw::bits`, `raw::internal`, `raw::page` | Static override regression coverage and internal invariants | Public C calls migrated; internal invariants still require unstable internals or crate-private tests. |
+| `tests/original_main_static_dep.rs` | root `raw::mi_malloc`, `raw::mi_free` | Public allocation behavior | Migrated to public C-header facade. |
+| `tests/original_test_api.rs` | root `raw::mi_*`, `raw::headers` | Port of upstream API test plus C++ header placeholders | Public C calls migrated; header placeholders remain compatibility surface. |
+| `tests/original_test_api_fill.rs` | root `raw::mi_*`, `raw::internal`, `raw::track`, `raw::types` | Debug fill/tracking parity | Public C calls migrated; debug/tracking constants still require unstable internals or crate-private tests. |
+| `tests/original_test_stress.rs` | root `raw::mi_*` public C-header facade | Port of upstream stress test | Migrated to public C-header facade. |
 | `tests/property_alloc_sequences.rs` | `raw::mimalloc::*` | Public C API property sequences | Keep on public C-header facade. |
 | `tests/release_fast_path_audit.rs` | `raw::atomic`, `raw::types` | Source-shape and layout audit helpers | Prefer crate-private tests or approved unstable internals. |
 | `tests/secure_features.rs` | `raw::internal`, `raw::types` | Secure feature constants/types | Gate behind unstable raw internals or move to crate-private tests. |
-| `tests/stats_exports.rs` | `raw::mimalloc`, `raw::stats` | Public stats export behavior | Keep on public C-header facade. |
-| `tests/thread_stats_regression.rs` | `raw::mimalloc`, `raw::stats` | Public stats regression behavior | Keep on public C-header facade. |
+| `tests/stats_exports.rs` | root `raw::mi_stats_get_bin_size`, `raw::MI_BIN_HUGE` | Public stats export behavior | Migrated to public C-header facade. |
+| `tests/thread_stats_regression.rs` | root `raw::mi_*`, `raw::mi_stats_t`, `raw::MI_STAT_VERSION` | Public stats regression behavior | Migrated to public C-header facade. |
 | `tests/tracking_features.rs` | `raw::internal`, `raw::track` | Tracking feature constants | Gate behind unstable raw internals or move to crate-private tests. |
 
 ## Raw Module Classification

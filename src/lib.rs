@@ -30,6 +30,44 @@
 //! uphold mimalloc's pointer ownership, layout, alignment, threading, and
 //! lifetime requirements. Safe Rust APIs are intentionally limited until those
 //! invariants are documented and tested at the wrapper boundary.
+//!
+//! # Examples
+//!
+//! Use the Rust `GlobalAlloc` facade:
+//!
+//! ```rust,no_run
+//! use mechanical_mimalloc::MiMalloc;
+//!
+//! #[global_allocator]
+//! static GLOBAL: MiMalloc = MiMalloc;
+//!
+//! fn main() {
+//!     let values = Box::new([1usize, 2, 3, 4]);
+//!     assert_eq!(values.iter().sum::<usize>(), 10);
+//! }
+//! ```
+//!
+//! Use the raw C-shaped facade only behind an explicit unsafe boundary:
+//!
+//! ```rust,no_run
+//! unsafe {
+//!     let p = mechanical_mimalloc::raw::mi_malloc(64);
+//!     mechanical_mimalloc::raw::mi_free(p);
+//! }
+//! ```
+//!
+//! Raw calls are intentionally not safe Rust calls:
+//!
+//! ```rust,compile_fail
+//! let p = mechanical_mimalloc::raw::mi_malloc(64);
+//! mechanical_mimalloc::raw::mi_free(p);
+//! ```
+//!
+//! Implementation modules are not part of the crate-root public API:
+//!
+//! ```rust,compile_fail
+//! let _ = mechanical_mimalloc::alloc::mi_malloc(64);
+//! ```
 
 #![cfg_attr(
     all(

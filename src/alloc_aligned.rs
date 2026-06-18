@@ -1,11 +1,6 @@
 //! Mechanical translation of `src/alloc-aligned.c`.
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    unsafe_op_in_unsafe_fn,
-    clippy::missing_safety_doc
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_void;
 use core::mem::size_of;
@@ -64,6 +59,8 @@ unsafe fn mi_padding_shrink_call(
 }
 
 #[inline]
+/// # Safety
+/// `alignment` must be a non-zero power of two.
 pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> bool {
     crate::mi_assert_internal!(_mi_is_power_of_two(alignment) && alignment > 0);
     if alignment > size {
@@ -79,6 +76,9 @@ pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> b
     ok
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be valid for aligned allocation.
 pub unsafe fn mi_theap_malloc_guarded_aligned(
     mut theap: *mut mi_theap_t,
     size: usize,
@@ -114,6 +114,9 @@ pub unsafe fn mi_theap_malloc_guarded_aligned(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// If `usable` is non-null it must be writable for one `usize`.
 pub unsafe fn mi_theap_malloc_zero_no_guarded(
     theap: *mut mi_theap_t,
     size: usize,
@@ -123,6 +126,9 @@ pub unsafe fn mi_theap_malloc_zero_no_guarded(
     _mi_theap_malloc_zero(theap, size, zero, usable)
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be a non-zero power of two, and `usable` must be writable when non-null.
 pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
     theap: *mut mi_theap_t,
     size: usize,
@@ -203,6 +209,9 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
     aligned_p
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be a non-zero power of two, and `usable` must be writable when non-null.
 pub unsafe fn mi_theap_malloc_zero_aligned_at_generic(
     theap: *mut mi_theap_t,
     size: usize,
@@ -235,6 +244,9 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_generic(
     mi_theap_malloc_zero_aligned_at_overalloc(theap, size, alignment, offset, zero, usable)
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be a non-zero power of two, and `usable` must be writable when non-null.
 pub unsafe fn mi_theap_malloc_zero_aligned_at(
     theap: *mut mi_theap_t,
     size: usize,
@@ -290,6 +302,9 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be valid for aligned allocation.
 pub unsafe fn mi_theap_malloc_aligned_at(
     theap: *mut mi_theap_t,
     size: usize,
@@ -299,6 +314,9 @@ pub unsafe fn mi_theap_malloc_aligned_at(
     mi_theap_malloc_zero_aligned_at(theap, size, alignment, offset, false, core::ptr::null_mut())
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc_aligned(
     theap: *mut mi_theap_t,
@@ -309,6 +327,9 @@ pub unsafe extern "C" fn mi_theap_malloc_aligned(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be valid for aligned allocation.
 pub unsafe fn mi_theap_zalloc_aligned_at(
     theap: *mut mi_theap_t,
     size: usize,
@@ -319,6 +340,9 @@ pub unsafe fn mi_theap_zalloc_aligned_at(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be valid for aligned allocation.
 pub unsafe fn mi_theap_zalloc_aligned(
     theap: *mut mi_theap_t,
     size: usize,
@@ -328,6 +352,9 @@ pub unsafe fn mi_theap_zalloc_aligned(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be valid for aligned allocation.
 pub unsafe fn mi_theap_calloc_aligned_at(
     theap: *mut mi_theap_t,
     count: usize,
@@ -343,6 +370,9 @@ pub unsafe fn mi_theap_calloc_aligned_at(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `alignment` must be valid for aligned allocation.
 pub unsafe fn mi_theap_calloc_aligned(
     theap: *mut mi_theap_t,
     count: usize,
@@ -352,6 +382,9 @@ pub unsafe fn mi_theap_calloc_aligned(
     mi_theap_calloc_aligned_at(theap, count, size, alignment, 0)
 }
 
+/// # Safety
+/// `alignment` must be valid for aligned allocation. Returned memory must be released through this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_aligned_at(
     size: usize,
@@ -361,6 +394,9 @@ pub unsafe extern "C" fn mi_malloc_aligned_at(
     mi_theap_malloc_aligned_at(_mi_theap_default(), size, alignment, offset)
 }
 
+/// # Safety
+/// `alignment` must be valid for aligned allocation. Returned memory must be released through this
+/// allocator.
 #[cfg(not(mi_c_malloc_fast))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_aligned(size: usize, alignment: usize) -> *mut c_void {
@@ -382,6 +418,9 @@ pub unsafe extern "C" fn mi_malloc_aligned(_size: usize, _alignment: usize) -> *
     );
 }
 
+/// # Safety
+/// `alignment` must be valid for aligned allocation. If `block_size` is non-null it must be
+/// writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_umalloc_aligned(
     size: usize,
@@ -391,6 +430,9 @@ pub unsafe extern "C" fn mi_umalloc_aligned(
     mi_theap_malloc_zero_aligned_at(_mi_theap_default(), size, alignment, 0, false, block_size)
 }
 
+/// # Safety
+/// `alignment` must be valid for aligned allocation. Returned memory must be released through this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_aligned_at(
     size: usize,
@@ -400,11 +442,17 @@ pub unsafe extern "C" fn mi_zalloc_aligned_at(
     mi_theap_zalloc_aligned_at(_mi_theap_default(), size, alignment, offset)
 }
 
+/// # Safety
+/// `alignment` must be valid for aligned allocation. Returned memory must be released through this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_aligned(size: usize, alignment: usize) -> *mut c_void {
     mi_theap_zalloc_aligned(_mi_theap_default(), size, alignment)
 }
 
+/// # Safety
+/// `alignment` must be valid for aligned allocation. If `block_size` is non-null it must be
+/// writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_uzalloc_aligned(
     size: usize,
@@ -414,6 +462,9 @@ pub unsafe extern "C" fn mi_uzalloc_aligned(
     mi_theap_malloc_zero_aligned_at(_mi_theap_default(), size, alignment, 0, true, block_size)
 }
 
+/// # Safety
+/// `alignment` must be valid for aligned allocation. Returned memory must be released through this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_calloc_aligned_at(
     count: usize,
@@ -424,6 +475,9 @@ pub unsafe extern "C" fn mi_calloc_aligned_at(
     mi_theap_calloc_aligned_at(_mi_theap_default(), count, size, alignment, offset)
 }
 
+/// # Safety
+/// `alignment` must be valid for aligned allocation. Returned memory must be released through this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_calloc_aligned(
     count: usize,
@@ -433,6 +487,8 @@ pub unsafe extern "C" fn mi_calloc_aligned(
     mi_theap_calloc_aligned(_mi_theap_default(), count, size, alignment)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -443,6 +499,8 @@ pub unsafe extern "C" fn mi_heap_malloc_aligned_at(
     mi_theap_malloc_aligned_at(_mi_heap_theap(heap), size, alignment, offset)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_aligned(
     heap: *mut mi_heap_t,
@@ -452,6 +510,8 @@ pub unsafe extern "C" fn mi_heap_malloc_aligned(
     mi_theap_malloc_aligned(_mi_heap_theap(heap), size, alignment)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -462,6 +522,8 @@ pub unsafe extern "C" fn mi_heap_zalloc_aligned_at(
     mi_theap_zalloc_aligned_at(_mi_heap_theap(heap), size, alignment, offset)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_aligned(
     heap: *mut mi_heap_t,
@@ -471,6 +533,8 @@ pub unsafe extern "C" fn mi_heap_zalloc_aligned(
     mi_theap_zalloc_aligned(_mi_heap_theap(heap), size, alignment)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_calloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -482,6 +546,8 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned_at(
     mi_theap_calloc_aligned_at(_mi_heap_theap(heap), count, size, alignment, offset)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_calloc_aligned(
     heap: *mut mi_heap_t,
@@ -492,6 +558,10 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned(
     mi_theap_calloc_aligned(_mi_heap_theap(heap), count, size, alignment)
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 pub unsafe fn mi_theap_realloc_zero_aligned_at(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -565,6 +635,10 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 pub unsafe fn mi_theap_realloc_zero_aligned(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -577,6 +651,10 @@ pub unsafe fn mi_theap_realloc_zero_aligned(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 pub unsafe fn mi_theap_realloc_aligned_at(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -588,6 +666,10 @@ pub unsafe fn mi_theap_realloc_aligned_at(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 pub unsafe fn mi_theap_realloc_aligned(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -598,6 +680,10 @@ pub unsafe fn mi_theap_realloc_aligned(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 pub unsafe fn mi_theap_rezalloc_aligned_at(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -609,6 +695,10 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 pub unsafe fn mi_theap_rezalloc_aligned(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -619,6 +709,10 @@ pub unsafe fn mi_theap_rezalloc_aligned(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 pub unsafe fn mi_theap_recalloc_aligned_at(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -635,6 +729,10 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
 }
 
 #[inline]
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 pub unsafe fn mi_theap_recalloc_aligned(
     theap: *mut mi_theap_t,
     p: *mut c_void,
@@ -645,6 +743,9 @@ pub unsafe fn mi_theap_recalloc_aligned(
     mi_theap_recalloc_aligned_at(theap, p, newcount, size, alignment, 0)
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realloc_aligned_at(
     p: *mut c_void,
@@ -655,6 +756,9 @@ pub unsafe extern "C" fn mi_realloc_aligned_at(
     mi_theap_realloc_aligned_at(_mi_theap_default(), p, newsize, alignment, offset)
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realloc_aligned(
     p: *mut c_void,
@@ -664,6 +768,9 @@ pub unsafe extern "C" fn mi_realloc_aligned(
     mi_theap_realloc_aligned(_mi_theap_default(), p, newsize, alignment)
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_rezalloc_aligned_at(
     p: *mut c_void,
@@ -674,6 +781,9 @@ pub unsafe extern "C" fn mi_rezalloc_aligned_at(
     mi_theap_rezalloc_aligned_at(_mi_theap_default(), p, newsize, alignment, offset)
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_rezalloc_aligned(
     p: *mut c_void,
@@ -683,6 +793,9 @@ pub unsafe extern "C" fn mi_rezalloc_aligned(
     mi_theap_rezalloc_aligned(_mi_theap_default(), p, newsize, alignment)
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc_aligned_at(
     p: *mut c_void,
@@ -694,6 +807,9 @@ pub unsafe extern "C" fn mi_recalloc_aligned_at(
     mi_theap_recalloc_aligned_at(_mi_theap_default(), p, newcount, size, alignment, offset)
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator, and `alignment` must be
+/// valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc_aligned(
     p: *mut c_void,
@@ -704,6 +820,9 @@ pub unsafe extern "C" fn mi_recalloc_aligned(
     mi_theap_recalloc_aligned(_mi_theap_default(), p, newcount, size, alignment)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator, and `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -715,6 +834,9 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     mi_theap_realloc_aligned_at(_mi_heap_theap(heap), p, newsize, alignment, offset)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator, and `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc_aligned(
     heap: *mut mi_heap_t,
@@ -725,6 +847,9 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
     mi_theap_realloc_aligned(_mi_heap_theap(heap), p, newsize, alignment)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator, and `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -736,6 +861,9 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     mi_theap_rezalloc_aligned_at(_mi_heap_theap(heap), p, newsize, alignment, offset)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator, and `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     heap: *mut mi_heap_t,
@@ -746,6 +874,9 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     mi_theap_rezalloc_aligned(_mi_heap_theap(heap), p, newsize, alignment)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator, and `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     heap: *mut mi_heap_t,
@@ -758,6 +889,9 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     mi_theap_recalloc_aligned_at(_mi_heap_theap(heap), p, newcount, size, alignment, offset)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator, and `alignment` must be valid for aligned allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     heap: *mut mi_heap_t,

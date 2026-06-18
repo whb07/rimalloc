@@ -19,7 +19,7 @@ use crate::internal::{
     _mi_align_up, _mi_arenas_alloc, _mi_arenas_free, _mi_deferred_free, _mi_divide_up,
     _mi_error_message, _mi_is_heap_main, _mi_memcpy_aligned, _mi_meta_free, _mi_meta_zalloc,
     _mi_subproc, _mi_theap_guarded_init, _mi_theap_heap, _mi_theap_options_init, mi_memid_t,
-    mi_memkind_t, mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_heap, mi_page_start,
+    mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_heap, mi_page_start,
     mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::mimalloc::mi_free;
@@ -613,6 +613,19 @@ pub(crate) unsafe extern "C" fn _mi_theap_random_next(theap: *mut mi_theap_t) ->
     _mi_random_next(ptr::addr_of_mut!((*theap).random))
 }
 
+#[inline]
+fn mi_memid_is_refcounted(memid: mi_memid_t) -> bool {
+    match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::None(_)
+        | crate::core_types::MemIdView::External(_)
+        | crate::core_types::MemIdView::Static(_) => false,
+        crate::core_types::MemIdView::Unknown(code) => {
+            code.0 > crate::core_types::MemKindCode::STATIC.0
+        }
+        _ => true,
+    }
+}
+
 #[inline(always)]
 unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
     if theap.is_null() {
@@ -620,30 +633,31 @@ unsafe fn mi_theap_free_mem(theap: *mut mi_theap_t) {
     }
 
     __mi_stat_decrease_mt(&mut (*_mi_subproc()).stats.theaps, 1);
-    match (*theap).memid.memkind {
-        mi_memkind_t::MI_MEM_HEAP_MAIN => {
+    let memid = (*theap).memid;
+    match crate::core_types::MemId::view(memid) {
+        crate::core_types::MemIdView::HeapMain(_) => {
             crate::mi_assert_internal!(_mi_is_heap_main(_mi_theap_heap(theap).cast_const()));
             mi_free(theap.cast());
         }
-        mi_memkind_t::MI_MEM_META => {
-            _mi_meta_free(theap.cast(), size_of::<mi_theap_t>(), (*theap).memid);
+        crate::core_types::MemIdView::Meta(_) => {
+            _mi_meta_free(theap.cast(), size_of::<mi_theap_t>(), memid);
         }
-        mi_memkind_t::MI_MEM_ARENA => {
+        crate::core_types::MemIdView::Arena(_) => {
             _mi_arenas_free(
                 theap.cast(),
                 _mi_align_up(size_of::<mi_theap_t>(), MI_ARENA_MIN_OBJ_SIZE),
-                (*theap).memid,
+                memid,
             );
         }
         _ => {
-            _mi_arenas_free(theap.cast(), size_of::<mi_theap_t>(), (*theap).memid);
+            _mi_arenas_free(theap.cast(), size_of::<mi_theap_t>(), memid);
         }
     }
 }
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_incref(theap: *mut mi_theap_t) {
-    if !theap.is_null() && ((*theap).memid.memkind as i32) > (mi_memkind_t::MI_MEM_STATIC as i32) {
+    if !theap.is_null() && mi_memid_is_refcounted((*theap).memid) {
         mi_atomic_increment_acq_rel(ptr::addr_of_mut!((*theap).refcount));
     }
 }
@@ -651,7 +665,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_incref(theap: *mut mi_theap_t) {
 #[inline(always)]
 unsafe fn mi_theap_decref_inline(theap: *mut mi_theap_t) {
     if !theap.is_null()
-        && ((*theap).memid.memkind as i32) > (mi_memkind_t::MI_MEM_STATIC as i32)
+        && mi_memid_is_refcounted((*theap).memid)
         && mi_atomic_fetch_sub_explicit(
             ptr::addr_of_mut!((*theap).refcount),
             1,

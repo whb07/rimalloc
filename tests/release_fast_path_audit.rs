@@ -2363,7 +2363,15 @@ fn free_path_internals_are_not_dynamic_exports() {
             && theap_rs.contains("let allocated_size = match crate::core_types::MemId::view(memid)")
             && theap_rs.contains("crate::core_types::MemIdView::Arena(a)")
             && theap_rs.contains("a.range.count_usize() * crate::arena::MI_ARENA_SLICE_SIZE")
+            && theap_rs.contains("fn mi_memid_is_refcounted(memid: mi_memid_t) -> bool")
+            && theap_rs.contains("crate::core_types::MemIdView::Unknown(code)")
+            && theap_rs.contains("code.0 > crate::core_types::MemKindCode::STATIC.0")
+            && theap_rs.contains("match crate::core_types::MemId::view(memid)")
+            && theap_rs.contains("crate::core_types::MemIdView::HeapMain(_)")
+            && theap_rs.contains("crate::core_types::MemIdView::Meta(_)")
+            && theap_rs.contains("mi_memid_is_refcounted((*theap).memid)")
             && !theap_rs.contains("memid.mem.os.")
+            && !theap_rs.contains("memid.memkind")
             && arena_meta_rs.contains(
                 "if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid)"
             )

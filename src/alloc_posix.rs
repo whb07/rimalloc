@@ -1,6 +1,6 @@
 //! Mechanical translation of `src/alloc-posix.c`.
 
-#![allow(dead_code, unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_op_in_unsafe_fn)]
 
 use crate::internal::{
     _mi_align_up, _mi_is_aligned, _mi_is_power_of_two, _mi_memcpy, _mi_os_page_size,

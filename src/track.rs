@@ -1,11 +1,6 @@
 //! Mechanical translation of `include/mimalloc/track.h`.
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    dead_code,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_void;
 

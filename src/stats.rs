@@ -1,6 +1,6 @@
 //! Statistics
 
-#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::{CStr, c_char, c_void};
 use core::str;
@@ -34,6 +34,7 @@ pub const MI_BIN_HUGE: usize = 73;
 pub const MI_LARGE_MAX_OBJ_WSIZE: usize = 8192 * size_of::<usize>();
 pub const MIMALLOC_STATS_H: () = ();
 
+#[allow(dead_code)]
 const MI_BIN_WORD_SIZES: [usize; MI_BIN_HUGE + 1] = [
     1,
     1,
@@ -303,6 +304,7 @@ macro_rules! MI_STAT_COUNTER {
     };
 }
 
+#[allow(dead_code)]
 pub(crate) fn bin_block_size(bin: usize) -> usize {
     MI_BIN_WORD_SIZES[bin] * size_of::<usize>()
 }
@@ -488,6 +490,7 @@ fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_coun
 }
 
 #[inline(never)]
+#[allow(dead_code)]
 unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {
         return;

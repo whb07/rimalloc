@@ -1,6 +1,6 @@
 //! Small libc-like string and environment helpers.
 
-#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::cmp::min;
 use core::ffi::CStr;
@@ -58,8 +58,8 @@ pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char,
     }
     let mut i = 0usize;
     while i < n {
-        let a = *as_bytes_ptr(s).add(i);
-        let b = *as_bytes_ptr(t).add(i);
+        let a = unsafe { *as_bytes_ptr(s).add(i) };
+        let b = unsafe { *as_bytes_ptr(t).add(i) };
         if _mi_toupper(a as c_char) != _mi_toupper(b as c_char) {
             return (a as i32) - (b as i32);
         }
@@ -84,8 +84,8 @@ pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) ->
     }
     let mut i = 0usize;
     loop {
-        let a = *as_bytes_ptr(s).add(i);
-        let b = *as_bytes_ptr(t).add(i);
+        let a = unsafe { *as_bytes_ptr(s).add(i) };
+        let b = unsafe { *as_bytes_ptr(t).add(i) };
         if a != b {
             return false;
         }
@@ -109,10 +109,12 @@ pub(crate) unsafe extern "C" fn _mi_strlcpy(
     if dest.is_null() || src.is_null() || dest_size == 0 {
         return;
     }
-    let src_bytes = CStr::from_ptr(src).to_bytes();
+    let src_bytes = unsafe { CStr::from_ptr(src) }.to_bytes();
     let n = min(src_bytes.len(), dest_size - 1);
-    ptr::copy_nonoverlapping(src_bytes.as_ptr(), as_bytes_mut_ptr(dest), n);
-    *as_bytes_mut_ptr(dest).add(n) = 0;
+    unsafe {
+        ptr::copy_nonoverlapping(src_bytes.as_ptr(), as_bytes_mut_ptr(dest), n);
+        *as_bytes_mut_ptr(dest).add(n) = 0;
+    }
 }
 
 /// # Safety
@@ -131,7 +133,7 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
     }
     let mut len = 0usize;
     while len < dest_size {
-        if *as_bytes_ptr(dest).add(len) == 0 {
+        if unsafe { *as_bytes_ptr(dest).add(len) } == 0 {
             break;
         }
         len += 1;
@@ -139,7 +141,9 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
     if len >= dest_size {
         return;
     }
-    _mi_strlcpy(dest.add(len), src, dest_size - len);
+    unsafe {
+        _mi_strlcpy(dest.add(len), src, dest_size - len);
+    }
 }
 
 /// # Safety
@@ -152,7 +156,7 @@ pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) ->
         return 0;
     }
     let mut len = 0usize;
-    while len < max_len && *as_bytes_ptr(s).add(len) != 0 {
+    while len < max_len && unsafe { *as_bytes_ptr(s).add(len) } != 0 {
         len += 1;
     }
     len
@@ -163,7 +167,7 @@ pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) ->
 /// `s` must point to a readable nul-terminated C string when non-null.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
-    _mi_strnlen(s, usize::MAX)
+    unsafe { _mi_strnlen(s, usize::MAX) }
 }
 
 /// # Safety
@@ -183,8 +187,8 @@ pub(crate) unsafe extern "C" fn _mi_strnstr(
     if pat.is_null() {
         return s;
     }
-    let s_len = _mi_strnlen(s, max_len);
-    let pat_len = _mi_strlen(pat);
+    let s_len = unsafe { _mi_strnlen(s, max_len) };
+    let pat_len = unsafe { _mi_strlen(pat) };
     if pat_len == 0 || pat_len > s_len {
         return if pat_len == 0 { s } else { ptr::null_mut() };
     }
@@ -194,11 +198,11 @@ pub(crate) unsafe extern "C" fn _mi_strnstr(
     let mut start = 0usize;
     while start <= end {
         let mut i = 0usize;
-        while i < pat_len && *s_bytes.add(start + i) == *pat_bytes.add(i) {
+        while i < pat_len && unsafe { *s_bytes.add(start + i) == *pat_bytes.add(i) } {
             i += 1;
         }
         if i == pat_len {
-            return s.add(start);
+            return unsafe { s.add(start) };
         }
         start += 1;
     }
@@ -218,7 +222,7 @@ pub(crate) unsafe extern "C" fn _mi_getenv(
     if name.is_null() || result.is_null() || result_size < 64 {
         return false;
     }
-    crate::prim::_mi_prim_getenv(name, result, result_size)
+    unsafe { crate::prim::_mi_prim_getenv(name, result, result_size) }
 }
 
 #[inline]
@@ -236,17 +240,19 @@ fn mi_outc(c: c_char, out: &mut *mut c_char, end: *mut c_char) {
 #[inline]
 #[allow(dead_code)]
 unsafe fn mi_outs(s: *const c_char, out: &mut *mut c_char, end: *mut c_char) {
-    if s.is_null() {
-        return;
+    unsafe {
+        if s.is_null() {
+            return;
+        }
+        let mut p = *out;
+        let mut cur = s;
+        while *cur != 0 && (p as usize) < (end as usize) {
+            *p = *cur;
+            p = p.add(1);
+            cur = cur.add(1);
+        }
+        *out = p;
     }
-    let mut p = *out;
-    let mut cur = s;
-    while *cur != 0 && (p as usize) < (end as usize) {
-        *p = *cur;
-        p = p.add(1);
-        cur = cur.add(1);
-    }
-    *out = p;
 }
 
 #[inline]
@@ -280,11 +286,13 @@ unsafe fn mi_out_alignright(
     if (start as usize) + len + extra >= (end as usize) {
         return;
     }
-    for i in 1..=len {
-        *start.add(len + extra - i) = *start.add(len - i);
-    }
-    for i in 0..extra {
-        *start.add(i) = fill;
+    unsafe {
+        for i in 1..=len {
+            *start.add(len + extra - i) = *start.add(len - i);
+        }
+        for i in 0..extra {
+            *start.add(i) = fill;
+        }
     }
 }
 

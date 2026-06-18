@@ -700,13 +700,33 @@ pub(crate) unsafe fn mi_theap_realloc_req(
     p: *mut c_void,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
+    let req = crate::core_types::ReallocRequest::new(
+        crate::core_types::UserPtr::new(p),
+        None,
+        layout,
+        layout.zeroed(),
+    );
+    mi_theap_realloc_request(theap, req, ptr::null_mut(), ptr::null_mut())
+}
+
+unsafe fn mi_theap_realloc_request(
+    theap: *mut mi_theap_t,
+    req: crate::core_types::ReallocRequest,
+    usable_pre: *mut usize,
+    usable_post: *mut usize,
+) -> *mut c_void {
+    let p = req
+        .ptr()
+        .map(|ptr| ptr.as_ptr())
+        .unwrap_or(core::ptr::null_mut());
+    let layout = req.new_layout();
     _mi_theap_realloc_zero(
         theap,
         p,
         layout.requested().get(),
-        layout.zeroed() == crate::core_types::Zeroed::Yes,
-        ptr::null_mut(),
-        ptr::null_mut(),
+        req.zero_new_tail() == crate::core_types::Zeroed::Yes,
+        usable_pre,
+        usable_post,
     )
 }
 

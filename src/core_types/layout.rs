@@ -194,6 +194,18 @@ impl ReallocRequest {
             zero_new_tail,
         }
     }
+
+    pub(crate) fn ptr(&self) -> Option<UserPtr> {
+        self.ptr
+    }
+
+    pub(crate) fn new_layout(&self) -> LayoutRequest {
+        self.new_layout
+    }
+
+    pub(crate) fn zero_new_tail(&self) -> Zeroed {
+        self.zero_new_tail
+    }
 }
 
 /// Generic malloc flags enforcing mutual exclusion of alignment bits and zeroing bit.

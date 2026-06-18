@@ -591,13 +591,17 @@ fn allocation_product_paths_use_typed_requests() {
             && alloc_rs.contains("unsafe fn mi_theap_calloc_req(")
             && alloc_rs.contains("unsafe fn mi_theap_mallocn_req(")
             && alloc_rs.contains("unsafe fn mi_theap_realloc_req(")
+            && alloc_rs.contains("unsafe fn mi_theap_realloc_request(")
             && alloc_rs.contains("unsafe fn mi_theap_reallocf_req(")
             && alloc_rs.contains("unsafe fn mi_theap_reallocn_req(")
             && alloc_rs.contains("unsafe fn mi_theap_recalloc_req(")
             && alloc_rs.contains("crate::core_types::CallocRequest::new(count, size)")
             && alloc_rs.contains("crate::core_types::CallocRequest::new(newcount, size)")
             && alloc_rs.contains("crate::core_types::LayoutRequest::malloc(req.total().get())")
-            && alloc_rs.contains("layout.zeroed() == crate::core_types::Zeroed::Yes")
+            && alloc_rs.contains("crate::core_types::ReallocRequest::new(")
+            && alloc_rs.contains("req.zero_new_tail() == crate::core_types::Zeroed::Yes")
+            && layout_rs.contains("pub(crate) struct ReallocRequest")
+            && layout_rs.contains("pub(crate) fn zero_new_tail(&self) -> Zeroed")
             && aligned_rs.contains("unsafe fn mi_theap_realloc_zero_aligned_at_req(")
             && aligned_rs.contains(
                 "crate::core_types::LayoutRequest::aligned_at(newsize, alignment, offset, zeroed)"

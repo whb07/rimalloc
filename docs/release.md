@@ -15,3 +15,14 @@ Before publishing or tagging a release:
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.
+
+Related policy documents:
+
+- `docs/api-inventory.md`
+- `docs/abi.md`
+- `docs/features.md`
+- `docs/platforms.md`
+- `docs/performance.md`
+- `docs/limitations.md`
+- `docs/upstream.md`
+- `docs/dependencies.md`

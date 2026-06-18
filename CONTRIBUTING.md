@@ -19,14 +19,8 @@ rewrites.
 Run the checks that match the change:
 
 ```sh
-cargo fmt --check
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo check --features std
-cargo check --features secure
-cargo check --features guarded
-cargo check --features track-valgrind
-cargo check --features track-asan
-cargo check --benches --features bench
+scripts/check-local.sh
 ```
 
+Use the narrower `scripts/check-*.sh` entrypoints when a change only needs part
+of the local verification matrix.

@@ -58,6 +58,8 @@ Default features are empty.
 The maintained target for the current port is Linux x86_64 GNU. Other upstream
 mimalloc platforms remain part of the source translation, but they are not yet
 claimed as maintained Rust targets until parity and CI evidence exists.
+See `docs/platforms.md` and `docs/limitations.md` for the current support
+matrix and caveats.
 
 ## Verification
 
@@ -75,6 +77,10 @@ Benchmark evidence is tracked in `BENCHMARK_RESULTS.md`; policy and thresholds
 are documented in `docs/performance.md`. Performance-sensitive changes should
 include fresh results for the changed benchmark set and a full report when hot
 paths or allocator-wide behavior can move.
+
+Additional policy documents live under `docs/`, including API inventory, ABI,
+features, performance, release, unsafe audit, upstream synchronization, and
+dependency policy.
 
 ## Examples
 

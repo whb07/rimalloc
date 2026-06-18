@@ -166,6 +166,35 @@ impl<T: 'static> AtomicPtrField<T> {
     /// # Safety
     /// See `atomic_ref`.
     #[inline(always)]
+    pub(crate) unsafe fn store(self, value: *mut T, order: Ordering) {
+        unsafe { self.atomic_ref() }.store(value, order);
+    }
+
+    /// # Safety
+    /// See `atomic_ref`.
+    #[inline(always)]
+    pub(crate) unsafe fn compare_exchange_release(
+        self,
+        expected: &mut *mut T,
+        desired: *mut T,
+    ) -> bool {
+        match unsafe { self.atomic_ref() }.compare_exchange(
+            *expected,
+            desired,
+            Ordering::Release,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => true,
+            Err(actual) => {
+                *expected = actual;
+                false
+            }
+        }
+    }
+
+    /// # Safety
+    /// See `atomic_ref`.
+    #[inline(always)]
     pub(crate) unsafe fn compare_exchange_acq_rel(
         self,
         expected: &mut *mut T,

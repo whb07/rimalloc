@@ -2736,6 +2736,28 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena_count compare-exchange should use AtomicUsizeField"
     );
     assert!(
+        atomic_types.contains("pub(crate) unsafe fn store(self, value: *mut T, order: Ordering)")
+            && atomic_types.contains("pub(crate) unsafe fn compare_exchange_release(")
+            && arena_rs
+                .matches("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(")
+                .count()
+                == 6
+            && arena_rs
+                .matches("(*subproc.cast::<MiSubprocPrefix>()).arenas[")
+                .count()
+                == 6
+            && arena_rs
+                .matches(".compare_exchange_release(&mut expected, arena)")
+                .count()
+                == 2
+            && arena_rs
+                .contains(".store(ptr::null_mut(), crate::core_types::MemoryOrder::Release);")
+            && !arena_rs.contains("mi_atomic_cas_ptr_strong_release")
+            && !arena_rs.contains("mi_atomic_store_ptr_release")
+            && !arena_rs.contains("mi_atomic_load_ptr_acquire"),
+        "arena table pointer atomics should use AtomicPtrField"
+    );
+    assert!(
         free_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign")
             && free_rs.contains("crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());")

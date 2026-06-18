@@ -5,10 +5,7 @@ use core::mem::{offset_of, size_of};
 use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
-use crate::atomic::{
-    EFAULT, mi_atomic_cas_ptr_strong_release, mi_atomic_guard_t, mi_atomic_load_ptr_acquire,
-    mi_atomic_store_ptr_release, mi_lock_acquire, mi_lock_release,
-};
+use crate::atomic::{EFAULT, mi_atomic_guard_t, mi_lock_acquire, mi_lock_release};
 use crate::bitmap::{
     _mi_bitmap_forall_set, _mi_bitmap_forall_setc_rangesn, MI_BCHUNK_BITS, MI_BCHUNK_FIELDS,
     MI_BCHUNK_SIZE, MI_BFIELD_BITS, MI_BITMAP_MAX_BIT_COUNT, mi_bbitmap_bsr_inv,
@@ -822,9 +819,10 @@ unsafe fn mi_arenas_contain_ex(p: *const c_void, parent: *mut mi_arena_t) -> boo
     let max_arena = unsafe { mi_arenas_get_count(subproc) };
     for i in 0..max_arena {
         let arena = unsafe {
-            mi_atomic_load_ptr_acquire(ptr::addr_of!(
+            crate::core_types::AtomicPtrField(ptr::addr_of_mut!(
                 (*subproc.cast::<MiSubprocPrefix>()).arenas[i]
             ))
+            .load(crate::core_types::MemoryOrder::Acquire)
         };
         if !arena.is_null()
             && (parent.is_null()
@@ -1172,9 +1170,10 @@ pub unsafe extern "C" fn mi_arena_from_index(
 ) -> *mut mi_arena_t {
     crate::mi_assert_internal!(idx < unsafe { mi_arenas_get_count(subproc) });
     unsafe {
-        mi_atomic_load_ptr_acquire(ptr::addr_of!(
+        crate::core_types::AtomicPtrField(ptr::addr_of_mut!(
             (*subproc.cast::<MiSubprocPrefix>()).arenas[idx]
         ))
+        .load(crate::core_types::MemoryOrder::Acquire)
     }
 }
 
@@ -1450,16 +1449,17 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: *mut mi_subproc_t) {
     let arena_count = unsafe { mi_arenas_get_count(subproc) };
     for i in 0..arena_count {
         let arena = unsafe {
-            mi_atomic_load_ptr_acquire(ptr::addr_of!(
+            crate::core_types::AtomicPtrField(ptr::addr_of_mut!(
                 (*subproc.cast::<MiSubprocPrefix>()).arenas[i]
             ))
+            .load(crate::core_types::MemoryOrder::Acquire)
         };
         if !arena.is_null() {
             unsafe {
-                mi_atomic_store_ptr_release(
-                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arenas[i]),
-                    ptr::null_mut(),
-                );
+                crate::core_types::AtomicPtrField(ptr::addr_of_mut!(
+                    (*subproc.cast::<MiSubprocPrefix>()).arenas[i]
+                ))
+                .store(ptr::null_mut(), crate::core_types::MemoryOrder::Release);
             }
             if mi_memid_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid }) {
                 unsafe {
@@ -1509,11 +1509,10 @@ unsafe fn mi_arenas_add(
             unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx = i };
             let mut expected = ptr::null_mut::<mi_arena_t>();
             if unsafe {
-                mi_atomic_cas_ptr_strong_release(
-                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arenas[i]),
-                    &mut expected,
-                    arena,
-                )
+                crate::core_types::AtomicPtrField(ptr::addr_of_mut!(
+                    (*subproc.cast::<MiSubprocPrefix>()).arenas[i]
+                ))
+                .compare_exchange_release(&mut expected, arena)
             } {
                 if !arena_id.is_null() {
                     unsafe { *arena_id = mi_arena_id_from_arena(arena) };
@@ -1534,11 +1533,10 @@ unsafe fn mi_arenas_add(
             unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx = count };
             let mut expected = ptr::null_mut::<mi_arena_t>();
             if unsafe {
-                mi_atomic_cas_ptr_strong_release(
-                    ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arenas[count]),
-                    &mut expected,
-                    arena,
-                )
+                crate::core_types::AtomicPtrField(ptr::addr_of_mut!(
+                    (*subproc.cast::<MiSubprocPrefix>()).arenas[count]
+                ))
+                .compare_exchange_release(&mut expected, arena)
             } {
                 unsafe {
                     __mi_stat_counter_increase(

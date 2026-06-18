@@ -1,5 +1,125 @@
 # Mimalloc Rust vs C Benchmark Results
 
+## Current-Head 10-Sample Criterion Aggregate
+
+**Date Generated:** 2026-06-18 17:00:19 EDT
+**Benchmarked Commit Hash:** `c0990a8b22b847d4999f9b0552ccbe2eacd5a1b4`
+
+This is the current-head aggregate Criterion pass for the hotpath harness and
+the selected native `mimalloc-bench` Rust ports. Espresso, redis, and rocksdb
+are intentionally excluded from this required set. Criterion enforces a minimum
+sample size of 10, so this pass used 10 samples for the aggregate and 20 samples
+for isolated hotpath reruns that initially flagged regressions.
+
+Environment:
+
+- CPU: AMD Ryzen 9 5950X, 32 logical CPUs, 16 cores, 1 NUMA node.
+- OS/kernel: Ubuntu 24.04, Linux `6.17.0-23-generic`, x86_64.
+- Rust: `rustc 1.92.0 (ded5c06cf 2025-12-08)`, LLVM 21.1.3.
+- C compiler: Ubuntu GCC `13.3.0`.
+- Feature flags: `--features bench`.
+- C allocator baseline: C mimalloc 3.3.2 built and linked by
+  `benches/mimalloc_bench.rs` from `mimalloc-3.3.2`.
+- Raw structured output: `target/criterion/**/new/{benchmark,estimates,sample}.json`.
+
+Commands:
+
+```bash
+env MIMALLOC_HOTPATH_SAMPLE_SIZE=10 \
+  MIMALLOC_HOTPATH_MEASUREMENT_SECS=1 \
+  MIMALLOC_HOTPATH_WARMUP_SECS=1 \
+  MIMALLOC_HOTPATH_NRESAMPLES=1000 \
+  cargo bench --features bench --bench hotpath
+
+env MIMALLOC_BENCH_SCENARIOS=glibc-simple,glibc-thread,malloc-large,malloc-large-old,cache-scratch1,cache-thrash1,cache-scratchN,cache-thrashN,xmalloc-testN,mstressN,sh6benchN,sh8benchN,alloc-test1,alloc-testN,larsonN,larsonN-sized,rptestN,barnes,cfrac,mleak10,mleak100 \
+  MIMALLOC_BENCH_ALLOCATORS=rust,c \
+  MIMALLOC_BENCH_SAMPLE_SIZE=10 \
+  MIMALLOC_BENCH_MEASUREMENT_SECS=1 \
+  MIMALLOC_BENCH_WARMUP_SECS=1 \
+  cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
+```
+
+Initial hotpath aggregate noise was followed up with longer isolated reruns:
+
+```bash
+env MIMALLOC_HOTPATH_SAMPLE_SIZE=20 \
+  MIMALLOC_HOTPATH_MEASUREMENT_SECS=3 \
+  MIMALLOC_HOTPATH_WARMUP_SECS=2 \
+  MIMALLOC_HOTPATH_NRESAMPLES=10000 \
+  cargo bench --features bench --bench hotpath -- <flagged-hotpath-id>
+```
+
+Summary generation:
+
+```bash
+scripts/summarize-criterion.py --id-file /tmp/mechanical_mimalloc_criterion_full_ids.txt
+```
+
+### Hotpath Summary
+
+| Benchmark | Samples | Mean | Median | Min | P95 | Max | Noise |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `paired_alloc_free/16` | 20 | 14.45 us | 14.45 us | 14.42 us | 14.53 us | 14.54 us | stable |
+| `paired_alloc_free/64` | 10 | 18.18 us | 18.16 us | 18.09 us | 18.33 us | 18.35 us | stable |
+| `paired_alloc_free/256` | 10 | 26.18 us | 26.15 us | 26.05 us | 26.35 us | 26.43 us | stable |
+| `paired_alloc_free/1024` | 10 | 54.07 us | 53.89 us | 53.45 us | 55.16 us | 55.94 us | stable |
+| `paired_alloc_free/4096` | 10 | 163.8 us | 164.1 us | 160.2 us | 165.2 us | 165.7 us | stable |
+| `paired_alloc_free/32768` | 10 | 158.1 us | 158.0 us | 155.2 us | 162.3 us | 164.6 us | stable |
+| `free_only/16` | 10 | 6.978 us | 7.054 us | 6.548 us | 7.320 us | 7.479 us | noisy |
+| `free_only/64` | 10 | 12.09 us | 12.80 us | 8.395 us | 13.77 us | 13.78 us | noisy |
+| `free_only/256` | 10 | 22.83 us | 23.23 us | 20.30 us | 23.69 us | 23.71 us | noisy |
+| `free_only/1024` | 10 | 29.74 us | 28.26 us | 27.85 us | 36.81 us | 43.30 us | noisy |
+| `free_only/4096` | 10 | 61.50 us | 63.62 us | 45.93 us | 66.02 us | 66.26 us | noisy |
+| `free_only/32768` | 10 | 42.23 us | 42.13 us | 41.39 us | 42.87 us | 42.95 us | stable |
+| `lifo_stack/16/512` | 20 | 1.675 us | 1.670 us | 1.644 us | 1.718 us | 1.744 us | stable |
+| `lifo_stack/64/256` | 20 | 797.6 ns | 798.0 ns | 790.8 ns | 805.8 ns | 810.8 ns | stable |
+| `lifo_stack/256/128` | 10 | 423.6 ns | 423.5 ns | 422.3 ns | 425.1 ns | 425.6 ns | stable |
+| `lifo_stack/1024/64` | 20 | 510.7 ns | 509.1 ns | 504.7 ns | 517.4 ns | 518.0 ns | stable |
+| `single_reuse/16` | 20 | 146.2 us | 146.0 us | 145.8 us | 147.2 us | 147.5 us | stable |
+| `single_reuse/64` | 20 | 142.3 us | 142.3 us | 141.4 us | 143.3 us | 144.0 us | stable |
+| `single_reuse/256` | 10 | 158.0 us | 157.8 us | 157.3 us | 158.8 us | 158.9 us | stable |
+| `single_reuse/1024` | 10 | 157.8 us | 157.8 us | 155.5 us | 159.1 us | 159.4 us | stable |
+
+Initial Criterion flags on `paired_alloc_free/16`, `lifo_stack/16/512`,
+`lifo_stack/64/256`, `lifo_stack/1024/64`, `single_reuse/16`, and
+`single_reuse/64` were rerun with 20 samples. The reruns cleared the hotpath
+regression concern: five improved and `single_reuse/16` moved to within the
+configured noise threshold.
+
+### Native Scenario Ratios
+
+| Scenario | Rust median | C median | Rust vs C | Noise |
+|---|---:|---:|---:|---|
+| `alloc-test1-per-workload` | 2.173 s | 2.173 s | -0.01% | stable |
+| `alloc-testN-per-workload` | 2.234 s | 2.243 s | -0.37% | stable |
+| `barnes-per-workload` | 1.836 s | 1.857 s | -1.14% | stable |
+| `cache-scratch1-per-workload` | 2.053 s | 2.047 s | +0.26% | stable |
+| `cache-scratchN-per-workload` | 103.6 ms | 105.0 ms | -1.29% | noisy |
+| `cache-thrash1-per-workload` | 2.050 s | 2.044 s | +0.28% | stable |
+| `cache-thrashN-per-workload` | 103.4 ms | 104.0 ms | -0.53% | noisy |
+| `cfrac-per-workload` | 11.33 s | 11.24 s | +0.84% | stable |
+| `glibc-simple-per-workload` | 895.6 ms | 907.5 ms | -1.30% | stable |
+| `glibc-thread-per-1M-malloc-free-pairs` | 950.3 us | 932.7 us | +1.89% | stable |
+| `larsonN-per-1M-alloc-free-pairs` | 2.956 ms | 2.908 ms | +1.66% | noisy |
+| `larsonN-sized-per-1M-alloc-free-pairs` | 3.004 ms | 2.859 ms | +5.08% | noisy |
+| `malloc-large-old-per-workload` | 142.4 ms | 142.4 ms | -0.02% | stable |
+| `malloc-large-per-workload` | 907.5 us | 952.4 us | -4.72% | stable |
+| `mleak10-per-workload` | 105.9 ms | 105.4 ms | +0.46% | stable |
+| `mleak100-per-workload` | 1.059 s | 1.060 s | -0.11% | stable |
+| `mstressN-per-workload` | 1.578 s | 1.548 s | +1.90% | stable |
+| `rptestN-per-1M-rptest-ops` | 1.553 s | 1.582 s | -1.86% | stable |
+| `sh6benchN-per-workload` | 107.2 ms | 117.2 ms | -8.49% | noisy |
+| `sh8benchN-per-workload` | 197.6 ms | 187.9 ms | +5.14% | noisy |
+| `xmalloc-testN-per-1M-frees` | 2.054 ms | 2.110 ms | -2.64% | stable |
+
+Native scenario geomean Rust/C median ratio: `0.9972` (`-0.28%`), meaning the
+Rust port is 0.28% faster overall by median geomean on this selected set.
+
+Conclusion: no confirmed hotpath regression remains after isolated reruns. No
+overall benchmark-score regression was detected; the current native aggregate is
+slightly positive overall. Noisy watch items are `free_only/*`,
+`cache-scratchN`, `cache-thrashN`, `larsonN*`, `sh6benchN`, and `sh8benchN`.
+
 ## Current-Head Smoke Check
 
 **Date Generated:** 2026-06-18 16:22:21 EDT

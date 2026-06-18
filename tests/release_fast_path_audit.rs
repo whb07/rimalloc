@@ -21,6 +21,24 @@ fn assert_not_no_mangle_item(source_name: &str, source: &str, internal_name: &st
     );
 }
 
+fn collect_rs_sources(base: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
+    for entry in fs::read_dir(dir).expect("read source directory") {
+        let entry = entry.expect("read source entry");
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rs_sources(base, &path, out);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            let rel = path
+                .strip_prefix(base)
+                .expect("source path under base")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let source = fs::read_to_string(&path).expect("read Rust source");
+            out.push((rel, source));
+        }
+    }
+}
+
 #[test]
 fn debug_assert_macros_are_release_gated_like_c_mimalloc() {
     let internal_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/internal.rs");
@@ -680,6 +698,116 @@ fn generic_allocation_flags_use_typed_boundary() {
             && layout_rs.contains("pub(crate) struct MallocGenericFlags(usize);")
             && !page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(\n    mut theap: *mut mi_theap_t,\n    size: usize,"),
         "generic allocation should use MallocGenericFlags instead of manually packing zero and huge alignment bits"
+    );
+}
+
+#[test]
+fn datatype_acceptance_criteria_have_cross_cutting_guards() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src = root.join("src");
+    let mut sources = Vec::new();
+    collect_rs_sources(root, &src, &mut sources);
+
+    let core_mod =
+        fs::read_to_string(root.join("src/core_types/mod.rs")).expect("read core_types/mod.rs");
+    for module in [
+        "arena",
+        "atomic_wrappers",
+        "free_actions",
+        "freelist",
+        "freelist_wrappers",
+        "heap",
+        "layout",
+        "memid",
+        "page",
+        "page_queues",
+        "page_states",
+        "ptr",
+        "scalar",
+        "validation",
+        "validation_extra",
+    ] {
+        assert!(
+            core_mod.contains(&format!("mod {module};")),
+            "core_types should own the {module} semantic wrapper module"
+        );
+    }
+
+    for (rel, source) in &sources {
+        if rel != "src/core_types/memid.rs" && rel != "src/types.rs" {
+            for raw_union_arm in ["mem.os", "mem.arena", "mem.meta"] {
+                assert!(
+                    !source.contains(raw_union_arm),
+                    "{rel} should inspect memid union arms through MemId::view, not {raw_union_arm}"
+                );
+            }
+        }
+
+        if rel != "src/core_types/atomic_wrappers.rs" {
+            for atomic_cast in [
+                "AtomicUsize::from_ptr",
+                "cast::<AtomicUsize>",
+                "cast::<core::sync::atomic::AtomicUsize>",
+            ] {
+                assert!(
+                    !source.contains(atomic_cast),
+                    "{rel} should route pointer-to-atomic casts through core_types::Atomic*Field"
+                );
+            }
+        }
+
+        if rel.starts_with("src/core_types/") {
+            for deref_impl in ["impl core::ops::Deref", "impl Deref", "Deref for"] {
+                assert!(
+                    !source.contains(deref_impl),
+                    "{rel} should keep allocator metadata wrappers raw-pointer based, without Deref"
+                );
+            }
+        }
+
+        if rel != "src/core_types/freelist_wrappers.rs" {
+            for block_next_access in [
+                "(*block).next",
+                "(*block.cast_mut()).next",
+                "(*block.as_ptr()).next",
+            ] {
+                assert!(
+                    !source.contains(block_next_access),
+                    "{rel} should read/write mi_block_s.next through BlockLink, EncodedPtr, or free-list wrappers"
+                );
+            }
+        }
+    }
+
+    let atomic_wrappers = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
+        .expect("read atomic wrappers");
+    assert!(
+        atomic_wrappers
+            .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
+            && !atomic_wrappers
+                .contains("pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);"),
+        "AtomicThreadFree should be backed by AtomicUsizeField, matching TYPES_SPEC.md"
+    );
+
+    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read free.rs");
+    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read page.rs");
+    assert!(
+        free_rs.contains(
+            "pub(crate) unsafe fn mi_free_block_local(\n    page_wrapper: crate::core_types::LocalPage,"
+        ) && free_rs.contains(
+            "pub(crate) unsafe fn mi_free_block_mt(\n    page_wrapper: crate::core_types::ForeignPage,"
+        ) && page_rs.contains(
+            "pub(crate) unsafe fn _mi_theap_page_reclaim(\n    page: crate::core_types::OwnedAbandonedPage,"
+        ),
+        "typed free/reclaim entry points should reject raw page ownership states"
+    );
+    assert!(
+        page_rs.contains(
+            "pub(crate) unsafe fn mi_page_queue_enqueue_from(\n    to: crate::core_types::FullPageQueue,\n    from: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
+        ) && page_rs.contains(
+            "pub(crate) unsafe fn mi_page_queue_enqueue_from_full(\n    to: crate::core_types::NormalPageQueue,\n    from: crate::core_types::FullPageQueue,\n    page: crate::core_types::FullPage,"
+        ),
+        "page queue transitions should require typed queue/page witnesses"
     );
 }
 

@@ -1068,7 +1068,6 @@ fn mi_heap_main_init() {
     }
 }
 
-#[allow(dead_code)]
 #[inline(always)]
 fn mi_tld_alloc() -> *mut mi_tld_t {
     let main_subproc = ptr::addr_of_mut!(subproc_main)
@@ -1086,6 +1085,8 @@ fn mi_tld_alloc() -> *mut mi_tld_t {
         mi_tld_alloc_non_main(main_subproc)
     }
 }
+
+const _: fn() -> *mut mi_tld_t = mi_tld_alloc;
 
 #[inline(always)]
 fn mi_tld_alloc_non_main(main_subproc: *mut mi_subproc_t) -> *mut mi_tld_t {

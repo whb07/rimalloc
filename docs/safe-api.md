@@ -31,6 +31,24 @@ Safe heap, stats, options, process-info, and callback APIs are not stabilized.
 They should remain raw/unsafe until the wrapper can enforce ownership,
 lifetime, aliasing, threading, and reentrancy invariants internally.
 
+## Deferred Safe Heap API
+
+No safe `Heap`, `MainHeap`, `HeapRef`, or `HeapAllocation` API is stabilized for
+the next release milestone. The raw heap functions remain available only under
+the unsafe `raw` facade.
+
+A future safe heap API needs a separate design that proves:
+
+- owned heaps cannot be destroyed while safe allocations tied to that heap are
+  live,
+- borrowed main-heap handles cannot be deleted,
+- safe allocation methods encode the heap/allocation lifetime relationship,
+- thread mobility and concurrent access are explicit trait decisions, and
+- raw interop methods cannot transfer deletion rights accidentally.
+
+Until that design exists, there is no safe `Heap::new`, heap allocation method,
+safe heap `collect`, safe heap destroy, `Heap::as_raw`, or `Heap::from_raw`.
+
 ## Naming Conventions
 
 - Rust-facing names use idiomatic Rust names: `MiMalloc`, `Allocation`, `Heap`,

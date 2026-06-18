@@ -55,6 +55,9 @@ root exposes only the small safe Rust facade (`MiMalloc`, `Allocation`, and
 allocation error types) plus the explicit `raw` facade; implementation modules
 are private so translation structure does not become an accidental SemVer
 contract.
+Safe heap, stats, options, and process-info wrappers are intentionally absent
+until their ownership, lifetime, threading, and initialization semantics are
+designed and audited.
 
 ## Features
 

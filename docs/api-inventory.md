@@ -28,8 +28,10 @@ re-exported from the crate root.
 allocation and releases it on drop, translating C-style null allocation failure
 into Rust `Result` values.
 
-No safe Rust `Heap`, `StatsSnapshot`, `Options`, or allocator-trait wrapper is
-stabilized yet.
+No safe Rust `Heap`, `MainHeap`, `HeapRef`, `HeapAllocation`, `StatsSnapshot`,
+`Options`, or allocator-trait wrapper is stabilized yet. Raw heap functions
+remain under `raw`; safe heap wrappers are intentionally deferred until their
+ownership, lifetime, threading, and deletion semantics are designed.
 
 Adding a safe wrapper requires documenting how it enforces ownership, lifetime,
 aliasing, nullability, alignment, threading, and unwind requirements without

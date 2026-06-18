@@ -669,7 +669,7 @@ Safe heap wrappers are not required for the minimal safe Rust facade, but if the
 
 ## D1. Decide heap API scope
 
-- [ ] Decide whether to stabilize any safe heap API in the next release milestone.
+- [x] Decide whether to stabilize any safe heap API in the next release milestone.
   - Options:
     - No safe heap API; raw heap API only.
     - Minimal owned `Heap` with allocation methods and RAII deletion.
@@ -677,8 +677,11 @@ Safe heap wrappers are not required for the minimal safe Rust facade, but if the
   - Validation:
     - Decision is recorded in `docs/api-inventory.md` and README.
     - If deferred, docs say safe heap API is intentionally absent, not forgotten.
+  - Evidence:
+    - `docs/api-inventory.md`, `docs/safe-api.md`, and README state that safe heap wrappers are intentionally deferred.
+    - Raw heap functions remain available only under `raw`.
 
-- [ ] Define heap ownership model.
+- [x] Define heap ownership model.
   - Required concepts if implemented:
     - `Heap`: owned heap created by `mi_heap_new` and deleted on drop.
     - `MainHeap` or `HeapRef`: borrowed handle for `mi_heap_main` that must not be deleted.
@@ -687,8 +690,12 @@ Safe heap wrappers are not required for the minimal safe Rust facade, but if the
     - Type signatures encode ownership and lifetime rules.
     - Compile-fail tests prove an allocation borrowing a heap cannot outlive the heap.
     - Safe API cannot destroy the main heap.
+  - Evidence:
+    - No safe heap ownership model is stabilized in this milestone.
+    - `docs/safe-api.md` records the required future ownership model: owned heaps, borrowed main heap handles, and heap-tied allocation lifetimes.
+    - `rg -n "pub (struct|enum|type) (Heap|MainHeap|HeapRef|HeapAllocation)|pub fn .*Heap|pub mod heap|Heap::" src/lib.rs src/safe.rs README.md` finds no public safe heap facade.
 
-- [ ] Decide heap thread-safety and mobility.
+- [x] Decide heap thread-safety and mobility.
   - Required behavior:
     - `Heap` is `!Send`/`!Sync` unless cross-thread heap use is proven safe for the wrapper semantics.
     - If `Send` is allowed, docs explain thread ownership, remote frees, and deletion requirements.
@@ -696,16 +703,22 @@ Safe heap wrappers are not required for the minimal safe Rust facade, but if the
   - Validation:
     - Trait tests prove intended `Send`/`Sync` behavior.
     - Unsafe audit contains proof for any manual impl.
+  - Evidence:
+    - Because no safe heap type is exposed, there are no safe heap `Send`/`Sync` impls to prove.
+    - `docs/safe-api.md` requires any future safe heap design to make thread mobility and concurrent access explicit trait decisions.
 
 ## D2. Implement safe heap allocation without wrong-heap or stale-handle hazards
 
-- [ ] Add `Heap::new() -> Result<Heap, HeapError>` if safe heap creation is in scope.
+- [x] Add `Heap::new() -> Result<Heap, HeapError>` if safe heap creation is in scope.
   - Validation:
     - Null result maps to `HeapError`.
     - Drop deletes heap exactly once.
     - Tests cover create/drop in default, secure, and guarded features where feasible.
+  - Evidence:
+    - Safe heap creation is not in scope for this milestone; there is no public `Heap::new`.
+    - `docs/safe-api.md` states that `Heap::new` is intentionally absent until the safe heap design is completed.
 
-- [ ] Add heap allocation methods only with lifetime-safe ownership.
+- [x] Add heap allocation methods only with lifetime-safe ownership.
   - Candidate methods:
     - `Heap::allocate(&self, layout: Layout) -> Result<HeapAllocation<'_>, AllocError>`.
     - `Heap::allocate_zeroed(&self, layout: Layout) -> Result<HeapAllocation<'_>, AllocError>`.
@@ -713,16 +726,22 @@ Safe heap wrappers are not required for the minimal safe Rust facade, but if the
     - Returned allocation cannot outlive heap.
     - Drop order is enforced by Rust lifetimes.
     - Tests verify heap containment where raw API supports it.
+  - Evidence:
+    - No safe heap allocation methods are exposed.
+    - `docs/safe-api.md` requires any future safe heap allocation API to encode heap/allocation lifetimes.
 
-- [ ] Prevent freeing through wrong heap in safe APIs.
+- [x] Prevent freeing through wrong heap in safe APIs.
   - Required behavior:
     - Heap-owned safe allocation carries enough lifetime/ownership information to prevent misuse.
     - Safe API does not expose `heap.free(ptr)` accepting arbitrary raw pointers.
   - Validation:
     - Compile-fail tests show users cannot construct a `HeapAllocation` from a pointer without unsafe code.
     - Compile-fail tests show users cannot pass allocation from one heap into another heap's safe free API.
+  - Evidence:
+    - There is no safe `HeapAllocation` type and no safe `heap.free(ptr)` API accepting arbitrary raw pointers.
+    - `scripts/check-api-inventory.py` passes and would fail on a new crate-root safe heap item until inventoried.
 
-- [ ] Define safe heap `collect` semantics.
+- [x] Define safe heap `collect` semantics.
   - Required docs:
     - What `force` means if exposed.
     - Whether method can block.
@@ -731,18 +750,24 @@ Safe heap wrappers are not required for the minimal safe Rust facade, but if the
   - Validation:
     - Tests call collect with live and no live allocations.
     - Docs include panic and allocation behavior.
+  - Evidence:
+    - Safe heap `collect` is intentionally absent with the rest of the safe heap API.
+    - Raw collect behavior remains under `raw`; safe semantics will be documented if a safe heap API is added.
 
-- [ ] Do not expose safe `heap_destroy` unless live allocations are impossible or semantics are fully documented.
+- [x] Do not expose safe `heap_destroy` unless live allocations are impossible or semantics are fully documented.
   - Required behavior:
     - Destructive operations that invalidate outstanding allocations are unsafe or absent.
     - Safe `Drop` uses the least-surprising C operation consistent with lifetime model.
   - Validation:
     - API review confirms no safe method can invalidate safe live allocations.
     - If unsafe destroy exists, it has `# Safety` docs and examples avoiding misuse.
+  - Evidence:
+    - There is no safe heap destroy API and no safe heap type.
+    - `docs/safe-api.md` says borrowed main-heap handles must not be deletable and owned heap deletion semantics require a future design.
 
 ## D3. Raw heap interop
 
-- [ ] Add `Heap::as_raw` only if needed.
+- [x] Add `Heap::as_raw` only if needed.
   - Required docs:
     - Borrowed raw pointer is valid only while `Heap` lives.
     - Caller must not delete/destroy it.
@@ -750,8 +775,11 @@ Safe heap wrappers are not required for the minimal safe Rust facade, but if the
   - Validation:
     - Method is safe only if it cannot violate ownership by itself; otherwise mark unsafe.
     - Docs include aliasing and lifetime requirements.
+  - Evidence:
+    - No safe `Heap::as_raw` exists because no safe heap wrapper exists.
+    - `docs/safe-api.md` requires future raw interop methods to avoid accidental deletion-right transfer.
 
-- [ ] Add `unsafe Heap::from_raw` only if ownership transfer is needed.
+- [x] Add `unsafe Heap::from_raw` only if ownership transfer is needed.
   - Required docs:
     - Pointer must be non-null.
     - Pointer must originate from this allocator.
@@ -761,6 +789,9 @@ Safe heap wrappers are not required for the minimal safe Rust facade, but if the
   - Validation:
     - Unsafe docs include all bullets.
     - Tests cover round-trip `into_raw`/`from_raw` if both exist.
+  - Evidence:
+    - No safe `Heap::from_raw` exists because no safe heap wrapper exists.
+    - `docs/safe-api.md` requires future raw interop methods to avoid accidental deletion-right transfer.
 
 ---
 

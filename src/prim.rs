@@ -8,7 +8,6 @@
     non_camel_case_types,
     non_upper_case_globals,
     dead_code,
-    clippy::missing_safety_doc,
     unsafe_op_in_unsafe_fn
 )]
 
@@ -149,6 +148,9 @@ pub(crate) use windows::{
 };
 
 unsafe extern "C" {
+    /// # Safety
+    ///
+    /// `key` must be a valid platform thread-local key for the current process.
     pub fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut c_void;
 }
 
@@ -288,6 +290,10 @@ pub fn _mi_prim_thread_id() -> mi_threadid_t {
     tid
 }
 
+/// # Safety
+///
+/// Must be called only after the process-global empty thread heap storage has
+/// been initialized.
 #[inline]
 pub unsafe fn __mi_theap_empty() -> *mut mi_theap_t {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -316,6 +322,11 @@ unsafe fn mi_prim_tls_slot_theap(slot: usize, expansion_slot: usize) -> *mut mi_
     }
 }
 
+/// # Safety
+///
+/// Reads the current thread's raw default thread heap slot. The caller must
+/// tolerate a null result and must not dereference the returned pointer without
+/// validating initialization.
 #[inline(always)]
 pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
     if MI_TLS_MODEL_THREAD_LOCAL {
@@ -347,6 +358,10 @@ pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
     }
 }
 
+/// # Safety
+///
+/// Returns the current thread's default thread heap or the empty sentinel. The
+/// caller must treat the returned pointer as allocator-owned thread-local state.
 #[inline]
 pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
     let theap = unsafe { _mi_theap_default_raw() };
@@ -357,6 +372,10 @@ pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
     }
 }
 
+/// # Safety
+///
+/// Returns the current thread's cached thread heap or the empty sentinel. The
+/// caller must treat the returned pointer as allocator-owned thread-local state.
 #[inline]
 pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
     if MI_TLS_MODEL_THREAD_LOCAL {
@@ -443,12 +462,19 @@ pub(crate) fn mi_prim_thread_local_cached_set(theap: *mut mi_theap_t) {
     }
 }
 
+/// # Safety
+///
+/// Must be called only after primitive TLS access is valid for the current
+/// thread.
 #[inline]
 pub unsafe fn _mi_thread_is_initialized() -> bool {
     let theap = _mi_theap_default();
     !theap.is_null() && crate::internal::mi_theap_is_initialized(theap)
 }
 
+/// # Safety
+///
+/// `heap` must be null or point to a heap object managed by this allocator.
 #[inline]
 pub unsafe fn _mi_heap_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let theap = _mi_theap_cached();
@@ -458,6 +484,9 @@ pub unsafe fn _mi_heap_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
     _mi_heap_theap_get_or_init(heap)
 }
 
+/// # Safety
+///
+/// `heap` must be null or point to a heap object managed by this allocator.
 #[inline]
 pub unsafe fn _mi_heap_theap_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let theap = _mi_theap_cached();
@@ -467,6 +496,9 @@ pub unsafe fn _mi_heap_theap_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
     _mi_heap_theap_get_peek(heap)
 }
 
+/// # Safety
+///
+/// `page` must point to a valid page object managed by this allocator.
 #[inline]
 pub unsafe fn _mi_page_associated_theap_peek(page: *mut mi_page_t) -> *mut mi_theap_t {
     let heap = (*page).heap;
@@ -481,11 +513,19 @@ pub unsafe fn _mi_page_associated_theap_peek(page: *mut mi_page_t) -> *mut mi_th
     theap
 }
 
+/// # Safety
+///
+/// Must be called only by the process attach constructor or equivalent process
+/// initialization path.
 #[inline(never)]
 pub unsafe extern "C" fn mi_process_attach() {
     unsafe { crate::internal::_mi_auto_process_init() }
 }
 
+/// # Safety
+///
+/// Must be called only by the process detach destructor or equivalent process
+/// teardown path.
 #[inline(never)]
 pub unsafe extern "C" fn mi_process_detach() {
     unsafe { crate::internal::_mi_auto_process_done() }
@@ -516,6 +556,10 @@ unsafe extern "C" {
     pub(crate) fn _mi_is_redirected() -> bool;
 }
 
+/// # Safety
+///
+/// Must be called only from allocator initialization paths that need to query
+/// whether malloc symbols are redirected.
 #[cfg(not(mi_c_malloc_fast))]
 #[inline(never)]
 pub unsafe extern "C" fn _mi_is_redirected() -> bool {

@@ -530,6 +530,20 @@ unsafe fn mi_page_unfull_typed(
 
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
+    let _ = _mi_page_free_internal(
+        crate::core_types::AllFreePage::active_unchecked(crate::core_types::ActivePage(
+            crate::core_types::PagePtr::new_unchecked(page),
+        )),
+        crate::core_types::PageQueuePtr::new_unchecked(pq),
+    );
+}
+
+pub(crate) unsafe fn _mi_page_free_internal(
+    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,
+    queue: crate::core_types::PageQueuePtr,
+) -> crate::core_types::DestroyedPage {
+    let page = page_wrapper.page.ptr.as_ptr();
+    let pq = queue.as_ptr();
     crate::mi_assert_internal!(!page.is_null());
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
     crate::mi_assert_internal!(pq == mi_page_queue_of(page));
@@ -540,9 +554,12 @@ pub(crate) unsafe extern "C" fn _mi_page_free(page: *mut mi_page_t, pq: *mut mi_
 
     let theap = mi_page_theap(page);
     crate::mi_assert_internal!(!theap.is_null());
+    let owner =
+        crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(theap));
     mi_page_set_theap(page, ptr::null_mut());
     _mi_arenas_page_free(page, theap);
     _mi_arenas_collect(false, false, (*theap).tld);
+    crate::core_types::free_all_free_page_to_arena(page_wrapper, owner)
 }
 
 const MI_RETIRE_CYCLES: u8 = 16;
@@ -590,7 +607,10 @@ pub(crate) unsafe fn _mi_page_retire_internal(
         return;
     }
 
-    _mi_page_free(page, pq);
+    let _ = _mi_page_free_internal(
+        page_wrapper,
+        crate::core_types::PageQueuePtr::new_unchecked(pq),
+    );
 }
 
 pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t, force: bool) {
@@ -603,7 +623,14 @@ pub(crate) unsafe extern "C" fn _mi_theap_collect_retired(theap: *mut mi_theap_t
             if mi_page_all_free(page) {
                 (*page).retire_expire -= 1;
                 if (*page).retire_expire == 0 || force {
-                    _mi_page_free(page, pq);
+                    let _ = _mi_page_free_internal(
+                        crate::core_types::AllFreePage::active_unchecked(
+                            crate::core_types::ActivePage(
+                                crate::core_types::PagePtr::new_unchecked(page),
+                            ),
+                        ),
+                        crate::core_types::PageQueuePtr::new_unchecked(pq),
+                    );
                 } else {
                     if bin < min {
                         min = bin;
@@ -809,7 +836,12 @@ static MI_PAGE_EXTEND_FREE_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_p
 pub(crate) unsafe extern "C" fn _mi_page_abandon(page: *mut mi_page_t, pq: *mut mi_page_queue_t) {
     _mi_page_free_collect(page, false);
     if mi_page_all_free(page) {
-        _mi_page_free(page, pq);
+        let _ = _mi_page_free_internal(
+            crate::core_types::AllFreePage::active_unchecked(crate::core_types::ActivePage(
+                crate::core_types::PagePtr::new_unchecked(page),
+            )),
+            crate::core_types::PageQueuePtr::new_unchecked(pq),
+        );
     } else {
         mi_page_queue_remove(pq, page);
         let theap = (*page).theap;
@@ -1576,7 +1608,14 @@ unsafe fn mi_page_queue_find_free_ex(
                 page_candidate = page;
                 candidate_limit = _mi_option_get_fast(mi_option_t::mi_option_page_max_candidates);
             } else if mi_page_all_free(page_candidate) {
-                _mi_page_free(page_candidate, pq);
+                let _ = _mi_page_free_internal(
+                    crate::core_types::AllFreePage::active_unchecked(
+                        crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(
+                            page_candidate,
+                        )),
+                    ),
+                    crate::core_types::PageQueuePtr::new_unchecked(pq),
+                );
                 page_candidate = page;
             } else if (*page).used >= (*page_candidate).used && !mi_page_is_mostly_used(page) {
                 page_candidate = page;

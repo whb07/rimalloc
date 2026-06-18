@@ -6,22 +6,28 @@
 // Match the crate convention (`src/free.rs` et al.) and allow implicit unsafe
 // in unsafe-fn bodies rather than wrapping every operation in `unsafe {}`.
 #![allow(unsafe_op_in_unsafe_fn)]
-// `core_types` intentionally contains strict typestate/scalar wrappers before
-// every scaffolded state is migrated to a live call site. The source-audit
-// tests guard the accepted scaffold shape against raw-access regressions.
-#![allow(dead_code)]
-
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod arena;
 mod free_actions;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod freelist;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod freelist_wrappers;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod layout;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod memid;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod page;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod page_queues;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod page_states;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod ptr;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod scalar;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod validation;
 mod validation_extra;
 
@@ -73,7 +79,9 @@ pub(crate) use page_queues::{
 };
 
 pub(crate) use arena::SliceRange;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod atomic_wrappers;
+#[expect(dead_code, reason = "staged strict-type scaffold from TYPES_SPEC.md")]
 mod heap;
 
 pub(crate) use atomic_wrappers::{

@@ -899,7 +899,7 @@ fn phase6_dead_code_allowances_stay_intentional() {
     let expected = BTreeMap::from([
         ("src/alloc.rs", 1),
         ("src/bitmap.rs", 4),
-        ("src/core_types/mod.rs", 1),
+        ("src/core_types/mod.rs", 13),
         ("src/init.rs", 5),
         ("src/internal.rs", 1),
         ("src/libc.rs", 6),
@@ -916,6 +916,13 @@ fn phase6_dead_code_allowances_stay_intentional() {
     assert_eq!(
         actual, expected,
         "Phase 6 dead_code allowances should stay on the audited compatibility/scaffold allowlist"
+    );
+    let core_types_mod =
+        fs::read_to_string(root.join("src/core_types/mod.rs")).expect("read core_types mod");
+    assert!(
+        !core_types_mod.contains("#![allow(dead_code)]")
+            && core_types_mod.matches("#[expect(dead_code").count() == 13,
+        "core_types dead_code suppression should stay scoped to compiler-proven staged modules"
     );
     assert!(
         !actual.contains_key("src/arena.rs"),

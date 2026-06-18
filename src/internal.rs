@@ -952,7 +952,11 @@ pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
 }
 
 #[inline]
-pub unsafe fn mi_page_queue(theap: *const mi_theap_t, size: usize) -> *mut mi_page_queue_t {
+pub(crate) unsafe fn mi_page_queue(
+    theap: *const mi_theap_t,
+    block_size: crate::core_types::BlockSize,
+) -> *mut mi_page_queue_t {
+    let size = block_size.get();
     let pq = ptr::addr_of!(
         (*(theap as *mut mi_theap_t)).pages[crate::page::_mi_bin_typed(size).as_usize()]
     )

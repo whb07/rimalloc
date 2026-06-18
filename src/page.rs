@@ -1636,13 +1636,14 @@ unsafe fn mi_find_page(
         return ptr::null_mut();
     }
 
+    let queue_block_size = if huge_alignment > 0 {
+        MI_LARGE_MAX_OBJ_SIZE + 1
+    } else {
+        size
+    };
     let pq = mi_page_queue(
         theap,
-        if huge_alignment > 0 {
-            MI_LARGE_MAX_OBJ_SIZE + 1
-        } else {
-            size
-        },
+        crate::core_types::BlockSize::new_unchecked(queue_block_size),
     );
     if mi_page_queue_is_huge(pq) || req_size > MI_MAX_ALLOC_SIZE {
         mi_huge_page_alloc(theap, size, huge_alignment, pq)

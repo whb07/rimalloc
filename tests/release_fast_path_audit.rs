@@ -1640,6 +1640,9 @@ fn free_path_internals_are_not_dynamic_exports() {
         alloc_rs.contains("let bin = _mi_bin_typed(bsize).as_usize();")
             && free_rs.contains("_mi_bin_typed(bsize.get()).as_usize()")
             && arena_rs.contains("let bin = _mi_bin_typed(block_size).as_usize();")
+            && internal.contains(
+                "block_size: crate::core_types::BlockSize,\n) -> *mut mi_page_queue_t {\n    let size = block_size.get();"
+            )
             && internal.contains("crate::page::_mi_bin_typed(size).as_usize()")
             && page_rs.contains("pub(crate) unsafe fn mi_page_bin_typed(")
             && page_rs.contains(") -> crate::core_types::Bin")

@@ -865,7 +865,7 @@ unsafe fn mi_abandoned_page_unown_from_free(
 
 unsafe fn mi_page_queue_len_is_atmost(
     theap: *mut mi_theap_t,
-    block_size: usize,
+    block_size: crate::core_types::BlockSize,
     atmost: core::ffi::c_long,
 ) -> bool {
     if atmost < 0 {
@@ -911,7 +911,13 @@ unsafe extern "C" fn mi_abandoned_page_try_reclaim(
         max_reclaim = _mi_option_get_fast(mi_option_t::mi_option_page_cross_thread_max_reclaim);
     }
 
-    if max_reclaim >= 0 && !mi_page_queue_len_is_atmost(theap, (*page).block_size, max_reclaim) {
+    if max_reclaim >= 0
+        && !mi_page_queue_len_is_atmost(
+            theap,
+            crate::core_types::BlockSize::new_unchecked((*page).block_size),
+            max_reclaim,
+        )
+    {
         return false;
     }
 

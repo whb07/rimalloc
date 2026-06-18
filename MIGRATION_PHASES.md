@@ -83,6 +83,8 @@ Follow-up Phase 6 dead-code cleanup removed stale module-wide `dead_code` allowa
 
 Additional item-level cleanup removed stale `dead_code` markers from heap thread-local helpers, page/OS/libc helper paths, option/message initialization, process/TLS initialization, and the arena visit, metadata, allocation, abandoned-claim, and purge helpers. `arena.rs` no longer carries `dead_code` allowances; its remaining localized allowances are C naming compatibility and C-shaped helper arity. The remaining active-platform `dead_code` allowances are limited to specific staged compatibility or fallback items in allocation, bitmap, libc, OS huge-page cleanup, options, init/TLS/cpuid, stats, and Unix clock fallback code, plus the already-audited `core_types` strict-type scaffold and `internal` re-export compatibility.
 
+`tests/release_fast_path_audit.rs` now enforces that remaining `dead_code` allowances stay on that explicit compatibility/scaffold allowlist, and asserts that `arena.rs`, `free.rs`, and `page.rs` do not regain `dead_code` suppressions.
+
 No benchmark rerun was needed for the dead-code allowance narrowing because these changes only adjust lint attributes and item-level documentation of staged compatibility helpers; no generated allocator logic or hot-path operation changed. The latest runtime benchmark evidence remains the post-`AtomicThreadFree(AtomicUsizeField)` verification above against `BENCHMARK_RESULTS.md`.
 
 **Action Items:**

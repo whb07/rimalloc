@@ -39,8 +39,9 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
 
 ## Safe API Trait Inventory
 
-- `MiMalloc`: implements `core::alloc::GlobalAlloc`; no manual unsafe
-  `Send`/`Sync` impls.
+- `MiMalloc`: implements `core::alloc::GlobalAlloc`; derives `Copy`, `Clone`,
+  `Debug`, and `Default`; has auto `Send`/`Sync`; no manual unsafe `Send`/`Sync`
+  impls.
 - `Allocation`: implements `Drop` and `Debug`; intentionally does not implement
   `Copy` or `Clone`.
 - `AllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and

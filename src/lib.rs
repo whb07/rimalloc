@@ -152,12 +152,72 @@ mod types;
 
 pub use safe::{AllocError, Allocation, LayoutError, TryAllocError};
 
-/// Rust `GlobalAlloc` facade backed by the crate's mimalloc implementation.
+/// Rust [`GlobalAlloc`](core::alloc::GlobalAlloc) facade backed by the crate's
+/// mimalloc implementation.
 ///
 /// This wrapper is intentionally small. It does not expose heap handles,
 /// options, or statistics as safe Rust APIs yet because those invariants are
 /// still being audited. Use [`raw`] for the C-shaped surface while that work
 /// continues.
+///
+/// # `GlobalAlloc` scope
+///
+/// `MiMalloc` implements Rust's process-wide global allocator interface. When
+/// declared with `#[global_allocator]`, Rust allocation APIs such as `Box`,
+/// `Vec`, and `String` allocate through this facade after the static allocator
+/// has been selected.
+///
+/// # Zero-size layouts
+///
+/// The [`GlobalAlloc`](core::alloc::GlobalAlloc) contract requires callers to pass non-zero-size layouts
+/// to `alloc` and `alloc_zeroed`; zero-size allocation behavior is therefore
+/// inherited from the unsafe trait contract. Safe wrappers in this crate handle
+/// zero-size layouts separately.
+///
+/// # Alignment
+///
+/// Layouts with alignment up to mimalloc's default maximum alignment use the
+/// normal allocation path. Over-aligned layouts use mimalloc's aligned
+/// allocation and reallocation paths.
+///
+/// # Allocation failure
+///
+/// Allocation and reallocation return a null pointer on failure, matching the
+/// [`GlobalAlloc`](core::alloc::GlobalAlloc) contract. The facade does not panic on allocation failure.
+///
+/// # Deallocation layouts
+///
+/// `dealloc` expects the pointer and layout to describe a live allocation that
+/// came from this allocator, as required by [`GlobalAlloc`](core::alloc::GlobalAlloc). Passing any other
+/// pointer, an already-freed pointer, or a mismatched layout is caller UB under
+/// Rust's allocator contract.
+///
+/// # Reallocation
+///
+/// `realloc` preserves the old contents up to `min(old_size, new_size)` on
+/// success, following mimalloc's reallocation behavior. If reallocation fails,
+/// it returns null and leaves the original allocation valid for the caller to
+/// free.
+///
+/// # Panic and unwind behavior
+///
+/// The facade itself does not intentionally panic. Optimized `no_std` Linux
+/// builds use the crate panic handler; `std` tooling, tests, docs, and examples
+/// use normal Rust panic behavior outside allocator calls.
+///
+/// # Thread behavior
+///
+/// `MiMalloc` is a zero-sized facade over mimalloc's process allocator and is
+/// safe to use as a global allocator from multiple threads. Thread-local
+/// allocator state remains internal to mimalloc.
+///
+/// # Feature interactions
+///
+/// The `secure`, `guarded`, `track-valgrind`, and `track-asan` features may
+/// change allocator hardening or diagnostics, but they do not change the
+/// `GlobalAlloc` ownership, alignment, failure, or deallocation contracts.
+/// The `std` feature affects documentation, examples, tests, and error trait
+/// support, not the `GlobalAlloc` contract.
 ///
 /// ```rust,no_run
 /// use mechanical_mimalloc::MiMalloc;
@@ -165,6 +225,7 @@ pub use safe::{AllocError, Allocation, LayoutError, TryAllocError};
 /// #[global_allocator]
 /// static GLOBAL: MiMalloc = MiMalloc;
 /// ```
+#[derive(Clone, Copy, Debug, Default)]
 pub struct MiMalloc;
 
 unsafe impl core::alloc::GlobalAlloc for MiMalloc {

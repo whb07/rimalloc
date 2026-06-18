@@ -47,9 +47,9 @@ lifetime, aliasing, threading, and reentrancy invariants internally.
 Implement `Debug`, `Default`, `Copy`, `Clone`, `Eq`, `Hash`, `Send`, and `Sync`
 only where the semantics are correct for the safe abstraction.
 
-- `MiMalloc` is a zero-sized global allocator facade. It currently relies on
-  auto traits and implements `GlobalAlloc`; additional marker traits should be
-  added only if useful and documented.
+- `MiMalloc` is a zero-sized global allocator facade. It implements
+  `GlobalAlloc`, derives `Copy`, `Clone`, `Debug`, and `Default`, and relies on
+  auto `Send`/`Sync` traits from having no state.
 - `Allocation` owns memory and releases it on drop. It implements `Debug`, but
   not `Copy` or `Clone`.
 - Error/status types are plain value types and may implement `Copy`, `Clone`,

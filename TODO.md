@@ -425,7 +425,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## C2. `MiMalloc` global allocator facade
 
-- [ ] Finalize `MiMalloc` semantics.
+- [x] Finalize `MiMalloc` semantics.
   - Required docs:
     - `GlobalAlloc` implementation scope.
     - Zero-size layout behavior and Rust `GlobalAlloc` contract.
@@ -440,8 +440,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `MiMalloc` rustdoc contains these sections.
     - `examples/global_allocator.rs` compiles.
     - `cargo test --doc --features std` passes.
+  - Evidence:
+    - `src/lib.rs` rustdoc for `MiMalloc` documents `GlobalAlloc` scope, zero-size layout behavior, alignment dispatch, allocation failure, deallocation layout expectations, realloc preservation/failure behavior, panic/unwind behavior, thread behavior, and feature interactions.
+    - `cargo test --quiet --example global_allocator --features std` passes.
+    - `cargo test --doc --features std` passes.
 
-- [ ] Audit `MiMalloc::alloc` alignment dispatch.
+- [x] Audit `MiMalloc::alloc` alignment dispatch.
   - Required behavior:
     - Alignment threshold uses the allocator's actual maximum default alignment rule.
     - Over-aligned layouts call aligned allocation.
@@ -450,8 +454,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - Unit/integration tests allocate through `MiMalloc` for alignments 1, 2, 4, 8, 16, 32, 64, page alignment, and a large power-of-two alignment.
     - Tests verify pointer alignment and free without corruption.
     - Secure/guarded feature tests include at least one over-aligned case.
+  - Evidence:
+    - `tests/mimalloc_global_alloc.rs` covers alignments 1, 2, 4, 8, 16, 32, 64, 4096, and 1 MiB through `MiMalloc`.
+    - The test verifies returned pointer alignment and frees every allocation.
+    - `cargo test --quiet --test mimalloc_global_alloc`, `cargo test --quiet --test mimalloc_global_alloc --features secure`, and `cargo test --quiet --test mimalloc_global_alloc --features guarded` pass.
 
-- [ ] Audit `MiMalloc::realloc` alignment behavior.
+- [x] Audit `MiMalloc::realloc` alignment behavior.
   - Required behavior:
     - Reallocating over-aligned allocations preserves alignment requirements.
     - Realloc failure behavior matches `GlobalAlloc` expectations.
@@ -460,8 +468,12 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - Tests cover grow and shrink for normal and over-aligned layouts.
     - Tests fill old allocation with a pattern and verify preservation.
     - Tests run under default, `secure`, and `guarded` where feasible.
+  - Evidence:
+    - `tests/mimalloc_global_alloc.rs` covers grow and shrink reallocations for normal, 64-byte, and page-aligned layouts.
+    - The realloc test writes a deterministic byte pattern and verifies preservation through `min(old_size, new_size)`.
+    - `cargo test --quiet --test mimalloc_global_alloc`, `cargo test --quiet --test mimalloc_global_alloc --features secure`, and `cargo test --quiet --test mimalloc_global_alloc --features guarded` pass.
 
-- [ ] Define whether `MiMalloc` is `Default`, `Debug`, `Copy`, `Clone`, `Send`, and `Sync`.
+- [x] Define whether `MiMalloc` is `Default`, `Debug`, `Copy`, `Clone`, `Send`, and `Sync`.
   - Recommended state:
     - `MiMalloc` is a zero-sized type.
     - `Default`, `Debug`, `Copy`, and `Clone` are acceptable if documented.
@@ -469,13 +481,21 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - Compile tests cover expected trait bounds.
     - Rustdoc lists trait behavior.
+  - Evidence:
+    - `MiMalloc` derives `Default`, `Debug`, `Copy`, and `Clone`.
+    - `tests/mimalloc_global_alloc.rs` compile-checks `MiMalloc: Copy + Clone + Default + Debug + Send + Sync`.
+    - `src/lib.rs`, `docs/api-inventory.md`, and `docs/safe-api.md` document the trait behavior and lack of manual unsafe `Send`/`Sync` impls.
 
-- [ ] Ensure `MiMalloc` examples avoid misleading allocator recursion.
+- [x] Ensure `MiMalloc` examples avoid misleading allocator recursion.
   - Required behavior:
     - Examples do not allocate during allocator initialization in ways that hide bugs.
     - Examples explain that `GlobalAlloc` affects process-wide Rust allocation after declaration.
   - Validation:
     - `examples/global_allocator.rs` and crate docs compile and run under `std`.
+  - Evidence:
+    - `examples/global_allocator.rs` declares a static `MiMalloc` global allocator and performs ordinary `Vec`/`Box` allocations in `main`, after allocator selection.
+    - `src/lib.rs` documents that `#[global_allocator]` affects process-wide Rust allocation after declaration.
+    - `cargo test --quiet --example global_allocator --features std` and `cargo test --doc --features std` pass.
 
 ## C3. Safe owned allocation wrapper
 

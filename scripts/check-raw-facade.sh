@@ -114,3 +114,76 @@ print(
     f"{sorted(default_modules)}; {len(unstable_modules)} implementation modules are feature-gated"
 )
 PY
+
+python3 - <<'PY'
+from __future__ import annotations
+
+import pathlib
+import re
+
+root = pathlib.Path.cwd()
+impl_only = {
+    "alloc",
+    "alloc_aligned",
+    "alloc_override",
+    "alloc_posix",
+    "arena",
+    "arena_meta",
+    "atomic",
+    "bitmap",
+    "bits",
+    "free",
+    "heap",
+    "init",
+    "internal",
+    "libc",
+    "memory",
+    "options",
+    "os",
+    "page",
+    "page_map",
+    "prim",
+    "random",
+    "static_c",
+    "stats",
+    "theap",
+    "threadlocal",
+    "track",
+    "types",
+}
+path_roots = [root / "tests", root / "benches", root / "examples"]
+direct = re.compile(
+    r"(?:mechanical_mimalloc::)?raw::(" + "|".join(sorted(impl_only)) + r")\b"
+)
+group = re.compile(r"(?:mechanical_mimalloc::)?raw::\{([^}]*)\}", flags=re.S)
+
+errors: list[str] = []
+for path_root in path_roots:
+    if not path_root.exists():
+        continue
+    for path in path_root.rglob("*.rs"):
+        text = path.read_text()
+        uses_impl_raw = False
+        if direct.search(text):
+            uses_impl_raw = True
+        for match in group.finditer(text):
+            names = [
+                item.strip().split(" as ")[0].split("::", 1)[0].strip()
+                for item in match.group(1).split(",")
+            ]
+            if any(name in impl_only for name in names):
+                uses_impl_raw = True
+                break
+        if not uses_impl_raw:
+            continue
+        if '#![cfg(feature = "unstable-raw-internals")]' not in text:
+            errors.append(
+                f"{path.relative_to(root)} uses gated raw internals without "
+                'feature-level cfg(feature = "unstable-raw-internals")'
+            )
+
+if errors:
+    raise SystemExit("\n".join(errors))
+
+print("ok: tests, benches, and examples do not use raw internals without unstable gating")
+PY

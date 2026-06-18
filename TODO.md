@@ -303,13 +303,21 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `docs/api-inventory.md`, `docs/compatibility.md`, and `docs/raw-facade-migration.md` state that the feature is off by default and has no SemVer guarantees.
     - `scripts/check-features.sh` checks `cargo check --features unstable-raw-internals` and `cargo test --quiet --features "std unstable-raw-internals"`.
 
-- [ ] Remove test/benchmark dependence on public raw internals where possible.
+- [x] Remove test/benchmark dependence on public raw internals where possible.
   - Required migration:
     - Integration tests that need internals should use public C API behavior or crate-private unit tests.
     - Benchmarks should call public C ABI or safe Rust facade, not private raw internals.
   - Validation:
     - `grep -R "mechanical_mimalloc::raw::internal\|mechanical_mimalloc::raw::page\|mechanical_mimalloc::raw::theap" tests benches examples` returns no default-feature uses unless intentionally allowlisted.
     - If any remain, they are behind `unstable-raw-internals` and documented.
+  - Evidence:
+    - `benches/` use public root `raw::mi_*` allocation/free/reallocation calls, not
+      gated implementation modules.
+    - Remaining `tests/` raw-internal references are file-gated with
+      `#![cfg(feature = "unstable-raw-internals")]` and documented in
+      `docs/raw-facade-migration.md`.
+    - `scripts/check-raw-facade.sh` now fails if `tests/`, `benches/`, or `examples/`
+      use a gated raw implementation module without the unstable feature cfg.
 
 ## B3. Separate exported C ABI from internal Rust calls
 

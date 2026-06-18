@@ -129,6 +129,7 @@ cargo clippy --all-targets -- -D warnings
 cargo clippy --features secure --all-targets -- -D warnings
 cargo clippy --features guarded --all-targets -- -D warnings
 cargo test
+cargo test --test property_alloc_sequences
 cargo test --features secure
 cargo test --features guarded
 cargo test --release

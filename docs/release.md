@@ -26,6 +26,7 @@ Related policy documents:
 - `docs/platforms.md`
 - `docs/performance.md`
 - `docs/reproducibility.md`
+- `docs/testing.md`
 - `docs/governance.md`
 - `docs/limitations.md`
 - `docs/upstream.md`

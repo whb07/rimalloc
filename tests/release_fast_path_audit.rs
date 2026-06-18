@@ -2197,6 +2197,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("static MI_PAGE_QUEUE_IS_VALID_KEEP")
             && page_rs.contains("static MI_PAGE_QUEUE_APPEND_KEEP")
             && page_rs.contains("mi_page_thread_free_collect(page);")
+            && page_rs.contains(
+                "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
+            )
+            && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
+            && page_rs.contains("let Some(head) = remote.0.map(|b| b.as_ptr()) else")
+            && !page_rs.contains("crate::internal::mi_tf_create(ptr::null_mut()")
             && page_rs
                 .contains("crate::mi_assert_internal!(!force || (*page).local_free.is_null());")
             && page_rs.contains("unsafe fn mi_page_move_to_full_typed(")

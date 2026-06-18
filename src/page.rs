@@ -17,9 +17,9 @@ use crate::arena::{
     MI_ARENA_SLICE_ALIGN, MI_ARENA_SLICE_SIZE,
 };
 use crate::atomic::{
-    EFAULT, mi_atomic_and_relaxed, mi_atomic_cas_weak_acq_rel, mi_atomic_cas_weak_release,
-    mi_atomic_load_explicit, mi_atomic_load_ptr_acquire, mi_atomic_or_relaxed,
-    mi_atomic_store_ptr_release, mi_memory_order_e,
+    EFAULT, mi_atomic_and_relaxed, mi_atomic_cas_weak_release, mi_atomic_load_explicit,
+    mi_atomic_load_ptr_acquire, mi_atomic_or_relaxed, mi_atomic_store_ptr_release,
+    mi_memory_order_e,
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::init::{_mi_page_empty, _mi_theap_empty, _mi_theap_empty_wrong};
@@ -362,26 +362,11 @@ pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut m
 
 #[inline]
 pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
-    let mut tfree = mi_atomic_load_explicit(
-        ptr::addr_of!((*page).xthread_free).cast(),
-        mi_memory_order_e::mi_memory_order_relaxed,
-    );
-    let mut head;
-    loop {
-        head = crate::internal::mi_tf_block(tfree);
-        if head.is_null() {
-            return;
-        }
-        let tfreex =
-            crate::internal::mi_tf_create(ptr::null_mut(), crate::internal::mi_tf_is_owned(tfree));
-        if mi_atomic_cas_weak_acq_rel(
-            ptr::addr_of_mut!((*page).xthread_free).cast(),
-            &mut tfree,
-            tfreex,
-        ) {
-            break;
-        }
-    }
+    let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
+    let remote = atomic_tf.take_head_preserving_owner();
+    let Some(head) = remote.0.map(|b| b.as_ptr()) else {
+        return;
+    };
     crate::mi_assert_internal!(!head.is_null());
     mi_page_thread_collect_to_local(page, head);
 }

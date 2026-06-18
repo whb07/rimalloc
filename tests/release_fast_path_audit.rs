@@ -972,7 +972,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         .collect::<BTreeSet<_>>();
     let expected = BTreeSet::from([
         "src/alloc.rs",
-        "src/free.rs",
         "src/os.rs",
         "src/page.rs",
         "src/prim/emscripten.rs",
@@ -992,6 +991,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/atomic.rs")
             && !actual.contains("src/bitmap.rs")
             && !actual.contains("src/core_types/mod.rs")
+            && !actual.contains("src/free.rs")
             && !actual.contains("src/heap.rs")
             && !actual.contains("src/internal.rs")
             && !actual.contains("src/libc.rs")
@@ -1002,7 +1002,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/theap.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, heap helpers, internal helpers, libc helpers, options helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, free-path helpers, heap helpers, internal helpers, libc helpers, options helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 
@@ -3255,7 +3255,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("let page = validated.page().as_ptr();")
             && free_rs.contains("crate::core_types::LocalPage(validated.page())")
             && free_rs.contains("validated.block()")
-            && free_rs.contains("crate::core_types::BlockForFree::new(\n        located.block(),\n        located.was_guarded(),\n    )")
+            && free_rs.contains("crate::core_types::BlockForFree::new(\n            located.block(),\n            located.was_guarded(),\n        )")
             && alloc_rs.contains("let block = location.block();")
             && free_rs.contains(
                 "mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))"
@@ -3743,7 +3743,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("(*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(\n            None,\n            crate::core_types::ThreadFreeOwner::Unowned,")
             && !arena_rs.contains("(*page).xthread_free = 0")
             && free_rs.contains(
-                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n        ptr::addr_of_mut!((*page).xthread_free),\n    ));"
+                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),\n        ));"
             )
             && free_rs.contains(
                 "while !atomic_tf.compare_exchange_release_ownership(&mut tf_expect)"
@@ -3787,8 +3787,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("static MI_ABANDONED_PAGE_TRY_RECLAIM_KEEP")
             && free_rs.contains("static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP")
             && free_rs.contains("&& mi_abandoned_page_try_reclaim(page, reclaim_on_free)")
-            && free_rs
-                .contains("_mi_theap_page_reclaim(\n        crate::core_types::OwnedAbandonedPage")
+            && free_rs.contains(
+                "_mi_theap_page_reclaim(\n            crate::core_types::OwnedAbandonedPage"
+            )
             && !free_rs.contains("_mi_theap_page_reclaim(theap, page)")
             && free_rs.contains("mi_page_usable_aligned_size_of_typed(page, p)"),
         "abandoned-page reclaim should keep C helper boundaries while routing internal reclaim through typed page/heap witnesses"
@@ -4028,8 +4029,8 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         free_rs.contains("#[inline(never)]")
             && free_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_free_generic(")
-            && free_rs.contains("if is_local {\n        mi_free_generic_local(page, p);")
-            && free_rs.contains("} else {\n        mi_free_generic_mt(page, p);")
+            && free_rs.contains("if is_local {\n            mi_free_generic_local(page, p);")
+            && free_rs.contains("} else {\n            mi_free_generic_mt(page, p);")
             && free_rs.contains("static MI_FREE_GENERIC_KEEP")
             && free_rs.contains("    _mi_free_generic;"),
         "_mi_free_generic should keep C's local runtime-integration dispatch boundary"

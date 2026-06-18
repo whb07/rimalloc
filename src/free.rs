@@ -1,7 +1,5 @@
 //! Mechanical translation of the early `src/free.c` free-path helpers.
 
-#![allow(unsafe_op_in_unsafe_fn)]
-
 use core::ffi::{CStr, c_char, c_void};
 use core::{cmp, ptr};
 
@@ -76,13 +74,15 @@ unsafe fn mi_list_contains(
     mut list: *const mi_block_t,
     elem: *const mi_block_t,
 ) -> bool {
-    while !list.is_null() {
-        if ptr::eq(elem, list) {
-            return true;
+    unsafe {
+        while !list.is_null() {
+            if ptr::eq(elem, list) {
+                return true;
+            }
+            list = mi_block_next(page, list);
         }
-        list = mi_block_next(page, list);
+        false
     }
-    false
 }
 
 #[inline(never)]
@@ -90,30 +90,34 @@ pub(crate) unsafe extern "C" fn _mi_page_ptr_unalign(
     page: *const mi_page_t,
     p: *const c_void,
 ) -> *mut mi_block_t {
-    crate::mi_assert_internal!(!page.is_null() && !p.is_null());
-    let diff = p.cast::<u8>().offset_from(mi_page_start(page)) as usize;
-    let block_size = mi_page_block_size(page);
-    let adjust = if _mi_is_power_of_two(block_size) {
-        diff & (block_size - 1)
-    } else {
-        diff % block_size
-    };
-    p.cast_mut().cast::<u8>().sub(adjust).cast::<mi_block_t>()
+    unsafe {
+        crate::mi_assert_internal!(!page.is_null() && !p.is_null());
+        let diff = p.cast::<u8>().offset_from(mi_page_start(page)) as usize;
+        let block_size = mi_page_block_size(page);
+        let adjust = if _mi_is_power_of_two(block_size) {
+            diff & (block_size - 1)
+        } else {
+            diff % block_size
+        };
+        p.cast_mut().cast::<u8>().sub(adjust).cast::<mi_block_t>()
+    }
 }
 
 unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_block_t) -> bool {
-    if mi_list_contains(page, (*page).free, block)
-        || mi_list_contains(page, (*page).local_free, block)
-        || mi_list_contains(page, mi_page_thread_free(page), block)
-    {
-        let block_size = mi_page_block_size(page);
-        _mi_error_message_fmt(
-            EAGAIN,
-            format_args!("double free detected of block {block:p} with size {block_size}\n"),
-        );
-        return true;
+    unsafe {
+        if mi_list_contains(page, (*page).free, block)
+            || mi_list_contains(page, (*page).local_free, block)
+            || mi_list_contains(page, mi_page_thread_free(page), block)
+        {
+            let block_size = mi_page_block_size(page);
+            _mi_error_message_fmt(
+                EAGAIN,
+                format_args!("double free detected of block {block:p} with size {block_size}\n"),
+            );
+            return true;
+        }
+        false
     }
-    false
 }
 
 unsafe fn mi_page_decode_padding(
@@ -122,34 +126,36 @@ unsafe fn mi_page_decode_padding(
     delta: *mut usize,
     bsize: *mut usize,
 ) -> bool {
-    let usable_size = mi_page_usable_block_size(page);
-    *bsize = usable_size.get();
-    let padding = crate::core_types::PaddingPtr::from_block_usable(
-        crate::core_types::BlockPtr::new_unchecked(block.cast_mut()),
-        usable_size,
-    );
-    let padding_ptr = padding.as_ptr();
-    mi_track_mem_defined(
-        padding_ptr.cast::<c_void>(),
-        crate::core_types::PaddingPtr::SIZE,
-    );
-    let metadata = padding.read();
-    *delta = metadata.delta().get() as usize;
-    let canary = metadata.canary().get();
-    let keys = crate::core_types::PageKeys(mi_page_keys(page));
-    let ok = crate::core_types::PaddingCanary::from_page_block_keys(
-        page.cast::<c_void>(),
-        block.cast::<c_void>(),
-        keys,
-    )
-    .get()
-        == canary
-        && *delta <= *bsize;
-    mi_track_mem_noaccess(
-        padding_ptr.cast::<c_void>(),
-        crate::core_types::PaddingPtr::SIZE,
-    );
-    ok
+    unsafe {
+        let usable_size = mi_page_usable_block_size(page);
+        *bsize = usable_size.get();
+        let padding = crate::core_types::PaddingPtr::from_block_usable(
+            crate::core_types::BlockPtr::new_unchecked(block.cast_mut()),
+            usable_size,
+        );
+        let padding_ptr = padding.as_ptr();
+        mi_track_mem_defined(
+            padding_ptr.cast::<c_void>(),
+            crate::core_types::PaddingPtr::SIZE,
+        );
+        let metadata = padding.read();
+        *delta = metadata.delta().get() as usize;
+        let canary = metadata.canary().get();
+        let keys = crate::core_types::PageKeys(mi_page_keys(page));
+        let ok = crate::core_types::PaddingCanary::from_page_block_keys(
+            page.cast::<c_void>(),
+            block.cast::<c_void>(),
+            keys,
+        )
+        .get()
+            == canary
+            && *delta <= *bsize;
+        mi_track_mem_noaccess(
+            padding_ptr.cast::<c_void>(),
+            crate::core_types::PaddingPtr::SIZE,
+        );
+        ok
+    }
 }
 
 #[cfg(not(mi_c_malloc_fast))]
@@ -159,45 +165,47 @@ pub(crate) unsafe extern "C" fn _mi_padding_shrink(
     block: *const mi_block_t,
     min_size: usize,
 ) {
-    if MI_PADDING == 0 {
-        let _ = page;
-        let _ = block;
-        let _ = min_size;
-        return;
-    }
+    unsafe {
+        if MI_PADDING == 0 {
+            let _ = page;
+            let _ = block;
+            let _ = min_size;
+            return;
+        }
 
-    let mut bsize = 0usize;
-    let mut delta = 0usize;
-    let ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
-    crate::mi_assert_internal!(ok);
-    if !ok || (bsize - delta) >= min_size {
-        return;
-    }
+        let mut bsize = 0usize;
+        let mut delta = 0usize;
+        let ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
+        crate::mi_assert_internal!(ok);
+        if !ok || (bsize - delta) >= min_size {
+            return;
+        }
 
-    crate::mi_assert_internal!(bsize >= min_size);
-    if bsize < min_size {
-        return;
-    }
+        crate::mi_assert_internal!(bsize >= min_size);
+        if bsize < min_size {
+            return;
+        }
 
-    let new_delta = bsize - min_size;
-    crate::mi_assert_internal!(new_delta < bsize);
-    let padding = crate::core_types::PaddingPtr::from_block_usable(
-        crate::core_types::BlockPtr::new_unchecked(block.cast_mut()),
-        crate::core_types::UsableSize::new(bsize),
-    );
-    let padding_ptr = padding.as_ptr();
-    mi_track_mem_defined(
-        padding_ptr.cast::<c_void>(),
-        crate::core_types::PaddingPtr::SIZE,
-    );
-    padding.write_delta(crate::core_types::PaddingDelta::for_usable(
-        new_delta,
-        crate::core_types::UsableSize::new(bsize),
-    ));
-    mi_track_mem_noaccess(
-        padding_ptr.cast::<c_void>(),
-        crate::core_types::PaddingPtr::SIZE,
-    );
+        let new_delta = bsize - min_size;
+        crate::mi_assert_internal!(new_delta < bsize);
+        let padding = crate::core_types::PaddingPtr::from_block_usable(
+            crate::core_types::BlockPtr::new_unchecked(block.cast_mut()),
+            crate::core_types::UsableSize::new(bsize),
+        );
+        let padding_ptr = padding.as_ptr();
+        mi_track_mem_defined(
+            padding_ptr.cast::<c_void>(),
+            crate::core_types::PaddingPtr::SIZE,
+        );
+        padding.write_delta(crate::core_types::PaddingDelta::for_usable(
+            new_delta,
+            crate::core_types::UsableSize::new(bsize),
+        ));
+        mi_track_mem_noaccess(
+            padding_ptr.cast::<c_void>(),
+            crate::core_types::PaddingPtr::SIZE,
+        );
+    }
 }
 
 unsafe fn mi_verify_padding(
@@ -206,66 +214,72 @@ unsafe fn mi_verify_padding(
     size: *mut usize,
     wrong: *mut usize,
 ) -> bool {
-    let mut bsize = 0usize;
-    let mut delta = 0usize;
-    let mut ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
-    *size = bsize;
-    *wrong = bsize;
-    if !ok {
-        return false;
-    }
-    crate::mi_assert_internal!(bsize >= delta);
-    *size = bsize - delta;
-    if !mi_page_is_huge(page) {
-        let fill = block.cast::<u8>().add(bsize - delta);
-        let maxpad = cmp::min(delta, MI_MAX_ALIGN_SIZE);
-        mi_track_mem_defined(fill.cast_mut().cast::<c_void>(), maxpad);
-        for i in 0..maxpad {
-            if *fill.add(i) != MI_DEBUG_PADDING {
-                *wrong = bsize - delta + i;
-                ok = false;
-                break;
-            }
+    unsafe {
+        let mut bsize = 0usize;
+        let mut delta = 0usize;
+        let mut ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
+        *size = bsize;
+        *wrong = bsize;
+        if !ok {
+            return false;
         }
-        mi_track_mem_noaccess(fill.cast_mut().cast::<c_void>(), maxpad);
+        crate::mi_assert_internal!(bsize >= delta);
+        *size = bsize - delta;
+        if !mi_page_is_huge(page) {
+            let fill = block.cast::<u8>().add(bsize - delta);
+            let maxpad = cmp::min(delta, MI_MAX_ALIGN_SIZE);
+            mi_track_mem_defined(fill.cast_mut().cast::<c_void>(), maxpad);
+            for i in 0..maxpad {
+                if *fill.add(i) != MI_DEBUG_PADDING {
+                    *wrong = bsize - delta + i;
+                    ok = false;
+                    break;
+                }
+            }
+            mi_track_mem_noaccess(fill.cast_mut().cast::<c_void>(), maxpad);
+        }
+        ok
     }
-    ok
 }
 
 /// # Safety
 /// `page` and `block` must refer to a valid block owned by that page.
 pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t) {
-    if MI_PADDING == 0 || MI_PADDING_CHECK == 0 {
-        return;
-    }
+    unsafe {
+        if MI_PADDING == 0 || MI_PADDING_CHECK == 0 {
+            return;
+        }
 
-    let mut size = 0usize;
-    let mut wrong = 0usize;
-    if !mi_verify_padding(page, block, &mut size, &mut wrong) {
-        _mi_error_message_fmt(
-            EFAULT,
-            format_args!(
-                "buffer overflow in theap block {block:p} of size {size}: write after {wrong} bytes\n"
-            ),
-        );
+        let mut size = 0usize;
+        let mut wrong = 0usize;
+        if !mi_verify_padding(page, block, &mut size, &mut wrong) {
+            _mi_error_message_fmt(
+                EFAULT,
+                format_args!(
+                    "buffer overflow in theap block {block:p} of size {size}: write after {wrong} bytes\n"
+                ),
+            );
+        }
     }
 }
 
 /// # Safety
 /// `page` and `block` must refer to a valid block owned by that page.
 pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_block_t) -> bool {
-    if MI_ENCODE_FREELIST == 0 || (crate::internal::MI_SECURE < 4 && MI_DEBUG == 0) {
-        return false;
-    }
+    unsafe {
+        if MI_ENCODE_FREELIST == 0 || (crate::internal::MI_SECURE < 4 && MI_DEBUG == 0) {
+            return false;
+        }
 
-    let keys = mi_page_keys(page);
-    let n = mi_block_nextx(page.cast::<c_void>(), block, &keys);
-    if ((n as usize) & (MI_INTPTR_SIZE - 1)) == 0
-        && (n.is_null() || mi_is_in_same_page(block.cast::<c_void>(), n.cast::<c_void>()))
-    {
-        return mi_check_is_double_freex(page, block);
+        let keys = mi_page_keys(page);
+        let n = mi_block_nextx(page.cast::<c_void>(), block, &keys);
+        if ((n as usize) & (MI_INTPTR_SIZE - 1)) == 0
+            && (n.is_null() || mi_is_in_same_page(block.cast::<c_void>(), n.cast::<c_void>()))
+        {
+            return mi_check_is_double_freex(page, block);
+        }
+        false
     }
-    false
 }
 
 pub(crate) unsafe fn mi_page_usable_size_of_typed(
@@ -273,22 +287,24 @@ pub(crate) unsafe fn mi_page_usable_size_of_typed(
     block: *const mi_block_t,
     is_guarded: bool,
 ) -> crate::core_types::UsableSize {
-    if MI_PADDING == 0 {
-        let _ = block;
-        let _ = is_guarded;
-        return mi_page_usable_block_size(page);
-    }
+    unsafe {
+        if MI_PADDING == 0 {
+            let _ = block;
+            let _ = is_guarded;
+            return mi_page_usable_block_size(page);
+        }
 
-    if is_guarded {
-        let bsize = mi_page_block_size(page);
-        crate::core_types::UsableSize::new(bsize - _mi_os_page_size())
-    } else {
-        let mut bsize = 0usize;
-        let mut delta = 0usize;
-        let ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
-        crate::mi_assert_internal!(ok);
-        crate::mi_assert_internal!(delta <= bsize);
-        crate::core_types::UsableSize::new(if ok { bsize - delta } else { 0 })
+        if is_guarded {
+            let bsize = mi_page_block_size(page);
+            crate::core_types::UsableSize::new(bsize - _mi_os_page_size())
+        } else {
+            let mut bsize = 0usize;
+            let mut delta = 0usize;
+            let ok = mi_page_decode_padding(page, block, &mut delta, &mut bsize);
+            crate::mi_assert_internal!(ok);
+            crate::mi_assert_internal!(delta <= bsize);
+            crate::core_types::UsableSize::new(if ok { bsize - delta } else { 0 })
+        }
     }
 }
 
@@ -299,34 +315,38 @@ pub unsafe fn mi_page_usable_size_of(
     block: *const mi_block_t,
     is_guarded: bool,
 ) -> usize {
-    mi_page_usable_size_of_typed(page, block, is_guarded).get()
+    unsafe { mi_page_usable_size_of_typed(page, block, is_guarded).get() }
 }
 
 /// # Safety
 /// `page` and `block` must refer to a valid block being freed.
 pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
-    let _ = block;
-    if crate::types::MI_STAT == 0 {
-        return;
-    }
-
-    let theap: *mut mi_theap_t = _mi_theap_default();
-    if !mi_theap_is_initialized(theap) {
-        return;
-    }
-
-    let bsize = mi_page_usable_block_size(page);
-    if bsize.get() <= MI_LARGE_MAX_OBJ_SIZE {
-        __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize.get());
-        if crate::types::MI_STAT > 1 {
-            __mi_stat_decrease(
-                ptr::addr_of_mut!((*theap).stats.malloc_bins[mi_bin_from_usable(bsize).as_usize()]),
-                1,
-            );
+    unsafe {
+        let _ = block;
+        if crate::types::MI_STAT == 0 {
+            return;
         }
-    } else {
-        let bpsize = mi_page_block_size(page);
-        __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_huge), bpsize);
+
+        let theap: *mut mi_theap_t = _mi_theap_default();
+        if !mi_theap_is_initialized(theap) {
+            return;
+        }
+
+        let bsize = mi_page_usable_block_size(page);
+        if bsize.get() <= MI_LARGE_MAX_OBJ_SIZE {
+            __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_normal), bsize.get());
+            if crate::types::MI_STAT > 1 {
+                __mi_stat_decrease(
+                    ptr::addr_of_mut!(
+                        (*theap).stats.malloc_bins[mi_bin_from_usable(bsize).as_usize()]
+                    ),
+                    1,
+                );
+            }
+        } else {
+            let bpsize = mi_page_block_size(page);
+            __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_huge), bpsize);
+        }
     }
 }
 
@@ -335,60 +355,60 @@ pub(crate) unsafe fn mi_free_block_local(
     block_wrapper: crate::core_types::BlockForFree,
     mode: crate::core_types::LocalFreeMode,
 ) {
-    let page = page_wrapper.0.as_ptr();
-    let block = block_wrapper.block().as_ptr();
-    let was_guarded = block_wrapper.is_guarded();
-    let track_stats = mode.track_stats;
-    let check_full = mode.check_full;
-    if mi_check_is_double_free(page, block) {
-        return;
-    }
-    if !was_guarded {
-        mi_check_padding(page, block);
-    }
-    if track_stats {
-        mi_stat_free(page, block);
-    }
-    if track_stats {
-        mi_track_free_size(
-            block.cast::<c_void>(),
-            mi_page_usable_size_of(page, block, was_guarded),
-        );
-    }
-    if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
-        _mi_memset_aligned(
-            block.cast::<c_void>(),
-            MI_DEBUG_FREED as i32,
-            mi_page_block_size(page),
-        );
-    }
+    unsafe {
+        let page = page_wrapper.0.as_ptr();
+        let block = block_wrapper.block().as_ptr();
+        let was_guarded = block_wrapper.is_guarded();
+        let track_stats = mode.track_stats;
+        let check_full = mode.check_full;
+        if mi_check_is_double_free(page, block) {
+            return;
+        }
+        if !was_guarded {
+            mi_check_padding(page, block);
+        }
+        if track_stats {
+            mi_stat_free(page, block);
+        }
+        if track_stats {
+            mi_track_free_size(
+                block.cast::<c_void>(),
+                mi_page_usable_size_of(page, block, was_guarded),
+            );
+        }
+        if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
+            _mi_memset_aligned(
+                block.cast::<c_void>(),
+                MI_DEBUG_FREED as i32,
+                mi_page_block_size(page),
+            );
+        }
 
-    // Push the freed block onto the page's local free list via the typed
-    // wrapper. Zero-cost: compiles to the same `mi_block_set_next` + store as
-    // the raw form it replaces.
-    // SAFETY: `page` is a valid local page; `block` is a valid block in it.
-    let local = unsafe { crate::core_types::LocalFreeList::from_raw((*page).local_free) };
-    let new_local = unsafe {
-        local.push(
+        // Push the freed block onto the page's local free list via the typed
+        // wrapper. Zero-cost: compiles to the same `mi_block_set_next` + store as
+        // the raw form it replaces.
+        // SAFETY: `page` is a valid local page; `block` is a valid block in it.
+        let local = crate::core_types::LocalFreeList::from_raw((*page).local_free);
+        let new_local = local.push(
             crate::core_types::LocalPage(crate::core_types::PagePtr::new_unchecked(page)),
             crate::core_types::FreeBlock(crate::core_types::BlockPtr::new_unchecked(block)),
-        )
-    };
-    (*page).local_free = new_local
-        .0
-        .map(|b| b.as_ptr())
-        .unwrap_or(core::ptr::null_mut());
-    (*page).used -= 1;
-    if (*page).used == 0 {
-        if (*page).retire_expire == 0 {
-            _mi_page_retire_internal(crate::core_types::AllFreePage::active_unchecked(
-                crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
+        );
+        (*page).local_free = new_local
+            .0
+            .map(|b| b.as_ptr())
+            .unwrap_or(core::ptr::null_mut());
+        (*page).used -= 1;
+        if (*page).used == 0 {
+            if (*page).retire_expire == 0 {
+                _mi_page_retire_internal(crate::core_types::AllFreePage::active_unchecked(
+                    crate::core_types::ActivePage(crate::core_types::PagePtr::new_unchecked(page)),
+                ));
+            }
+        } else if check_full && crate::page::mi_page_is_in_full(page) {
+            _mi_page_unfull_internal(crate::core_types::FullPage(
+                crate::core_types::PagePtr::new_unchecked(page),
             ));
         }
-    } else if check_full && crate::page::mi_page_is_in_full(page) {
-        _mi_page_unfull_internal(crate::core_types::FullPage(
-            crate::core_types::PagePtr::new_unchecked(page),
-        ));
     }
 }
 
@@ -396,76 +416,80 @@ pub(crate) unsafe fn mi_free_block_mt(
     page_wrapper: crate::core_types::ForeignPage,
     block_wrapper: crate::core_types::BlockForFree,
 ) {
-    let page = page_wrapper.0.as_ptr();
-    let block = block_wrapper.block().as_ptr();
-    let was_guarded = block_wrapper.is_guarded();
-    mi_stat_free(page, block);
-    mi_track_free_size(
-        block.cast::<c_void>(),
-        mi_page_usable_size_of_typed(page, block, was_guarded).get(),
-    );
-
-    if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
-        let mut dbgsize = crate::mimalloc::mi_usable_size(block.cast::<c_void>());
-        if dbgsize > MI_MiB {
-            dbgsize = MI_MiB;
-        }
-        _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
-    }
-
-    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_free),
-    ));
-
-    let mut tf_old = atomic_tf.load_relaxed();
-    loop {
-        mi_block_set_next(
-            page,
-            block,
-            tf_old
-                .head()
-                .map(|p| p.as_ptr())
-                .unwrap_or(core::ptr::null_mut()),
+    unsafe {
+        let page = page_wrapper.0.as_ptr();
+        let block = block_wrapper.block().as_ptr();
+        let was_guarded = block_wrapper.is_guarded();
+        mi_stat_free(page, block);
+        mi_track_free_size(
+            block.cast::<c_void>(),
+            mi_page_usable_size_of_typed(page, block, was_guarded).get(),
         );
-        let bp = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
-        match atomic_tf.compare_exchange_push(&mut tf_old, bp) {
-            Ok(_) => break,
-            Err(_) => continue, // tf_old is updated by the atomic wrapper
-        }
-    }
 
-    if !tf_old.is_owned() {
-        crate::mi_assert_internal!(mi_page_is_abandoned(page));
-        mi_free_try_collect_mt(page, block);
+        if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
+            let mut dbgsize = crate::mimalloc::mi_usable_size(block.cast::<c_void>());
+            if dbgsize > MI_MiB {
+                dbgsize = MI_MiB;
+            }
+            _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
+        }
+
+        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*page).xthread_free),
+        ));
+
+        let mut tf_old = atomic_tf.load_relaxed();
+        loop {
+            mi_block_set_next(
+                page,
+                block,
+                tf_old
+                    .head()
+                    .map(|p| p.as_ptr())
+                    .unwrap_or(core::ptr::null_mut()),
+            );
+            let bp = crate::core_types::BlockPtr::new_unchecked(block);
+            match atomic_tf.compare_exchange_push(&mut tf_old, bp) {
+                Ok(_) => break,
+                Err(_) => continue, // tf_old is updated by the atomic wrapper
+            }
+        }
+
+        if !tf_old.is_owned() {
+            crate::mi_assert_internal!(mi_page_is_abandoned(page));
+            mi_free_try_collect_mt(page, block);
+        }
     }
 }
 
 unsafe fn mi_block_unguard(page: *mut mi_page_t, block: *mut mi_block_t, p: *mut c_void) {
-    if MI_GUARDED == 0 {
-        let _ = page;
-        let _ = block;
-        let _ = p;
-        return;
+    unsafe {
+        if MI_GUARDED == 0 {
+            let _ = page;
+            let _ = block;
+            let _ = p;
+            return;
+        }
+
+        crate::mi_assert_internal!(mi_block_ptr_is_guarded(block, p));
+        crate::mi_assert_internal!(mi_page_has_interior_pointers(page));
+        crate::mi_assert_internal!(
+            p.cast::<u8>().offset_from(block.cast::<u8>())
+                >= core::mem::size_of::<mi_block_t>() as isize
+        );
+        crate::mi_assert_internal!(
+            crate::core_types::BlockLink::read_tag_from_raw(block).is_guarded_tag()
+        );
+
+        let bsize = mi_page_block_size(page);
+        let psize = _mi_os_page_size();
+        crate::mi_assert_internal!(bsize > psize);
+        crate::mi_assert_internal!(!(*page).memid.is_pinned);
+
+        let gpage = block.cast::<u8>().add(bsize - psize).cast::<c_void>();
+        crate::mi_assert_internal!((gpage as usize).is_multiple_of(psize));
+        crate::os::_mi_os_unprotect(gpage, psize);
     }
-
-    crate::mi_assert_internal!(mi_block_ptr_is_guarded(block, p));
-    crate::mi_assert_internal!(mi_page_has_interior_pointers(page));
-    crate::mi_assert_internal!(
-        p.cast::<u8>().offset_from(block.cast::<u8>())
-            >= core::mem::size_of::<mi_block_t>() as isize
-    );
-    crate::mi_assert_internal!(
-        crate::core_types::BlockLink::read_tag_from_raw(block).is_guarded_tag()
-    );
-
-    let bsize = mi_page_block_size(page);
-    let psize = _mi_os_page_size();
-    crate::mi_assert_internal!(bsize > psize);
-    crate::mi_assert_internal!(!(*page).memid.is_pinned);
-
-    let gpage = block.cast::<u8>().add(bsize - psize).cast::<c_void>();
-    crate::mi_assert_internal!((gpage as usize).is_multiple_of(psize));
-    crate::os::_mi_os_unprotect(gpage, psize);
 }
 
 /// # Safety
@@ -475,14 +499,16 @@ pub unsafe fn mi_block_check_unguard(
     block: *mut mi_block_t,
     p: *mut c_void,
 ) -> bool {
-    if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block, p) {
-        mi_block_unguard(page, block, p);
-        true
-    } else {
-        let _ = page;
-        let _ = block;
-        let _ = p;
-        false
+    unsafe {
+        if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block, p) {
+            mi_block_unguard(page, block, p);
+            true
+        } else {
+            let _ = page;
+            let _ = block;
+            let _ = p;
+            false
+        }
     }
 }
 
@@ -491,49 +517,51 @@ pub(crate) unsafe fn mi_validate_block_from_ptr(
     page: *const mi_page_t,
     p: *mut c_void,
 ) -> crate::core_types::PointerLookup {
-    use crate::core_types::{
-        BlockOffset, BlockPtr, GuardedBlock, PagePtr, PointerInvalidReason, PointerLocation,
-        PointerLookup, UserPtr,
-    };
-
-    if p.is_null() {
-        return PointerLookup::Null;
-    }
-    let user = UserPtr::new_unchecked(p);
-    if page.is_null() {
-        return PointerLookup::Invalid {
-            user: Some(user),
-            reason: PointerInvalidReason::NotOwnedByAllocator,
+    unsafe {
+        use crate::core_types::{
+            BlockOffset, BlockPtr, GuardedBlock, PagePtr, PointerInvalidReason, PointerLocation,
+            PointerLookup, UserPtr,
         };
-    }
 
-    let block = if mi_page_has_interior_pointers(page) || MI_SECURE > 0 {
-        _mi_page_ptr_unalign(page, p)
-    } else {
-        p.cast()
-    };
-    if !mi_page_has_interior_pointers(page) {
-        crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());
-    }
-
-    let page = PagePtr::new_unchecked(page.cast_mut());
-    let block = BlockPtr::new_unchecked(block);
-    let offset = BlockOffset((p as usize) - (block.as_ptr() as usize));
-    let location = if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block.as_ptr(), p) {
-        PointerLocation::Guarded {
-            block: GuardedBlock(block),
-            offset,
+        if p.is_null() {
+            return PointerLookup::Null;
         }
-    } else if offset.0 != 0 {
-        PointerLocation::Interior { block, offset }
-    } else {
-        PointerLocation::BlockStart(block)
-    };
+        let user = UserPtr::new_unchecked(p);
+        if page.is_null() {
+            return PointerLookup::Invalid {
+                user: Some(user),
+                reason: PointerInvalidReason::NotOwnedByAllocator,
+            };
+        }
 
-    PointerLookup::Valid {
-        user,
-        page,
-        location,
+        let block = if mi_page_has_interior_pointers(page) || MI_SECURE > 0 {
+            _mi_page_ptr_unalign(page, p)
+        } else {
+            p.cast()
+        };
+        if !mi_page_has_interior_pointers(page) {
+            crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());
+        }
+
+        let page = PagePtr::new_unchecked(page.cast_mut());
+        let block = BlockPtr::new_unchecked(block);
+        let offset = BlockOffset((p as usize) - (block.as_ptr() as usize));
+        let location = if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block.as_ptr(), p) {
+            PointerLocation::Guarded {
+                block: GuardedBlock(block),
+                offset,
+            }
+        } else if offset.0 != 0 {
+            PointerLocation::Interior { block, offset }
+        } else {
+            PointerLocation::BlockStart(block)
+        };
+
+        PointerLookup::Valid {
+            user,
+            page,
+            location,
+        }
     }
 }
 
@@ -542,60 +570,66 @@ unsafe fn mi_block_for_free_from_lookup(
     p: *mut c_void,
     lookup: crate::core_types::PointerLookup,
 ) -> Option<crate::core_types::BlockForFree> {
-    let crate::core_types::PointerLookup::Valid { location, .. } = lookup else {
-        return None;
-    };
-    let located = location.located_block();
-    if located.was_guarded() == crate::core_types::WasGuarded::Yes {
-        mi_block_check_unguard(page, located.block().as_ptr(), p);
+    unsafe {
+        let crate::core_types::PointerLookup::Valid { location, .. } = lookup else {
+            return None;
+        };
+        let located = location.located_block();
+        if located.was_guarded() == crate::core_types::WasGuarded::Yes {
+            mi_block_check_unguard(page, located.block().as_ptr(), p);
+        }
+        Some(crate::core_types::BlockForFree::new(
+            located.block(),
+            located.was_guarded(),
+        ))
     }
-    Some(crate::core_types::BlockForFree::new(
-        located.block(),
-        located.was_guarded(),
-    ))
 }
 
 #[cold]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
-    crate::mi_assert_internal!(!p.is_null() && !page.is_null());
-    let Some(block_wrapper) =
-        mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))
-    else {
-        return;
-    };
+    unsafe {
+        crate::mi_assert_internal!(!p.is_null() && !page.is_null());
+        let Some(block_wrapper) =
+            mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))
+        else {
+            return;
+        };
 
-    // SAFETY: The generic dispatch boundary supplies a non-null page for `p`;
-    // `mi_validate_block_from_ptr` reconstructs the typed block witness.
-    let page_wrapper =
-        crate::core_types::LocalPage(crate::core_types::PagePtr::new_unchecked(page));
+        // SAFETY: The generic dispatch boundary supplies a non-null page for `p`;
+        // `mi_validate_block_from_ptr` reconstructs the typed block witness.
+        let page_wrapper =
+            crate::core_types::LocalPage(crate::core_types::PagePtr::new_unchecked(page));
 
-    mi_free_block_local(
-        page_wrapper,
-        block_wrapper,
-        crate::core_types::LocalFreeMode {
-            track_stats: true,
-            check_full: true,
-        },
-    );
+        mi_free_block_local(
+            page_wrapper,
+            block_wrapper,
+            crate::core_types::LocalFreeMode {
+                track_stats: true,
+                check_full: true,
+            },
+        );
+    }
 }
 
 #[cold]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
-    crate::mi_assert_internal!(!p.is_null() && !page.is_null());
-    let Some(block_wrapper) =
-        mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))
-    else {
-        return;
-    };
+    unsafe {
+        crate::mi_assert_internal!(!p.is_null() && !page.is_null());
+        let Some(block_wrapper) =
+            mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))
+        else {
+            return;
+        };
 
-    // SAFETY: The generic dispatch boundary supplies a non-null page for `p`;
-    // `mi_validate_block_from_ptr` reconstructs the typed block witness.
-    let page_wrapper =
-        crate::core_types::ForeignPage(crate::core_types::PagePtr::new_unchecked(page));
+        // SAFETY: The generic dispatch boundary supplies a non-null page for `p`;
+        // `mi_validate_block_from_ptr` reconstructs the typed block witness.
+        let page_wrapper =
+            crate::core_types::ForeignPage(crate::core_types::PagePtr::new_unchecked(page));
 
-    mi_free_block_mt(page_wrapper, block_wrapper);
+        mi_free_block_mt(page_wrapper, block_wrapper);
+    }
 }
 
 #[inline(never)]
@@ -604,10 +638,12 @@ pub(crate) unsafe extern "C" fn _mi_free_generic(
     is_local: bool,
     p: *mut c_void,
 ) {
-    if is_local {
-        mi_free_generic_local(page, p);
-    } else {
-        mi_free_generic_mt(page, p);
+    unsafe {
+        if is_local {
+            mi_free_generic_local(page, p);
+        } else {
+            mi_free_generic_mt(page, p);
+        }
     }
 }
 
@@ -619,79 +655,81 @@ pub(crate) unsafe fn mi_validate_pointer(
     p: *mut c_void,
     msg: *const c_char,
 ) -> crate::core_types::PointerLookup {
-    use crate::core_types::{
-        BlockOffset, BlockPtr, GuardedBlock, PagePtr, PointerInvalidReason, PointerLocation,
-        PointerLookup, UserPtr,
-    };
-    if p.is_null() {
-        return PointerLookup::Null;
-    }
-    let user_ptr = UserPtr::new_unchecked(p);
-
-    if (MI_DEBUG != 0 || cfg!(feature = "secure"))
-        && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
-        && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
-    {
-        let msg_str = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
-        _mi_error_message_fmt(
-            EINVAL,
-            format_args!("{msg_str}: invalid (unaligned) pointer: {p:p}\n"),
-        );
-        return PointerLookup::Invalid {
-            user: Some(user_ptr),
-            reason: PointerInvalidReason::BadAlignment,
+    unsafe {
+        use crate::core_types::{
+            BlockOffset, BlockPtr, GuardedBlock, PagePtr, PointerInvalidReason, PointerLocation,
+            PointerLookup, UserPtr,
         };
-    }
-
-    let page_raw = if MI_DEBUG != 0 || cfg!(feature = "secure") {
-        let mut page = _mi_safe_ptr_page(p);
-        if !page.is_null() && !mi_page_contains_address(page, p) {
-            page = ptr::null_mut();
+        if p.is_null() {
+            return PointerLookup::Null;
         }
-        page
-    } else {
-        _mi_ptr_page(p)
-    };
+        let user_ptr = UserPtr::new_unchecked(p);
 
-    if page_raw.is_null() {
-        if MI_DEBUG != 0 || cfg!(feature = "secure") {
+        if (MI_DEBUG != 0 || cfg!(feature = "secure"))
+            && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
+            && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
+        {
             let msg_str = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
-            _mi_error_message_fmt(EINVAL, format_args!("{msg_str}: invalid pointer: {p:p}\n"));
+            _mi_error_message_fmt(
+                EINVAL,
+                format_args!("{msg_str}: invalid (unaligned) pointer: {p:p}\n"),
+            );
+            return PointerLookup::Invalid {
+                user: Some(user_ptr),
+                reason: PointerInvalidReason::BadAlignment,
+            };
         }
-        return PointerLookup::Invalid {
-            user: Some(user_ptr),
-            reason: PointerInvalidReason::NotOwnedByAllocator,
+
+        let page_raw = if MI_DEBUG != 0 || cfg!(feature = "secure") {
+            let mut page = _mi_safe_ptr_page(p);
+            if !page.is_null() && !mi_page_contains_address(page, p) {
+                page = ptr::null_mut();
+            }
+            page
+        } else {
+            _mi_ptr_page(p)
         };
-    }
 
-    let page_ptr = PagePtr::new_unchecked(page_raw);
-    let block_raw = if mi_page_has_interior_pointers(page_raw) {
-        _mi_page_ptr_unalign(page_raw, p)
-    } else {
-        p.cast::<mi_block_t>()
-    };
-
-    let offset = BlockOffset((p as usize) - (block_raw as usize));
-    let block_ptr = BlockPtr::new_unchecked(block_raw);
-
-    let location = if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block_raw, p) {
-        PointerLocation::Guarded {
-            block: GuardedBlock(block_ptr),
-            offset,
+        if page_raw.is_null() {
+            if MI_DEBUG != 0 || cfg!(feature = "secure") {
+                let msg_str = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
+                _mi_error_message_fmt(EINVAL, format_args!("{msg_str}: invalid pointer: {p:p}\n"));
+            }
+            return PointerLookup::Invalid {
+                user: Some(user_ptr),
+                reason: PointerInvalidReason::NotOwnedByAllocator,
+            };
         }
-    } else if offset.0 != 0 {
-        PointerLocation::Interior {
-            block: block_ptr,
-            offset,
-        }
-    } else {
-        PointerLocation::BlockStart(block_ptr)
-    };
 
-    PointerLookup::Valid {
-        user: user_ptr,
-        page: page_ptr,
-        location,
+        let page_ptr = PagePtr::new_unchecked(page_raw);
+        let block_raw = if mi_page_has_interior_pointers(page_raw) {
+            _mi_page_ptr_unalign(page_raw, p)
+        } else {
+            p.cast::<mi_block_t>()
+        };
+
+        let offset = BlockOffset((p as usize) - (block_raw as usize));
+        let block_ptr = BlockPtr::new_unchecked(block_raw);
+
+        let location = if MI_GUARDED != 0 && mi_block_ptr_is_guarded(block_raw, p) {
+            PointerLocation::Guarded {
+                block: GuardedBlock(block_ptr),
+                offset,
+            }
+        } else if offset.0 != 0 {
+            PointerLocation::Interior {
+                block: block_ptr,
+                offset,
+            }
+        } else {
+            PointerLocation::BlockStart(block_ptr)
+        };
+
+        PointerLookup::Valid {
+            user: user_ptr,
+            page: page_ptr,
+            location,
+        }
     }
 }
 
@@ -700,27 +738,29 @@ pub(crate) unsafe fn mi_free_validated(
     validated: crate::core_types::ValidatedFree,
     usable: *mut usize,
 ) {
-    let page = validated.page().as_ptr();
-    if !usable.is_null() {
-        *usable = mi_page_usable_block_size(page).get();
-    }
+    unsafe {
+        let page = validated.page().as_ptr();
+        if !usable.is_null() {
+            *usable = mi_page_usable_block_size(page).get();
+        }
 
-    let current_tid = unsafe { crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id()) };
-    let page_tid = crate::core_types::PageThreadId::new(mi_page_xthread_id(page));
-    let delta = page_tid.xor_current(current_tid);
+        let current_tid = crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id());
+        let page_tid = crate::core_types::PageThreadId::new(mi_page_xthread_id(page));
+        let delta = page_tid.xor_current(current_tid);
 
-    if delta.is_local_fast() {
-        mi_free_block_local(
-            crate::core_types::LocalPage(validated.page()),
-            validated.block(),
-            crate::core_types::LocalFreeMode {
-                track_stats: true,
-                check_full: false,
-            },
-        );
-        return;
+        if delta.is_local_fast() {
+            mi_free_block_local(
+                crate::core_types::LocalPage(validated.page()),
+                validated.block(),
+                crate::core_types::LocalFreeMode {
+                    track_stats: true,
+                    check_full: false,
+                },
+            );
+            return;
+        }
+        mi_free_ex_slow(validated, delta);
     }
-    mi_free_ex_slow(validated, delta);
 }
 
 #[cold]
@@ -729,52 +769,56 @@ pub(crate) unsafe fn mi_free_ex_slow(
     validated: crate::core_types::ValidatedFree,
     delta: crate::core_types::XThreadDelta,
 ) {
-    // `validated` was produced by `mi_validate_pointer`, which already derived the
-    // interior-corrected block and resolved guard state. Route the typed witness
-    // directly to the block free functions instead of re-deriving from the raw
-    // pointer via `mi_free_generic_local`/`mi_free_generic_mt` (which would also
-    // double-call `mi_block_check_unguard` on guarded blocks).
-    if delta.needs_local_slow() {
-        // Local page with flags set (e.g. in the full queue): check for unfull.
-        mi_free_block_local(
-            crate::core_types::LocalPage(validated.page()),
-            validated.block(),
-            crate::core_types::LocalFreeMode {
-                track_stats: true,
-                check_full: true,
-            },
-        );
-    } else {
-        // Remote (plain or with flags): push onto the owning thread's free list.
-        // The flag distinction collapses here because validation already resolved
-        // the block; `mi_free_block_mt` does not branch on page flags.
-        mi_free_block_mt(
-            crate::core_types::ForeignPage(validated.page()),
-            validated.block(),
-        );
+    unsafe {
+        // `validated` was produced by `mi_validate_pointer`, which already derived the
+        // interior-corrected block and resolved guard state. Route the typed witness
+        // directly to the block free functions instead of re-deriving from the raw
+        // pointer via `mi_free_generic_local`/`mi_free_generic_mt` (which would also
+        // double-call `mi_block_check_unguard` on guarded blocks).
+        if delta.needs_local_slow() {
+            // Local page with flags set (e.g. in the full queue): check for unfull.
+            mi_free_block_local(
+                crate::core_types::LocalPage(validated.page()),
+                validated.block(),
+                crate::core_types::LocalFreeMode {
+                    track_stats: true,
+                    check_full: true,
+                },
+            );
+        } else {
+            // Remote (plain or with flags): push onto the owning thread's free list.
+            // The flag distinction collapses here because validation already resolved
+            // the block; `mi_free_block_mt` does not branch on page flags.
+            mi_free_block_mt(
+                crate::core_types::ForeignPage(validated.page()),
+                validated.block(),
+            );
+        }
     }
 }
 
 pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *mut usize) {
-    if p.is_null() {
-        return;
-    }
-    if let crate::core_types::PointerLookup::Valid {
-        user,
-        page,
-        location,
-    } = mi_validate_pointer(p, msg)
-    {
-        let located = location.located_block();
-        if located.was_guarded() == crate::core_types::WasGuarded::Yes {
-            mi_block_check_unguard(page.as_ptr(), located.block().as_ptr(), p);
+    unsafe {
+        if p.is_null() {
+            return;
         }
-        let validated = crate::core_types::ValidatedFree::new(
+        if let crate::core_types::PointerLookup::Valid {
             user,
             page,
-            crate::core_types::BlockForFree::new(located.block(), located.was_guarded()),
-        );
-        mi_free_validated(validated, usable);
+            location,
+        } = mi_validate_pointer(p, msg)
+        {
+            let located = location.located_block();
+            if located.was_guarded() == crate::core_types::WasGuarded::Yes {
+                mi_block_check_unguard(page.as_ptr(), located.block().as_ptr(), p);
+            }
+            let validated = crate::core_types::ValidatedFree::new(
+                user,
+                page,
+                crate::core_types::BlockForFree::new(located.block(), located.was_guarded()),
+            );
+            mi_free_validated(validated, usable);
+        }
     }
 }
 
@@ -782,97 +826,107 @@ pub(crate) unsafe fn mi_route_usable_size_typed(
     p: *const c_void,
     msg: *const c_char,
 ) -> crate::core_types::UsableSize {
-    if p.is_null() {
-        return crate::core_types::UsableSize::new(0);
-    }
-    match mi_validate_pointer(p.cast_mut(), msg) {
-        crate::core_types::PointerLookup::Valid { page, location, .. } => {
-            let located = location.located_block();
-            crate::core_types::UsableSize::new(
-                mi_page_usable_size_of_typed(
-                    page.as_ptr(),
-                    located.block().as_ptr(),
-                    located.was_guarded() == crate::core_types::WasGuarded::Yes,
-                )
-                .get()
-                .saturating_sub(located.offset().0),
-            )
+    unsafe {
+        if p.is_null() {
+            return crate::core_types::UsableSize::new(0);
         }
-        _ => crate::core_types::UsableSize::new(0),
+        match mi_validate_pointer(p.cast_mut(), msg) {
+            crate::core_types::PointerLookup::Valid { page, location, .. } => {
+                let located = location.located_block();
+                crate::core_types::UsableSize::new(
+                    mi_page_usable_size_of_typed(
+                        page.as_ptr(),
+                        located.block().as_ptr(),
+                        located.was_guarded() == crate::core_types::WasGuarded::Yes,
+                    )
+                    .get()
+                    .saturating_sub(located.offset().0),
+                )
+            }
+            _ => crate::core_types::UsableSize::new(0),
+        }
     }
 }
 
 pub(crate) unsafe fn mi_route_usable_size(p: *const c_void, msg: *const c_char) -> usize {
-    mi_route_usable_size_typed(p, msg).get()
+    unsafe { mi_route_usable_size_typed(p, msg).get() }
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator and not yet freed.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free(p: *mut c_void) {
-    mi_route_free(p, c"mi_free".as_ptr(), ptr::null_mut());
+    unsafe {
+        mi_route_free(p, c"mi_free".as_ptr(), ptr::null_mut());
+    }
 }
 
 unsafe fn mi_abandoned_page_try_free(page: *mut mi_page_t) -> bool {
-    if !mi_page_all_free(page) {
-        return false;
+    unsafe {
+        if !mi_page_all_free(page) {
+            return false;
+        }
+        _mi_arenas_page_unabandon(page, ptr::null_mut());
+        _mi_arenas_page_free(page, ptr::null_mut());
+        true
     }
-    _mi_arenas_page_unabandon(page, ptr::null_mut());
-    _mi_arenas_page_free(page, ptr::null_mut());
-    true
 }
 
 unsafe fn mi_abandoned_page_try_reabandon_to_mapped(page: *mut mi_page_t) -> bool {
-    if mi_page_is_mostly_used(page) {
-        return false;
-    }
-    if !matches!(
-        crate::core_types::MemId::view((*page).memid),
-        crate::core_types::MemIdView::Arena(_)
-    ) || mi_page_is_abandoned_mapped(page)
-    {
-        return false;
-    }
+    unsafe {
+        if mi_page_is_mostly_used(page) {
+            return false;
+        }
+        if !matches!(
+            crate::core_types::MemId::view((*page).memid),
+            crate::core_types::MemIdView::Arena(_)
+        ) || mi_page_is_abandoned_mapped(page)
+        {
+            return false;
+        }
 
-    crate::mi_assert!(!mi_page_is_full(page));
-    _mi_arenas_page_try_reabandon_to_mapped(page)
+        crate::mi_assert!(!mi_page_is_full(page));
+        _mi_arenas_page_try_reabandon_to_mapped(page)
+    }
 }
 
 unsafe fn mi_abandoned_page_unown_from_free(
     page: *mut mi_page_t,
     expected_thread_free: *mut mi_block_t,
 ) {
-    crate::mi_assert_internal!(mi_page_is_owned(page));
-    crate::mi_assert_internal!(mi_page_is_abandoned(page));
-    crate::mi_assert_internal!(!mi_page_all_free(page));
+    unsafe {
+        crate::mi_assert_internal!(mi_page_is_owned(page));
+        crate::mi_assert_internal!(mi_page_is_abandoned(page));
+        crate::mi_assert_internal!(!mi_page_all_free(page));
 
-    let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-        ptr::addr_of_mut!((*page).xthread_free),
-    ));
-    let expected_head = if expected_thread_free.is_null() {
-        None
-    } else {
-        Some(crate::core_types::BlockPtr::new_unchecked(
-            expected_thread_free,
-        ))
-    };
-    let mut tf_expect = crate::core_types::ThreadFreeWord::from_parts(
-        expected_head,
-        crate::core_types::ThreadFreeOwner::Owned,
-    );
-    while !atomic_tf.compare_exchange_release_ownership(&mut tf_expect) {
-        crate::mi_assert_internal!(tf_expect.is_owned());
-        while tf_expect.head().is_some() {
-            _mi_page_free_collect(page, false);
-            if mi_abandoned_page_try_free(page) {
-                return;
+        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*page).xthread_free),
+        ));
+        let expected_head = if expected_thread_free.is_null() {
+            None
+        } else {
+            Some(crate::core_types::BlockPtr::new_unchecked(
+                expected_thread_free,
+            ))
+        };
+        let mut tf_expect = crate::core_types::ThreadFreeWord::from_parts(
+            expected_head,
+            crate::core_types::ThreadFreeOwner::Owned,
+        );
+        while !atomic_tf.compare_exchange_release_ownership(&mut tf_expect) {
+            crate::mi_assert_internal!(tf_expect.is_owned());
+            while tf_expect.head().is_some() {
+                _mi_page_free_collect(page, false);
+                if mi_abandoned_page_try_free(page) {
+                    return;
+                }
+                if mi_abandoned_page_try_reabandon_to_mapped(page) {
+                    return;
+                }
+                tf_expect = atomic_tf.load_relaxed();
             }
-            if mi_abandoned_page_try_reabandon_to_mapped(page) {
-                return;
-            }
-            tf_expect = atomic_tf.load_relaxed();
+            crate::mi_assert_internal!(tf_expect.head().is_none());
         }
-        crate::mi_assert_internal!(tf_expect.head().is_none());
     }
 }
 
@@ -881,12 +935,14 @@ unsafe fn mi_page_queue_len_is_atmost(
     block_size: crate::core_types::BlockSize,
     atmost: core::ffi::c_long,
 ) -> bool {
-    if atmost < 0 {
-        return false;
+    unsafe {
+        if atmost < 0 {
+            return false;
+        }
+        let pq = mi_page_queue(theap, block_size);
+        crate::mi_assert_internal!(!pq.is_null());
+        (*pq).count <= atmost as usize
     }
-    let pq = mi_page_queue(theap, block_size);
-    crate::mi_assert_internal!(!pq.is_null());
-    (*pq).count <= atmost as usize
 }
 
 #[inline(never)]
@@ -894,53 +950,57 @@ unsafe extern "C" fn mi_abandoned_page_try_reclaim(
     page: *mut mi_page_t,
     reclaim_on_free: core::ffi::c_long,
 ) -> bool {
-    crate::mi_assert_internal!(mi_page_is_owned(page));
-    crate::mi_assert_internal!(mi_page_is_abandoned(page));
-    crate::mi_assert_internal!(!mi_page_all_free(page));
-    crate::mi_assert_internal!((*page).block_size <= MI_MEDIUM_MAX_OBJ_SIZE);
-    crate::mi_assert_internal!(reclaim_on_free >= 0);
+    unsafe {
+        crate::mi_assert_internal!(mi_page_is_owned(page));
+        crate::mi_assert_internal!(mi_page_is_abandoned(page));
+        crate::mi_assert_internal!(!mi_page_all_free(page));
+        crate::mi_assert_internal!((*page).block_size <= MI_MEDIUM_MAX_OBJ_SIZE);
+        crate::mi_assert_internal!(reclaim_on_free >= 0);
 
-    if !_mi_thread_is_initialized() {
-        return false;
+        if !_mi_thread_is_initialized() {
+            return false;
+        }
+
+        let theap = _mi_page_associated_theap_peek(page);
+        if theap.is_null() || !(*theap).allow_page_reclaim {
+            return false;
+        }
+
+        let mut max_reclaim = 0;
+        if theap == (*page).theap {
+            max_reclaim = _mi_option_get_fast(if (*(*theap).tld).is_in_threadpool {
+                mi_option_t::mi_option_page_cross_thread_max_reclaim
+            } else {
+                mi_option_t::mi_option_page_max_reclaim
+            });
+        } else if reclaim_on_free == 1
+            && !(*(*theap).tld).is_in_threadpool
+            && !mi_page_is_mostly_used(page)
+            && _mi_arena_memid_is_suitable((*page).memid, (*_mi_theap_heap(theap)).exclusive_arena)
+        {
+            max_reclaim = _mi_option_get_fast(mi_option_t::mi_option_page_cross_thread_max_reclaim);
+        }
+
+        if max_reclaim >= 0
+            && !mi_page_queue_len_is_atmost(
+                theap,
+                crate::core_types::BlockSize::new_unchecked((*page).block_size),
+                max_reclaim,
+            )
+        {
+            return false;
+        }
+
+        _mi_arenas_page_unabandon(page, theap);
+        _mi_theap_page_reclaim(
+            crate::core_types::OwnedAbandonedPage(crate::core_types::PagePtr::new_unchecked(page)),
+            crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(
+                theap,
+            )),
+        );
+        __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reclaim_on_free), 1);
+        true
     }
-
-    let theap = _mi_page_associated_theap_peek(page);
-    if theap.is_null() || !(*theap).allow_page_reclaim {
-        return false;
-    }
-
-    let mut max_reclaim = 0;
-    if theap == (*page).theap {
-        max_reclaim = _mi_option_get_fast(if (*(*theap).tld).is_in_threadpool {
-            mi_option_t::mi_option_page_cross_thread_max_reclaim
-        } else {
-            mi_option_t::mi_option_page_max_reclaim
-        });
-    } else if reclaim_on_free == 1
-        && !(*(*theap).tld).is_in_threadpool
-        && !mi_page_is_mostly_used(page)
-        && _mi_arena_memid_is_suitable((*page).memid, (*_mi_theap_heap(theap)).exclusive_arena)
-    {
-        max_reclaim = _mi_option_get_fast(mi_option_t::mi_option_page_cross_thread_max_reclaim);
-    }
-
-    if max_reclaim >= 0
-        && !mi_page_queue_len_is_atmost(
-            theap,
-            crate::core_types::BlockSize::new_unchecked((*page).block_size),
-            max_reclaim,
-        )
-    {
-        return false;
-    }
-
-    _mi_arenas_page_unabandon(page, theap);
-    _mi_theap_page_reclaim(
-        crate::core_types::OwnedAbandonedPage(crate::core_types::PagePtr::new_unchecked(page)),
-        crate::core_types::ThreadHeapLocal(crate::core_types::ThreadHeapPtr::new_unchecked(theap)),
-    );
-    __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reclaim_on_free), 1);
-    true
 }
 
 #[cold]
@@ -949,42 +1009,44 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
     page: *mut mi_page_t,
     mut mt_free: *mut mi_block_t,
 ) {
-    crate::mi_assert_internal!(mi_page_is_owned(page));
-    crate::mi_assert_internal!(mi_page_is_abandoned(page));
-    crate::mi_assert_internal!(!mt_free.is_null());
+    unsafe {
+        crate::mi_assert_internal!(mi_page_is_owned(page));
+        crate::mi_assert_internal!(mi_page_is_abandoned(page));
+        crate::mi_assert_internal!(!mt_free.is_null());
 
-    if (*page).block_size <= MI_SMALL_SIZE_MAX {
-        crate::mi_assert_internal!((*page).reserved >= 16);
-        _mi_page_free_collect_partly(page, mt_free);
-    } else {
-        _mi_page_free_collect(page, false);
-        mt_free = ptr::null_mut();
-    }
-
-    let reclaim_on_free = _mi_option_get_fast(mi_option_t::mi_option_page_reclaim_on_free);
-    if MI_DEBUG > 1 {
-        if mi_page_is_singleton(page) {
-            crate::mi_assert_internal!(mi_page_all_free(page));
+        if (*page).block_size <= MI_SMALL_SIZE_MAX {
+            crate::mi_assert_internal!((*page).reserved >= 16);
+            _mi_page_free_collect_partly(page, mt_free);
+        } else {
+            _mi_page_free_collect(page, false);
+            mt_free = ptr::null_mut();
         }
-        if mi_page_is_full(page) {
-            crate::mi_assert!(mi_page_is_mostly_used(page));
+
+        let reclaim_on_free = _mi_option_get_fast(mi_option_t::mi_option_page_reclaim_on_free);
+        if MI_DEBUG > 1 {
+            if mi_page_is_singleton(page) {
+                crate::mi_assert_internal!(mi_page_all_free(page));
+            }
+            if mi_page_is_full(page) {
+                crate::mi_assert!(mi_page_is_mostly_used(page));
+            }
         }
-    }
 
-    if mi_abandoned_page_try_free(page) {
-        return;
-    }
-    if (*page).block_size <= MI_MEDIUM_MAX_OBJ_SIZE
-        && reclaim_on_free >= 0
-        && mi_abandoned_page_try_reclaim(page, reclaim_on_free)
-    {
-        return;
-    }
-    if mi_abandoned_page_try_reabandon_to_mapped(page) {
-        return;
-    }
+        if mi_abandoned_page_try_free(page) {
+            return;
+        }
+        if (*page).block_size <= MI_MEDIUM_MAX_OBJ_SIZE
+            && reclaim_on_free >= 0
+            && mi_abandoned_page_try_reclaim(page, reclaim_on_free)
+        {
+            return;
+        }
+        if mi_abandoned_page_try_reabandon_to_mapped(page) {
+            return;
+        }
 
-    mi_abandoned_page_unown_from_free(page, mt_free);
+        mi_abandoned_page_unown_from_free(page, mt_free);
+    }
 }
 
 /// # Safety
@@ -994,39 +1056,43 @@ pub unsafe extern "C" fn mi_page_usable_aligned_size_of(
     page: *const mi_page_t,
     p: *const c_void,
 ) -> usize {
-    mi_page_usable_aligned_size_of_typed(page, p).get()
+    unsafe { mi_page_usable_aligned_size_of_typed(page, p).get() }
 }
 
 pub(crate) unsafe fn mi_page_usable_aligned_size_of_typed(
     page: *const mi_page_t,
     p: *const c_void,
 ) -> crate::core_types::UsableSize {
-    let block = _mi_page_ptr_unalign(page, p);
-    let is_guarded = mi_block_ptr_is_guarded(block, p.cast_mut());
-    let size = mi_page_usable_size_of_typed(page, block, is_guarded).get();
-    let adjust = p.cast::<u8>().offset_from(block.cast::<u8>());
-    crate::mi_assert_internal!(adjust >= 0 && adjust as usize <= size);
-    crate::core_types::UsableSize::new(size - adjust as usize)
+    unsafe {
+        let block = _mi_page_ptr_unalign(page, p);
+        let is_guarded = mi_block_ptr_is_guarded(block, p.cast_mut());
+        let size = mi_page_usable_size_of_typed(page, block, is_guarded).get();
+        let adjust = p.cast::<u8>().offset_from(block.cast::<u8>());
+        crate::mi_assert_internal!(adjust >= 0 && adjust as usize <= size);
+        crate::core_types::UsableSize::new(size - adjust as usize)
+    }
 }
 
 pub(crate) unsafe fn _mi_usable_size_typed(
     p: *const c_void,
     page: *const mi_page_t,
 ) -> crate::core_types::UsableSize {
-    if page.is_null() {
-        return crate::core_types::UsableSize::new(0);
-    }
-    if !mi_page_has_interior_pointers(page) {
-        mi_page_usable_size_of_typed(page, p.cast(), false)
-    } else {
-        mi_page_usable_aligned_size_of_typed(page, p)
+    unsafe {
+        if page.is_null() {
+            return crate::core_types::UsableSize::new(0);
+        }
+        if !mi_page_has_interior_pointers(page) {
+            mi_page_usable_size_of_typed(page, p.cast(), false)
+        } else {
+            mi_page_usable_aligned_size_of_typed(page, p)
+        }
     }
 }
 
 /// # Safety
 /// `page` must be null or the page containing `p`.
 pub unsafe fn _mi_usable_size(p: *const c_void, page: *const mi_page_t) -> usize {
-    _mi_usable_size_typed(p, page).get()
+    unsafe { _mi_usable_size_typed(p, page).get() }
 }
 
 #[used]
@@ -1045,35 +1111,41 @@ static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP: unsafe extern "C" fn(
 /// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_usable_size(p: *const c_void) -> usize {
-    mi_route_usable_size(p, c"mi_usable_size".as_ptr())
+    unsafe { mi_route_usable_size(p, c"mi_usable_size".as_ptr()) }
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator and not yet freed.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
-    let _ = size;
-    if MI_DEBUG != 0 {
-        let available = mi_route_usable_size(p, c"mi_free_size".as_ptr());
-        crate::mi_assert!(p.is_null() || size <= available || available == 0);
+    unsafe {
+        let _ = size;
+        if MI_DEBUG != 0 {
+            let available = mi_route_usable_size(p, c"mi_free_size".as_ptr());
+            crate::mi_assert!(p.is_null() || size <= available || available == 0);
+        }
+        mi_free(p);
     }
-    mi_free(p);
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator with the given alignment.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size_aligned(p: *mut c_void, size: usize, alignment: usize) {
-    crate::mi_assert!(alignment != 0 && (p as usize).is_multiple_of(alignment));
-    mi_free_size(p, size);
+    unsafe {
+        crate::mi_assert!(alignment != 0 && (p as usize).is_multiple_of(alignment));
+        mi_free_size(p, size);
+    }
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator with the given alignment.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_aligned(p: *mut c_void, alignment: usize) {
-    crate::mi_assert!(alignment != 0 && (p as usize).is_multiple_of(alignment));
-    mi_free(p);
+    unsafe {
+        crate::mi_assert!(alignment != 0 && (p as usize).is_multiple_of(alignment));
+        mi_free(p);
+    }
 }
 
 /// # Safety
@@ -1081,31 +1153,36 @@ pub unsafe extern "C" fn mi_free_aligned(p: *mut c_void, alignment: usize) {
 /// `usable` is non-null it must be writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_ufree(p: *mut c_void, usable: *mut usize) {
-    mi_route_free(p, c"mi_ufree".as_ptr(), usable);
+    unsafe {
+        mi_route_free(p, c"mi_ufree".as_ptr(), usable);
+    }
 }
 
 /// # Safety
 /// `p` must be null or a small allocation pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_free_small(p: *mut c_void) {
-    if MI_PAGE_META_ALIGNED_FREE_SMALL == 0 || MI_GUARDED != 0 {
-        mi_free(p);
-        return;
-    }
-
-    let page = _mi_align_down_ptr(p, MI_SMALL_PAGE_SIZE).cast::<mi_page_t>();
-    crate::mi_assert!(
-        if let crate::core_types::PointerLookup::Valid { page: pg, .. } =
-            mi_validate_pointer(p, c"mi_free_small".as_ptr())
-        {
-            page == pg.as_ptr()
-        } else {
-            false
+    unsafe {
+        if MI_PAGE_META_ALIGNED_FREE_SMALL == 0 || MI_GUARDED != 0 {
+            mi_free(p);
+            return;
         }
-    );
-    crate::mi_assert!(
-        page.cast::<c_void>() == _mi_align_down_ptr(mi_page_start(page).cast(), MI_SMALL_PAGE_SIZE)
-    );
-    crate::mi_assert!((*page).block_size <= MI_SMALL_SIZE_MAX);
-    mi_route_free(p, c"mi_free_small".as_ptr(), ptr::null_mut());
+
+        let page = _mi_align_down_ptr(p, MI_SMALL_PAGE_SIZE).cast::<mi_page_t>();
+        crate::mi_assert!(
+            if let crate::core_types::PointerLookup::Valid { page: pg, .. } =
+                mi_validate_pointer(p, c"mi_free_small".as_ptr())
+            {
+                page == pg.as_ptr()
+            } else {
+                false
+            }
+        );
+        crate::mi_assert!(
+            page.cast::<c_void>()
+                == _mi_align_down_ptr(mi_page_start(page).cast(), MI_SMALL_PAGE_SIZE)
+        );
+        crate::mi_assert!((*page).block_size <= MI_SMALL_SIZE_MAX);
+        mi_route_free(p, c"mi_free_small".as_ptr(), ptr::null_mut());
+    }
 }

@@ -272,6 +272,7 @@ name = "mechanical_mimalloc"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "libc",
  "rand",
 ]
 

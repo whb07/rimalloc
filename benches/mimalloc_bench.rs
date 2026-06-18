@@ -18,8 +18,14 @@
 //!   MIMALLOC_BENCH_SAMPLE_SIZE=10
 //!   MIMALLOC_BENCH_MEASUREMENT_SECS=10
 //!   MIMALLOC_BENCH_WARMUP_SECS=1
+//!
+//! Scenario selection uses upstream `bench.sh` names. Criterion result IDs add
+//! an explicit metric suffix, either `per-workload` or `per-1M-...`, so reported
+//! times are not mistaken for a uniform allocator-operation unit.
 
-use criterion::{BenchmarkId, Criterion, SamplingMode, criterion_group, criterion_main};
+use criterion::{
+    BenchmarkId, Criterion, SamplingMode, Throughput, criterion_group, criterion_main,
+};
 use std::env;
 use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
 use std::path::{Path, PathBuf};
@@ -156,6 +162,49 @@ impl BenchAllocator {
 struct Scenario {
     name: &'static str,
     run: unsafe fn(BenchAllocator) -> Duration,
+    metric: ScenarioMetric,
+}
+
+#[derive(Clone, Copy)]
+enum ScenarioMetric {
+    Workload,
+    PerMillion { unit: &'static str },
+}
+
+impl Scenario {
+    fn workload(name: &'static str, run: unsafe fn(BenchAllocator) -> Duration) -> Self {
+        Self {
+            name,
+            run,
+            metric: ScenarioMetric::Workload,
+        }
+    }
+
+    fn per_million(
+        name: &'static str,
+        run: unsafe fn(BenchAllocator) -> Duration,
+        unit: &'static str,
+    ) -> Self {
+        Self {
+            name,
+            run,
+            metric: ScenarioMetric::PerMillion { unit },
+        }
+    }
+
+    fn benchmark_name(&self) -> String {
+        match self.metric {
+            ScenarioMetric::Workload => format!("{}-per-workload", self.name),
+            ScenarioMetric::PerMillion { unit } => format!("{}-per-1M-{unit}", self.name),
+        }
+    }
+
+    fn throughput(&self) -> Option<Throughput> {
+        match self.metric {
+            ScenarioMetric::Workload => None,
+            ScenarioMetric::PerMillion { .. } => Some(Throughput::Elements(1_000_000)),
+        }
+    }
 }
 
 fn workspace_root() -> PathBuf {
@@ -182,6 +231,11 @@ fn skip_build() -> bool {
 
 fn logical_cpus() -> usize {
     std::thread::available_parallelism().map_or(1, |n| n.get())
+}
+
+fn duration_per_million_ops(elapsed_secs: f64, ops: f64) -> Duration {
+    assert!(ops > 0.0, "benchmark produced zero operations");
+    Duration::from_secs_f64((elapsed_secs / ops) * 1_000_000.0)
 }
 
 fn run_status(mut command: Command, action: &str) {
@@ -434,97 +488,36 @@ fn allocators(root: &Path) -> Vec<BenchAllocator> {
 fn scenarios() -> Vec<Scenario> {
     let procs = logical_cpus();
     let mut scenarios = vec![
-        Scenario {
-            name: "glibc-simple",
-            run: glibc_simple::run,
-        },
-        Scenario {
-            name: "glibc-thread",
-            run: glibc_thread::run,
-        },
-        Scenario {
-            name: "malloc-large",
-            run: malloc_large::run,
-        },
-        Scenario {
-            name: "malloc-large-old",
-            run: malloc_large_old::run,
-        },
-        Scenario {
-            name: "cache-scratch1",
-            run: cache_workloads::run_scratch1,
-        },
-        Scenario {
-            name: "cache-thrash1",
-            run: cache_workloads::run_thrash1,
-        },
-        Scenario {
-            name: "xmalloc-testN",
-            run: xmalloc_test::run,
-        },
-        Scenario {
-            name: "mstressN",
-            run: mstress::run,
-        },
-        Scenario {
-            name: "sh6benchN",
-            run: sh6bench::run,
-        },
-        Scenario {
-            name: "sh8benchN",
-            run: sh8bench::run,
-        },
-        Scenario {
-            name: "alloc-test1",
-            run: alloc_test::run_one,
-        },
-        Scenario {
-            name: "alloc-testN",
-            run: alloc_test::run_n,
-        },
-        Scenario {
-            name: "larsonN",
-            run: larson::run_unsized,
-        },
-        Scenario {
-            name: "larsonN-sized",
-            run: larson::run_sized,
-        },
-        Scenario {
-            name: "rptestN",
-            run: rptest::run,
-        },
-        Scenario {
-            name: "barnes",
-            run: barnes::run,
-        },
-        Scenario {
-            name: "cfrac",
-            run: cfrac::run,
-        },
-        Scenario {
-            name: "espresso",
-            run: espresso::run,
-        },
-        Scenario {
-            name: "mleak10",
-            run: |alloc| unsafe { mleak::run(alloc, 5) },
-        },
-        Scenario {
-            name: "mleak100",
-            run: |alloc| unsafe { mleak::run(alloc, 50) },
-        },
+        Scenario::workload("glibc-simple", glibc_simple::run),
+        Scenario::per_million("glibc-thread", glibc_thread::run, "malloc-free-pairs"),
+        Scenario::workload("malloc-large", malloc_large::run),
+        Scenario::workload("malloc-large-old", malloc_large_old::run),
+        Scenario::workload("cache-scratch1", cache_workloads::run_scratch1),
+        Scenario::workload("cache-thrash1", cache_workloads::run_thrash1),
+        Scenario::per_million("xmalloc-testN", xmalloc_test::run, "frees"),
+        Scenario::workload("mstressN", mstress::run),
+        Scenario::workload("sh6benchN", sh6bench::run),
+        Scenario::workload("sh8benchN", sh8bench::run),
+        Scenario::workload("alloc-test1", alloc_test::run_one),
+        Scenario::workload("alloc-testN", alloc_test::run_n),
+        Scenario::per_million("larsonN", larson::run_unsized, "alloc-free-pairs"),
+        Scenario::per_million("larsonN-sized", larson::run_sized, "alloc-free-pairs"),
+        Scenario::per_million("rptestN", rptest::run, "rptest-ops"),
+        Scenario::workload("barnes", barnes::run),
+        Scenario::workload("cfrac", cfrac::run),
+        Scenario::workload("mleak10", |alloc| unsafe { mleak::run(alloc, 5) }),
+        Scenario::workload("mleak100", |alloc| unsafe { mleak::run(alloc, 50) }),
     ];
 
     if procs != 1 {
-        scenarios.push(Scenario {
-            name: "cache-scratchN",
-            run: cache_workloads::run_scratch_n,
-        });
-        scenarios.push(Scenario {
-            name: "cache-thrashN",
-            run: cache_workloads::run_thrash_n,
-        });
+        scenarios.push(Scenario::workload(
+            "cache-scratchN",
+            cache_workloads::run_scratch_n,
+        ));
+        scenarios.push(Scenario::workload(
+            "cache-thrashN",
+            cache_workloads::run_thrash_n,
+        ));
     }
 
     let selected = csv_env("MIMALLOC_BENCH_SCENARIOS");
@@ -788,8 +781,6 @@ mod glibc_thread {
     }
 
     unsafe extern "C" {
-        fn signal(signum: c_int, handler: extern "C" fn(c_int)) -> usize;
-        fn alarm(seconds: c_uint) -> c_uint;
         fn srand(seed: c_uint);
         fn rand() -> c_int;
     }
@@ -808,7 +799,7 @@ mod glibc_thread {
 
     unsafe fn init_random_values() -> RandomValues {
         unsafe {
-            srand(1);
+            srand(88);
             let mut block_sizes = [0; NUM_BLOCK_SIZES];
             let mut offsets = [0; NUM_OFFSETS];
             for size in &mut block_sizes {
@@ -925,12 +916,19 @@ mod glibc_thread {
         unsafe {
             let random = init_random_values();
             TIMEOUT.store(false, Ordering::SeqCst);
-            signal(14, alarm_handler);
-            alarm(BENCHMARK_DURATION_SECS);
+            let mut action: libc::sigaction = std::mem::zeroed();
+            action.sa_sigaction = alarm_handler as usize;
+            action.sa_flags = 0;
+            libc::sigemptyset(&mut action.sa_mask);
+            let rc = libc::sigaction(libc::SIGALRM, &action, ptr::null_mut());
+            assert_eq!(rc, 0, "sigaction failed in glibc-thread: {rc}");
+            libc::alarm(BENCHMARK_DURATION_SECS);
+            let start = Instant::now();
             let iters = do_benchmark(alloc, logical_cpus(), &random);
-            alarm(0);
+            let elapsed = start.elapsed();
+            libc::alarm(0);
             assert!(iters > 0, "glibc-thread produced zero iterations");
-            Duration::from_secs_f64(1_000_000_000.0 / iters as f64)
+            duration_per_million_ops(elapsed.as_secs_f64(), iters as f64)
         }
     }
 }
@@ -953,7 +951,6 @@ mod malloc_large {
                 let new_size = rng.range_inclusive(MIN_BUFFER_SIZE, MAX_BUFFER_SIZE);
                 let new_buffer = alloc.malloc(new_size);
                 assert!(!new_buffer.is_null(), "allocation failed in malloc-large");
-                ptr::write_bytes(new_buffer, 0, new_size);
                 let old = std::mem::replace(&mut buffers[buffer_idx], new_buffer);
                 alloc.free(old);
             }
@@ -1027,14 +1024,12 @@ mod cache_workloads {
 
     unsafe fn touch_object(obj: *mut u8, obj_size: usize, repetitions: usize) {
         unsafe {
-            // The optimized upstream C++ binary keeps this touch loop on a volatile stack byte.
-            let _ = obj;
             for _ in 0..repetitions {
                 for k in 0..obj_size {
-                    let mut ch = k as u8;
-                    ptr::write_volatile(&mut ch, ch);
-                    ch = ptr::read_volatile(&ch).wrapping_add(1);
-                    ptr::write_volatile(&mut ch, ch);
+                    let slot = obj.add(k);
+                    ptr::write_volatile(slot, k as u8);
+                    let ch = ptr::read_volatile(slot).wrapping_add(1);
+                    std::hint::black_box(ch);
                 }
             }
         }
@@ -1377,7 +1372,7 @@ mod xmalloc_test {
 
             let mfree_per_sec = (total as f64 / elapsed) * 1e-6;
             assert!(mfree_per_sec > 0.0, "xmalloc-testN produced zero free rate");
-            Duration::from_secs_f64(100.0 / mfree_per_sec)
+            duration_per_million_ops(elapsed, total as f64)
         }
     }
 }
@@ -2335,6 +2330,8 @@ mod larson {
                 data.allocs += 1;
 
                 p.write(b'a');
+                let ch = ptr::read_volatile(p);
+                std::hint::black_box(ch);
                 p.add(1).write(b'b');
 
                 if state.stop.load(Ordering::Relaxed) {
@@ -2422,8 +2419,7 @@ mod larson {
             cleanup(&state);
 
             assert!(sum_allocs > 0, "larson produced zero allocations");
-            let throughput = sum_allocs as f64 / elapsed;
-            Duration::from_secs_f64(1.0e9 / throughput)
+            duration_per_million_ops(elapsed, sum_allocs as f64)
         }
     }
 
@@ -2924,6 +2920,7 @@ mod rptest {
             let num_threads = logical_cpus();
             let mut mops = 0u64;
             let mut ticks = 0.0;
+            let start = Instant::now();
             for _ in 0..2 {
                 let (iter_mops, iter_ticks) = run_iteration(alloc, num_threads);
                 mops += iter_mops;
@@ -2932,8 +2929,9 @@ mod rptest {
             if ticks == 0.0 {
                 ticks = 1.0;
             }
-            let average_mops = mops as f64 / ticks;
-            Duration::from_secs_f64(2_000_000.0 / average_mops)
+            assert!(mops > 0, "rptestN produced zero operations");
+            std::hint::black_box(ticks);
+            duration_per_million_ops(start.elapsed().as_secs_f64(), mops as f64)
         }
     }
 }
@@ -2959,6 +2957,7 @@ mod barnes {
     const TSTOP: f64 = 0.075;
     const MFRAC: f64 = 0.999;
     const PI: f64 = std::f64::consts::PI;
+    const EXPECTED_CHECKSUM: f64 = -3.932_300_281_685_248e4;
 
     #[derive(Clone, Copy, Default, PartialEq, Eq)]
     enum NodeRef {
@@ -3807,6 +3806,11 @@ mod barnes {
                     sum += body.phi + body.pos[0] + body.vel[1] + body.acc[2];
                 }
                 self.checksum = sum;
+                assert!(
+                    (self.checksum - EXPECTED_CHECKSUM).abs() < 1.0e-8,
+                    "barnes checksum drifted: expected {EXPECTED_CHECKSUM:.17e}, got {:.17e}",
+                    self.checksum
+                );
                 std::hint::black_box(self.checksum);
                 std::hint::black_box((
                     self.maxleaf,
@@ -4328,343 +4332,6 @@ mod cfrac {
     }
 }
 
-mod espresso {
-    use super::*;
-
-    const ITERATIONS: usize = 20;
-    const INPUTS: usize = 16;
-    const OUTPUTS: usize = 40;
-    const EXPECTED_ROWS: usize = 2810;
-    const EXPECTED_ONES: u32 = 13_747;
-    const EXPECTED_DASHES: u32 = 6_489;
-    const SIMPLIFY_ROUNDS: usize = 45;
-
-    #[derive(Clone, Copy)]
-    struct Cube {
-        zeros: u32,
-        ones: u32,
-        outputs: u64,
-    }
-
-    struct Cover {
-        alloc: BenchAllocator,
-        ptr: *mut Cube,
-        len: usize,
-        cap: usize,
-    }
-
-    impl Cover {
-        unsafe fn with_capacity(alloc: BenchAllocator, cap: usize) -> Self {
-            unsafe {
-                let bytes = cap * std::mem::size_of::<Cube>();
-                let ptr = alloc.malloc(bytes).cast::<Cube>();
-                assert!(!ptr.is_null(), "espresso cover allocation failed");
-                Self {
-                    alloc,
-                    ptr,
-                    len: 0,
-                    cap,
-                }
-            }
-        }
-
-        unsafe fn push(&mut self, cube: Cube) {
-            unsafe {
-                if self.len == self.cap {
-                    let next_cap = self.cap * 2;
-                    let bytes = next_cap * std::mem::size_of::<Cube>();
-                    let ptr = self
-                        .alloc
-                        .realloc(self.ptr.cast::<u8>(), bytes)
-                        .cast::<Cube>();
-                    assert!(!ptr.is_null(), "espresso cover growth failed");
-                    self.ptr = ptr;
-                    self.cap = next_cap;
-                }
-                self.ptr.add(self.len).write(cube);
-                self.len += 1;
-            }
-        }
-
-        unsafe fn get(&self, index: usize) -> Cube {
-            unsafe { *self.ptr.add(index) }
-        }
-
-        unsafe fn set(&mut self, index: usize, cube: Cube) {
-            unsafe {
-                self.ptr.add(index).write(cube);
-            }
-        }
-
-        unsafe fn clear(&mut self) {
-            self.len = 0;
-        }
-
-        unsafe fn duplicate(&self) -> Self {
-            unsafe {
-                let mut out = Cover::with_capacity(self.alloc, self.len.max(1));
-                std::ptr::copy_nonoverlapping(self.ptr, out.ptr, self.len);
-                out.len = self.len;
-                out
-            }
-        }
-    }
-
-    impl Drop for Cover {
-        fn drop(&mut self) {
-            unsafe {
-                self.alloc.free(self.ptr.cast::<u8>());
-            }
-        }
-    }
-
-    struct ParsedPla {
-        cover: Cover,
-        rows: u32,
-        ones: u32,
-        dashes: u32,
-    }
-
-    fn input_path() -> PathBuf {
-        if let Some(path) = env::var_os("MIMALLOC_BENCH_ESPRESSO_INPUT") {
-            return PathBuf::from(path);
-        }
-        workspace_root()
-            .join("mimalloc-bench")
-            .join("bench")
-            .join("espresso")
-            .join("largest.espresso")
-    }
-
-    fn source() -> &'static str {
-        static SOURCE: OnceLock<String> = OnceLock::new();
-        SOURCE.get_or_init(|| {
-            std::fs::read_to_string(input_path())
-                .expect("failed to read mimalloc-bench/bench/espresso/largest.espresso")
-        })
-    }
-
-    unsafe fn parse_pla(alloc: BenchAllocator) -> ParsedPla {
-        unsafe {
-            let mut cover = Cover::with_capacity(alloc, EXPECTED_ROWS);
-            let mut rows = 0u32;
-            let mut output_ones = 0u32;
-            let mut input_dashes = 0u32;
-
-            for line in source().lines() {
-                let line = line.trim();
-                if line.is_empty() || line.starts_with('.') {
-                    continue;
-                }
-                let Some((input, output)) = line.split_once(' ') else {
-                    continue;
-                };
-                assert_eq!(input.len(), INPUTS);
-                assert_eq!(output.len(), OUTPUTS);
-
-                let mut zeros = 0u32;
-                let mut ones = 0u32;
-                for (idx, byte) in input.bytes().enumerate() {
-                    let bit = 1u32 << idx;
-                    match byte {
-                        b'0' => zeros |= bit,
-                        b'1' => ones |= bit,
-                        b'-' => input_dashes += 1,
-                        _ => panic!("invalid espresso input bit"),
-                    }
-                }
-
-                let mut outputs = 0u64;
-                for (idx, byte) in output.bytes().enumerate() {
-                    match byte {
-                        b'0' | b'-' => {}
-                        b'1' => {
-                            outputs |= 1u64 << idx;
-                            output_ones += 1;
-                        }
-                        _ => panic!("invalid espresso output bit"),
-                    }
-                }
-                if outputs != 0 {
-                    cover.push(Cube {
-                        zeros,
-                        ones,
-                        outputs,
-                    });
-                }
-                rows += 1;
-            }
-
-            ParsedPla {
-                cover,
-                rows,
-                ones: output_ones,
-                dashes: input_dashes,
-            }
-        }
-    }
-
-    fn contains(a: Cube, b: Cube) -> bool {
-        (a.zeros & !b.zeros) == 0 && (a.ones & !b.ones) == 0 && (b.outputs & !a.outputs) == 0
-    }
-
-    fn merge_distance_one(a: Cube, b: Cube) -> Option<Cube> {
-        if a.outputs != b.outputs {
-            return None;
-        }
-        let changed_zeros = a.zeros ^ b.zeros;
-        let changed_ones = a.ones ^ b.ones;
-        let changed = changed_zeros | changed_ones;
-        if changed.count_ones() != 1 {
-            return None;
-        }
-        if (changed_zeros & changed_ones) != 0 {
-            return None;
-        }
-        Some(Cube {
-            zeros: a.zeros & !changed,
-            ones: a.ones & !changed,
-            outputs: a.outputs,
-        })
-    }
-
-    unsafe fn compact_unique(input: &Cover, output: &mut Cover) {
-        unsafe {
-            output.clear();
-            for i in 0..input.len {
-                let cube = input.get(i);
-                let mut duplicate = false;
-                for j in 0..output.len {
-                    let other = output.get(j);
-                    if cube.zeros == other.zeros
-                        && cube.ones == other.ones
-                        && cube.outputs == other.outputs
-                    {
-                        duplicate = true;
-                        break;
-                    }
-                }
-                if !duplicate {
-                    output.push(cube);
-                }
-            }
-        }
-    }
-
-    unsafe fn remove_contained(input: &Cover, output: &mut Cover) {
-        unsafe {
-            output.clear();
-            for i in 0..input.len {
-                let cube = input.get(i);
-                let mut covered = false;
-                for j in 0..input.len {
-                    if i != j && contains(input.get(j), cube) {
-                        covered = true;
-                        break;
-                    }
-                }
-                if !covered {
-                    output.push(cube);
-                }
-            }
-        }
-    }
-
-    unsafe fn distance_merge(input: &Cover, output: &mut Cover) {
-        unsafe {
-            output.clear();
-            for i in 0..input.len {
-                output.push(input.get(i));
-            }
-            for i in 0..input.len {
-                let a = input.get(i);
-                for j in (i + 1)..input.len {
-                    if let Some(merged) = merge_distance_one(a, input.get(j)) {
-                        output.push(merged);
-                    }
-                }
-            }
-        }
-    }
-
-    unsafe fn expand_outputs(input: &mut Cover) {
-        unsafe {
-            for i in 0..input.len {
-                let mut cube = input.get(i);
-                for j in 0..input.len {
-                    if i == j {
-                        continue;
-                    }
-                    let other = input.get(j);
-                    if cube.zeros == other.zeros && cube.ones == other.ones {
-                        cube.outputs |= other.outputs;
-                    }
-                }
-                input.set(i, cube);
-            }
-        }
-    }
-
-    unsafe fn checksum(cover: &Cover) -> u64 {
-        unsafe {
-            let mut hash = 0xcbf29ce484222325u64;
-            for i in 0..cover.len {
-                let cube = cover.get(i);
-                hash ^= cube.zeros as u64;
-                hash = hash.wrapping_mul(0x100000001b3);
-                hash ^= cube.ones as u64;
-                hash = hash.wrapping_mul(0x100000001b3);
-                hash ^= cube.outputs;
-                hash = hash.wrapping_mul(0x100000001b3);
-            }
-            hash
-        }
-    }
-
-    unsafe fn run_one(alloc: BenchAllocator) -> (usize, u64, ParsedPla) {
-        unsafe {
-            let parsed = parse_pla(alloc);
-            assert_eq!(parsed.rows as usize, EXPECTED_ROWS);
-            assert_eq!(parsed.ones, EXPECTED_ONES);
-            assert_eq!(parsed.dashes, EXPECTED_DASHES);
-
-            let mut current = parsed.cover.duplicate();
-            let mut scratch = Cover::with_capacity(alloc, current.len * 2);
-            let mut unique = Cover::with_capacity(alloc, current.len * 2);
-
-            for _ in 0..SIMPLIFY_ROUNDS {
-                remove_contained(&current, &mut scratch);
-                std::mem::swap(&mut current, &mut scratch);
-                distance_merge(&current, &mut scratch);
-                compact_unique(&scratch, &mut unique);
-                std::mem::swap(&mut current, &mut unique);
-                expand_outputs(&mut current);
-            }
-
-            let count = current.len;
-            let hash = checksum(&current);
-            (count, hash, parsed)
-        }
-    }
-
-    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
-        unsafe {
-            let start = Instant::now();
-            let mut total_count = 0usize;
-            let mut total_hash = 0u64;
-            for _ in 0..ITERATIONS {
-                let (count, hash, parsed) = run_one(alloc);
-                total_count += count;
-                total_hash ^= hash;
-                std::hint::black_box(parsed.cover.len);
-            }
-            std::hint::black_box(total_count);
-            std::hint::black_box(total_hash);
-            start.elapsed()
-        }
-    }
-}
-
 mod mleak {
     use super::*;
 
@@ -4773,33 +4440,40 @@ fn bench_native_ports(c: &mut Criterion) {
         "no allocators selected; check MIMALLOC_BENCH_ALLOCATORS"
     );
 
-    let mut group = c.benchmark_group("mimalloc-bench-native");
-    group.sample_size(
-        env::var("MIMALLOC_BENCH_SAMPLE_SIZE")
-            .ok()
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(10)
-            .max(10),
-    );
-    group.measurement_time(Duration::from_secs(
+    let sample_size = env::var("MIMALLOC_BENCH_SAMPLE_SIZE")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(10)
+        .max(10);
+    let measurement_time = Duration::from_secs(
         env::var("MIMALLOC_BENCH_MEASUREMENT_SECS")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(10)
             .max(1),
-    ));
-    group.warm_up_time(Duration::from_secs(
+    );
+    let warm_up_time = Duration::from_secs(
         env::var("MIMALLOC_BENCH_WARMUP_SECS")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(1)
             .max(1),
-    ));
-    group.sampling_mode(SamplingMode::Flat);
+    );
 
     for scenario in &scenarios {
+        let mut group = c.benchmark_group(format!(
+            "mimalloc-bench-native/{}",
+            scenario.benchmark_name()
+        ));
+        group.sample_size(sample_size);
+        group.measurement_time(measurement_time);
+        group.warm_up_time(warm_up_time);
+        group.sampling_mode(SamplingMode::Flat);
         for &allocator in &allocators {
-            group.bench_function(BenchmarkId::new(scenario.name, allocator.name()), |b| {
+            if let Some(throughput) = scenario.throughput() {
+                group.throughput(throughput);
+            }
+            group.bench_function(BenchmarkId::from_parameter(allocator.name()), |b| {
                 b.iter_custom(|iters| {
                     let mut total = Duration::ZERO;
                     for _ in 0..iters {
@@ -4809,9 +4483,8 @@ fn bench_native_ports(c: &mut Criterion) {
                 });
             });
         }
+        group.finish();
     }
-
-    group.finish();
 }
 
 criterion_group!(mimalloc_bench_native, bench_native_ports);

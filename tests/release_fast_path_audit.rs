@@ -2224,6 +2224,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && alloc_aligned_rs.contains("crate::core_types::BlockTag::ALIGNED\n                .write_to")
             && internal.contains("crate::core_types::BlockTag::read_from_raw(block).is_guarded()")
             && free_rs.contains("crate::core_types::BlockTag::read_from_raw(block).is_guarded()")
+            && !internal.contains("(*block).next")
             && !alloc_rs.contains("(*block).next = 0")
             && !alloc_rs.contains("(*block).next = MI_BLOCK_TAG_GUARDED")
             && !alloc_aligned_rs.contains("(*block).next = MI_BLOCK_TAG_ALIGNED")

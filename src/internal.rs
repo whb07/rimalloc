@@ -1351,10 +1351,11 @@ pub unsafe fn mi_block_nextx(
     keys: &[usize; 2],
 ) -> *mut mi_block_t {
     unsafe { crate::track::mi_track_mem_defined(block.cast_mut().cast(), size_of::<mi_block_t>()) };
+    let link = unsafe { crate::core_types::EncodedPtr::read_word_from_raw(block) };
     let next = if MI_ENCODE_FREELIST != 0 {
-        mi_ptr_decode(null, (*block).next, keys).cast::<mi_block_t>()
+        unsafe { link.decode_block_raw(null, crate::core_types::PageKeys(*keys)) }
     } else {
-        (*block).next as *mut mi_block_t
+        link.as_unencoded_raw()
     };
     unsafe {
         crate::track::mi_track_mem_noaccess(block.cast_mut().cast(), size_of::<mi_block_t>())
@@ -1370,11 +1371,19 @@ pub unsafe fn mi_block_set_nextx(
     keys: &[usize; 2],
 ) {
     unsafe { crate::track::mi_track_mem_undefined(block.cast(), size_of::<mi_block_t>()) };
-    (*block).next = if MI_ENCODE_FREELIST != 0 {
-        mi_ptr_encode(null, next.cast(), keys)
+    let link = if MI_ENCODE_FREELIST != 0 {
+        unsafe {
+            crate::core_types::EncodedPtr::encode_block_raw(
+                next,
+                null,
+                crate::core_types::PageKeys(*keys),
+            )
+        }
     } else {
-        next as usize
+        crate::core_types::EncodedPtr::from_unencoded_raw(next)
     };
+    let block_ptr = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
+    unsafe { link.write_word_to_raw(block_ptr) };
     unsafe { crate::track::mi_track_mem_noaccess(block.cast(), size_of::<mi_block_t>()) };
 }
 

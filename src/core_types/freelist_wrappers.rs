@@ -1,6 +1,6 @@
 //! DT-8: Free-list wrappers and EncodedPtr domain types.
 
-use core::marker::PhantomData;
+use core::{ffi::c_void, marker::PhantomData};
 
 use crate::core_types::BlockPtr;
 use crate::core_types::page_states::{AvailablePage, LocalPage, OwnedAbandonedPage};
@@ -32,6 +32,76 @@ pub(crate) struct EncodedPtr<T> {
 }
 
 impl EncodedPtr<crate::types::mi_block_t> {
+    /// Read the raw encoded free-list word stored in a block link.
+    ///
+    /// # Safety
+    /// `block` must point to a valid block whose `next` field is accessible for
+    /// the current tracking state.
+    #[inline(always)]
+    pub(crate) unsafe fn read_word_from_raw(block: *const mi_block_t) -> Self {
+        Self {
+            word: EncodedWord(unsafe { (*block.cast_mut()).next }),
+            _ty: PhantomData,
+        }
+    }
+
+    /// Write the raw encoded free-list word into a block link.
+    ///
+    /// # Safety
+    /// `block` must point to a valid block whose `next` field is accessible for
+    /// the current tracking state.
+    #[inline(always)]
+    pub(crate) unsafe fn write_word_to_raw(self, block: BlockPtr) {
+        unsafe { (*block.as_ptr()).next = self.word.0 };
+    }
+
+    /// Wrap an unencoded raw block pointer as a free-list word.
+    #[inline(always)]
+    pub(crate) fn from_unencoded_raw(block: *const mi_block_t) -> Self {
+        Self {
+            word: EncodedWord(block as usize),
+            _ty: PhantomData,
+        }
+    }
+
+    /// Interpret this word as an unencoded raw block pointer.
+    #[inline(always)]
+    pub(crate) fn as_unencoded_raw(self) -> *mut mi_block_t {
+        self.word.0 as *mut mi_block_t
+    }
+
+    /// Decode an encoded block-pointer word using a raw null context.
+    ///
+    /// # Safety
+    /// `null_context` and `keys` must belong to the page that owns this block
+    /// link.
+    #[inline(always)]
+    pub(crate) unsafe fn decode_block_raw(
+        self,
+        null_context: *const c_void,
+        keys: PageKeys,
+    ) -> *mut mi_block_t {
+        crate::internal::mi_ptr_decode(null_context, self.word.0, &keys.0).cast()
+    }
+
+    /// Encode a raw block pointer using a raw null context.
+    ///
+    /// # Safety
+    /// `null_context` and `keys` must belong to the page that owns this block
+    /// link.
+    #[inline(always)]
+    pub(crate) unsafe fn encode_block_raw(
+        block: *const mi_block_t,
+        null_context: *const c_void,
+        keys: PageKeys,
+    ) -> Self {
+        let word = crate::internal::mi_ptr_encode(null_context, block.cast(), &keys.0);
+        Self {
+            word: EncodedWord(word),
+            _ty: PhantomData,
+        }
+    }
+
     /// Decode an encoded block-pointer word back to a `BlockPtr`.
     ///
     /// Returns `None` if the decoded value is the page's null sentinel. This is

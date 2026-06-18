@@ -1,7 +1,5 @@
 //! Mechanical translation of `include/mimalloc/track.h`.
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
-
 use core::ffi::c_void;
 
 pub const MI_TRACK_H: () = ();

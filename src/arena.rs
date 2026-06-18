@@ -3788,7 +3788,13 @@ unsafe fn mi_debug_show_page_bfield(
             } else {
                 color = MI_DARKGREEN;
             }
-            bit_of_page = unsafe { (*page).memid.mem.arena.slice_count as isize };
+            bit_of_page = match crate::core_types::MemId::view(unsafe { (*page).memid }) {
+                crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize,
+                _ => {
+                    crate::mi_assert_internal!(false);
+                    0
+                }
+            };
             if color != prev_color {
                 unsafe { mi_debug_color(buf, k, color) };
                 prev_color = color;

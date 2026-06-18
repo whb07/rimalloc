@@ -4,7 +4,6 @@
     non_camel_case_types,
     non_upper_case_globals,
     unsafe_op_in_unsafe_fn,
-    clippy::missing_safety_doc,
     clippy::nonminimal_bool
 )]
 
@@ -200,6 +199,9 @@ pub unsafe extern "C" fn mi_page_queue_count(pq: *const mi_page_queue_t) -> usiz
     unsafe { (*pq).count }
 }
 
+/// # Safety
+/// `page` must be valid, `page_start` must be that page's block area, and `i * block_size` must
+/// stay within the reserved block range.
 #[inline]
 pub unsafe fn mi_page_block_at(
     page: *const mi_page_t,
@@ -218,6 +220,8 @@ pub unsafe fn mi_page_block_at(
     }
 }
 
+/// # Safety
+/// `page` must be valid, and `head` must be null or a block list belonging to `page`.
 #[inline]
 pub unsafe fn mi_page_list_count(page: *mut mi_page_t, mut head: *mut mi_block_t) -> usize {
     crate::mi_assert_internal!(_mi_ptr_page((*page).page_start.cast()) == page);
@@ -238,6 +242,8 @@ pub unsafe fn mi_page_list_count(page: *mut mi_page_t, mut head: *mut mi_block_t
     count
 }
 
+/// # Safety
+/// `page` must be valid, and `p` must be null or a block list belonging to `page`.
 #[inline]
 pub unsafe fn mi_page_list_is_valid(page: *mut mi_page_t, mut p: *mut mi_block_t) -> bool {
     let mut psize = 0usize;
@@ -263,6 +269,8 @@ pub unsafe fn mi_page_list_is_valid(page: *mut mi_page_t, mut p: *mut mi_block_t
     true
 }
 
+/// # Safety
+/// `page` must point to page metadata initialized or being initialized by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_valid_init(page: *mut mi_page_t) -> bool {
     crate::mi_assert_internal!(mi_page_block_size(page) > 0);
@@ -294,6 +302,8 @@ pub unsafe fn mi_page_is_valid_init(page: *mut mi_page_t) -> bool {
     true
 }
 
+/// # Safety
+/// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
     crate::mi_assert_internal!(mi_page_is_valid_init(page));
@@ -319,6 +329,8 @@ pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
     true
 }
 
+/// # Safety
+/// `page` must be valid, and `head` must be a detached thread-free list for that page.
 #[inline]
 pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut mi_block_t) {
     if head.is_null() {
@@ -356,6 +368,8 @@ pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut m
     (*page).used -= count as u16;
 }
 
+/// # Safety
+/// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
     let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));
@@ -367,6 +381,8 @@ pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
     mi_page_thread_collect_to_local(page, head);
 }
 
+/// # Safety
+/// `page` must point to page metadata owned by the current allocator state.
 #[inline]
 pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
     if !(*page).free.is_null() {
@@ -381,6 +397,8 @@ pub unsafe fn mi_page_free_quick_collect(page: *mut mi_page_t) -> bool {
     true
 }
 
+/// # Safety
+/// `page` must point to page metadata owned by this allocator.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
     crate::mi_assert_internal!(!page.is_null());
@@ -411,6 +429,8 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
     crate::mi_assert_internal!(!force || (*page).local_free.is_null());
 }
 
+/// # Safety
+/// `page` must be valid, and `head` must be null or a detached block list belonging to `page`.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
     if head.is_null() {
@@ -442,6 +462,8 @@ pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head
     }
 }
 
+/// # Safety
+/// `page` must point to a page currently owned by a full queue.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
     let _ = _mi_page_unfull_internal(crate::core_types::FullPage(
@@ -876,6 +898,8 @@ pub(crate) unsafe fn _mi_page_abandon_internal(
     }
 }
 
+/// # Safety
+/// `theap` must be valid. If non-null, `pq` must be a page queue belonging to `theap`.
 #[inline(never)]
 pub unsafe extern "C" fn mi_page_fresh_alloc(
     theap: *mut mi_theap_t,
@@ -998,6 +1022,8 @@ pub(crate) unsafe extern "C" fn _mi_page_init(
     true
 }
 
+/// # Safety
+/// `theap` must be valid, and `pq` must be a page queue belonging to `theap`.
 #[inline]
 pub unsafe fn mi_page_fresh(theap: *mut mi_theap_t, pq: *mut mi_page_queue_t) -> *mut mi_page_t {
     crate::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
@@ -1067,6 +1093,8 @@ unsafe extern "C" fn mi_theap_page_reclaim_raw(theap: *mut mi_theap_t, page: *mu
 static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi_page_t) =
     mi_theap_page_reclaim_raw;
 
+/// # Safety
+/// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {
     if !mi_page_is_singleton(page) {
@@ -1083,6 +1111,8 @@ pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {
     }
 }
 
+/// # Safety
+/// `page` must point to mutable page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_flags_set(page: *mut mi_page_t, set: bool, newflag: mi_page_flags_t) -> bool {
     let flag = crate::core_types::PageFlags::from_low_bits(newflag);
@@ -1093,17 +1123,23 @@ pub unsafe fn mi_page_flags_set(page: *mut mi_page_t, set: bool, newflag: mi_pag
     old.flags().contains(flag)
 }
 
+/// # Safety
+/// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_in_full(page: *const mi_page_t) -> bool {
     crate::core_types::PageFlags::from_low_bits(mi_page_flags(page))
         .contains(crate::core_types::PageFlags::IN_FULL_QUEUE)
 }
 
+/// # Safety
+/// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
     !mi_page_immediate_available(page) && !mi_page_is_expandable(page)
 }
 
+/// # Safety
+/// `page` must point to mutable page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_set_in_full(page: *mut mi_page_t, in_full: bool) {
     let was_in_full = mi_page_flags_set(page, in_full, MI_PAGE_IN_FULL_QUEUE);
@@ -1122,6 +1158,8 @@ pub unsafe fn mi_page_set_in_full(page: *mut mi_page_t, in_full: bool) {
     }
 }
 
+/// # Safety
+/// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_is_abandoned(page: *const mi_page_t) -> bool {
     let atomic_tid = crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(
@@ -1131,6 +1169,8 @@ pub unsafe fn mi_page_is_abandoned(page: *const mi_page_t) -> bool {
     tid.is_abandoned() || tid.is_abandoned_mapped()
 }
 
+/// # Safety
+/// `page` must be valid. `theap` must be null or a valid thread heap for this allocator.
 #[inline]
 pub unsafe fn mi_page_set_theap(page: *mut mi_page_t, theap: *mut mi_theap_t) {
     (*page).theap = theap;
@@ -1160,6 +1200,8 @@ pub unsafe fn mi_page_set_theap(page: *mut mi_page_t, theap: *mut mi_theap_t) {
     }
 }
 
+/// # Safety
+/// `page` must be valid and must not be abandoned.
 #[inline]
 pub unsafe fn mi_page_theap(page: *const mi_page_t) -> *mut mi_theap_t {
     crate::mi_assert_internal!(!mi_page_is_abandoned(page));
@@ -1167,6 +1209,8 @@ pub unsafe fn mi_page_theap(page: *const mi_page_t) -> *mut mi_theap_t {
     (*page).theap
 }
 
+/// # Safety
+/// `queue` must be valid, and `page` must be null or page metadata compatible with that queue.
 #[inline]
 pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const mi_page_t) -> bool {
     crate::mi_assert_internal!(!page.is_null());
@@ -1182,6 +1226,9 @@ pub unsafe fn mi_page_queue_contains(queue: *mut mi_page_queue_t, page: *const m
     ptr::eq(list, page.cast_mut())
 }
 
+/// # Safety
+/// `theap` must point to a valid thread heap, and `pq` must be a queue pointer to compare against
+/// that heap's page queues.
 #[inline]
 pub unsafe fn mi_theap_contains_queue(
     theap: *const mi_theap_t,
@@ -1193,6 +1240,8 @@ pub unsafe fn mi_theap_contains_queue(
     queue >= start && queue <= end
 }
 
+/// # Safety
+/// `theap` must be valid, and `pq` must point to a page queue belonging to that heap.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_queue_is_valid(
     theap: *mut mi_theap_t,
@@ -1255,6 +1304,8 @@ pub(crate) unsafe fn mi_page_bin_typed(page: *const mi_page_t) -> crate::core_ty
     crate::core_types::Bin::new(bin as u16)
 }
 
+/// # Safety
+/// `page` must point to page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
     mi_page_bin_typed(page).as_usize()
@@ -1277,6 +1328,8 @@ pub(crate) unsafe fn _mi_page_stats_bin_typed(
     crate::core_types::StatsBin::new(bin as u16)
 }
 
+/// # Safety
+/// `page` must point to page metadata owned by this allocator.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_stats_bin(page: *const mi_page_t) -> usize {
     let bin = _mi_page_stats_bin_typed(page).as_usize();
@@ -1284,6 +1337,8 @@ pub unsafe extern "C" fn _mi_page_stats_bin(page: *const mi_page_t) -> usize {
     bin
 }
 
+/// # Safety
+/// `theap` must be valid, and `page` must point to page metadata owned by that heap.
 #[inline]
 pub unsafe fn mi_theap_page_queue_of(
     theap: *mut mi_theap_t,
@@ -1300,6 +1355,8 @@ pub unsafe fn mi_theap_page_queue_of(
     pq
 }
 
+/// # Safety
+/// `page` must point to non-abandoned page metadata owned by this allocator.
 #[inline]
 pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
     let theap = mi_page_theap(page);
@@ -1308,6 +1365,8 @@ pub unsafe fn mi_page_queue_of(page: *const mi_page_t) -> *mut mi_page_queue_t {
     pq
 }
 
+/// # Safety
+/// `theap` must be valid, and `pq` must point to one of its page queues.
 pub unsafe fn mi_theap_queue_first_update(theap: *mut mi_theap_t, pq: *const mi_page_queue_t) {
     crate::mi_assert_internal!(mi_theap_contains_queue(theap, pq));
     let size = (*pq).block_size;
@@ -1352,6 +1411,8 @@ pub unsafe fn mi_theap_queue_first_update(theap: *mut mi_theap_t, pq: *const mi_
     }
 }
 
+/// # Safety
+/// `queue` and `page` must be valid, and `page` must currently be linked into `queue`.
 pub unsafe fn mi_page_queue_remove(queue: *mut mi_page_queue_t, page: *mut mi_page_t) {
     crate::mi_assert_internal!(!page.is_null());
     crate::mi_assert_expensive!(mi_page_queue_contains(queue, page));
@@ -1383,6 +1444,9 @@ pub unsafe fn mi_page_queue_remove(queue: *mut mi_page_queue_t, page: *mut mi_pa
     mi_page_set_in_full(page, false);
 }
 
+/// # Safety
+/// `theap`, `queue`, and `page` must be valid. `queue` must belong to `theap`, and `page` must not
+/// already be linked into it.
 pub unsafe fn mi_page_queue_push(
     theap: *mut mi_theap_t,
     queue: *mut mi_page_queue_t,
@@ -1413,6 +1477,9 @@ pub unsafe fn mi_page_queue_push(
     (*theap).page_count += 1;
 }
 
+/// # Safety
+/// `theap`, `queue`, and `page` must be valid. `queue` must belong to `theap`, and `page` must not
+/// already be linked into it.
 pub unsafe fn mi_page_queue_push_at_end(
     theap: *mut mi_theap_t,
     queue: *mut mi_page_queue_t,
@@ -1456,6 +1523,8 @@ unsafe fn mi_page_queue_push_at_end_typed(
     page
 }
 
+/// # Safety
+/// `theap`, `queue`, and `page` must be valid. `page` must currently be linked into `queue`.
 pub unsafe fn mi_page_queue_move_to_front(
     theap: *mut mi_theap_t,
     queue: *mut mi_page_queue_t,
@@ -1567,6 +1636,8 @@ pub(crate) unsafe fn mi_page_queue_enqueue_from_full(
     crate::core_types::unfull_page(page, from, to)
 }
 
+/// # Safety
+/// `theap`, `pq`, and `append` must be valid page-queue structures with compatible block sizes.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_queue_append(
     theap: *mut mi_theap_t,
@@ -1744,6 +1815,9 @@ pub(crate) unsafe extern "C" fn _mi_deferred_free(theap: *mut mi_theap_t, force:
     }
 }
 
+/// # Safety
+/// `fn_`, when present, must remain callable for the lifetime of its registration. `arg` is stored
+/// opaquely and passed back to that callback.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_register_deferred_free(
     fn_: Option<mi_deferred_free_fun>,

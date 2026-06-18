@@ -16,8 +16,8 @@ use core::mem::{size_of, zeroed};
 use core::ptr;
 
 pub(crate) use crate::alloc::{
-    _mi_page_malloc_zero, _mi_theap_malloc_guarded, _mi_theap_malloc_zero,
-    _mi_theap_malloc_zero_ex, _mi_theap_realloc_zero,
+    _mi_page_malloc_zero, _mi_page_malloc_zero_typed, _mi_theap_malloc_guarded,
+    _mi_theap_malloc_zero, _mi_theap_malloc_zero_ex, _mi_theap_realloc_zero,
 };
 pub(crate) use crate::arena::{
     _mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable, _mi_arenas_alloc,

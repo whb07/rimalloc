@@ -2166,11 +2166,22 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         alloc_rs
-            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
-            && page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")
+            .contains("pub(crate) unsafe fn _mi_page_malloc_zero_typed(\n    theap: *mut mi_theap_t,\n    page: *mut mi_page_t,\n    padded: crate::core_types::PaddedSize,")
+            && alloc_rs.contains("let size = padded.get();")
+            && alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(\n            padded,")
+            && alloc_rs.contains("_mi_page_malloc_zero_typed(\n        theap,\n        page,\n        crate::core_types::PaddedSize::new_unchecked(size),")
+            && alloc_rs
+                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
+            && page_rs.contains(
+                "let p = _mi_page_malloc_zero_typed(theap, page, layout.padded(), zero, ptr::null_mut());"
+            )
+            && alloc_aligned_rs.contains("let p = _mi_page_malloc_zero_typed(")
             && alloc_aligned_rs
+                .contains("crate::core_types::PaddedSize::new_unchecked(padsize)")
+            && !page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")
+            && !alloc_aligned_rs
                 .contains("let p = _mi_page_malloc_zero(theap, page, padsize, zero);"),
-        "page and aligned allocation should keep C's _mi_page_malloc_zero call boundary"
+        "page and aligned allocation should use typed padded-size page allocation internally"
     );
     assert!(
         atomic_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_atomic_once_enter")

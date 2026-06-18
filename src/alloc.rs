@@ -96,13 +96,14 @@ unsafe fn mi_theap_strndup(theap: *mut mi_theap_t, s: *const c_char, n: usize) -
     t
 }
 
-unsafe fn mi_page_malloc_zero(
+pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     theap: *mut mi_theap_t,
     page: *mut mi_page_t,
-    size: usize,
+    padded: crate::core_types::PaddedSize,
     zero: bool,
     usable: *mut usize,
 ) -> *mut c_void {
+    let size = padded.get();
     if (*page).block_size != 0 {
         crate::mi_assert_internal!(crate::internal::mi_page_block_size(page) >= size);
         crate::mi_assert_internal!(_mi_is_aligned(
@@ -115,7 +116,7 @@ unsafe fn mi_page_malloc_zero(
     let block = (*page).free;
     if mi_unlikely(block.is_null()) {
         let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
-            crate::core_types::PaddedSize::new_unchecked(size),
+            padded,
             if zero {
                 crate::core_types::Zeroed::Yes
             } else {
@@ -233,7 +234,13 @@ pub(crate) unsafe extern "C" fn _mi_page_malloc_zero(
     size: usize,
     zero: bool,
 ) -> *mut c_void {
-    mi_page_malloc_zero(theap, page, size, zero, ptr::null_mut())
+    _mi_page_malloc_zero_typed(
+        theap,
+        page,
+        crate::core_types::PaddedSize::new_unchecked(size),
+        zero,
+        ptr::null_mut(),
+    )
 }
 
 unsafe fn mi_theap_malloc_small_zero_nonnull(
@@ -262,7 +269,7 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
     // normalized to non-zero above, so the sum cannot overflow or yield zero.
     let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
     let page = _mi_theap_get_free_small_page(theap, padded.get());
-    let p = mi_page_malloc_zero(theap, page, padded.get(), zero, usable);
+    let p = _mi_page_malloc_zero_typed(theap, page, padded, zero, usable);
     mi_track_malloc(p, size, zero);
 
     if cfg!(debug_assertions) && !p.is_null() && zero {

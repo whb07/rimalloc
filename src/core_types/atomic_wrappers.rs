@@ -91,6 +91,27 @@ impl AtomicUsizeField {
             }
         }
     }
+
+    /// # Safety
+    /// See `as_atomic`.
+    #[inline(always)]
+    pub(crate) unsafe fn compare_exchange_weak(
+        self,
+        expected: &mut usize,
+        desired: usize,
+        success: Ordering,
+        failure: Ordering,
+    ) -> bool {
+        match unsafe { self.as_atomic() }
+            .compare_exchange_weak(*expected, desired, success, failure)
+        {
+            Ok(_) => true,
+            Err(actual) => {
+                *expected = actual;
+                false
+            }
+        }
+    }
 }
 
 #[repr(transparent)]
@@ -308,10 +329,13 @@ pub(crate) enum RemotePushOutcome {
 pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);
 
 impl AtomicThreadFree {
+    #[inline(always)]
+    fn field(self) -> AtomicUsizeField {
+        AtomicUsizeField(self.0)
+    }
+
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord {
-        let val =
-            unsafe { core::sync::atomic::AtomicUsize::from_ptr(self.0).load(Ordering::Relaxed) };
-        ThreadFreeWord(val)
+        ThreadFreeWord(unsafe { self.field().load(Ordering::Relaxed) })
     }
 
     pub(crate) fn compare_exchange_push(
@@ -321,25 +345,26 @@ impl AtomicThreadFree {
     ) -> Result<ThreadFreeWord, ThreadFreeWord> {
         let new_tf =
             ThreadFreeWord::from_parts(Some(block), crate::core_types::ThreadFreeOwner::Owned);
-        let atomic = unsafe { &*self.0.cast::<core::sync::atomic::AtomicUsize>() };
-        match atomic.compare_exchange_weak(
-            old.raw(),
-            new_tf.raw(),
-            Ordering::AcqRel,
-            Ordering::Relaxed,
-        ) {
-            Ok(_) => Ok(new_tf),
-            Err(val) => {
-                *old = ThreadFreeWord::from_parts(
-                    ThreadFreeWord(val).head(),
-                    if ThreadFreeWord(val).is_owned() {
-                        crate::core_types::ThreadFreeOwner::Owned
-                    } else {
-                        crate::core_types::ThreadFreeOwner::Unowned
-                    },
-                );
-                Err(*old)
-            }
+        let mut expected = old.raw();
+        if unsafe {
+            self.field().compare_exchange_weak(
+                &mut expected,
+                new_tf.raw(),
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            )
+        } {
+            Ok(new_tf)
+        } else {
+            *old = ThreadFreeWord::from_parts(
+                ThreadFreeWord(expected).head(),
+                if ThreadFreeWord(expected).is_owned() {
+                    crate::core_types::ThreadFreeOwner::Owned
+                } else {
+                    crate::core_types::ThreadFreeOwner::Unowned
+                },
+            );
+            Err(*old)
         }
     }
 
@@ -356,18 +381,19 @@ impl AtomicThreadFree {
         expected: &mut ThreadFreeWord,
     ) -> bool {
         let new = ThreadFreeWord::from_parts(expected.head(), ThreadFreeOwner::Unowned);
-        let atomic = unsafe { &*self.0.cast::<core::sync::atomic::AtomicUsize>() };
-        match atomic.compare_exchange_weak(
-            expected.raw(),
-            new.raw(),
-            Ordering::AcqRel,
-            Ordering::Relaxed,
-        ) {
-            Ok(_) => true,
-            Err(value) => {
-                *expected = ThreadFreeWord(value);
-                false
-            }
+        let mut raw_expected = expected.raw();
+        if unsafe {
+            self.field().compare_exchange_weak(
+                &mut raw_expected,
+                new.raw(),
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            )
+        } {
+            true
+        } else {
+            *expected = ThreadFreeWord(raw_expected);
+            false
         }
     }
 
@@ -382,8 +408,7 @@ impl AtomicThreadFree {
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]
     pub(crate) unsafe fn take_head_preserving_owner(self) -> RemoteFreeList {
-        let atomic = unsafe { &*self.0.cast::<core::sync::atomic::AtomicUsize>() };
-        let mut old = ThreadFreeWord(atomic.load(Ordering::Relaxed));
+        let mut old = ThreadFreeWord(unsafe { self.field().load(Ordering::Relaxed) });
         loop {
             let head = old.head();
             if head.is_none() {
@@ -395,15 +420,18 @@ impl AtomicThreadFree {
                 ThreadFreeOwner::Unowned
             };
             let new = ThreadFreeWord::from_parts(None, owner);
-            match atomic.compare_exchange_weak(
-                old.raw(),
-                new.raw(),
-                Ordering::AcqRel,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => return RemoteFreeList(head),
-                Err(value) => old = ThreadFreeWord(value),
+            let mut raw_old = old.raw();
+            if unsafe {
+                self.field().compare_exchange_weak(
+                    &mut raw_old,
+                    new.raw(),
+                    Ordering::AcqRel,
+                    Ordering::Relaxed,
+                )
+            } {
+                return RemoteFreeList(head);
             }
+            old = ThreadFreeWord(raw_old);
         }
     }
 
@@ -418,11 +446,7 @@ impl AtomicThreadFree {
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]
     pub(crate) unsafe fn claim_ownership(self) -> bool {
-        let old = crate::atomic::mi_atomic_fetch_or_explicit(
-            self.0,
-            1,
-            crate::atomic::mi_memory_order_e::mi_memory_order_acq_rel,
-        );
+        let old = unsafe { self.field().fetch_or(1, Ordering::AcqRel) };
         (old & 1) == 0
     }
 
@@ -441,14 +465,20 @@ impl AtomicThreadFree {
     /// state (see `mi_abandoned_page_unown_from_free` for the full protocol).
     #[inline]
     pub(crate) unsafe fn release_ownership(self, _expected_head: Option<BlockPtr>) -> bool {
-        let atomic = unsafe { &*self.0.cast::<core::sync::atomic::AtomicUsize>() };
         loop {
-            let current = atomic.load(Ordering::Acquire);
+            let current = unsafe { self.field().load(Ordering::Acquire) };
             // Preserve the head pointer (all bits except the owned bit).
             let new = current & !1usize;
-            match atomic.compare_exchange_weak(current, new, Ordering::AcqRel, Ordering::Relaxed) {
-                Ok(_) => return (current & 1) == 1,
-                Err(_) => continue,
+            let mut expected = current;
+            if unsafe {
+                self.field().compare_exchange_weak(
+                    &mut expected,
+                    new,
+                    Ordering::AcqRel,
+                    Ordering::Relaxed,
+                )
+            } {
+                return (current & 1) == 1;
             }
         }
     }

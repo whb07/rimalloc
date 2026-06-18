@@ -1657,20 +1657,24 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
     zero_huge_alignment: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    _mi_malloc_generic_typed(
-        theap,
-        size,
-        crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment),
-        usable,
-    )
+    let flags = crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment);
+    if size == 0 {
+        return ptr::null_mut();
+    }
+    let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
+        crate::core_types::PaddedSize::new_unchecked(size),
+        flags.zeroed(),
+    );
+    _mi_malloc_generic_typed(theap, layout, flags, usable)
 }
 
 pub(crate) unsafe fn _mi_malloc_generic_typed(
     mut theap: *mut mi_theap_t,
-    size: usize,
+    layout: crate::core_types::LayoutRequest,
     flags: crate::core_types::MallocGenericFlags,
     usable: *mut usize,
 ) -> *mut c_void {
+    let size = layout.padded().get();
     let zero = flags.zeroed() == crate::core_types::Zeroed::Yes;
     let huge_alignment = flags.huge_alignment().get();
 

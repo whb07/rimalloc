@@ -664,12 +664,21 @@ fn generic_allocation_flags_use_typed_boundary() {
             && alloc_rs.contains("crate::core_types::MaybeHugeAlignment::new(huge_alignment)")
             && alloc_rs.contains("crate::core_types::MaybeHugeAlignment::none()")
             && page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(")
+            && page_rs.contains("layout: crate::core_types::LayoutRequest")
+            && page_rs.contains("let size = layout.padded().get();")
             && page_rs
                 .contains("crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment)")
+            && page_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
+            && alloc_rs.contains("let layout = match crate::core_types::LayoutRequest::malloc(size)")
+            && alloc_rs.contains("let p = _mi_malloc_generic_typed(theap, layout, flags, usable)")
+            && alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
+            && layout_rs.contains("pub(crate) unsafe fn from_padded_unchecked(")
+            && layout_rs.contains("requested_size = padded.get().wrapping_sub(crate::types::MI_PADDING_SIZE)")
             && page_rs.contains("flags.zeroed() == crate::core_types::Zeroed::Yes")
             && page_rs.contains("flags.huge_alignment().get()")
             && layout_rs.contains("pub(crate) struct MaybeHugeAlignment(usize);")
-            && layout_rs.contains("pub(crate) struct MallocGenericFlags(usize);"),
+            && layout_rs.contains("pub(crate) struct MallocGenericFlags(usize);")
+            && !page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(\n    mut theap: *mut mi_theap_t,\n    size: usize,"),
         "generic allocation should use MallocGenericFlags instead of manually packing zero and huge alignment bits"
     );
 }

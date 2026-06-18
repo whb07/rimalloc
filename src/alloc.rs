@@ -114,9 +114,17 @@ unsafe fn mi_page_malloc_zero(
 
     let block = (*page).free;
     if mi_unlikely(block.is_null()) {
+        let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
+            crate::core_types::PaddedSize::new_unchecked(size),
+            if zero {
+                crate::core_types::Zeroed::Yes
+            } else {
+                crate::core_types::Zeroed::No
+            },
+        );
         return _mi_malloc_generic_typed(
             theap,
-            size,
+            layout,
             crate::core_types::MallocGenericFlags::new(
                 if zero {
                     crate::core_types::Zeroed::Yes
@@ -285,10 +293,10 @@ unsafe fn mi_theap_malloc_generic(
         return _mi_theap_malloc_guarded(theap, size, zero);
     }
 
-    // Compute the padded size via the typed `PaddedSize` boundary, matching the
-    // small path. On overflow (request too large), report and return null.
-    let padded = match crate::core_types::RequestedSize::new(size).checked_padded() {
-        Ok(p) => p,
+    // Construct the typed layout once at the generic boundary. On overflow
+    // (request too large), report and return null.
+    let layout = match crate::core_types::LayoutRequest::malloc(size) {
+        Ok(layout) => layout,
         Err(_) => {
             _mi_error_message_fmt(
                 EOVERFLOW,
@@ -305,7 +313,7 @@ unsafe fn mi_theap_malloc_generic(
         },
         crate::core_types::MaybeHugeAlignment::new(huge_alignment),
     );
-    let p = _mi_malloc_generic_typed(theap, padded.get(), flags, usable);
+    let p = _mi_malloc_generic_typed(theap, layout, flags, usable);
     mi_track_malloc(p, size, zero);
     if cfg!(debug_assertions) && !p.is_null() && zero {
         crate::mi_assert_expensive!(crate::internal::mi_mem_is_zero(p, size));
@@ -1317,9 +1325,13 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_guarded(
         MI_MAX_ALIGN_SIZE,
     );
     let req_size = _mi_align_up(bsize + os_page_size, os_page_size);
+    let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
+        crate::core_types::PaddedSize::new_unchecked(req_size),
+        crate::core_types::Zeroed::No,
+    );
     let block = _mi_malloc_generic_typed(
         theap,
-        req_size,
+        layout,
         crate::core_types::MallocGenericFlags::new(
             crate::core_types::Zeroed::No,
             crate::core_types::MaybeHugeAlignment::none(),

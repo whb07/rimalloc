@@ -112,6 +112,31 @@ impl LayoutRequest {
         req.zeroed = zeroed;
         Ok(req)
     }
+
+    /// Construct a layout from a size that already includes mimalloc padding.
+    ///
+    /// # Safety
+    /// `padded` must be the result of adding `MI_PADDING_SIZE` to the logical
+    /// requested size for this allocation path.
+    pub(crate) unsafe fn from_padded_unchecked(padded: PaddedSize, zeroed: Zeroed) -> Self {
+        crate::mi_debug_assert!(
+            padded.get() >= crate::types::MI_PADDING_SIZE,
+            "padded allocation size must include padding"
+        );
+        let requested_size = padded.get().wrapping_sub(crate::types::MI_PADDING_SIZE);
+        let effective_size = if requested_size == 0 {
+            1
+        } else {
+            requested_size
+        };
+        Self {
+            requested: RequestedSize::new(requested_size),
+            effective: EffectiveSize::new_unchecked(effective_size),
+            padded,
+            alignment: MaybeAlignment::new(0),
+            zeroed,
+        }
+    }
 }
 
 /// Represents the number of items for `calloc`.

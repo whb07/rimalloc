@@ -820,6 +820,20 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
                 );
             }
         }
+
+        if rel != "src/core_types/padding.rs" && rel != "src/types.rs" {
+            for raw_padding_access in [
+                "mi_padding_t",
+                "(*padding).canary",
+                "(*padding).delta",
+                "cast::<mi_padding_t>",
+            ] {
+                assert!(
+                    !source.contains(raw_padding_access),
+                    "{rel} should route padding metadata access through core_types::PaddingPtr"
+                );
+            }
+        }
     }
 
     let atomic_wrappers = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
@@ -2018,7 +2032,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_padding_shrink(")
             && free_rs.contains("if MI_PADDING == 0")
             && free_rs.contains("mi_page_decode_padding(page, block, &mut delta, &mut bsize)")
-            && free_rs.contains("(*padding).delta = new_delta as u32;")
+            && free_rs.contains(
+                "padding.write_delta(crate::core_types::PaddingDelta::new(new_delta as u32));"
+            )
             && alloc_aligned_rs.contains("#[cfg(mi_c_malloc_fast)]")
             && alloc_aligned_rs.contains("\"call _mi_padding_shrink\"")
             && alloc_aligned_rs.contains("fn mi_padding_shrink_call(")

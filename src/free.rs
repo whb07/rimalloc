@@ -34,7 +34,7 @@ use crate::prim::{
 use crate::track::{mi_track_free_size, mi_track_mem_defined, mi_track_mem_noaccess};
 use crate::types::{
     MI_DEBUG_FREED, MI_DEBUG_PADDING, MI_MAX_ALIGN_SIZE, MI_PAGE_META_ALIGNED_FREE_SMALL,
-    MI_SMALL_PAGE_SIZE, MI_SMALL_SIZE_MAX, mi_block_t, mi_padding_t, mi_page_t, mi_theap_t,
+    MI_SMALL_PAGE_SIZE, MI_SMALL_SIZE_MAX, mi_block_t, mi_page_t, mi_theap_t,
 };
 
 #[cfg(mi_c_malloc_fast)]
@@ -122,20 +122,26 @@ unsafe fn mi_page_decode_padding(
     delta: *mut usize,
     bsize: *mut usize,
 ) -> bool {
-    *bsize = mi_page_usable_block_size(page).get();
-    let padding = (block.cast::<u8>()).add(*bsize).cast::<mi_padding_t>();
-    mi_track_mem_defined(
-        padding.cast_mut().cast::<c_void>(),
-        core::mem::size_of::<mi_padding_t>(),
+    let usable_size = mi_page_usable_block_size(page);
+    *bsize = usable_size.get();
+    let padding = crate::core_types::PaddingPtr::from_block_usable(
+        crate::core_types::BlockPtr::new_unchecked(block.cast_mut()),
+        usable_size,
     );
-    *delta = (*padding).delta as usize;
-    let canary = (*padding).canary;
+    let padding_ptr = padding.as_ptr();
+    mi_track_mem_defined(
+        padding_ptr.cast::<c_void>(),
+        crate::core_types::PaddingPtr::SIZE,
+    );
+    let metadata = padding.read();
+    *delta = metadata.delta().get() as usize;
+    let canary = metadata.canary().get();
     let keys = mi_page_keys(page);
     let ok = mi_ptr_encode_canary(page.cast::<c_void>(), block.cast::<c_void>(), &keys) == canary
         && *delta <= *bsize;
     mi_track_mem_noaccess(
-        padding.cast_mut().cast::<c_void>(),
-        core::mem::size_of::<mi_padding_t>(),
+        padding_ptr.cast::<c_void>(),
+        crate::core_types::PaddingPtr::SIZE,
     );
     ok
 }
@@ -169,18 +175,19 @@ pub(crate) unsafe extern "C" fn _mi_padding_shrink(
 
     let new_delta = bsize - min_size;
     crate::mi_assert_internal!(new_delta < bsize);
-    let padding = (block.cast::<u8>())
-        .add(bsize)
-        .cast_mut()
-        .cast::<mi_padding_t>();
-    mi_track_mem_defined(
-        padding.cast::<c_void>(),
-        core::mem::size_of::<mi_padding_t>(),
+    let padding = crate::core_types::PaddingPtr::from_block_usable(
+        crate::core_types::BlockPtr::new_unchecked(block.cast_mut()),
+        crate::core_types::UsableSize::new(bsize),
     );
-    (*padding).delta = new_delta as u32;
+    let padding_ptr = padding.as_ptr();
+    mi_track_mem_defined(
+        padding_ptr.cast::<c_void>(),
+        crate::core_types::PaddingPtr::SIZE,
+    );
+    padding.write_delta(crate::core_types::PaddingDelta::new(new_delta as u32));
     mi_track_mem_noaccess(
-        padding.cast::<c_void>(),
-        core::mem::size_of::<mi_padding_t>(),
+        padding_ptr.cast::<c_void>(),
+        crate::core_types::PaddingPtr::SIZE,
     );
 }
 

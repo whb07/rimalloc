@@ -30,7 +30,7 @@ use crate::track::{
 };
 use crate::types::{
     ENOMEM, EOVERFLOW, MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING_SIZE, MI_SMALL_SIZE_MAX,
-    MI_STAT, mi_block_t, mi_heap_t, mi_padding_t, mi_page_t, mi_theap_t,
+    MI_STAT, mi_block_t, mi_heap_t, mi_page_t, mi_theap_t,
 };
 
 unsafe extern "C" {
@@ -204,17 +204,25 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     }
 
     if MI_PADDING != 0 {
-        let padding = block.cast::<u8>().add(bsize).cast::<mi_padding_t>();
-        let delta = (padding as usize).wrapping_sub(block as usize) - (size - MI_PADDING_SIZE);
+        let block_ptr = crate::core_types::BlockPtr::new_unchecked(block);
+        let padding = crate::core_types::PaddingPtr::from_block_usable(block_ptr, usable_size);
+        let padding_ptr = padding.as_ptr();
+        let delta = (padding_ptr as usize).wrapping_sub(block as usize) - (size - MI_PADDING_SIZE);
         if cfg!(debug_assertions) {
             crate::mi_assert_internal!(delta <= bsize && bsize >= (size - MI_PADDING_SIZE + delta));
         }
-        mi_track_mem_defined(padding.cast(), size_of::<mi_padding_t>());
+        mi_track_mem_defined(padding_ptr.cast(), crate::core_types::PaddingPtr::SIZE);
         let keys = mi_page_keys(page);
-        (*padding).canary = mi_ptr_encode_canary(page.cast(), block.cast(), &keys);
-        (*padding).delta = delta as u32;
+        padding.write(crate::core_types::Padding::new(
+            crate::core_types::PaddingCanary::new(mi_ptr_encode_canary(
+                page.cast(),
+                block.cast(),
+                &keys,
+            )),
+            crate::core_types::PaddingDelta::new(delta as u32),
+        ));
         if MI_PADDING_CHECK != 0 && !crate::page::mi_page_is_huge(page) {
-            let fill = padding.cast::<u8>().sub(delta);
+            let fill = padding_ptr.cast::<u8>().sub(delta);
             let maxpad = delta.min(MI_MAX_ALIGN_SIZE);
             for i in 0..maxpad {
                 *fill.add(i) = crate::types::MI_DEBUG_PADDING;

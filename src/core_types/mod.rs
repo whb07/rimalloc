@@ -81,3 +81,5 @@ pub(crate) use atomic_wrappers::{
     MemoryOrder,
 };
 mod padding;
+
+pub(crate) use padding::{Padding, PaddingCanary, PaddingDelta, PaddingPtr};

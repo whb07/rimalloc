@@ -903,7 +903,6 @@ fn phase6_dead_code_allowances_stay_intentional() {
         ("src/init.rs", 5),
         ("src/internal.rs", 1),
         ("src/libc.rs", 6),
-        ("src/options.rs", 1),
         ("src/os.rs", 1),
         ("src/prim/emscripten.rs", 1),
         ("src/prim/osx.rs", 1),

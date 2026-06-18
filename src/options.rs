@@ -1255,11 +1255,6 @@ pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void)
     mi_error_arg.store(arg, Ordering::Release);
 }
 
-#[allow(dead_code)]
-pub(crate) fn mi_option_has_size_in_kib(option: mi_option_t) -> bool {
-    option_has_size_in_kib(option)
-}
-
 fn mi_option_init(desc: &mut mi_option_desc_t) {
     let name = unsafe { CStr::from_ptr(desc.name) };
     let name_str = name.to_str().unwrap_or("");

@@ -1593,7 +1593,15 @@ fn free_path_internals_are_not_dynamic_exports() {
         alloc_rs.contains("let bin = _mi_bin_typed(bsize).as_usize();")
             && free_rs.contains("_mi_bin_typed(bsize.get()).as_usize()")
             && arena_rs.contains("let bin = _mi_bin_typed(block_size).as_usize();")
-            && internal.contains("crate::page::_mi_bin_typed(size).as_usize()"),
+            && internal.contains("crate::page::_mi_bin_typed(size).as_usize()")
+            && page_rs.contains("pub(crate) unsafe fn mi_page_bin_typed(")
+            && page_rs.contains(") -> crate::core_types::Bin")
+            && page_rs.contains("pub(crate) unsafe fn _mi_page_stats_bin_typed(")
+            && page_rs.contains(") -> crate::core_types::StatsBin")
+            && page_rs.contains("let bin = mi_page_bin_typed(page).as_usize();")
+            && page_rs.contains("let bin = _mi_page_stats_bin_typed(page).as_usize();")
+            && page_rs.contains("let bin = _mi_bin_typed(size).as_usize();")
+            && page_rs.contains("bin == _mi_bin_typed((*prev).block_size).as_usize()"),
         "internal bin users should consume typed Bin wrappers before raw array indexing"
     );
     assert!(

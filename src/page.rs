@@ -1106,25 +1106,41 @@ static MI_PAGE_QUEUE_IS_VALID_KEEP: unsafe extern "C" fn(
 ) -> bool = _mi_page_queue_is_valid;
 
 #[inline]
-pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
+pub(crate) unsafe fn mi_page_bin_typed(page: *const mi_page_t) -> crate::core_types::Bin {
     let bin = if mi_page_is_in_full(page) {
         MI_BIN_FULL
     } else if mi_page_is_huge(page) {
         MI_BIN_HUGE
     } else {
-        mi_bin(mi_page_block_size(page))
+        _mi_bin_typed(mi_page_block_size(page)).as_usize()
     };
     crate::mi_assert_internal!(bin <= MI_BIN_FULL);
-    bin
+    crate::mi_debug_assert!(u16::try_from(bin).is_ok());
+    crate::core_types::Bin::new(bin as u16)
+}
+
+#[inline]
+pub unsafe fn mi_page_bin(page: *const mi_page_t) -> usize {
+    mi_page_bin_typed(page).as_usize()
+}
+
+#[inline]
+pub(crate) unsafe fn _mi_page_stats_bin_typed(
+    page: *const mi_page_t,
+) -> crate::core_types::StatsBin {
+    let bin = if mi_page_is_huge(page) {
+        MI_BIN_HUGE
+    } else {
+        _mi_bin_typed(mi_page_block_size(page)).as_usize()
+    };
+    crate::mi_assert_internal!(bin <= MI_BIN_HUGE);
+    crate::mi_debug_assert!(u16::try_from(bin).is_ok());
+    crate::core_types::StatsBin::new(bin as u16)
 }
 
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_stats_bin(page: *const mi_page_t) -> usize {
-    let bin = if mi_page_is_huge(page) {
-        MI_BIN_HUGE
-    } else {
-        mi_bin(mi_page_block_size(page))
-    };
+    let bin = _mi_page_stats_bin_typed(page).as_usize();
     crate::mi_assert_internal!(bin <= MI_BIN_HUGE);
     bin
 }
@@ -1135,7 +1151,7 @@ pub unsafe fn mi_theap_page_queue_of(
     page: *const mi_page_t,
 ) -> *mut mi_page_queue_t {
     crate::mi_assert_internal!(!theap.is_null());
-    let bin = mi_page_bin(page);
+    let bin = mi_page_bin_typed(page).as_usize();
     let pq = ptr::addr_of_mut!((*theap).pages[bin]);
     crate::mi_assert_internal!(
         (mi_page_block_size(page) == (*pq).block_size)
@@ -1175,9 +1191,11 @@ pub unsafe fn mi_theap_queue_first_update(theap: *mut mi_theap_t, pq: *const mi_
         0
     } else {
         crate::mi_assert_internal!(pq > ptr::addr_of!((*theap).pages[0]));
-        let bin = mi_bin(size);
+        let bin = _mi_bin_typed(size).as_usize();
         let mut prev = pq.sub(1);
-        while bin == mi_bin((*prev).block_size) && prev > ptr::addr_of!((*theap).pages[0]) {
+        while bin == _mi_bin_typed((*prev).block_size).as_usize()
+            && prev > ptr::addr_of!((*theap).pages[0])
+        {
             prev = prev.sub(1);
         }
         let start = 1 + _mi_wsize_from_size((*prev).block_size);

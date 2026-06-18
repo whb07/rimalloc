@@ -29,7 +29,7 @@ pub(crate) use ptr::{
 
 pub(crate) use scalar::{
     Alignment, AllocSizeError, ArenaIndex, Bin, BlockSize, DirectBin, EffectiveSize, GoodSize,
-    MaybeAlignment, PaddedSize, RequestedSize, SliceCount, SliceIndex, UsableSize,
+    MaybeAlignment, PaddedSize, RequestedSize, SliceCount, SliceIndex, StatsBin, UsableSize,
 };
 
 pub(crate) use layout::{

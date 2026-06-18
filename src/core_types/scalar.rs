@@ -212,6 +212,26 @@ impl Bin {
     }
 }
 
+/// Stats bin index (0 … MI_BIN_HUGE).
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub(crate) struct StatsBin(pub(crate) u16);
+
+impl StatsBin {
+    #[inline(always)]
+    pub(crate) const fn new(index: u16) -> Self {
+        Self(index)
+    }
+    #[inline(always)]
+    pub(crate) const fn get(self) -> u16 {
+        self.0
+    }
+    #[inline(always)]
+    pub(crate) const fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
 /// Direct bin index (0 … MI_PAGES_DIRECT-1).
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

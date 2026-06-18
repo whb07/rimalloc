@@ -4,8 +4,7 @@
     non_camel_case_types,
     non_snake_case,
     non_upper_case_globals,
-    unused_macros,
-    unsafe_op_in_unsafe_fn
+    unused_macros
 )]
 
 use core::ffi::{c_char, c_int, c_void};
@@ -1250,7 +1249,7 @@ pub unsafe fn mi_unix_malloc_usable_size(p: *const c_void) -> usize {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_unix_malloc_good_size(size: usize) -> usize {
-    crate::mimalloc::mi_malloc_good_size(size)
+    unsafe { crate::mimalloc::mi_malloc_good_size(size) }
 }
 
 /// # Safety

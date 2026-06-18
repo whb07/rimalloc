@@ -3642,7 +3642,7 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     exclusive: bool,
     arena_id: *mut mi_arena_id_t,
 ) -> bool {
-    let mut memid = crate::core_types::MemId::<crate::core_types::OsMem>::os(
+    let memid = crate::core_types::MemId::<crate::core_types::ExternalMem>::external(
         crate::core_types::OsMemPtr::new(start),
         crate::core_types::ReservedBytes(size),
         crate::core_types::InitiallyCommitted(is_committed),
@@ -3650,7 +3650,6 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
         crate::core_types::Pinned(is_pinned),
     )
     .raw;
-    memid.memkind = mi_memkind_t::MI_MEM_EXTERNAL; // Overwrite memkind to match original
     unsafe {
         mi_manage_os_memory_ex2(
             _mi_subproc(),
@@ -3683,7 +3682,7 @@ pub unsafe extern "C" fn mi_manage_memory(
     commit_fun_arg: *mut c_void,
     arena_id: *mut mi_arena_id_t,
 ) -> bool {
-    let mut memid = crate::core_types::MemId::<crate::core_types::OsMem>::os(
+    let memid = crate::core_types::MemId::<crate::core_types::ExternalMem>::external(
         crate::core_types::OsMemPtr::new(start),
         crate::core_types::ReservedBytes(size),
         crate::core_types::InitiallyCommitted(is_committed),
@@ -3691,7 +3690,6 @@ pub unsafe extern "C" fn mi_manage_memory(
         crate::core_types::Pinned(is_pinned),
     )
     .raw;
-    memid.memkind = mi_memkind_t::MI_MEM_EXTERNAL; // Overwrite memkind to match original
     unsafe {
         mi_manage_os_memory_ex2(
             _mi_subproc(),

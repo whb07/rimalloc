@@ -194,6 +194,32 @@ impl MemId<OsMem> {
     }
 }
 
+impl MemId<ExternalMem> {
+    pub(crate) fn external(
+        base: Option<OsMemPtr>,
+        size: ReservedBytes,
+        committed: InitiallyCommitted,
+        zero: InitiallyZero,
+        pinned: Pinned,
+    ) -> Self {
+        Self {
+            raw: crate::internal::mi_memid_t {
+                mem: crate::internal::mi_memid_mem_t {
+                    os: crate::internal::mi_memid_os_info_t {
+                        base: base.map_or(core::ptr::null_mut(), |p| p.as_ptr()),
+                        size: size.0,
+                    },
+                },
+                is_pinned: pinned.0,
+                initially_committed: committed.0,
+                initially_zero: zero.0,
+                memkind: crate::internal::mi_memkind_t::MI_MEM_EXTERNAL as _,
+            },
+            _kind: PhantomData,
+        }
+    }
+}
+
 impl MemId<ArenaMem> {
     pub(crate) fn arena(arena: ArenaPtr, range: SliceRange) -> Self {
         Self {

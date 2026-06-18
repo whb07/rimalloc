@@ -2346,6 +2346,10 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("crate::core_types::MemIdView::Os(_)")
             && memid_rs.contains("pub(crate) struct ExternalMemId")
             && memid_rs.contains("External(ExternalMemId)")
+            && memid_rs.contains("impl MemId<ExternalMem>")
+            && memid_rs.contains("pub(crate) fn external(")
+            && arena_rs
+                .contains("crate::core_types::MemId::<crate::core_types::ExternalMem>::external")
             && arena_rs.contains("crate::core_types::MemIdView::External(external)")
             && os_rs.contains("crate::core_types::MemIdView::External(external)")
             && arena_rs.contains("let os_size = external.size.0;")
@@ -2358,6 +2362,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !os_rs.contains("mi_memkind_is_os(memid.memkind)")
             && !arena_rs.contains("memid.mem.os.")
             && !arena_rs.contains("memid.mem.arena.")
+            && !arena_rs.contains("memid.memkind = mi_memkind_t::MI_MEM_EXTERNAL")
             && !os_rs.contains("memid.mem.os.")
             && page_map.contains("fn mi_memid_os_base_size(memid: mi_memid_t)")
             && page_map.contains("crate::core_types::MemIdView::Os(os)")

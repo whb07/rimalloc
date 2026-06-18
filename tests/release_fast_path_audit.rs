@@ -172,6 +172,12 @@ fn preloading_state_matches_c_mimalloc_lifecycle() {
         "mi_process_init_inner should set process initialization state like C's mi_process_init_once"
     );
     assert!(
+        source[process_init_inner..process_init].contains("mi_detect_cpu_features();")
+            && source[process_init_inner..process_init].find("mi_detect_cpu_features();")
+                < source[process_init_inner..process_init].find("mi_subproc_main_init();"),
+        "process initialization should detect CPU copy/popcnt features before allocator subsystem initialization"
+    );
+    assert!(
         source[process_done..].contains("OS_PRELOADING.store(true, Ordering::Relaxed);"),
         "mi_process_done should restore preloading after allocator teardown"
     );
@@ -898,7 +904,7 @@ fn phase6_dead_code_allowances_stay_intentional() {
 
     let expected = BTreeMap::from([
         ("src/core_types/mod.rs", 13),
-        ("src/init.rs", 2),
+        ("src/init.rs", 1),
         ("src/internal.rs", 1),
         ("src/prim/emscripten.rs", 1),
         ("src/prim/osx.rs", 1),
@@ -3929,6 +3935,20 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !init_rs.contains("#[unsafe(no_mangle)]\npub static mut _mi_cpu_movsb_max")
             && !init_rs.contains("#[unsafe(no_mangle)]\npub static mut _mi_cpu_stosb_max"),
         "CPU copy thresholds should use stable hidden C names like C without becoming public dynamic ABI symbols"
+    );
+    assert!(
+        init_rs.contains("fn mi_detect_cpu_features()")
+            && init_rs.contains("if mi_cpuid(cpu_info.as_mut_ptr(), 0, 0)")
+            && init_rs.contains("amd = cpu_info[2] == 0x444d_4163;")
+            && init_rs.contains("if mi_cpuid(cpu_info.as_mut_ptr(), 7, 0)")
+            && init_rs.contains("fsrm = (cpu_info[3] & (1 << 4)) != 0;")
+            && init_rs.contains("if mi_cpuid(cpu_info.as_mut_ptr(), 7, 1)")
+            && init_rs.contains("fsrs = (cpu_info[1] & (1 << 11)) != 0;")
+            && init_rs.contains("if mi_cpuid(cpu_info.as_mut_ptr(), 1, 0)")
+            && init_rs.contains("_mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0")
+            && init_rs.contains("if fsrm {\n            unsafe { _mi_cpu_movsb_max = 127 };")
+            && init_rs.contains("if fsrs || (amd && fsrm) {\n            unsafe { _mi_cpu_stosb_max = 127 };"),
+        "CPU feature detection should initialize C's popcnt and short rep movsb/stosb thresholds"
     );
     assert!(
         internal.contains("\"rep stosb\"")

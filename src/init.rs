@@ -1308,7 +1308,6 @@ fn mi_tls_slots_done() {
     any(target_arch = "x86", target_arch = "x86_64"),
     not(target_env = "msvc")
 ))]
-#[allow(dead_code)]
 fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
     let regs = {
         #[cfg(target_arch = "x86")]
@@ -1355,6 +1354,39 @@ fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
 fn mi_cpuid(_regs4: *mut u32, _level: u32, _sublevel: u32) -> bool {
     false
+}
+
+fn mi_detect_cpu_features() {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        let mut amd = false;
+        let mut fsrm = false;
+        let mut fsrs = false;
+        let mut cpu_info = [0u32; 4];
+        if mi_cpuid(cpu_info.as_mut_ptr(), 0, 0) {
+            amd = cpu_info[2] == 0x444d_4163;
+        }
+        if mi_cpuid(cpu_info.as_mut_ptr(), 7, 0) {
+            fsrm = (cpu_info[3] & (1 << 4)) != 0;
+        }
+        if mi_cpuid(cpu_info.as_mut_ptr(), 7, 1) {
+            fsrs = (cpu_info[1] & (1 << 11)) != 0;
+        }
+        if mi_cpuid(cpu_info.as_mut_ptr(), 1, 0) {
+            unsafe { _mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0 };
+        }
+        if fsrm {
+            unsafe { _mi_cpu_movsb_max = 127 };
+        }
+        if fsrs || (amd && fsrm) {
+            unsafe { _mi_cpu_stosb_max = 127 };
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        _mi_cpu_has_popcnt = true;
+    }
 }
 
 /// # Safety
@@ -1850,6 +1882,7 @@ unsafe fn mi_process_init_inner() {
     {
         unsafe {
             _mi_process_is_initialized = true;
+            mi_detect_cpu_features();
             mi_subproc_main_init();
             crate::stats::_mi_stats_init();
             crate::os::_mi_os_init();

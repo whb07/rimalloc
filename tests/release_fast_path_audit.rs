@@ -2137,6 +2137,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !page_rs.contains(
                 "pub unsafe fn mi_page_queue_enqueue_from_full(\n    to: *mut mi_page_queue_t,"
             )
+            && page_rs.contains("match crate::core_types::MemId::view((*page).memid)")
+            && page_rs.contains("crate::core_types::MemIdView::Os(os) => os")
+            && !page_rs.contains("(*page).memid.mem.os.base")
             && page_rs.contains("mi_page_unfull_typed(\n        crate::core_types::FullPage")
             && page_rs
                 .contains("mi_page_move_to_full_typed(\n            crate::core_types::ActivePage")

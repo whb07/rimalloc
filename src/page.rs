@@ -28,7 +28,7 @@ use crate::internal::{
     _mi_is_heap_main, _mi_os_commit, _mi_os_good_alloc_size, _mi_os_page_size,
     _mi_page_malloc_zero, _mi_ptr_page, _mi_theap_heap, _mi_theap_random_next, _mi_wsize_from_size,
     MI_DEBUG, MI_SECURE, mi_block_next, mi_block_set_next, mi_direct_bin_from_size, mi_mem_is_zero,
-    mi_memkind_t, mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_committed,
+    mi_page_all_free, mi_page_area, mi_page_block_size, mi_page_committed,
     mi_page_contains_address, mi_page_flags, mi_page_has_interior_pointers,
     mi_page_immediate_available, mi_page_is_expandable, mi_page_is_mostly_used,
     mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers, mi_page_set_keys,
@@ -957,14 +957,18 @@ static MI_THEAP_PAGE_RECLAIM_KEEP: unsafe extern "C" fn(*mut mi_theap_t, *mut mi
 
 #[inline]
 pub unsafe fn mi_page_is_huge(page: *const mi_page_t) -> bool {
-    mi_page_is_singleton(page)
-        && (mi_page_block_size(page) > MI_LARGE_MAX_OBJ_SIZE
-            || (matches!(
-                (*page).memid.memkind,
-                mi_memkind_t::MI_MEM_OS
-                    | mi_memkind_t::MI_MEM_OS_HUGE
-                    | mi_memkind_t::MI_MEM_OS_REMAP
-            ) && unsafe { (*page).memid.mem.os.base } < page.cast_mut().cast::<c_void>()))
+    if !mi_page_is_singleton(page) {
+        return false;
+    }
+    if mi_page_block_size(page) > MI_LARGE_MAX_OBJ_SIZE {
+        return true;
+    }
+    match crate::core_types::MemId::view((*page).memid) {
+        crate::core_types::MemIdView::Os(os) => os
+            .base
+            .is_some_and(|base| base.as_ptr() < page.cast_mut().cast::<c_void>()),
+        _ => false,
+    }
 }
 
 #[inline]

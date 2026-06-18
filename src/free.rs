@@ -312,8 +312,8 @@ pub(crate) unsafe fn mi_free_block_local(
     mode: crate::core_types::LocalFreeMode,
 ) {
     let page = page_wrapper.0.as_ptr();
-    let block = block_wrapper.block.as_ptr();
-    let was_guarded = block_wrapper.was_guarded == crate::core_types::WasGuarded::Yes;
+    let block = block_wrapper.block().as_ptr();
+    let was_guarded = block_wrapper.is_guarded();
     let track_stats = mode.track_stats;
     let check_full = mode.check_full;
     if mi_check_is_double_free(page, block) {
@@ -373,8 +373,8 @@ pub(crate) unsafe fn mi_free_block_mt(
     block_wrapper: crate::core_types::BlockForFree,
 ) {
     let page = page_wrapper.0.as_ptr();
-    let block = block_wrapper.block.as_ptr();
-    let was_guarded = block_wrapper.was_guarded == crate::core_types::WasGuarded::Yes;
+    let block = block_wrapper.block().as_ptr();
+    let was_guarded = block_wrapper.is_guarded();
     mi_stat_free(page, block);
     mi_track_free_size(
         block.cast::<c_void>(),
@@ -670,7 +670,7 @@ pub(crate) unsafe fn mi_free_validated(
     validated: crate::core_types::ValidatedFree,
     usable: *mut usize,
 ) {
-    let page = validated.page.as_ptr();
+    let page = validated.page().as_ptr();
     if !usable.is_null() {
         *usable = mi_page_usable_block_size(page).get();
     }
@@ -681,8 +681,8 @@ pub(crate) unsafe fn mi_free_validated(
 
     if delta.is_local_fast() {
         mi_free_block_local(
-            crate::core_types::LocalPage(validated.page),
-            validated.block,
+            crate::core_types::LocalPage(validated.page()),
+            validated.block(),
             crate::core_types::LocalFreeMode {
                 track_stats: true,
                 check_full: false,
@@ -707,8 +707,8 @@ pub(crate) unsafe fn mi_free_ex_slow(
     if delta.needs_local_slow() {
         // Local page with flags set (e.g. in the full queue): check for unfull.
         mi_free_block_local(
-            crate::core_types::LocalPage(validated.page),
-            validated.block,
+            crate::core_types::LocalPage(validated.page()),
+            validated.block(),
             crate::core_types::LocalFreeMode {
                 track_stats: true,
                 check_full: true,
@@ -719,8 +719,8 @@ pub(crate) unsafe fn mi_free_ex_slow(
         // The flag distinction collapses here because validation already resolved
         // the block; `mi_free_block_mt` does not branch on page flags.
         mi_free_block_mt(
-            crate::core_types::ForeignPage(validated.page),
-            validated.block,
+            crate::core_types::ForeignPage(validated.page()),
+            validated.block(),
         );
     }
 }

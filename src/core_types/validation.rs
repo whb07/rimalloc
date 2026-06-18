@@ -111,8 +111,8 @@ pub(crate) enum WasGuarded {
 /// A block that has been completely validated and is ready for the typed free path.
 #[derive(Clone, Copy)]
 pub(crate) struct BlockForFree {
-    pub(crate) block: BlockPtr,
-    pub(crate) was_guarded: WasGuarded,
+    block: BlockPtr,
+    was_guarded: WasGuarded,
 }
 
 impl BlockForFree {
@@ -127,18 +127,34 @@ impl BlockForFree {
     pub(crate) fn was_guarded(self) -> WasGuarded {
         self.was_guarded
     }
+
+    pub(crate) fn is_guarded(self) -> bool {
+        self.was_guarded == WasGuarded::Yes
+    }
 }
 
 /// A fully validated free request ready to be routed.
 #[derive(Clone, Copy)]
 pub(crate) struct ValidatedFree {
-    pub(crate) user: UserPtr,
-    pub(crate) page: PagePtr,
-    pub(crate) block: BlockForFree,
+    user: UserPtr,
+    page: PagePtr,
+    block: BlockForFree,
 }
 
 impl ValidatedFree {
     pub(crate) fn new(user: UserPtr, page: PagePtr, block: BlockForFree) -> Self {
         Self { user, page, block }
+    }
+
+    pub(crate) fn user(self) -> UserPtr {
+        self.user
+    }
+
+    pub(crate) fn page(self) -> PagePtr {
+        self.page
+    }
+
+    pub(crate) fn block(self) -> BlockForFree {
+        self.block
     }
 }

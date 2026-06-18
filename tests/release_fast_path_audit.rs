@@ -2785,13 +2785,26 @@ fn free_path_internals_are_not_dynamic_exports() {
             && validation_types.contains("pub(crate) struct LocatedBlock")
             && validation_types.contains("impl PointerLocation")
             && validation_types.contains("pub(crate) fn located_block(self) -> LocatedBlock")
+            && validation_types.contains("pub(crate) struct BlockForFree {\n    block: BlockPtr,\n    was_guarded: WasGuarded,")
+            && validation_types.contains("pub(crate) fn is_guarded(self) -> bool")
+            && validation_types.contains("pub(crate) struct ValidatedFree {\n    user: UserPtr,\n    page: PagePtr,\n    block: BlockForFree,")
+            && validation_types.contains("pub(crate) fn page(self) -> PagePtr")
+            && validation_types.contains("pub(crate) fn block(self) -> BlockForFree")
             && free_rs.contains("unsafe fn mi_block_for_free_from_lookup(")
             && free_rs.contains("let located = location.located_block();")
+            && free_rs.contains("let block = block_wrapper.block().as_ptr();")
+            && free_rs.contains("let was_guarded = block_wrapper.is_guarded();")
+            && free_rs.contains("let page = validated.page().as_ptr();")
+            && free_rs.contains("crate::core_types::LocalPage(validated.page())")
+            && free_rs.contains("validated.block()")
             && free_rs.contains("crate::core_types::BlockForFree::new(\n        located.block(),\n        located.was_guarded(),\n    )")
             && alloc_rs.contains("let block = location.block();")
             && free_rs.contains(
                 "mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))"
             )
+            && !validation_types.contains("pub(crate) block: BlockPtr")
+            && !validation_types.contains("pub(crate) page: PagePtr")
+            && !free_rs.contains("validated.block,")
             && !free_rs.contains("PointerLocation::BlockStart(b) => (b, false)")
             && !free_rs.contains("pub unsafe fn mi_validate_block_from_ptr(\n    page: *const mi_page_t,\n    p: *mut c_void,\n) -> *mut mi_block_t"),
         "free validation should keep _mi_page_ptr_unalign while returning PointerLookup and BlockForFree"

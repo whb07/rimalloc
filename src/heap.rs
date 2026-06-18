@@ -28,8 +28,7 @@ use crate::threadlocal::{
 };
 use crate::types::{EFAULT, mi_arena_id_t, mi_heap_t, mi_page_t, mi_theap_t};
 
-#[allow(clippy::manual_dangling_ptr)]
-const MI_THEAP_TLS_BUSY: *mut mi_theap_t = 1usize as *mut mi_theap_t;
+const MI_THEAP_TLS_BUSY: *mut mi_theap_t = core::ptr::dangling_mut::<mi_theap_t>();
 
 /// # Safety
 ///

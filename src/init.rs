@@ -55,8 +55,7 @@ pub const MI_TLS_DIRECT_FIRST: usize = if MI_SIZE_SIZE == 4 {
 };
 pub const MI_TLS_INITIAL_SLOT: usize = 5;
 const MI_MAX_ARENAS: usize = 160;
-#[allow(clippy::manual_dangling_ptr)]
-pub const MI_TLD_INVALID: *mut mi_tld_t = 1usize as *mut mi_tld_t;
+pub const MI_TLD_INVALID: *mut mi_tld_t = core::ptr::dangling_mut::<mi_tld_t>();
 pub const TLS_OUT_OF_INDEXES: u32 = u32::MAX;
 
 #[allow(non_snake_case)]

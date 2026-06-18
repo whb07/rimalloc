@@ -1,6 +1,6 @@
 //! Random number generation
 
-#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use crate::bits::mi_rotl32;
 use crate::types::{mi_msecs_t, mi_random_ctx_t};
@@ -184,8 +184,8 @@ pub(crate) unsafe extern "C" fn _mi_random_split(
     ctx: *mut mi_random_ctx_t,
     ctx_new: *mut mi_random_ctx_t,
 ) {
-    let ctx = &mut *ctx;
-    let ctx_new = &mut *ctx_new;
+    let ctx = unsafe { &mut *ctx };
+    let ctx_new = unsafe { &mut *ctx_new };
     crate::mi_debug_assert!(mi_random_is_initialized(ctx));
     crate::mi_debug_assert!(!core::ptr::eq(ctx, ctx_new));
     chacha_split(
@@ -201,7 +201,7 @@ pub(crate) unsafe extern "C" fn _mi_random_split(
 /// duration of the call.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize {
-    let ctx = &mut *ctx;
+    let ctx = unsafe { &mut *ctx };
     crate::mi_debug_assert!(mi_random_is_initialized(ctx));
     loop {
         #[cfg(target_pointer_width = "32")]
@@ -233,7 +233,7 @@ pub(crate) extern "C" fn _mi_os_random_weak(extra_seed: usize) -> usize {
 /// `ctx` must point to a writable random context.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_init(ctx: *mut mi_random_ctx_t) {
-    mi_random_init_ex(&mut *ctx, false);
+    mi_random_init_ex(unsafe { &mut *ctx }, false);
 }
 
 /// # Safety
@@ -241,7 +241,7 @@ pub(crate) unsafe extern "C" fn _mi_random_init(ctx: *mut mi_random_ctx_t) {
 /// `ctx` must point to a writable random context.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t) {
-    mi_random_init_ex(&mut *ctx, true);
+    mi_random_init_ex(unsafe { &mut *ctx }, true);
 }
 
 /// # Safety
@@ -250,7 +250,7 @@ pub(crate) unsafe extern "C" fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t) 
 /// initialized by the random initialization routines.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ctx_t) {
-    if (*ctx).weak {
-        _mi_random_init(ctx);
+    if unsafe { (*ctx).weak } {
+        unsafe { _mi_random_init(ctx) };
     }
 }

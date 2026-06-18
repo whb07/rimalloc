@@ -87,6 +87,8 @@ Additional item-level cleanup removed stale `dead_code` markers from heap thread
 
 Stale localized Clippy allowances were removed from the non-Linux Unix clock fallback and the `mi_manage_memory` C API wrapper. The source audit now also enforces the remaining localized Clippy allowlist by file/lint count.
 
+The tracking shim no longer needs the broad `unsafe_op_in_unsafe_fn` module allowance. The remaining broad unsafe-op allowances are now enforced by `tests/release_fast_path_audit.rs` as an explicit mechanical raw-pointer module allowlist, with `track.rs` guarded against regaining that suppression.
+
 No benchmark rerun was needed for the dead-code allowance narrowing because these changes only adjust lint attributes and item-level documentation of staged compatibility helpers; no generated allocator logic or hot-path operation changed. The latest runtime benchmark evidence remains the post-`AtomicThreadFree(AtomicUsizeField)` verification above against `BENCHMARK_RESULTS.md`.
 
 **Action Items:**

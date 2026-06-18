@@ -49,6 +49,24 @@ A future safe heap API needs a separate design that proves:
 Until that design exists, there is no safe `Heap::new`, heap allocation method,
 safe heap `collect`, safe heap destroy, `Heap::as_raw`, or `Heap::from_raw`.
 
+## Deferred Safe Stats, Options, And Process APIs
+
+No safe `StatsSnapshot`, `Options`, `ProcessInfo`, or callback API is
+stabilized for the next release milestone. The corresponding C-shaped APIs
+remain under the unsafe `raw` facade.
+
+A future safe stats API must return owned numeric snapshots and document
+process-wide, heap-local, thread-local, reset, and merge semantics without
+returning references into allocator metadata.
+
+A future safe options API must specify initialization order, runtime mutability,
+threading, diagnostics, and callback/output behavior. Safe option diagnostics
+must avoid allocator recursion in allocator-critical contexts.
+
+A future safe process-info API must return owned numeric values and represent
+unsupported platform fields with `Option` or typed errors. Raw out-pointer
+behavior remains under `raw`.
+
 ## Naming Conventions
 
 - Rust-facing names use idiomatic Rust names: `MiMalloc`, `Allocation`, `Heap`,

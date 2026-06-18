@@ -801,15 +801,18 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## E1. Safe stats snapshot
 
-- [ ] Decide whether to expose `StatsSnapshot`.
+- [x] Decide whether to expose `StatsSnapshot`.
   - Required decision:
     - If yes, it must be an owned/copy snapshot, not references into live allocator metadata.
     - If no, raw stats remain under `raw` and docs say safe stats are not stabilized.
   - Validation:
     - Decision is recorded in `docs/api-inventory.md`.
     - README examples match decision.
+  - Evidence:
+    - `docs/api-inventory.md`, `docs/safe-api.md`, and README state that safe stats wrappers are intentionally deferred.
+    - README examples only show `MiMalloc`, `Allocation`, and raw C-shaped calls; they do not present stats as safe Rust API.
 
-- [ ] Implement stats snapshot without dangling references.
+- [x] Implement stats snapshot without dangling references.
   - Required behavior:
     - Snapshot owns copied numeric data.
     - Snapshot methods do not allocate unless clearly documented and outside allocator-critical paths.
@@ -818,8 +821,12 @@ These wrappers should be added only if they can avoid dangling references, globa
     - Tests collect stats before/after allocations and verify monotonic fields where meaningful.
     - Drop of heaps/allocations cannot invalidate snapshot.
     - Miri/model tests cover pure formatting logic if implemented.
+  - Evidence:
+    - No safe `StatsSnapshot` type or stats methods are exposed.
+    - `docs/safe-api.md` requires any future safe stats API to return owned numeric snapshots without references into allocator metadata.
+    - Snapshot collection/formatting tests do not apply until a safe stats API exists.
 
-- [ ] Define stats reset/merge behavior if exposed.
+- [x] Define stats reset/merge behavior if exposed.
   - Required docs:
     - Whether stats are process-wide, heap-local, thread-local, or snapshot-only.
     - Whether reset affects global allocator state.
@@ -827,10 +834,13 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Tests cover merge/reset semantics against raw API parity.
     - Docs include feature and platform caveats.
+  - Evidence:
+    - Safe stats reset/merge is not exposed.
+    - `docs/safe-api.md` names process-wide, heap-local, thread-local, reset, and merge semantics as required future design points.
 
 ## E2. Safe options API
 
-- [ ] Decide whether to expose safe options.
+- [x] Decide whether to expose safe options.
   - Required decision:
     - No safe options API until initialization/order/threading semantics are specified.
     - Or expose a narrow read-only options view.
@@ -838,8 +848,11 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Decision is documented.
     - No safe option setter exists for options that can break allocator invariants when changed at the wrong time.
+  - Evidence:
+    - `docs/api-inventory.md`, `docs/safe-api.md`, and README state that safe options wrappers are intentionally deferred.
+    - No safe `Options` type or option setter exists in the crate-root safe facade.
 
-- [ ] If options are exposed, define typed option keys and values.
+- [x] If options are exposed, define typed option keys and values.
   - Required behavior:
     - No raw `mi_option_t` in safe APIs.
     - No ambiguous bool/int setters.
@@ -849,17 +862,24 @@ These wrappers should be added only if they can avoid dangling references, globa
     - Unit tests cover valid and invalid values.
     - Feature-specific options are cfg-gated and documented.
     - Raw C option behavior remains available under `raw`.
+  - Evidence:
+    - Safe options are not exposed, so typed safe option keys and values are intentionally absent.
+    - Raw C option behavior remains under `raw`.
 
-- [ ] Prevent allocator recursion in option diagnostics.
+- [x] Prevent allocator recursion in option diagnostics.
   - Required behavior:
     - Safe option printing/logging does not allocate through the allocator unless explicitly outside allocator-critical context.
     - Callback/output behavior is raw unless a safe callback wrapper exists.
   - Validation:
     - `tests/no_allocation_critical_paths.rs` or source audit covers option diagnostics.
+  - Evidence:
+    - No safe option diagnostics API exists.
+    - `docs/safe-api.md` requires any future safe option diagnostics to avoid allocator recursion in allocator-critical contexts.
+    - Existing allocator critical-path coverage remains in `tests/no_allocation_critical_paths.rs`.
 
 ## E3. Safe process info
 
-- [ ] Decide whether to expose `ProcessInfo`.
+- [x] Decide whether to expose `ProcessInfo`.
   - Required behavior if implemented:
     - Snapshot owns numeric values.
     - OS/platform unsupported fields are `Option` or a typed unsupported error.
@@ -867,6 +887,10 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Tests call process info under Linux x86_64 GNU.
     - Docs specify platform support and unsupported fields.
+  - Evidence:
+    - `docs/api-inventory.md`, `docs/safe-api.md`, and README state that safe process-info wrappers are intentionally deferred.
+    - `docs/safe-api.md` requires any future safe process-info API to return owned numeric values and represent unsupported fields with `Option` or typed errors.
+    - Raw out-pointer behavior remains under `raw`.
 
 ---
 

@@ -32,6 +32,9 @@ No safe Rust `Heap`, `MainHeap`, `HeapRef`, `HeapAllocation`, `StatsSnapshot`,
 `Options`, or allocator-trait wrapper is stabilized yet. Raw heap functions
 remain under `raw`; safe heap wrappers are intentionally deferred until their
 ownership, lifetime, threading, and deletion semantics are designed.
+Safe stats, options, process-info, and callback wrappers are also intentionally
+deferred until their snapshot ownership, runtime mutability, recursion, and
+platform semantics are designed.
 
 Adding a safe wrapper requires documenting how it enforces ownership, lifetime,
 aliasing, nullability, alignment, threading, and unwind requirements without

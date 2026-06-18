@@ -905,7 +905,6 @@ fn phase6_dead_code_allowances_stay_intentional() {
 
     let expected = BTreeMap::from([
         ("src/core_types/mod.rs", 13),
-        ("src/internal.rs", 1),
         ("src/prim/emscripten.rs", 1),
         ("src/prim/osx.rs", 1),
         ("src/prim/wasi.rs", 1),
@@ -930,6 +929,10 @@ fn phase6_dead_code_allowances_stay_intentional() {
     assert!(
         !actual.contains_key("src/init.rs"),
         "init.rs should not regain dead_code allowances after wiring retained C-shaped helpers"
+    );
+    assert!(
+        !actual.contains_key("src/internal.rs"),
+        "internal.rs should not regain dead_code allowances after compatibility re-export cleanup"
     );
     assert!(
         !actual.contains_key("src/free.rs") && !actual.contains_key("src/page.rs"),

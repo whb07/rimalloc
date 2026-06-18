@@ -302,9 +302,9 @@ fn options_state_uses_internal_locks_like_c() {
     assert!(
         !alloc_rs.contains("CStr::from_ptr(msg).to_string_lossy()")
             && !free_rs.contains("CStr::from_ptr(msg).to_string_lossy()")
-            && alloc_rs.contains("core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes())")
+            && alloc_rs.contains("crate::free::mi_validate_pointer(p.cast_mut(), msg)")
             && free_rs.contains("core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes())"),
-        "pointer validation messages should borrow static C message names without lossy Rust decoding"
+        "pointer validation messages should route through raw C message names without lossy Rust decoding"
     );
 }
 
@@ -617,6 +617,23 @@ fn allocation_product_paths_use_typed_requests() {
 }
 
 #[test]
+fn realloc_validation_uses_pointer_lookup_boundary() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
+
+    assert!(
+        alloc_rs.contains(
+            "unsafe fn mi_validate_ptr_page(\n    p: *const c_void,\n    msg: *const c_char,\n) -> crate::core_types::PointerLookup"
+        ) && alloc_rs.contains("crate::free::mi_validate_pointer(p.cast_mut(), msg)")
+            && alloc_rs.contains("crate::core_types::PointerLookup::Valid { page, .. } => page.as_ptr()")
+            && alloc_rs.contains("crate::core_types::PointerLookup::Invalid { .. }")
+            && !alloc_rs.contains("unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const c_char) -> *mut mi_page_t")
+            && !alloc_rs.contains("_mi_safe_ptr_page"),
+        "realloc must use the typed PointerLookup validation boundary instead of a raw page-pointer validator"
+    );
+}
+
+#[test]
 fn generic_allocation_flags_use_typed_boundary() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
@@ -800,12 +817,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             .matches("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_safe_ptr_page(")
             .count()
             == 2
-            && alloc_rs.contains("let page = _mi_safe_ptr_page(p);")
+            && alloc_rs.contains("crate::free::mi_validate_pointer(p.cast_mut(), msg)")
             && free_rs.contains("let mut page = _mi_safe_ptr_page(p);")
             && heap_rs.contains("let page: *mut mi_page_t = _mi_safe_ptr_page(p);")
             && heap_rs.contains("let page = _mi_safe_ptr_page(p);")
             && arena_rs.contains("let page = unsafe { _mi_safe_ptr_page(start) };"),
-        "safe pointer page lookup should keep C's _mi_safe_ptr_page local call boundary"
+        "safe pointer page lookup should keep C's _mi_safe_ptr_page local call boundary outside typed realloc validation"
     );
     assert!(
         theap_rs

@@ -2,24 +2,22 @@
 
 #![allow(dead_code, clippy::missing_safety_doc, unsafe_op_in_unsafe_fn)]
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_void};
+use core::ffi::{c_char, c_int, c_long, c_void};
 use core::mem::size_of;
 use core::{
     ptr,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::bits::MI_INTPTR_SIZE;
 use crate::free::_mi_usable_size_typed;
 use crate::internal::{
     __mi_stat_adjust_decrease, __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up,
     _mi_is_aligned, _mi_memcpy, _mi_memzero, _mi_memzero_aligned, _mi_os_page_size, _mi_ptr_page,
-    _mi_safe_ptr_page, _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page, _mi_theap_heap,
-    _mi_thread_id, MI_BLOCK_TAG_GUARDED, MI_DEBUG, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_PADDING,
-    MI_PADDING_CHECK, mi_likely, mi_page_block_size, mi_page_heap, mi_page_keys,
-    mi_page_set_has_interior_pointers, mi_page_slice_start, mi_page_start,
-    mi_page_usable_block_size, mi_ptr_encode_canary, mi_theap_is_initialized,
-    mi_theap_malloc_use_guarded, mi_unlikely,
+    _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page, _mi_theap_heap, _mi_thread_id,
+    MI_BLOCK_TAG_GUARDED, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_PADDING, MI_PADDING_CHECK,
+    mi_likely, mi_page_block_size, mi_page_heap, mi_page_keys, mi_page_set_has_interior_pointers,
+    mi_page_slice_start, mi_page_start, mi_page_usable_block_size, mi_ptr_encode_canary,
+    mi_theap_is_initialized, mi_theap_malloc_use_guarded, mi_unlikely,
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
@@ -29,8 +27,8 @@ use crate::track::{
     MI_TRACK_ENABLED, mi_track_align, mi_track_malloc, mi_track_mem_defined, mi_track_mem_undefined,
 };
 use crate::types::{
-    EINVAL, ENOMEM, EOVERFLOW, MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING_SIZE,
-    MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_heap_t, mi_padding_t, mi_page_t, mi_theap_t,
+    ENOMEM, EOVERFLOW, MI_DEBUG_UNINIT, MI_MAX_ALIGN_SIZE, MI_PADDING_SIZE, MI_SMALL_SIZE_MAX,
+    MI_STAT, mi_block_t, mi_heap_t, mi_padding_t, mi_page_t, mi_theap_t,
 };
 
 unsafe extern "C" {
@@ -601,28 +599,11 @@ pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_voi
     p
 }
 
-unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const c_char) -> *mut mi_page_t {
-    if MI_DEBUG != 0 {
-        if !p.is_null()
-            && ((p as usize) & (MI_INTPTR_SIZE - 1)) != 0
-            && !mi_option_is_enabled(mi_option_t::mi_option_guarded_precise)
-        {
-            let msg = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
-            _mi_error_message_fmt(
-                EINVAL,
-                format_args!("{msg}: invalid (unaligned) pointer: {p:p}\n"),
-            );
-            return ptr::null_mut();
-        }
-        let page = _mi_safe_ptr_page(p);
-        if !p.is_null() && page.is_null() {
-            let msg = core::str::from_utf8_unchecked(CStr::from_ptr(msg).to_bytes());
-            _mi_error_message_fmt(EINVAL, format_args!("{msg}: invalid pointer: {p:p}\n"));
-        }
-        page
-    } else {
-        _mi_ptr_page(p)
-    }
+unsafe fn mi_validate_ptr_page(
+    p: *const c_void,
+    msg: *const c_char,
+) -> crate::core_types::PointerLookup {
+    crate::free::mi_validate_pointer(p.cast_mut(), msg)
 }
 
 pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
@@ -639,7 +620,16 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
         }
         (ptr::null_mut(), 0usize)
     } else {
-        let page = mi_validate_ptr_page(p, c"mi_realloc".as_ptr());
+        let page = match mi_validate_ptr_page(p, c"mi_realloc".as_ptr()) {
+            crate::core_types::PointerLookup::Valid { page, .. } => page.as_ptr(),
+            crate::core_types::PointerLookup::Null
+            | crate::core_types::PointerLookup::Invalid { .. } => {
+                if !usable_pre.is_null() {
+                    *usable_pre = 0;
+                }
+                return ptr::null_mut();
+            }
+        };
         let size = _mi_usable_size_typed(p, page);
         if !usable_pre.is_null() {
             *usable_pre = mi_page_usable_block_size(page).get();

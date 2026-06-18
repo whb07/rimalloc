@@ -36,6 +36,12 @@ and `repr(C)` layouts for tests, benchmarks, and low-level integration.
 The raw facade is a compatibility surface, not a safe abstraction. Most calls
 are unsafe because they inherit mimalloc's C preconditions.
 
+The source/documentation inventory is checked by:
+
+```sh
+scripts/check-api-inventory.py
+```
+
 ## C ABI Symbols
 
 The `cdylib` exports mimalloc-compatible C ABI symbols. The authoritative local

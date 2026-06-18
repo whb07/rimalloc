@@ -1,11 +1,6 @@
 //! Random number generation
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    clippy::missing_const_for_fn,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
 
 use crate::bits::mi_rotl32;
 use crate::types::{mi_msecs_t, mi_random_ctx_t};

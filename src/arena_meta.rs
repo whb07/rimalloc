@@ -1,6 +1,6 @@
 //! Mechanical translation of `src/arena-meta.c`.
 
-#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::c_void;
 use core::mem::offset_of;
@@ -47,11 +47,16 @@ static mi_meta_pages: AtomicPtr<mi_meta_page_t> = AtomicPtr::new(ptr::null_mut()
 /// If `block_idx` is non-null, it must be valid for writing one `usize`.
 #[inline]
 pub unsafe fn mi_meta_page_of_ptr(p: *mut c_void, block_idx: *mut usize) -> *mut mi_meta_page_t {
-    let mpage = (_mi_align_down_ptr(p, MI_ARENA_SLICE_ALIGN).cast::<u8>())
-        .add(_mi_os_secure_guard_page_size())
-        .cast::<mi_meta_page_t>();
+    let mpage = unsafe {
+        (_mi_align_down_ptr(p, MI_ARENA_SLICE_ALIGN).cast::<u8>())
+            .add(_mi_os_secure_guard_page_size())
+            .cast::<mi_meta_page_t>()
+    };
     if !block_idx.is_null() {
-        *block_idx = (p.cast::<u8>().offset_from(mpage.cast::<u8>()) as usize) / MI_META_BLOCK_SIZE;
+        unsafe {
+            *block_idx =
+                (p.cast::<u8>().offset_from(mpage.cast::<u8>()) as usize) / MI_META_BLOCK_SIZE;
+        }
     }
     mpage
 }
@@ -61,7 +66,7 @@ pub unsafe fn mi_meta_page_of_ptr(p: *mut c_void, block_idx: *mut usize) -> *mut
 /// `mpage` must point to a live meta page.
 #[inline]
 pub unsafe fn mi_meta_page_next(mpage: *mut mi_meta_page_t) -> *mut mi_meta_page_t {
-    (*mpage).next
+    unsafe { (*mpage).next }
 }
 
 /// # Safety
@@ -70,77 +75,84 @@ pub unsafe fn mi_meta_page_next(mpage: *mut mi_meta_page_t) -> *mut mi_meta_page
 /// page's meta block range.
 #[inline]
 pub unsafe fn mi_meta_block_start(mpage: *mut mi_meta_page_t, block_idx: usize) -> *mut c_void {
+    let guard_size = unsafe { _mi_os_secure_guard_page_size() };
     crate::mi_assert_internal!(_mi_is_aligned(
-        mpage
-            .cast::<u8>()
-            .sub(_mi_os_secure_guard_page_size())
-            .cast(),
+        unsafe { mpage.cast::<u8>().sub(guard_size).cast() },
         MI_ARENA_SLICE_ALIGN
     ));
     crate::mi_assert_internal!(block_idx < MI_META_BLOCKS_PER_PAGE);
-    let p = mpage
-        .cast::<u8>()
-        .sub(_mi_os_secure_guard_page_size())
-        .add(block_idx * MI_META_BLOCK_SIZE)
-        .cast::<c_void>();
-    crate::mi_assert_internal!(mpage == mi_meta_page_of_ptr(p, ptr::null_mut()));
+    let p = unsafe {
+        mpage
+            .cast::<u8>()
+            .sub(guard_size)
+            .add(block_idx * MI_META_BLOCK_SIZE)
+            .cast::<c_void>()
+    };
+    crate::mi_assert_internal!(mpage == unsafe { mi_meta_page_of_ptr(p, ptr::null_mut()) });
     p
 }
 
 unsafe fn mi_meta_page_zalloc() -> *mut mi_meta_page_t {
-    let mut memid: mi_memid_t = core::mem::zeroed();
-    let base = _mi_arenas_alloc_aligned(
-        mi_heap_main(),
-        MI_META_PAGE_SIZE,
-        MI_ARENA_SLICE_ALIGN,
-        0,
-        true,
-        MI_SECURE == 0,
-        ptr::null_mut(),
-        0,
-        -1,
-        ptr::addr_of_mut!(memid),
-    )
-    .cast::<u8>();
-    if base.is_null() {
-        return ptr::null_mut();
-    }
-    crate::mi_assert_internal!(_mi_is_aligned(base.cast(), MI_ARENA_SLICE_ALIGN));
-    if !memid.initially_zero {
-        _mi_memzero_aligned(base.cast(), MI_ARENA_SLICE_SIZE);
-    }
+    unsafe {
+        let mut memid: mi_memid_t = core::mem::zeroed();
+        let base = _mi_arenas_alloc_aligned(
+            mi_heap_main(),
+            MI_META_PAGE_SIZE,
+            MI_ARENA_SLICE_ALIGN,
+            0,
+            true,
+            MI_SECURE == 0,
+            ptr::null_mut(),
+            0,
+            -1,
+            ptr::addr_of_mut!(memid),
+        )
+        .cast::<u8>();
+        if base.is_null() {
+            return ptr::null_mut();
+        }
+        crate::mi_assert_internal!(_mi_is_aligned(base.cast(), MI_ARENA_SLICE_ALIGN));
+        if !memid.initially_zero {
+            _mi_memzero_aligned(base.cast(), MI_ARENA_SLICE_SIZE);
+        }
 
-    if MI_SECURE != 0 {
-        _mi_os_secure_guard_page_set_at(base.cast(), memid);
-        _mi_os_secure_guard_page_set_before(base.add(MI_META_PAGE_SIZE).cast(), memid);
-    }
+        if MI_SECURE != 0 {
+            _mi_os_secure_guard_page_set_at(base.cast(), memid);
+            _mi_os_secure_guard_page_set_before(base.add(MI_META_PAGE_SIZE).cast(), memid);
+        }
 
-    let mpage = base
-        .add(_mi_os_secure_guard_page_size())
-        .cast::<mi_meta_page_t>();
-    (*mpage).memid = memid;
-    mi_bbitmap_init(
-        ptr::addr_of_mut!((*mpage).blocks_free),
-        MI_META_BLOCKS_PER_PAGE,
-        true,
-    );
-    let mpage_size = offset_of!(mi_meta_page_t, blocks_free)
-        + mi_bbitmap_size(MI_META_BLOCKS_PER_PAGE, ptr::null_mut());
-    let info_blocks = _mi_divide_up(mpage_size, MI_META_BLOCK_SIZE);
-    let guard_blocks = _mi_divide_up(_mi_os_secure_guard_page_size(), MI_META_BLOCK_SIZE);
-    crate::mi_assert_internal!(info_blocks + 2 * guard_blocks < MI_META_BLOCKS_PER_PAGE);
-    mi_bbitmap_unsafe_setN(
-        ptr::addr_of_mut!((*mpage).blocks_free),
-        info_blocks + guard_blocks,
-        MI_META_BLOCKS_PER_PAGE - info_blocks - 2 * guard_blocks,
-    );
+        let mpage = base
+            .add(_mi_os_secure_guard_page_size())
+            .cast::<mi_meta_page_t>();
+        (*mpage).memid = memid;
+        mi_bbitmap_init(
+            ptr::addr_of_mut!((*mpage).blocks_free),
+            MI_META_BLOCKS_PER_PAGE,
+            true,
+        );
+        let mpage_size = offset_of!(mi_meta_page_t, blocks_free)
+            + mi_bbitmap_size(MI_META_BLOCKS_PER_PAGE, ptr::null_mut());
+        let info_blocks = _mi_divide_up(mpage_size, MI_META_BLOCK_SIZE);
+        let guard_blocks = _mi_divide_up(_mi_os_secure_guard_page_size(), MI_META_BLOCK_SIZE);
+        crate::mi_assert_internal!(info_blocks + 2 * guard_blocks < MI_META_BLOCKS_PER_PAGE);
+        mi_bbitmap_unsafe_setN(
+            ptr::addr_of_mut!((*mpage).blocks_free),
+            info_blocks + guard_blocks,
+            MI_META_BLOCKS_PER_PAGE - info_blocks - 2 * guard_blocks,
+        );
 
-    let mut old = mi_meta_pages.load(Ordering::Acquire);
-    loop {
-        (*mpage).next = old;
-        match mi_meta_pages.compare_exchange_weak(old, mpage, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => return mpage,
-            Err(actual) => old = actual,
+        let mut old = mi_meta_pages.load(Ordering::Acquire);
+        loop {
+            (*mpage).next = old;
+            match mi_meta_pages.compare_exchange_weak(
+                old,
+                mpage,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return mpage,
+                Err(actual) => old = actual,
+            }
         }
     }
 }
@@ -153,49 +165,51 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
     size: usize,
     pmemid: *mut mi_memid_t,
 ) -> *mut c_void {
-    crate::mi_assert_internal!(!pmemid.is_null());
-    let size = _mi_align_up(size, MI_META_BLOCK_SIZE);
-    if size == 0 || size > MI_META_MAX_SIZE {
-        return ptr::null_mut();
-    }
-    let block_count = _mi_divide_up(size, MI_META_BLOCK_SIZE);
-    crate::mi_assert_internal!(block_count > 0 && block_count < MI_BCHUNK_BITS);
-
-    let mpage0 = mi_meta_pages.load(Ordering::Acquire);
-    let mut mpage = mpage0;
-    while !mpage.is_null() {
-        let mut block_idx = 0usize;
-        if mi_bbitmap_try_find_and_clearN(
-            ptr::addr_of_mut!((*mpage).blocks_free),
-            0,
-            block_count,
-            ptr::addr_of_mut!(block_idx),
-        ) {
-            *pmemid = _mi_memid_create_meta(mpage.cast(), block_idx, block_count);
-            return mi_meta_block_start(mpage, block_idx);
+    unsafe {
+        crate::mi_assert_internal!(!pmemid.is_null());
+        let size = _mi_align_up(size, MI_META_BLOCK_SIZE);
+        if size == 0 || size > MI_META_MAX_SIZE {
+            return ptr::null_mut();
         }
-        mpage = mi_meta_page_next(mpage);
-    }
+        let block_count = _mi_divide_up(size, MI_META_BLOCK_SIZE);
+        crate::mi_assert_internal!(block_count > 0 && block_count < MI_BCHUNK_BITS);
 
-    if mi_meta_pages.load(Ordering::Acquire) != mpage0 {
-        return _mi_meta_zalloc(size, pmemid);
-    }
-
-    mpage = mi_meta_page_zalloc();
-    if !mpage.is_null() {
-        let mut block_idx = 0usize;
-        if mi_bbitmap_try_find_and_clearN(
-            ptr::addr_of_mut!((*mpage).blocks_free),
-            0,
-            block_count,
-            ptr::addr_of_mut!(block_idx),
-        ) {
-            *pmemid = _mi_memid_create_meta(mpage.cast(), block_idx, block_count);
-            return mi_meta_block_start(mpage, block_idx);
+        let mpage0 = mi_meta_pages.load(Ordering::Acquire);
+        let mut mpage = mpage0;
+        while !mpage.is_null() {
+            let mut block_idx = 0usize;
+            if mi_bbitmap_try_find_and_clearN(
+                ptr::addr_of_mut!((*mpage).blocks_free),
+                0,
+                block_count,
+                ptr::addr_of_mut!(block_idx),
+            ) {
+                *pmemid = _mi_memid_create_meta(mpage.cast(), block_idx, block_count);
+                return mi_meta_block_start(mpage, block_idx);
+            }
+            mpage = mi_meta_page_next(mpage);
         }
-    }
 
-    _mi_os_alloc(size, pmemid)
+        if mi_meta_pages.load(Ordering::Acquire) != mpage0 {
+            return _mi_meta_zalloc(size, pmemid);
+        }
+
+        mpage = mi_meta_page_zalloc();
+        if !mpage.is_null() {
+            let mut block_idx = 0usize;
+            if mi_bbitmap_try_find_and_clearN(
+                ptr::addr_of_mut!((*mpage).blocks_free),
+                0,
+                block_count,
+                ptr::addr_of_mut!(block_idx),
+            ) {
+                *pmemid = _mi_memid_create_meta(mpage.cast(), block_idx, block_count);
+                return mi_meta_block_start(mpage, block_idx);
+            }
+        }
+
+        _mi_os_alloc(size, pmemid)
+    }
 }
 
 /// # Safety
@@ -203,32 +217,34 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
 /// `p` may be null. Otherwise `p`, `size`, and `memid` must describe a live
 /// allocation returned by `_mi_meta_zalloc` or its arena fallback.
 pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
-    if p.is_null() {
-        return;
-    }
-    if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid) {
-        let block_count = meta.block_count.get() as usize;
-        let block_idx = meta.block_index.0 as usize;
-        let mpage = meta.meta_page.as_ptr().cast::<mi_meta_page_t>();
-        crate::mi_assert_internal!(_mi_divide_up(size, MI_META_BLOCK_SIZE) == block_count);
-        crate::mi_assert_internal!(mi_meta_page_of_ptr(p, ptr::null_mut()) == mpage);
-        crate::mi_assert_internal!(block_idx + block_count <= MI_META_BLOCKS_PER_PAGE);
-        crate::mi_assert_internal!(mi_bbitmap_is_clearN(
-            ptr::addr_of_mut!((*mpage).blocks_free),
-            block_idx,
-            block_count
-        ));
-        _mi_memzero_aligned(
-            mi_meta_block_start(mpage, block_idx),
-            block_count * MI_META_BLOCK_SIZE,
-        );
-        mi_bbitmap_setN(
-            ptr::addr_of_mut!((*mpage).blocks_free),
-            block_idx,
-            block_count,
-        );
-    } else {
-        _mi_arenas_free(p, size, memid);
+    unsafe {
+        if p.is_null() {
+            return;
+        }
+        if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid) {
+            let block_count = meta.block_count.get() as usize;
+            let block_idx = meta.block_index.0 as usize;
+            let mpage = meta.meta_page.as_ptr().cast::<mi_meta_page_t>();
+            crate::mi_assert_internal!(_mi_divide_up(size, MI_META_BLOCK_SIZE) == block_count);
+            crate::mi_assert_internal!(mi_meta_page_of_ptr(p, ptr::null_mut()) == mpage);
+            crate::mi_assert_internal!(block_idx + block_count <= MI_META_BLOCKS_PER_PAGE);
+            crate::mi_assert_internal!(mi_bbitmap_is_clearN(
+                ptr::addr_of_mut!((*mpage).blocks_free),
+                block_idx,
+                block_count
+            ));
+            _mi_memzero_aligned(
+                mi_meta_block_start(mpage, block_idx),
+                block_count * MI_META_BLOCK_SIZE,
+            );
+            mi_bbitmap_setN(
+                ptr::addr_of_mut!((*mpage).blocks_free),
+                block_idx,
+                block_count,
+            );
+        } else {
+            _mi_arenas_free(p, size, memid);
+        }
     }
 }
 
@@ -243,7 +259,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_is_meta_page(p: *mut c_void) -> bool {
         if mpage.cast::<c_void>() == p {
             return true;
         }
-        mpage = mi_meta_page_next(mpage);
+        mpage = unsafe { mi_meta_page_next(mpage) };
     }
     false
 }

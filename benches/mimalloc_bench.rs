@@ -489,6 +489,10 @@ fn scenarios() -> Vec<Scenario> {
             run: rptest::run,
         },
         Scenario {
+            name: "barnes",
+            run: barnes::run,
+        },
+        Scenario {
             name: "mleak10",
             run: |alloc| unsafe { mleak::run(alloc, 5) },
         },
@@ -2916,6 +2920,1012 @@ mod rptest {
             }
             let average_mops = mops as f64 / ticks;
             Duration::from_secs_f64(2_000_000.0 / average_mops)
+        }
+    }
+}
+
+mod barnes {
+    use super::*;
+
+    const NDIM: usize = 3;
+    const NSUB: usize = 1 << NDIM;
+    const MAX_BODIES_PER_LEAF: usize = 10;
+    const BODY: i16 = 1;
+    const CELL: i16 = 2;
+    const LEAF: i16 = 3;
+    const MAXLEVEL: i32 = 8 * std::mem::size_of::<i32>() as i32 - 2;
+    const IMAX: i32 = 1 << MAXLEVEL;
+    const N_BODY: usize = 163_840;
+    const SEED: i32 = 123;
+    const DTIME: f64 = 0.025;
+    const EPS: f64 = 0.05;
+    const TOL: f64 = 1.0;
+    const FCELLS: f64 = 2.0;
+    const FLEAVES: f64 = 5.0;
+    const TSTOP: f64 = 0.075;
+    const MFRAC: f64 = 0.999;
+    const PI: f64 = std::f64::consts::PI;
+
+    #[derive(Clone, Copy, Default, PartialEq, Eq)]
+    enum NodeRef {
+        #[default]
+        None,
+        Body(usize),
+        Cell(usize),
+        Leaf(usize),
+    }
+
+    #[derive(Clone, Copy)]
+    struct Body {
+        typ: i16,
+        mass: f64,
+        pos: [f64; NDIM],
+        cost: i32,
+        level: i32,
+        parent: NodeRef,
+        child_num: i32,
+        vel: [f64; NDIM],
+        acc: [f64; NDIM],
+        phi: f64,
+    }
+
+    impl Default for Body {
+        fn default() -> Self {
+            Self {
+                typ: BODY,
+                mass: 0.0,
+                pos: [0.0; NDIM],
+                cost: 0,
+                level: 0,
+                parent: NodeRef::None,
+                child_num: 0,
+                vel: [0.0; NDIM],
+                acc: [0.0; NDIM],
+                phi: 0.0,
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    struct Cell {
+        typ: i16,
+        mass: f64,
+        pos: [f64; NDIM],
+        cost: i32,
+        level: i32,
+        child_num: i32,
+        done: bool,
+        subp: [NodeRef; NSUB],
+    }
+
+    impl Default for Cell {
+        fn default() -> Self {
+            Self {
+                typ: CELL,
+                mass: 0.0,
+                pos: [0.0; NDIM],
+                cost: 0,
+                level: 0,
+                child_num: 0,
+                done: false,
+                subp: [NodeRef::None; NSUB],
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    struct Leaf {
+        typ: i16,
+        mass: f64,
+        pos: [f64; NDIM],
+        cost: i32,
+        level: i32,
+        parent: NodeRef,
+        child_num: i32,
+        done: bool,
+        num_bodies: usize,
+        bodyp: [usize; MAX_BODIES_PER_LEAF],
+    }
+
+    impl Default for Leaf {
+        fn default() -> Self {
+            Self {
+                typ: LEAF,
+                mass: 0.0,
+                pos: [0.0; NDIM],
+                cost: 0,
+                level: 0,
+                parent: NodeRef::None,
+                child_num: 0,
+                done: false,
+                num_bodies: 0,
+                bodyp: [0; MAX_BODIES_PER_LEAF],
+            }
+        }
+    }
+
+    struct ForeignArray<T> {
+        alloc: BenchAllocator,
+        ptr: *mut T,
+        len: usize,
+    }
+
+    impl<T> ForeignArray<T> {
+        unsafe fn new(alloc: BenchAllocator, len: usize) -> Self {
+            unsafe {
+                let bytes = len
+                    .checked_mul(std::mem::size_of::<T>())
+                    .expect("barnes allocation size overflow");
+                let ptr = alloc.malloc(bytes).cast::<T>();
+                assert!(!ptr.is_null(), "allocation failed in barnes");
+                Self { alloc, ptr, len }
+            }
+        }
+
+        unsafe fn get(&self, index: usize) -> &T {
+            assert!(index < self.len);
+            unsafe { &*self.ptr.add(index) }
+        }
+
+        unsafe fn get_mut(&mut self, index: usize) -> &mut T {
+            assert!(index < self.len);
+            unsafe { &mut *self.ptr.add(index) }
+        }
+
+        unsafe fn write(&mut self, index: usize, value: T) {
+            assert!(index < self.len);
+            unsafe { self.ptr.add(index).write(value) };
+        }
+    }
+
+    impl<T> Drop for ForeignArray<T> {
+        fn drop(&mut self) {
+            unsafe { self.alloc.free(self.ptr.cast()) }
+        }
+    }
+
+    struct Rand {
+        a: i64,
+        b: i64,
+        randx: i64,
+    }
+
+    impl Rand {
+        fn new(seed: i32) -> Self {
+            const MULT: i64 = 1_103_515_245;
+            const ADD: i64 = 12_345;
+            const MASK: i64 = 0x7fff_ffff;
+            let mut a = 1i64;
+            let mut b = 0i64;
+            let randx = (a * seed as i64 + b) & MASK;
+            a = (MULT * a) & MASK;
+            b = (MULT * b + ADD) & MASK;
+            Self { a, b, randx }
+        }
+
+        fn prand(&mut self) -> f64 {
+            const MASK: i64 = 0x7fff_ffff;
+            const TWOTO31: f64 = 2_147_483_648.0;
+            let last = self.randx;
+            self.randx = (self.a * self.randx + self.b) & MASK;
+            last as f64 / TWOTO31
+        }
+
+        fn xrand(&mut self, low: f64, high: f64) -> f64 {
+            low + (high - low) * self.prand()
+        }
+    }
+
+    struct Sim {
+        alloc: BenchAllocator,
+        nbody: usize,
+        maxleaf: usize,
+        maxcell: usize,
+        maxmybody: usize,
+        maxmycell: usize,
+        maxmyleaf: usize,
+        bodies: ForeignArray<Body>,
+        cells: ForeignArray<Cell>,
+        leaves: ForeignArray<Leaf>,
+        mybodytab: ForeignArray<usize>,
+        mycelltab: ForeignArray<usize>,
+        myleaftab: ForeignArray<usize>,
+        mynbody: usize,
+        mynumcell: usize,
+        mynumleaf: usize,
+        myncell: usize,
+        mynleaf: usize,
+        nstep: usize,
+        tnow: f64,
+        dthf: f64,
+        epssq: f64,
+        tolsq: f64,
+        rmin: [f64; NDIM],
+        min: [f64; NDIM],
+        max: [f64; NDIM],
+        rsize: f64,
+        root: usize,
+        pos0: [f64; NDIM],
+        acc0: [f64; NDIM],
+        phi0: f64,
+        dr: [f64; NDIM],
+        drsq: f64,
+        pmem: NodeRef,
+        pskip: usize,
+        myn2bterm: i32,
+        mynbcterm: i32,
+        skipself: bool,
+        checksum: f64,
+    }
+
+    impl Sim {
+        unsafe fn new(alloc: BenchAllocator) -> Self {
+            unsafe {
+                let maxleaf = (FLEAVES * N_BODY as f64) as usize;
+                let maxcell = (FCELLS * maxleaf as f64) as usize;
+                let maxmybody = N_BODY + maxleaf * MAX_BODIES_PER_LEAF;
+                let maxmycell = maxcell;
+                let maxmyleaf = maxleaf;
+                let mut sim = Self {
+                    alloc,
+                    nbody: N_BODY,
+                    maxleaf,
+                    maxcell,
+                    maxmybody,
+                    maxmycell,
+                    maxmyleaf,
+                    bodies: ForeignArray::new(alloc, N_BODY),
+                    cells: ForeignArray::new(alloc, maxcell),
+                    leaves: ForeignArray::new(alloc, maxleaf),
+                    mybodytab: ForeignArray::new(alloc, maxmybody),
+                    mycelltab: ForeignArray::new(alloc, maxmycell),
+                    myleaftab: ForeignArray::new(alloc, maxmyleaf),
+                    mynbody: 0,
+                    mynumcell: 0,
+                    mynumleaf: 0,
+                    myncell: 0,
+                    mynleaf: 0,
+                    nstep: 0,
+                    tnow: 0.0,
+                    dthf: 0.5 * DTIME,
+                    epssq: EPS * EPS,
+                    tolsq: TOL * TOL,
+                    rmin: [0.0; NDIM],
+                    min: [0.0; NDIM],
+                    max: [0.0; NDIM],
+                    rsize: 0.0,
+                    root: 0,
+                    pos0: [0.0; NDIM],
+                    acc0: [0.0; NDIM],
+                    phi0: 0.0,
+                    dr: [0.0; NDIM],
+                    drsq: 0.0,
+                    pmem: NodeRef::None,
+                    pskip: 0,
+                    myn2bterm: 0,
+                    mynbcterm: 0,
+                    skipself: false,
+                    checksum: 0.0,
+                };
+                sim.testdata();
+                sim.setbound();
+                sim.find_my_initial_bodies();
+                sim
+            }
+        }
+
+        unsafe fn body(&self, index: usize) -> &Body {
+            unsafe { self.bodies.get(index) }
+        }
+
+        unsafe fn body_mut(&mut self, index: usize) -> &mut Body {
+            unsafe { self.bodies.get_mut(index) }
+        }
+
+        unsafe fn cell(&self, index: usize) -> &Cell {
+            unsafe { self.cells.get(index) }
+        }
+
+        unsafe fn cell_mut(&mut self, index: usize) -> &mut Cell {
+            unsafe { self.cells.get_mut(index) }
+        }
+
+        unsafe fn leaf(&self, index: usize) -> &Leaf {
+            unsafe { self.leaves.get(index) }
+        }
+
+        unsafe fn leaf_mut(&mut self, index: usize) -> &mut Leaf {
+            unsafe { self.leaves.get_mut(index) }
+        }
+
+        unsafe fn testdata(&mut self) {
+            unsafe {
+                let mut rng = Rand::new(SEED);
+                let rsc = 9.0 * PI / 16.0;
+                let vsc = (1.0 / rsc).sqrt();
+                let mut cmr = [0.0; NDIM];
+                let mut cmv = [0.0; NDIM];
+                let halfnbody = self.nbody.div_ceil(2);
+                for i in 0..halfnbody {
+                    let mut body = Body {
+                        typ: BODY,
+                        mass: 1.0 / self.nbody as f64,
+                        cost: 1,
+                        ..Body::default()
+                    };
+                    let mut r = 1.0 / (rng.xrand(0.0, MFRAC).powf(-2.0 / 3.0) - 1.0).sqrt();
+                    while r > 9.0 {
+                        r = 1.0 / (rng.xrand(0.0, MFRAC).powf(-2.0 / 3.0) - 1.0).sqrt();
+                    }
+                    body.pos = Self::pickshell(&mut rng, rsc * r);
+                    add_assign(&mut cmr, body.pos);
+                    let mut x;
+                    let mut y;
+                    loop {
+                        x = rng.xrand(0.0, 1.0);
+                        y = rng.xrand(0.0, 0.1);
+                        if y <= x * x * (1.0 - x * x).powf(3.5) {
+                            break;
+                        }
+                    }
+                    let v = 2.0_f64.sqrt() * x / (1.0 + r * r).powf(0.25);
+                    body.vel = Self::pickshell(&mut rng, vsc * v);
+                    add_assign(&mut cmv, body.vel);
+                    self.bodies.write(i, body);
+                }
+
+                for i in halfnbody..self.nbody {
+                    let cp = *self.body(i - halfnbody);
+                    let mut body = Body {
+                        typ: BODY,
+                        mass: 1.0 / self.nbody as f64,
+                        cost: 1,
+                        ..Body::default()
+                    };
+                    for k in 0..NDIM {
+                        body.pos[k] = cp.pos[k] + 4.0;
+                        cmr[k] += body.pos[k];
+                        body.vel[k] = cp.vel[k];
+                        cmv[k] += body.vel[k];
+                    }
+                    self.bodies.write(i, body);
+                }
+
+                div_scalar(&mut cmr, self.nbody as f64);
+                div_scalar(&mut cmv, self.nbody as f64);
+                for i in 0..self.nbody {
+                    let body = self.body_mut(i);
+                    sub_assign(&mut body.pos, cmr);
+                    sub_assign(&mut body.vel, cmv);
+                }
+            }
+        }
+
+        fn pickshell(rng: &mut Rand, rad: f64) -> [f64; NDIM] {
+            loop {
+                let vec = [
+                    rng.xrand(-1.0, 1.0),
+                    rng.xrand(-1.0, 1.0),
+                    rng.xrand(-1.0, 1.0),
+                ];
+                let rsq = dot(vec, vec);
+                if rsq <= 1.0 {
+                    return mul_scalar(vec, rad / rsq.sqrt());
+                }
+            }
+        }
+
+        unsafe fn setbound(&mut self) {
+            unsafe {
+                self.min = [1e99; NDIM];
+                self.max = [-1e99; NDIM];
+                for i in 0..self.nbody {
+                    let pos = self.body(i).pos;
+                    for (k, value) in pos.into_iter().enumerate() {
+                        self.min[k] = self.min[k].min(value);
+                        self.max[k] = self.max[k].max(value);
+                    }
+                }
+                let mut side: f64 = 0.0;
+                for k in 0..NDIM {
+                    self.max[k] -= self.min[k];
+                    side = side.max(self.max[k]);
+                    self.rmin[k] = self.min[k] - side / 100000.0;
+                }
+                self.rsize = 1.00002 * side;
+                self.max = [-1e99; NDIM];
+                self.min = [1e99; NDIM];
+            }
+        }
+
+        unsafe fn find_my_initial_bodies(&mut self) {
+            unsafe {
+                self.mynbody = self.nbody;
+                for i in 0..self.nbody {
+                    self.mybodytab.write(i, i);
+                }
+            }
+        }
+
+        unsafe fn init_root(&mut self) {
+            unsafe {
+                self.root = 0;
+                self.mynumcell = 1;
+                self.myncell = 1;
+                self.mynumleaf = 0;
+                self.mynleaf = 0;
+                let root = Cell {
+                    typ: CELL,
+                    level: IMAX >> 1,
+                    done: false,
+                    subp: [NodeRef::None; NSUB],
+                    ..Cell::default()
+                };
+                self.cells.write(self.root, root);
+                self.mycelltab.write(0, self.root);
+            }
+        }
+
+        unsafe fn makecell(&mut self, parent: NodeRef) -> usize {
+            unsafe {
+                assert!(
+                    self.mynumcell < self.maxmycell,
+                    "barnes exhausted cell arena"
+                );
+                let index = self.mynumcell;
+                self.mynumcell += 1;
+                let level = match parent {
+                    NodeRef::Cell(parent) => self.cell(parent).level >> 1,
+                    _ => IMAX >> 1,
+                };
+                let cell = Cell {
+                    typ: CELL,
+                    level,
+                    done: false,
+                    subp: [NodeRef::None; NSUB],
+                    ..Cell::default()
+                };
+                self.cells.write(index, cell);
+                self.mycelltab.write(self.myncell, index);
+                self.myncell += 1;
+                index
+            }
+        }
+
+        unsafe fn makeleaf(&mut self, parent: NodeRef) -> usize {
+            unsafe {
+                assert!(
+                    self.mynumleaf < self.maxmyleaf,
+                    "barnes exhausted leaf arena"
+                );
+                let index = self.mynumleaf;
+                self.mynumleaf += 1;
+                let level = match parent {
+                    NodeRef::Cell(parent) => self.cell(parent).level >> 1,
+                    _ => IMAX >> 1,
+                };
+                let leaf = Leaf {
+                    typ: LEAF,
+                    level,
+                    parent,
+                    done: false,
+                    bodyp: [0; MAX_BODIES_PER_LEAF],
+                    ..Leaf::default()
+                };
+                self.leaves.write(index, leaf);
+                self.myleaftab.write(self.mynleaf, index);
+                self.mynleaf += 1;
+                index
+            }
+        }
+
+        unsafe fn maketree(&mut self) {
+            unsafe {
+                self.myncell = 1;
+                self.mynleaf = 0;
+                self.mynumcell = 1;
+                self.mynumleaf = 0;
+                for slot in 0..self.mynbody {
+                    let body_index = *self.mybodytab.get(slot);
+                    if self.body(body_index).mass != 0.0 {
+                        self.loadtree(body_index);
+                    }
+                }
+                self.hackcofm();
+            }
+        }
+
+        unsafe fn loadtree(&mut self, body_index: usize) {
+            unsafe {
+                let xp = self.intcoord(self.body(body_index).pos);
+                let mut mynode = self.root;
+                let mut kid_index = subindex(xp, self.cell(mynode).level);
+                let mut level = self.cell(mynode).level >> 1;
+
+                loop {
+                    assert_ne!(level, 0, "barnes tree ran out of levels");
+                    match self.cell(mynode).subp[kid_index] {
+                        NodeRef::None => {
+                            let leaf = self.makeleaf(NodeRef::Cell(mynode));
+                            {
+                                let body = self.body_mut(body_index);
+                                body.parent = NodeRef::Leaf(leaf);
+                                body.level = level;
+                                body.child_num = 0;
+                            }
+                            {
+                                let leaf_ref = self.leaf_mut(leaf);
+                                leaf_ref.child_num = kid_index as i32;
+                                leaf_ref.bodyp[0] = body_index;
+                                leaf_ref.num_bodies = 1;
+                            }
+                            self.cell_mut(mynode).subp[kid_index] = NodeRef::Leaf(leaf);
+                            return;
+                        }
+                        NodeRef::Leaf(leaf) => {
+                            if self.leaf(leaf).num_bodies == MAX_BODIES_PER_LEAF {
+                                let cell = self.subdivide_leaf(leaf, NodeRef::Cell(mynode), level);
+                                self.cell_mut(mynode).subp[kid_index] = NodeRef::Cell(cell);
+                            } else {
+                                let child_num = self.leaf(leaf).num_bodies;
+                                {
+                                    let body = self.body_mut(body_index);
+                                    body.parent = NodeRef::Leaf(leaf);
+                                    body.level = level;
+                                    body.child_num = child_num as i32;
+                                }
+                                let leaf_ref = self.leaf_mut(leaf);
+                                leaf_ref.bodyp[child_num] = body_index;
+                                leaf_ref.num_bodies += 1;
+                                return;
+                            }
+                        }
+                        NodeRef::Cell(cell) => {
+                            mynode = cell;
+                            kid_index = subindex(xp, level);
+                            level >>= 1;
+                        }
+                        NodeRef::Body(_) => unreachable!("barnes tree stores bodies in leaves"),
+                    }
+                    if let NodeRef::Cell(cell) = self.cell(mynode).subp[kid_index] {
+                        mynode = cell;
+                        kid_index = subindex(xp, level);
+                        level >>= 1;
+                    }
+                }
+            }
+        }
+
+        unsafe fn subdivide_leaf(&mut self, leaf: usize, parent: NodeRef, level: i32) -> usize {
+            unsafe {
+                let num_bodies = self.leaf(leaf).num_bodies;
+                let mut bodies = [0usize; MAX_BODIES_PER_LEAF];
+                for (i, body) in bodies.iter_mut().enumerate().take(num_bodies) {
+                    *body = self.leaf(leaf).bodyp[i];
+                }
+                self.leaf_mut(leaf).num_bodies = 0;
+
+                let cell = self.makecell(parent);
+                let child_num = self.leaf(leaf).child_num;
+                self.cell_mut(cell).child_num = child_num;
+
+                let first = bodies[0];
+                let first_index = subindex(self.intcoord(self.body(first).pos), level);
+                {
+                    let cell_ref = self.cell_mut(cell);
+                    cell_ref.subp[first_index] = NodeRef::Leaf(leaf);
+                }
+                {
+                    let leaf_ref = self.leaf_mut(leaf);
+                    leaf_ref.child_num = first_index as i32;
+                    leaf_ref.parent = NodeRef::Cell(cell);
+                    leaf_ref.level = level >> 1;
+                    leaf_ref.bodyp[0] = first;
+                    leaf_ref.num_bodies = 1;
+                }
+                {
+                    let body = self.body_mut(first);
+                    body.parent = NodeRef::Leaf(leaf);
+                    body.child_num = 0;
+                    body.level = level >> 1;
+                }
+
+                for &body_index in bodies.iter().take(num_bodies).skip(1) {
+                    let index = subindex(self.intcoord(self.body(body_index).pos), level);
+                    let target_leaf = match self.cell(cell).subp[index] {
+                        NodeRef::None => {
+                            let new_leaf = self.makeleaf(NodeRef::Cell(cell));
+                            self.leaf_mut(new_leaf).child_num = index as i32;
+                            self.cell_mut(cell).subp[index] = NodeRef::Leaf(new_leaf);
+                            new_leaf
+                        }
+                        NodeRef::Leaf(existing) => existing,
+                        _ => unreachable!("new barnes subdivision only contains leaves"),
+                    };
+                    let child = self.leaf(target_leaf).num_bodies;
+                    self.leaf_mut(target_leaf).bodyp[child] = body_index;
+                    self.leaf_mut(target_leaf).num_bodies += 1;
+                    let body = self.body_mut(body_index);
+                    body.parent = NodeRef::Leaf(target_leaf);
+                    body.child_num = child as i32;
+                    body.level = level >> 1;
+                }
+                cell
+            }
+        }
+
+        unsafe fn hackcofm(&mut self) {
+            unsafe {
+                for i in (0..self.mynleaf).rev() {
+                    let leaf_index = *self.myleaftab.get(i);
+                    let num_bodies = self.leaf(leaf_index).num_bodies;
+                    let mut mass = 0.0;
+                    let mut cost = 0;
+                    let mut pos = [0.0; NDIM];
+                    for j in 0..num_bodies {
+                        let body_index = self.leaf(leaf_index).bodyp[j];
+                        let body = self.body(body_index);
+                        mass += body.mass;
+                        cost += body.cost;
+                        add_assign(&mut pos, mul_scalar(body.pos, body.mass));
+                    }
+                    div_scalar(&mut pos, mass);
+                    let leaf = self.leaf_mut(leaf_index);
+                    leaf.mass = mass;
+                    leaf.cost = cost;
+                    leaf.pos = pos;
+                    leaf.done = true;
+                }
+
+                for i in (0..self.myncell).rev() {
+                    let cell_index = *self.mycelltab.get(i);
+                    let mut mass = 0.0;
+                    let mut cost = 0;
+                    let mut pos = [0.0; NDIM];
+                    for child in self.cell(cell_index).subp {
+                        if child != NodeRef::None {
+                            let child_mass = self.mass(child);
+                            mass += child_mass;
+                            cost += self.cost(child);
+                            add_assign(&mut pos, mul_scalar(self.pos(child), child_mass));
+                            self.set_done(child, false);
+                        }
+                    }
+                    div_scalar(&mut pos, mass);
+                    let cell = self.cell_mut(cell_index);
+                    cell.mass = mass;
+                    cell.cost = cost;
+                    cell.pos = pos;
+                    cell.done = true;
+                }
+            }
+        }
+
+        unsafe fn housekeep(&mut self) {
+            self.min = [1e99; NDIM];
+            self.max = [-1e99; NDIM];
+        }
+
+        unsafe fn collect_my_bodies(&mut self) {
+            unsafe {
+                self.mynbody = 0;
+                self.collect_bodies(NodeRef::Cell(self.root));
+            }
+        }
+
+        unsafe fn collect_bodies(&mut self, node: NodeRef) {
+            unsafe {
+                match node {
+                    NodeRef::Leaf(leaf) => {
+                        for i in 0..self.leaf(leaf).num_bodies {
+                            let body = self.leaf(leaf).bodyp[i];
+                            self.mybodytab.write(self.mynbody, body);
+                            self.mynbody += 1;
+                        }
+                    }
+                    NodeRef::Cell(cell) => {
+                        for child in self.cell(cell).subp {
+                            if child != NodeRef::None {
+                                self.collect_bodies(child);
+                            }
+                        }
+                    }
+                    NodeRef::Body(body) => {
+                        self.mybodytab.write(self.mynbody, body);
+                        self.mynbody += 1;
+                    }
+                    NodeRef::None => {}
+                }
+            }
+        }
+
+        unsafe fn compute_forces(&mut self) {
+            unsafe {
+                for i in 0..self.mynbody {
+                    let body_index = *self.mybodytab.get(i);
+                    let acc1 = self.body(body_index).acc;
+                    self.body_mut(body_index).cost = 0;
+                    self.hackgrav(body_index);
+                    if self.nstep > 0 {
+                        let dacc = sub(self.body(body_index).acc, acc1);
+                        let dvel = mul_scalar(dacc, self.dthf);
+                        add_assign(&mut self.body_mut(body_index).vel, dvel);
+                    }
+                }
+            }
+        }
+
+        unsafe fn hackgrav(&mut self, body_index: usize) {
+            unsafe {
+                self.pskip = body_index;
+                self.pos0 = self.body(body_index).pos;
+                self.phi0 = 0.0;
+                self.acc0 = [0.0; NDIM];
+                self.myn2bterm = 0;
+                self.mynbcterm = 0;
+                self.skipself = false;
+                self.walksub(NodeRef::Cell(self.root), self.rsize * self.rsize);
+                let myn2bterm = self.myn2bterm;
+                let mynbcterm = self.mynbcterm;
+                let phi0 = self.phi0;
+                let acc0 = self.acc0;
+                let body = self.body_mut(body_index);
+                body.phi = phi0;
+                body.acc = acc0;
+                body.cost = myn2bterm + mynbcterm;
+            }
+        }
+
+        unsafe fn walksub(&mut self, node: NodeRef, dsq: f64) {
+            unsafe {
+                if self.subdivp(node, dsq) {
+                    match node {
+                        NodeRef::Cell(cell) => {
+                            for child in self.cell(cell).subp {
+                                if child != NodeRef::None {
+                                    self.walksub(child, dsq / 4.0);
+                                }
+                            }
+                        }
+                        NodeRef::Leaf(leaf) => {
+                            for i in 0..self.leaf(leaf).num_bodies {
+                                let body = self.leaf(leaf).bodyp[i];
+                                if body != self.pskip {
+                                    self.gravsub(NodeRef::Body(body));
+                                } else {
+                                    self.skipself = true;
+                                }
+                            }
+                        }
+                        NodeRef::Body(body) => {
+                            if body != self.pskip {
+                                self.gravsub(node);
+                            } else {
+                                self.skipself = true;
+                            }
+                        }
+                        NodeRef::None => {}
+                    }
+                } else {
+                    self.gravsub(node);
+                }
+            }
+        }
+
+        unsafe fn subdivp(&mut self, node: NodeRef, dsq: f64) -> bool {
+            unsafe {
+                self.dr = sub(self.pos(node), self.pos0);
+                self.drsq = dot(self.dr, self.dr);
+                self.pmem = node;
+                self.tolsq * self.drsq < dsq
+            }
+        }
+
+        unsafe fn gravsub(&mut self, node: NodeRef) {
+            unsafe {
+                if node != self.pmem {
+                    self.dr = sub(self.pos(node), self.pos0);
+                    self.drsq = dot(self.dr, self.dr);
+                }
+                self.drsq += self.epssq;
+                let drabs = self.drsq.sqrt();
+                let phii = self.mass(node) / drabs;
+                self.phi0 -= phii;
+                let mor3 = phii / self.drsq;
+                add_assign(&mut self.acc0, mul_scalar(self.dr, mor3));
+                if self.typ(node) != BODY {
+                    self.mynbcterm += 1;
+                } else {
+                    self.myn2bterm += 1;
+                }
+            }
+        }
+
+        unsafe fn stepsystem(&mut self) {
+            unsafe {
+                self.init_root();
+                self.maketree();
+                self.housekeep();
+                self.collect_my_bodies();
+                self.compute_forces();
+
+                for i in 0..self.mynbody {
+                    let body_index = *self.mybodytab.get(i);
+                    let acc = self.body(body_index).acc;
+                    let vel = self.body(body_index).vel;
+                    let dvel = mul_scalar(acc, self.dthf);
+                    let vel1 = add(vel, dvel);
+                    let dpos = mul_scalar(vel1, DTIME);
+                    {
+                        let body = self.body_mut(body_index);
+                        add_assign(&mut body.pos, dpos);
+                        body.vel = add(vel1, dvel);
+                    }
+                    let pos = self.body(body_index).pos;
+                    for (k, value) in pos.into_iter().enumerate() {
+                        self.min[k] = self.min[k].min(value);
+                        self.max[k] = self.max[k].max(value);
+                    }
+                }
+
+                self.rsize = 0.0;
+                for k in 0..NDIM {
+                    self.max[k] -= self.min[k];
+                    self.rsize = self.rsize.max(self.max[k]);
+                    self.rmin[k] = self.min[k] - self.rsize / 100000.0;
+                }
+                self.rsize *= 1.00002;
+                self.min = [1e99; NDIM];
+                self.max = [-1e99; NDIM];
+                self.nstep += 1;
+                self.tnow += DTIME;
+            }
+        }
+
+        unsafe fn run(&mut self) {
+            unsafe {
+                while self.tnow < TSTOP + 0.1 * DTIME {
+                    self.stepsystem();
+                }
+                let mut sum = 0.0;
+                for i in 0..self.nbody {
+                    let body = self.body(i);
+                    sum += body.phi + body.pos[0] + body.vel[1] + body.acc[2];
+                }
+                self.checksum = sum;
+                std::hint::black_box(self.checksum);
+                std::hint::black_box((
+                    self.maxleaf,
+                    self.maxcell,
+                    self.maxmybody,
+                    self.alloc.name(),
+                ));
+            }
+        }
+
+        unsafe fn typ(&self, node: NodeRef) -> i16 {
+            unsafe {
+                match node {
+                    NodeRef::Body(body) => self.body(body).typ,
+                    NodeRef::Cell(cell) => self.cell(cell).typ,
+                    NodeRef::Leaf(leaf) => self.leaf(leaf).typ,
+                    NodeRef::None => 0,
+                }
+            }
+        }
+
+        unsafe fn mass(&self, node: NodeRef) -> f64 {
+            unsafe {
+                match node {
+                    NodeRef::Body(body) => self.body(body).mass,
+                    NodeRef::Cell(cell) => self.cell(cell).mass,
+                    NodeRef::Leaf(leaf) => self.leaf(leaf).mass,
+                    NodeRef::None => 0.0,
+                }
+            }
+        }
+
+        unsafe fn cost(&self, node: NodeRef) -> i32 {
+            unsafe {
+                match node {
+                    NodeRef::Body(body) => self.body(body).cost,
+                    NodeRef::Cell(cell) => self.cell(cell).cost,
+                    NodeRef::Leaf(leaf) => self.leaf(leaf).cost,
+                    NodeRef::None => 0,
+                }
+            }
+        }
+
+        unsafe fn pos(&self, node: NodeRef) -> [f64; NDIM] {
+            unsafe {
+                match node {
+                    NodeRef::Body(body) => self.body(body).pos,
+                    NodeRef::Cell(cell) => self.cell(cell).pos,
+                    NodeRef::Leaf(leaf) => self.leaf(leaf).pos,
+                    NodeRef::None => [0.0; NDIM],
+                }
+            }
+        }
+
+        unsafe fn set_done(&mut self, node: NodeRef, done: bool) {
+            unsafe {
+                match node {
+                    NodeRef::Cell(cell) => self.cell_mut(cell).done = done,
+                    NodeRef::Leaf(leaf) => self.leaf_mut(leaf).done = done,
+                    _ => {}
+                }
+            }
+        }
+
+        fn intcoord(&self, rp: [f64; NDIM]) -> [i32; NDIM] {
+            let mut xp = [0; NDIM];
+            for k in 0..NDIM {
+                let xsc = (rp[k] - self.rmin[k]) / self.rsize;
+                assert!((0.0..1.0).contains(&xsc), "barnes body out of root bounds");
+                xp[k] = (IMAX as f64 * xsc).floor() as i32;
+            }
+            xp
+        }
+    }
+
+    fn subindex(x: [i32; NDIM], level: i32) -> usize {
+        let mut i = 0usize;
+        let mut yes = false;
+        if (x[0] & level) != 0 {
+            i += NSUB >> 1;
+            yes = true;
+        }
+        for (k, value) in x.iter().enumerate().skip(1) {
+            if (((value & level) != 0) && !yes) || (((value & level) == 0) && yes) {
+                i += NSUB >> (k + 1);
+                yes = true;
+            } else {
+                yes = false;
+            }
+        }
+        i
+    }
+
+    fn add(a: [f64; NDIM], b: [f64; NDIM]) -> [f64; NDIM] {
+        [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+    }
+
+    fn sub(a: [f64; NDIM], b: [f64; NDIM]) -> [f64; NDIM] {
+        [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+    }
+
+    fn mul_scalar(a: [f64; NDIM], scalar: f64) -> [f64; NDIM] {
+        [a[0] * scalar, a[1] * scalar, a[2] * scalar]
+    }
+
+    fn dot(a: [f64; NDIM], b: [f64; NDIM]) -> f64 {
+        a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    }
+
+    fn add_assign(a: &mut [f64; NDIM], b: [f64; NDIM]) {
+        for k in 0..NDIM {
+            a[k] += b[k];
+        }
+    }
+
+    fn sub_assign(a: &mut [f64; NDIM], b: [f64; NDIM]) {
+        for k in 0..NDIM {
+            a[k] -= b[k];
+        }
+    }
+
+    fn div_scalar(a: &mut [f64; NDIM], scalar: f64) {
+        for value in a {
+            *value /= scalar;
+        }
+    }
+
+    pub unsafe fn run(alloc: BenchAllocator) -> Duration {
+        unsafe {
+            let start = Instant::now();
+            let mut sim = Sim::new(alloc);
+            sim.run();
+            start.elapsed()
         }
     }
 }

@@ -991,7 +991,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "src/prim/unix.rs",
         "src/prim/wasi.rs",
         "src/theap.rs",
-        "src/threadlocal.rs",
     ]);
 
     assert_eq!(
@@ -1002,8 +1001,9 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         !actual.contains("src/alloc_posix.rs")
             && !actual.contains("src/core_types/mod.rs")
             && !actual.contains("src/random.rs")
+            && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "POSIX allocation shims, core types, random helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "POSIX allocation shims, core types, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 

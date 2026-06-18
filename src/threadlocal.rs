@@ -1,6 +1,6 @@
 //! Dynamic thread-local key management.
 
-#![allow(non_camel_case_types, non_upper_case_globals, unsafe_op_in_unsafe_fn)]
+#![allow(non_camel_case_types, non_upper_case_globals)]
 
 use core::mem::size_of;
 use core::ptr;
@@ -233,7 +233,9 @@ unsafe extern "C" fn mi_thread_local_claim_fun(
     _arena: *mut mi_arena_t,
     keep_set: *mut bool,
 ) -> bool {
-    *keep_set = false;
+    unsafe {
+        *keep_set = false;
+    }
     true
 }
 

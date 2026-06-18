@@ -4,7 +4,6 @@
     dead_code,
     non_camel_case_types,
     non_upper_case_globals,
-    clippy::missing_safety_doc,
     unsafe_op_in_unsafe_fn
 )]
 
@@ -52,6 +51,10 @@ pub(crate) extern "C" fn _mi_toupper(c: c_char) -> c_char {
 #[used]
 static MI_TOUPPER_KEEP: extern "C" fn(c_char) -> c_char = _mi_toupper;
 
+/// # Safety
+///
+/// `s` and `t`, when non-null, must point to readable C strings for at least
+/// `n` bytes or until their first nul byte.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> i32 {
     if s.is_null() || t.is_null() || n == 0 {
@@ -72,6 +75,9 @@ pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char,
     0
 }
 
+/// # Safety
+///
+/// `s` and `t`, when non-null, must point to readable nul-terminated C strings.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) -> bool {
     if s.is_null() && t.is_null() {
@@ -94,6 +100,10 @@ pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) ->
     }
 }
 
+/// # Safety
+///
+/// `dest` must be writable for `dest_size` bytes when non-null. `src`, when
+/// non-null, must point to a readable nul-terminated C string.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlcpy(
     dest: *mut c_char,
@@ -109,6 +119,11 @@ pub(crate) unsafe extern "C" fn _mi_strlcpy(
     *as_bytes_mut_ptr(dest).add(n) = 0;
 }
 
+/// # Safety
+///
+/// `dest` must be writable for `dest_size` bytes and contain a nul byte within
+/// that range when non-null. `src`, when non-null, must point to a readable
+/// nul-terminated C string.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlcat(
     dest: *mut c_char,
@@ -131,6 +146,10 @@ pub(crate) unsafe extern "C" fn _mi_strlcat(
     _mi_strlcpy(dest.add(len), src, dest_size - len);
 }
 
+/// # Safety
+///
+/// `s`, when non-null, must be readable for `max_len` bytes or until its first
+/// nul byte.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) -> usize {
     if s.is_null() {
@@ -143,11 +162,19 @@ pub(crate) unsafe extern "C" fn _mi_strnlen(s: *const c_char, max_len: usize) ->
     len
 }
 
+/// # Safety
+///
+/// `s` must point to a readable nul-terminated C string when non-null.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strlen(s: *const c_char) -> usize {
     _mi_strnlen(s, usize::MAX)
 }
 
+/// # Safety
+///
+/// `s`, when non-null, must be readable for `max_len` bytes or until its first
+/// nul byte. `pat`, when non-null, must point to a readable nul-terminated C
+/// string.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_strnstr(
     s: *mut c_char,
@@ -182,6 +209,10 @@ pub(crate) unsafe extern "C" fn _mi_strnstr(
     ptr::null_mut()
 }
 
+/// # Safety
+///
+/// `name` must point to a readable nul-terminated C string. `result` must be
+/// writable for `result_size` bytes.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_getenv(
     name: *const c_char,
@@ -466,6 +497,11 @@ pub(crate) fn mi_vsnprintf_args(buf: *mut c_char, bufsize: usize, args: fmt::Arg
     out.used as i32
 }
 
+/// # Safety
+///
+/// `buf` must be writable for `bufsize` bytes. `fmt` must point to a readable
+/// nul-terminated C format string, and `args` must be a valid varargs object
+/// for that format on platforms that forward to C `vsnprintf`.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_vsnprintf(
     buf: *mut c_char,

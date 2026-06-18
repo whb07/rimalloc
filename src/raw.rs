@@ -9,6 +9,23 @@
 //! return raw pointers and inherit mimalloc's C ABI preconditions.
 //! The Rust module paths in this facade are also unstable until explicitly
 //! versioned; C ABI symbol compatibility is tracked separately.
+//!
+//! Correct raw allocation pairs must remain inside an explicit unsafe boundary:
+//!
+//! ```rust,no_run
+//! unsafe {
+//!     let p = mechanical_mimalloc::raw::mi_malloc(64);
+//!     mechanical_mimalloc::raw::mi_free(p);
+//! }
+//! ```
+//!
+//! Like C `free`, `mi_free` accepts null:
+//!
+//! ```rust,no_run
+//! unsafe {
+//!     mechanical_mimalloc::raw::mi_free(core::ptr::null_mut());
+//! }
+//! ```
 
 #![allow(unused_imports)]
 

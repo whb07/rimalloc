@@ -5,6 +5,24 @@ use core::ptr::NonNull;
 use crate::MiMalloc;
 
 /// Error returned when a safe Rust allocation request cannot be satisfied.
+///
+/// Allocation failure is platform and overcommit dependent, so examples should
+/// treat this as the error branch from safe allocation APIs rather than trying
+/// to force a reliable runtime failure:
+///
+/// ```rust,no_run
+/// use core::alloc::Layout;
+/// use mechanical_mimalloc::{AllocError, Allocation};
+///
+/// fn inspect(err: AllocError) {
+///     assert!(err.layout().align().is_power_of_two());
+/// }
+///
+/// let layout = Layout::from_size_align(1024, 16).unwrap();
+/// if let Err(err) = Allocation::new(layout) {
+///     inspect(err);
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AllocError {
     layout: Layout,
@@ -32,6 +50,19 @@ impl fmt::Display for AllocError {
 impl std::error::Error for AllocError {}
 
 /// Error returned when size/alignment parameters do not form a valid layout.
+///
+/// ```rust
+/// use mechanical_mimalloc::{Allocation, TryAllocError};
+///
+/// let err = Allocation::with_size_align(8, 3).unwrap_err();
+/// match err {
+///     TryAllocError::Layout(layout) => {
+///         assert_eq!(layout.size(), 8);
+///         assert_eq!(layout.align(), 3);
+///     }
+///     TryAllocError::Alloc(_) => unreachable!(),
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LayoutError {
     size: usize,
@@ -64,6 +95,13 @@ impl fmt::Display for LayoutError {
 impl std::error::Error for LayoutError {}
 
 /// Error returned by size/alignment convenience allocation constructors.
+///
+/// ```rust
+/// use mechanical_mimalloc::{Allocation, TryAllocError};
+///
+/// let err = Allocation::zeroed_with_size_align(1, 3).unwrap_err();
+/// assert!(matches!(err, TryAllocError::Layout(_)));
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TryAllocError {
     Layout(LayoutError),
@@ -88,6 +126,16 @@ impl std::error::Error for TryAllocError {}
 /// null allocation failure into [`AllocError`] and releases the allocation on
 /// drop. It intentionally does not expose heap handles, options, statistics, or
 /// allocator-owned metadata.
+///
+/// ```rust
+/// use core::alloc::Layout;
+/// use mechanical_mimalloc::Allocation;
+///
+/// let layout = Layout::from_size_align(32, 8).unwrap();
+/// let allocation = Allocation::zeroed(layout).unwrap();
+/// assert_eq!(allocation.len(), 32);
+/// assert!(!allocation.is_empty());
+/// ```
 pub struct Allocation {
     ptr: NonNull<u8>,
     layout: Layout,

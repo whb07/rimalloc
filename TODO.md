@@ -876,11 +876,14 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## G3. Documentation examples and compile-fail examples
 
-- [ ] Add rustdoc examples for every safe public type.
+- [x] Add rustdoc examples for every safe public type.
   - Validation:
     - `cargo test --doc --features std` passes.
+  - Evidence:
+    - `MiMalloc`, `Allocation`, `AllocError`, `LayoutError`, and `TryAllocError` have item-level rustdoc examples or explicit failure-branch guidance.
+    - `scripts/check-docs.sh` passes.
 
-- [ ] Add compile-fail examples for inaccessible internals.
+- [x] Add compile-fail examples for inaccessible internals.
   - Required examples:
     - `mechanical_mimalloc::alloc` not accessible.
     - `mechanical_mimalloc::core_types` not accessible.
@@ -888,8 +891,11 @@ These wrappers should be added only if they can avoid dangling references, globa
     - optional: `raw::internal` unavailable by default after raw narrowing.
   - Validation:
     - Doctests pass and fail in intended way.
+  - Evidence:
+    - Crate docs include compile-fail examples for `mechanical_mimalloc::alloc`, grouped inaccessible implementation modules, `core_types`, and raw calls without `unsafe`.
+    - `scripts/check-docs.sh` passes.
 
-- [ ] Add safety examples for raw calls.
+- [x] Add safety examples for raw calls.
   - Required docs:
     - Correct raw malloc/free pair.
     - Null free behavior.
@@ -897,6 +903,10 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Doctests pass.
     - Docs do not encourage raw use when safe wrapper suffices.
+  - Evidence:
+    - `src/raw.rs` documents a correct unsafe raw malloc/free pair and null free behavior.
+    - Crate docs present safe `MiMalloc`/`Allocation` examples before raw examples.
+    - `scripts/check-docs.sh` passes.
 
 ---
 

@@ -158,6 +158,13 @@ pub use safe::{AllocError, Allocation, LayoutError, TryAllocError};
 /// options, or statistics as safe Rust APIs yet because those invariants are
 /// still being audited. Use [`raw`] for the C-shaped surface while that work
 /// continues.
+///
+/// ```rust,no_run
+/// use mechanical_mimalloc::MiMalloc;
+///
+/// #[global_allocator]
+/// static GLOBAL: MiMalloc = MiMalloc;
+/// ```
 pub struct MiMalloc;
 
 unsafe impl core::alloc::GlobalAlloc for MiMalloc {

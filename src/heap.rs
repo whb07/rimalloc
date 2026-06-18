@@ -338,7 +338,6 @@ pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
 /// # Safety
 ///
 /// `heap` must be a live heap pointer with initialized thread-local metadata.
-#[allow(dead_code)]
 #[inline(never)]
 unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let heap = heap.cast_mut();
@@ -387,7 +386,6 @@ unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap
 ///
 /// `heap` may be null or point to a live heap. Non-main heaps must have a valid
 /// thread-local slot and must not be concurrently destroyed.
-#[allow(dead_code)]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
     if heap.is_null() || _mi_is_heap_main(heap) {
@@ -401,7 +399,6 @@ pub(crate) unsafe extern "C" fn _mi_heap_theap_get_peek(heap: *const mi_heap_t) 
 ///
 /// `heap` may be null or point to a live heap. Non-main heaps must have a valid
 /// thread-local slot and must not be concurrently destroyed.
-#[allow(dead_code)]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_theap_get_or_init(
     heap: *const mi_heap_t,

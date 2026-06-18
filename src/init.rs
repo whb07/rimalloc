@@ -162,7 +162,6 @@ pub const fn MI_STATS_NULL() -> mi_stats_t {
     }
 }
 
-#[allow(dead_code)]
 static mut subprocs_lock: mi_lock_t = mi_lock_t::new();
 static PROCESS_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
 static OPTIONS_POST_INIT_STATE: AtomicUsize = AtomicUsize::new(0);
@@ -192,7 +191,6 @@ static mut subprocs: *mut mi_subproc_t = ptr::addr_of_mut!(subproc_main)
     .cast::<MiSubprocPrefix>()
     .cast::<mi_subproc_t>();
 
-#[allow(dead_code)]
 static mut tld_empty: mi_tld_t = mi_tld_t {
     thread_id: 0,
     thread_seq: 0,
@@ -227,7 +225,6 @@ pub struct MiHeapMainPrefix {
     stats: mi_stats_t,
 }
 
-#[allow(dead_code)]
 static mut tld_main: mi_tld_t = mi_tld_t {
     thread_id: 0,
     thread_seq: 0,
@@ -1023,7 +1020,6 @@ pub(crate) unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
     }
 }
 
-#[allow(dead_code)]
 fn mi_tld_main_init() {
     // SAFETY: mutates the statically allocated main-thread tld during one-time lazy init.
     unsafe {
@@ -1034,7 +1030,6 @@ fn mi_tld_main_init() {
     }
 }
 
-#[allow(dead_code)]
 fn mi_theap_main_init() {
     // SAFETY: mutates the statically allocated main theap during one-time lazy init.
     unsafe {
@@ -1053,7 +1048,6 @@ fn mi_theap_main_init() {
     }
 }
 
-#[allow(dead_code)]
 fn mi_heap_main_init() {
     // SAFETY: mutates the statically allocated main heap during one-time lazy init.
     unsafe {
@@ -1093,7 +1087,6 @@ fn mi_tld_alloc() -> *mut mi_tld_t {
     }
 }
 
-#[allow(dead_code)]
 #[inline(always)]
 fn mi_tld_alloc_non_main(main_subproc: *mut mi_subproc_t) -> *mut mi_tld_t {
     // SAFETY: allocates a fresh zeroed tld block and initializes its local fields.
@@ -1125,7 +1118,6 @@ fn mi_tld_alloc_non_main(main_subproc: *mut mi_subproc_t) -> *mut mi_tld_t {
 }
 
 #[inline(never)]
-#[allow(dead_code)]
 fn mi_tld_free(tld: *mut mi_tld_t) {
     if tld.is_null() || tld == MI_TLD_INVALID {
         return;
@@ -1160,7 +1152,6 @@ unsafe extern "system" {
 }
 
 #[cfg(windows)]
-#[allow(dead_code)]
 unsafe fn mi_win_tls_slot_alloc(
     slot: *mut usize,
     extended: *mut usize,
@@ -1223,7 +1214,6 @@ unsafe fn mi_win_tls_slot_alloc(
 }
 
 #[cfg(windows)]
-#[allow(dead_code)]
 unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
     let index = unsafe { raw_index.read() };
     if index != TLS_OUT_OF_INDEXES {
@@ -1241,7 +1231,6 @@ unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
 }
 
 #[cfg(windows)]
-#[allow(dead_code)]
 unsafe fn mi_win_tls_slot_set(slot: usize, extended_slot: usize, value: *mut c_void) {
     crate::mi_assert_internal!(
         (slot >= MI_TLS_DIRECT_FIRST && slot < MI_TLS_DIRECT_FIRST + MI_TLS_DIRECT_SLOTS)
@@ -1256,11 +1245,9 @@ unsafe fn mi_win_tls_slot_set(slot: usize, extended_slot: usize, value: *mut c_v
 }
 
 #[cfg(not(windows))]
-#[allow(dead_code)]
 unsafe fn mi_win_tls_slot_set(_slot: usize, _extended_slot: usize, _value: *mut c_void) {}
 
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
-#[allow(dead_code)]
 unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
     let key = crate::threadlocal::_mi_thread_local_create();
     if key == 0 {
@@ -1278,7 +1265,6 @@ unsafe fn mi_pthread_key_create(pkey: *mut mi_thread_local_t) -> i32 {
     0
 }
 
-#[allow(dead_code)]
 fn mi_tls_slots_init() {
     static TLS_SLOTS_INIT: mi_atomic_once_t = mi_atomic_once_s::new();
     if let Some(_once) =
@@ -1326,7 +1312,6 @@ fn mi_tls_slots_init() {
     }
 }
 
-#[allow(dead_code)]
 fn mi_tls_slots_done() {
     #[cfg(windows)]
     unsafe {
@@ -1375,7 +1360,6 @@ fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
 }
 
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_env = "msvc"))]
-#[allow(dead_code)]
 fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
     let regs = {
         #[cfg(target_arch = "x86")]
@@ -1397,7 +1381,6 @@ fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
 }
 
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-#[allow(dead_code)]
 fn mi_cpuid(_regs4: *mut u32, _level: u32, _sublevel: u32) -> bool {
     false
 }
@@ -1674,7 +1657,6 @@ pub(crate) unsafe extern "C" fn _mi_is_theap_main(theap: *const mi_theap_t) -> b
 #[used]
 static MI_IS_THEAP_MAIN_KEEP: unsafe extern "C" fn(*const mi_theap_t) -> bool = _mi_is_theap_main;
 
-#[allow(dead_code)]
 #[inline(always)]
 unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
     let mut theap = unsafe { crate::prim::_mi_theap_default() };
@@ -1699,7 +1681,6 @@ unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
     theap
 }
 
-#[allow(dead_code)]
 unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
     let empty = unsafe { _mi_theap_empty_get() };
     unsafe {

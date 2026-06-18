@@ -47,6 +47,24 @@ fn dead_code_allowance_count(source: &str) -> usize {
         .count()
 }
 
+fn clippy_allowance_counts(sources: &[(String, String)]) -> BTreeMap<(&str, &str), usize> {
+    let mut counts = BTreeMap::new();
+    for (rel, source) in sources {
+        for line in source.lines() {
+            let Some(start) = line.find("clippy::") else {
+                continue;
+            };
+            let lint = &line[start + "clippy::".len()..];
+            let lint = lint
+                .split(|ch: char| ch == ')' || ch == ',' || ch.is_whitespace())
+                .next()
+                .expect("lint name after clippy::");
+            *counts.entry((rel.as_str(), lint)).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
 #[test]
 fn debug_assert_macros_are_release_gated_like_c_mimalloc() {
     let internal_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/internal.rs");
@@ -862,6 +880,28 @@ fn phase6_dead_code_allowances_stay_intentional() {
     assert!(
         !actual.contains_key("src/free.rs") && !actual.contains_key("src/page.rs"),
         "free/page hot-path modules should not regain dead_code allowances"
+    );
+}
+
+#[test]
+fn phase6_clippy_allowances_stay_intentional() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src = root.join("src");
+    let mut sources = Vec::new();
+    collect_rs_sources(root, &src, &mut sources);
+
+    let expected = BTreeMap::from([
+        (("src/arena.rs", "too_many_arguments"), 5),
+        (("src/free.rs", "absurd_extreme_comparisons"), 1),
+        (("src/os.rs", "absurd_extreme_comparisons"), 3),
+        (("src/os.rs", "too_many_arguments"), 1),
+        (("src/page.rs", "absurd_extreme_comparisons"), 1),
+    ]);
+
+    assert_eq!(
+        clippy_allowance_counts(&sources),
+        expected,
+        "localized Clippy allowances should remain limited to audited C-shaped arity and secure/debug constant comparisons"
     );
 }
 

@@ -489,8 +489,8 @@ fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_coun
     }
 }
 
-#[inline(never)]
 #[allow(dead_code)]
+#[inline(never)]
 unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {
         return;

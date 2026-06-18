@@ -6,7 +6,6 @@
     non_snake_case,
     non_upper_case_globals,
     clippy::collapsible_if,
-    clippy::implicit_saturating_sub,
     clippy::missing_const_for_fn,
     unsafe_op_in_unsafe_fn
 )]
@@ -2285,11 +2284,7 @@ fn mi_bchunk_try_clearN_(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, n: usize)
             }
             return false;
         }
-        m = if m <= MI_BCHUNK_BITS {
-            0
-        } else {
-            m - MI_BCHUNK_BITS
-        };
+        m = m.saturating_sub(MI_BCHUNK_BITS);
         count += 1;
     }
     true

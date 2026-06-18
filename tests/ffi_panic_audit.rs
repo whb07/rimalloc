@@ -27,6 +27,53 @@ fn rust_sources_under(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+fn production_lines(contents: &str) -> Vec<(usize, &str)> {
+    let mut lines = Vec::new();
+    let mut skip_test_module = false;
+    let mut pending_test_cfg = false;
+    let mut brace_depth = 0usize;
+
+    for (line_index, line) in contents.lines().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("//!") || trimmed.starts_with("///") {
+            continue;
+        }
+
+        if skip_test_module {
+            brace_depth = brace_depth
+                .saturating_add(line.matches('{').count())
+                .saturating_sub(line.matches('}').count());
+            if brace_depth == 0 {
+                skip_test_module = false;
+            }
+            continue;
+        }
+
+        if trimmed.starts_with("#[cfg(test)]") {
+            pending_test_cfg = true;
+            continue;
+        }
+
+        if pending_test_cfg && trimmed.starts_with("mod tests") {
+            skip_test_module = true;
+            brace_depth = line
+                .matches('{')
+                .count()
+                .saturating_sub(line.matches('}').count());
+            if brace_depth == 0 {
+                skip_test_module = false;
+            }
+            pending_test_cfg = false;
+            continue;
+        }
+
+        pending_test_cfg = false;
+        lines.push((line_index, line));
+    }
+
+    lines
+}
+
 #[test]
 fn production_sources_do_not_use_panic_prone_shortcuts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -36,7 +83,7 @@ fn production_sources_do_not_use_panic_prone_shortcuts() {
     let mut hits = Vec::new();
     for path in sources {
         let contents = fs::read_to_string(&path).expect("read source file");
-        for (line_index, line) in contents.lines().enumerate() {
+        for (line_index, line) in production_lines(&contents) {
             for marker in FORBIDDEN {
                 if (marker == "debug_assert!(" || marker == "debug_assert_eq!(")
                     && line.contains("mi_debug_assert")

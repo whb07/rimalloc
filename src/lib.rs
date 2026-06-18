@@ -7,9 +7,10 @@
 //!   benchmarks, and experimental integration.
 //!
 //! The Rust API is not yet stabilized. Use [`MiMalloc`] as a global allocator
-//! when a Rust `GlobalAlloc` facade is needed, or use [`raw`] for the explicit
-//! C-shaped compatibility surface. Implementation modules are crate-private so
-//! internal translation structure does not become an accidental SemVer contract.
+//! when a Rust `GlobalAlloc` facade is needed, [`Allocation`] when a small
+//! owned byte allocation wrapper is enough, or [`raw`] for the explicit C-shaped
+//! compatibility surface. Implementation modules are crate-private so internal
+//! translation structure does not become an accidental SemVer contract.
 //!
 //! # Features
 //!
@@ -45,6 +46,18 @@
 //!     let values = Box::new([1usize, 2, 3, 4]);
 //!     assert_eq!(values.iter().sum::<usize>(), 10);
 //! }
+//! ```
+//!
+//! Use the safe owned allocation wrapper when you want a Rust `Result` instead
+//! of the C API's null-on-failure convention:
+//!
+//! ```rust
+//! use core::alloc::Layout;
+//! use mechanical_mimalloc::Allocation;
+//!
+//! let layout = Layout::from_size_align(128, 16).unwrap();
+//! let allocation = Allocation::zeroed(layout).unwrap();
+//! assert_eq!(allocation.len(), 128);
 //! ```
 //!
 //! Use the raw C-shaped facade only behind an explicit unsafe boundary:
@@ -108,6 +121,7 @@ mod page;
 mod page_map;
 mod prim;
 mod random;
+mod safe;
 #[path = "static.rs"]
 mod static_c;
 mod stats;
@@ -115,6 +129,8 @@ mod theap;
 mod threadlocal;
 mod track;
 mod types;
+
+pub use safe::{AllocError, Allocation, LayoutError, TryAllocError};
 
 /// Rust `GlobalAlloc` facade backed by the crate's mimalloc implementation.
 ///

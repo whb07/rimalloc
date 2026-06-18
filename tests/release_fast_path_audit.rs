@@ -382,8 +382,11 @@ fn crate_root_exposes_only_curated_rust_facade() {
     let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
 
     assert!(
-        lib_rs.contains("pub mod raw;") && lib_rs.contains("pub struct MiMalloc;"),
-        "crate root should expose the explicit raw facade and the small Rust allocator facade"
+        lib_rs.contains("pub mod raw;")
+            && lib_rs.contains("pub struct MiMalloc;")
+            && lib_rs
+                .contains("pub use safe::{AllocError, Allocation, LayoutError, TryAllocError};"),
+        "crate root should expose the explicit raw facade and the small safe Rust allocator facade"
     );
 
     for module in [

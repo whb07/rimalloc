@@ -5,7 +5,10 @@ implementation internals.
 
 ## Crate Root
 
-- `MiMalloc`: the only safe Rust facade currently exported at the crate root.
+- `MiMalloc`: Rust `GlobalAlloc` facade.
+- `Allocation`: owned byte allocation wrapper backed by `MiMalloc`.
+- `AllocError`, `LayoutError`, `TryAllocError`: Rust-native error/status types
+  for the safe allocation wrapper.
 - `raw`: explicit C-shaped compatibility facade.
 
 Implementation modules such as allocation, page, heap, arena, OS, primitive,
@@ -14,8 +17,12 @@ re-exported from the crate root.
 
 ## Safe Rust API
 
-`MiMalloc` implements `core::alloc::GlobalAlloc`. No safe Rust `Heap`,
-`StatsSnapshot`, `Options`, or allocator-trait wrapper is stabilized yet.
+`MiMalloc` implements `core::alloc::GlobalAlloc`. `Allocation` owns one byte
+allocation and releases it on drop, translating C-style null allocation failure
+into Rust `Result` values.
+
+No safe Rust `Heap`, `StatsSnapshot`, `Options`, or allocator-trait wrapper is
+stabilized yet.
 
 Adding a safe wrapper requires documenting how it enforces ownership, lifetime,
 aliasing, nullability, alignment, threading, and unwind requirements without

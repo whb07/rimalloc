@@ -1,7 +1,8 @@
 # Known Limitations
 
 - The crate is pre-release and `publish = false`.
-- The safe Rust API is intentionally limited to `MiMalloc`.
+- The safe Rust API is intentionally limited to `MiMalloc`, `Allocation`, and
+  allocation error/status types.
 - Safe wrappers for heaps, options, stats, and allocator-owned handles are not
   stabilized.
 - The `raw` facade exposes C-shaped unsafe APIs and should not be treated as a

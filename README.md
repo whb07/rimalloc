@@ -22,6 +22,18 @@ use mechanical_mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 ```
 
+Use the owned byte allocation wrapper when you want Rust-native errors instead
+of C null/error conventions:
+
+```rust
+use core::alloc::Layout;
+use mechanical_mimalloc::Allocation;
+
+let layout = Layout::from_size_align(128, 16).unwrap();
+let allocation = Allocation::zeroed(layout).unwrap();
+assert_eq!(allocation.len(), 128);
+```
+
 Use the raw C-shaped facade only when you can uphold mimalloc's pointer,
 layout, alignment, and threading rules:
 
@@ -35,9 +47,10 @@ unsafe {
 ## Status
 
 This crate is not published and `Cargo.toml` has `publish = false`. The crate
-root exposes only `MiMalloc` and the explicit `raw` facade; implementation
-modules are private so translation structure does not become an accidental
-SemVer contract.
+root exposes only the small safe Rust facade (`MiMalloc`, `Allocation`, and
+allocation error types) plus the explicit `raw` facade; implementation modules
+are private so translation structure does not become an accidental SemVer
+contract.
 
 ## Features
 
@@ -91,6 +104,7 @@ the explicit raw C-shaped API:
 ```sh
 cargo check --examples --features std
 cargo run --example global_allocator --features std
+cargo run --example allocation --features std
 ```
 
 ## Safety Model

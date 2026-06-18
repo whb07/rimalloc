@@ -1,6 +1,6 @@
 //! Core allocation / free paths + libc overrides
 
-#![allow(dead_code, clippy::missing_safety_doc, unsafe_op_in_unsafe_fn)]
+#![allow(dead_code, unsafe_op_in_unsafe_fn)]
 
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::mem::size_of;
@@ -348,16 +348,23 @@ unsafe fn mi_theap_malloc_small_zero(
     }
 }
 
+/// # Safety
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
     mi_theap_malloc_small_zero(_mi_theap_default(), size, false, ptr::null_mut())
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     mi_theap_malloc_small_zero(theap, size, false, ptr::null_mut())
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     mi_theap_malloc_small_zero_nonnull(_mi_heap_theap(heap), size, false, ptr::null_mut())
@@ -421,16 +428,23 @@ static MI_THEAP_MALLOC_ZERO_KEEP: unsafe extern "C" fn(
     *mut usize,
 ) -> *mut c_void = _mi_theap_malloc_zero;
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     _mi_theap_malloc_zero(theap, size, false, ptr::null_mut())
 }
 
+/// # Safety
+/// Returned memory must be released through this allocator.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
     mi_theap_malloc(_mi_theap_default(), size)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::malloc(size) {
@@ -446,36 +460,53 @@ pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *m
     }
 }
 
+/// # Safety
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
     mi_theap_malloc_small_zero(_mi_theap_default(), size, true, ptr::null_mut())
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     mi_theap_malloc_small_zero(theap, size, true, ptr::null_mut())
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     mi_theap_malloc_small_zero_nonnull(_mi_heap_theap(heap), size, true, ptr::null_mut())
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     _mi_theap_malloc_zero(theap, size, true, ptr::null_mut())
 }
 
+/// # Safety
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc(size: usize) -> *mut c_void {
     _mi_theap_malloc_zero(_mi_theap_default(), size, true, ptr::null_mut())
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     mi_theap_malloc_zero_nonnull(_mi_heap_theap(heap), size, true, 0, ptr::null_mut())
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_calloc(
     theap: *mut mi_theap_t,
@@ -496,6 +527,8 @@ unsafe fn mi_theap_calloc_req(
     mi_theap_zalloc(theap, req.layout().requested().get())
 }
 
+/// # Safety
+/// Returned memory must be released through this allocator.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
@@ -505,6 +538,8 @@ pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
     }
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_calloc(
     heap: *mut mi_heap_t,
@@ -518,16 +553,23 @@ pub unsafe extern "C" fn mi_heap_calloc(
     }
 }
 
+/// # Safety
+/// If `usable` is non-null it must be writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_umalloc_small(size: usize, usable: *mut usize) -> *mut c_void {
     mi_theap_malloc_small_zero(_mi_theap_default(), size, false, usable)
 }
 
+/// # Safety
+/// If `usable` is non-null it must be writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_uzalloc_small(size: usize, usable: *mut usize) -> *mut c_void {
     mi_theap_malloc_small_zero(_mi_theap_default(), size, true, usable)
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// If `usable` is non-null it must be writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_umalloc(
     theap: *mut mi_theap_t,
@@ -537,16 +579,22 @@ pub unsafe extern "C" fn mi_theap_umalloc(
     _mi_theap_malloc_zero_ex(theap, size, false, 0, usable)
 }
 
+/// # Safety
+/// If `usable` is non-null it must be writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_umalloc(size: usize, usable: *mut usize) -> *mut c_void {
     mi_theap_umalloc(_mi_theap_default(), size, usable)
 }
 
+/// # Safety
+/// If `usable` is non-null it must be writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_void {
     _mi_theap_malloc_zero_ex(_mi_theap_default(), size, true, 0, usable)
 }
 
+/// # Safety
+/// If `usable` is non-null it must be writable for one `usize`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_ucalloc(count: usize, size: usize, usable: *mut usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
@@ -576,6 +624,8 @@ unsafe fn mi_theap_mallocn_req(
     mi_theap_malloc(theap, req.total().get())
 }
 
+/// # Safety
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
@@ -585,6 +635,8 @@ pub unsafe extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
     }
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_mallocn(
     heap: *mut mi_heap_t,
@@ -598,6 +650,8 @@ pub unsafe extern "C" fn mi_heap_mallocn(
     }
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_expand(p: *mut c_void, newsize: usize) -> *mut c_void {
     if MI_PADDING != 0 {
@@ -729,6 +783,9 @@ unsafe fn mi_theap_realloc_apply(
     newp
 }
 
+/// # Safety
+/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_realloc(
     theap: *mut mi_theap_t,
@@ -856,6 +913,8 @@ unsafe fn mi_theap_recalloc_req(
     mi_theap_realloc_req(theap, p, req.layout())
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) {
@@ -865,6 +924,8 @@ pub unsafe extern "C" fn mi_realloc(p: *mut c_void, newsize: usize) -> *mut c_vo
     }
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reallocn(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
@@ -874,6 +935,9 @@ pub unsafe extern "C" fn mi_reallocn(p: *mut c_void, count: usize, size: usize) 
     }
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator. Non-null usable outputs
+/// must be writable for one `usize` each.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_urealloc(
     p: *mut c_void,
@@ -891,6 +955,8 @@ pub unsafe extern "C" fn mi_urealloc(
     )
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reallocf(p: *mut c_void, newsize: usize) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::malloc(newsize) {
@@ -903,6 +969,8 @@ pub unsafe extern "C" fn mi_reallocf(p: *mut c_void, newsize: usize) -> *mut c_v
     }
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_rezalloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     if let Ok(layout) = crate::core_types::LayoutRequest::zalloc(newsize) {
@@ -912,11 +980,16 @@ pub unsafe extern "C" fn mi_rezalloc(p: *mut c_void, newsize: usize) -> *mut c_v
     }
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     mi_theap_recalloc(_mi_theap_default(), p, count, size)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc(
     heap: *mut mi_heap_t,
@@ -930,6 +1003,9 @@ pub unsafe extern "C" fn mi_heap_realloc(
     }
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_reallocn(
     heap: *mut mi_heap_t,
@@ -940,6 +1016,9 @@ pub unsafe extern "C" fn mi_heap_reallocn(
     mi_theap_reallocn(_mi_heap_theap(heap), p, count, size)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_reallocf(
     heap: *mut mi_heap_t,
@@ -956,6 +1035,9 @@ pub unsafe extern "C" fn mi_heap_reallocf(
     }
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc(
     heap: *mut mi_heap_t,
@@ -965,6 +1047,9 @@ pub unsafe extern "C" fn mi_heap_rezalloc(
     mi_theap_rezalloc(_mi_heap_theap(heap), p, newsize)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
+/// allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc(
     heap: *mut mi_heap_t,
@@ -975,21 +1060,31 @@ pub unsafe extern "C" fn mi_heap_recalloc(
     mi_theap_recalloc(_mi_heap_theap(heap), p, count, size)
 }
 
+/// # Safety
+/// `s` must be null or point to a valid NUL-terminated C string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_strdup(s: *const c_char) -> *mut c_char {
     mi_theap_strdup(_mi_theap_default(), s)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `s` must be null or point to a valid NUL-terminated C
+/// string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_strdup(heap: *mut mi_heap_t, s: *const c_char) -> *mut c_char {
     mi_theap_strdup(_mi_heap_theap(heap), s)
 }
 
+/// # Safety
+/// `s` must be null or readable for at most `n` bytes up to a NUL terminator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_strndup(s: *const c_char, n: usize) -> *mut c_char {
     mi_theap_strndup(_mi_theap_default(), s, n)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. `s` must be null or readable for at most `n` bytes up to a
+/// NUL terminator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_strndup(
     heap: *mut mi_heap_t,
@@ -1027,6 +1122,9 @@ unsafe fn mi_path_max() -> usize {
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]
+/// # Safety
+/// `fname` must point to a valid NUL-terminated path. If `resolved_name` is non-null it must be
+/// writable as required by `realpath`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_realpath(
     theap: *mut mi_theap_t,
@@ -1050,6 +1148,9 @@ pub unsafe extern "C" fn mi_theap_realpath(
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]
+/// # Safety
+/// `heap` must be a valid heap pointer. `fname` must point to a valid NUL-terminated path. If
+/// `resolved_name` is non-null it must be writable as required by `realpath`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realpath(
     heap: *mut mi_heap_t,
@@ -1060,6 +1161,9 @@ pub unsafe extern "C" fn mi_heap_realpath(
 }
 
 #[cfg(all(unix, not(target_os = "wasi")))]
+/// # Safety
+/// `fname` must point to a valid NUL-terminated path. If `resolved_name` is non-null it must be
+/// writable as required by `realpath`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realpath(
     fname: *const c_char,
@@ -1152,11 +1256,15 @@ pub(crate) unsafe extern "C" fn mi_theap_alloc_new(
     }
 }
 
+/// # Safety
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
     mi_theap_alloc_new(_mi_theap_default(), size)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_alloc_new(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     let p = mi_heap_malloc(heap, size);
@@ -1177,11 +1285,15 @@ unsafe fn mi_theap_alloc_new_n(theap: *mut mi_theap_t, count: usize, size: usize
     }
 }
 
+/// # Safety
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_n(count: usize, size: usize) -> *mut c_void {
     mi_theap_alloc_new_n(_mi_theap_default(), count, size)
 }
 
+/// # Safety
+/// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_alloc_new_n(
     heap: *mut mi_heap_t,
@@ -1191,6 +1303,8 @@ pub unsafe extern "C" fn mi_heap_alloc_new_n(
     mi_theap_alloc_new_n(_mi_heap_theap(heap), count, size)
 }
 
+/// # Safety
+/// Returned memory must be released through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
     let p = mi_malloc(size);
@@ -1201,6 +1315,9 @@ pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
     }
 }
 
+/// # Safety
+/// `alignment` must be valid for the aligned allocation API. Returned memory must be released
+/// through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_aligned(size: usize, alignment: usize) -> *mut c_void {
     let mut p: *mut c_void;
@@ -1212,6 +1329,9 @@ pub unsafe extern "C" fn mi_new_aligned(size: usize, alignment: usize) -> *mut c
     }
 }
 
+/// # Safety
+/// `alignment` must be valid for the aligned allocation API. Returned memory must be released
+/// through this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_aligned_nothrow(size: usize, alignment: usize) -> *mut c_void {
     let mut p: *mut c_void;
@@ -1223,6 +1343,8 @@ pub unsafe extern "C" fn mi_new_aligned_nothrow(size: usize, alignment: usize) -
     }
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     let mut q: *mut c_void;
@@ -1234,6 +1356,8 @@ pub unsafe extern "C" fn mi_new_realloc(p: *mut c_void, newsize: usize) -> *mut 
     }
 }
 
+/// # Safety
+/// `p` must be null or a pointer previously returned by this allocator.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_reallocn(
     p: *mut c_void,

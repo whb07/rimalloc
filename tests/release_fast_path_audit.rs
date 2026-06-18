@@ -2534,6 +2534,28 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena metadata sizing and initialization should receive typed SliceCount"
     );
     assert!(
+        arena_rs.contains(
+            "unsafe fn mi_arenas_page_try_find_abandoned(\n    theap: *mut mi_theap_t,\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arenas_page_alloc_fresh_area(\n    theap: *mut mi_theap_t,\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arenas_page_alloc_fresh(\n    theap: *mut mi_theap_t,\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arenas_page_regular_alloc(\n    theap: *mut mi_theap_t,\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains("let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count)")
+            && arena_rs.contains("const MI_SMALL_PAGE_SLICE_COUNT: crate::core_types::SliceCount")
+            && arena_rs.contains("const MI_MEDIUM_PAGE_SLICE_COUNT: crate::core_types::SliceCount")
+            && arena_rs.contains("const MI_LARGE_PAGE_SLICE_COUNT: crate::core_types::SliceCount")
+            && arena_rs.contains("mi_arenas_page_regular_alloc(theap, MI_SMALL_PAGE_SLICE_COUNT, block_size)")
+            && arena_rs.contains("mi_arenas_page_regular_alloc(theap, MI_MEDIUM_PAGE_SLICE_COUNT, block_size)")
+            && arena_rs.contains("mi_arenas_page_regular_alloc(theap, MI_LARGE_PAGE_SLICE_COUNT, block_size)")
+            && !arena_rs.contains("unsafe fn mi_arenas_page_try_find_abandoned(\n    theap: *mut mi_theap_t,\n    slice_count: usize,")
+            && !arena_rs.contains("unsafe fn mi_arenas_page_alloc_fresh_area(\n    theap: *mut mi_theap_t,\n    slice_count: usize,")
+            && !arena_rs.contains("unsafe fn mi_arenas_page_alloc_fresh(\n    theap: *mut mi_theap_t,\n    slice_count: usize,")
+            && !arena_rs.contains("unsafe fn mi_arenas_page_regular_alloc(\n    theap: *mut mi_theap_t,\n    slice_count: usize,"),
+        "arena page allocation helpers should carry typed SliceCount after raw entry-point validation"
+    );
+    assert!(
         stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_now()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_start()")
             && stats_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_clock_end(")

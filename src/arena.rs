@@ -76,6 +76,21 @@ const MI_MAX_ARENAS: usize = 160;
 const MI_ARENA_BIN_COUNT: usize = MI_BIN_COUNT;
 const MI_ARENA_MIN_OBJ_SIZE: usize = MI_ARENA_SLICE_SIZE;
 const MI_ARENA_MAX_SIZE: usize = MI_BITMAP_MAX_BIT_COUNT * MI_ARENA_SLICE_SIZE;
+const _: () = assert!(mi_slice_count_of_size(MI_SMALL_PAGE_SIZE) > 0);
+const _: () = assert!(mi_slice_count_of_size(MI_SMALL_PAGE_SIZE) <= u32::MAX as usize);
+const MI_SMALL_PAGE_SLICE_COUNT: crate::core_types::SliceCount = unsafe {
+    crate::core_types::SliceCount::new_unchecked(mi_slice_count_of_size(MI_SMALL_PAGE_SIZE) as u32)
+};
+const _: () = assert!(mi_slice_count_of_size(MI_MEDIUM_PAGE_SIZE) > 0);
+const _: () = assert!(mi_slice_count_of_size(MI_MEDIUM_PAGE_SIZE) <= u32::MAX as usize);
+const MI_MEDIUM_PAGE_SLICE_COUNT: crate::core_types::SliceCount = unsafe {
+    crate::core_types::SliceCount::new_unchecked(mi_slice_count_of_size(MI_MEDIUM_PAGE_SIZE) as u32)
+};
+const _: () = assert!(mi_slice_count_of_size(MI_LARGE_PAGE_SIZE) > 0);
+const _: () = assert!(mi_slice_count_of_size(MI_LARGE_PAGE_SIZE) <= u32::MAX as usize);
+const MI_LARGE_PAGE_SLICE_COUNT: crate::core_types::SliceCount = unsafe {
+    crate::core_types::SliceCount::new_unchecked(mi_slice_count_of_size(MI_LARGE_PAGE_SIZE) as u32)
+};
 const EAGAIN: c_int = 11;
 const EINVAL: c_int = 22;
 const ENOMEM: c_int = 12;
@@ -2215,13 +2230,13 @@ unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
 
 unsafe fn mi_arenas_page_try_find_abandoned(
     theap: *mut mi_theap_t,
-    slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
     block_size: usize,
 ) -> *mut mi_page_t {
     let heap = unsafe { _mi_theap_heap(theap) };
     let tseq = unsafe { (*(*theap).tld).thread_seq };
     let req_arena = unsafe { (*heap.cast::<MiHeapPrefix>()).exclusive_arena };
-    let _ = slice_count;
+    let slice_count_usize = slice_count.get() as usize;
 
     let bin =
         mi_bin_from_block_size(unsafe { crate::core_types::BlockSize::new_unchecked(block_size) })
@@ -2264,20 +2279,20 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                 crate::mi_assert_internal!(mi_bbitmap_is_clearN(
                     (*arena.cast::<MiArenaPrefix>()).slices_free,
                     slice_index,
-                    slice_count,
+                    slice_count_usize,
                 ));
                 crate::mi_assert_internal!(
                     (*page).slice_committed > 0
                         || mi_bitmap_is_setN(
                             (*arena.cast::<MiArenaPrefix>()).slices_committed,
                             slice_index,
-                            slice_count,
+                            slice_count_usize,
                         )
                 );
                 crate::mi_assert_internal!(mi_bitmap_is_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_dirty,
                     slice_index,
-                    slice_count,
+                    slice_count_usize,
                 ));
                 crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
                     mi_page_slice_start(page).cast(),
@@ -2300,7 +2315,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
 
 unsafe fn mi_arenas_page_alloc_fresh_area(
     theap: *mut mi_theap_t,
-    slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
     block_size: usize,
     block_alignment: usize,
     os_align: bool,
@@ -2321,36 +2336,33 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
 
     let mut start = ptr::null_mut::<u8>();
     unsafe { *memid = _mi_memid_none() };
-    let alloc_size = mi_size_of_slices(slice_count);
+    let slice_count_usize = slice_count.get() as usize;
+    let alloc_size = mi_size_of_slices(slice_count_usize);
     if !mi_option_is_enabled(mi_option_t::mi_option_disallow_arena_alloc)
         && !os_align
-        && slice_count <= unsafe { mi_arena_max_object_size() } / MI_ARENA_SLICE_SIZE
+        && slice_count_usize <= unsafe { mi_arena_max_object_size() } / MI_ARENA_SLICE_SIZE
     {
-        if let Some(typed_slice_count) = crate::core_types::SliceCount::from_usize(slice_count) {
-            start = unsafe {
-                mi_arenas_try_alloc(
-                    heap,
-                    typed_slice_count,
-                    page_alignment,
-                    commit,
-                    allow_large,
-                    req_arena,
-                    (*tld).thread_seq,
-                    numa_node,
-                    memid,
-                )
-                .cast::<u8>()
-            };
-        }
+        start = unsafe {
+            mi_arenas_try_alloc(
+                heap,
+                slice_count,
+                page_alignment,
+                commit,
+                allow_large,
+                req_arena,
+                (*tld).thread_seq,
+                numa_node,
+                memid,
+            )
+            .cast::<u8>()
+        };
         if !start.is_null() {
             match crate::core_types::MemId::view(unsafe { *memid }) {
                 crate::core_types::MemIdView::Arena(a) => {
                     let arena = a.arena.as_ptr();
                     let arena_pages = unsafe { mi_heap_ensure_arena_pages(heap, arena) };
                     if arena_pages.is_null() {
-                        unsafe {
-                            _mi_arenas_free(start.cast(), mi_size_of_slices(slice_count), *memid)
-                        };
+                        unsafe { _mi_arenas_free(start.cast(), alloc_size, *memid) };
                         start = ptr::null_mut();
                     } else {
                         let slice_idx = a.range.start().0;
@@ -2430,13 +2442,14 @@ unsafe fn mi_page_block_start(block_size: usize, os_align: bool) -> usize {
 
 unsafe fn mi_arenas_page_alloc_fresh(
     theap: *mut mi_theap_t,
-    slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
     block_size: usize,
     block_alignment: usize,
     commit: bool,
 ) -> *mut mi_page_t {
     let os_align = block_alignment > MI_PAGE_MAX_OVERALLOC_ALIGN;
-    let alloc_size = mi_size_of_slices(slice_count);
+    let slice_count_usize = slice_count.get() as usize;
+    let alloc_size = mi_size_of_slices(slice_count_usize);
     let mut memid = unsafe { _mi_memid_none() };
     let slice_start = unsafe {
         mi_arenas_page_alloc_fresh_area(
@@ -2512,10 +2525,12 @@ unsafe fn mi_arenas_page_alloc_fresh(
 
     if memid.initially_committed {
         if memid.initially_zero {
-            unsafe { mi_track_mem_defined(slice_start.cast(), slice_count * MI_ARENA_SLICE_SIZE) };
+            unsafe {
+                mi_track_mem_defined(slice_start.cast(), slice_count_usize * MI_ARENA_SLICE_SIZE)
+            };
         } else {
             unsafe {
-                mi_track_mem_undefined(slice_start.cast(), slice_count * MI_ARENA_SLICE_SIZE)
+                mi_track_mem_undefined(slice_start.cast(), slice_count_usize * MI_ARENA_SLICE_SIZE)
             };
         }
     }
@@ -2577,7 +2592,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
 
 unsafe fn mi_arenas_page_regular_alloc(
     theap: *mut mi_theap_t,
-    slice_count: usize,
+    slice_count: crate::core_types::SliceCount,
     block_size: usize,
 ) -> *mut mi_page_t {
     let mut page = unsafe { mi_arenas_page_try_find_abandoned(theap, slice_count, block_size) };
@@ -2587,7 +2602,8 @@ unsafe fn mi_arenas_page_regular_alloc(
 
     let commit_on_demand =
         crate::options::mi_option_get(mi_option_t::mi_option_page_commit_on_demand);
-    let commit = slice_count <= mi_slice_count_of_size(MI_PAGE_MIN_COMMIT_SIZE)
+    let slice_count_usize = slice_count.get() as usize;
+    let commit = slice_count_usize <= mi_slice_count_of_size(MI_PAGE_MIN_COMMIT_SIZE)
         || (commit_on_demand == 2 && unsafe { _mi_os_has_overcommit() })
         || commit_on_demand == 0;
     page = unsafe { mi_arenas_page_alloc_fresh(theap, slice_count, block_size, 1, commit) };
@@ -2596,8 +2612,7 @@ unsafe fn mi_arenas_page_regular_alloc(
     }
     crate::mi_assert_internal!(
         match crate::core_types::MemId::view(unsafe { (*page).memid }) {
-            crate::core_types::MemIdView::Arena(a) =>
-                a.range.count().0.get() as usize == slice_count,
+            crate::core_types::MemIdView::Arena(a) => a.range.count() == slice_count,
             _ => true, // Non-arena allocations trivially pass this slice_count assert
         }
     );
@@ -2621,6 +2636,10 @@ unsafe fn mi_arenas_page_singleton_alloc(
         crate::internal::mi_page_info_size()
     };
     let slice_count = mi_slice_count_of_size(info_size + block_size);
+    let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+        crate::mi_assert_internal!(false);
+        return ptr::null_mut();
+    };
     let page = unsafe {
         mi_arenas_page_alloc_fresh(theap, slice_count, block_size, block_alignment, true)
     };
@@ -2647,29 +2666,11 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
         crate::mi_assert_internal!(crate::internal::_mi_is_power_of_two(block_alignment));
         unsafe { mi_arenas_page_singleton_alloc(theap, block_size, block_alignment) }
     } else if block_size <= MI_SMALL_MAX_OBJ_SIZE {
-        unsafe {
-            mi_arenas_page_regular_alloc(
-                theap,
-                mi_slice_count_of_size(MI_SMALL_PAGE_SIZE),
-                block_size,
-            )
-        }
+        unsafe { mi_arenas_page_regular_alloc(theap, MI_SMALL_PAGE_SLICE_COUNT, block_size) }
     } else if block_size <= MI_MEDIUM_MAX_OBJ_SIZE {
-        unsafe {
-            mi_arenas_page_regular_alloc(
-                theap,
-                mi_slice_count_of_size(MI_MEDIUM_PAGE_SIZE),
-                block_size,
-            )
-        }
+        unsafe { mi_arenas_page_regular_alloc(theap, MI_MEDIUM_PAGE_SLICE_COUNT, block_size) }
     } else if MI_ENABLE_LARGE_PAGES != 0 && block_size <= MI_LARGE_MAX_OBJ_SIZE {
-        unsafe {
-            mi_arenas_page_regular_alloc(
-                theap,
-                mi_slice_count_of_size(MI_LARGE_PAGE_SIZE),
-                block_size,
-            )
-        }
+        unsafe { mi_arenas_page_regular_alloc(theap, MI_LARGE_PAGE_SLICE_COUNT, block_size) }
     } else {
         unsafe { mi_arenas_page_singleton_alloc(theap, block_size, block_alignment) }
     };

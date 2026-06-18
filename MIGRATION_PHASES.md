@@ -69,7 +69,7 @@ Raw `usize` remains at FFI, ABI, and compatibility boundaries, but the internal 
 
 **Status:** In progress.
 
-Recent cleanup removed unused `core_types` re-exports, the redundant crate-level `clippy::nonminimal_bool` allowance, the heap, random, page-map, arena-meta, tracking, options, libc helper, and POSIX allocation `clippy::missing_safety_doc` module allowances after documenting their unsafe boundaries, and a redundant thread-local safety-doc allowance. The remaining broad allowances are mostly C-port compatibility (`non_camel_case_types`, C ABI globals, `unsafe_op_in_unsafe_fn`, and missing safety docs on still C-shaped unsafe boundaries) or intentional type scaffolding that is not yet live at every future call site.
+Recent cleanup removed unused `core_types` re-exports, the redundant crate-level `clippy::nonminimal_bool` allowance, the heap, random, page-map, arena-meta, tracking, options, libc helper, POSIX allocation, and Emscripten primitive `clippy::missing_safety_doc` module allowances after documenting their unsafe boundaries, and a redundant thread-local safety-doc allowance. The remaining broad allowances are mostly C-port compatibility (`non_camel_case_types`, C ABI globals, `unsafe_op_in_unsafe_fn`, and missing safety docs on still C-shaped unsafe boundaries) or intentional type scaffolding that is not yet live at every future call site.
 
 **Action Items:**
 1. **Remove Unused Types:** In progress. Do not delete C ABI aliases still required by `raw`/compat/public module boundaries.

@@ -695,7 +695,8 @@ fn realloc_validation_uses_pointer_lookup_boundary() {
             "unsafe fn mi_validate_ptr_page(\n    p: *const c_void,\n    msg: *const c_char,\n) -> crate::core_types::PointerLookup"
         ) && alloc_rs.contains("crate::free::mi_validate_pointer(p.cast_mut(), msg)")
             && alloc_rs.contains("unsafe fn mi_realloc_old_allocation(")
-            && alloc_rs.contains("crate::core_types::PointerLookup::Valid {\n            user,\n            page,\n            location,")
+            && alloc_rs.contains("crate::core_types::PointerLookup::Valid {")
+            && alloc_rs.contains("user,\n                page,\n                location,")
             && alloc_rs.contains("Some(crate::core_types::OldAllocation::new(")
             && alloc_rs.contains("let Some(old) = mi_realloc_old_allocation(p, c\"mi_realloc\".as_ptr())")
             && alloc_rs.contains("unsafe fn mi_theap_realloc_apply(")
@@ -971,7 +972,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         })
         .collect::<BTreeSet<_>>();
     let expected = BTreeSet::from([
-        "src/alloc.rs",
         "src/page.rs",
         "src/prim/emscripten.rs",
         "src/prim/osx.rs",
@@ -984,6 +984,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
     );
     assert!(
         !actual.contains("src/alloc_aligned.rs")
+            && !actual.contains("src/alloc.rs")
             && !actual.contains("src/alloc_posix.rs")
             && !actual.contains("src/alloc_override.rs")
             && !actual.contains("src/arena_meta.rs")
@@ -1002,7 +1003,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/theap.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, free-path helpers, heap helpers, internal helpers, libc helpers, options helpers, OS boundary helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "allocation helpers, aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, free-path helpers, heap helpers, internal helpers, libc helpers, options helpers, OS boundary helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 
@@ -2719,8 +2720,10 @@ fn free_path_internals_are_not_dynamic_exports() {
         alloc_rs
             .contains("pub(crate) unsafe fn _mi_page_malloc_zero_typed(\n    theap: *mut mi_theap_t,\n    page: *mut mi_page_t,\n    padded: crate::core_types::PaddedSize,")
             && alloc_rs.contains("let size = padded.get();")
-            && alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(\n            padded,")
-            && alloc_rs.contains("_mi_page_malloc_zero_typed(\n        theap,\n        page,\n        crate::core_types::PaddedSize::new_unchecked(size),")
+            && alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
+            && alloc_rs.contains("padded,\n                if zero")
+            && alloc_rs.contains("_mi_page_malloc_zero_typed(")
+            && alloc_rs.contains("crate::core_types::PaddedSize::new_unchecked(size),")
             && alloc_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
             && page_rs.contains(
@@ -3686,10 +3689,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         alloc_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn mi_theap_try_new")
             && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_try_new")
             && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_try_new")
-            && alloc_rs.contains(
-                "if mi_unlikely(p.is_null()) {\n        mi_heap_try_new(heap, size, false)"
-            )
-            && alloc_rs.contains("if mi_unlikely(p.is_null()) {\n        mi_try_new(size, true)")
+            && alloc_rs.contains("mi_heap_try_new(heap, size, false)")
+            && alloc_rs.contains("mi_try_new(size, true)")
             && alloc_rs.contains("static MI_THEAP_TRY_NEW_KEEP")
             && alloc_rs.contains("static MI_TRY_NEW_KEEP")
             && alloc_rs.contains("static MI_HEAP_TRY_NEW_KEEP"),

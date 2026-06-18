@@ -13,6 +13,8 @@ rewrites.
   assumptions when relevant.
 - Document new unsafe assumptions in `docs/unsafe-audit.md`.
 - Include benchmark evidence for allocator hot-path or broad workload changes.
+- Use the unsafe design-change and benchmark-report templates when changing
+  allocator invariants or performance-sensitive paths.
 
 ## Local Checks
 

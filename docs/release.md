@@ -23,6 +23,8 @@ Related policy documents:
 - `docs/features.md`
 - `docs/platforms.md`
 - `docs/performance.md`
+- `docs/reproducibility.md`
+- `docs/governance.md`
 - `docs/limitations.md`
 - `docs/upstream.md`
 - `docs/dependencies.md`

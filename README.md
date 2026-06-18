@@ -79,8 +79,8 @@ include fresh results for the changed benchmark set and a full report when hot
 paths or allocator-wide behavior can move.
 
 Additional policy documents live under `docs/`, including API inventory, ABI,
-features, performance, release, unsafe audit, upstream synchronization, and
-dependency policy.
+features, performance, release, unsafe audit, reproducibility, governance,
+upstream synchronization, and dependency policy.
 
 ## Examples
 

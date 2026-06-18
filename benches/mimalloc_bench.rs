@@ -35,6 +35,9 @@ struct DylibAllocator {
     calloc: unsafe extern "C" fn(usize, usize) -> *mut c_void,
     realloc: unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void,
     free: unsafe extern "C" fn(*mut c_void),
+    new_array: unsafe extern "C" fn(usize) -> *mut c_void,
+    delete_array: unsafe extern "C" fn(*mut c_void),
+    delete_array_sized: unsafe extern "C" fn(*mut c_void, usize),
 }
 
 #[derive(Clone, Copy)]
@@ -89,6 +92,42 @@ impl BenchAllocator {
             match self {
                 BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
                     (alloc.free)(ptr.cast());
+                }
+            }
+        }
+    }
+
+    unsafe fn new_array(self, size: usize) -> *mut u8 {
+        unsafe {
+            match self {
+                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
+                    (alloc.new_array)(size).cast()
+                }
+            }
+        }
+    }
+
+    unsafe fn delete_array(self, ptr: *mut u8) {
+        unsafe {
+            if ptr.is_null() {
+                return;
+            }
+            match self {
+                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
+                    (alloc.delete_array)(ptr.cast());
+                }
+            }
+        }
+    }
+
+    unsafe fn delete_array_sized(self, ptr: *mut u8, size: usize) {
+        unsafe {
+            if ptr.is_null() {
+                return;
+            }
+            match self {
+                BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => {
+                    (alloc.delete_array_sized)(ptr.cast(), size);
                 }
             }
         }
@@ -289,6 +328,9 @@ mod dylib {
             let calloc = symbol(handle, c"calloc");
             let realloc = symbol(handle, c"realloc");
             let free = symbol(handle, c"free");
+            let new_array = symbol(handle, c"_Znam");
+            let delete_array = symbol(handle, c"_ZdaPv");
+            let delete_array_sized = symbol(handle, c"_ZdaPvm");
 
             DylibAllocator {
                 malloc: std::mem::transmute::<
@@ -304,6 +346,17 @@ mod dylib {
                     unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void,
                 >(realloc),
                 free: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void)>(free),
+                new_array: std::mem::transmute::<
+                    *mut c_void,
+                    unsafe extern "C" fn(usize) -> *mut c_void,
+                >(new_array),
+                delete_array: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void)>(
+                    delete_array,
+                ),
+                delete_array_sized: std::mem::transmute::<
+                    *mut c_void,
+                    unsafe extern "C" fn(*mut c_void, usize),
+                >(delete_array_sized),
             }
         }
     }
@@ -404,6 +457,14 @@ fn scenarios() -> Vec<Scenario> {
         Scenario {
             name: "alloc-testN",
             run: alloc_test::run_n,
+        },
+        Scenario {
+            name: "larsonN",
+            run: larson::run_unsized,
+        },
+        Scenario {
+            name: "larsonN-sized",
+            run: larson::run_sized,
         },
         Scenario {
             name: "mleak10",
@@ -2122,6 +2183,216 @@ mod alloc_test {
 
     pub unsafe fn run_n(alloc: BenchAllocator) -> Duration {
         unsafe { run_threads(alloc, logical_cpus().min(16)) }
+    }
+}
+
+mod larson {
+    use super::*;
+
+    const SLEEP_SECS: u64 = 5;
+    const MIN_SIZE: usize = 8;
+    const MAX_SIZE: usize = 1000;
+    const CHUNKS_PER_THREAD: usize = 5000;
+    const NUM_ROUNDS: usize = 100;
+    const SEED: i64 = 4141;
+
+    struct State {
+        alloc: BenchAllocator,
+        sized_delete: bool,
+        stop: AtomicBool,
+        blocks: Vec<AtomicPtr<u8>>,
+        sizes: Vec<AtomicUsize>,
+    }
+
+    struct ThreadData {
+        state: *const State,
+        thread_no: usize,
+        num_blocks: usize,
+        array_start: usize,
+        array_size: usize,
+        min_size: usize,
+        max_size: usize,
+        rng: Lran2,
+        allocs: usize,
+        frees: usize,
+    }
+
+    unsafe fn larson_new(alloc: BenchAllocator, size: usize) -> *mut u8 {
+        unsafe {
+            let p = alloc.new_array(size);
+            assert!(!p.is_null(), "allocation failed in larson");
+            p
+        }
+    }
+
+    unsafe fn larson_delete(alloc: BenchAllocator, p: *mut u8, size: usize, sized_delete: bool) {
+        unsafe {
+            if sized_delete {
+                alloc.delete_array_sized(p, size);
+            } else {
+                alloc.delete_array(p);
+            }
+        }
+    }
+
+    unsafe fn warmup(state: &State, rng: &mut Lran2, start: usize, num_chunks: usize) {
+        unsafe {
+            for i in 0..num_chunks {
+                let size = MIN_SIZE + rng.next() as usize % (MAX_SIZE - MIN_SIZE);
+                let p = larson_new(state.alloc, size);
+                state.blocks[start + i].store(p, Ordering::Relaxed);
+                state.sizes[start + i].store(size, Ordering::Relaxed);
+            }
+
+            for cblks in (1..=num_chunks).rev() {
+                let victim = rng.next() as usize % cblks;
+                let last = cblks - 1;
+                let victim_ptr = state.blocks[start + victim].load(Ordering::Relaxed);
+                let victim_size = state.sizes[start + victim].load(Ordering::Relaxed);
+                let last_ptr = state.blocks[start + last].load(Ordering::Relaxed);
+                let last_size = state.sizes[start + last].load(Ordering::Relaxed);
+                state.blocks[start + victim].store(last_ptr, Ordering::Relaxed);
+                state.sizes[start + victim].store(last_size, Ordering::Relaxed);
+                state.blocks[start + last].store(victim_ptr, Ordering::Relaxed);
+                state.sizes[start + last].store(victim_size, Ordering::Relaxed);
+            }
+
+            for _ in 0..(4 * num_chunks) {
+                let victim = rng.next() as usize % num_chunks;
+                let idx = start + victim;
+                let old = state.blocks[idx].load(Ordering::Relaxed);
+                let old_size = state.sizes[idx].load(Ordering::Relaxed);
+                larson_delete(state.alloc, old, old_size, state.sized_delete);
+
+                let size = MIN_SIZE + rng.next() as usize % (MAX_SIZE - MIN_SIZE);
+                let p = larson_new(state.alloc, size);
+                state.blocks[idx].store(p, Ordering::Relaxed);
+                state.sizes[idx].store(size, Ordering::Relaxed);
+            }
+        }
+    }
+
+    unsafe fn exercise_heap(data: &mut ThreadData) {
+        unsafe {
+            let state = &*data.state;
+            let range = data.max_size - data.min_size;
+            for _ in 0..data.num_blocks {
+                let victim = data.rng.next() as usize % data.array_size;
+                let idx = data.array_start + victim;
+                let old = state.blocks[idx].load(Ordering::Relaxed);
+                let old_size = state.sizes[idx].load(Ordering::Relaxed);
+                larson_delete(state.alloc, old, old_size, state.sized_delete);
+                data.frees += 1;
+
+                let block_size = if range == 0 {
+                    data.min_size
+                } else {
+                    data.min_size + data.rng.next() as usize % range
+                };
+                let p = larson_new(state.alloc, block_size);
+                state.blocks[idx].store(p, Ordering::Relaxed);
+                state.sizes[idx].store(block_size, Ordering::Relaxed);
+                data.allocs += 1;
+
+                p.write(b'a');
+                p.add(1).write(b'b');
+
+                if state.stop.load(Ordering::Relaxed) {
+                    break;
+                }
+            }
+            std::hint::black_box(data.thread_no);
+        }
+    }
+
+    extern "C" fn thread_entry(arg: *mut c_void) -> *mut c_void {
+        unsafe {
+            let data = &mut *arg.cast::<ThreadData>();
+            let state = &*data.state;
+            while !state.stop.load(Ordering::Relaxed) {
+                exercise_heap(data);
+            }
+        }
+        ptr::null_mut()
+    }
+
+    unsafe fn cleanup(state: &State) {
+        unsafe {
+            for i in 0..state.blocks.len() {
+                let p = state.blocks[i].swap(ptr::null_mut(), Ordering::Relaxed);
+                let size = state.sizes[i].load(Ordering::Relaxed);
+                larson_delete(state.alloc, p, size, state.sized_delete);
+            }
+        }
+    }
+
+    unsafe fn run_case(alloc: BenchAllocator, sized_delete: bool) -> Duration {
+        unsafe {
+            let num_threads = logical_cpus();
+            let total_chunks = num_threads * CHUNKS_PER_THREAD;
+            let state = State {
+                alloc,
+                sized_delete,
+                stop: AtomicBool::new(false),
+                blocks: (0..total_chunks)
+                    .map(|_| AtomicPtr::new(ptr::null_mut()))
+                    .collect(),
+                sizes: (0..total_chunks).map(|_| AtomicUsize::new(0)).collect(),
+            };
+            let mut global_rng = Lran2::new(SEED);
+            warmup(&state, &mut global_rng, 0, total_chunks);
+
+            let mut args = Vec::with_capacity(num_threads);
+            for i in 0..num_threads {
+                let seed = global_rng.next();
+                args.push(ThreadData {
+                    state: &state,
+                    thread_no: i + 1,
+                    num_blocks: NUM_ROUNDS * CHUNKS_PER_THREAD,
+                    array_start: i * CHUNKS_PER_THREAD,
+                    array_size: CHUNKS_PER_THREAD,
+                    min_size: MIN_SIZE,
+                    max_size: MAX_SIZE,
+                    rng: Lran2::new(seed),
+                    allocs: 0,
+                    frees: 0,
+                });
+            }
+
+            let mut threads = vec![0; num_threads];
+            for i in 0..num_threads {
+                let rc = pthread::pthread_create(
+                    &mut threads[i],
+                    ptr::null(),
+                    thread_entry,
+                    (&mut args[i] as *mut ThreadData).cast(),
+                );
+                assert_eq!(rc, 0, "pthread_create failed in larson: {rc}");
+            }
+
+            let start = Instant::now();
+            std::thread::sleep(Duration::from_secs(SLEEP_SECS));
+            state.stop.store(true, Ordering::Relaxed);
+            for thread in threads {
+                let rc = pthread::pthread_join(thread, ptr::null_mut());
+                assert_eq!(rc, 0, "pthread_join failed in larson: {rc}");
+            }
+            let elapsed = start.elapsed().as_secs_f64();
+            let sum_allocs: usize = args.iter().map(|arg| arg.allocs).sum();
+            cleanup(&state);
+
+            assert!(sum_allocs > 0, "larson produced zero allocations");
+            let throughput = sum_allocs as f64 / elapsed;
+            Duration::from_secs_f64(1.0e9 / throughput)
+        }
+    }
+
+    pub unsafe fn run_unsized(alloc: BenchAllocator) -> Duration {
+        unsafe { run_case(alloc, false) }
+    }
+
+    pub unsafe fn run_sized(alloc: BenchAllocator) -> Duration {
+        unsafe { run_case(alloc, true) }
     }
 }
 

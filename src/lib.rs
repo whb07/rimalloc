@@ -1,7 +1,6 @@
 //! Mechanical Rust translation foundation for mimalloc 3.3.2
 
 #![cfg_attr(all(not(test), target_os = "linux", not(debug_assertions)), no_std)]
-#![allow(clippy::nonminimal_bool)]
 
 pub mod abi;
 pub mod alloc;

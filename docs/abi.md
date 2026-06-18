@@ -151,6 +151,34 @@ There should be no ambiguity about where to add a new C ABI declaration or an
 exported function: declarations live in `src/abi.rs`, and exported
 implementations live only in files classified by `scripts/check-ffi-boundary.py`.
 
+## Export Boundary Classification
+
+Exported C ABI functions are boundary wrappers even when they remain in the
+translated implementation file for parity with upstream C. `scripts/check-ffi-boundary.py`
+owns the allowlist of files that may contain `#[unsafe(no_mangle)]`,
+`#[unsafe(export_name = ...)]`, naked ABI shims, `global_asm!`, or `naked_asm!`
+public aliases. Run `scripts/check-ffi-boundary.py --list` to list every
+classified export site with its file, line, and boundary class.
+
+The current explicit boundary classes are:
+
+- `c-abi`: public `mi_*` and related C API wrappers that preserve C null,
+  errno, and allocation semantics.
+- `malloc-cxx-override`: malloc-family and C++ operator override symbols whose
+  names are part of the dynamic ABI surface.
+- `runtime-boundary` and `panic-runtime-boundary`: process/thread lifecycle,
+  panic, and platform runtime hooks.
+- `c-abi-internal-classified`: translated internal `_mi_*` helpers that are
+  still exported for C parity or static archive compatibility and are tracked
+  separately from stable public API.
+
+Some naked shims and assembly aliases intentionally remain near allocation,
+free, runtime, or override code instead of moving to a separate file. Those
+sites are classified because their exact symbol spelling, aliasing, and codegen
+shape are part of the C/malloc override contract or release fast path audit.
+Moving them requires ABI symbol checks, release fast-path checks, and benchmark
+evidence.
+
 ## Callback ABI
 
 Callback types mirror upstream mimalloc C callback signatures. Callbacks must

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import pathlib
 import re
 
@@ -65,9 +66,23 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Verify and optionally list classified exported ABI sites."
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="print every classified exported ABI attribute or assembly alias site",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
     offenders: list[str] = []
     classified: dict[str, int] = {}
+    occurrences: list[tuple[str, int, str, str]] = []
     for path in sorted((ROOT / "src").rglob("*.rs")):
         rel = path.relative_to(ROOT).as_posix()
         text = path.read_text()
@@ -78,6 +93,9 @@ def main() -> int:
             offenders.append(rel)
             continue
         classified[classification] = classified.get(classification, 0) + 1
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if any(pattern.search(line) for pattern in EXPORT_PATTERNS):
+                occurrences.append((rel, line_number, classification, line.strip()))
 
     require(
         not offenders,
@@ -95,10 +113,15 @@ def main() -> int:
             f"Linux linker version script missing public export pattern {pattern}",
         )
 
+    if args.list:
+        for rel, line_number, classification, line in occurrences:
+            print(f"{rel}:{line_number}: {classification}: {line}")
+
     summary = ", ".join(f"{name}={count}" for name, count in sorted(classified.items()))
     print(
         "ok: FFI/export boundary attributes limited to "
         f"{len(EXPORT_FILE_CLASSIFICATION)} classified files ({summary}); "
+        f"{len(occurrences)} export sites checked; "
         f"version script covers {len(VERSION_SCRIPT_PATTERNS)} public patterns"
     )
     return 0

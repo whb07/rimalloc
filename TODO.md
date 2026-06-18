@@ -321,13 +321,21 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## B3. Separate exported C ABI from internal Rust calls
 
-- [ ] Create explicit exported-function wrapper files.
+- [x] Create explicit exported-function wrapper files.
   - Required behavior:
     - `#[unsafe(no_mangle)]`, `#[export_name]`, naked exported functions, and global assembly exported public aliases live in approved boundary files or are clearly classified if assembly must remain near hot paths.
     - Boundary wrappers validate/convert inputs where possible, call internal Rust functions, and convert results back to C null/errno conventions.
   - Validation:
     - A script lists every `no_mangle`, `export_name`, naked exported function, and global public symbol alias and compares paths against an allowlist.
     - `docs/abi.md` describes why any exception remains near hot-path assembly.
+  - Evidence:
+    - `scripts/check-ffi-boundary.py` classifies every source file that may contain
+      `no_mangle`, `export_name`, naked ABI shims, `global_asm!`, or `naked_asm!`
+      public aliases and fails on unclassified export files.
+    - `scripts/check-ffi-boundary.py --list` prints every classified export site with
+      file, line, and boundary class.
+    - `docs/abi.md` documents the explicit export boundary classes and explains why
+      naked shims or assembly aliases may remain near allocation/free/runtime code.
 
 - [ ] Stop internal Rust code from re-entering exported C ABI functions except when preserving C semantics requires it.
   - Required behavior:

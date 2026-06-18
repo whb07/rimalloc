@@ -356,9 +356,7 @@ pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
     // SAFETY: non-null `p` is suitable for allocator page lookup by API contract.
     unsafe {
         let page = _mi_safe_ptr_page(p);
-        if page.is_null()
-            || (*page).used == (*page).capacity
-            || (*page).capacity < (*page).reserved
+        if page.is_null() || (*page).used == (*page).capacity || (*page).capacity < (*page).reserved
         {
             return false;
         }

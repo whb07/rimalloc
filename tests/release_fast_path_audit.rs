@@ -197,8 +197,8 @@ fn stderr_output_routes_through_platform_primitive() {
     );
     assert!(
         unix_rs.contains("fn write(fd: c_int, buf: *const c_void, count: usize) -> ssize_t;")
-            && unix_rs.contains("let n = write(")
-            && unix_rs.contains("2,\n            bytes.as_ptr().add(written)")
+            && unix_rs.contains("let n = unsafe {\n            write(")
+            && unix_rs.contains("2,\n                bytes.as_ptr().add(written)")
             && !unix_rs.contains("use std::io")
             && !unix_rs.contains("use std::ffi::CString")
             && !unix_rs.contains("format!(\"/sys/devices/system/node/node{}\"")
@@ -979,7 +979,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "src/page.rs",
         "src/prim/emscripten.rs",
         "src/prim/osx.rs",
-        "src/prim/unix.rs",
         "src/prim/wasi.rs",
         "src/theap.rs",
     ]);
@@ -999,10 +998,11 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/libc.rs")
             && !actual.contains("src/options.rs")
             && !actual.contains("src/prim.rs")
+            && !actual.contains("src/prim/unix.rs")
             && !actual.contains("src/random.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, heap helpers, libc helpers, options helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, heap helpers, libc helpers, options helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 
@@ -2243,9 +2243,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && prim_unix_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_prim_getenv(")
             && prim_unix_rs.contains("for i in 0..10000usize")
-            && prim_unix_rs.contains("_mi_strnicmp(name, s, len) == 0")
+            && prim_unix_rs.contains("unsafe { _mi_strnicmp(name, s, len) == 0")
             && prim_unix_rs.contains("if _mi_preloading() {\n        return false;")
-            && prim_unix_rs.contains("s = getenv(buf.as_ptr());")
+            && prim_unix_rs.contains("s = unsafe { getenv(buf.as_ptr()) };")
             && options_rs.contains("crate::libc::_mi_getenv("),
         "_mi_getenv and _mi_prim_getenv should keep C's environment helper boundaries and option parser dependency"
     );
@@ -2421,9 +2421,9 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("find end of mi_stats_add_into");
     let stats_add_into_body = &stats_rs[stats_add_into_start..stats_add_into_end];
     assert!(
-        stats_add_into_body.contains(
-            "unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };"
-        ) && !stats_add_into_body.contains("mi_stats_add_nonnull("),
+        stats_add_into_body
+            .contains("unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };")
+            && !stats_add_into_body.contains("mi_stats_add_nonnull("),
         "mi_stats_add_into should exercise C's checked raw mi_stats_add compatibility boundary"
     );
     let stats_merge_start = stats_rs
@@ -3960,7 +3960,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && init_rs.contains("if mi_cpuid(cpu_info.as_mut_ptr(), 1, 0)")
             && init_rs.contains("_mi_cpu_has_popcnt = (cpu_info[2] & (1 << 23)) != 0")
             && init_rs.contains("if fsrm {\n            unsafe { _mi_cpu_movsb_max = 127 };")
-            && init_rs.contains("if fsrs || (amd && fsrm) {\n            unsafe { _mi_cpu_stosb_max = 127 };"),
+            && init_rs.contains(
+                "if fsrs || (amd && fsrm) {\n            unsafe { _mi_cpu_stosb_max = 127 };"
+            ),
         "CPU feature detection should initialize C's popcnt and short rep movsb/stosb thresholds"
     );
     assert!(

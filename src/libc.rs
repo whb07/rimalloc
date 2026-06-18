@@ -237,65 +237,6 @@ fn mi_outc(c: c_char, out: &mut *mut c_char, end: *mut c_char) {
     *out = unsafe { p.add(1) };
 }
 
-#[inline]
-#[allow(dead_code)]
-unsafe fn mi_outs(s: *const c_char, out: &mut *mut c_char, end: *mut c_char) {
-    unsafe {
-        if s.is_null() {
-            return;
-        }
-        let mut p = *out;
-        let mut cur = s;
-        while *cur != 0 && (p as usize) < (end as usize) {
-            *p = *cur;
-            p = p.add(1);
-            cur = cur.add(1);
-        }
-        *out = p;
-    }
-}
-
-#[inline]
-#[allow(dead_code)]
-fn mi_out_fill(fill: c_char, len: usize, out: &mut *mut c_char, end: *mut c_char) {
-    let mut p = *out;
-    for _ in 0..len {
-        if (p as usize) >= (end as usize) {
-            break;
-        }
-        unsafe {
-            *p = fill;
-            p = p.add(1);
-        }
-    }
-    *out = p;
-}
-
-#[inline]
-#[allow(dead_code)]
-unsafe fn mi_out_alignright(
-    fill: c_char,
-    start: *mut c_char,
-    len: usize,
-    extra: usize,
-    end: *mut c_char,
-) {
-    if len == 0 || extra == 0 {
-        return;
-    }
-    if (start as usize) + len + extra >= (end as usize) {
-        return;
-    }
-    unsafe {
-        for i in 1..=len {
-            *start.add(len + extra - i) = *start.add(len - i);
-        }
-        for i in 0..extra {
-            *start.add(i) = fill;
-        }
-    }
-}
-
 #[inline(never)]
 unsafe fn mi_out_num(
     mut x: u128,

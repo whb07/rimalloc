@@ -65,6 +65,23 @@ fn clippy_allowance_counts(sources: &[(String, String)]) -> BTreeMap<(&str, &str
     counts
 }
 
+fn rust_allowance_counts<'a>(
+    sources: &'a [(String, String)],
+    lints: &'static [&'static str],
+) -> BTreeMap<(&'a str, &'static str), usize> {
+    let mut counts = BTreeMap::new();
+    for (rel, source) in sources {
+        for line in source.lines() {
+            for &lint in lints {
+                if line.contains(lint) {
+                    *counts.entry((rel.as_str(), lint)).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+    counts
+}
+
 #[test]
 fn debug_assert_macros_are_release_gated_like_c_mimalloc() {
     let internal_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/internal.rs");
@@ -954,6 +971,102 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         !actual.contains("src/track.rs"),
         "tracking shims should not regain unsafe_op_in_unsafe_fn after their explicit unsafe cleanup"
     );
+}
+
+#[test]
+fn phase6_c_naming_allowances_stay_intentional() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src = root.join("src");
+    let mut sources = Vec::new();
+    collect_rs_sources(root, &src, &mut sources);
+
+    const LINTS: &[&str] = &[
+        "non_camel_case_types",
+        "non_upper_case_globals",
+        "non_snake_case",
+        "unused_macros",
+        "improper_ctypes_definitions",
+    ];
+    let expected = BTreeMap::from([
+        (("src/alloc.rs", "non_snake_case"), 1),
+        (("src/alloc_aligned.rs", "non_camel_case_types"), 1),
+        (("src/alloc_aligned.rs", "non_upper_case_globals"), 1),
+        (("src/alloc_override.rs", "improper_ctypes_definitions"), 1),
+        (("src/alloc_override.rs", "non_camel_case_types"), 1),
+        (("src/alloc_override.rs", "non_snake_case"), 1),
+        (("src/alloc_override.rs", "non_upper_case_globals"), 1),
+        (("src/alloc_override.rs", "unused_macros"), 1),
+        (("src/arena.rs", "non_camel_case_types"), 6),
+        (("src/arena.rs", "non_upper_case_globals"), 1),
+        (("src/arena_meta.rs", "non_camel_case_types"), 1),
+        (("src/arena_meta.rs", "non_upper_case_globals"), 1),
+        (("src/atomic.rs", "non_camel_case_types"), 1),
+        (("src/atomic.rs", "non_upper_case_globals"), 1),
+        (("src/bitmap.rs", "non_camel_case_types"), 1),
+        (("src/bitmap.rs", "non_snake_case"), 1),
+        (("src/bitmap.rs", "non_upper_case_globals"), 1),
+        (("src/bits.rs", "non_camel_case_types"), 1),
+        (("src/bits.rs", "non_upper_case_globals"), 1),
+        (("src/bits.rs", "unused_macros"), 1),
+        (("src/headers.rs", "non_upper_case_globals"), 14),
+        (("src/init.rs", "non_camel_case_types"), 1),
+        (("src/init.rs", "non_snake_case"), 8),
+        (("src/init.rs", "non_upper_case_globals"), 1),
+        (("src/internal.rs", "non_camel_case_types"), 1),
+        (("src/internal.rs", "non_snake_case"), 1),
+        (("src/internal.rs", "non_upper_case_globals"), 1),
+        (("src/libc.rs", "non_camel_case_types"), 1),
+        (("src/libc.rs", "non_upper_case_globals"), 1),
+        (("src/mimalloc.rs", "non_camel_case_types"), 1),
+        (("src/mimalloc.rs", "non_upper_case_globals"), 1),
+        (("src/options.rs", "non_camel_case_types"), 1),
+        (("src/options.rs", "non_upper_case_globals"), 1),
+        (("src/os.rs", "non_camel_case_types"), 1),
+        (("src/os.rs", "non_upper_case_globals"), 1),
+        (("src/page.rs", "non_camel_case_types"), 1),
+        (("src/page.rs", "non_upper_case_globals"), 1),
+        (("src/page_map.rs", "non_camel_case_types"), 1),
+        (("src/page_map.rs", "non_upper_case_globals"), 1),
+        (("src/prim.rs", "non_camel_case_types"), 1),
+        (("src/prim.rs", "non_upper_case_globals"), 1),
+        (("src/prim/emscripten.rs", "non_camel_case_types"), 1),
+        (("src/prim/emscripten.rs", "non_upper_case_globals"), 1),
+        (("src/prim/osx.rs", "non_camel_case_types"), 1),
+        (("src/prim/osx.rs", "non_snake_case"), 1),
+        (("src/prim/osx.rs", "non_upper_case_globals"), 1),
+        (("src/prim/osx.rs", "unused_macros"), 1),
+        (("src/prim/unix.rs", "non_camel_case_types"), 1),
+        (("src/prim/unix.rs", "non_upper_case_globals"), 1),
+        (("src/prim/wasi.rs", "non_camel_case_types"), 1),
+        (("src/prim/wasi.rs", "non_upper_case_globals"), 1),
+        (("src/prim/windows.rs", "non_camel_case_types"), 1),
+        (("src/prim/windows.rs", "non_snake_case"), 1),
+        (("src/prim/windows.rs", "non_upper_case_globals"), 1),
+        (("src/prim/windows.rs", "unused_macros"), 1),
+        (("src/random.rs", "non_camel_case_types"), 1),
+        (("src/random.rs", "non_upper_case_globals"), 1),
+        (("src/stats.rs", "non_camel_case_types"), 1),
+        (("src/stats.rs", "non_upper_case_globals"), 1),
+        (("src/theap.rs", "non_camel_case_types"), 1),
+        (("src/threadlocal.rs", "non_camel_case_types"), 1),
+        (("src/threadlocal.rs", "non_upper_case_globals"), 1),
+        (("src/types.rs", "non_camel_case_types"), 1),
+        (("src/types.rs", "non_upper_case_globals"), 1),
+    ]);
+
+    assert_eq!(
+        rust_allowance_counts(&sources, LINTS),
+        expected,
+        "C naming/macro/ctypes allowances should stay limited to audited ABI and mechanical-translation surfaces"
+    );
+    for cleaned in ["src/static.rs", "src/track.rs"] {
+        assert!(
+            !rust_allowance_counts(&sources, LINTS)
+                .keys()
+                .any(|(rel, _)| *rel == cleaned),
+            "{cleaned} should not regain C naming allowances"
+        );
+    }
 }
 
 #[test]

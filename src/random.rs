@@ -4,7 +4,6 @@
     non_camel_case_types,
     non_upper_case_globals,
     clippy::missing_const_for_fn,
-    clippy::missing_safety_doc,
     unsafe_op_in_unsafe_fn
 )]
 
@@ -181,6 +180,10 @@ fn mi_random_init_ex(ctx: &mut mi_random_ctx_t, use_weak: bool) {
     chacha_init(ctx, &key, nonce);
 }
 
+/// # Safety
+///
+/// `ctx` and `ctx_new` must be valid, writable random contexts. They must be
+/// distinct, and `ctx` must already be initialized.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_split(
     ctx: *mut mi_random_ctx_t,
@@ -197,6 +200,10 @@ pub(crate) unsafe extern "C" fn _mi_random_split(
     );
 }
 
+/// # Safety
+///
+/// `ctx` must point to an initialized random context that is writable for the
+/// duration of the call.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> usize {
     let ctx = &mut *ctx;
@@ -226,16 +233,26 @@ pub(crate) extern "C" fn _mi_os_random_weak(extra_seed: usize) -> usize {
     x
 }
 
+/// # Safety
+///
+/// `ctx` must point to a writable random context.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_init(ctx: *mut mi_random_ctx_t) {
     mi_random_init_ex(&mut *ctx, false);
 }
 
+/// # Safety
+///
+/// `ctx` must point to a writable random context.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_init_weak(ctx: *mut mi_random_ctx_t) {
     mi_random_init_ex(&mut *ctx, true);
 }
 
+/// # Safety
+///
+/// `ctx` must point to a writable random context that was previously
+/// initialized by the random initialization routines.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_random_reinit_if_weak(ctx: *mut mi_random_ctx_t) {
     if (*ctx).weak {

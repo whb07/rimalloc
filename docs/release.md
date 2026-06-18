@@ -8,7 +8,8 @@ Before publishing or tagging a release:
 2. Run `scripts/check-local.sh`.
 3. Run `scripts/check-abi-symbols.sh` for exported C symbol inventory.
 4. Run `scripts/check-layout.sh` for ABI/layout audits.
-5. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes.
+5. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
+   using `docs/performance.md` for thresholds and noise handling.
 6. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
 7. Capture `scripts/env-info.sh` output alongside benchmark evidence.
 

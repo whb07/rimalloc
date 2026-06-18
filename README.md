@@ -71,9 +71,10 @@ Individual entrypoints are available under `scripts/` for formatting, lints,
 feature sweeps, ABI symbols, layout, docs, packaging, benchmark smoke/full
 runs, Miri, sanitizers, and environment capture.
 
-Benchmark evidence is tracked in `BENCHMARK_RESULTS.md`. Performance-sensitive
-changes should include fresh results for the changed benchmark set and a full
-report when hot paths or allocator-wide behavior can move.
+Benchmark evidence is tracked in `BENCHMARK_RESULTS.md`; policy and thresholds
+are documented in `docs/performance.md`. Performance-sensitive changes should
+include fresh results for the changed benchmark set and a full report when hot
+paths or allocator-wide behavior can move.
 
 ## Safety Model
 

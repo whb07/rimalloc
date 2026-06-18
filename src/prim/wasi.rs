@@ -2,12 +2,7 @@
 //!
 //! This file intentionally covers an early standalone helper slice only.
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    dead_code,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, dead_code)]
 
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::null_mut;
@@ -41,45 +36,49 @@ unsafe extern "C" {
 /// by the primitive allocator.
 #[inline]
 pub unsafe fn mi_memory_grow(size: usize) -> *mut c_void {
-    #[cfg(target_os = "wasi")]
-    {
-        let increment = match isize::try_from(size) {
-            Ok(n) => n,
-            Err(_) => return null_mut(),
-        };
-        let p = sbrk(increment);
-        if p as isize == -1 { null_mut() } else { p }
-    }
-    #[cfg(not(target_os = "wasi"))]
-    {
-        let _ = size;
-        null_mut()
+    unsafe {
+        #[cfg(target_os = "wasi")]
+        {
+            let increment = match isize::try_from(size) {
+                Ok(n) => n,
+                Err(_) => return null_mut(),
+            };
+            let p = sbrk(increment);
+            if p as isize == -1 { null_mut() } else { p }
+        }
+        #[cfg(not(target_os = "wasi"))]
+        {
+            let _ = size;
+            null_mut()
+        }
     }
 }
 
 #[inline]
 unsafe fn mi_prim_mem_grow(size: usize, try_alignment: usize) -> *mut c_void {
-    if try_alignment <= 1 {
-        return mi_memory_grow(size);
-    }
-    let current = mi_memory_grow(0);
-    if current.is_null() {
-        return null_mut();
-    }
-    let aligned_current = _mi_align_up_ptr(current, try_alignment);
-    let alloc_size = _mi_align_up(
-        ((aligned_current as usize) - (current as usize)).saturating_add(size),
-        _mi_os_page_size(),
-    );
-    let base = mi_memory_grow(alloc_size);
-    if base.is_null() {
-        return null_mut();
-    }
-    let p = _mi_align_up_ptr(base, try_alignment);
-    if (p as usize).saturating_add(size) > (base as usize).saturating_add(alloc_size) {
-        null_mut()
-    } else {
-        p
+    unsafe {
+        if try_alignment <= 1 {
+            return mi_memory_grow(size);
+        }
+        let current = mi_memory_grow(0);
+        if current.is_null() {
+            return null_mut();
+        }
+        let aligned_current = _mi_align_up_ptr(current, try_alignment);
+        let alloc_size = _mi_align_up(
+            ((aligned_current as usize) - (current as usize)).saturating_add(size),
+            _mi_os_page_size(),
+        );
+        let base = mi_memory_grow(alloc_size);
+        if base.is_null() {
+            return null_mut();
+        }
+        let p = _mi_align_up_ptr(base, try_alignment);
+        if (p as usize).saturating_add(size) > (base as usize).saturating_add(alloc_size) {
+            null_mut()
+        } else {
+            p
+        }
     }
 }
 
@@ -89,14 +88,16 @@ unsafe fn mi_prim_mem_grow(size: usize, try_alignment: usize) -> *mut c_void {
 /// owned by the primitive initialization caller.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
-    if config.is_null() {
-        return;
+    unsafe {
+        if config.is_null() {
+            return;
+        }
+        (*config).page_size = 64 * crate::bits::MI_KiB;
+        (*config).alloc_granularity = 16;
+        (*config).has_overcommit = false;
+        (*config).has_partial_free = false;
+        (*config).has_virtual_reserve = false;
     }
-    (*config).page_size = 64 * crate::bits::MI_KiB;
-    (*config).alloc_granularity = 16;
-    (*config).has_overcommit = false;
-    (*config).has_partial_free = false;
-    (*config).has_virtual_reserve = false;
 }
 
 /// # Safety
@@ -125,20 +126,22 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     is_zero: *mut bool,
     addr: *mut *mut c_void,
 ) -> c_int {
-    let _ = hint_addr;
-    let _ = commit;
-    let _ = allow_large;
-    if !is_large.is_null() {
-        *is_large = false;
+    unsafe {
+        let _ = hint_addr;
+        let _ = commit;
+        let _ = allow_large;
+        if !is_large.is_null() {
+            *is_large = false;
+        }
+        if !is_zero.is_null() {
+            *is_zero = false;
+        }
+        let p = mi_prim_mem_grow(size, try_alignment);
+        if !addr.is_null() {
+            *addr = p;
+        }
+        if p.is_null() { ENOMEM } else { 0 }
     }
-    if !is_zero.is_null() {
-        *is_zero = false;
-    }
-    let p = mi_prim_mem_grow(size, try_alignment);
-    if !addr.is_null() {
-        *addr = p;
-    }
-    if p.is_null() { ENOMEM } else { 0 }
 }
 
 /// # Safety
@@ -152,12 +155,14 @@ pub unsafe extern "C" fn _mi_prim_commit(
     size: usize,
     is_zero: *mut bool,
 ) -> c_int {
-    let _ = addr;
-    let _ = size;
-    if !is_zero.is_null() {
-        *is_zero = false;
+    unsafe {
+        let _ = addr;
+        let _ = size;
+        if !is_zero.is_null() {
+            *is_zero = false;
+        }
+        0
     }
-    0
 }
 
 /// # Safety
@@ -171,12 +176,14 @@ pub unsafe extern "C" fn _mi_prim_decommit(
     size: usize,
     needs_recommit: *mut bool,
 ) -> i32 {
-    let _ = addr;
-    let _ = size;
-    if !needs_recommit.is_null() {
-        *needs_recommit = false;
+    unsafe {
+        let _ = addr;
+        let _ = size;
+        if !needs_recommit.is_null() {
+            *needs_recommit = false;
+        }
+        0
     }
-    0
 }
 
 /// # Safety
@@ -243,16 +250,18 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     is_zero: *mut bool,
     addr: *mut *mut c_void,
 ) -> c_int {
-    let _ = hint_addr;
-    let _ = size;
-    let _ = numa_node;
-    if !is_zero.is_null() {
-        *is_zero = true;
+    unsafe {
+        let _ = hint_addr;
+        let _ = size;
+        let _ = numa_node;
+        if !is_zero.is_null() {
+            *is_zero = true;
+        }
+        if !addr.is_null() {
+            *addr = null_mut();
+        }
+        ENOSYS
     }
-    if !addr.is_null() {
-        *addr = null_mut();
-    }
-    ENOSYS
 }
 
 /// # Safety
@@ -270,13 +279,15 @@ pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
 /// the duration of the call.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
-    if msg.is_null() {
-        return;
+    unsafe {
+        if msg.is_null() {
+            return;
+        }
+        let bytes = CStr::from_ptr(msg).to_bytes();
+        let mut stderr = io::stderr().lock();
+        let _ = stderr.write_all(bytes);
+        let _ = stderr.flush();
     }
-    let bytes = CStr::from_ptr(msg).to_bytes();
-    let mut stderr = io::stderr().lock();
-    let _ = stderr.write_all(bytes);
-    let _ = stderr.flush();
 }
 
 /// # Safety
@@ -289,25 +300,27 @@ pub unsafe extern "C" fn _mi_prim_getenv(
     result: *mut c_char,
     result_size: usize,
 ) -> bool {
-    if name.is_null() || result.is_null() || result_size == 0 || _mi_preloading() {
-        return false;
-    }
-
-    let mut s = getenv(name);
-    if s.is_null() {
-        let mut buf = [0 as c_char; 65];
-        let len = _mi_strnlen(name, buf.len() - 1);
-        for (i, slot) in buf.iter_mut().take(len).enumerate() {
-            *slot = _mi_toupper(*name.add(i));
+    unsafe {
+        if name.is_null() || result.is_null() || result_size == 0 || _mi_preloading() {
+            return false;
         }
-        buf[len] = 0;
-        s = getenv(buf.as_ptr());
+
+        let mut s = getenv(name);
+        if s.is_null() {
+            let mut buf = [0 as c_char; 65];
+            let len = _mi_strnlen(name, buf.len() - 1);
+            for (i, slot) in buf.iter_mut().take(len).enumerate() {
+                *slot = _mi_toupper(*name.add(i));
+            }
+            buf[len] = 0;
+            s = getenv(buf.as_ptr());
+        }
+        if s.is_null() || _mi_strnlen(s, result_size) >= result_size {
+            return false;
+        }
+        _mi_strlcpy(result, s, result_size);
+        true
     }
-    if s.is_null() || _mi_strnlen(s, result_size) >= result_size {
-        return false;
-    }
-    _mi_strlcpy(result, s, result_size);
-    true
 }
 
 /// # Safety
@@ -356,5 +369,5 @@ pub unsafe extern "C" fn _mi_prim_thread_yield() {
 /// allocator.
 #[inline]
 pub unsafe fn mi_wasi_try_alloc(size: usize, try_alignment: usize) -> *mut c_void {
-    mi_prim_mem_grow(size, try_alignment)
+    unsafe { mi_prim_mem_grow(size, try_alignment) }
 }

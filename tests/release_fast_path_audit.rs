@@ -971,15 +971,11 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
                 .then_some(rel.as_str())
         })
         .collect::<BTreeSet<_>>();
-    let expected = BTreeSet::from([
-        "src/prim/emscripten.rs",
-        "src/prim/osx.rs",
-        "src/prim/wasi.rs",
-    ]);
+    let expected = BTreeSet::<&str>::new();
 
     assert_eq!(
         actual, expected,
-        "broad unsafe_op_in_unsafe_fn allowances should stay limited to audited mechanical raw-pointer modules"
+        "broad unsafe_op_in_unsafe_fn allowances should not be reintroduced"
     );
     assert!(
         !actual.contains("src/alloc_aligned.rs")
@@ -1003,7 +999,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/theap.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "allocation helpers, aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, free-path helpers, heap helpers, internal helpers, libc helpers, options helpers, OS boundary helpers, page helpers, Unix primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "allocation helpers, aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, free-path helpers, heap helpers, internal helpers, libc helpers, options helpers, OS boundary helpers, page helpers, Unix/Emscripten/WASI/macOS primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 

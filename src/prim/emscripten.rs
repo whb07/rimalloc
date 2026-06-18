@@ -2,12 +2,7 @@
 //!
 //! This file intentionally covers the early primitive-layer surface only.
 
-#![allow(
-    non_camel_case_types,
-    non_upper_case_globals,
-    dead_code,
-    unsafe_op_in_unsafe_fn
-)]
+#![allow(non_camel_case_types, non_upper_case_globals, dead_code)]
 
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -56,14 +51,16 @@ static mut _mi_heap_default_key: pthread_key_t = PTHREAD_KEY_INVALID;
 /// owned by the primitive initialization caller.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
-    if config.is_null() {
-        return;
+    unsafe {
+        if config.is_null() {
+            return;
+        }
+        (*config).page_size = 64 * MI_KiB;
+        (*config).alloc_granularity = 16;
+        (*config).has_overcommit = false;
+        (*config).has_partial_free = false;
+        (*config).has_virtual_reserve = false;
     }
-    (*config).page_size = 64 * MI_KiB;
-    (*config).alloc_granularity = 16;
-    (*config).has_overcommit = false;
-    (*config).has_partial_free = false;
-    (*config).has_virtual_reserve = false;
 }
 
 /// # Safety
@@ -72,18 +69,20 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
 /// returned by the Emscripten primitive allocator for a compatible allocation.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
-    if size == 0 {
-        return 0;
+    unsafe {
+        if size == 0 {
+            return 0;
+        }
+        #[cfg(target_os = "emscripten")]
+        {
+            emmalloc_free(addr);
+        }
+        #[cfg(not(target_os = "emscripten"))]
+        {
+            let _ = addr;
+        }
+        0
     }
-    #[cfg(target_os = "emscripten")]
-    {
-        emmalloc_free(addr);
-    }
-    #[cfg(not(target_os = "emscripten"))]
-    {
-        let _ = addr;
-    }
-    0
 }
 
 /// # Safety
@@ -101,34 +100,36 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     is_zero: *mut bool,
     addr: *mut *mut c_void,
 ) -> c_int {
-    let _ = hint_addr;
-    let _ = commit;
-    let _ = allow_large;
-    if !is_large.is_null() {
-        *is_large = false;
-    }
-    if !is_zero.is_null() {
-        *is_zero = false;
-    }
-    if try_alignment < MIN_EMMALLOC_ALIGN {
-        try_alignment = MIN_EMMALLOC_ALIGN;
-    }
-    #[cfg(target_os = "emscripten")]
-    {
-        let p = emmalloc_memalign(try_alignment, size);
-        if !addr.is_null() {
-            *addr = p;
+    unsafe {
+        let _ = hint_addr;
+        let _ = commit;
+        let _ = allow_large;
+        if !is_large.is_null() {
+            *is_large = false;
         }
-        if p.is_null() { ENOMEM } else { 0 }
-    }
-    #[cfg(not(target_os = "emscripten"))]
-    {
-        let _ = size;
-        let _ = try_alignment;
-        if !addr.is_null() {
-            *addr = core::ptr::null_mut();
+        if !is_zero.is_null() {
+            *is_zero = false;
         }
-        ENOMEM
+        if try_alignment < MIN_EMMALLOC_ALIGN {
+            try_alignment = MIN_EMMALLOC_ALIGN;
+        }
+        #[cfg(target_os = "emscripten")]
+        {
+            let p = emmalloc_memalign(try_alignment, size);
+            if !addr.is_null() {
+                *addr = p;
+            }
+            if p.is_null() { ENOMEM } else { 0 }
+        }
+        #[cfg(not(target_os = "emscripten"))]
+        {
+            let _ = size;
+            let _ = try_alignment;
+            if !addr.is_null() {
+                *addr = core::ptr::null_mut();
+            }
+            ENOMEM
+        }
     }
 }
 
@@ -143,12 +144,14 @@ pub unsafe extern "C" fn _mi_prim_commit(
     size: usize,
     is_zero: *mut bool,
 ) -> c_int {
-    let _ = addr;
-    let _ = size;
-    if !is_zero.is_null() {
-        *is_zero = false;
+    unsafe {
+        let _ = addr;
+        let _ = size;
+        if !is_zero.is_null() {
+            *is_zero = false;
+        }
+        0
     }
-    0
 }
 
 /// # Safety
@@ -162,12 +165,14 @@ pub unsafe extern "C" fn _mi_prim_decommit(
     size: usize,
     needs_recommit: *mut bool,
 ) -> c_int {
-    let _ = addr;
-    let _ = size;
-    if !needs_recommit.is_null() {
-        *needs_recommit = false;
+    unsafe {
+        let _ = addr;
+        let _ = size;
+        if !needs_recommit.is_null() {
+            *needs_recommit = false;
+        }
+        0
     }
-    0
 }
 
 /// # Safety
@@ -216,16 +221,18 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     is_zero: *mut bool,
     addr: *mut *mut c_void,
 ) -> c_int {
-    let _ = hint_addr;
-    let _ = size;
-    let _ = numa_node;
-    if !is_zero.is_null() {
-        *is_zero = true;
+    unsafe {
+        let _ = hint_addr;
+        let _ = size;
+        let _ = numa_node;
+        if !is_zero.is_null() {
+            *is_zero = true;
+        }
+        if !addr.is_null() {
+            *addr = core::ptr::null_mut();
+        }
+        ENOSYS
     }
-    if !addr.is_null() {
-        *addr = core::ptr::null_mut();
-    }
-    ENOSYS
 }
 
 /// # Safety
@@ -252,16 +259,18 @@ pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
 /// clock is permitted.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
-    #[cfg(target_os = "emscripten")]
-    {
-        emscripten_date_now() as mi_msecs_t
-    }
-    #[cfg(not(target_os = "emscripten"))]
-    {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as mi_msecs_t)
-            .unwrap_or(0)
+    unsafe {
+        #[cfg(target_os = "emscripten")]
+        {
+            emscripten_date_now() as mi_msecs_t
+        }
+        #[cfg(not(target_os = "emscripten"))]
+        {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_millis() as mi_msecs_t)
+                .unwrap_or(0)
+        }
     }
 }
 
@@ -280,19 +289,21 @@ pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
 /// the duration of the call.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
-    if msg.is_null() {
-        return;
-    }
-    #[cfg(target_os = "emscripten")]
-    {
-        emscripten_console_error(msg);
-    }
-    #[cfg(not(target_os = "emscripten"))]
-    {
-        let bytes = CStr::from_ptr(msg).to_bytes();
-        let mut stderr = io::stderr().lock();
-        let _ = stderr.write_all(bytes);
-        let _ = stderr.flush();
+    unsafe {
+        if msg.is_null() {
+            return;
+        }
+        #[cfg(target_os = "emscripten")]
+        {
+            emscripten_console_error(msg);
+        }
+        #[cfg(not(target_os = "emscripten"))]
+        {
+            let bytes = CStr::from_ptr(msg).to_bytes();
+            let mut stderr = io::stderr().lock();
+            let _ = stderr.write_all(bytes);
+            let _ = stderr.flush();
+        }
     }
 }
 
@@ -318,8 +329,10 @@ pub unsafe extern "C" fn _mi_prim_getenv(
 /// with the Emscripten pthread destructor key.
 #[inline]
 pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
-    if !value.is_null() {
-        crate::internal::_mi_thread_done(value.cast::<mi_theap_t>());
+    unsafe {
+        if !value.is_null() {
+            crate::internal::_mi_thread_done(value.cast::<mi_theap_t>());
+        }
     }
 }
 
@@ -329,17 +342,19 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
 /// default-heap key is active for this process.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
-    crate::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
-    #[cfg(target_os = "emscripten")]
-    {
-        let mut key = PTHREAD_KEY_INVALID;
-        if pthread_key_create(&mut key, Some(mi_pthread_done)) == 0 {
-            _mi_heap_default_key = key;
+    unsafe {
+        crate::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
+        #[cfg(target_os = "emscripten")]
+        {
+            let mut key = PTHREAD_KEY_INVALID;
+            if pthread_key_create(&mut key, Some(mi_pthread_done)) == 0 {
+                _mi_heap_default_key = key;
+            }
         }
-    }
-    #[cfg(not(target_os = "emscripten"))]
-    {
-        _mi_heap_default_key = 0;
+        #[cfg(not(target_os = "emscripten"))]
+        {
+            _mi_heap_default_key = 0;
+        }
     }
 }
 
@@ -349,16 +364,18 @@ pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
 /// `_mi_prim_thread_init_auto_done` has initialized the key.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
-    if _mi_heap_default_key != PTHREAD_KEY_INVALID {
-        #[cfg(target_os = "emscripten")]
-        {
-            let _ = pthread_key_delete(_mi_heap_default_key);
+    unsafe {
+        if _mi_heap_default_key != PTHREAD_KEY_INVALID {
+            #[cfg(target_os = "emscripten")]
+            {
+                let _ = pthread_key_delete(_mi_heap_default_key);
+            }
+            #[cfg(not(target_os = "emscripten"))]
+            {
+                MI_EM_PTHREAD_DEFAULT_THEAP.with(|value| value.set(ptr::null_mut()));
+            }
+            _mi_heap_default_key = PTHREAD_KEY_INVALID;
         }
-        #[cfg(not(target_os = "emscripten"))]
-        {
-            MI_EM_PTHREAD_DEFAULT_THEAP.with(|value| value.set(ptr::null_mut()));
-        }
-        _mi_heap_default_key = PTHREAD_KEY_INVALID;
     }
 }
 
@@ -368,14 +385,16 @@ pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
 /// subsequent primitive thread-done callbacks.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
-    if _mi_heap_default_key != PTHREAD_KEY_INVALID {
-        #[cfg(target_os = "emscripten")]
-        {
-            let _ = pthread_setspecific(_mi_heap_default_key, theap.cast_const().cast());
-        }
-        #[cfg(not(target_os = "emscripten"))]
-        {
-            MI_EM_PTHREAD_DEFAULT_THEAP.with(|value| value.set(theap.cast()));
+    unsafe {
+        if _mi_heap_default_key != PTHREAD_KEY_INVALID {
+            #[cfg(target_os = "emscripten")]
+            {
+                let _ = pthread_setspecific(_mi_heap_default_key, theap.cast_const().cast());
+            }
+            #[cfg(not(target_os = "emscripten"))]
+            {
+                MI_EM_PTHREAD_DEFAULT_THEAP.with(|value| value.set(theap.cast()));
+            }
         }
     }
 }

@@ -10,8 +10,7 @@
     non_upper_case_globals,
     dead_code,
     unused_imports,
-    unused_macros,
-    unsafe_op_in_unsafe_fn
+    unused_macros
 )]
 
 use core::ffi::{c_char, c_int, c_void};
@@ -191,7 +190,7 @@ pub unsafe extern "C" fn mi_malloc_create_zone(
     _size: vm_size_t,
     _flags: u32,
 ) -> *mut malloc_zone_t {
-    mi_get_default_zone()
+    unsafe { mi_get_default_zone() }
 }
 
 /// # Safety
@@ -199,7 +198,7 @@ pub unsafe extern "C" fn mi_malloc_create_zone(
 /// Must be called only through the macOS malloc default-zone ABI.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_default_zone() -> *mut malloc_zone_t {
-    mi_get_default_zone()
+    unsafe { mi_get_default_zone() }
 }
 
 /// # Safety
@@ -207,7 +206,7 @@ pub unsafe extern "C" fn mi_malloc_default_zone() -> *mut malloc_zone_t {
 /// Must be called only through the macOS malloc purgeable-zone ABI.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_default_purgeable_zone() -> *mut malloc_zone_t {
-    mi_get_default_zone()
+    unsafe { mi_get_default_zone() }
 }
 
 /// # Safety
@@ -230,13 +229,15 @@ pub unsafe extern "C" fn mi_malloc_get_all_zones(
     addresses: *mut *mut vm_address_t,
     count: *mut u32,
 ) -> kern_return_t {
-    if !addresses.is_null() {
-        *addresses = null_mut();
+    unsafe {
+        if !addresses.is_null() {
+            *addresses = null_mut();
+        }
+        if !count.is_null() {
+            *count = 0;
+        }
+        KERN_SUCCESS
     }
-    if !count.is_null() {
-        *count = 0;
-    }
-    KERN_SUCCESS
 }
 
 /// # Safety
@@ -244,12 +245,14 @@ pub unsafe extern "C" fn mi_malloc_get_all_zones(
 /// `zone`, when non-null, must point to a valid malloc zone object.
 #[inline]
 pub unsafe extern "C" fn mi_malloc_get_zone_name(zone: *mut malloc_zone_t) -> *const c_char {
-    let zone = if zone.is_null() {
-        mi_get_default_zone()
-    } else {
-        zone
-    };
-    (*zone).zone_name
+    unsafe {
+        let zone = if zone.is_null() {
+            mi_get_default_zone()
+        } else {
+            zone
+        };
+        (*zone).zone_name
+    }
 }
 
 /// # Safety
@@ -492,7 +495,7 @@ pub unsafe extern "C" fn zone_check(_zone: *mut malloc_zone_t) -> boolean_t {
 #[inline]
 pub unsafe extern "C" fn zone_from_ptr(p: *const c_void) -> *mut malloc_zone_t {
     if mi_any_heap_contains(p) {
-        mi_get_default_zone()
+        unsafe { mi_get_default_zone() }
     } else {
         null_mut()
     }

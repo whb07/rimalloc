@@ -974,7 +974,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "src/alloc.rs",
         "src/bitmap.rs",
         "src/free.rs",
-        "src/heap.rs",
         "src/internal.rs",
         "src/os.rs",
         "src/page.rs",
@@ -996,13 +995,14 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/arena_meta.rs")
             && !actual.contains("src/atomic.rs")
             && !actual.contains("src/core_types/mod.rs")
+            && !actual.contains("src/heap.rs")
             && !actual.contains("src/libc.rs")
             && !actual.contains("src/options.rs")
             && !actual.contains("src/prim.rs")
             && !actual.contains("src/random.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, libc helpers, options helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, core types, heap helpers, libc helpers, options helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 
@@ -1278,7 +1278,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             == 2
             && alloc_rs.contains("crate::free::mi_validate_pointer(p.cast_mut(), msg)")
             && free_rs.contains("let mut page = _mi_safe_ptr_page(p);")
-            && heap_rs.contains("let page: *mut mi_page_t = _mi_safe_ptr_page(p);")
+            && heap_rs.contains("let page: *mut mi_page_t = unsafe { _mi_safe_ptr_page(p) };")
             && heap_rs.contains("let page = _mi_safe_ptr_page(p);")
             && arena_rs.contains("let page = unsafe { _mi_safe_ptr_page(start) };"),
         "safe pointer page lookup should keep C's _mi_safe_ptr_page local call boundary outside typed realloc validation"
@@ -2172,7 +2172,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && heap_rs.contains("if heap.is_null() || _mi_is_heap_main(heap)")
             && heap_rs.contains("crate::init::_mi_theap_main_safe()")
             && heap_rs.contains("_mi_thread_local_get((*heap).theap).cast::<mi_theap_t>()")
-            && heap_rs.contains("let mut theap = _mi_heap_theap_get_peek(heap);")
+            && heap_rs.contains("let mut theap = unsafe { _mi_heap_theap_get_peek(heap) };")
             && prim_rs.contains("_mi_heap_theap_get_peek(heap)"),
         "heap/theap cache misses should keep C's local _mi_heap_theap_get_peek no-create helper boundary"
     );
@@ -3286,7 +3286,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && heap_rs.contains("_mi_heap_move_pages(heap, mi_heap_main());")
             && heap_rs.contains("_mi_heap_destroy_pages(heap);")
-            && heap_rs.contains("_mi_heap_force_destroy(heap);"),
+            && heap_rs.contains("unsafe { _mi_heap_force_destroy(heap) };"),
         "heap delete/destroy should keep C's heap page movement and force-destroy helper boundaries"
     );
     assert!(
@@ -3870,7 +3870,7 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_theap_get_or_init"
             )
             && heap_rs.contains("static MI_HEAP_THEAP_GET_OR_INIT_KEEP")
-            && heap_rs.contains("theap = mi_heap_init_theap(heap);"),
+            && heap_rs.contains("theap = unsafe { mi_heap_init_theap(heap) };"),
         "heap theap initialization should keep C's local helper boundaries"
     );
     assert!(

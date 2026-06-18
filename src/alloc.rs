@@ -16,8 +16,8 @@ use crate::internal::{
     _mi_strlen, _mi_strnlen, _mi_theap_get_free_small_page_typed, _mi_theap_heap, _mi_thread_id,
     MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_PADDING, MI_PADDING_CHECK, mi_likely, mi_page_block_size,
     mi_page_heap, mi_page_keys, mi_page_set_has_interior_pointers, mi_page_slice_start,
-    mi_page_start, mi_page_usable_block_size, mi_ptr_encode_canary, mi_theap_is_initialized,
-    mi_theap_malloc_use_guarded, mi_unlikely,
+    mi_page_start, mi_page_usable_block_size, mi_theap_is_initialized, mi_theap_malloc_use_guarded,
+    mi_unlikely,
 };
 use crate::mimalloc::{mi_free, mi_malloc_aligned};
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
@@ -212,14 +212,10 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
             crate::mi_assert_internal!(delta <= bsize && bsize >= (size - MI_PADDING_SIZE + delta));
         }
         mi_track_mem_defined(padding_ptr.cast(), crate::core_types::PaddingPtr::SIZE);
-        let keys = mi_page_keys(page);
+        let keys = crate::core_types::PageKeys(mi_page_keys(page));
         padding.write(crate::core_types::Padding::new(
-            crate::core_types::PaddingCanary::new(mi_ptr_encode_canary(
-                page.cast(),
-                block.cast(),
-                &keys,
-            )),
-            crate::core_types::PaddingDelta::new(delta as u32),
+            crate::core_types::PaddingCanary::from_page_block_keys(page.cast(), block.cast(), keys),
+            crate::core_types::PaddingDelta::for_usable(delta, usable_size),
         ));
         if MI_PADDING_CHECK != 0 && !crate::page::mi_page_is_huge(page) {
             let fill = padding_ptr.cast::<u8>().sub(delta);

@@ -838,6 +838,20 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
 
     let atomic_wrappers = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
         .expect("read atomic wrappers");
+    let padding_rs =
+        fs::read_to_string(root.join("src/core_types/padding.rs")).expect("read padding wrappers");
+    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read alloc.rs");
+    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read free.rs");
+    assert!(
+        padding_rs.contains("pub(crate) fn from_page_block_keys(")
+            && padding_rs
+                .contains("pub(crate) fn for_usable(delta: usize, usable_size: UsableSize)")
+            && alloc_rs.contains("PaddingCanary::from_page_block_keys")
+            && alloc_rs.contains("PaddingDelta::for_usable(delta, usable_size)")
+            && free_rs.contains("PaddingCanary::from_page_block_keys")
+            && free_rs.contains("PaddingDelta::for_usable("),
+        "padding metadata should construct canaries from PageKeys and deltas with the usable-size bound"
+    );
     assert!(
         atomic_wrappers
             .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
@@ -846,7 +860,6 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         "AtomicThreadFree should be backed by AtomicUsizeField, matching TYPES_SPEC.md"
     );
 
-    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read free.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read page.rs");
     assert!(
         free_rs.contains(
@@ -2032,9 +2045,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_padding_shrink(")
             && free_rs.contains("if MI_PADDING == 0")
             && free_rs.contains("mi_page_decode_padding(page, block, &mut delta, &mut bsize)")
-            && free_rs.contains(
-                "padding.write_delta(crate::core_types::PaddingDelta::new(new_delta as u32));"
-            )
+            && free_rs.contains("padding.write_delta(crate::core_types::PaddingDelta::for_usable(")
             && alloc_aligned_rs.contains("#[cfg(mi_c_malloc_fast)]")
             && alloc_aligned_rs.contains("\"call _mi_padding_shrink\"")
             && alloc_aligned_rs.contains("fn mi_padding_shrink_call(")

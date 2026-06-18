@@ -1,8 +1,9 @@
 //! DT-14: Padding types.
 
-use core::ptr::NonNull;
+use core::{ffi::c_void, ptr::NonNull};
 
-use crate::core_types::{BlockPtr, UsableSize};
+use crate::core_types::{BlockPtr, PageKeys, UsableSize};
+use crate::internal::mi_ptr_encode_canary;
 use crate::types::mi_padding_t;
 
 #[repr(transparent)]
@@ -11,8 +12,12 @@ pub(crate) struct PaddingCanary(pub(crate) u32);
 
 impl PaddingCanary {
     #[inline(always)]
-    pub(crate) const fn new(canary: u32) -> Self {
-        Self(canary)
+    pub(crate) fn from_page_block_keys(
+        page: *const c_void,
+        block: *const c_void,
+        keys: PageKeys,
+    ) -> Self {
+        Self(mi_ptr_encode_canary(page, block, &keys.0))
     }
 
     #[inline(always)]
@@ -27,8 +32,9 @@ pub(crate) struct PaddingDelta(pub(crate) u32);
 
 impl PaddingDelta {
     #[inline(always)]
-    pub(crate) const fn new(delta: u32) -> Self {
-        Self(delta)
+    pub(crate) fn for_usable(delta: usize, usable_size: UsableSize) -> Self {
+        crate::mi_debug_assert!(delta <= usable_size.get());
+        Self(delta as u32)
     }
 
     #[inline(always)]

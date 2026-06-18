@@ -19,7 +19,7 @@ use crate::internal::{
     mi_page_block_size, mi_page_contains_address, mi_page_has_interior_pointers,
     mi_page_is_abandoned_mapped, mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned,
     mi_page_is_singleton, mi_page_keys, mi_page_queue, mi_page_start, mi_page_thread_free,
-    mi_page_usable_block_size, mi_page_xthread_id, mi_ptr_encode_canary, mi_theap_is_initialized,
+    mi_page_usable_block_size, mi_page_xthread_id, mi_theap_is_initialized,
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
@@ -136,8 +136,14 @@ unsafe fn mi_page_decode_padding(
     let metadata = padding.read();
     *delta = metadata.delta().get() as usize;
     let canary = metadata.canary().get();
-    let keys = mi_page_keys(page);
-    let ok = mi_ptr_encode_canary(page.cast::<c_void>(), block.cast::<c_void>(), &keys) == canary
+    let keys = crate::core_types::PageKeys(mi_page_keys(page));
+    let ok = crate::core_types::PaddingCanary::from_page_block_keys(
+        page.cast::<c_void>(),
+        block.cast::<c_void>(),
+        keys,
+    )
+    .get()
+        == canary
         && *delta <= *bsize;
     mi_track_mem_noaccess(
         padding_ptr.cast::<c_void>(),
@@ -184,7 +190,10 @@ pub(crate) unsafe extern "C" fn _mi_padding_shrink(
         padding_ptr.cast::<c_void>(),
         crate::core_types::PaddingPtr::SIZE,
     );
-    padding.write_delta(crate::core_types::PaddingDelta::new(new_delta as u32));
+    padding.write_delta(crate::core_types::PaddingDelta::for_usable(
+        new_delta,
+        crate::core_types::UsableSize::new(bsize),
+    ));
     mi_track_mem_noaccess(
         padding_ptr.cast::<c_void>(),
         crate::core_types::PaddingPtr::SIZE,

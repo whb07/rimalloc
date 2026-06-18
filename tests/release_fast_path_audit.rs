@@ -975,7 +975,6 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "src/alloc.rs",
         "src/alloc_aligned.rs",
         "src/alloc_override.rs",
-        "src/atomic.rs",
         "src/bitmap.rs",
         "src/free.rs",
         "src/heap.rs",
@@ -996,6 +995,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
     assert!(
         !actual.contains("src/alloc_posix.rs")
             && !actual.contains("src/arena_meta.rs")
+            && !actual.contains("src/atomic.rs")
             && !actual.contains("src/core_types/mod.rs")
             && !actual.contains("src/libc.rs")
             && !actual.contains("src/options.rs")
@@ -1003,7 +1003,7 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
             && !actual.contains("src/random.rs")
             && !actual.contains("src/threadlocal.rs")
             && !actual.contains("src/track.rs"),
-        "POSIX allocation shims, arena metadata, core types, libc helpers, options helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
+        "POSIX allocation shims, arena metadata, atomic/lock helpers, core types, libc helpers, options helpers, primitive TLS helpers, random helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
 

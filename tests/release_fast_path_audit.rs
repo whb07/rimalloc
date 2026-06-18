@@ -2143,6 +2143,9 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_free_collect_partly("
             )
             && page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_unfull(")
+            && page_rs.contains(
+                "#[inline(never)]\npub(crate) unsafe fn _mi_page_unfull_internal(\n    page_wrapper: crate::core_types::FullPage,"
+            )
             && page_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_init(")
             && page_rs
@@ -2181,10 +2184,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("match crate::core_types::MemId::view((*page).memid)")
             && page_rs.contains("crate::core_types::MemIdView::Os(os) => os")
             && !page_rs.contains("(*page).memid.mem.os.base")
-            && page_rs.contains("mi_page_unfull_typed(\n        crate::core_types::FullPage")
+            && page_rs.contains(
+                "let _ = _mi_page_unfull_internal(crate::core_types::FullPage(\n        crate::core_types::PagePtr::new_unchecked(page),"
+            )
+            && page_rs.contains("mi_page_unfull_typed(\n        page_wrapper,")
             && page_rs
                 .contains("mi_page_move_to_full_typed(\n            crate::core_types::ActivePage")
-            && free_rs.contains("_mi_page_unfull(page);")
+            && free_rs.contains("_mi_page_unfull_internal(crate::core_types::FullPage")
             && free_rs.contains("_mi_page_free_collect(page, false);")
             && free_rs.contains("_mi_page_free_collect_partly(page, mt_free);")
             && arena_rs.contains("crate::page::_mi_page_init(theap, page)")

@@ -459,12 +459,22 @@ pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head
 
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
+    let _ = _mi_page_unfull_internal(crate::core_types::FullPage(
+        crate::core_types::PagePtr::new_unchecked(page),
+    ));
+}
+
+#[inline(never)]
+pub(crate) unsafe fn _mi_page_unfull_internal(
+    page_wrapper: crate::core_types::FullPage,
+) -> crate::core_types::ActivePage {
+    let page = page_wrapper.0.as_ptr();
     crate::mi_assert_internal!(!page.is_null());
     crate::mi_assert_expensive!(_mi_page_is_valid(page));
     crate::mi_assert_internal!(mi_page_is_in_full(page));
     crate::mi_assert_internal!(!(*mi_page_theap(page)).allow_page_abandon);
     if !mi_page_is_in_full(page) {
-        return;
+        return crate::core_types::ActivePage(page_wrapper.0);
     }
 
     let theap = mi_page_theap(page);
@@ -473,10 +483,10 @@ pub unsafe extern "C" fn _mi_page_unfull(page: *mut mi_page_t) {
     let pq = mi_theap_page_queue_of(theap, page);
     mi_page_set_in_full(page, true);
     mi_page_unfull_typed(
-        crate::core_types::FullPage(crate::core_types::PagePtr::new_unchecked(page)),
+        page_wrapper,
         crate::core_types::FullPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pqfull)),
         crate::core_types::NormalPageQueue(crate::core_types::PageQueuePtr::new_unchecked(pq)),
-    );
+    )
 }
 
 #[allow(dead_code)]

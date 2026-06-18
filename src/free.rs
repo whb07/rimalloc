@@ -30,7 +30,7 @@ use crate::internal::{
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
-    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_retire, _mi_page_unfull,
+    _mi_page_free_collect, _mi_page_free_collect_partly, _mi_page_retire, _mi_page_unfull_internal,
     _mi_theap_page_reclaim, MI_MEDIUM_MAX_OBJ_SIZE, mi_bin_from_usable, mi_page_is_abandoned,
     mi_page_is_huge,
 };
@@ -367,7 +367,9 @@ pub(crate) unsafe fn mi_free_block_local(
             _mi_page_retire(page);
         }
     } else if check_full && crate::page::mi_page_is_in_full(page) {
-        _mi_page_unfull(page);
+        _mi_page_unfull_internal(crate::core_types::FullPage(
+            crate::core_types::PagePtr::new_unchecked(page),
+        ));
     }
 }
 

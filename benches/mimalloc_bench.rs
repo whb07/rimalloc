@@ -32,6 +32,9 @@ use std::time::{Duration, Instant};
 #[allow(dead_code)]
 #[path = "support/cfrac_core.rs"]
 mod cfrac_core;
+#[allow(dead_code)]
+#[path = "support/cfrac_expected.rs"]
+mod cfrac_expected;
 mod rptest_tables;
 
 #[derive(Clone, Copy)]

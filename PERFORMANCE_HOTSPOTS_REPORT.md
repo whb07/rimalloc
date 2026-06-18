@@ -1,10 +1,15 @@
 # Performance Hotspots Report
 
 Date: 2026-06-18
+Current commit reviewed: `5094e9dbdf8f`
 
 This report summarizes a local `perf`/flamegraph pass intended to identify
 where the team should research additional performance without weakening
 correctness or increasing RSS.
+
+The allocator implementation hot path did not change in the most recent
+raw-facade/API-surface commit. A focused current-head sanity run was still taken
+for the tight `paired_alloc_free/16` Criterion case and is recorded below.
 
 ## Method
 
@@ -69,6 +74,7 @@ Generated local artifacts:
 - `target/perf-hotspots/reports/native_cache_scratch.svg`
 - `target/perf-hotspots/reports/*.report.txt`
 - `target/perf-hotspots/*.stat`
+- `target/perf-hotspots/current/hotpath_paired_16_5094e9d.stat`
 
 `perf_event_paranoid=1` allowed user-space profiling. Kernel symbols were
 restricted, so kernel samples are not useful in this run.
@@ -108,6 +114,18 @@ Interpretation: the broader threaded workload is contention, synchronization,
 and memory-system sensitive. Wins here are more likely in cross-thread free,
 abandoned-page reclaim, queue scanning, and page/free-list refill behavior than
 in the tiny local alloc/free pair alone.
+
+Current-head hotpath sanity check at `5094e9dbdf8f`:
+
+- Command:
+  `perf stat -d -r 3 -- target/release/deps/hotpath-2d764e6f6cbe18dd --bench hotpath/paired_alloc_free/mechanical_mimalloc/16 --quiet`
+- Criterion result range across the three repeats: `13.306 us` to `13.584 us`
+  mean time, or roughly `301M` to `308M` elements/s.
+- `perf stat` aggregate: 12.52 s elapsed, 2.43 instructions per cycle, 0.81%
+  branch misses, 4.74% L1 data-load miss rate.
+- Compared with the historical 10-sample aggregate in `BENCHMARK_RESULTS.md`
+  (`14.45 us` mean for `paired_alloc_free/16`), this does not indicate a
+  current hotpath regression.
 
 ## Hotspots To Research
 

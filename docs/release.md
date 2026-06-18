@@ -27,6 +27,7 @@ Related policy documents:
 - `docs/performance.md`
 - `docs/reproducibility.md`
 - `docs/testing.md`
+- `docs/strict-types.md`
 - `docs/governance.md`
 - `docs/limitations.md`
 - `docs/upstream.md`

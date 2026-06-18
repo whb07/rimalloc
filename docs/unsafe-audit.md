@@ -14,6 +14,8 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   and cross-thread publication.
 - `atomic`: acquire/release/relaxed ordering around free lists, ownership, locks,
   and once initialization.
+- `core_types`: crate-private witnesses for pointer domains, layout requests,
+  free-list ownership, page states, memid views, and atomic metadata fields.
 - `track`: Valgrind/ASan hooks and feature-exclusive instrumentation.
 - `raw ABI`: C callbacks, null/error conventions, exported symbols, and panic
   boundaries.
@@ -26,4 +28,3 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
 - Any new unsafe wrapper must document caller obligations.
 - Any new safe wrapper around raw allocator state must explain how it enforces
   ownership, lifetime, and aliasing invariants.
-

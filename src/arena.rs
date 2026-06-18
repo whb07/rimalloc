@@ -890,21 +890,16 @@ unsafe fn mi_arena_from_memid(
     slice_index: *mut usize,
     slice_count: *mut usize,
 ) -> *mut mi_arena_t {
-    match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::Arena(a) => {
-            if !slice_index.is_null() {
-                unsafe { *slice_index = a.range.start().0 };
-            }
-            if !slice_count.is_null() {
-                unsafe { *slice_count = a.range.count().0.get() as usize };
-            }
-            a.arena.as_ptr()
-        }
-        _ => {
-            crate::mi_assert_internal!(false);
-            core::ptr::null_mut()
-        }
+    let Some((arena, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else {
+        return core::ptr::null_mut();
+    };
+    if !slice_index.is_null() {
+        unsafe { *slice_index = range.start_usize() };
     }
+    if !slice_count.is_null() {
+        unsafe { *slice_count = range.count_usize() };
+    }
+    arena.as_ptr()
 }
 
 #[allow(dead_code)]

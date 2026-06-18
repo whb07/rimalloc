@@ -2568,6 +2568,9 @@ fn free_path_internals_are_not_dynamic_exports() {
         arena_rs.contains(
             "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> mi_memid_t"
         ) && arena_rs.contains("unsafe { *memid = mi_memid_create_arena(arena, range) };")
+            && arena_rs.contains("let Some((arena, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else")
+            && arena_rs.contains("unsafe { *slice_index = range.start_usize() };")
+            && arena_rs.contains("unsafe { *slice_count = range.count_usize() };")
             && !arena_rs.contains(
                 "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    slice_index: usize,\n    slice_count: usize,"
             )

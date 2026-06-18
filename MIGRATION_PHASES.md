@@ -79,6 +79,10 @@ Benchmark verification after the `AtomicThreadFree(AtomicUsizeField)` cleanup re
 
 A Phase 6 dead-code probe confirmed the remaining broad `core_types` `dead_code` allowance covers required staged typestate/scalar scaffolding from `TYPES_SPEC.md`, not accidental live-code silence. The unused pointer-wrapper `as_non_null` escape hatch was removed so pointer wrappers expose only the constructor/raw-pointer surface required by the spec.
 
+Follow-up Phase 6 dead-code cleanup removed stale module-wide `dead_code` allowances from the public header/static facades, stats/tracking/POSIX allocation boundaries, bitmap/libc/override/primitive boundary modules, the active Unix primitive layer, arena metadata, thread-heap helpers, and the allocation/free hot-path modules. Remaining broad `dead_code` allowances are now limited to `internal` re-export compatibility, `core_types` staged strict-type scaffolding, non-Linux primitive targets that are not compiled on this platform, and a small set of arena C-compatibility definitions/helpers. The active hot-path modules now rely on item-level allowances only where a specific staged compatibility helper remains.
+
+No benchmark rerun was needed for the dead-code allowance narrowing because these changes only adjust lint attributes and item-level documentation of staged compatibility helpers; no generated allocator logic or hot-path operation changed. The latest runtime benchmark evidence remains the post-`AtomicThreadFree(AtomicUsizeField)` verification above against `BENCHMARK_RESULTS.md`.
+
 **Action Items:**
 1. **Remove Unused Types:** In progress. Do not delete C ABI aliases still required by `raw`/compat/public module boundaries.
 2. **Resolve Clippy Warnings:** In progress. `cargo clippy --all-targets -- -D warnings` is clean with the remaining intentional allowances.

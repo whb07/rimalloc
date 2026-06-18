@@ -198,7 +198,7 @@ struct MiArenaPagesPrefix {
 #[allow(non_camel_case_types)]
 type mi_arena_pages_t = MiArenaPagesPrefix;
 
-#[allow(dead_code, non_camel_case_types)]
+#[allow(non_camel_case_types)]
 #[repr(C)]
 struct mi_purge_visit_info_t {
     now: mi_msecs_t,
@@ -207,7 +207,7 @@ struct mi_purge_visit_info_t {
     any_purged: bool,
 }
 
-#[allow(dead_code, non_camel_case_types)]
+#[allow(non_camel_case_types)]
 #[repr(C)]
 struct mi_heap_visit_info_t {
     heap: *mut mi_heap_t,
@@ -216,7 +216,7 @@ struct mi_heap_visit_info_t {
     visit_blocks: bool,
 }
 
-#[allow(dead_code, non_camel_case_types)]
+#[allow(non_camel_case_types)]
 #[repr(C)]
 struct mi_heap_delete_visit_info_t {
     heap_target: *mut mi_heap_t,
@@ -224,7 +224,6 @@ struct mi_heap_delete_visit_info_t {
     theap: *mut mi_theap_t,
 }
 
-#[allow(dead_code)]
 unsafe fn mi_heap_visit_page(page: *mut mi_page_t, vinfo: *mut mi_heap_visit_info_t) -> bool {
     let mut area = mi_heap_area_t::default();
     unsafe { _mi_heap_area_init(ptr::addr_of_mut!(area), page) };
@@ -249,7 +248,6 @@ unsafe fn mi_heap_visit_page(page: *mut mi_page_t, vinfo: *mut mi_heap_visit_inf
     }
 }
 
-#[allow(dead_code)]
 unsafe extern "C" fn mi_heap_visit_page_at(
     slice_index: usize,
     _slice_count: usize,
@@ -363,7 +361,6 @@ pub unsafe extern "C" fn mi_heap_visit_abandoned_blocks(
     unsafe { _mi_heap_visit_blocks(heap, true, visit_blocks, visitor, arg) }
 }
 
-#[allow(dead_code)]
 unsafe extern "C" fn mi_heap_delete_page(
     heap: *const mi_heap_t,
     area: *const mi_heap_area_t,
@@ -439,7 +436,6 @@ unsafe extern "C" fn mi_heap_delete_page(
     true
 }
 
-#[allow(dead_code)]
 unsafe fn mi_heap_delete_pages(heap: *mut mi_heap_t, heap_target: *mut mi_heap_t) {
     let theap_target = if heap_target.is_null() {
         ptr::null_mut()
@@ -565,7 +561,6 @@ pub unsafe extern "C" fn mi_arena_id_from_arena(arena: *mut mi_arena_t) -> mi_ar
     }
 }
 
-#[allow(dead_code)]
 unsafe fn mi_arena_is_suitable(arena: *mut mi_arena_t, req_arena: *mut mi_arena_t) -> bool {
     if arena == req_arena {
         return true;

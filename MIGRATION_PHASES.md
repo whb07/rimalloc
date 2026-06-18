@@ -95,6 +95,8 @@ Stale C naming allowances were removed from the static and tracking facades. The
 
 No benchmark rerun was needed for the allowance and padding-wrapper narrowing because the lint/audit changes do not affect generated allocator logic, and default release builds compile the padding metadata branch out (`MI_PADDING == 0`). The latest runtime benchmark evidence remains the post-`AtomicThreadFree(AtomicUsizeField)` verification above against `BENCHMARK_RESULTS.md`.
 
+Current release verification after the Phase 6 dead-code cleanup rebuilt the cdylib, refreshed `target/bench-allocators/libmimalloc-rust.so`, and ran a short `mimalloc-bench` hot/watch pass at `-n=3` over glibc, rptest, cfrac, alloc-test, larson-sized, shbench, xmalloc, cache scratch, redis, and rocksdb. The 14-case geomean was `1.002766` (`+0.28%` Rust vs C) while the allocator hot-path cases were tied or Rust-favored: `glibc-simple` `-3.23%`, `glibc-thread` `+0.40%`, `rptestN` `-2.78%`, `cfrac` `-0.61%`, `alloc-test1` `-0.80%`, `alloc-testN` `+0.16%`, `larsonN-sized` `-1.47%`, and cache scratch tied/Rust-favored. Focused `-n=5` repeats for the noisy cases showed `sh8benchN` remained a short-test spread (`+4.17%` mean on `.27s.. .31s` samples), redis narrowed to a small app-level tail (`+1.49%` mean, `+0.75%` median), and rocksdb was Rust-favored (`-0.34%` mean, `-0.84%` median). No hot-path or overall benchmark regression was found relative to the `BENCHMARK_RESULTS.md` parity envelope.
+
 **Action Items:**
 1. **Remove Unused Types:** In progress. Do not delete C ABI aliases still required by `raw`/compat/public module boundaries.
 2. **Resolve Clippy Warnings:** In progress. `cargo clippy --all-targets -- -D warnings` is clean with the remaining intentional allowances.

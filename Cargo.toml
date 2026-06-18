@@ -41,3 +41,9 @@ name = "hotpath"
 path = "benches/hotpath.rs"
 harness = false
 required-features = ["bench"]
+
+[[bench]]
+name = "mimalloc_bench"
+path = "benches/mimalloc_bench.rs"
+harness = false
+required-features = ["bench"]

@@ -402,12 +402,12 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         "release builds should produce the benchmark cdylib directly with one optimized codegen unit"
     );
     assert!(
-        lib_rs.contains(
-            "#![cfg_attr(all(not(test), target_os = \"linux\", not(debug_assertions)), no_std)]"
-        ) && lib_rs.contains("#[panic_handler]")
+        lib_rs.contains("not(feature = \"std\")")
+            && lib_rs.contains("no_std")
+            && lib_rs.contains("#[panic_handler]")
             && lib_rs.contains("#[link_name = \"abort\"]")
             && lib_rs.contains("extern \"C\" fn rust_eh_personality()"),
-        "Linux release cdylibs should avoid linking Rust std panic/backtrace machinery"
+        "Linux release cdylibs should avoid linking Rust std panic/backtrace machinery unless the explicit std feature is enabled for tooling"
     );
     assert!(
         tls_shim.contains("__mi_theap_default")

@@ -13,7 +13,9 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use std::alloc::{GlobalAlloc, Layout, System};
+#[cfg(feature = "compare")]
+use std::alloc::System;
+use std::alloc::{GlobalAlloc, Layout};
 use std::hint::black_box as hint_black_box;
 use std::time::Duration;
 

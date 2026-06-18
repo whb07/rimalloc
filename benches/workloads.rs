@@ -18,7 +18,9 @@ use rand::SeedableRng;
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use std::alloc::{GlobalAlloc, Layout, System};
+#[cfg(feature = "compare")]
+use std::alloc::System;
+use std::alloc::{GlobalAlloc, Layout};
 use std::time::Duration;
 
 /// Deterministic seed for reproducible benchmarks.

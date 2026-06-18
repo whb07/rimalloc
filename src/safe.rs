@@ -200,14 +200,15 @@ pub struct Allocation {
     layout: Layout,
 }
 
-// SAFETY: `Allocation` has unique ownership of a block allocated by mimalloc.
-// Mimalloc supports freeing allocations from a different thread, and safe
-// methods do not expose references into the block.
+// SAFETY[AUDIT:owned-allocation]: `Allocation` has unique ownership of a block
+// allocated by mimalloc. Mimalloc supports freeing allocations from a different
+// thread, and safe methods do not expose references into the block.
 unsafe impl Send for Allocation {}
 
-// SAFETY: shared references to `Allocation` expose only metadata and raw
-// pointers. Safe code cannot read or mutate allocation contents through
-// `&Allocation`; any raw pointer dereference remains an unsafe caller boundary.
+// SAFETY[AUDIT:owned-allocation]: shared references to `Allocation` expose only
+// metadata and raw pointers. Safe code cannot read or mutate allocation
+// contents through `&Allocation`; any raw pointer dereference remains an unsafe
+// caller boundary.
 unsafe impl Sync for Allocation {}
 
 impl Allocation {
@@ -311,6 +312,9 @@ impl Allocation {
 impl Drop for Allocation {
     fn drop(&mut self) {
         if self.layout.size() != 0 {
+            // SAFETY[AUDIT:owned-allocation]: non-zero `Allocation` values are
+            // constructed only from successful `MiMalloc` allocation calls and
+            // are freed exactly once from `Drop`.
             unsafe { MiMalloc.dealloc(self.ptr.as_ptr(), self.layout) };
         }
     }
@@ -327,6 +331,9 @@ impl fmt::Debug for Allocation {
 
 #[inline]
 fn dangling_for(layout: Layout) -> NonNull<u8> {
+    // SAFETY[AUDIT:owned-allocation]: `Layout` alignments are non-zero powers
+    // of two, so the integer value is an aligned non-null sentinel for
+    // zero-sized allocations and is never dereferenced by safe code.
     unsafe { NonNull::new_unchecked(layout.align() as *mut u8) }
 }
 

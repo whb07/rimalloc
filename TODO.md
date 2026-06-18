@@ -898,7 +898,7 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## F1. Unsafe Rust API classification
 
-- [ ] Inventory every public unsafe Rust item outside `raw`.
+- [x] Inventory every public unsafe Rust item outside `raw`.
   - Required behavior:
     - Prefer zero public unsafe items outside `raw` unless they are part of a deliberate wrapper design.
     - Every public unsafe item has a `# Safety` section.
@@ -906,8 +906,12 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Script or rustdoc JSON inventory finds public unsafe items.
     - `cargo clippy --all-targets -- -D clippy::missing_safety_doc` passes or a staged allowlist is documented.
+  - Evidence:
+    - `scripts/check-safe-boundary.py` inventories `src/lib.rs` and `src/safe.rs` and fails on public unsafe Rust items outside the raw facade.
+    - `scripts/check-safe-boundary.py` passes.
+    - `docs/unsafe-audit.md` documents the staged safety-doc posture for the raw facade and safe boundary.
 
-- [ ] Add naming discipline for unsafe raw ownership transfers.
+- [x] Add naming discipline for unsafe raw ownership transfers.
   - Required names:
     - `as_raw` for borrowed raw pointer.
     - `into_raw` for ownership transfer out.
@@ -916,8 +920,12 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Public API review finds no ad-hoc unsafe constructor names.
     - Docs define ownership transfer for each method.
+  - Evidence:
+    - `docs/safe-api.md` defines `as_raw`, `into_raw`, `from_raw`, and `from_raw_unchecked` naming discipline.
+    - Current safe facade has no raw ownership-transfer methods; `Allocation` exposes only non-owning `as_ptr` and `as_non_null`.
+    - `scripts/check-safe-boundary.py` passes and finds no public unsafe ownership-transfer item in the safe facade.
 
-- [ ] Define invalidation rules for every raw pointer returned by safe types.
+- [x] Define invalidation rules for every raw pointer returned by safe types.
   - Required docs:
     - What invalidates pointer.
     - Whether pointer may be null.
@@ -926,10 +934,13 @@ These wrappers should be added only if they can avoid dangling references, globa
     - Aliasing and thread restrictions.
   - Validation:
     - Rustdoc review for all raw pointer escape hatches.
+  - Evidence:
+    - `Allocation::as_ptr` and `Allocation::as_non_null` rustdoc document lifetime, no manual free, aliasing, uninitialized-read restrictions, and zero-sized sentinel behavior.
+    - There are no other raw pointer escape hatches on safe public types.
 
 ## F2. Unsafe audit integration
 
-- [ ] Expand `docs/unsafe-audit.md` for safe API/FFI boundary.
+- [x] Expand `docs/unsafe-audit.md` for safe API/FFI boundary.
   - Required sections:
     - C ABI exported functions.
     - Raw Rust facade.
@@ -942,8 +953,11 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Each section lists caller obligations, callee guarantees, aliasing, lifetime, alignment, initialization, concurrency, and unwind behavior.
     - Source comments link to audit sections or use stable audit tags.
+  - Evidence:
+    - `docs/unsafe-audit.md` includes sections for C ABI exports, raw Rust facade, `MiMalloc`, `Allocation`, deferred heap/stats/options/callback wrappers, panic/unwind boundary, and raw pointer escape hatches.
+    - Safe facade source comments use stable `SAFETY[AUDIT:*]` tags.
 
-- [ ] Add audit tags to boundary unsafe blocks.
+- [x] Add audit tags to boundary unsafe blocks.
   - Example tags:
     - `SAFETY[AUDIT:global-alloc]`
     - `SAFETY[AUDIT:owned-allocation]`
@@ -953,8 +967,12 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - Source audit fails if new boundary unsafe block lacks a `SAFETY` comment.
     - Audit doc explains tag meanings.
+  - Evidence:
+    - `MiMalloc`, `Allocation`, and panic-boundary unsafe blocks in the safe facade carry `SAFETY[AUDIT:*]` comments.
+    - `scripts/check-safe-boundary.py` fails if safe-facade unsafe blocks or unsafe impls lack audit tags.
+    - `docs/unsafe-audit.md` explains `global-alloc`, `owned-allocation`, `ffi-export`, `raw-callback`, `panic-boundary`, and reserved `heap-wrapper` tags.
 
-- [ ] Deny broad unsafe-op suppressions.
+- [x] Deny broad unsafe-op suppressions.
   - Required behavior:
     - Crate or Cargo lint denies `unsafe_op_in_unsafe_fn` where feasible.
     - Broad module-level allowances are forbidden.
@@ -962,6 +980,9 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - `cargo clippy --all-targets -- -D warnings` passes.
     - Source audit confirms no broad `allow(unsafe_op_in_unsafe_fn)` remains.
+  - Evidence:
+    - `scripts/check-lints.sh` passes.
+    - `rg -n "allow\\(unsafe_op_in_unsafe_fn\\)|unsafe_op_in_unsafe_fn" src tests scripts docs` finds only policy/audit references and release-audit test assertions, not source allowances.
 
 ---
 

@@ -228,8 +228,13 @@ pub use safe::{AllocError, Allocation, LayoutError, TryAllocError};
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MiMalloc;
 
+// SAFETY[AUDIT:global-alloc]: `MiMalloc` is a zero-sized facade over the
+// process allocator. Each unsafe trait method delegates to mimalloc while
+// preserving Rust's `GlobalAlloc` null-on-failure and caller-layout contract.
 unsafe impl core::alloc::GlobalAlloc for MiMalloc {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        // SAFETY[AUDIT:global-alloc]: `GlobalAlloc` callers provide a valid
+        // non-zero `Layout`; over-aligned requests use mimalloc's aligned path.
         unsafe {
             if layout.align() <= types::MI_MAX_ALIGN_SIZE {
                 alloc::mi_malloc(layout.size()).cast()
@@ -240,6 +245,8 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
     }
 
     unsafe fn alloc_zeroed(&self, layout: core::alloc::Layout) -> *mut u8 {
+        // SAFETY[AUDIT:global-alloc]: same layout contract as `alloc`, with
+        // the zeroing path selected before returning to the caller.
         unsafe {
             if layout.align() <= types::MI_MAX_ALIGN_SIZE {
                 alloc::mi_zalloc(layout.size()).cast()
@@ -250,6 +257,8 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: core::alloc::Layout) {
+        // SAFETY[AUDIT:global-alloc]: `GlobalAlloc` requires `ptr` to be a
+        // live allocation from this allocator with its original layout.
         unsafe { free::mi_free(ptr.cast()) }
     }
 
@@ -259,6 +268,9 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         layout: core::alloc::Layout,
         new_size: usize,
     ) -> *mut u8 {
+        // SAFETY[AUDIT:global-alloc]: `GlobalAlloc` requires `ptr` and
+        // `layout` to identify a live allocation; mimalloc preserves contents
+        // on success and returns null on failure.
         unsafe {
             if layout.align() <= types::MI_MAX_ALIGN_SIZE {
                 alloc::mi_realloc(ptr.cast(), new_size).cast()
@@ -277,6 +289,8 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
 ))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
+    // SAFETY[AUDIT:panic-boundary]: the no_std panic handler forwards a static
+    // message to mimalloc's aborting assertion path and never unwinds.
     unsafe { options::_mi_assert_fail(c"panic".as_ptr(), c"rust".as_ptr(), 0, core::ptr::null()) }
 }
 
@@ -286,6 +300,8 @@ fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
     not(debug_assertions),
     not(feature = "std")
 ))]
+// SAFETY[AUDIT:panic-boundary]: declaration of the platform abort symbol used
+// only by the no_std personality shim.
 unsafe extern "C" {
     #[link_name = "abort"]
     fn c_abort() -> !;
@@ -299,5 +315,7 @@ unsafe extern "C" {
 ))]
 #[unsafe(no_mangle)]
 extern "C" fn rust_eh_personality() {
+    // SAFETY[AUDIT:panic-boundary]: optimized no_std builds abort if an
+    // unwinding personality is reached.
     unsafe { c_abort() }
 }

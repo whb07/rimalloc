@@ -2203,8 +2203,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
             && page_rs.contains("let Some(head) = remote.0.map(|b| b.as_ptr()) else")
             && page_rs.contains(".map(|block| block.as_ptr())")
+            && page_rs.contains("let thread_free =\n        crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free)).load_relaxed();")
+            && page_rs.contains("crate::core_types::ThreadFreeWord::from_parts(\n                None,\n                crate::core_types::ThreadFreeOwner::Owned")
             && !page_rs.contains("crate::internal::mi_tf_create(ptr::null_mut()")
             && !page_rs.contains("crate::internal::mi_tf_block(mi_atomic_load_explicit")
+            && !page_rs.contains("(*page).xthread_free == 1")
             && page_rs
                 .contains("crate::mi_assert_internal!(!force || (*page).local_free.is_null());")
             && page_rs.contains("unsafe fn mi_page_move_to_full_typed(")
@@ -3134,6 +3137,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && internal.contains("crate::core_types::ThreadFreeWord::from_parts(")
             && internal.contains("let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!(")
             && internal.contains("unsafe { atomic_tf.claim_ownership() }")
+            && arena_rs.contains("(*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(\n            None,\n            crate::core_types::ThreadFreeOwner::Unowned,")
+            && !arena_rs.contains("(*page).xthread_free = 0")
             && free_rs.contains(
                 "let atomic_tf = crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free));"
             )

@@ -966,7 +966,15 @@ pub(crate) unsafe extern "C" fn _mi_page_init(
     crate::mi_assert_internal!((*page).free.is_null());
     crate::mi_assert_internal!((*page).used == 0);
     crate::mi_assert_internal!(crate::internal::mi_page_is_owned(page));
-    crate::mi_assert_internal!((*page).xthread_free == 1);
+    let thread_free =
+        crate::core_types::AtomicThreadFree(ptr::addr_of_mut!((*page).xthread_free)).load_relaxed();
+    crate::mi_assert_internal!(
+        thread_free
+            == crate::core_types::ThreadFreeWord::from_parts(
+                None,
+                crate::core_types::ThreadFreeOwner::Owned
+            )
+    );
     crate::mi_assert_internal!((*page).next.is_null());
     crate::mi_assert_internal!((*page).prev.is_null());
     crate::mi_assert_internal!((*page).retire_expire == 0);

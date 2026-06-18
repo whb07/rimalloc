@@ -2541,7 +2541,13 @@ unsafe fn mi_arenas_page_alloc_fresh(
     crate::mi_assert_internal!(page_meta_is_separate == unsafe { mi_page_meta_is_separated(page) });
     crate::mi_assert_internal!(unsafe { mi_page_slice_start(page) } == slice_start);
 
-    unsafe { (*page).xthread_free = 0 };
+    unsafe {
+        (*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(
+            None,
+            crate::core_types::ThreadFreeOwner::Unowned,
+        )
+        .raw()
+    };
     unsafe { mi_page_claim_ownership(page) };
     if !unsafe { _mi_page_map_register(page) } {
         unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };

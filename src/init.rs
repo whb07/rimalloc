@@ -650,7 +650,8 @@ fn mi_subproc_main_init() {
         let main_prefix = mi_subproc_prefix(main);
         if !mi_memid_is_static((*main_prefix).memid) {
             _mi_options_init();
-            (*main_prefix).memid = crate::internal::_mi_memid_create(mi_memkind_t::MI_MEM_STATIC);
+            (*main_prefix).memid =
+                crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().raw;
             (*main_prefix).heaps = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
             (*main_prefix).heap_total_count.store(1, Ordering::Relaxed);
             (*main_prefix).heap_count.store(1, Ordering::Relaxed);
@@ -1039,7 +1040,8 @@ fn mi_theap_main_init() {
     // SAFETY: mutates the statically allocated main theap during one-time lazy init.
     unsafe {
         if !mi_memid_is_static(theap_main.memid) {
-            theap_main.memid = crate::internal::_mi_memid_create(mi_memkind_t::MI_MEM_STATIC);
+            theap_main.memid =
+                crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().raw;
             #[cfg(any(target_os = "macos", windows))]
             crate::internal::_mi_random_init_weak(ptr::addr_of_mut!(theap_main.random));
             #[cfg(not(any(target_os = "macos", windows)))]

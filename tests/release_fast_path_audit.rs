@@ -2558,8 +2558,16 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !theap_rs.contains("memid.memkind")
             && init_rs.contains("fn mi_memid_is_static(memid: mi_memid_t) -> bool")
             && init_rs.contains("crate::core_types::MemIdView::Static(_)")
+            && memid_rs.contains("impl MemId<StaticMem>")
+            && memid_rs.contains("pub(crate) const fn static_mem() -> Self")
+            && init_rs.contains(
+                "crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().raw"
+            )
             && init_rs.contains("!mi_memid_is_static((*main_prefix).memid)")
             && init_rs.contains("!mi_memid_is_static(theap_main.memid)")
+            && !init_rs.contains(
+                "crate::internal::_mi_memid_create(mi_memkind_t::MI_MEM_STATIC)"
+            )
             && !init_rs.contains("(*main_prefix).memid.memkind != mi_memkind_t::MI_MEM_STATIC")
             && !init_rs.contains("theap_main.memid.memkind != mi_memkind_t::MI_MEM_STATIC")
             && internal.contains("pub fn mi_memid_is_os(memid: mi_memid_t) -> bool")

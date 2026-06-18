@@ -168,6 +168,26 @@ impl MemId<NoneMem> {
     }
 }
 
+impl MemId<StaticMem> {
+    pub(crate) const fn static_mem() -> Self {
+        Self {
+            raw: crate::internal::mi_memid_t {
+                mem: crate::internal::mi_memid_mem_t {
+                    os: crate::internal::mi_memid_os_info_t {
+                        base: core::ptr::null_mut(),
+                        size: 0,
+                    },
+                },
+                is_pinned: false,
+                initially_committed: false,
+                initially_zero: false,
+                memkind: crate::internal::mi_memkind_t::MI_MEM_STATIC as _,
+            },
+            _kind: PhantomData,
+        }
+    }
+}
+
 impl MemId<OsMem> {
     pub(crate) fn os(
         base: Option<OsMemPtr>,

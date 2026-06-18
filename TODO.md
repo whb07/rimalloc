@@ -383,7 +383,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## C1. Safe API design principles
 
-- [ ] Document the safe API design rules.
+- [x] Document the safe API design rules.
   - Required rules:
     - Safe APIs must not require callers to uphold pointer provenance, heap ownership, aliasing, or thread-local invariants.
     - Raw C null/error conventions are translated into Rust `Result`, `Option`, or safe no-op behavior.
@@ -393,8 +393,11 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - `docs/api-inventory.md` or `docs/safe-api.md` includes these rules.
     - Every safe public item has a short statement of what invariants it enforces.
+  - Evidence:
+    - `docs/safe-api.md` documents the safe API rules for pointer provenance, heap ownership, aliasing, thread-local invariants, C null/error translation, panic behavior, hot-path/error-path allocation, and RAII handle semantics.
+    - `docs/api-inventory.md` and rustdoc describe the current safe public items and their enforced invariants.
 
-- [ ] Define safe API naming conventions.
+- [x] Define safe API naming conventions.
   - Required conventions:
     - Rust-facing names are idiomatic: `MiMalloc`, `Allocation`, `Heap`, `StatsSnapshot`, `Options`.
     - C names remain under `raw`/`ffi`.
@@ -403,8 +406,11 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - Public API inventory passes a naming review.
     - Rustdoc examples use Rust names unless demonstrating raw C API.
+  - Evidence:
+    - `docs/safe-api.md` defines Rust-facing names, C-name placement under `raw`/C ABI, fallible `try_` naming, and raw ownership-transfer naming.
+    - `scripts/check-api-inventory.py` passes and rustdoc examples use Rust names except in raw examples.
 
-- [ ] Define safe API trait policy.
+- [x] Define safe API trait policy.
   - Required behavior:
     - Implement `Debug`, `Default`, `Copy`, `Clone`, `Eq`, `Hash`, `Send`, and `Sync` only where semantically correct.
     - Every unsafe `Send` or `Sync` impl has a proof in rustdoc and unsafe audit docs.
@@ -412,6 +418,10 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - Trait impls are listed in `docs/api-inventory.md`.
     - Unsafe trait impls have `SAFETY:` comments and audit sections.
+  - Evidence:
+    - `docs/safe-api.md` defines trait policy for `Debug`, `Default`, `Copy`, `Clone`, `Eq`, `Hash`, `Send`, `Sync`, and `Deref`.
+    - `docs/api-inventory.md` lists current safe API trait impls.
+    - No current safe API type has a manual unsafe `Send` or `Sync` impl.
 
 ## C2. `MiMalloc` global allocator facade
 
@@ -1162,7 +1172,7 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## K1. Required docs files
 
-- [ ] `docs/safe-api.md` or equivalent exists.
+- [x] `docs/safe-api.md` or equivalent exists.
   - Required contents:
     - Safe API philosophy.
     - Stable/experimental status.
@@ -1221,6 +1231,9 @@ These wrappers should be added only if they can avoid dangling references, globa
     - Platform support limits.
   - Validation:
     - README matches `docs/limitations.md` and `docs/api-inventory.md`.
+  - Evidence:
+    - `docs/safe-api.md` exists and documents safe API philosophy plus stable/experimental status.
+    - README, `docs/limitations.md`, and `docs/api-inventory.md` all describe the safe API as narrow/limited to the current facade rather than a broad heap/options/stats abstraction.
 
 ## K3. Changelog and migration notes
 

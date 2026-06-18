@@ -35,6 +35,21 @@ Adding a safe wrapper requires documenting how it enforces ownership, lifetime,
 aliasing, nullability, alignment, threading, and unwind requirements without
 caller discipline.
 
+Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
+
+## Safe API Trait Inventory
+
+- `MiMalloc`: implements `core::alloc::GlobalAlloc`; no manual unsafe
+  `Send`/`Sync` impls.
+- `Allocation`: implements `Drop` and `Debug`; intentionally does not implement
+  `Copy` or `Clone`.
+- `AllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
+  `std::error::Error` when `std` is enabled.
+- `LayoutError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
+  `std::error::Error` when `std` is enabled.
+- `TryAllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
+  `std::error::Error` when `std` is enabled.
+
 ## Raw Rust Facade
 
 `mechanical_mimalloc::raw` exposes C-shaped functions, constants, callbacks,

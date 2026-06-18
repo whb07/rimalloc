@@ -35,6 +35,7 @@ that lint globally:
 Related policy documents:
 
 - `docs/api-inventory.md`
+- `docs/safe-api.md`
 - `docs/abi.md`
 - `docs/raw-facade-migration.md`
 - `docs/assembly-intrinsics.md`

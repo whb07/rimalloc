@@ -552,13 +552,9 @@ static out_len: AtomicUsize = AtomicUsize::new(0);
 static mut out_buf_lock: mi_lock_t = mi_lock_s::new();
 static mi_out_default: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 static mi_out_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
-#[allow(dead_code)]
 static mi_max_error_count: AtomicIsize = AtomicIsize::new(16);
-#[allow(dead_code)]
 static mi_max_warning_count: AtomicIsize = AtomicIsize::new(16);
-#[allow(dead_code)]
 static error_count: AtomicUsize = AtomicUsize::new(0);
-#[allow(dead_code)]
 static warning_count: AtomicUsize = AtomicUsize::new(0);
 
 struct LockedErrorHandler(UnsafeCell<Option<mi_error_fun>>);
@@ -732,7 +728,6 @@ fn mi_out_buf_flush(out: mi_output_fun, no_more_buf: bool, arg: *mut c_void) {
     unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
 }
 
-#[allow(dead_code)]
 unsafe extern "C" fn mi_out_buf_stderr(msg: *const c_char, arg: *mut c_void) {
     unsafe { mi_out_stderr(msg, arg) };
     unsafe { mi_out_buf(msg, arg) };
@@ -745,7 +740,6 @@ fn mi_out_get_default(parg: Option<&mut *mut c_void>) -> mi_output_fun {
     ptr_to_mi_output_fun(mi_out_default.load(Ordering::Acquire)).unwrap_or(mi_out_buf)
 }
 
-#[allow(dead_code)]
 fn mi_add_stderr_output() {
     if !mi_out_default.load(Ordering::Acquire).is_null() {
         return;
@@ -817,7 +811,6 @@ fn mi_recurse_exit() {
 ///
 /// `prefix` and `message`, when non-null, must point to valid nul-terminated
 /// C strings. If `out` is supplied, it must be callable with `arg`.
-#[allow(dead_code)]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_fputs(
     out: Option<mi_output_fun>,
@@ -848,7 +841,6 @@ pub(crate) unsafe extern "C" fn _mi_fputs(
     }
 }
 
-#[allow(dead_code)]
 pub(crate) fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, args: fmt::Arguments<'_>) {
     let mut text = StackMessage::new();
     if fmt::write(&mut text, args).is_ok() {
@@ -893,7 +885,6 @@ impl fmt::Write for StackMessage {
     }
 }
 
-#[allow(dead_code)]
 fn mi_vfprintf(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
@@ -912,7 +903,6 @@ fn mi_vfprintf(
     unsafe { _mi_fputs(out, arg, prefix, text.as_c_ptr()) };
 }
 
-#[allow(dead_code)]
 fn mi_vfprintf_thread(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
@@ -934,7 +924,6 @@ fn mi_vfprintf_thread(
     mi_vfprintf(out, arg, prefix, args);
 }
 
-#[allow(dead_code)]
 fn mi_vfputs_thread(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
@@ -995,7 +984,6 @@ static MI_TRACE_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_trace_message
 #[used]
 static MI_VERBOSE_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_verbose_message;
 
-#[allow(dead_code)]
 fn mi_show_error_message(args: fmt::Arguments<'_>) {
     if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
         if !mi_option_is_enabled(mi_option_t::mi_option_show_errors) {
@@ -1010,7 +998,6 @@ fn mi_show_error_message(args: fmt::Arguments<'_>) {
     mi_vfprintf_thread(None, ptr::null_mut(), c"mimalloc: error: ".as_ptr(), args);
 }
 
-#[allow(dead_code)]
 fn mi_show_error_message_raw(message: *const c_char) {
     if !mi_option_is_enabled(mi_option_t::mi_option_verbose) {
         if !mi_option_is_enabled(mi_option_t::mi_option_show_errors) {
@@ -1244,7 +1231,6 @@ pub extern "C" fn mi_version() -> i32 {
     MI_MALLOC_VERSION
 }
 
-#[allow(dead_code)]
 pub(crate) fn mi_error_default(err: i32) {
     if err == EFAULT && (MI_DEBUG > 0 || cfg!(feature = "secure")) {
         unsafe { c_abort() };

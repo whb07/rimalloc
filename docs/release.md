@@ -20,7 +20,9 @@ Related policy documents:
 
 - `docs/api-inventory.md`
 - `docs/abi.md`
+- `docs/assembly-intrinsics.md`
 - `docs/features.md`
+- `docs/memory-ordering.md`
 - `docs/platforms.md`
 - `docs/performance.md`
 - `docs/reproducibility.md`

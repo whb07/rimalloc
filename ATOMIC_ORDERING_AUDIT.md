@@ -27,6 +27,10 @@ supported default matrix:
 - `src/bitmap.rs`: bitmap bit updates mirror `bitmap.c`: set/clear transitions
   use acq-rel RMW/CAS, state queries that synchronize with those transitions use
   acquire loads, and scan-only/counting paths retain relaxed loads.
+- `src/core_types/atomic_wrappers.rs`: typed allocator-field wrappers centralize
+  pointer-to-atomic reinterpretation and expose the fixed acquire/release/acq-rel
+  helper operations used by page ownership, thread-free lists, arena state, and
+  page-map publication.
 - `src/heap.rs`: heap sequence/count updates and arena-page cleanup retain the C
   relaxed ordering because external synchronization or ownership already protects
   the structural mutation.

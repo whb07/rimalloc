@@ -1749,7 +1749,7 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## K3. Changelog and migration notes
 
-- [ ] Changelog classifies safe API / raw split changes.
+- [x] Changelog classifies safe API / raw split changes.
   - Required sections under Unreleased:
     - Added
     - Changed
@@ -1763,14 +1763,30 @@ These wrappers should be added only if they can avoid dangling references, globa
     - Raw path removals/gates are listed.
     - Safe API additions are listed.
     - C ABI unchanged or changes are explicit.
+  - Evidence:
+    - `CHANGELOG.md` has Unreleased `Added`, `Changed`, `Deprecated`,
+      `Removed`, `Safety`, `ABI`, `Performance`, and `Documentation` sections.
+    - The changelog lists safe API additions, default raw facade narrowing,
+      unstable raw implementation-module gates, and states that dynamic
+      mimalloc-compatible C ABI symbols/layouts are preserved.
+    - The changelog states that no allocator hotpath behavior is intentionally
+      changed by the safe API/raw facade split.
 
-- [ ] Add migration notes for old raw paths.
+- [x] Add migration notes for old raw paths.
   - Required contents:
     - Old path.
     - New path.
     - Whether it is safe, raw public, unstable internals, or removed.
   - Validation:
     - Tests/examples/docs use new paths.
+  - Evidence:
+    - `docs/raw-facade-migration.md` has an `Old Path Migration Matrix` with
+      old paths, new paths, and classifications for removed crate-root
+      implementation modules, raw public C API paths, retained raw modules, and
+      `unstable-raw-internals`.
+    - `docs/raw-facade-migration.md` inventories current raw users and their
+      migration targets.
+    - `scripts/check-raw-facade.sh` passes.
 
 ---
 

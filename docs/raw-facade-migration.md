@@ -8,6 +8,23 @@ and `raw::headers`. The `unstable-raw-internals` feature exposes translated
 implementation modules for repository audits and parity tests only. It is off
 by default and carries no SemVer guarantees.
 
+## Old Path Migration Matrix
+
+| Old path | New path | Classification |
+|---|---|---|
+| crate-root implementation modules such as `mechanical_mimalloc::alloc`, `mechanical_mimalloc::heap`, `mechanical_mimalloc::page`, `mechanical_mimalloc::internal` | No public replacement; use crate-root safe APIs or `mechanical_mimalloc::raw` as appropriate | Removed from public crate root; implementation internals are private. |
+| `mechanical_mimalloc::raw::alloc::*` | root `mechanical_mimalloc::raw::mi_*` or `mechanical_mimalloc::raw::mimalloc::*` for public C allocation functions | Raw public C API for public functions; implementation module path is unstable internals. |
+| `mechanical_mimalloc::raw::alloc_aligned::*` | root `mechanical_mimalloc::raw::mi_*_aligned*` or `mechanical_mimalloc::raw::mimalloc::*` | Raw public C API for public functions; implementation module path is unstable internals. |
+| `mechanical_mimalloc::raw::free::*` | root `mechanical_mimalloc::raw::mi_free` and related public C free functions | Raw public C API for public functions; implementation module path is unstable internals. |
+| `mechanical_mimalloc::raw::heap::*` | root `mechanical_mimalloc::raw::mi_heap_*` or `mechanical_mimalloc::raw::mimalloc::*` | Raw public C API for public functions; implementation module path is unstable internals. |
+| `mechanical_mimalloc::raw::stats::*` | root `mechanical_mimalloc::raw::mi_stats_*`, `mechanical_mimalloc::raw::mi_heap_stats_*`, public stats constants/layouts, or `raw::abi` | Raw public C API/layouts for public items; implementation module path is unstable internals. |
+| `mechanical_mimalloc::raw::options::*` | root `mechanical_mimalloc::raw::mi_option_*`, `mechanical_mimalloc::raw::mi_option_t`, or `raw::abi` | Raw public C API/layouts for public items; implementation module path is unstable internals. |
+| `mechanical_mimalloc::raw::types::*` | root raw re-exports or `mechanical_mimalloc::raw::abi::*` for public C layouts and aliases | Raw public C layouts for public items; internal mixed type module is unstable internals. |
+| `mechanical_mimalloc::raw::headers::*` | `mechanical_mimalloc::raw::headers::*` | Raw public C/C++ header compatibility placeholders; retained in the default raw facade. |
+| `mechanical_mimalloc::raw::abi::*` | `mechanical_mimalloc::raw::abi::*` | Raw public C declaration/layout owner; retained in the default raw facade. |
+| `mechanical_mimalloc::raw::mimalloc::*` | root `mechanical_mimalloc::raw::mi_*` where convenient, or keep `raw::mimalloc::*` for grouped public C calls | Raw public C API alias; retained in the default raw facade. |
+| `mechanical_mimalloc::raw::{arena, bitmap, bits, init, internal, libc, memory, os, page, page_map, prim, random, static_c, theap, threadlocal, track}` | No supported integration replacement; repository audits may enable `unstable-raw-internals` | Unstable internals only. |
+
 ## Current Raw Users
 
 | Caller | Raw paths | Reason | Migration target |

@@ -394,7 +394,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## B4. Raw layout and ABI representation
 
-- [ ] Keep all C-compatible structs under raw/ABI ownership.
+- [x] Keep all C-compatible structs under raw/ABI ownership.
   - Required behavior:
     - Public C layout types are `#[repr(C)]` or documented `#[repr(transparent)]` wrappers.
     - Field order, size, alignment, and offsets are asserted.
@@ -403,6 +403,17 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `scripts/check-layout.sh` passes for default and relevant feature sets.
     - Layout assertions cover every public C layout used through `raw`.
     - `docs/abi.md` lists layout-sensitive feature flags.
+  - Evidence:
+    - `src/abi.rs` owns public C header layout and stats declarations exposed through
+      `raw::abi` and `raw::mimalloc`.
+    - `scripts/check-public-abi.py` compiles its Rust probe against default
+      `raw::mimalloc`, so public raw layout coverage does not depend on gated
+      implementation modules.
+    - `scripts/check-layout.sh` passes and compares C header sizes, alignments,
+      field offsets, public constants, option values, and stats initialization
+      behavior against the Rust raw facade.
+    - `docs/abi.md` lists the layout-sensitive `secure`, `guarded`,
+      `track-valgrind`, and `track-asan` feature flags.
 
 - [ ] Avoid Rust enums for C-extensible integer domains unless the domain is closed.
   - Required behavior:

@@ -17,7 +17,11 @@ pub use crate::options::{
     mi_option_max_segment_reclaim, mi_option_purge_extend_delay, mi_option_reset_decommits,
     mi_option_reset_delay, mi_option_t,
 };
-pub use crate::stats::{MI_BIN_HUGE, MI_STAT_VERSION, mi_stats_t};
+pub use crate::stats::{
+    MI_BIN_HUGE, MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_NONE,
+    MI_CBIN_OTHER, MI_CBIN_SMALL, MI_STAT_VERSION, mi_chunkbin_t, mi_stat_count_t,
+    mi_stat_counter_t, mi_stats_header_init, mi_stats_init, mi_stats_t,
+};
 pub use crate::types::{
     MI_MALLOC_VERSION, MI_MAX_ALIGN_SIZE, MI_SMALL_SIZE_MAX, MI_SMALL_WSIZE_MAX, mi_arena_id_t,
     mi_block_visit_fun, mi_commit_fun_t, mi_deferred_free_fun, mi_error_fun, mi_heap_area_t,

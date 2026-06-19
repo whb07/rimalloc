@@ -1794,37 +1794,81 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## L1. Reviewer questions must be answerable from docs
 
-- [ ] A reviewer can answer: What is the stable safe Rust API?
+- [x] A reviewer can answer: What is the stable safe Rust API?
   - Validation:
     - Answer appears in README and `docs/api-inventory.md`.
+  - Evidence:
+    - README `API Surfaces` says the safe Rust facade is crate-root
+      `MiMalloc`, `Allocation`, and allocation error types.
+    - `docs/api-inventory.md` lists the crate-root safe API and safe API trait
+      inventory.
 
-- [ ] A reviewer can answer: What is the raw Rust facade, and is it stable?
+- [x] A reviewer can answer: What is the raw Rust facade, and is it stable?
   - Validation:
     - Answer appears in `docs/api-inventory.md` and `docs/compatibility.md`.
+  - Evidence:
+    - `docs/api-inventory.md` describes `mechanical_mimalloc::raw` as a
+      C-shaped compatibility facade that is unsafe and unstable unless
+      explicitly versioned.
+    - `docs/compatibility.md` defines Tier R as the raw Rust facade, states it
+      is not a safe abstraction, and says it is not yet promised as stable Rust
+      SemVer surface.
 
-- [ ] A reviewer can answer: What is the C ABI compatibility surface?
+- [x] A reviewer can answer: What is the C ABI compatibility surface?
   - Validation:
     - Answer appears in `docs/abi.md` and symbol scripts.
+  - Evidence:
+    - `docs/abi.md` defines the expected exported C surface, hidden symbols,
+      layout/constant compatibility, callback contracts, and export-boundary
+      classification.
+    - `scripts/check-abi-symbols.sh` validates the dynamic symbol surface.
+    - `scripts/check-layout.sh` validates public C layouts and constants.
 
-- [ ] A reviewer can answer: Where do new C ABI declarations go?
+- [x] A reviewer can answer: Where do new C ABI declarations go?
   - Validation:
     - Answer appears in `docs/ffi-raw-split.md` or `docs/abi.md`.
+  - Evidence:
+    - `docs/abi.md` `Current File Layout` states that new public C ABI
+      declarations, `repr(C)` layouts, C-compatible aliases, public constants,
+      and callback type aliases belong in `src/abi.rs`.
 
-- [ ] A reviewer can answer: Where do new safe wrappers go?
+- [x] A reviewer can answer: Where do new safe wrappers go?
   - Validation:
     - Answer appears in `docs/safe-api.md` or `docs/architecture.md`.
+  - Evidence:
+    - `docs/safe-api.md` `Adding Safe Wrappers` states that new safe wrappers
+      belong in `src/safe.rs` with re-exports from `src/lib.rs`, plus inventory,
+      tests, and unsafe-audit updates as needed.
 
-- [ ] A reviewer can answer: What are the unsafe obligations for raw API users?
+- [x] A reviewer can answer: What are the unsafe obligations for raw API users?
   - Validation:
     - Answer appears in `raw` rustdoc and `docs/unsafe-audit.md`.
+  - Evidence:
+    - `src/raw.rs` rustdoc states that raw APIs inherit C ABI preconditions,
+      C nullability, pointer validity, metadata/out-pointer obligations, and
+      callback no-unwind requirements.
+    - `docs/unsafe-audit.md` documents raw facade and C ABI caller obligations.
 
-- [ ] A reviewer can answer: What platforms are supported?
+- [x] A reviewer can answer: What platforms are supported?
   - Validation:
     - Answer appears in README and `docs/platforms.md`.
+  - Evidence:
+    - README states maintained platform support is currently Linux x86_64 GNU.
+    - `docs/platforms.md` lists Linux x86_64 GNU as Tier 1 and says other
+      source-present platforms are not maintained Rust targets yet.
 
-- [ ] A reviewer can answer: How do I verify the split locally?
+- [x] A reviewer can answer: How do I verify the split locally?
   - Validation:
     - Answer appears in README, `docs/testing.md`, and `docs/release.md`.
+  - Evidence:
+    - README `Verification` points to `scripts/check-local.sh` and individual
+      scripts under `scripts/`.
+    - `docs/testing.md` `Safe API / Raw Facade Split Checks` lists
+      `scripts/check-api-inventory.py`, `scripts/check-safe-boundary.py`,
+      `scripts/check-raw-facade.sh`, `scripts/check-ffi-boundary.py`, and
+      `scripts/check-docs.sh`.
+    - `docs/release.md` release policy includes API inventory, FFI boundary,
+      local, ABI symbol, and layout checks.
 
 ## L2. Final command signoff
 

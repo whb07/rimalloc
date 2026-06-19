@@ -29,6 +29,27 @@ alignment, preservation, and heap ownership. The interpreter is deterministic
 in normal tests but keeps the operation model close to a future cargo-fuzz
 target.
 
+## Safe API / Raw Facade Split Checks
+
+Use these checks when changing the crate-root facade, `raw`, FFI declarations,
+or documentation that describes the split:
+
+```sh
+scripts/check-api-inventory.py
+scripts/check-safe-boundary.py
+scripts/check-raw-facade.sh
+scripts/check-ffi-boundary.py
+scripts/check-docs.sh
+```
+
+`scripts/check-api-inventory.py` verifies the crate-root safe API, default raw
+modules, unstable raw-internals modules, and public inventory docs.
+`scripts/check-safe-boundary.py` verifies that safe facade unsafe blocks and
+unsafe impls are tagged and that safe APIs do not expose public unsafe items.
+`scripts/check-raw-facade.sh` verifies that default `raw` does not re-export
+implementation modules and that tests/examples/benches gate raw internals with
+`unstable-raw-internals`.
+
 ## Sanitizers
 
 AddressSanitizer is available through:

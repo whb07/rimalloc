@@ -20,6 +20,18 @@ Rust allocation facade.
   lifetime-sensitive C handles. Raw escape hatches are unsafe unless they return
   non-owning pointers with clearly documented invalidation rules.
 
+## Adding Safe Wrappers
+
+New safe wrappers belong in the crate-root safe facade, with implementation in
+`src/safe.rs` and re-exports from `src/lib.rs` only after their invariants are
+documented and tested. They must be added to `docs/api-inventory.md`, covered by
+safe facade tests, and reviewed in `docs/unsafe-audit.md` if they contain unsafe
+blocks or unsafe trait impls.
+
+Safe wrappers must not be added under `raw`. The `raw` facade remains the
+C-shaped unsafe compatibility surface, and implementation modules remain
+private unless explicitly exposed through an audited unstable-internals gate.
+
 ## Current Safe Surface
 
 - `MiMalloc`: `GlobalAlloc` facade backed by the allocator.

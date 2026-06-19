@@ -213,10 +213,64 @@ pub struct mi_heap_area_t {
     pub reserved1: *mut c_void,
 }
 
+/// Deferred-free callback registered through `mi_register_deferred_free`.
+///
+/// Nullability: the registration function accepts `None` to clear the callback;
+/// `arg` may be null and is passed back opaquely. Lifetime: the function
+/// pointer and `arg` must remain valid until replaced or cleared. Threading:
+/// mimalloc may invoke this from allocator activity on a thread using the
+/// registered hook. Reentrancy: allocator calls from the callback follow the C
+/// contract and are parity-tested, but callback code must tolerate allocator
+/// reentry. Unwind: the callback must not panic or unwind across the C ABI.
 pub type mi_deferred_free_fun = unsafe extern "C" fn(force: bool, heartbeat: u64, arg: *mut c_void);
+
+/// Output callback used by registered output and `*_print_out` APIs.
+///
+/// Nullability: registrations and direct print APIs accept `None`; `msg` is a
+/// non-null C string for each callback invocation; `arg` may be null and is
+/// passed back opaquely. Lifetime: registered function pointers and arguments
+/// must stay valid until replaced or cleared; direct print callbacks must stay
+/// valid for the call duration. Threading: output may be invoked from any
+/// thread that emits diagnostics or stats. Reentrancy: allocator calls from the
+/// callback follow the C contract and are parity-tested, but callback code must
+/// tolerate allocator reentry. Unwind: the callback must not panic or unwind
+/// across the C ABI.
 pub type mi_output_fun = unsafe extern "C" fn(msg: *const c_char, arg: *mut c_void);
+
+/// Error callback registered through `mi_register_error`.
+///
+/// Nullability: the registration function accepts `None` to clear the callback;
+/// `arg` may be null and is passed back opaquely. Lifetime: the function
+/// pointer and `arg` must remain valid until replaced or cleared. Threading:
+/// mimalloc may invoke this from any thread reporting an allocator error.
+/// Reentrancy: allocator calls from the callback follow the C contract and are
+/// parity-tested, but callback code must tolerate allocator reentry. Unwind:
+/// the callback must not panic or unwind across the C ABI.
 pub type mi_error_fun = unsafe extern "C" fn(err: i32, arg: *mut c_void);
+
+/// Heap-visitor callback used by subprocess heap traversal.
+///
+/// Nullability: traversal APIs accept `None`; `heap` is non-null for normal
+/// callback invocations and `arg` may be null. Lifetime: the callback and
+/// `arg` must remain valid for the traversal call, and the heap pointer is
+/// allocator-owned and valid only during the callback. Threading: invocation
+/// follows the calling traversal and allocator state. Reentrancy: allocator
+/// calls from the callback follow the C contract and are parity-tested, but
+/// callback code must tolerate allocator reentry. Unwind: the callback must not
+/// panic or unwind across the C ABI.
 pub type mi_heap_visit_fun = unsafe extern "C" fn(heap: *mut mi_heap_t, arg: *mut c_void) -> bool;
+
+/// Block-visitor callback used by heap and thread-heap block traversal.
+///
+/// Nullability: traversal APIs accept `None`; `heap` and `area` are non-null
+/// for normal callback invocations; `block` is non-null when blocks are being
+/// visited and may be null for area-only visitation; `arg` may be null.
+/// Lifetime: callback pointers and `arg` must remain valid for the traversal
+/// call, and all allocator-owned pointers are valid only during the callback.
+/// Threading: invocation follows the calling traversal and allocator state.
+/// Reentrancy: allocator calls from the callback follow the C contract and are
+/// parity-tested, but callback code must tolerate allocator reentry. Unwind:
+/// the callback must not panic or unwind across the C ABI.
 pub type mi_block_visit_fun = unsafe extern "C" fn(
     heap: *const mi_heap_t,
     area: *const mi_heap_area_t,
@@ -224,6 +278,18 @@ pub type mi_block_visit_fun = unsafe extern "C" fn(
     block_size: usize,
     arg: *mut c_void,
 ) -> bool;
+
+/// Managed-memory commit/decommit callback used by `mi_manage_memory`.
+///
+/// Nullability: `mi_manage_memory` accepts `None`; `start` is non-null for
+/// normal commit/decommit ranges; `is_zero` may be null when the caller does
+/// not request a zero-state result; `user_arg` may be null and is passed back
+/// opaquely. Lifetime: the callback and `user_arg` must remain valid for the
+/// managed arena lifetime that stores them. Threading: mimalloc may invoke the
+/// callback from threads using the managed arena. Reentrancy: allocator calls
+/// from the callback follow the C contract and are parity-tested, but callback
+/// code must tolerate allocator reentry. Unwind: the callback must not panic or
+/// unwind across the C ABI.
 pub type mi_commit_fun_t = unsafe extern "C" fn(
     commit: bool,
     start: *mut c_void,

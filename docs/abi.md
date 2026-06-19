@@ -260,10 +260,30 @@ upstream C contract does so.
 
 ## Callback ABI
 
-Callback types mirror upstream mimalloc C callback signatures. Callbacks must
-not unwind across the C ABI boundary. Callers are responsible for ensuring
-callback function pointers and callback arguments remain valid for the duration
-of the call that receives them.
+Callback types mirror upstream mimalloc C callback signatures. Public callback
+function pointers are represented as `Option<mi_*_fun>` where the C API accepts
+a null callback. Callbacks must not unwind across the C ABI boundary. Callers
+are responsible for ensuring callback function pointers and callback arguments
+remain valid for the documented registration lifetime or direct-call duration.
+
+Default public callback families:
+
+| Family | Type | Public entry points | Nullability | Lifetime | Threading | Reentrancy |
+| --- | --- | --- | --- | --- | --- | --- |
+| Output callback | `mi_output_fun` | `mi_register_output`, `mi_options_print_out`, `mi_process_info_print_out`, `mi_stats_print_out`, `mi_thread_stats_print_out`, `mi_heap_stats_print_out`, `mi_subproc_stats_print_out`, `mi_subproc_heap_stats_print_out`, deprecated `mi_stats_print` callback pointer form | Callback may be null to use/restore defaults or clear registration. `msg` is non-null during callback invocation. `arg` may be null and is passed through opaquely. | Registered callback and `arg` must remain valid until replaced or cleared; direct print callbacks must remain valid for the call duration. | May be invoked by any thread that emits diagnostics, options, process info, or stats output. | Allocating from the callback is C-parity-tested, but callback code must tolerate allocator reentry and must not rely on recursive diagnostics being serialized beyond the C contract. |
+| Error callback | `mi_error_fun` | `mi_register_error` | Callback may be null to clear registration. `arg` may be null and is passed through opaquely. | Callback and `arg` must remain valid until replaced or cleared. | May be invoked by any thread reporting allocator errors. | Allocating from the callback is C-parity-tested, but callback code must tolerate allocator reentry. |
+| Deferred free callback | `mi_deferred_free_fun` | `mi_register_deferred_free` | Callback may be null to clear registration. `arg` may be null and is passed through opaquely. | Callback and `arg` must remain valid until replaced or cleared. | May be invoked from allocator activity on a thread using the registered hook. | Allocating from the callback is C-parity-tested, but callback code must tolerate allocator reentry. |
+| Heap visitor callback | `mi_heap_visit_fun` | `mi_subproc_visit_heaps` | Callback may be null. `heap` is non-null for normal visitor invocation. `arg` may be null. | Callback and `arg` must remain valid for the traversal call; the heap pointer is allocator-owned and valid only during the callback. | Invocation follows the calling traversal and allocator state. | Allocating from the callback is C-parity-tested for heap traversal, but callback code must tolerate allocator reentry. |
+| Block visitor callback | `mi_block_visit_fun` | `mi_heap_visit_blocks`, `mi_heap_visit_abandoned_blocks`, `mi_theap_visit_blocks` | Callback may be null. `heap` and `area` are non-null for normal visitor invocation. `block` is non-null when block visitation is requested and may be null for area-only visitation. `arg` may be null. | Callback and `arg` must remain valid for the traversal call; allocator-owned pointers are valid only during the callback. | Invocation follows the calling traversal and allocator state. | Allocating from the callback follows the C contract; visitors must tolerate allocator reentry and traversal invalidation rules. |
+| Managed-memory commit callback | `mi_commit_fun_t` | `mi_manage_memory` | Callback may be null. `start` is non-null for normal commit/decommit ranges. `is_zero` may be null when no zero-state result is requested. `user_arg` may be null. | Callback and `user_arg` must remain valid for the managed arena lifetime that stores them. | May be invoked from threads using the managed arena. | Allocating from the callback is C-parity-tested, but callback code must tolerate allocator reentry and must not invalidate the managed range. |
+
+Translated internal callback helpers such as `mi_claim_fun_t`,
+`mi_forall_set_fun_t`, `theap_page_visitor_fun`, `mi_theap_area_visit_fun`, and
+bitmap visitor helpers are implementation-internal or exposed only through the
+`unstable-raw-internals` audit surface. They are not part of the default public
+raw facade and must not be stabilized without adding them to this inventory and
+documenting the same nullability, lifetime, threading, reentrancy, and unwind
+contract.
 
 ## Null, Errno, and Error Behavior
 

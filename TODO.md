@@ -463,7 +463,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
 
 ## B5. Callback boundary
 
-- [ ] Inventory all C callback types and registrations.
+- [x] Inventory all C callback types and registrations.
   - Callback areas:
     - output callback
     - error callback
@@ -473,6 +473,20 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - `docs/abi.md` has a callback ABI section listing every callback family.
     - Each callback type has docs for nullability, lifetime, threading, reentrancy, and unwind behavior.
+  - Evidence:
+    - `docs/abi.md` lists the default public output, error, deferred-free,
+      heap-visitor, block-visitor, and managed-memory commit callback families,
+      including their public entry points, nullability, lifetime, threading,
+      reentrancy, and unwind contracts.
+    - `docs/abi.md` also classifies `mi_claim_fun_t`, `mi_forall_set_fun_t`,
+      theap visitor callbacks, and bitmap visitor helpers as internal or
+      `unstable-raw-internals` audit-surface callbacks rather than default
+      public raw facade callbacks.
+    - `src/types.rs` rustdoc documents nullability, lifetime, threading,
+      reentrancy, and unwind behavior for each default public callback alias.
+    - `tests/release_fast_path_audit.rs` checks that the callback inventory,
+      callback aliases, callback-accepting ABI declarations, and registration
+      implementations stay aligned.
 
 - [ ] Keep callback registration raw/unsafe unless a sound RAII wrapper is designed.
   - Required behavior:

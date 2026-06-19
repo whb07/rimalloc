@@ -21,6 +21,8 @@
 //! pointers, out-pointers, and callback context pointers are valid, non-null
 //! caller obligations unless the specific C-shaped API documents or inherits a
 //! nullable case.
+//! Raw callbacks registered through this facade must not panic or unwind across
+//! the C ABI boundary.
 //!
 //! Correct raw allocation pairs must remain inside an explicit unsafe boundary:
 //!

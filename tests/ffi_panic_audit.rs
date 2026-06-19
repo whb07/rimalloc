@@ -129,6 +129,41 @@ fn production_profiles_abort_on_panic() {
 }
 
 #[test]
+fn callback_unwind_policy_is_documented_and_has_no_safe_wrapper() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
+    let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
+    let safe_rs = fs::read_to_string(root.join("src/safe.rs")).expect("read src/safe.rs");
+    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
+
+    assert!(
+        raw_rs.contains("Raw callbacks registered through this facade must not panic or unwind")
+            && abi_doc.contains("Callbacks must not unwind across the C ABI boundary.")
+            && abi_doc.contains("panic\nor unwind is prevented at the C boundary"),
+        "raw facade and ABI docs should state that callbacks must not unwind"
+    );
+    assert!(
+        types_rs.matches("Unwind:").count() >= 6
+            && types_rs.matches("panic").count() >= 6
+            && types_rs.matches("unwind").count() >= 6,
+        "public callback type docs should include panic/unwind behavior"
+    );
+
+    for source in [safe_rs.as_str(), lib_rs.as_str()] {
+        assert!(
+            !source.contains("CallbackGuard")
+                && !source.contains("register_callback")
+                && !source.contains("catch_unwind")
+                && !source.contains("mi_register_output")
+                && !source.contains("mi_register_error")
+                && !source.contains("mi_register_deferred_free"),
+            "safe facade has no callback wrapper that would need catch/abort unwind containment"
+        );
+    }
+}
+
+#[test]
 fn mimalloc_assert_fail_aborts_instead_of_unwinding() {
     const CHILD_ENV: &str = "MI_FFI_PANIC_AUDIT_ASSERT_CHILD";
 

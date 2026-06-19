@@ -506,13 +506,22 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `tests/release_fast_path_audit.rs` verifies that the safe facade does not
       expose callback registration or callback guard APIs.
 
-- [ ] Prevent Rust panics from crossing callback/FFI boundaries.
+- [x] Prevent Rust panics from crossing callback/FFI boundaries.
   - Required behavior:
     - Raw docs state callbacks must not unwind.
     - If safe callback wrappers exist, they catch/abort or otherwise prevent unwinding across C.
   - Validation:
     - `tests/ffi_panic_audit.rs` covers exported boundary unwind policy.
     - Documentation includes panic behavior.
+  - Evidence:
+    - `src/raw.rs`, `docs/abi.md`, and callback rustdoc in `src/types.rs`
+      state that raw callbacks must not panic or unwind across the C ABI.
+    - `docs/abi.md`, `docs/safe-api.md`, and `docs/unsafe-audit.md` document
+      that no safe callback wrappers exist; future safe wrappers must prove
+      panic containment before stabilization.
+    - `tests/ffi_panic_audit.rs` checks panic-abort profiles, production
+      sources for panic-prone shortcuts, assertion abort behavior, callback
+      unwind documentation, and the absence of safe callback wrappers.
 
 ---
 

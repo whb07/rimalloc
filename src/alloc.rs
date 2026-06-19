@@ -554,7 +554,7 @@ pub unsafe extern "C" fn mi_theap_calloc(
     size: usize,
 ) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_theap_calloc_req(theap, req)
         } else {
             ptr::null_mut()
@@ -569,12 +569,23 @@ unsafe fn mi_theap_calloc_req(
     unsafe { mi_theap_zalloc(theap, req.layout().requested().get()) }
 }
 
+pub(crate) fn calloc_request_or_report(
+    count: usize,
+    size: usize,
+) -> Option<crate::core_types::CallocRequest> {
+    let mut total = 0;
+    if unsafe { crate::internal::mi_count_size_overflow(count, size, &mut total) } {
+        return None;
+    }
+    crate::core_types::CallocRequest::new(count, size).ok()
+}
+
 /// # Safety
 /// Returned memory must be released through this allocator.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_theap_calloc_req(_mi_theap_default(), req)
         } else {
             core::ptr::null_mut()
@@ -591,7 +602,7 @@ pub unsafe extern "C" fn mi_heap_calloc(
     size: usize,
 ) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_theap_calloc_req(_mi_heap_theap(heap), req)
         } else {
             core::ptr::null_mut()
@@ -644,7 +655,7 @@ pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_v
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_ucalloc(count: usize, size: usize, usable: *mut usize) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_uzalloc(req.layout().requested().get(), usable)
         } else {
             ptr::null_mut()
@@ -669,7 +680,7 @@ unsafe fn mi_theap_mallocn_req(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_mallocn(count: usize, size: usize) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_theap_mallocn_req(_mi_theap_default(), req)
         } else {
             core::ptr::null_mut()
@@ -686,7 +697,7 @@ pub unsafe extern "C" fn mi_heap_mallocn(
     size: usize,
 ) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_theap_mallocn_req(_mi_heap_theap(heap), req)
         } else {
             core::ptr::null_mut()
@@ -912,7 +923,7 @@ unsafe fn mi_theap_reallocn(
     size: usize,
 ) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_theap_reallocn_req(theap, p, req)
         } else {
             ptr::null_mut()
@@ -965,7 +976,7 @@ unsafe fn mi_theap_recalloc(
     size: usize,
 ) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_theap_recalloc_req(theap, p, req)
         } else {
             ptr::null_mut()
@@ -999,7 +1010,7 @@ pub unsafe extern "C" fn mi_realloc(p: *mut c_void, newsize: usize) -> *mut c_vo
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reallocn(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_theap_reallocn_req(_mi_theap_default(), p, req)
         } else {
             core::ptr::null_mut()

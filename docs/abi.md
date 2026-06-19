@@ -187,6 +187,24 @@ in `src/abi.rs`; those macros intentionally expand through root `raw::mi_*` so
 downstream macro users see C-header behavior. `scripts/check-ffi-boundary.py`
 fails if any other source file re-enters the public raw/ABI `mi_*` facade.
 
+Allocation and free entry points convert raw C inputs into crate-private
+witness types before entering allocator-core paths when validation is possible:
+
+- size/count/alignment inputs use `LayoutRequest`, `CallocRequest`,
+  `ReallocRequest`, `RequestedSize`, `MaybeAlignment`, and
+  `MaybeHugeAlignment`;
+- old realloc pointers use `PointerLookup` and construct `OldAllocation` only
+  after pointer/page/block validation;
+- free paths use `PointerLookup`, `BlockForFree`, and `ValidatedFree` before
+  routing local or foreign frees;
+- generic allocation flags use `MallocGenericFlags` instead of ad hoc bit
+  packing.
+
+C boundary wrappers still return C-shaped results: null for allocation failure
+or invalid/overflow requests where mimalloc returns null, errno-compatible
+behavior where the public C API requires it, and abort/error reporting where the
+upstream C contract does so.
+
 ## Callback ABI
 
 Callback types mirror upstream mimalloc C callback signatures. Callbacks must

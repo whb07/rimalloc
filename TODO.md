@@ -353,7 +353,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `docs/abi.md` states internal allocator code must call crate-private helpers
       and documents the C-header macro exception.
 
-- [ ] Create typed internal request/result conversion at the FFI boundary.
+- [x] Create typed internal request/result conversion at the FFI boundary.
   - Required conversions:
     - `usize` size/count/alignment inputs to `LayoutRequest`, `CallocRequest`, `ReallocRequest`, `Alignment`, `RequestedSize`, etc.
     - Raw heap/page pointers to crate-private checked wrappers where validation is possible.
@@ -362,6 +362,17 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - Representative public allocation entry points construct typed request objects before allocator-core dispatch.
     - Audit tests verify allocation/free/realloc entry points cross a typed validation boundary.
     - C parity tests still pass.
+  - Evidence:
+    - `src/core_types/layout.rs` defines `LayoutRequest`, `CallocRequest`,
+      `ReallocRequest`, `OldAllocation`, `MallocGenericFlags`, and
+      `MaybeHugeAlignment`.
+    - `src/core_types/validation.rs` defines `PointerLookup`, `BlockForFree`, and
+      `ValidatedFree` for checked pointer/free routing.
+    - `tests/release_fast_path_audit.rs` has focused audits for allocation product
+      requests, realloc pointer lookup, generic allocation flags, page malloc typed
+      paths, and free validation.
+    - `docs/abi.md` documents the typed request/result boundary and C null/errno
+      conversion behavior.
 
 - [ ] Preserve C ABI names while using Rust-native internal names.
   - Required naming split:

@@ -2577,7 +2577,7 @@ unsafe fn mi_arenas_page_singleton_alloc(
     };
     let slice_count = mi_slice_count_of_size(info_size + block_size);
     let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
-        crate::mi_assert_internal!(false);
+        unsafe { mi_set_errno(ENOMEM) };
         return ptr::null_mut();
     };
     let page = unsafe {

@@ -736,12 +736,20 @@ fn allocation_product_paths_use_typed_requests() {
     let layout_rs =
         fs::read_to_string(root.join("src/core_types/layout.rs")).expect("read layout.rs");
 
+    let product_overflow_checks = alloc_rs.matches("mi_count_size_overflow").count()
+        + aligned_rs.matches("mi_count_size_overflow").count()
+        + posix_rs.matches("mi_count_size_overflow").count();
+
     assert!(
-        !alloc_rs.contains("mi_count_size_overflow")
+        product_overflow_checks == 1
             && !alloc_rs.contains("Temp compat bridge")
             && !aligned_rs.contains("mi_count_size_overflow")
             && !aligned_rs.contains("_mi_theap_realloc_zero(")
             && !posix_rs.contains("mi_count_size_overflow")
+            && alloc_rs.contains("pub(crate) fn calloc_request_or_report(")
+            && alloc_rs
+                .contains("crate::internal::mi_count_size_overflow(count, size, &mut total)")
+            && alloc_rs.contains("crate::core_types::CallocRequest::new(count, size).ok()")
             && alloc_rs.contains("unsafe fn mi_theap_calloc_req(")
             && alloc_rs.contains("unsafe fn mi_theap_mallocn_req(")
             && alloc_rs.contains("unsafe fn mi_theap_realloc_req(")
@@ -761,12 +769,12 @@ fn allocation_product_paths_use_typed_requests() {
                 "crate::core_types::LayoutRequest::aligned_at(newsize, alignment, offset, zeroed)"
             )
             && aligned_rs.contains("mi_theap_realloc_req(theap, p, layout)")
-            && aligned_rs.contains("crate::core_types::CallocRequest::new(count, size)")
-            && aligned_rs.contains("crate::core_types::CallocRequest::new(newcount, size)")
+            && aligned_rs.contains("calloc_request_or_report(count, size)")
+            && aligned_rs.contains("calloc_request_or_report(newcount, size)")
             && posix_rs.contains("crate::core_types::CallocRequest::new(count, size)")
             && layout_rs.contains("pub(crate) fn layout(self) -> LayoutRequest")
             && layout_rs.contains("let total_size = count.checked_mul(size)"),
-        "calloc/mallocn/recalloc/reallocarray product-size paths should use CallocRequest as the checked multiplication boundary"
+        "calloc/mallocn/recalloc/reallocarray product-size paths should use CallocRequest as the checked multiplication boundary with one C-compatible overflow reporting adapter"
     );
 }
 

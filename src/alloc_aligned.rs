@@ -7,7 +7,7 @@ use core::mem::size_of;
 
 use crate::alloc::{
     _mi_page_malloc_zero_typed, _mi_theap_malloc_guarded, _mi_theap_malloc_zero,
-    _mi_theap_malloc_zero_ex, mi_theap_realloc_req,
+    _mi_theap_malloc_zero_ex, calloc_request_or_report, mi_theap_realloc_req,
 };
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
@@ -383,7 +383,7 @@ pub unsafe fn mi_theap_calloc_aligned_at(
     offset: usize,
 ) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(count, size) {
+        if let Some(req) = calloc_request_or_report(count, size) {
             mi_theap_zalloc_aligned_at(theap, req.layout().requested().get(), alignment, offset)
         } else {
             core::ptr::null_mut()
@@ -599,6 +599,17 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
     if alignment == 0 {
         return core::ptr::null_mut();
     }
+    if alignment <= size_of::<usize>() && offset == 0 {
+        let layout = if zero {
+            crate::core_types::LayoutRequest::zalloc(newsize)
+        } else {
+            crate::core_types::LayoutRequest::malloc(newsize)
+        };
+        return match layout {
+            Ok(layout) => unsafe { mi_theap_realloc_req(theap, p, layout) },
+            Err(_) => core::ptr::null_mut(),
+        };
+    }
     let zeroed = if zero {
         crate::core_types::Zeroed::Yes
     } else {
@@ -754,7 +765,7 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     offset: usize,
 ) -> *mut c_void {
     unsafe {
-        if let Ok(req) = crate::core_types::CallocRequest::new(newcount, size) {
+        if let Some(req) = calloc_request_or_report(newcount, size) {
             mi_theap_rezalloc_aligned_at(
                 theap,
                 p,

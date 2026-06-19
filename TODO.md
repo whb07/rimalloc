@@ -1549,7 +1549,7 @@ These wrappers should be added only if they can avoid dangling references, globa
     - No safe test uses an escaped allocation pointer after drop.
     - `cargo test --quiet --lib safe::tests --features std` passes.
 
-- [ ] Test safe API under features.
+- [x] Test safe API under features.
   - Feature sets:
     - default
     - `std`
@@ -1559,6 +1559,16 @@ These wrappers should be added only if they can avoid dangling references, globa
     - `track-asan`
   - Validation:
     - `scripts/check-features.sh` and targeted safe API tests pass.
+  - Evidence:
+    - `scripts/check-safe-api-features.sh` runs `safe::tests` under default,
+      `std`, `secure`, `guarded`, and `track-valgrind`.
+    - `scripts/check-safe-api-features.sh` compile-checks `track-asan` with
+      `cargo check --lib --features track-asan`; executable `track-asan` tests
+      require ASan runtime symbols and are intentionally handled as a compile
+      gate, matching `scripts/check-feature-abi.sh`.
+    - `scripts/check-safe-api-features.sh` passes.
+    - `scripts/check-features.sh` passes, including the expected rejected
+      `track-valgrind track-asan` feature combination.
 
 ## J2. Safe heap tests, if heap is implemented
 

@@ -1572,19 +1572,39 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## J2. Safe heap tests, if heap is implemented
 
-- [ ] Test heap create/drop.
+- [x] Test heap create/drop.
   - Validation:
     - No leaks or double frees under debug/sanitizer checks where feasible.
+  - Evidence:
+    - Safe heap APIs are intentionally deferred for this milestone, so there is
+      no safe `Heap` create/drop wrapper to exercise.
+    - `rg -n "pub (struct|enum|type) (Heap|MainHeap|HeapRef|HeapAllocation)|pub fn .*Heap|pub mod heap|Heap::" src/lib.rs src/safe.rs` finds no public safe heap facade.
+    - `scripts/check-api-inventory.py` passes and documents that safe heap
+      wrappers are intentionally deferred.
 
-- [ ] Test heap allocation lifetimes.
+- [x] Test heap allocation lifetimes.
   - Validation:
     - Compile-fail test proves allocation cannot outlive heap.
     - Runtime tests verify heap containment.
+  - Evidence:
+    - No safe heap allocation type exists, so there is no safe
+      `HeapAllocation<'heap>` lifetime contract to test yet.
+    - `docs/safe-api.md` and `docs/api-inventory.md` document that safe heap
+      allocation wrappers are intentionally absent until their lifetime model is
+      designed.
+    - Raw heap containment remains covered by raw/compatibility tests rather
+      than safe API tests.
 
-- [ ] Test heap non-Send/non-Sync or Send/Sync behavior.
+- [x] Test heap non-Send/non-Sync or Send/Sync behavior.
   - Validation:
     - Static trait tests verify intended behavior.
     - Unsafe audit proof exists for manual impls.
+  - Evidence:
+    - There is no public safe `Heap`, `MainHeap`, `HeapRef`, or
+      `HeapAllocation` type, so there are no safe heap `Send`/`Sync` impls to
+      prove in this milestone.
+    - `scripts/check-safe-boundary.py` passes and confirms the safe facade has
+      no public unsafe items.
 
 ## J3. Safe stats/options tests, if implemented
 

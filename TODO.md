@@ -437,7 +437,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `docs/abi.md` documents transparent integer newtypes for C-extensible raw
       domains and limits Rust enums to closed/internal domains.
 
-- [ ] Define raw pointer nullability in docs and types.
+- [x] Define raw pointer nullability in docs and types.
   - Required behavior:
     - Raw C APIs use raw pointers where null is valid or inherited from C.
     - Unsafe Rust convenience wrappers may use `NonNull` only when null is impossible or checked.
@@ -445,6 +445,21 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - Public unsafe docs include nullability for every raw pointer parameter.
     - Tests cover null-accepted APIs such as free and null realloc behavior.
+  - Evidence:
+    - `docs/abi.md` defines the raw pointer nullability policy for raw C
+      signatures, allocation null returns, null free, null realloc, out
+      pointers, metadata pointers, internal `NonNull` use, and safe API
+      translation.
+    - `src/raw.rs` and `src/abi.rs` rustdoc document that public raw signatures
+      keep raw pointers rather than `NonNull` and inherit C nullability.
+    - `src/core_types/ptr.rs` keeps `NonNull` inside crate-private wrappers
+      with checked `new` constructors and explicit unsafe `new_unchecked`
+      contracts.
+    - `tests/aligned_exports.rs`, `tests/compat_exports.rs`,
+      `tests/fuzz_alloc_sequences.rs`, and `scripts/check-behavioral-parity.py`
+      cover null-accepted free/realloc-family behavior.
+    - `tests/release_fast_path_audit.rs` audits the nullability policy,
+      crate-private `NonNull` wrappers, and safe facade null/error translation.
 
 ## B5. Callback boundary
 

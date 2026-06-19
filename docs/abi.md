@@ -101,6 +101,35 @@ alignment, lifetime, nullability, and threading are caller obligations.
 The `unstable-raw-internals` module paths are not public API and must not be
 used by downstream users as normal library paths.
 
+## Raw Pointer Nullability
+
+The raw C boundary uses raw pointers in signatures. It does not use `NonNull`
+in raw C signatures because the C header shape must represent nullable
+pointers, allocation-failure null returns, and pointer domains whose
+nullability is inherited from upstream mimalloc.
+
+Nullability follows the C API contract and parity tests:
+
+- allocation functions return null on allocation failure, overflow, or invalid
+  requests where upstream returns null;
+- `mi_free` and matching deallocation APIs accept null as a no-op where the C
+  API does;
+- `mi_realloc` and matching realloc-family APIs treat a null input pointer as
+  an allocation request only for functions where the C API does;
+- out-pointers require valid writable storage unless the function docs or C
+  behavior explicitly allow null;
+- heap, thread-heap, arena, page, and other metadata pointers must be valid and
+  non-null unless the specific raw function documents a nullable case.
+
+Unsafe Rust convenience wrappers and allocator-internal helpers may use
+`NonNull` only after construction proves the pointer is not null, or after a
+checked conversion such as `NonNull::new`. Those wrappers must convert back to
+raw `*mut` or `*const` pointers at the raw C boundary.
+
+Safe Rust APIs must not expose C null/error conventions directly. Safe wrappers
+translate nullable C results into `Result`, `Option`, safe no-op behavior, or a
+non-null handle such as `NonNull` when null has already been checked.
+
 ## Module Taxonomy
 
 Current ownership is the final layout for this migration phase:

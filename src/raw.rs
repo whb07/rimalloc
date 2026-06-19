@@ -7,11 +7,20 @@
 //!
 //! The APIs here are not safe Rust abstractions. Most functions accept or
 //! return raw pointers and inherit mimalloc's C ABI preconditions.
+//! Public raw signatures intentionally use `*mut` and `*const` rather than
+//! `NonNull` so they can represent C nullability exactly.
 //! The default facade exposes the public C-header mirror through [`abi`],
 //! [`mimalloc`], and root `mi_*` re-exports. Translated implementation modules
 //! are available only with the `unstable-raw-internals` feature for repository
 //! audits and are not public API. C ABI symbol compatibility is tracked
 //! separately.
+//!
+//! Null is valid only where the C API says it is valid. Allocation functions
+//! return null on failure, `mi_free` accepts null as a no-op, and
+//! `mi_realloc` with a null input pointer behaves like allocation. Metadata
+//! pointers, out-pointers, and callback context pointers are valid, non-null
+//! caller obligations unless the specific C-shaped API documents or inherits a
+//! nullable case.
 //!
 //! Correct raw allocation pairs must remain inside an explicit unsafe boundary:
 //!
@@ -27,6 +36,15 @@
 //! ```rust,no_run
 //! unsafe {
 //!     mechanical_mimalloc::raw::mi_free(core::ptr::null_mut());
+//! }
+//! ```
+//!
+//! Like C `realloc`, `mi_realloc` accepts null as an allocation request:
+//!
+//! ```rust,no_run
+//! unsafe {
+//!     let p = mechanical_mimalloc::raw::mi_realloc(core::ptr::null_mut(), 64);
+//!     mechanical_mimalloc::raw::mi_free(p);
 //! }
 //! ```
 

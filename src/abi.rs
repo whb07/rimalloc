@@ -1,4 +1,13 @@
 //! Mechanical translation of `include/mimalloc.h`.
+//!
+//! Public declarations in this module keep the C header pointer shape. Raw
+//! pointer parameters and returns use `*mut` or `*const`, including nullable
+//! cases inherited from mimalloc. Nullability follows the upstream C contract:
+//! allocation failure returns null where C returns null, `mi_free` accepts
+//! null, realloc-family functions accept null only where C treats that as
+//! allocation, and metadata/out-pointer arguments must be valid and non-null
+//! unless their specific C contract allows null. This module does not use
+//! `NonNull` in raw C signatures.
 
 #![allow(non_camel_case_types, non_upper_case_globals)]
 

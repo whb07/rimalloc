@@ -374,7 +374,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `docs/abi.md` documents the typed request/result boundary and C null/errno
       conversion behavior.
 
-- [ ] Preserve C ABI names while using Rust-native internal names.
+- [x] Preserve C ABI names while using Rust-native internal names.
   - Required naming split:
     - `mi_*` names remain in C ABI/raw layers.
     - Internal helpers use Rust names or typed methods where ownership/invariants are clearer.
@@ -382,6 +382,15 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - New internal APIs added by this workstream are reviewed for naming.
     - `docs/architecture.md` or equivalent explains naming rules.
+  - Evidence:
+    - `docs/abi.md` defines the C ABI/raw boundary naming split and reserves new
+      internal `mi_*` names for explicit compatibility shims.
+    - `docs/safe-api.md` defines Rust-facing naming conventions for the safe API.
+    - The typed boundary helpers added in this workstream use Rust names or
+      typed methods, for example `LayoutRequest`, `PointerLookup`,
+      `ValidatedFree`, and `calloc_request_or_report`.
+    - `tests/release_fast_path_audit.rs` guards known internal helpers against
+      regaining dynamic C exports.
 
 ## B4. Raw layout and ABI representation
 

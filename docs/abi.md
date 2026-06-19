@@ -187,6 +187,23 @@ in `src/abi.rs`; those macros intentionally expand through root `raw::mi_*` so
 downstream macro users see C-header behavior. `scripts/check-ffi-boundary.py`
 fails if any other source file re-enters the public raw/ABI `mi_*` facade.
 
+## Naming Rules
+
+The dynamic C ABI preserves upstream mimalloc symbol spelling. Public C symbols,
+C-header declarations, raw facade exports, and direct compatibility shims keep
+their `mi_*` or `_mi_*` names when that spelling is part of the C contract.
+
+New allocator-internal Rust helpers should use Rust names or typed methods when
+the helper is not itself a C compatibility shim. Prefer names that describe the
+Rust invariant being carried, such as `ValidatedFree`, `PointerLookup`,
+`LayoutRequest`, `calloc_request_or_report`, or methods on those types. Do not
+add new internal `mi_*` entry points just to mirror C spelling; reserve that
+shape for translated compatibility shims whose ABI, debug, static-archive, or
+upstream-parity role is explicit.
+
+`docs/safe-api.md` owns Rust-facing safe API naming conventions. This document
+owns the C ABI/raw boundary naming split.
+
 Allocation and free entry points convert raw C inputs into crate-private
 witness types before entering allocator-core paths when validation is possible:
 

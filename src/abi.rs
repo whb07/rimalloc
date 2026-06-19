@@ -28,7 +28,7 @@ pub use crate::types::{
     mi_heap_t, mi_heap_visit_fun, mi_output_fun, mi_subproc_id_t, mi_theap_t,
 };
 
-pub const _mi_option_last: mi_option_t = crate::options::mi_option_e::_mi_option_last;
+pub const _mi_option_last: mi_option_t = crate::options::mi_option_t::_mi_option_last;
 pub const MIMALLOC_H: () = ();
 pub const mi_attr_noexcept: () = ();
 pub const mi_decl_nodiscard: () = ();

@@ -42,3 +42,11 @@ fn option_and_callback_exports_link_and_mutate_state() {
         assert_eq!(mi_option_get(option), original);
     }
 }
+
+#[test]
+fn option_raw_unknown_values_are_not_enum_ub() {
+    let invalid = mi_option_t::from_raw(-1);
+
+    assert_eq!(invalid.as_i32(), -1);
+    assert_ne!(invalid, mi_option_t::mi_option_show_errors);
+}

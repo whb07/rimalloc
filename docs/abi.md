@@ -73,6 +73,13 @@ Public `repr(C)` structs and C-compatible aliases are compatibility-sensitive.
 Changing size, alignment, offsets, enum discriminants, callback signatures, or
 feature-dependent layout requires ABI notes and matching test updates.
 
+C integer domains that can receive values from C callers must not rely on Rust
+enum validity unless the domain is closed. Public raw option values use the
+transparent integer newtype `mi_option_t`; known option constants are associated
+constants, and unknown values can be represented with `mi_option_t::from_raw`
+without creating Rust enum UB. Closed internal translated enums may remain Rust
+enums when they are not part of the default public raw facade.
+
 ## Raw Rust Facade
 
 `mechanical_mimalloc::raw` is the Rust path for C-shaped constants, callbacks,

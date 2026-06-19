@@ -38,81 +38,98 @@ unsafe extern "C" {
     static mut C_STDERR: *mut c_void;
 }
 
-#[repr(i32)]
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum mi_option_e {
-    mi_option_show_errors = 0,
-    mi_option_show_stats = 1,
-    mi_option_verbose = 2,
-    mi_option_deprecated_eager_commit = 3,
-    mi_option_arena_eager_commit = 4,
-    mi_option_purge_decommits = 5,
-    mi_option_allow_large_os_pages = 6,
-    mi_option_reserve_huge_os_pages = 7,
-    mi_option_reserve_huge_os_pages_at = 8,
-    mi_option_reserve_os_memory = 9,
-    mi_option_deprecated_segment_cache = 10,
-    mi_option_deprecated_page_reset = 11,
-    mi_option_deprecated_abandoned_page_purge = 12,
-    mi_option_deprecated_segment_reset = 13,
-    mi_option_deprecated_eager_commit_delay = 14,
-    mi_option_purge_delay = 15,
-    mi_option_use_numa_nodes = 16,
-    mi_option_disallow_os_alloc = 17,
-    mi_option_os_tag = 18,
-    mi_option_max_errors = 19,
-    mi_option_max_warnings = 20,
-    mi_option_deprecated_max_segment_reclaim = 21,
-    mi_option_destroy_on_exit = 22,
-    mi_option_arena_reserve = 23,
-    mi_option_arena_purge_mult = 24,
-    mi_option_deprecated_purge_extend_delay = 25,
-    mi_option_disallow_arena_alloc = 26,
-    mi_option_retry_on_oom = 27,
-    mi_option_visit_abandoned = 28,
-    mi_option_guarded_min = 29,
-    mi_option_guarded_max = 30,
-    mi_option_guarded_precise = 31,
-    mi_option_guarded_sample_rate = 32,
-    mi_option_guarded_sample_seed = 33,
-    mi_option_generic_collect = 34,
-    mi_option_page_reclaim_on_free = 35,
-    mi_option_page_full_retain = 36,
-    mi_option_page_max_candidates = 37,
-    mi_option_max_vabits = 38,
-    mi_option_pagemap_commit = 39,
-    mi_option_page_commit_on_demand = 40,
-    mi_option_page_max_reclaim = 41,
-    mi_option_page_cross_thread_max_reclaim = 42,
-    mi_option_allow_thp = 43,
-    mi_option_minimal_purge_size = 44,
-    mi_option_arena_max_object_size = 45,
-    mi_option_arena_is_numa_local = 46,
-    _mi_option_last = 47,
+pub struct mi_option_t(i32);
+
+impl mi_option_t {
+    pub const mi_option_show_errors: Self = Self(0);
+    pub const mi_option_show_stats: Self = Self(1);
+    pub const mi_option_verbose: Self = Self(2);
+    pub const mi_option_deprecated_eager_commit: Self = Self(3);
+    pub const mi_option_arena_eager_commit: Self = Self(4);
+    pub const mi_option_purge_decommits: Self = Self(5);
+    pub const mi_option_allow_large_os_pages: Self = Self(6);
+    pub const mi_option_reserve_huge_os_pages: Self = Self(7);
+    pub const mi_option_reserve_huge_os_pages_at: Self = Self(8);
+    pub const mi_option_reserve_os_memory: Self = Self(9);
+    pub const mi_option_deprecated_segment_cache: Self = Self(10);
+    pub const mi_option_deprecated_page_reset: Self = Self(11);
+    pub const mi_option_deprecated_abandoned_page_purge: Self = Self(12);
+    pub const mi_option_deprecated_segment_reset: Self = Self(13);
+    pub const mi_option_deprecated_eager_commit_delay: Self = Self(14);
+    pub const mi_option_purge_delay: Self = Self(15);
+    pub const mi_option_use_numa_nodes: Self = Self(16);
+    pub const mi_option_disallow_os_alloc: Self = Self(17);
+    pub const mi_option_os_tag: Self = Self(18);
+    pub const mi_option_max_errors: Self = Self(19);
+    pub const mi_option_max_warnings: Self = Self(20);
+    pub const mi_option_deprecated_max_segment_reclaim: Self = Self(21);
+    pub const mi_option_destroy_on_exit: Self = Self(22);
+    pub const mi_option_arena_reserve: Self = Self(23);
+    pub const mi_option_arena_purge_mult: Self = Self(24);
+    pub const mi_option_deprecated_purge_extend_delay: Self = Self(25);
+    pub const mi_option_disallow_arena_alloc: Self = Self(26);
+    pub const mi_option_retry_on_oom: Self = Self(27);
+    pub const mi_option_visit_abandoned: Self = Self(28);
+    pub const mi_option_guarded_min: Self = Self(29);
+    pub const mi_option_guarded_max: Self = Self(30);
+    pub const mi_option_guarded_precise: Self = Self(31);
+    pub const mi_option_guarded_sample_rate: Self = Self(32);
+    pub const mi_option_guarded_sample_seed: Self = Self(33);
+    pub const mi_option_generic_collect: Self = Self(34);
+    pub const mi_option_page_reclaim_on_free: Self = Self(35);
+    pub const mi_option_page_full_retain: Self = Self(36);
+    pub const mi_option_page_max_candidates: Self = Self(37);
+    pub const mi_option_max_vabits: Self = Self(38);
+    pub const mi_option_pagemap_commit: Self = Self(39);
+    pub const mi_option_page_commit_on_demand: Self = Self(40);
+    pub const mi_option_page_max_reclaim: Self = Self(41);
+    pub const mi_option_page_cross_thread_max_reclaim: Self = Self(42);
+    pub const mi_option_allow_thp: Self = Self(43);
+    pub const mi_option_minimal_purge_size: Self = Self(44);
+    pub const mi_option_arena_max_object_size: Self = Self(45);
+    pub const mi_option_arena_is_numa_local: Self = Self(46);
+    pub const _mi_option_last: Self = Self(47);
+
+    #[inline]
+    pub const fn from_raw(raw: i32) -> Self {
+        Self(raw)
+    }
+
+    #[inline]
+    pub const fn as_i32(self) -> i32 {
+        self.0
+    }
+
+    #[inline]
+    pub const fn as_usize(self) -> usize {
+        self.0 as usize
+    }
 }
 
-pub type mi_option_t = mi_option_e;
+pub type mi_option_e = mi_option_t;
 
-pub const mi_option_eager_commit: mi_option_t = mi_option_e::mi_option_deprecated_eager_commit;
+pub const mi_option_eager_commit: mi_option_t = mi_option_t::mi_option_deprecated_eager_commit;
 pub const mi_option_eager_commit_delay: mi_option_t =
-    mi_option_e::mi_option_deprecated_eager_commit_delay;
+    mi_option_t::mi_option_deprecated_eager_commit_delay;
 pub const mi_option_abandoned_page_purge: mi_option_t =
-    mi_option_e::mi_option_deprecated_abandoned_page_purge;
+    mi_option_t::mi_option_deprecated_abandoned_page_purge;
 pub const mi_option_abandoned_reclaim_on_free: mi_option_t =
-    mi_option_e::mi_option_page_reclaim_on_free;
+    mi_option_t::mi_option_page_reclaim_on_free;
 pub const mi_option_max_segment_reclaim: mi_option_t =
-    mi_option_e::mi_option_deprecated_max_segment_reclaim;
+    mi_option_t::mi_option_deprecated_max_segment_reclaim;
 pub const mi_option_purge_extend_delay: mi_option_t =
-    mi_option_e::mi_option_deprecated_purge_extend_delay;
+    mi_option_t::mi_option_deprecated_purge_extend_delay;
 pub const mi_option_decommit_extend_delay: mi_option_t =
-    mi_option_e::mi_option_deprecated_purge_extend_delay;
-pub const mi_option_large_os_pages: mi_option_t = mi_option_e::mi_option_allow_large_os_pages;
-pub const mi_option_eager_region_commit: mi_option_t = mi_option_e::mi_option_arena_eager_commit;
-pub const mi_option_reset_decommits: mi_option_t = mi_option_e::mi_option_purge_decommits;
-pub const mi_option_reset_delay: mi_option_t = mi_option_e::mi_option_purge_delay;
-pub const mi_option_limit_os_alloc: mi_option_t = mi_option_e::mi_option_disallow_os_alloc;
+    mi_option_t::mi_option_deprecated_purge_extend_delay;
+pub const mi_option_large_os_pages: mi_option_t = mi_option_t::mi_option_allow_large_os_pages;
+pub const mi_option_eager_region_commit: mi_option_t = mi_option_t::mi_option_arena_eager_commit;
+pub const mi_option_reset_decommits: mi_option_t = mi_option_t::mi_option_purge_decommits;
+pub const mi_option_reset_delay: mi_option_t = mi_option_t::mi_option_purge_delay;
+pub const mi_option_limit_os_alloc: mi_option_t = mi_option_t::mi_option_disallow_os_alloc;
 
-const MI_OPTION_COUNT: usize = mi_option_e::_mi_option_last as usize;
+const MI_OPTION_COUNT: usize = mi_option_t::_mi_option_last.as_usize();
 
 const MI_DEFAULT_SHOW_ERRORS: c_long = if cfg!(debug_assertions) { 1 } else { 0 };
 const MI_DEFAULT_VERBOSE: c_long = 0;
@@ -148,7 +165,7 @@ macro_rules! MI_OPTION {
         mi_option_desc_t {
             value: $value as c_long,
             init: $init,
-            option: mi_option_e::$option,
+            option: mi_option_t::$option,
             name: cstr(concat!($name, "\0").as_bytes()),
             legacy_name: ptr::null(),
         }
@@ -160,7 +177,7 @@ macro_rules! MI_OPTION_LEGACY {
         mi_option_desc_t {
             value: $value as c_long,
             init: $init,
-            option: mi_option_e::$option,
+            option: mi_option_t::$option,
             name: cstr(concat!($name, "\0").as_bytes()),
             legacy_name: cstr(concat!($legacy, "\0").as_bytes()),
         }
@@ -1155,7 +1172,7 @@ fn parse_long_prefix(s: &str) -> Option<(i128, &str)> {
 #[inline]
 fn option_from_index(i: usize) -> mi_option_t {
     crate::mi_debug_assert!(i < MI_OPTION_COUNT);
-    unsafe { core::mem::transmute::<i32, mi_option_t>(i as i32) }
+    mi_option_t::from_raw(i as i32)
 }
 
 fn parse_option_value(raw: &str, size_in_kib: bool) -> Option<c_long> {
@@ -1312,7 +1329,7 @@ fn mi_option_init(desc: &mut mi_option_desc_t) {
 }
 
 fn mi_option_get_fast_impl(option: mi_option_t) -> c_long {
-    let idx = option as usize;
+    let idx = option.as_usize();
     crate::mi_assert!(idx < MI_OPTION_COUNT);
     if idx >= MI_OPTION_COUNT {
         return 0;
@@ -1327,7 +1344,7 @@ pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_get(option: mi_option_t) -> c_long {
-    let idx = option as usize;
+    let idx = option.as_usize();
     crate::mi_assert!(idx < MI_OPTION_COUNT);
     if idx >= MI_OPTION_COUNT {
         return 0;
@@ -1384,7 +1401,7 @@ pub extern "C" fn mi_option_get_size(option: mi_option_t) -> usize {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
-    let idx = option as usize;
+    let idx = option.as_usize();
     crate::mi_assert!(idx < MI_OPTION_COUNT);
     if idx >= MI_OPTION_COUNT {
         return;
@@ -1397,8 +1414,8 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
         option_value_store(idx, value);
         option_init_store(idx, mi_option_init_t::MI_OPTION_INITIALIZED);
 
-        let guarded_min_idx = mi_option_t::mi_option_guarded_min as usize;
-        let guarded_max_idx = mi_option_t::mi_option_guarded_max as usize;
+        let guarded_min_idx = mi_option_t::mi_option_guarded_min.as_usize();
+        let guarded_max_idx = mi_option_t::mi_option_guarded_max.as_usize();
         if option_kind == mi_option_t::mi_option_guarded_min && table[guarded_max_idx].value < value
         {
             Some((mi_option_t::mi_option_guarded_max, value))
@@ -1418,7 +1435,7 @@ pub extern "C" fn mi_option_set(option: mi_option_t, value: c_long) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_option_set_default(option: mi_option_t, value: c_long) {
-    let idx = option as usize;
+    let idx = option.as_usize();
     crate::mi_assert!(idx < MI_OPTION_COUNT);
     if idx >= MI_OPTION_COUNT {
         return;

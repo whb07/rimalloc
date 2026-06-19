@@ -415,13 +415,27 @@ The safe Rust API / FFI split work is complete only when all of these are true:
     - `docs/abi.md` lists the layout-sensitive `secure`, `guarded`,
       `track-valgrind`, and `track-asan` feature flags.
 
-- [ ] Avoid Rust enums for C-extensible integer domains unless the domain is closed.
+- [x] Avoid Rust enums for C-extensible integer domains unless the domain is closed.
   - Required behavior:
     - C enums or integer domains that may receive unknown values use transparent integer newtypes.
     - Conversion methods validate known values without making unknown values UB.
   - Validation:
     - Audit checks all public raw enum-like types.
     - Tests cover unknown/raw values where the C ABI may pass them.
+  - Evidence:
+    - `mi_option_t` is a `#[repr(transparent)]` integer newtype with associated
+      constants for known C option values, preserving `mi_option_t::name` call
+      sites without Rust enum validity assumptions.
+    - `mi_option_t::from_raw`, `as_i32`, and `as_usize` represent and inspect
+      raw C values without transmute or enum UB.
+    - `tests/options_exports.rs` covers construction and inspection of
+      `mi_option_t::from_raw(-1)` without calling invalid C-shaped option APIs.
+    - `scripts/check-behavioral-parity.py` preserves the C debug assertion
+      status for invalid option API calls.
+    - `tests/release_fast_path_audit.rs` fails if public `mi_option_t` regresses
+      to a Rust enum or transmute-based construction.
+    - `docs/abi.md` documents transparent integer newtypes for C-extensible raw
+      domains and limits Rust enums to closed/internal domains.
 
 - [ ] Define raw pointer nullability in docs and types.
   - Required behavior:

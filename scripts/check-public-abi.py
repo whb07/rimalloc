@@ -265,11 +265,11 @@ def rust_source() -> str:
         for field in STAT_FIELDS
     )
     option_values = "\n".join(
-        f'    println!("const.{name}={{}}", mi_option_t::{name} as i32);'
+        f'    println!("const.{name}={{}}", mi_option_t::{name}.as_i32());'
         for name in OPTION_NAMES[:48]
     )
     legacy_values = "\n".join(
-        f'    println!("const.{name}={{}}", {name} as i32);' for name in OPTION_NAMES[48:]
+        f'    println!("const.{name}={{}}", {name}.as_i32());' for name in OPTION_NAMES[48:]
     )
     return f"""\
 use std::mem::{{align_of, offset_of, size_of}};

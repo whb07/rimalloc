@@ -4190,3 +4190,20 @@ fn release_page_stat_writes_follow_c_mimalloc_gates() {
         );
     }
 }
+
+#[test]
+fn public_option_domain_is_transparent_not_rust_enum() {
+    let options_rs =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/options.rs"))
+            .expect("read src/options.rs");
+
+    assert!(
+        options_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug, PartialEq, Eq)]\npub struct mi_option_t(i32);")
+            && options_rs.contains("pub const fn from_raw(raw: i32) -> Self")
+            && options_rs.contains("pub const fn as_i32(self) -> i32")
+            && options_rs.contains("pub type mi_option_e = mi_option_t;")
+            && !options_rs.contains("pub enum mi_option_e")
+            && !options_rs.contains("transmute::<i32, mi_option_t>"),
+        "public mi_option_t must allow unknown C integer values without Rust enum UB"
+    );
+}

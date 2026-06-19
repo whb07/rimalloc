@@ -1874,47 +1874,74 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 Before marking this TODO complete, run and record the exact output/status for:
 
-- [ ] `cargo fmt --check`
+- [x] `cargo fmt --check`
   - Validation: exits 0.
+  - Evidence: exits 0 with no output.
 
-- [ ] `cargo test --quiet`
+- [x] `cargo test --quiet`
   - Validation: exits 0.
+  - Evidence: exits 0; full default test suite passed.
 
-- [ ] `cargo test --doc --features std`
+- [x] `cargo test --doc --features std`
   - Validation: exits 0.
+  - Evidence: exits 0; both doctest groups passed with 9/9 tests.
 
-- [ ] `cargo check --examples --features std`
+- [x] `cargo check --examples --features std`
   - Validation: exits 0.
+  - Evidence: exits 0; examples compile under `std`.
 
-- [ ] `scripts/check-api-inventory.py`
+- [x] `scripts/check-api-inventory.py`
   - Validation: exits 0 and reports expected crate-root/raw inventory.
+  - Evidence: exits 0; reports 6 crate-root items, 3 default raw facade
+    modules, and 27 unstable raw-internals modules.
 
-- [ ] `scripts/check-raw-facade.sh` or equivalent
+- [x] `scripts/check-raw-facade.sh` or equivalent
   - Validation: exits 0 and reports no accidental raw internals in default facade.
+  - Evidence: exits 0; default raw facade exposes only `abi`, `headers`,
+    and `mimalloc`, with implementation modules feature-gated.
 
-- [ ] `scripts/check-features.sh`
+- [x] `scripts/check-features.sh`
   - Validation: exits 0; invalid `track-valgrind track-asan` combination fails as expected.
+  - Evidence: exits 0; valid feature matrix passes, and the invalid
+    `track-valgrind track-asan` combination fails with the expected
+    `compile_error!`.
 
-- [ ] `scripts/check-lints.sh`
+- [x] `scripts/check-lints.sh`
   - Validation: exits 0 for default, bench, and maximal valid feature sets.
+  - Evidence: exits 0; clippy passes with `-D warnings` for raw internals,
+    bench, and both maximal valid tracking feature sets.
 
-- [ ] `scripts/check-docs.sh`
+- [x] `scripts/check-docs.sh`
   - Validation: exits 0.
+  - Evidence: exits 0; `cargo doc --no-deps --features std` and
+    `cargo test --doc --features std` pass.
 
-- [ ] `scripts/check-layout.sh`
+- [x] `scripts/check-layout.sh`
   - Validation: exits 0.
+  - Evidence: exits 0; public ABI layout check passes.
 
-- [ ] `scripts/check-abi-symbols.sh`
+- [x] `scripts/check-abi-symbols.sh`
   - Validation: exits 0.
+  - Evidence: exits 0; reports 190 public header symbols exported and 228
+    public ABI symbols present.
 
-- [ ] `scripts/check-package.sh`
+- [x] `scripts/check-package.sh`
   - Validation: exits 0 and package contents match policy.
+  - Evidence: exits 0; `cargo package --list --allow-dirty` lists the
+    intended package contents and `cargo package --allow-dirty --no-verify`
+    packages 176 files.
 
-- [ ] `scripts/check-bench-smoke.sh`
+- [x] `scripts/check-bench-smoke.sh`
   - Validation: exits 0 for changes that could affect hot paths; documentation-only/raw path changes may record why smoke/full bench is not required.
+  - Evidence: not required for this signoff slice; changes since the last
+    hot-path validation are documentation/checklist/script-signoff only and
+    do not touch allocator hot paths.
 
-- [ ] `scripts/check-bench-full.sh`
+- [x] `scripts/check-bench-full.sh`
   - Validation: required before release or any allocator-wide/hot-path change; report is appended to `BENCHMARK_RESULTS.md` with exact commit hash.
+  - Evidence: not required for this signoff slice; no allocator-wide or
+    hot-path source changes were made after the previously recorded benchmark
+    work.
 
 ## L3. Final API surface diff
 

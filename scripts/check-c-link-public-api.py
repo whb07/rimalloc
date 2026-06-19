@@ -40,7 +40,11 @@ def rust_staticlib() -> pathlib.Path:
         check=True,
     )
     libs = sorted(
-        (ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
+        [
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
+            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc.a"),
+            *(ROOT / "target/debug").glob("libmechanical_mimalloc.a"),
+        ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

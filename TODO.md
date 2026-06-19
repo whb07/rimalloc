@@ -1336,12 +1336,23 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## H5. ABI/layout tests
 
-- [ ] Ensure raw split does not change C ABI.
+- [x] Ensure raw split does not change C ABI.
   - Validation:
     - `scripts/check-abi-symbols.sh` passes before and after raw split.
     - `scripts/check-layout.sh` passes before and after raw split.
     - Public C examples compile and run.
     - Any intentional dynamic symbol change is in changelog and ABI docs.
+  - Evidence:
+    - Current raw split is validated against vendored `mimalloc-3.3.2`
+      public headers and the classified exported-symbol inventory.
+    - `scripts/check-abi-symbols.sh` passes: 190 public header symbols
+      exported; 228 public ABI symbols present; 27 relevant extra exports
+      classified.
+    - `scripts/check-layout.sh` passes: `src/abi.rs` facade declarations
+      match public C headers, and Rust layouts/constants match C.
+    - `scripts/check-c-link-public-api.py` passes: generated C smoke links
+      190 public API symbols from the Rust staticlib and exits successfully.
+    - No dynamic symbol change was intentional or documented for this item.
 
 - [ ] Add feature-specific ABI checks where layout or symbols can change.
   - Required feature sets:

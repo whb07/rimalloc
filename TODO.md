@@ -1608,17 +1608,31 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## J3. Safe stats/options tests, if implemented
 
-- [ ] Test stats snapshots.
+- [x] Test stats snapshots.
   - Validation:
     - Snapshot remains valid after allocations/frees.
     - Snapshot contains plausible deltas.
     - No references into allocator metadata escape.
+  - Evidence:
+    - Safe stats snapshots are intentionally deferred for this milestone, so
+      there is no safe `StatsSnapshot` wrapper to exercise.
+    - `rg -n "pub (struct|enum|type) (Stats|StatsSnapshot|Options|Option|ProcessInfo)|pub fn .*(stats|option|Options|Stats)|StatsSnapshot::|Options::" src/lib.rs src/safe.rs` finds no public safe stats/options facade.
+    - `docs/safe-api.md`, `docs/api-inventory.md`, and README document that
+      safe stats wrappers are intentionally absent until snapshot ownership and
+      metadata-escape invariants are designed.
 
-- [ ] Test options API.
+- [x] Test options API.
   - Validation:
     - Valid values set/read correctly.
     - Invalid values return typed errors.
     - Unsupported runtime changes are rejected safely.
+  - Evidence:
+    - Safe options APIs are intentionally deferred for this milestone, so there
+      is no safe `Options` wrapper to exercise.
+    - `scripts/check-api-inventory.py` passes and documents that safe options
+      wrappers are intentionally deferred.
+    - `scripts/check-safe-boundary.py` passes and confirms the safe facade has
+      no public unsafe items.
 
 ---
 

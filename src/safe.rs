@@ -352,6 +352,25 @@ mod tests {
     }
 
     #[test]
+    fn owned_allocation_covers_sizes_and_alignments() {
+        let sizes = [1usize, 7, 64, 4096, 1 << 20];
+        let alignments = [1usize, 2, 4, 8, 16, 64, 256, 4096];
+
+        for size in sizes {
+            for align in alignments {
+                let layout = Layout::from_size_align(size, align).expect("layout");
+                let allocation = Allocation::new(layout).expect("allocation");
+
+                assert_eq!(allocation.layout(), layout);
+                assert_eq!(allocation.len(), size);
+                assert!(!allocation.is_empty());
+                assert_ne!(allocation.as_ptr(), core::ptr::null_mut());
+                assert_eq!(allocation.as_ptr() as usize % align, 0);
+            }
+        }
+    }
+
+    #[test]
     fn zeroed_allocation_returns_zeroed_bytes() {
         let allocation = Allocation::zeroed_with_size_align(32, 8).expect("allocation");
         let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
@@ -359,8 +378,31 @@ mod tests {
     }
 
     #[test]
+    fn zeroed_allocation_covers_sizes_and_alignments() {
+        let sizes = [1usize, 32, 257, 4096];
+        let alignments = [1usize, 8, 64, 4096];
+
+        for size in sizes {
+            for align in alignments {
+                let allocation =
+                    Allocation::zeroed_with_size_align(size, align).expect("allocation");
+
+                assert_eq!(allocation.len(), size);
+                assert_eq!(allocation.layout().align(), align);
+                assert_eq!(allocation.as_ptr() as usize % align, 0);
+
+                let bytes =
+                    unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
+                assert!(bytes.iter().all(|byte| *byte == 0));
+            }
+        }
+    }
+
+    #[test]
     fn uninitialized_allocation_can_be_written_before_unsafe_read() {
         let allocation = Allocation::with_size_align(32, 16).expect("allocation");
+        assert_eq!(allocation.as_non_null().as_ptr(), allocation.as_ptr());
+
         for i in 0..allocation.len() {
             unsafe { allocation.as_ptr().add(i).write((i % 251) as u8) };
         }
@@ -378,6 +420,11 @@ mod tests {
             assert!(allocation.is_empty());
             assert_eq!(allocation.layout(), layout);
             assert_eq!(allocation.as_ptr() as usize % align, 0);
+
+            let zeroed = Allocation::zeroed(layout).expect("zeroed allocation");
+            assert!(zeroed.is_empty());
+            assert_eq!(zeroed.layout(), layout);
+            assert_eq!(zeroed.as_ptr() as usize % align, 0);
         }
     }
 

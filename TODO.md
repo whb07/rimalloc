@@ -1498,7 +1498,7 @@ These wrappers should be added only if they can avoid dangling references, globa
     - `cargo test --quiet --test mimalloc_global_allocator_std --features std`
       passes.
 
-- [ ] Test `Allocation` normal allocation.
+- [x] Test `Allocation` normal allocation.
   - Cases:
     - small sizes
     - large sizes
@@ -1507,21 +1507,47 @@ These wrappers should be added only if they can avoid dangling references, globa
     - allocation failure/overflow where feasible
   - Validation:
     - Tests verify alignment, length, non-null for nonzero, no crash on drop.
+  - Evidence:
+    - `src/safe.rs` tests cover `Allocation::new` for sizes 1, 7, 64, 4096,
+      and 1 MiB across alignments 1, 2, 4, 8, 16, 64, 256, and 4096.
+    - `zero_sized_allocation_does_not_call_allocator` covers zero-size
+      `Allocation::new` layouts across alignments through 4096.
+    - `invalid_layout_reports_rust_error` and
+      `overflow_layout_reports_rust_error_without_allocating` cover feasible
+      layout failure paths.
+    - `cargo test --quiet --lib safe::tests --features std` passes.
 
-- [ ] Test `Allocation::zeroed`.
+- [x] Test `Allocation::zeroed`.
   - Cases:
     - zeroed bytes for several sizes/alignments.
     - zero size.
   - Validation:
     - Safe reads occur only for initialized/zeroed allocation state.
+  - Evidence:
+    - `zeroed_allocation_covers_sizes_and_alignments` verifies zeroed bytes for
+      sizes 1, 32, 257, and 4096 across alignments 1, 8, 64, and 4096.
+    - `zero_sized_allocation_does_not_call_allocator` covers zero-size
+      `Allocation::zeroed` layouts across alignments through 4096.
+    - Tests read bytes only from `Allocation::zeroed` memory or after explicit
+      raw-pointer writes to uninitialized memory.
+    - `cargo test --quiet --lib safe::tests --features std` passes.
 
-- [ ] Test raw pointer escape hatches.
+- [x] Test raw pointer escape hatches.
   - Cases:
     - `as_ptr` gives writable memory while alive.
     - pointer not used after drop in safe tests.
     - docs state unsafe obligations for external use.
   - Validation:
     - Tests write/read through raw pointer only inside unsafe blocks.
+  - Evidence:
+    - `uninitialized_allocation_can_be_written_before_unsafe_read` verifies
+      `as_ptr` and `as_non_null`, writes through the raw pointer while the
+      allocation is alive, and reads only inside unsafe blocks after writes.
+    - The `Allocation::as_ptr` and `Allocation::as_non_null` rustdoc states
+      lifetime, manual-free, aliasing, initialization, and zero-size sentinel
+      obligations.
+    - No safe test uses an escaped allocation pointer after drop.
+    - `cargo test --quiet --lib safe::tests --features std` passes.
 
 - [ ] Test safe API under features.
   - Feature sets:

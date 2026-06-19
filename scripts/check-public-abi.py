@@ -369,8 +369,19 @@ def run(command: list[str]) -> str:
     return completed.stdout
 
 
+def feature_args() -> list[str]:
+    features = os.environ.get("MIMALLOC_CHECK_FEATURES", "").split()
+    if not features:
+        return []
+    return ["--features", " ".join(features)]
+
+
 def rust_rlib() -> pathlib.Path:
-    subprocess.run(["cargo", "build", "--lib"], cwd=ROOT, check=True)
+    subprocess.run(
+        ["cargo", "build", "--lib", *feature_args()],
+        cwd=ROOT,
+        check=True,
+    )
     libs = sorted(
         [
             *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.rlib"),

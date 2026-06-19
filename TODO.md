@@ -1354,7 +1354,7 @@ These wrappers should be added only if they can avoid dangling references, globa
       190 public API symbols from the Rust staticlib and exits successfully.
     - No dynamic symbol change was intentional or documented for this item.
 
-- [ ] Add feature-specific ABI checks where layout or symbols can change.
+- [x] Add feature-specific ABI checks where layout or symbols can change.
   - Required feature sets:
     - default
     - `secure`
@@ -1363,6 +1363,18 @@ These wrappers should be added only if they can avoid dangling references, globa
     - `track-asan`
   - Validation:
     - Scripts run or explicitly document why a feature does not affect ABI/layout.
+  - Evidence:
+    - `scripts/check-feature-abi.sh` runs ABI/layout checks for default,
+      `secure`, `guarded`, and `track-valgrind`, and runs compile/export
+      checks for `track-asan`.
+    - `scripts/check-public-abi.py` now honors `MIMALLOC_CHECK_FEATURES` for
+      feature-specific layout/constant comparisons.
+    - `scripts/check-public-symbols.py` now honors `MIMALLOC_CHECK_FEATURES`
+      for feature-specific staticlib export checks.
+    - `scripts/check-feature-abi.sh` passes across all required feature sets.
+      `track-asan` documents that the executable layout probe is covered by
+      non-ASan feature sets because `track-asan` requires ASan runtime symbols,
+      then verifies `cargo check --features track-asan` and public exports.
 
 ---
 

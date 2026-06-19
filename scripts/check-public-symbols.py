@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import subprocess
@@ -86,6 +87,13 @@ STATIC_MALLOC_EXTRA_SYMBOLS = {
 }
 
 
+def feature_args() -> list[str]:
+    features = os.environ.get("MIMALLOC_CHECK_FEATURES", "").split()
+    if not features:
+        return []
+    return ["--features", " ".join(features)]
+
+
 def public_header_symbols() -> list[str]:
     decl = re.compile(r"mi_decl(?:_nodiscard)?[^;#]*?\b(mi_[A-Za-z0-9_]+)\s*\(")
     symbols: list[str] = []
@@ -102,7 +110,7 @@ def public_header_symbols() -> list[str]:
 
 def rust_staticlib() -> pathlib.Path:
     subprocess.run(
-        ["cargo", "rustc", "--lib", "--", "--crate-type", "staticlib"],
+        ["cargo", "rustc", "--lib", *feature_args(), "--", "--crate-type", "staticlib"],
         cwd=ROOT,
         check=True,
     )

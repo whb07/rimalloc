@@ -30,6 +30,11 @@ Rust allocation facade.
 Safe heap, stats, options, process-info, and callback APIs are not stabilized.
 They should remain raw/unsafe until the wrapper can enforce ownership,
 lifetime, aliasing, threading, and reentrancy invariants internally.
+There is no safe callback registration API, safe callback closure API, or safe
+RAII callback guard. Any future safe callback guard must prove whether `Drop`
+unregisters the callback or restores the previous registration, how dangling
+contexts are prevented, how panics are stopped before the C ABI boundary, and
+whether callback bodies may allocate through this allocator.
 
 ## Deferred Safe Heap API
 

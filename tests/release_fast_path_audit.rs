@@ -619,6 +619,49 @@ fn public_callback_abi_inventory_stays_documented() {
 }
 
 #[test]
+fn safe_callback_registration_remains_deferred() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
+    let safe_doc =
+        fs::read_to_string(root.join("docs/safe-api.md")).expect("read docs/safe-api.md");
+    let unsafe_doc =
+        fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read docs/unsafe-audit.md");
+    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
+    let safe_rs = fs::read_to_string(root.join("src/safe.rs")).expect("read src/safe.rs");
+
+    assert!(
+        abi_doc.contains("Callback registration remains raw and unsafe.")
+            && abi_doc.contains("does not expose safe\nRAII callback guards")
+            && abi_doc.contains("prevents dangling callback contexts")
+            && abi_doc
+                .contains("drop unregisters the callback or restores the previous registration")
+            && abi_doc.contains("which callback bodies may allocate\nthrough this allocator"),
+        "docs/abi.md should keep callback registration raw unless a sound safe wrapper is designed"
+    );
+    assert!(
+        safe_doc.contains("There is no safe callback registration API")
+            && safe_doc.contains("safe\nRAII callback guard")
+            && unsafe_doc.contains("no safe callback registration API")
+            && unsafe_doc.contains("unregister/restore-on-drop behavior")
+            && unsafe_doc.contains("allocator reentrancy"),
+        "safe API and unsafe audit docs should defer safe callback wrappers with required proof topics"
+    );
+
+    for source in [lib_rs.as_str(), safe_rs.as_str()] {
+        assert!(
+            !source.contains("mi_register_output")
+                && !source.contains("mi_register_error")
+                && !source.contains("mi_register_deferred_free")
+                && !source.contains("register_callback")
+                && !source.contains("CallbackGuard")
+                && !source.contains("OutputCallback")
+                && !source.contains("ErrorCallback"),
+            "safe facade should not expose callback registration or callback guard APIs"
+        );
+    }
+}
+
+#[test]
 fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");

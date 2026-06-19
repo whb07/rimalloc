@@ -42,7 +42,11 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   classified by the FFI/export boundary checks.
 - `SAFETY[AUDIT:raw-callback]`: raw callback entrypoints and callback storage.
   Callers must provide ABI-compatible function pointers and user data that stay
-  valid for the documented call duration. Safe callback wrappers are deferred.
+  valid for the documented call duration. Safe callback wrappers are deferred;
+  no safe callback registration API, callback closure API, or RAII callback
+  guard is currently exposed. Adding one requires a soundness proof for context
+  lifetime, unregister/restore-on-drop behavior, panic containment, and
+  allocator reentrancy.
 - `SAFETY[AUDIT:panic-boundary]`: no-std panic/personality shims and aborting
   assertion paths. These paths must not allocate or unwind.
 - `SAFETY[AUDIT:heap-wrapper]`: reserved for a future safe heap wrapper. No

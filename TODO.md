@@ -488,7 +488,7 @@ The safe Rust API / FFI split work is complete only when all of these are true:
       callback aliases, callback-accepting ABI declarations, and registration
       implementations stay aligned.
 
-- [ ] Keep callback registration raw/unsafe unless a sound RAII wrapper is designed.
+- [x] Keep callback registration raw/unsafe unless a sound RAII wrapper is designed.
   - Required behavior:
     - Safe API must not let users register a callback with dangling context.
     - Safe callback guards must unregister or restore previous callback on drop, or document why that cannot be guaranteed.
@@ -496,6 +496,15 @@ The safe Rust API / FFI split work is complete only when all of these are true:
   - Validation:
     - No safe callback registration API exists unless a soundness proof is in `docs/unsafe-audit.md`.
     - If implemented, tests cover registration, callback invocation, guard drop, panic prevention, and reentrancy notes.
+  - Evidence:
+    - `docs/abi.md`, `docs/safe-api.md`, and `docs/unsafe-audit.md` state
+      that callback registration remains raw/unsafe and that no safe callback
+      registration API, callback closure API, or RAII callback guard is exposed.
+    - Those docs require a future safe wrapper to prove context lifetime,
+      unregister/restore-on-drop behavior, panic containment, and allocator
+      reentrancy before stabilization.
+    - `tests/release_fast_path_audit.rs` verifies that the safe facade does not
+      expose callback registration or callback guard APIs.
 
 - [ ] Prevent Rust panics from crossing callback/FFI boundaries.
   - Required behavior:

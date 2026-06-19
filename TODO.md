@@ -1714,13 +1714,22 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## K2. README updates
 
-- [ ] README accurately distinguishes safe, raw, and C ABI usage.
+- [x] README accurately distinguishes safe, raw, and C ABI usage.
   - Validation:
     - Safe examples use only crate-root safe APIs.
     - Raw examples are wrapped in `unsafe` and labeled raw/unsafe.
     - C usage is described separately from Rust raw usage.
+  - Evidence:
+    - README has an `API Surfaces` section that separately describes the safe
+      Rust facade, raw Rust facade, and dynamic C ABI.
+    - README quick-start safe examples use crate-root `MiMalloc` and
+      `Allocation` only.
+    - README raw example is labeled "raw C-shaped facade" and is wrapped in an
+      `unsafe` block.
+    - README describes the dynamic C ABI as the `cdylib` export surface tracked
+      separately from Rust SemVer.
 
-- [ ] README documents what is not stabilized.
+- [x] README documents what is not stabilized.
   - Required notes:
     - Safe heap API status.
     - Safe stats/options status.
@@ -1731,6 +1740,12 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Evidence:
     - `docs/safe-api.md` exists and documents safe API philosophy plus stable/experimental status.
     - README, `docs/limitations.md`, and `docs/api-inventory.md` all describe the safe API as narrow/limited to the current facade rather than a broad heap/options/stats abstraction.
+    - README states that safe heap, stats, options, process-info, and callback
+      wrappers are intentionally absent.
+    - README states that the raw Rust facade is unstable as a Rust path
+      surface.
+    - README states that maintained platform support is currently Linux x86_64
+      GNU.
 
 ## K3. Changelog and migration notes
 

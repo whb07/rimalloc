@@ -15,6 +15,22 @@ The C ABI compatibility surface is the primary target today. The safe Rust API
 is intentionally small and experimental while the allocator invariants are still
 being audited.
 
+## API Surfaces
+
+- Safe Rust facade: crate-root `MiMalloc`, `Allocation`, and allocation error
+  types. This is the only Rust API intended to be usable without an unsafe
+  block.
+- Raw Rust facade: `mechanical_mimalloc::raw`, a C-shaped Rust path for
+  low-level tests, benchmarks, and integration code that can uphold mimalloc's
+  unsafe pointer and lifetime contracts. The raw Rust path surface is not
+  stabilized as a Rust SemVer API yet.
+- Dynamic C ABI: the `cdylib` export surface, which preserves
+  mimalloc-compatible C symbols, layouts, callbacks, and calling conventions.
+  This is tracked separately from Rust SemVer.
+
+See `docs/safe-api.md`, `docs/abi.md`, and `docs/api-inventory.md` for the
+current boundary policy and inventory.
+
 ## Quick Start
 
 Use the Rust `GlobalAlloc` facade:
@@ -58,6 +74,12 @@ contract.
 Safe heap, stats, options, process-info, and callback wrappers are intentionally
 absent until their ownership, lifetime, threading, initialization, recursion,
 and platform semantics are designed and audited.
+The raw Rust facade is unstable as a Rust path surface; use it only behind an
+explicit unsafe boundary and expect inventory or migration notes before treating
+paths as stable.
+Maintained platform support is currently Linux x86_64 GNU. Other upstream
+mimalloc platform code may be present in the translation but is not claimed as a
+maintained Rust target without parity and CI evidence.
 
 ## Features
 

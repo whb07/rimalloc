@@ -1,23 +1,23 @@
 //! DT-14: Padding types.
 
-use core::{ffi::c_void, ptr::NonNull};
+use core::ptr::NonNull;
 
-use crate::core_types::{BlockPtr, PageKeys, UsableSize};
+use crate::core_types::{BlockPtr, PageKeys, PagePtr, UsableSize};
 use crate::internal::mi_ptr_encode_canary;
 use crate::types::mi_padding_t;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct PaddingCanary(pub(crate) u32);
+pub(crate) struct PaddingCanary(u32);
 
 impl PaddingCanary {
     #[inline(always)]
-    pub(crate) fn from_page_block_keys(
-        page: *const c_void,
-        block: *const c_void,
-        keys: PageKeys,
-    ) -> Self {
-        Self(mi_ptr_encode_canary(page, block, &keys.0))
+    pub(crate) fn from_page_block_keys(page: PagePtr, block: BlockPtr, keys: PageKeys) -> Self {
+        Self(mi_ptr_encode_canary(
+            page.as_ptr().cast(),
+            block.as_ptr().cast(),
+            &keys.0,
+        ))
     }
 
     #[inline(always)]
@@ -28,13 +28,20 @@ impl PaddingCanary {
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub(crate) struct PaddingDelta(pub(crate) u32);
+pub(crate) struct PaddingDelta(u32);
 
 impl PaddingDelta {
     #[inline(always)]
-    pub(crate) fn for_usable(delta: usize, usable_size: UsableSize) -> Self {
-        crate::mi_debug_assert!(delta <= usable_size.get());
-        Self(delta as u32)
+    pub(crate) fn for_usable(delta: usize, usable_size: UsableSize) -> Option<Self> {
+        if delta > usable_size.get() {
+            return None;
+        }
+        u32::try_from(delta).ok().map(Self)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn new_unchecked(delta: u32) -> Self {
+        Self(delta)
     }
 
     #[inline(always)]
@@ -109,8 +116,8 @@ impl PaddingPtr {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Padding {
-    pub(crate) canary: PaddingCanary,
-    pub(crate) delta: PaddingDelta,
+    canary: PaddingCanary,
+    delta: PaddingDelta,
 }
 
 impl Padding {
@@ -133,11 +140,52 @@ impl Padding {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::mem::{align_of, size_of};
+
+    #[test]
+    fn padding_wrappers_match_raw_layout() {
+        assert_eq!(size_of::<Padding>(), size_of::<mi_padding_t>());
+        assert_eq!(align_of::<Padding>(), align_of::<mi_padding_t>());
+        assert_eq!(size_of::<PaddingPtr>(), size_of::<NonNull<mi_padding_t>>());
+        assert_eq!(
+            align_of::<PaddingPtr>(),
+            align_of::<NonNull<mi_padding_t>>()
+        );
+        assert_eq!(
+            size_of::<Option<PaddingPtr>>(),
+            size_of::<NonNull<mi_padding_t>>()
+        );
+        assert_eq!(size_of::<PaddingCanary>(), size_of::<u32>());
+        assert_eq!(align_of::<PaddingCanary>(), align_of::<u32>());
+        assert_eq!(size_of::<PaddingDelta>(), size_of::<u32>());
+        assert_eq!(align_of::<PaddingDelta>(), align_of::<u32>());
+    }
 
     #[test]
     fn padding_delta_preserves_usable_delta() {
-        let delta = PaddingDelta::for_usable(12, UsableSize::new(16));
+        let delta = PaddingDelta::for_usable(12, UsableSize::new(16)).unwrap();
         assert_eq!(delta.get(), 12);
+    }
+
+    #[test]
+    fn padding_delta_rejects_out_of_range_values() {
+        assert_eq!(PaddingDelta::for_usable(17, UsableSize::new(16)), None);
+        assert_eq!(
+            PaddingDelta::for_usable(u32::MAX as usize + 1, UsableSize::new(usize::MAX)),
+            None
+        );
+    }
+
+    #[test]
+    fn padding_canary_uses_typed_page_and_block() {
+        let page = unsafe { PagePtr::new_unchecked(core::ptr::NonNull::dangling().as_ptr()) };
+        let block = unsafe { BlockPtr::new_unchecked(core::ptr::NonNull::dangling().as_ptr()) };
+        let keys = PageKeys([1, 2]);
+
+        assert_eq!(
+            PaddingCanary::from_page_block_keys(page, block, keys).get(),
+            mi_ptr_encode_canary(page.as_ptr().cast(), block.as_ptr().cast(), &keys.0)
+        );
     }
 
     #[test]

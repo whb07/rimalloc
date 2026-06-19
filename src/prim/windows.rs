@@ -21,7 +21,7 @@ use std::sync::Once;
 
 use crate::bits::{MI_KiB, MI_MiB, MI_SIZE_BITS, mi_clz};
 use crate::init::_mi_preloading;
-use crate::internal::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_page_size};
+use crate::internal::{_mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_page_size_typed};
 use crate::options::{
     _mi_verbose_message, _mi_warning_message_fmt, mi_option_get_clamp, mi_option_is_enabled,
     mi_option_t,
@@ -1209,7 +1209,7 @@ unsafe fn win_virtual_alloc_prim_once(
 
     if addr.is_null()
         && try_alignment > unsafe { win_allocation_granularity }
-        && try_alignment.is_multiple_of(unsafe { _mi_os_page_size() })
+        && try_alignment.is_multiple_of(unsafe { _mi_os_page_size_typed().get() })
         && let Some(virtual_alloc2) = unsafe { pVirtualAlloc2 }
     {
         let mut reqs = MI_MEM_ADDRESS_REQUIREMENTS {
@@ -1455,7 +1455,9 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     is_zero: *mut bool,
     addr: *mut *mut c_void,
 ) -> i32 {
-    crate::mi_assert_internal!(size > 0 && size.is_multiple_of(unsafe { _mi_os_page_size() }));
+    crate::mi_assert_internal!(
+        size > 0 && size.is_multiple_of(unsafe { _mi_os_page_size_typed().get() })
+    );
     crate::mi_assert_internal!(commit || !allow_large);
     crate::mi_assert_internal!(try_alignment > 0);
     if !is_zero.is_null() {

@@ -1,4 +1,10 @@
 //! DT-6: User pointer validation types.
+//!
+//! Block types are intentionally split by validation phase: `AllocatedBlock` and
+//! `FreeBlock` live in `validation_extra` because free-list wrappers consume
+//! them without depending on user-pointer validation internals. `GuardedBlock`
+//! and `BlockForFree` stay here because they are produced only by pointer
+//! classification and validation.
 
 use crate::core_types::{BlockPtr, PagePtr, UserPtr};
 
@@ -19,9 +25,22 @@ pub(crate) enum PointerInvalidReason {
 /// Represents a guarded block that needs special handling.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct GuardedBlock(pub(crate) BlockPtr);
+pub(crate) struct GuardedBlock(BlockPtr);
+
+impl GuardedBlock {
+    #[inline(always)]
+    pub(crate) fn after_guarded_detection(block: BlockPtr) -> Self {
+        Self(block)
+    }
+
+    #[inline(always)]
+    pub(crate) fn block(self) -> BlockPtr {
+        self.0
+    }
+}
 
 /// Location of a pointer within a block.
+#[derive(Clone, Copy)]
 pub(crate) enum PointerLocation {
     BlockStart(BlockPtr),
     Interior {
@@ -74,7 +93,7 @@ impl PointerLocation {
                 offset,
             },
             PointerLocation::Guarded { block, offset } => LocatedBlock {
-                block: block.0,
+                block: block.block(),
                 was_guarded: WasGuarded::Yes,
                 offset,
             },
@@ -90,15 +109,59 @@ impl PointerLocation {
 /// Result of a user pointer lookup.
 pub(crate) enum PointerLookup {
     Null,
-    Valid {
-        user: UserPtr,
-        page: PagePtr,
-        location: PointerLocation,
-    },
+    Valid(ValidPointerLookup),
     Invalid {
         user: Option<UserPtr>,
         reason: PointerInvalidReason,
     },
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ValidPointerLookup {
+    user: UserPtr,
+    page: PagePtr,
+    location: PointerLocation,
+}
+
+impl ValidPointerLookup {
+    #[inline(always)]
+    pub(crate) fn user(self) -> UserPtr {
+        self.user
+    }
+
+    #[inline(always)]
+    pub(crate) fn page(self) -> PagePtr {
+        self.page
+    }
+
+    #[inline(always)]
+    pub(crate) fn location(self) -> PointerLocation {
+        self.location
+    }
+}
+
+impl PointerLookup {
+    #[inline(always)]
+    pub(crate) fn valid(user: UserPtr, page: PagePtr, location: PointerLocation) -> Self {
+        Self::Valid(ValidPointerLookup {
+            user,
+            page,
+            location,
+        })
+    }
+
+    #[inline(always)]
+    pub(crate) fn prepare_free(self) -> Option<ValidatedFree> {
+        let PointerLookup::Valid(valid) = self else {
+            return None;
+        };
+        let user = valid.user();
+        let page = valid.page();
+        let location = valid.location();
+        let located = location.located_block();
+        let block = BlockForFree::new(located.block(), located.was_guarded());
+        Some(ValidatedFree { user, page, block })
+    }
 }
 
 /// Indicates whether a block was guarded before being passed to free.
@@ -116,7 +179,7 @@ pub(crate) struct BlockForFree {
 }
 
 impl BlockForFree {
-    pub(crate) fn new(block: BlockPtr, was_guarded: WasGuarded) -> Self {
+    fn new(block: BlockPtr, was_guarded: WasGuarded) -> Self {
         Self { block, was_guarded }
     }
 
@@ -131,6 +194,11 @@ impl BlockForFree {
     pub(crate) fn is_guarded(self) -> bool {
         self.was_guarded == WasGuarded::Yes
     }
+
+    #[inline(always)]
+    pub(crate) fn into_free_block(self) -> crate::core_types::FreeBlock {
+        unsafe { crate::core_types::validation_extra::FreeBlock::new_unchecked(self.block) }
+    }
 }
 
 /// A fully validated free request ready to be routed.
@@ -142,10 +210,6 @@ pub(crate) struct ValidatedFree {
 }
 
 impl ValidatedFree {
-    pub(crate) fn new(user: UserPtr, page: PagePtr, block: BlockForFree) -> Self {
-        Self { user, page, block }
-    }
-
     pub(crate) fn user(self) -> UserPtr {
         self.user
     }
@@ -156,5 +220,41 @@ impl ValidatedFree {
 
     pub(crate) fn block(self) -> BlockForFree {
         self.block
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{mi_block_t, mi_page_t};
+    use core::mem::MaybeUninit;
+
+    #[test]
+    fn guarded_pointer_lookup_prepares_guarded_free_witnesses() {
+        let mut raw_page = MaybeUninit::<mi_page_t>::zeroed();
+        let mut raw_block = mi_block_t::default();
+        let mut raw_user = 0usize;
+
+        let page = unsafe { PagePtr::new_unchecked(raw_page.as_mut_ptr()) };
+        let block = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(raw_block)) };
+        let user = unsafe { UserPtr::new_unchecked(core::ptr::addr_of_mut!(raw_user).cast()) };
+        let guarded = GuardedBlock::after_guarded_detection(block);
+
+        let lookup = PointerLookup::valid(
+            user,
+            page,
+            PointerLocation::Guarded {
+                block: guarded,
+                offset: BlockOffset(8),
+            },
+        );
+
+        let validated = lookup.prepare_free().expect("valid guarded lookup");
+
+        assert_eq!(validated.page().as_ptr(), page.as_ptr());
+        assert_eq!(validated.user().as_ptr(), user.as_ptr());
+        assert_eq!(validated.block().block().as_ptr(), block.as_ptr());
+        assert!(validated.block().is_guarded());
+        assert_eq!(validated.block().was_guarded(), WasGuarded::Yes);
     }
 }

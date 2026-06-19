@@ -7,6 +7,9 @@ use core::sync::atomic::Ordering;
 use crate::arena::_mi_arena_from_id;
 use crate::arena::{_mi_heap_destroy_pages, _mi_heap_move_pages};
 use crate::atomic::{mi_lock_acquire, mi_lock_done, mi_lock_init, mi_lock_release};
+use crate::core_types::{
+    BorrowedHeap, Errno, HeapPtr, MainHeap, OwnedHeap, PagePtr, ThreadHeapPtr,
+};
 use crate::init::{
     _mi_theap_cached_set, _mi_theap_default_safe, _mi_theap_empty_wrong, mi_heap_main,
 };
@@ -24,7 +27,7 @@ use crate::theap::{_mi_theap_create, _mi_theap_free};
 use crate::threadlocal::{
     _mi_thread_local_create, _mi_thread_local_free, _mi_thread_local_get, _mi_thread_local_set,
 };
-use crate::types::{EFAULT, mi_arena_id_t, mi_heap_t, mi_page_t, mi_theap_t};
+use crate::types::{mi_arena_id_t, mi_heap_t, mi_page_t, mi_theap_t};
 
 const MI_THEAP_TLS_BUSY: *mut mi_theap_t = core::ptr::dangling_mut::<mi_theap_t>();
 
@@ -35,7 +38,19 @@ const MI_THEAP_TLS_BUSY: *mut mi_theap_t = core::ptr::dangling_mut::<mi_theap_t>
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_theap(heap: *mut mi_heap_t) -> *mut mi_theap_t {
     // SAFETY: upheld by the caller contract for this C ABI boundary.
-    unsafe { _mi_heap_theap(heap) }
+    unsafe { mi_heap_theap_typed(HeapPtr::new(heap)) }
+        .map(ThreadHeapPtr::as_ptr)
+        .unwrap_or(ptr::null_mut())
+}
+
+/// # Safety
+///
+/// `heap` must be `None` or point to a live heap object accepted by the
+/// mimalloc heap APIs. Non-null heaps must not be concurrently destroyed.
+#[inline]
+pub(crate) unsafe fn mi_heap_theap_typed(heap: Option<HeapPtr>) -> Option<ThreadHeapPtr> {
+    let heap = heap.map(HeapPtr::as_ptr).unwrap_or(ptr::null_mut());
+    ThreadHeapPtr::new(unsafe { _mi_heap_theap(heap) })
 }
 
 /// # Safety
@@ -46,19 +61,26 @@ pub unsafe extern "C" fn mi_heap_theap(heap: *mut mi_heap_t) -> *mut mi_theap_t 
 pub unsafe extern "C" fn mi_heap_set_numa_affinity(heap: *mut mi_heap_t, numa_node: i32) {
     let heap = if heap.is_null() {
         // SAFETY: null heap selects the process main heap by API contract.
-        unsafe { mi_heap_main() }
+        HeapPtr::new(unsafe { mi_heap_main() })
     } else {
-        heap
+        HeapPtr::new(heap)
     };
     // SAFETY: non-null heap pointers are live and mutable by the caller contract.
     unsafe {
-        let numa_count = _mi_os_numa_node_count();
-        (*heap).numa_node = if numa_node < 0 || numa_count <= 0 {
-            -1
-        } else {
-            numa_node % numa_count
+        let Some(heap) = heap else {
+            return;
         };
+        mi_heap_set_numa_affinity_typed(heap, crate::core_types::NumaNode::new(numa_node));
     }
+}
+
+/// # Safety
+///
+/// `heap` must point to live heap metadata whose NUMA affinity may be mutated.
+#[inline]
+unsafe fn mi_heap_set_numa_affinity_typed(heap: HeapPtr, numa_node: crate::core_types::NumaNode) {
+    let numa_count = unsafe { _mi_os_numa_node_count() };
+    unsafe { heap.set_numa_node(numa_node.normalize(numa_count)) };
 }
 
 /// # Safety
@@ -67,15 +89,21 @@ pub unsafe extern "C" fn mi_heap_set_numa_affinity(heap: *mut mi_heap_t, numa_no
 /// concurrently mutated outside the allocator synchronization rules.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
-    if heap.is_null() {
-        return;
-    }
-    // SAFETY: non-null heap pointers are live by contract; stats merge accepts raw heap stats.
     unsafe {
-        _mi_stats_merge_into(
-            ptr::addr_of_mut!((*mi_heap_main()).stats),
-            ptr::addr_of_mut!((*heap).stats),
-        );
+        let Some(heap) = BorrowedHeap::from_lookup_raw(heap) else {
+            return;
+        };
+        mi_heap_stats_merge_to_main_typed(heap);
+    }
+}
+
+#[inline]
+unsafe fn mi_heap_stats_merge_to_main_typed(heap: BorrowedHeap) {
+    unsafe {
+        let Some(main) = HeapPtr::new(mi_heap_main()) else {
+            return;
+        };
+        _mi_stats_merge_into(main.stats(), heap.ptr().stats());
     }
 }
 
@@ -102,7 +130,7 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
     let theap_slot = _mi_thread_local_create();
     if theap_slot == 0 {
         _mi_error_message_fmt(
-            EFAULT,
+            Errno::EFAULT,
             format_args!("unable to dynamically create a thread local for a heap\n"),
         );
         unsafe { mi_free(heap.cast::<c_void>()) };
@@ -113,11 +141,14 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
     unsafe {
         (*heap).theap = theap_slot;
         (*heap).subproc = (*heap_main).subproc;
-        (*heap).heap_seq = (*(*heap_main).subproc)
-            .heap_total_count
-            .fetch_add(1, Ordering::Relaxed);
+        (*heap).heap_seq = crate::core_types::HeapSeq::new(
+            (*(*heap_main).subproc)
+                .heap_total_count
+                .fetch_add(1, Ordering::Relaxed),
+        )
+        .get();
         (*heap).exclusive_arena = _mi_arena_from_id(exclusive_arena_id);
-        (*heap).numa_node = -1;
+        (*heap).numa_node = crate::core_types::NumaNode::any().get();
         mi_stats_header_init(ptr::addr_of_mut!((*heap).stats));
         mi_lock_init(ptr::addr_of_mut!((*heap).theaps_lock));
         mi_lock_init(ptr::addr_of_mut!((*heap).os_abandoned_pages_lock));
@@ -151,7 +182,8 @@ pub unsafe extern "C" fn mi_heap_new() -> *mut mi_heap_t {
     unsafe { mi_heap_new_in_arena(ptr::null_mut()) }
 }
 
-unsafe fn mi_heap_free_theaps(heap: *mut mi_heap_t) {
+unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
+    let heap = heap.as_ptr();
     // SAFETY: callers pass a live heap whose thread heaps are being deleted/destroyed.
     unsafe {
         loop {
@@ -178,7 +210,12 @@ unsafe fn mi_heap_free_theaps(heap: *mut mi_heap_t) {
     }
 }
 
-unsafe fn mi_heap_free(heap: *mut mi_heap_t) {
+unsafe fn mi_heap_free_theaps(heap: OwnedHeap) {
+    unsafe { mi_heap_free_theaps_in(heap.ptr()) };
+}
+
+unsafe fn mi_heap_free(heap: OwnedHeap) {
+    let heap = heap.ptr().as_ptr();
     // SAFETY: callers pass a non-main heap that is no longer reachable by mutators.
     unsafe {
         crate::mi_assert_internal!(!heap.is_null() && !_mi_is_heap_main(heap));
@@ -226,18 +263,25 @@ unsafe fn mi_heap_free(heap: *mut mi_heap_t) {
 /// and must not be used again after this call returns.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
-    if heap.is_null() {
+    let Some(heap) = HeapPtr::new(heap) else {
         return;
-    }
+    };
     // SAFETY: non-null heap is live by the caller contract.
-    if unsafe { _mi_is_heap_main(heap) } {
+    let Some(heap) = (unsafe { OwnedHeap::new(heap) }) else {
         _mi_warning_message_fmt(format_args!("cannot delete the main heap\n"));
         return;
-    }
+    };
+    // SAFETY: heap deletion owns the non-main heap teardown sequence.
+    unsafe { mi_heap_delete_typed(heap) };
+}
+
+#[inline]
+unsafe fn mi_heap_delete_typed(heap: OwnedHeap) {
+    let heap_raw = heap.ptr().as_ptr();
     // SAFETY: heap deletion owns the non-main heap teardown sequence.
     unsafe {
         mi_heap_free_theaps(heap);
-        _mi_heap_move_pages(heap, mi_heap_main());
+        _mi_heap_move_pages(heap_raw, mi_heap_main());
         mi_heap_free(heap);
     }
 }
@@ -248,16 +292,37 @@ pub unsafe extern "C" fn mi_heap_delete(heap: *mut mi_heap_t) {
 /// after destruction starts, except through allocator teardown internals.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
-    if heap.is_null() {
+    let Some(heap) = HeapPtr::new(heap) else {
         return;
-    }
+    };
     // SAFETY: force-destroy owns teardown of the live heap pointer.
     unsafe {
-        mi_heap_free_theaps(heap);
-        _mi_heap_destroy_pages(heap);
-        if !_mi_is_heap_main(heap) {
-            mi_heap_free(heap);
+        if let Some(heap) = MainHeap::new(heap) {
+            mi_heap_force_destroy_main(heap);
+        } else if let Some(heap) = OwnedHeap::new(heap) {
+            mi_heap_force_destroy_owned(heap);
         }
+    }
+}
+
+#[inline]
+unsafe fn mi_heap_force_destroy_main(heap: MainHeap) {
+    let heap = heap.ptr();
+    // SAFETY: force-destroy owns teardown of this main heap.
+    unsafe {
+        mi_heap_free_theaps_in(heap);
+        _mi_heap_destroy_pages(heap.as_ptr());
+    }
+}
+
+#[inline]
+unsafe fn mi_heap_force_destroy_owned(heap: OwnedHeap) {
+    let heap_ptr = heap.ptr();
+    // SAFETY: force-destroy owns teardown of this non-main heap.
+    unsafe {
+        mi_heap_free_theaps(heap);
+        _mi_heap_destroy_pages(heap_ptr.as_ptr());
+        mi_heap_free(heap);
     }
 }
 
@@ -267,16 +332,16 @@ pub(crate) unsafe extern "C" fn _mi_heap_force_destroy(heap: *mut mi_heap_t) {
 /// and must not be used again after this call returns.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_destroy(heap: *mut mi_heap_t) {
-    if heap.is_null() {
+    let Some(heap) = HeapPtr::new(heap) else {
         return;
-    }
+    };
     // SAFETY: non-null heap is live by the caller contract.
-    if unsafe { _mi_is_heap_main(heap) } {
+    let Some(heap) = (unsafe { OwnedHeap::new(heap) }) else {
         _mi_warning_message_fmt(format_args!("cannot destroy the main heap\n"));
         return;
-    }
+    };
     // SAFETY: non-main heap is live and destroy owns teardown.
-    unsafe { _mi_heap_force_destroy(heap) };
+    unsafe { mi_heap_force_destroy_owned(heap) };
 }
 
 /// # Safety
@@ -326,8 +391,42 @@ pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_vo
 /// arguments must remain valid for allocator ownership inspection.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_void) -> bool {
+    let heap = if heap.is_null() {
+        // SAFETY: null heap selects the main heap by API contract.
+        unsafe { mi_heap_main() }
+    } else {
+        heap
+    };
     // SAFETY: forwards this API's ownership-inspection contract.
-    unsafe { mi_heap_contains(heap.cast_const(), p) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_lookup_raw(heap) }) else {
+        return false;
+    };
+    // SAFETY: heap and pointer arguments remain valid for ownership inspection.
+    unsafe { mi_heap_check_owned_typed(heap, p) }
+}
+
+#[inline]
+unsafe fn mi_heap_check_owned_typed(heap: BorrowedHeap, p: *const c_void) -> bool {
+    // SAFETY: `heap` is a live heap borrowed for this ownership check.
+    if let Some(heap) = unsafe { OwnedHeap::new(heap.ptr()) } {
+        // SAFETY: non-main heap and pointer remain valid for ownership inspection.
+        unsafe { mi_heap_check_owned_owned(heap, p) }
+    } else {
+        // SAFETY: main heap and pointer remain valid for ownership inspection.
+        unsafe { mi_heap_check_owned_borrowed(heap, p) }
+    }
+}
+
+#[inline]
+unsafe fn mi_heap_check_owned_owned(heap: OwnedHeap, p: *const c_void) -> bool {
+    // SAFETY: forwards this API's ownership-inspection contract.
+    core::ptr::eq(heap.ptr().as_ptr().cast_const(), unsafe { mi_heap_of(p) })
+}
+
+#[inline]
+unsafe fn mi_heap_check_owned_borrowed(heap: BorrowedHeap, p: *const c_void) -> bool {
+    // SAFETY: forwards this API's ownership-inspection contract.
+    core::ptr::eq(heap.ptr().as_ptr().cast_const(), unsafe { mi_heap_of(p) })
 }
 
 /// # Safety
@@ -355,30 +454,50 @@ pub unsafe extern "C" fn mi_unsafe_heap_page_is_under_utilized(
     }
     // SAFETY: non-null `p` is suitable for allocator page lookup by API contract.
     unsafe {
+        let heap = if heap.is_null() {
+            None
+        } else {
+            BorrowedHeap::from_lookup_raw(heap)
+        };
         let page = _mi_safe_ptr_page(p);
-        if page.is_null() || (*page).used == (*page).capacity || (*page).capacity < (*page).reserved
+        let Some(page) = PagePtr::new(page) else {
+            return false;
+        };
+        mi_unsafe_heap_page_is_under_utilized_typed(heap, page, perc_threshold)
+    }
+}
+
+#[inline]
+unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
+    heap: Option<BorrowedHeap>,
+    page: PagePtr,
+    perc_threshold: usize,
+) -> bool {
+    unsafe {
+        let page_raw = page.as_ptr();
+        let used = crate::page::mi_page_used_count(page_raw);
+        let capacity = crate::page::mi_page_capacity_count(page_raw);
+        let reserved = crate::page::mi_page_reserved_count(page_raw);
+        if used.get() == capacity.get() || capacity.get() < reserved.get() {
+            return false;
+        }
+        if (*page_raw).prev.is_null() {
+            return false;
+        }
+
+        let Some(page_heap) = HeapPtr::new(mi_page_heap(page_raw)) else {
+            return false;
+        };
+        if let Some(heap) = heap
+            && !core::ptr::eq(page_heap.as_ptr(), heap.ptr().as_ptr())
         {
             return false;
         }
-        if (*page).prev.is_null() {
-            return false;
-        }
 
-        let page_heap = mi_page_heap(page);
-        if page_heap.is_null() {
-            return false;
-        }
-        if !heap.is_null() && !core::ptr::eq(page_heap, heap) {
-            return false;
-        }
-
-        if (*page).capacity == 0 {
-            return false;
-        }
         if perc_threshold >= 100 {
             return true;
         }
-        perc_threshold >= ((100usize * (*page).used as usize) / (*page).capacity as usize)
+        perc_threshold >= ((100usize * used.as_usize()) / capacity.as_usize())
     }
 }
 
@@ -403,7 +522,7 @@ unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap
         crate::mi_assert_internal!((*heap).theap != 0);
         if (*heap).theap == 0 {
             _mi_error_message_fmt(
-                EFAULT,
+                Errno::EFAULT,
                 format_args!("no thread-local reserved for heap ({:p})\n", heap),
             );
             return ptr::null_mut();
@@ -413,7 +532,7 @@ unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap
         if theap.is_null() {
             if !_mi_thread_local_set((*heap).theap, MI_THEAP_TLS_BUSY.cast::<c_void>()) {
                 _mi_error_message_fmt(
-                    EFAULT,
+                    Errno::EFAULT,
                     format_args!("unable to allocate memory for thread local storage\n"),
                 );
                 return ptr::null_mut();
@@ -422,7 +541,7 @@ unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap
             _mi_thread_local_set((*heap).theap, theap.cast::<c_void>());
             if theap.is_null() {
                 _mi_error_message_fmt(
-                    EFAULT,
+                    Errno::EFAULT,
                     format_args!("unable to allocate memory for a thread local heap\n"),
                 );
                 return ptr::null_mut();

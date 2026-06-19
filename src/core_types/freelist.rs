@@ -58,11 +58,6 @@ impl ThreadFreeWord {
     }
 }
 
-pub(crate) struct ThreadFreeSnapshot {
-    head: Option<BlockPtr>,
-    owner: ThreadFreeOwner,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

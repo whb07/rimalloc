@@ -4,6 +4,7 @@
 
 use core::ffi::c_void;
 use core::mem::offset_of;
+use core::num::NonZeroU32;
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering};
 
@@ -13,10 +14,10 @@ use crate::bitmap::{
     mi_bbitmap_setN, mi_bbitmap_size, mi_bbitmap_t, mi_bbitmap_try_find_and_clearN,
     mi_bbitmap_unsafe_setN,
 };
+use crate::core_types::{BlockIndex, MemId, MetaMem};
 use crate::internal::{
     _mi_align_down_ptr, _mi_align_up, _mi_arenas_alloc_aligned, _mi_arenas_free, _mi_divide_up,
-    _mi_is_aligned, _mi_memid_create_meta, _mi_memzero_aligned, _mi_os_alloc, MI_SECURE,
-    mi_memid_t,
+    _mi_is_aligned, _mi_memzero_aligned, _mi_os_alloc, MI_SECURE, mi_memid_t,
 };
 use crate::mimalloc::mi_heap_main;
 use crate::os::{
@@ -38,6 +39,25 @@ pub struct mi_meta_page_s {
 }
 
 pub type mi_meta_page_t = mi_meta_page_s;
+
+#[inline]
+unsafe fn mi_meta_memid(
+    mpage: *mut mi_meta_page_t,
+    block_idx: usize,
+    block_count: usize,
+) -> mi_memid_t {
+    unsafe {
+        crate::mi_assert_internal!(!mpage.is_null());
+        crate::mi_assert_internal!(block_idx <= u32::MAX as usize);
+        crate::mi_assert_internal!(block_count <= u32::MAX as usize);
+        MemId::<MetaMem>::meta(
+            core::ptr::NonNull::new_unchecked(mpage.cast()),
+            BlockIndex(block_idx as u32),
+            NonZeroU32::new_unchecked(block_count as u32),
+        )
+        .into_raw()
+    }
+}
 
 static mi_meta_pages: AtomicPtr<mi_meta_page_t> = AtomicPtr::new(ptr::null_mut());
 
@@ -184,7 +204,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
                 block_count,
                 ptr::addr_of_mut!(block_idx),
             ) {
-                *pmemid = _mi_memid_create_meta(mpage.cast(), block_idx, block_count);
+                *pmemid = mi_meta_memid(mpage, block_idx, block_count);
                 return mi_meta_block_start(mpage, block_idx);
             }
             mpage = mi_meta_page_next(mpage);
@@ -203,7 +223,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
                 block_count,
                 ptr::addr_of_mut!(block_idx),
             ) {
-                *pmemid = _mi_memid_create_meta(mpage.cast(), block_idx, block_count);
+                *pmemid = mi_meta_memid(mpage, block_idx, block_count);
                 return mi_meta_block_start(mpage, block_idx);
             }
         }

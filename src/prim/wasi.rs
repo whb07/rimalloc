@@ -12,7 +12,7 @@ use std::io::{self, Write};
 use crate::internal::{
     _mi_align_up, _mi_align_up_ptr, _mi_preloading, _mi_strlcpy, _mi_strnlen, _mi_toupper,
 };
-use crate::os::_mi_os_page_size;
+use crate::os::_mi_os_page_size_typed;
 use crate::prim::{mi_os_mem_config_t, mi_process_info_t};
 use crate::types::mi_theap_t;
 
@@ -67,7 +67,7 @@ unsafe fn mi_prim_mem_grow(size: usize, try_alignment: usize) -> *mut c_void {
         let aligned_current = _mi_align_up_ptr(current, try_alignment);
         let alloc_size = _mi_align_up(
             ((aligned_current as usize) - (current as usize)).saturating_add(size),
-            _mi_os_page_size(),
+            _mi_os_page_size_typed().get(),
         );
         let base = mi_memory_grow(alloc_size);
         if base.is_null() {

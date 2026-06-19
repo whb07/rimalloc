@@ -117,17 +117,7 @@ unsafe extern "C" {
 }
 
 pub struct mi_atomic_guard_scope_t {
-    guard: *mut mi_atomic_guard_t,
-}
-
-impl Drop for mi_atomic_guard_scope_t {
-    fn drop(&mut self) {
-        // SAFETY: the scope is created only after successfully acquiring the guard and
-        // releases that same guard exactly once on scope exit.
-        unsafe {
-            mi_atomic_store_release(self.guard.cast::<usize>(), 0);
-        }
-    }
+    _guard: crate::core_types::AtomicGuard<'static>,
 }
 
 #[repr(C)]
@@ -155,17 +145,7 @@ impl Default for mi_atomic_once_s {
 }
 
 pub struct mi_atomic_once_scope_t {
-    once: *mut mi_atomic_once_t,
-}
-
-impl Drop for mi_atomic_once_scope_t {
-    fn drop(&mut self) {
-        // SAFETY: the scope is created only after `_mi_atomic_once_enter` succeeds and
-        // must release the same once-state exactly once on scope exit.
-        unsafe {
-            _mi_atomic_once_release(self.once);
-        }
-    }
+    _once: crate::core_types::OnceGuard<'static>,
 }
 
 /// # Safety
@@ -173,12 +153,9 @@ impl Drop for mi_atomic_once_scope_t {
 pub unsafe fn mi_atomic_guard_enter(
     guard: *mut mi_atomic_guard_t,
 ) -> Option<mi_atomic_guard_scope_t> {
-    let mut expected = 0usize;
-    if unsafe { mi_atomic_cas_strong_acq_rel(guard.cast::<usize>(), &mut expected, 1) } {
-        Some(mi_atomic_guard_scope_t { guard })
-    } else {
-        None
-    }
+    let field = crate::core_types::AtomicUsizeField(guard.cast::<usize>());
+    unsafe { crate::core_types::AtomicGuard::try_acquire(field) }
+        .map(|_guard| mi_atomic_guard_scope_t { _guard })
 }
 
 /// # Safety
@@ -186,11 +163,9 @@ pub unsafe fn mi_atomic_guard_enter(
 pub unsafe fn mi_atomic_do_once_enter(
     once: *mut mi_atomic_once_t,
 ) -> Option<mi_atomic_once_scope_t> {
-    if unsafe { _mi_atomic_once_enter(once) } {
-        Some(mi_atomic_once_scope_t { once })
-    } else {
-        None
-    }
+    let state = crate::core_types::OnceStatePtr(once.cast::<usize>());
+    unsafe { crate::core_types::OnceGuard::try_enter(state) }
+        .map(|_once| mi_atomic_once_scope_t { _once })
 }
 
 #[macro_export]
@@ -841,9 +816,9 @@ pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
     let err = unsafe { pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex)) };
     if err != 0 {
         unsafe {
-            crate::options::_mi_error_message(
-                err,
-                c"internal error: lock cannot be acquired\n".as_ptr(),
+            crate::options::_mi_error_message_fmt(
+                crate::core_types::Errno::new(err),
+                format_args!("internal error: lock cannot be acquired\n"),
             )
         };
     }

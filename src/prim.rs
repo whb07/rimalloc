@@ -23,6 +23,7 @@ use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use crate::bits::{MI_GiB, MI_INTPTR_SIZE};
+use crate::core_types::{PagePtr, ThreadHeapPtr};
 use crate::heap::{_mi_heap_theap_get_or_init, _mi_heap_theap_get_peek};
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 use crate::init::_mi_theap_empty;
@@ -33,7 +34,7 @@ use crate::init::{
 #[cfg(target_os = "emscripten")]
 pub(crate) use crate::types::mi_msecs_t;
 pub(crate) use crate::types::mi_process_info_t;
-use crate::types::{mi_heap_t, mi_page_t, mi_theap_t, mi_thread_local_t, mi_threadid_t};
+use crate::types::{mi_heap_t, mi_theap_t, mi_thread_local_t, mi_threadid_t};
 
 pub const MIMALLOC_PRIM_H: () = ();
 pub const MI_USE_SBRK: usize = if cfg!(target_os = "wasi") { 1 } else { 0 };
@@ -152,9 +153,31 @@ unsafe extern "C" {
 #[cfg(target_os = "linux")]
 unsafe extern "C" {
     fn _mi_tls_theap_default_get() -> *mut mi_theap_t;
-    fn _mi_tls_theap_default_set(theap: *mut mi_theap_t);
+    #[link_name = "_mi_tls_theap_default_set"]
+    fn _mi_tls_theap_default_set_raw(theap: *mut c_void);
     fn _mi_tls_theap_cached_get() -> *mut mi_theap_t;
-    fn _mi_tls_theap_cached_set(theap: *mut mi_theap_t);
+    #[link_name = "_mi_tls_theap_cached_set"]
+    fn _mi_tls_theap_cached_set_raw(theap: *mut c_void);
+}
+
+#[cfg(target_os = "linux")]
+#[inline(always)]
+unsafe fn _mi_tls_theap_default_set(theap: Option<ThreadHeapPtr>) {
+    let theap = theap
+        .map(ThreadHeapPtr::as_ptr)
+        .unwrap_or(ptr::null_mut())
+        .cast();
+    unsafe { _mi_tls_theap_default_set_raw(theap) };
+}
+
+#[cfg(target_os = "linux")]
+#[inline(always)]
+unsafe fn _mi_tls_theap_cached_set(theap: Option<ThreadHeapPtr>) {
+    let theap = theap
+        .map(ThreadHeapPtr::as_ptr)
+        .unwrap_or(ptr::null_mut())
+        .cast();
+    unsafe { _mi_tls_theap_cached_set_raw(theap) };
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
@@ -175,7 +198,8 @@ unsafe fn mi_linux_x64_theap_default_get() -> *mut mi_theap_t {
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
 #[inline(always)]
-unsafe fn mi_linux_x64_theap_default_set(theap: *mut mi_theap_t) {
+unsafe fn mi_linux_x64_theap_default_set(theap: Option<ThreadHeapPtr>) {
+    let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
     unsafe {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + __mi_theap_default@GOTTPOFF]",
@@ -205,7 +229,8 @@ unsafe fn mi_linux_x64_theap_cached_get() -> *mut mi_theap_t {
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
 #[inline(always)]
-unsafe fn mi_linux_x64_theap_cached_set(theap: *mut mi_theap_t) {
+unsafe fn mi_linux_x64_theap_cached_set(theap: Option<ThreadHeapPtr>) {
+    let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
     unsafe {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + __mi_theap_cached@GOTTPOFF]",
@@ -420,7 +445,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
 }
 
 #[inline]
-pub(crate) fn mi_prim_thread_local_default_set(theap: *mut mi_theap_t) {
+pub(crate) fn mi_prim_thread_local_default_set(theap: Option<ThreadHeapPtr>) {
     if MI_TLS_MODEL_THREAD_LOCAL {
         #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
         unsafe {
@@ -434,12 +459,13 @@ pub(crate) fn mi_prim_thread_local_default_set(theap: *mut mi_theap_t) {
             _mi_tls_theap_default_set(theap);
         }
         #[cfg(not(target_os = "linux"))]
-        TLS_THEAP_DEFAULT.with(|cell| cell.set(theap));
+        TLS_THEAP_DEFAULT
+            .with(|cell| cell.set(theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut())));
     }
 }
 
 #[inline]
-pub(crate) fn mi_prim_thread_local_cached_set(theap: *mut mi_theap_t) {
+pub(crate) fn mi_prim_thread_local_cached_set(theap: Option<ThreadHeapPtr>) {
     if MI_TLS_MODEL_THREAD_LOCAL {
         #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
         unsafe {
@@ -453,7 +479,8 @@ pub(crate) fn mi_prim_thread_local_cached_set(theap: *mut mi_theap_t) {
             _mi_tls_theap_cached_set(theap);
         }
         #[cfg(not(target_os = "linux"))]
-        TLS_THEAP_CACHED.with(|cell| cell.set(theap));
+        TLS_THEAP_CACHED
+            .with(|cell| cell.set(theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut())));
     }
 }
 
@@ -495,7 +522,8 @@ pub unsafe fn _mi_heap_theap_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
 ///
 /// `page` must point to a valid page object managed by this allocator.
 #[inline]
-pub unsafe fn _mi_page_associated_theap_peek(page: *mut mi_page_t) -> *mut mi_theap_t {
+pub(crate) unsafe fn _mi_page_associated_theap_peek(page: PagePtr) -> Option<ThreadHeapPtr> {
+    let page = page.as_ptr();
     let heap = unsafe { (*page).heap };
     let theap = if heap.is_null() {
         crate::init::mi_theap_main_tls_peek()
@@ -505,7 +533,7 @@ pub unsafe fn _mi_page_associated_theap_peek(page: *mut mi_page_t) -> *mut mi_th
     crate::mi_assert_internal!(
         theap.is_null() || crate::init::_mi_thread_id() == unsafe { (*(*theap).tld).thread_id }
     );
-    theap
+    ThreadHeapPtr::new(theap)
 }
 
 /// # Safety
@@ -611,12 +639,12 @@ mod tests {
     fn linux_theap_tls_shim_stores_empty_sentinel() {
         unsafe {
             let marker = super::__mi_theap_empty();
-            super::_mi_tls_theap_default_set(marker);
-            super::_mi_tls_theap_cached_set(marker);
+            super::_mi_tls_theap_default_set(crate::core_types::ThreadHeapPtr::new(marker));
+            super::_mi_tls_theap_cached_set(crate::core_types::ThreadHeapPtr::new(marker));
             assert_eq!(super::_mi_tls_theap_default_get(), marker);
             assert_eq!(super::_mi_tls_theap_cached_get(), marker);
-            super::_mi_tls_theap_default_set(core::ptr::null_mut());
-            super::_mi_tls_theap_cached_set(core::ptr::null_mut());
+            super::_mi_tls_theap_default_set(None);
+            super::_mi_tls_theap_cached_set(None);
         }
     }
 
@@ -624,18 +652,22 @@ mod tests {
     #[test]
     fn linux_theap_tls_accessors_map_null_to_empty() {
         unsafe {
-            super::_mi_tls_theap_default_set(core::ptr::null_mut());
-            super::_mi_tls_theap_cached_set(core::ptr::null_mut());
+            super::_mi_tls_theap_default_set(None);
+            super::_mi_tls_theap_cached_set(None);
             assert_eq!(super::_mi_theap_default(), super::__mi_theap_empty());
             assert_eq!(super::_mi_theap_cached(), super::__mi_theap_empty());
 
-            super::_mi_tls_theap_default_set(super::__mi_theap_empty());
-            super::_mi_tls_theap_cached_set(super::__mi_theap_empty());
+            super::_mi_tls_theap_default_set(crate::core_types::ThreadHeapPtr::new(
+                super::__mi_theap_empty(),
+            ));
+            super::_mi_tls_theap_cached_set(crate::core_types::ThreadHeapPtr::new(
+                super::__mi_theap_empty(),
+            ));
             assert_eq!(super::_mi_theap_default(), super::__mi_theap_empty());
             assert_eq!(super::_mi_theap_cached(), super::__mi_theap_empty());
 
-            super::_mi_tls_theap_default_set(core::ptr::null_mut());
-            super::_mi_tls_theap_cached_set(core::ptr::null_mut());
+            super::_mi_tls_theap_default_set(None);
+            super::_mi_tls_theap_cached_set(None);
         }
     }
 

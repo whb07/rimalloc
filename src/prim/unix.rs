@@ -19,7 +19,8 @@ use crate::internal::{
 };
 use crate::options::{_mi_warning_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::os::{
-    _mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_has_overcommit, _mi_os_page_size,
+    _mi_os_canuse_large_page, _mi_os_get_aligned_hint, _mi_os_has_overcommit,
+    _mi_os_page_size_typed,
 };
 use crate::prim::{mi_os_mem_config_t, mi_process_info_t};
 use crate::types::{mi_msecs_t, mi_theap_t};
@@ -633,7 +634,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc(
     addr: *mut *mut c_void,
 ) -> c_int {
     unsafe {
-        crate::mi_assert_internal!(size > 0 && size.is_multiple_of(_mi_os_page_size()));
+        crate::mi_assert_internal!(size > 0 && size.is_multiple_of(_mi_os_page_size_typed().get()));
         crate::mi_assert_internal!(commit || !allow_large);
         crate::mi_assert_internal!(try_alignment > 0);
         if !is_zero.is_null() {

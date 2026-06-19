@@ -12,6 +12,7 @@ use crate::bitmap::{
     mi_bitmap_try_find_and_claim, mi_bitmap_unsafe_setN,
 };
 use crate::bits::MI_SIZE_BITS;
+use crate::core_types::{ArenaPtr, SliceIndex, ThreadLocalClaimCallback, ThreadSeq};
 use crate::mimalloc::{mi_free, mi_rezalloc, mi_zalloc_aligned};
 use crate::types::{mi_arena_t, mi_thread_local_t, mi_thread_locals_t, mi_tls_slot_t};
 
@@ -227,34 +228,59 @@ fn mi_thread_local_set_expand(key: mi_thread_local_t, val: *mut core::ffi::c_voi
     true
 }
 
+struct ThreadLocalKeepSet(ptr::NonNull<bool>);
+
+impl ThreadLocalKeepSet {
+    /// # Safety
+    /// `keep_set` must be valid for a `bool` write.
+    #[inline(always)]
+    unsafe fn from_raw(keep_set: *mut bool) -> Self {
+        crate::mi_assert_internal!(!keep_set.is_null());
+        Self(unsafe { ptr::NonNull::new_unchecked(keep_set) })
+    }
+
+    #[inline(always)]
+    fn clear(self) {
+        unsafe {
+            *self.0.as_ptr() = false;
+        }
+    }
+}
+
 #[inline]
 unsafe extern "C" fn mi_thread_local_claim_fun(
-    _slice_index: usize,
-    _arena: *mut mi_arena_t,
+    slice_index: usize,
+    arena: *mut mi_arena_t,
     keep_set: *mut bool,
 ) -> bool {
     unsafe {
-        *keep_set = false;
+        mi_thread_local_claim_fun_typed(
+            SliceIndex::new(slice_index),
+            ArenaPtr::new(arena),
+            ThreadLocalKeepSet::from_raw(keep_set),
+        )
     }
+}
+
+#[inline(always)]
+fn mi_thread_local_claim_fun_typed(
+    _slice_index: SliceIndex,
+    _arena: Option<ArenaPtr>,
+    keep_set: ThreadLocalKeepSet,
+) -> bool {
+    keep_set.clear();
     true
 }
 
 fn mi_thread_local_claim() -> mi_thread_local_t {
     let slots = mi_thread_locals_free.load(Ordering::Acquire);
-    let mut idx = 0usize;
+    let mut idx = SliceIndex::new(0);
     if slots.is_null() {
         return 0;
     }
-    let mut claim_fun: crate::types::mi_claim_fun_t = mi_thread_local_claim_fun;
-    if unsafe {
-        mi_bitmap_try_find_and_claim(
-            slots,
-            0,
-            &mut idx as *mut usize,
-            &mut claim_fun as *mut crate::types::mi_claim_fun_t,
-            ptr::null_mut(),
-        )
-    } {
+    let claim_fun = ThreadLocalClaimCallback::new(mi_thread_local_claim_fun);
+    if unsafe { mi_bitmap_try_find_and_claim(slots, ThreadSeq::new(0), &mut idx, claim_fun, None) }
+    {
         let mut version = mi_thread_locals_version
             .load(Ordering::Relaxed)
             .wrapping_add(1);
@@ -262,7 +288,7 @@ fn mi_thread_local_claim() -> mi_thread_local_t {
             version = 1;
         }
         mi_thread_locals_version.store(version, Ordering::Relaxed);
-        mi_key_create(idx, version)
+        mi_key_create(idx.get(), version)
     } else {
         0
     }

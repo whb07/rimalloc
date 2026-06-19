@@ -66,8 +66,20 @@ pub(crate) enum HeapMainMem {}
 /// Safely wraps the raw `mi_memid_t` with a phantom tag proving its valid discriminator.
 #[repr(transparent)]
 pub(crate) struct MemId<K = AnyMem> {
-    pub(crate) raw: crate::internal::mi_memid_t,
+    raw: crate::internal::mi_memid_t,
     _kind: PhantomData<K>,
+}
+
+impl<K> MemId<K> {
+    #[inline(always)]
+    pub(crate) const fn into_raw(self) -> crate::internal::mi_memid_t {
+        self.raw
+    }
+
+    #[inline(always)]
+    pub(crate) const fn as_raw(&self) -> crate::internal::mi_memid_t {
+        self.raw
+    }
 }
 
 pub(crate) enum MemIdView {
@@ -93,7 +105,7 @@ impl MemId<AnyMem> {
                 let os = unsafe { raw.mem.os };
                 MemIdView::External(ExternalMemId {
                     base: OsMemPtr::new(os.base),
-                    size: ReservedBytes(os.size),
+                    size: ReservedBytes::new(os.size),
                     initially_committed: InitiallyCommitted(raw.initially_committed),
                     initially_zero: InitiallyZero(raw.initially_zero),
                     pinned: Pinned(raw.is_pinned),
@@ -108,8 +120,11 @@ impl MemId<AnyMem> {
                 let Some(block_count) = core::num::NonZeroU32::new(m.block_count) else {
                     return MemIdView::Unknown(code);
                 };
+                let Some(meta_page) = NonNull::new(m.meta_page) else {
+                    return MemIdView::Unknown(code);
+                };
                 MemIdView::Meta(MetaMemId {
-                    meta_page: unsafe { NonNull::new_unchecked(m.meta_page) },
+                    meta_page,
                     block_index: BlockIndex(m.block_index),
                     block_count,
                 })
@@ -118,7 +133,7 @@ impl MemId<AnyMem> {
                 let os = unsafe { raw.mem.os };
                 MemIdView::Os(OsMemId {
                     base: OsMemPtr::new(os.base),
-                    size: ReservedBytes(os.size),
+                    size: ReservedBytes::new(os.size),
                     initially_committed: InitiallyCommitted(raw.initially_committed),
                     initially_zero: InitiallyZero(raw.initially_zero),
                     pinned: Pinned(raw.is_pinned),
@@ -131,9 +146,15 @@ impl MemId<AnyMem> {
             }
             MemKind::Arena => {
                 let a = unsafe { raw.mem.arena };
+                let Some(arena) = ArenaPtr::new(a.arena) else {
+                    return MemIdView::Unknown(code);
+                };
+                let Ok(range) = SliceRange::from_raw(a.slice_index, a.slice_count) else {
+                    return MemIdView::Unknown(code);
+                };
                 MemIdView::Arena(ArenaMemId {
-                    arena: unsafe { ArenaPtr::new_unchecked(a.arena) },
-                    range: SliceRange::from_raw(a.slice_index, a.slice_count),
+                    arena,
+                    range,
                     initially_committed: InitiallyCommitted(raw.initially_committed),
                     initially_zero: InitiallyZero(raw.initially_zero),
                     pinned: Pinned(raw.is_pinned),
@@ -188,6 +209,26 @@ impl MemId<StaticMem> {
     }
 }
 
+impl MemId<HeapMainMem> {
+    pub(crate) const fn heap_main() -> Self {
+        Self {
+            raw: crate::internal::mi_memid_t {
+                mem: crate::internal::mi_memid_mem_t {
+                    os: crate::internal::mi_memid_os_info_t {
+                        base: core::ptr::null_mut(),
+                        size: 0,
+                    },
+                },
+                is_pinned: false,
+                initially_committed: false,
+                initially_zero: false,
+                memkind: crate::internal::mi_memkind_t::MI_MEM_HEAP_MAIN as _,
+            },
+            _kind: PhantomData,
+        }
+    }
+}
+
 impl MemId<OsMem> {
     pub(crate) fn os(
         base: Option<OsMemPtr>,
@@ -207,6 +248,16 @@ impl MemId<OsMem> {
         pinned: Pinned,
     ) -> Self {
         Self::os_with_kind(base, size, committed, zero, pinned, OsMemKind::Huge)
+    }
+
+    pub(crate) fn os_remap(
+        base: Option<OsMemPtr>,
+        size: ReservedBytes,
+        committed: InitiallyCommitted,
+        zero: InitiallyZero,
+        pinned: Pinned,
+    ) -> Self {
+        Self::os_with_kind(base, size, committed, zero, pinned, OsMemKind::Remap)
     }
 
     fn os_with_kind(
@@ -266,19 +317,25 @@ impl MemId<ExternalMem> {
 }
 
 impl MemId<ArenaMem> {
-    pub(crate) fn arena(arena: ArenaPtr, range: SliceRange) -> Self {
+    pub(crate) fn arena(
+        arena: ArenaPtr,
+        range: SliceRange,
+        committed: InitiallyCommitted,
+        zero: InitiallyZero,
+        pinned: Pinned,
+    ) -> Self {
         Self {
             raw: crate::internal::mi_memid_t {
                 mem: crate::internal::mi_memid_mem_t {
                     arena: crate::internal::mi_memid_arena_info_t {
                         arena: arena.as_ptr(),
-                        slice_index: range.start().0 as u32,
-                        slice_count: range.count().0.get(),
+                        slice_index: range.start_u32(),
+                        slice_count: range.count_u32(),
                     },
                 },
-                is_pinned: false,
-                initially_committed: false, // Default false until proven
-                initially_zero: false,      // Default false until proven
+                is_pinned: pinned.0,
+                initially_committed: committed.0,
+                initially_zero: zero.0,
                 memkind: crate::internal::mi_memkind_t::MI_MEM_ARENA as _,
             },
             _kind: PhantomData,
@@ -313,8 +370,49 @@ impl MemId<MetaMem> {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BlockIndex(pub(crate) u32);
-#[derive(Clone, Copy, Debug)]
+
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub(crate) struct ReservedBytes(pub(crate) usize);
+
+impl ReservedBytes {
+    #[inline(always)]
+    pub(crate) const fn new(size: usize) -> Self {
+        Self(size)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn get(self) -> usize {
+        self.0
+    }
+
+    #[inline(always)]
+    pub(crate) const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub(crate) struct CommittedBytes(pub(crate) usize);
+
+impl CommittedBytes {
+    #[inline(always)]
+    pub(crate) const fn new(size: usize) -> Self {
+        Self(size)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn get(self) -> usize {
+        self.0
+    }
+
+    #[inline(always)]
+    pub(crate) const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InitiallyCommitted(pub(crate) bool);
 #[derive(Clone, Copy, Debug)]
@@ -364,6 +462,7 @@ mod tests {
     use super::*;
     use core::ffi::c_void;
     use core::mem::MaybeUninit;
+    use core::ptr;
 
     #[test]
     fn memkind_code_maps_known_and_unknown_values() {
@@ -386,23 +485,64 @@ mod tests {
     fn os_memid_round_trips_through_view() {
         let mut byte = 0u8;
         let base = unsafe { OsMemPtr::new_unchecked((&mut byte as *mut u8).cast::<c_void>()) };
+        let normal = MemId::<OsMem>::os(
+            Some(base),
+            ReservedBytes::new(2048),
+            InitiallyCommitted(false),
+            InitiallyZero(true),
+            Pinned(false),
+        );
+
+        let MemIdView::Os(view) = MemId::<AnyMem>::view(normal.as_raw()) else {
+            panic!("expected normal OS memid view");
+        };
+        assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
+        assert_eq!(view.size.get(), 2048);
+        assert!(!view.initially_committed.0);
+        assert!(view.initially_zero.0);
+        assert!(!view.pinned.0);
+        assert!(matches!(view.kind, OsMemKind::Normal));
+
         let memid = MemId::<OsMem>::os_huge(
             Some(base),
-            ReservedBytes(4096),
+            ReservedBytes::new(4096),
             InitiallyCommitted(true),
             InitiallyZero(false),
             Pinned(true),
         );
 
-        let MemIdView::Os(view) = MemId::<AnyMem>::view(memid.raw) else {
+        let MemIdView::Os(view) = MemId::<AnyMem>::view(memid.as_raw()) else {
             panic!("expected OS memid view");
         };
         assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
-        assert_eq!(view.size.0, 4096);
+        assert_eq!(view.size.get(), 4096);
         assert!(view.initially_committed.0);
         assert!(!view.initially_zero.0);
         assert!(view.pinned.0);
         assert!(matches!(view.kind, OsMemKind::Huge));
+    }
+
+    #[test]
+    fn os_remap_memid_round_trips_through_view() {
+        let mut byte = 0u8;
+        let base = unsafe { OsMemPtr::new_unchecked((&mut byte as *mut u8).cast::<c_void>()) };
+        let memid = MemId::<OsMem>::os_remap(
+            Some(base),
+            ReservedBytes::new(16384),
+            InitiallyCommitted(false),
+            InitiallyZero(true),
+            Pinned(false),
+        );
+
+        let MemIdView::Os(view) = MemId::<AnyMem>::view(memid.as_raw()) else {
+            panic!("expected OS remap memid view");
+        };
+        assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
+        assert_eq!(view.size.get(), 16384);
+        assert!(!view.initially_committed.0);
+        assert!(view.initially_zero.0);
+        assert!(!view.pinned.0);
+        assert!(matches!(view.kind, OsMemKind::Remap));
     }
 
     #[test]
@@ -411,31 +551,30 @@ mod tests {
         let base = unsafe { OsMemPtr::new_unchecked((&mut byte as *mut u8).cast::<c_void>()) };
         let external = MemId::<ExternalMem>::external(
             Some(base),
-            ReservedBytes(8192),
+            ReservedBytes::new(8192),
             InitiallyCommitted(false),
             InitiallyZero(true),
             Pinned(false),
         );
 
-        let MemIdView::External(view) = MemId::<AnyMem>::view(external.raw) else {
+        let MemIdView::External(view) = MemId::<AnyMem>::view(external.as_raw()) else {
             panic!("expected external memid view");
         };
         assert_eq!(view.base.map(OsMemPtr::as_ptr), Some(base.as_ptr()));
-        assert_eq!(view.size.0, 8192);
+        assert_eq!(view.size.get(), 8192);
         assert!(!view.initially_committed.0);
         assert!(view.initially_zero.0);
         assert!(!view.pinned.0);
 
         let mut meta_byte = 0u8;
-        let meta_page =
-            unsafe { NonNull::new_unchecked((&mut meta_byte as *mut u8).cast::<c_void>()) };
+        let meta_page = NonNull::new((&mut meta_byte as *mut u8).cast::<c_void>()).unwrap();
         let meta = MemId::<MetaMem>::meta(
             meta_page,
             BlockIndex(7),
             core::num::NonZeroU32::new(3).unwrap(),
         );
 
-        let MemIdView::Meta(view) = MemId::<AnyMem>::view(meta.raw) else {
+        let MemIdView::Meta(view) = MemId::<AnyMem>::view(meta.as_raw()) else {
             panic!("expected meta memid view");
         };
         assert_eq!(view.meta_page, meta_page);
@@ -447,17 +586,120 @@ mod tests {
     fn arena_memid_round_trips_slice_metadata() {
         let mut arena = MaybeUninit::<crate::types::mi_arena_t>::uninit();
         let arena_ptr = unsafe { ArenaPtr::new_unchecked(arena.as_mut_ptr()) };
+        unsafe {
+            arena_ptr.set_slice_count(crate::core_types::SliceCount::from_usize(32).unwrap());
+        }
         let range = SliceRange::new(11, 5, arena_ptr).unwrap();
-        let memid = MemId::<ArenaMem>::arena(arena_ptr, range);
+        let memid = MemId::<ArenaMem>::arena(
+            arena_ptr,
+            range,
+            InitiallyCommitted(true),
+            InitiallyZero(false),
+            Pinned(true),
+        );
 
-        let MemIdView::Arena(view) = MemId::<AnyMem>::view(memid.raw) else {
+        let MemIdView::Arena(view) = MemId::<AnyMem>::view(memid.as_raw()) else {
             panic!("expected arena memid view");
         };
         assert_eq!(view.arena.as_ptr(), arena_ptr.as_ptr());
         assert_eq!(view.range.start_usize(), 11);
         assert_eq!(view.range.count_usize(), 5);
-        assert!(!view.initially_committed.0);
+        assert!(view.initially_committed.0);
         assert!(!view.initially_zero.0);
-        assert!(!view.pinned.0);
+        assert!(view.pinned.0);
+    }
+
+    #[test]
+    fn heap_main_memid_round_trips_through_view() {
+        let memid = MemId::<HeapMainMem>::heap_main();
+
+        let MemIdView::HeapMain(view) = MemId::<AnyMem>::view(memid.as_raw()) else {
+            panic!("expected heap-main memid view");
+        };
+        assert_eq!(
+            view.as_raw().memkind,
+            crate::internal::mi_memkind_t::MI_MEM_HEAP_MAIN as _
+        );
+    }
+
+    #[test]
+    fn memid_view_returns_unknown_for_null_meta_or_arena_union_pointers() {
+        let null_meta = crate::internal::mi_memid_t {
+            mem: crate::internal::mi_memid_mem_t {
+                meta: crate::internal::mi_memid_meta_info_t {
+                    meta_page: ptr::null_mut(),
+                    block_index: 0,
+                    block_count: 1,
+                },
+            },
+            is_pinned: true,
+            initially_committed: true,
+            initially_zero: true,
+            memkind: crate::internal::mi_memkind_t::MI_MEM_META as _,
+        };
+        let MemIdView::Unknown(code) = MemId::<AnyMem>::view(null_meta) else {
+            panic!("expected unknown view for null meta page");
+        };
+        assert_eq!(code, MemKindCode::META);
+
+        let null_arena = crate::internal::mi_memid_t {
+            mem: crate::internal::mi_memid_mem_t {
+                arena: crate::internal::mi_memid_arena_info_t {
+                    arena: ptr::null_mut(),
+                    slice_index: 0,
+                    slice_count: 1,
+                },
+            },
+            is_pinned: false,
+            initially_committed: false,
+            initially_zero: false,
+            memkind: crate::internal::mi_memkind_t::MI_MEM_ARENA as _,
+        };
+        let MemIdView::Unknown(code) = MemId::<AnyMem>::view(null_arena) else {
+            panic!("expected unknown view for null arena pointer");
+        };
+        assert_eq!(code, MemKindCode::ARENA);
+    }
+
+    #[test]
+    fn memid_view_returns_unknown_for_invalid_arena_slice_range() {
+        let mut arena = MaybeUninit::<crate::types::mi_arena_t>::uninit();
+        let arena = arena.as_mut_ptr();
+
+        let zero_count = crate::internal::mi_memid_t {
+            mem: crate::internal::mi_memid_mem_t {
+                arena: crate::internal::mi_memid_arena_info_t {
+                    arena,
+                    slice_index: 0,
+                    slice_count: 0,
+                },
+            },
+            is_pinned: false,
+            initially_committed: false,
+            initially_zero: false,
+            memkind: crate::internal::mi_memkind_t::MI_MEM_ARENA as _,
+        };
+        let MemIdView::Unknown(code) = MemId::<AnyMem>::view(zero_count) else {
+            panic!("expected unknown view for zero arena slice count");
+        };
+        assert_eq!(code, MemKindCode::ARENA);
+
+        let overflow = crate::internal::mi_memid_t {
+            mem: crate::internal::mi_memid_mem_t {
+                arena: crate::internal::mi_memid_arena_info_t {
+                    arena,
+                    slice_index: u32::MAX,
+                    slice_count: 1,
+                },
+            },
+            is_pinned: false,
+            initially_committed: false,
+            initially_zero: false,
+            memkind: crate::internal::mi_memkind_t::MI_MEM_ARENA as _,
+        };
+        let MemIdView::Unknown(code) = MemId::<AnyMem>::view(overflow) else {
+            panic!("expected unknown view for overflowing arena slice range");
+        };
+        assert_eq!(code, MemKindCode::ARENA);
     }
 }

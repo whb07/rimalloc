@@ -10,9 +10,12 @@ use core::{mem::size_of, ptr};
 use crate::atomic::{
     mi_atomic_addi64_relaxed, mi_atomic_maxi64_relaxed, mi_atomic_void_addi64_relaxed, mi_lock_t,
 };
-use crate::core_types::RequestedSize;
+use crate::core_types::{
+    Bin, BorrowedHeap, HeapPtr, OutputCallback, OutputCallbackArg, RequestedSize, StatsBin,
+    SubprocPtr, ThreadHeapLocal, ThreadHeapPtr,
+};
 use crate::init::_mi_subproc_main;
-use crate::internal::{_mi_memzero, _mi_theap_heap, mi_memid_t, mi_theap_is_initialized};
+use crate::internal::{_mi_memzero, mi_memid_t, mi_theap_is_initialized};
 use crate::mimalloc::mi_rezalloc;
 use crate::mimalloc::{mi_heap_main, mi_subproc_current, mi_subproc_visit_heaps};
 use crate::options::{_mi_fprintf, _mi_fputs};
@@ -228,10 +231,19 @@ macro_rules! MI_STAT_COUNTER {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
-    if bin > MI_BIN_HUGE {
+    let Some(typed_bin) = u16::try_from(bin).ok().and_then(StatsBin::new) else {
         return 0;
-    }
-    _mi_bin_size(bin)
+    };
+    mi_stats_get_bin_size_from_raw(bin, typed_bin).get()
+}
+
+fn mi_stats_get_bin_size_from_raw(bin: usize, typed_bin: StatsBin) -> StatBinSize {
+    crate::mi_debug_assert!(bin == typed_bin.as_usize());
+    StatBinSize(_mi_bin_size(bin))
+}
+
+fn mi_stats_get_bin_size_typed(bin: StatsBin) -> StatBinSize {
+    StatBinSize(_mi_bin_size(stats_bin_as_bin(bin).as_usize()))
 }
 
 fn mi_stat_update_mt(stat: &mut mi_stat_count_t, amount: i64) {
@@ -481,8 +493,9 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
         let src_malloc_bins =
             unsafe { ptr::addr_of!((*src).malloc_bins).cast::<mi_stat_count_t>() };
         for i in 0..=MI_BIN_HUGE {
-            mi_stat_count_add_mt(unsafe { stats_malloc_bins.add(i) }, unsafe {
-                src_malloc_bins.add(i)
+            let bin = unsafe { StatsBin::new_unchecked(i as u16) };
+            mi_stat_count_add_mt(unsafe { stats_malloc_bins.add(bin.as_usize()) }, unsafe {
+                src_malloc_bins.add(bin.as_usize())
             });
         }
     }
@@ -490,8 +503,9 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
         unsafe { ptr::addr_of_mut!((*stats).page_bins).cast::<mi_stat_count_t>() };
     let src_page_bins = unsafe { ptr::addr_of!((*src).page_bins).cast::<mi_stat_count_t>() };
     for i in 0..=MI_BIN_HUGE {
-        mi_stat_count_add_mt(unsafe { stats_page_bins.add(i) }, unsafe {
-            src_page_bins.add(i)
+        let bin = unsafe { StatsBin::new_unchecked(i as u16) };
+        mi_stat_count_add_mt(unsafe { stats_page_bins.add(bin.as_usize()) }, unsafe {
+            src_page_bins.add(bin.as_usize())
         });
     }
 }
@@ -631,6 +645,134 @@ pub struct mi_heap_print_visit_info_s {
 
 pub type mi_heap_print_visit_info_t = mi_heap_print_visit_info_s;
 
+#[derive(Clone, Copy)]
+struct HeapPrintVisitInfo {
+    out: OutputCallback,
+    out_arg: OutputCallbackArg,
+}
+
+impl HeapPrintVisitInfo {
+    #[inline(always)]
+    fn from_raw(info: &mi_heap_print_visit_info_t) -> Self {
+        Self {
+            out: OutputCallback::new(info.out),
+            out_arg: OutputCallbackArg::from_raw(info.out_arg),
+        }
+    }
+}
+
+struct HeapAggregateVisitInfo<'a> {
+    stats: &'a mut mi_stats_t,
+}
+
+#[derive(Clone, Copy)]
+struct JsonBufferSize(usize);
+
+impl JsonBufferSize {
+    #[inline(always)]
+    fn get(self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy)]
+struct JsonBufferPtr(*mut c_char);
+
+impl JsonBufferPtr {
+    #[inline(always)]
+    fn as_ptr(self) -> *mut c_char {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy)]
+struct JsonOutputBuffer {
+    size: JsonBufferSize,
+    ptr: JsonBufferPtr,
+}
+
+#[derive(Clone, Copy)]
+struct StatCountValue(i64);
+
+impl StatCountValue {
+    #[inline(always)]
+    fn get(self) -> i64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StatByteValue(i64);
+
+impl StatByteValue {
+    #[inline(always)]
+    fn get(self) -> i64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StatCountSnapshot {
+    total: StatCountValue,
+    peak: StatCountValue,
+    current: StatCountValue,
+}
+
+impl StatCountSnapshot {
+    #[inline(always)]
+    fn from_stat(stat: &mi_stat_count_t) -> Self {
+        Self {
+            total: StatCountValue(stat.total),
+            peak: StatCountValue(stat.peak),
+            current: StatCountValue(stat.current),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StatCounterSnapshot {
+    total: StatCountValue,
+}
+
+impl StatCounterSnapshot {
+    #[inline(always)]
+    fn from_stat(stat: &mi_stat_counter_t) -> Self {
+        Self {
+            total: StatCountValue(stat.total),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StatBinSize(usize);
+
+impl StatBinSize {
+    #[inline(always)]
+    fn as_bytes(self) -> StatByteValue {
+        StatByteValue(self.0 as i64)
+    }
+
+    #[inline(always)]
+    fn get(self) -> usize {
+        self.0
+    }
+}
+
+#[inline(always)]
+fn stats_bin_iter() -> impl Iterator<Item = StatsBin> {
+    (0..=MI_BIN_HUGE).map(|index| {
+        crate::mi_debug_assert!(u16::try_from(index).is_ok());
+        // SAFETY: the range is bounded by `MI_BIN_HUGE`.
+        unsafe { StatsBin::new_unchecked(index as u16) }
+    })
+}
+
+#[inline(always)]
+fn stats_bin_as_bin(bin: StatsBin) -> Bin {
+    // SAFETY: every stats bin is within mimalloc's regular bin table.
+    unsafe { Bin::new_unchecked(bin.get()) }
+}
+
 fn c_char_buffer_str(buf: &[c_char]) -> &str {
     // SAFETY: fixed formatting buffers are written only from ASCII format fragments and
     // always NUL-terminated by `mi_vsnprintf_args`.
@@ -734,26 +876,27 @@ fn mi_stat_print_ex(
     arg: *mut c_void,
     notok: Option<&str>,
 ) {
+    let stat = StatCountSnapshot::from_stat(stat);
     _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
     if unit != 0 {
         if unit > 0 {
-            mi_print_amount(stat.peak, unit, out, arg);
-            mi_print_amount(stat.total, unit, out, arg);
-            mi_print_amount(stat.current, unit, out, arg);
+            mi_print_amount(stat.peak.get(), unit, out, arg);
+            mi_print_amount(stat.total.get(), unit, out, arg);
+            mi_print_amount(stat.current.get(), unit, out, arg);
             mi_print_amount(unit, 1, out, arg);
-            mi_print_count(stat.total, unit, out, arg);
+            mi_print_count(stat.total.get(), unit, out, arg);
         } else {
-            mi_print_amount(stat.peak, -1, out, arg);
-            mi_print_amount(stat.total, -1, out, arg);
-            mi_print_amount(stat.current, -1, out, arg);
+            mi_print_amount(stat.peak.get(), -1, out, arg);
+            mi_print_amount(stat.total.get(), -1, out, arg);
+            mi_print_amount(stat.current.get(), -1, out, arg);
             if unit == -1 {
                 _mi_fprintf(out, arg, format_args!("{:>24}", ""));
             } else {
                 mi_print_amount(-unit, 1, out, arg);
-                mi_print_count(stat.total / -unit, 0, out, arg);
+                mi_print_count(stat.total.get() / -unit, 0, out, arg);
             }
         }
-        if stat.current != 0 {
+        if stat.current.get() != 0 {
             _mi_fprintf(
                 out,
                 arg,
@@ -763,9 +906,9 @@ fn mi_stat_print_ex(
             _mi_fprintf(out, arg, format_args!("  ok\n"));
         }
     } else {
-        mi_print_amount(stat.peak, 0, out, arg);
-        mi_print_amount(stat.total, 0, out, arg);
-        mi_print_amount(stat.current, 0, out, arg);
+        mi_print_amount(stat.peak.get(), 0, out, arg);
+        mi_print_amount(stat.total.get(), 0, out, arg);
+        mi_print_amount(stat.current.get(), 0, out, arg);
         _mi_fprintf(out, arg, format_args!("\n"));
     }
 }
@@ -787,9 +930,10 @@ fn mi_stat_total_print(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) {
+    let stat = StatCountSnapshot::from_stat(stat);
     _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
     _mi_fprintf(out, arg, format_args!("{:>12}", " "));
-    mi_print_amount(stat.total, unit, out, arg);
+    mi_print_amount(stat.total.get(), unit, out, arg);
     _mi_fprintf(out, arg, format_args!("\n"));
 }
 
@@ -799,8 +943,9 @@ fn mi_stat_counter_print(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) {
+    let stat = StatCounterSnapshot::from_stat(stat);
     _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
-    mi_print_amount(stat.total, 0, out, arg);
+    mi_print_amount(stat.total.get(), 0, out, arg);
     _mi_fprintf(out, arg, format_args!("\n"));
 }
 
@@ -810,8 +955,9 @@ fn mi_stat_counter_print_size(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) {
+    let stat = StatCounterSnapshot::from_stat(stat);
     _mi_fprintf(out, arg, format_args!("  {msg:<10}:"));
-    mi_print_amount(stat.total, 1, out, arg);
+    mi_print_amount(stat.total.get(), 1, out, arg);
     _mi_fprintf(out, arg, format_args!("\n"));
 }
 
@@ -845,20 +991,21 @@ fn mi_print_header(name: &str, out: Option<mi_output_fun>, arg: *mut c_void) {
 
 fn mi_stats_print_bins(
     bins: &[mi_stat_count_t],
-    max: usize,
+    max: StatsBin,
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) -> bool {
     let mut found = false;
-    for (i, stat) in bins.iter().enumerate().take(max + 1) {
-        if stat.total > 0 {
+    for bin in stats_bin_iter().take(max.as_usize() + 1) {
+        let stat = &bins[bin.as_usize()];
+        if StatCountSnapshot::from_stat(stat).total.get() > 0 {
             found = true;
-            let unit = _mi_bin_size(i);
-            let pagekind = if unit <= MI_SMALL_MAX_OBJ_SIZE {
+            let unit = mi_stats_get_bin_size_typed(bin);
+            let pagekind = if unit.get() <= MI_SMALL_MAX_OBJ_SIZE {
                 "S"
-            } else if unit <= MI_MEDIUM_MAX_OBJ_SIZE {
+            } else if unit.get() <= MI_MEDIUM_MAX_OBJ_SIZE {
                 "M"
-            } else if unit <= MI_LARGE_MAX_OBJ_SIZE {
+            } else if unit.get() <= MI_LARGE_MAX_OBJ_SIZE {
                 "L"
             } else {
                 "H"
@@ -867,9 +1014,15 @@ fn mi_stats_print_bins(
             crate::libc::mi_vsnprintf_args(
                 label.as_mut_ptr(),
                 label.len(),
-                format_args!("bin{pagekind:>2}  {i:>3}"),
+                format_args!("bin{pagekind:>2}  {:>3}", bin.as_usize()),
             );
-            mi_stat_print(stat, c_char_buffer_str(&label), unit as i64, out, arg);
+            mi_stat_print(
+                stat,
+                c_char_buffer_str(&label),
+                unit.as_bytes().get(),
+                out,
+                arg,
+            );
         }
     }
     if found {
@@ -940,7 +1093,12 @@ unsafe fn _mi_stats_print(
 
     if stats.malloc_normal.total + stats.malloc_huge.total != 0 {
         mi_print_header("blocks", out, arg);
-        mi_stats_print_bins(&stats.malloc_bins, MI_BIN_HUGE, out, arg);
+        mi_stats_print_bins(
+            &stats.malloc_bins,
+            unsafe { StatsBin::new_unchecked(MI_BIN_HUGE as u16) },
+            out,
+            arg,
+        );
         mi_stat_print(
             &stats.malloc_normal,
             "binned",
@@ -1025,23 +1183,41 @@ unsafe fn _mi_stats_print(
 }
 
 unsafe fn mi_stats_merge_theap_to_heap(theap: *mut mi_theap_t) -> *const mi_stats_t {
-    let stats = unsafe { &mut (*theap).stats };
-    let heap = unsafe { _mi_theap_heap(theap) }.cast::<MiHeapStatsPrefix>();
-    let heap_stats = unsafe { &mut (*heap).stats };
+    let theap = unsafe { ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap)) };
+    let Some(heap) = (unsafe { theap.ptr().heap() }) else {
+        crate::mi_assert_internal!(false);
+        return core::ptr::null();
+    };
+    unsafe { mi_stats_merge_theap_to_heap_typed(theap, heap) }
+}
+
+unsafe fn mi_stats_merge_theap_to_heap_typed(
+    theap: ThreadHeapLocal,
+    heap: HeapPtr,
+) -> *const mi_stats_t {
+    let stats = unsafe { &mut (*theap.ptr().as_ptr()).stats };
+    let heap_stats = unsafe { &mut (*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats };
     unsafe { _mi_stats_merge_into(heap_stats, stats) };
     heap_stats as *const mi_stats_t
 }
 
-unsafe fn mi_heap_get_stats(mut heap: *mut mi_heap_t) -> *const mi_stats_t {
-    if heap.is_null() {
-        heap = unsafe { mi_heap_main() };
-    }
+unsafe fn mi_heap_get_stats(heap: *mut mi_heap_t) -> *const mi_stats_t {
+    let heap = if heap.is_null() {
+        unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
+    } else {
+        unsafe { HeapPtr::new_unchecked(heap) }
+    };
+    unsafe { mi_heap_get_stats_borrowed(BorrowedHeap::new_unchecked(heap)) }
+}
+
+unsafe fn mi_heap_get_stats_borrowed(heap: BorrowedHeap) -> *const mi_stats_t {
+    let heap = heap.ptr();
     if !unsafe { crate::prim::_mi_thread_is_initialized() } {
-        return unsafe { &(*heap.cast::<MiHeapStatsPrefix>()).stats };
+        return unsafe { &(*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats };
     }
-    let theap = unsafe { _mi_heap_theap_peek(heap) };
+    let theap = unsafe { _mi_heap_theap_peek(heap.as_ptr()) };
     if theap.is_null() {
-        unsafe { &(*heap.cast::<MiHeapStatsPrefix>()).stats }
+        unsafe { &(*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats }
     } else {
         unsafe { mi_stats_merge_theap_to_heap(theap) }
     }
@@ -1050,13 +1226,21 @@ unsafe fn mi_heap_get_stats(mut heap: *mut mi_heap_t) -> *const mi_stats_t {
 /// # Safety
 /// `heap` must be null or a valid heap pointer owned by the current subproc.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_heap_stats_merge_to_subproc(mut heap: *mut mi_heap_t) {
-    if heap.is_null() {
-        heap = unsafe { mi_heap_main() };
-    }
-    let heap = heap.cast::<MiHeapStatsPrefix>();
-    let subproc = unsafe { (*heap).subproc.cast::<MiSubprocStatsPrefix>() };
-    unsafe { _mi_stats_merge_into(&mut (*subproc).stats, &mut (*heap).stats) };
+pub unsafe extern "C" fn mi_heap_stats_merge_to_subproc(heap: *mut mi_heap_t) {
+    let heap = if heap.is_null() {
+        unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
+    } else {
+        unsafe { HeapPtr::new_unchecked(heap) }
+    };
+    let Some(subproc) = (unsafe { heap.subproc() }) else {
+        crate::mi_assert_internal!(false);
+        return;
+    };
+    unsafe { mi_heap_stats_merge_to_subproc_typed(BorrowedHeap::new_unchecked(heap), subproc) };
+}
+
+unsafe fn mi_heap_stats_merge_to_subproc_typed(heap: BorrowedHeap, subproc: SubprocPtr) {
+    unsafe { _mi_stats_merge_into(&mut *subproc.stats(), &mut *heap.ptr().stats()) };
 }
 
 /// # Safety
@@ -1087,38 +1271,71 @@ pub unsafe extern "C" fn mi_stats_merge() {
 /// `heap` must be null or a valid `mi_heap_t*`; any output callback must obey the C ABI.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_print_out(
-    mut heap: *mut mi_heap_t,
+    heap: *mut mi_heap_t,
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) {
-    if heap.is_null() {
-        heap = unsafe { mi_heap_main() };
-    }
-    let heap_prefix = heap.cast::<MiHeapStatsPrefix>();
+    let heap = if heap.is_null() {
+        unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
+    } else {
+        unsafe { HeapPtr::new_unchecked(heap) }
+    };
+    unsafe {
+        mi_heap_stats_print_out_typed(
+            BorrowedHeap::new_unchecked(heap),
+            OutputCallback::new(out),
+            OutputCallbackArg::from_raw(arg),
+        )
+    };
+}
+
+unsafe fn mi_heap_stats_print_out_typed(
+    heap: BorrowedHeap,
+    out: OutputCallback,
+    arg: OutputCallbackArg,
+) {
+    let heap_ptr = heap.ptr();
+    let heap_prefix = heap_ptr.as_ptr().cast::<MiHeapStatsPrefix>();
     unsafe {
         _mi_stats_print(
             "heap",
-            (*heap_prefix).heap_seq,
-            mi_heap_get_stats(heap),
-            out,
-            arg,
+            crate::core_types::HeapSeq::new((*heap_prefix).heap_seq).get(),
+            mi_heap_get_stats_borrowed(heap),
+            out.raw(),
+            arg.as_ptr(),
         )
     };
 }
 
 #[inline(never)]
 unsafe extern "C" fn mi_heap_print_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
-    let vinfo = unsafe { &*(arg.cast::<mi_heap_print_visit_info_t>()) };
-    unsafe { mi_heap_stats_print_out(heap, vinfo.out, vinfo.out_arg) };
+    let vinfo =
+        HeapPrintVisitInfo::from_raw(unsafe { &*(arg.cast::<mi_heap_print_visit_info_t>()) });
+    let heap = unsafe { BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(heap)) };
+    unsafe { mi_heap_print_visitor_typed(heap, vinfo) }
+}
+
+unsafe fn mi_heap_print_visitor_typed(heap: BorrowedHeap, vinfo: HeapPrintVisitInfo) -> bool {
+    unsafe { mi_heap_stats_print_out_typed(heap, vinfo.out, vinfo.out_arg) };
     true
 }
 
 #[inline(never)]
 unsafe extern "C" fn mi_heap_aggregate_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
-    let stats = unsafe { &mut *arg.cast::<mi_stats_t>() };
-    let heap_stats = unsafe { mi_heap_get_stats(heap) };
+    let vinfo = HeapAggregateVisitInfo {
+        stats: unsafe { &mut *arg.cast::<mi_stats_t>() },
+    };
+    let heap = unsafe { BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(heap)) };
+    unsafe { mi_heap_aggregate_visitor_typed(heap, vinfo) }
+}
+
+unsafe fn mi_heap_aggregate_visitor_typed(
+    heap: BorrowedHeap,
+    vinfo: HeapAggregateVisitInfo<'_>,
+) -> bool {
+    let heap_stats = unsafe { mi_heap_get_stats_borrowed(heap) };
     // SAFETY: both pointers refer to valid stats buffers during the heap walk.
-    unsafe { mi_stats_add_into(stats, &*heap_stats) };
+    unsafe { mi_stats_add_into(vinfo.stats, &*heap_stats) };
     true
 }
 
@@ -1149,7 +1366,7 @@ pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
         );
         _mi_stats_print(
             "subproc",
-            (*subproc).subproc_seq,
+            crate::core_types::SubprocSeq::new((*subproc).subproc_seq).get(),
             ptr::addr_of!((*subproc).stats),
             out,
             arg,
@@ -1215,7 +1432,16 @@ pub unsafe extern "C" fn mi_heap_stats_get(heap: *mut mi_heap_t, stats: *mut mi_
     if stats.is_null() {
         return false;
     }
-    unsafe { mi_stats_copy(stats, mi_heap_get_stats(heap)) }
+    let heap = if heap.is_null() {
+        unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
+    } else {
+        unsafe { HeapPtr::new_unchecked(heap) }
+    };
+    unsafe { mi_heap_stats_get_borrowed(BorrowedHeap::new_unchecked(heap), &mut *stats) }
+}
+
+unsafe fn mi_heap_stats_get_borrowed(heap: BorrowedHeap, stats: &mut mi_stats_t) -> bool {
+    unsafe { mi_stats_copy(stats, mi_heap_get_stats_borrowed(heap)) }
 }
 
 /// # Safety
@@ -1242,7 +1468,7 @@ pub unsafe extern "C" fn mi_subproc_stats_print_out(
         if mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
             _mi_stats_print(
                 "subproc",
-                (*subproc).subproc_seq,
+                crate::core_types::SubprocSeq::new((*subproc).subproc_seq).get(),
                 ptr::addr_of!(stats),
                 out,
                 arg,
@@ -1279,10 +1505,22 @@ pub unsafe extern "C" fn mi_thread_stats_print_out(out: Option<mi_output_fun>, a
     if theap.is_null() || !unsafe { mi_theap_is_initialized(theap) } {
         return;
     }
-    let heap = unsafe { _mi_theap_heap(theap) };
-    let heap_seq = unsafe { (*heap.cast::<MiHeapStatsPrefix>()).heap_seq };
+    let theap_ptr = unsafe { ThreadHeapPtr::new_unchecked(theap) };
+    let Some(heap) = (unsafe { theap_ptr.heap() }) else {
+        crate::mi_assert_internal!(false);
+        return;
+    };
+    let heap_seq = crate::core_types::HeapSeq::new(unsafe {
+        (*heap.as_ptr().cast::<MiHeapStatsPrefix>()).heap_seq
+    });
     unsafe {
-        _mi_stats_print("heap", heap_seq, ptr::addr_of!((*theap).stats), out, arg);
+        _mi_stats_print(
+            "heap",
+            heap_seq.get(),
+            ptr::addr_of!((*theap).stats),
+            out,
+            arg,
+        );
         mi_stats_merge_theap_to_heap(theap);
     }
 }
@@ -1477,15 +1715,16 @@ fn mi_json_buf_print_count_bin(
     hbuf: &mut mi_json_buf_t,
     prefix: &str,
     stat: &mi_stat_count_t,
-    bin: usize,
+    bin: StatsBin,
     add_comma: bool,
 ) {
-    let binsize = mi_stats_get_bin_size(bin);
-    let pagesize = if binsize <= MI_SMALL_MAX_OBJ_SIZE {
+    let stat = StatCountSnapshot::from_stat(stat);
+    let binsize = mi_stats_get_bin_size_typed(bin);
+    let pagesize = if binsize.get() <= MI_SMALL_MAX_OBJ_SIZE {
         MI_SMALL_PAGE_SIZE
-    } else if binsize <= MI_MEDIUM_MAX_OBJ_SIZE {
+    } else if binsize.get() <= MI_MEDIUM_MAX_OBJ_SIZE {
         MI_MEDIUM_PAGE_SIZE
-    } else if binsize <= MI_LARGE_MAX_OBJ_SIZE {
+    } else if binsize.get() <= MI_LARGE_MAX_OBJ_SIZE {
         MI_LARGE_PAGE_SIZE
     } else {
         0
@@ -1495,10 +1734,11 @@ fn mi_json_buf_print_count_bin(
         buf.as_mut_ptr(),
         buf.len(),
         format_args!(
-            "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"block_size\": {binsize}, \"page_size\": {pagesize} }}{}\n",
-            stat.total,
-            stat.peak,
-            stat.current,
+            "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"block_size\": {}, \"page_size\": {pagesize} }}{}\n",
+            stat.total.get(),
+            stat.peak.get(),
+            stat.current.get(),
+            binsize.get(),
             if add_comma { "," } else { "" }
         ),
     );
@@ -1512,6 +1752,7 @@ fn mi_json_buf_print_count_cbin(
     bin: mi_chunkbin_t,
     add_comma: bool,
 ) {
+    let stat = StatCountSnapshot::from_stat(stat);
     let cbin = match bin {
         mi_chunkbin_e::MI_CBIN_SMALL => "S",
         mi_chunkbin_e::MI_CBIN_MEDIUM => "M",
@@ -1526,9 +1767,9 @@ fn mi_json_buf_print_count_cbin(
         buf.len(),
         format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {}, \"bin\": \"{cbin}\" }}{}\n",
-            stat.total,
-            stat.peak,
-            stat.current,
+            stat.total.get(),
+            stat.peak.get(),
+            stat.current.get(),
             if add_comma { "," } else { "" }
         ),
     );
@@ -1541,15 +1782,16 @@ fn mi_json_buf_print_count(
     stat: &mi_stat_count_t,
     add_comma: bool,
 ) {
+    let stat = StatCountSnapshot::from_stat(stat);
     let mut buf = [0 as c_char; 128];
     crate::libc::mi_vsnprintf_args(
         buf.as_mut_ptr(),
         buf.len(),
         format_args!(
             "{prefix}{{ \"total\": {}, \"peak\": {}, \"current\": {} }}{}\n",
-            stat.total,
-            stat.peak,
-            stat.current,
+            stat.total.get(),
+            stat.peak.get(),
+            stat.current.get(),
             if add_comma { "," } else { "" }
         ),
     );
@@ -1591,7 +1833,7 @@ fn mi_json_buf_print_size(hbuf: &mut mi_json_buf_t, name: &str, val: usize, add_
 }
 
 fn mi_json_buf_print_counter_value(hbuf: &mut mi_json_buf_t, name: &str, stat: &mi_stat_counter_t) {
-    mi_json_buf_print_value(hbuf, name, stat.total);
+    mi_json_buf_print_value(hbuf, name, StatCounterSnapshot::from_stat(stat).total.get());
 }
 
 fn append_stats_json(hbuf: &mut mi_json_buf_t, stats: &mi_stats_t) {
@@ -1713,19 +1955,25 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
     append_stats_json(&mut hbuf, stats);
 
     mi_json_buf_print(&mut hbuf, "  \"malloc_bins\": [\n");
-    for i in 0..=MI_BIN_HUGE {
+    for bin in stats_bin_iter() {
         mi_json_buf_print_count_bin(
             &mut hbuf,
             "    ",
-            &stats.malloc_bins[i],
-            i,
-            i != MI_BIN_HUGE,
+            &stats.malloc_bins[bin.as_usize()],
+            bin,
+            bin.as_usize() != MI_BIN_HUGE,
         );
     }
     mi_json_buf_print(&mut hbuf, "  ],\n");
     mi_json_buf_print(&mut hbuf, "  \"page_bins\": [\n");
-    for i in 0..=MI_BIN_HUGE {
-        mi_json_buf_print_count_bin(&mut hbuf, "    ", &stats.page_bins[i], i, i != MI_BIN_HUGE);
+    for bin in stats_bin_iter() {
+        mi_json_buf_print_count_bin(
+            &mut hbuf,
+            "    ",
+            &stats.page_bins[bin.as_usize()],
+            bin,
+            bin.as_usize() != MI_BIN_HUGE,
+        );
     }
     mi_json_buf_print(&mut hbuf, "  ],\n");
     mi_json_buf_print(&mut hbuf, "  \"chunk_bins\": [\n");
@@ -1779,7 +2027,29 @@ pub unsafe extern "C" fn mi_heap_stats_get_json(
     buf_size: usize,
     buf: *mut c_char,
 ) -> *mut c_char {
-    unsafe { mi_stats_get_json_from(mi_heap_get_stats(heap), buf_size, buf) }
+    let heap = if heap.is_null() {
+        unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
+    } else {
+        unsafe { HeapPtr::new_unchecked(heap) }
+    };
+    let output = JsonOutputBuffer {
+        size: JsonBufferSize(buf_size),
+        ptr: JsonBufferPtr(buf),
+    };
+    unsafe { mi_heap_stats_get_json_borrowed(BorrowedHeap::new_unchecked(heap), output) }
+}
+
+unsafe fn mi_heap_stats_get_json_borrowed(
+    heap: BorrowedHeap,
+    output: JsonOutputBuffer,
+) -> *mut c_char {
+    unsafe {
+        mi_stats_get_json_from(
+            mi_heap_get_stats_borrowed(heap),
+            output.size.get(),
+            output.ptr.as_ptr(),
+        )
+    }
 }
 
 /// # Safety

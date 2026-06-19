@@ -1,8 +1,8 @@
 //! DT-3 allocation layout types.
 
 use crate::core_types::{
-    BlockPtr, EffectiveSize, MaybeAlignment, PaddedSize, PagePtr, RequestedSize, UsableSize,
-    UserPtr,
+    Alignment, AlignmentOffset, BlockPtr, EffectiveSize, MaybeAlignment, PaddedSize, PagePtr,
+    RequestedSize, UsableSize, UserPtr,
 };
 
 /// Represents an explicit zeroing request.
@@ -40,7 +40,11 @@ impl MaybeHugeAlignment {
     }
 }
 
-/// Errors when creating layout structures.
+/// Internal errors when creating allocator layout structures.
+///
+/// This is intentionally separate from the public safe facade's
+/// `crate::safe::LayoutError`: internal allocation paths need compact enum
+/// reasons, while the safe API reports the rejected size/alignment pair.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum LayoutError {
     SizeOverflow,
@@ -59,23 +63,36 @@ pub(crate) struct LayoutRequest {
 }
 
 impl LayoutRequest {
+    fn from_parts(
+        requested: RequestedSize,
+        effective: EffectiveSize,
+        alignment: MaybeAlignment,
+        zeroed: Zeroed,
+    ) -> Result<Self, LayoutError> {
+        let padded = RequestedSize::new(effective.get())
+            .checked_padded()
+            .map_err(|_| LayoutError::SizeOverflow)?;
+        Ok(Self {
+            requested,
+            effective,
+            padded,
+            alignment,
+            zeroed,
+        })
+    }
+
     pub(crate) fn malloc(size: usize) -> Result<Self, LayoutError> {
         let requested = RequestedSize::new(size);
         // Effective size for malloc is at least 1, up to the implementation limits.
         let eff_size = if size == 0 { 1 } else { size };
         // Unsafe is fine here as we've explicitly guarded against 0.
         let effective = unsafe { EffectiveSize::new_unchecked(eff_size) };
-        let padded = requested
-            .checked_padded()
-            .map_err(|_| LayoutError::SizeOverflow)?;
-
-        Ok(Self {
+        Self::from_parts(
             requested,
             effective,
-            padded,
-            alignment: MaybeAlignment::new(0),
-            zeroed: Zeroed::No,
-        })
+            unsafe { MaybeAlignment::new_unchecked(0) },
+            Zeroed::No,
+        )
     }
 
     pub(crate) fn zalloc(size: usize) -> Result<Self, LayoutError> {
@@ -84,33 +101,58 @@ impl LayoutRequest {
         Ok(req)
     }
 
-    pub(crate) fn aligned(size: usize, alignment: usize) -> Result<Self, LayoutError> {
-        if alignment != 0 && !alignment.is_power_of_two() {
-            return Err(LayoutError::AlignmentInvalid);
+    fn maybe_alignment_from_raw(alignment: usize) -> Result<MaybeAlignment, LayoutError> {
+        if alignment == 0 {
+            return Ok(unsafe { MaybeAlignment::new_unchecked(0) });
         }
+        let alignment = Alignment::new(alignment).ok_or(LayoutError::AlignmentInvalid)?;
+        Ok(unsafe { MaybeAlignment::new_unchecked(alignment.get()) })
+    }
+
+    pub(crate) fn aligned(size: usize, alignment: usize) -> Result<Self, LayoutError> {
+        let alignment = Self::maybe_alignment_from_raw(alignment)?;
         let mut req = Self::malloc(size)?;
-        req.alignment = MaybeAlignment::new(alignment);
+        req.alignment = alignment;
         Ok(req)
     }
 
     pub(crate) fn aligned_at(
         size: usize,
         alignment: usize,
-        offset: usize,
+        offset: AlignmentOffset,
         zeroed: Zeroed,
     ) -> Result<Self, LayoutError> {
-        if alignment != 0 && !alignment.is_power_of_two() {
-            return Err(LayoutError::AlignmentInvalid);
-        }
+        let alignment = Self::maybe_alignment_from_raw(alignment)?;
         // Basic overflow check for the `aligned_at` calculation
-        if size.checked_add(offset).is_none() || size.checked_add(alignment).is_none() {
+        if size.checked_add(offset.get()).is_none() || size.checked_add(alignment.get()).is_none() {
             return Err(LayoutError::AlignmentOverflow);
         }
 
         let mut req = Self::malloc(size)?;
-        req.alignment = MaybeAlignment::new(alignment);
+        req.alignment = alignment;
         req.zeroed = zeroed;
         Ok(req)
+    }
+
+    /// Construct a layout from a size that has already been normalized to a
+    /// nonzero effective allocation size.
+    ///
+    /// # Safety
+    /// `effective.get() + MI_PADDING_SIZE` must not overflow, and the caller
+    /// must not need to preserve a distinct zero-size requested value.
+    #[inline(always)]
+    pub(crate) unsafe fn from_effective_unchecked(
+        effective: EffectiveSize,
+        zeroed: Zeroed,
+    ) -> Self {
+        let requested = RequestedSize::new(effective.get());
+        Self {
+            requested,
+            effective,
+            padded: requested.padded_unchecked(),
+            alignment: unsafe { MaybeAlignment::new_unchecked(0) },
+            zeroed,
+        }
     }
 
     /// Construct a layout from a size that already includes mimalloc padding.
@@ -133,7 +175,7 @@ impl LayoutRequest {
             requested: RequestedSize::new(requested_size),
             effective: unsafe { EffectiveSize::new_unchecked(effective_size) },
             padded,
-            alignment: MaybeAlignment::new(0),
+            alignment: unsafe { MaybeAlignment::new_unchecked(0) },
             zeroed,
         }
     }
@@ -175,6 +217,27 @@ impl CallocRequest {
 }
 
 #[derive(Clone, Copy)]
+pub(crate) struct AllocProduct {
+    count: ItemCount,
+    item_size: RequestedSize,
+    total: RequestedSize,
+    layout: LayoutRequest,
+}
+
+impl AllocProduct {
+    pub(crate) fn new(count: usize, size: usize) -> Result<Self, LayoutError> {
+        let total_size = count.checked_mul(size).ok_or(LayoutError::SizeOverflow)?;
+        let layout = LayoutRequest::malloc(total_size)?;
+        Ok(Self {
+            count: ItemCount::new(count),
+            item_size: RequestedSize::new(size),
+            total: RequestedSize::new(total_size),
+            layout,
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
 pub(crate) struct OldAllocation {
     ptr: UserPtr,
     usable: UsableSize,
@@ -182,20 +245,43 @@ pub(crate) struct OldAllocation {
     block: BlockPtr,
 }
 
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct PreserveBytes(usize);
+
+impl PreserveBytes {
+    pub(crate) fn new(old: UsableSize, new: RequestedSize) -> Self {
+        Self(usize::min(old.get(), new.get()))
+    }
+
+    pub(crate) const fn get(self) -> usize {
+        self.0
+    }
+}
+
 impl OldAllocation {
-    /// Constructs OldAllocation. Only safe if the caller validates `ptr` maps to `page`/`block`.
-    pub(crate) unsafe fn new(
-        ptr: UserPtr,
-        usable: UsableSize,
-        page: PagePtr,
-        block: BlockPtr,
-    ) -> Self {
+    unsafe fn new(ptr: UserPtr, usable: UsableSize, page: PagePtr, block: BlockPtr) -> Self {
         Self {
             ptr,
             usable,
             page,
             block,
         }
+    }
+
+    /// Constructs an old allocation after pointer validation has proven the
+    /// user pointer, page, and block belong together.
+    ///
+    /// # Safety
+    /// `ptr`, `page`, and `block` must come from the same successful
+    /// `PointerLookup::Valid` result.
+    pub(crate) unsafe fn from_validated_parts(
+        ptr: UserPtr,
+        usable: UsableSize,
+        page: PagePtr,
+        block: BlockPtr,
+    ) -> Self {
+        unsafe { Self::new(ptr, usable, page, block) }
     }
 
     pub(crate) fn ptr(self) -> UserPtr {
@@ -215,34 +301,51 @@ impl OldAllocation {
     }
 }
 
+#[derive(Clone, Copy)]
+enum ReallocSource {
+    Null,
+    Existing(OldAllocation),
+}
+
 pub(crate) struct ReallocRequest {
-    ptr: Option<UserPtr>,
-    old: Option<OldAllocation>,
+    source: ReallocSource,
     new_layout: LayoutRequest,
     zero_new_tail: Zeroed,
 }
 
 impl ReallocRequest {
-    pub(crate) fn new(
-        ptr: Option<UserPtr>,
-        old: Option<OldAllocation>,
+    pub(crate) fn from_null(new_layout: LayoutRequest, zero_new_tail: Zeroed) -> Self {
+        Self {
+            source: ReallocSource::Null,
+            new_layout,
+            zero_new_tail,
+        }
+    }
+
+    pub(crate) fn from_existing(
+        old: OldAllocation,
         new_layout: LayoutRequest,
         zero_new_tail: Zeroed,
     ) -> Self {
         Self {
-            ptr,
-            old,
+            source: ReallocSource::Existing(old),
             new_layout,
             zero_new_tail,
         }
     }
 
     pub(crate) fn ptr(&self) -> Option<UserPtr> {
-        self.ptr
+        match self.source {
+            ReallocSource::Null => None,
+            ReallocSource::Existing(old) => Some(old.ptr()),
+        }
     }
 
     pub(crate) fn old(&self) -> Option<OldAllocation> {
-        self.old
+        match self.source {
+            ReallocSource::Null => None,
+            ReallocSource::Existing(old) => Some(old),
+        }
     }
 
     pub(crate) fn new_layout(&self) -> LayoutRequest {
@@ -251,11 +354,6 @@ impl ReallocRequest {
 
     pub(crate) fn zero_new_tail(&self) -> Zeroed {
         self.zero_new_tail
-    }
-
-    pub(crate) fn with_old(mut self, old: Option<OldAllocation>) -> Self {
-        self.old = old;
-        self
     }
 }
 
@@ -281,8 +379,12 @@ impl MallocGenericFlags {
         Self(z | huge_alignment.get())
     }
 
+    /// # Safety
+    ///
+    /// Bit 0 must only encode the zeroing flag, and all high bits must be zero
+    /// or a valid huge-alignment payload with bit 0 clear.
     #[inline(always)]
-    pub(crate) fn from_raw(raw: usize) -> Self {
+    pub(crate) unsafe fn from_raw(raw: usize) -> Self {
         Self(raw)
     }
 
@@ -342,21 +444,68 @@ impl CallocRequest {
     }
 }
 
+impl AllocProduct {
+    pub(crate) fn count(self) -> ItemCount {
+        self.count
+    }
+    pub(crate) fn item_size(self) -> RequestedSize {
+        self.item_size
+    }
+    pub(crate) fn total(self) -> RequestedSize {
+        self.total
+    }
+    pub(crate) fn layout(self) -> LayoutRequest {
+        self.layout
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn internal_layout_error_is_distinct_from_public_safe_error() {
+        assert_ne!(
+            core::any::TypeId::of::<LayoutError>(),
+            core::any::TypeId::of::<crate::safe::LayoutError>()
+        );
+    }
 
     #[test]
     fn malloc_layout_preserves_requested_and_normalizes_effective_size() {
         let zero = LayoutRequest::malloc(0).expect("zero-size malloc layout");
         assert_eq!(zero.requested().get(), 0);
         assert_eq!(zero.effective().get(), 1);
+        assert_eq!(zero.padded().get(), crate::types::MI_PADDING_SIZE + 1);
         assert_eq!(zero.zeroed(), Zeroed::No);
 
         let nonzero = LayoutRequest::malloc(17).expect("malloc layout");
         assert_eq!(nonzero.requested().get(), 17);
         assert_eq!(nonzero.effective().get(), 17);
         assert!(nonzero.padded().get() >= 17);
+    }
+
+    #[test]
+    fn layout_request_from_parts_is_the_checked_padding_path() {
+        let req = LayoutRequest::from_parts(
+            RequestedSize::new(0),
+            unsafe { EffectiveSize::new_unchecked(1) },
+            unsafe { MaybeAlignment::new_unchecked(0) },
+            Zeroed::No,
+        )
+        .expect("layout from parts");
+        assert_eq!(req.padded().get(), crate::types::MI_PADDING_SIZE + 1);
+    }
+
+    #[test]
+    fn from_effective_unchecked_keeps_normalized_size() {
+        let req = unsafe {
+            LayoutRequest::from_effective_unchecked(EffectiveSize::new_unchecked(32), Zeroed::Yes)
+        };
+        assert_eq!(req.requested().get(), 32);
+        assert_eq!(req.effective().get(), 32);
+        assert_eq!(req.padded().get(), crate::types::MI_PADDING_SIZE + 32);
+        assert_eq!(req.zeroed(), Zeroed::Yes);
     }
 
     #[test]
@@ -388,14 +537,58 @@ mod tests {
     }
 
     #[test]
+    fn alloc_product_checks_multiplication_without_zeroing() {
+        let req = AllocProduct::new(4, 32).expect("alloc product");
+        assert_eq!(req.count().get(), 4);
+        assert_eq!(req.item_size().get(), 32);
+        assert_eq!(req.total().get(), 128);
+        assert_eq!(req.layout().zeroed(), Zeroed::No);
+
+        assert_eq!(
+            AllocProduct::new(usize::MAX, 2).err(),
+            Some(LayoutError::SizeOverflow)
+        );
+    }
+
+    #[test]
+    fn realloc_request_constructors_distinguish_null_from_existing() {
+        let layout = LayoutRequest::malloc(64).expect("realloc layout");
+        let null = ReallocRequest::from_null(layout, Zeroed::No);
+        assert!(null.ptr().is_none());
+        assert!(null.old().is_none());
+
+        let user = unsafe { UserPtr::new_unchecked(core::ptr::dangling_mut::<u8>().cast()) };
+        let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
+        let block = unsafe { BlockPtr::new_unchecked(core::ptr::dangling_mut()) };
+        let old =
+            unsafe { OldAllocation::from_validated_parts(user, UsableSize::new(128), page, block) };
+        let existing = ReallocRequest::from_existing(old, layout, Zeroed::No);
+        assert_eq!(existing.ptr().map(|ptr| ptr.as_ptr()), Some(user.as_ptr()));
+        assert!(existing.old().is_some());
+    }
+
+    #[test]
+    fn preserve_bytes_is_min_of_old_usable_and_new_requested() {
+        let shrink = PreserveBytes::new(UsableSize::new(128), RequestedSize::new(64));
+        assert_eq!(shrink.get(), 64);
+
+        let grow = PreserveBytes::new(UsableSize::new(128), RequestedSize::new(192));
+        assert_eq!(grow.get(), 128);
+    }
+
+    #[test]
     fn generic_flags_pack_zero_bit_and_huge_alignment() {
         let flags = MallocGenericFlags::new(Zeroed::Yes, MaybeHugeAlignment::new(64));
         assert_eq!(flags.zeroed(), Zeroed::Yes);
         assert_eq!(flags.huge_alignment().get(), 64);
         assert_eq!(flags.raw(), 65);
 
-        let raw = MallocGenericFlags::from_raw(128);
+        let raw = unsafe { MallocGenericFlags::from_raw(128) };
         assert_eq!(raw.zeroed(), Zeroed::No);
         assert_eq!(raw.huge_alignment().get(), 128);
+
+        let raw_zero_huge = unsafe { MallocGenericFlags::from_raw(65) };
+        assert_eq!(raw_zero_huge.zeroed(), Zeroed::Yes);
+        assert_eq!(raw_zero_huge.huge_alignment().get(), 64);
     }
 }

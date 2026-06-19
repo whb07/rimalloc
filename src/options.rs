@@ -10,19 +10,23 @@ use core::fmt;
 use core::fmt::Write as _;
 use core::mem::size_of;
 use core::ptr;
-use core::ptr::addr_of_mut;
+use core::ptr::{NonNull, addr_of_mut};
 use core::sync::atomic::{AtomicIsize, AtomicPtr, AtomicU8, AtomicUsize, Ordering};
 
 use crate::arena::{MI_ARENA_BCHUNK_BITS, MI_ARENA_SLICE_SIZE};
 use crate::atomic::{mi_lock_acquire, mi_lock_release, mi_lock_s, mi_lock_t};
 use crate::bits::{MI_GiB, MI_KiB, MI_MiB, MI_SIZE_BITS};
+use crate::core_types::{
+    Errno, ErrorCallback, ErrorCallbackArg, MiLockGuard, MiLockPtr, OutputCallback,
+    OutputCallbackArg,
+};
 use crate::init::{_mi_is_main_thread, _mi_preloading, _mi_thread_id};
 use crate::internal::{MI_DEBUG, MI_GUARDED};
 use crate::libc::_mi_strnlen;
 use crate::page::MI_MAX_ALLOC_SIZE;
 use crate::prim::_mi_prim_out_stderr;
 use crate::types::{
-    EFAULT, MI_MALLOC_VERSION, mi_error_fun, mi_option_desc_t, mi_option_init_t, mi_output_fun,
+    MI_MALLOC_VERSION, mi_error_fun, mi_option_desc_t, mi_option_init_t, mi_output_fun,
 };
 
 unsafe extern "C" {
@@ -574,40 +578,39 @@ static mi_max_warning_count: AtomicIsize = AtomicIsize::new(16);
 static error_count: AtomicUsize = AtomicUsize::new(0);
 static warning_count: AtomicUsize = AtomicUsize::new(0);
 
-struct LockedErrorHandler(UnsafeCell<Option<mi_error_fun>>);
+struct LockedErrorHandler(UnsafeCell<ErrorCallback>);
 
 unsafe impl Sync for LockedErrorHandler {}
 
 static mut mi_error_handler_lock: mi_lock_t = mi_lock_s::new();
-static mi_error_handler: LockedErrorHandler = LockedErrorHandler(UnsafeCell::new(None));
+static mi_error_handler: LockedErrorHandler =
+    LockedErrorHandler(UnsafeCell::new(ErrorCallback::none()));
 static mi_error_arg: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 
 #[inline]
 fn with_options_table<R>(f: impl FnOnce(&mut [mi_option_desc_t; MI_OPTION_COUNT]) -> R) -> R {
     unsafe {
-        mi_lock_acquire(addr_of_mut!(options_lock));
-        let result = f(&mut *OPTIONS.0.get());
-        mi_lock_release(addr_of_mut!(options_lock));
-        result
+        let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(options_lock)));
+        let _lock = MiLockGuard::acquire(lock);
+        f(&mut *OPTIONS.0.get())
     }
 }
 
 #[inline]
-fn error_handler_load() -> Option<mi_error_fun> {
+fn error_handler_load() -> ErrorCallback {
     unsafe {
-        mi_lock_acquire(addr_of_mut!(mi_error_handler_lock));
-        let handler = *mi_error_handler.0.get();
-        mi_lock_release(addr_of_mut!(mi_error_handler_lock));
-        handler
+        let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
+        let _lock = MiLockGuard::acquire(lock);
+        *mi_error_handler.0.get()
     }
 }
 
 #[inline]
-fn error_handler_store(fun: Option<mi_error_fun>) {
+fn error_handler_store(fun: ErrorCallback) {
     unsafe {
-        mi_lock_acquire(addr_of_mut!(mi_error_handler_lock));
+        let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));
+        let _lock = MiLockGuard::acquire(lock);
         *mi_error_handler.0.get() = fun;
-        mi_lock_release(addr_of_mut!(mi_error_handler_lock));
     }
 }
 
@@ -669,13 +672,8 @@ fn clamp_c_long(x: i128) -> c_long {
 }
 
 #[inline]
-fn mi_output_fun_to_ptr(out: mi_output_fun) -> *mut c_void {
-    out as *const () as *mut c_void
-}
-
-#[inline]
 fn mi_output_is_c_file(out: mi_output_fun) -> bool {
-    let p = mi_output_fun_to_ptr(out);
+    let p = OutputCallback::new(Some(out)).storage_ptr();
     #[cfg(all(target_os = "linux", not(target_env = "musl")))]
     {
         p == unsafe { C_STDOUT } || p == unsafe { C_STDERR }
@@ -684,15 +682,6 @@ fn mi_output_is_c_file(out: mi_output_fun) -> bool {
     {
         let _ = p;
         false
-    }
-}
-
-#[inline]
-fn ptr_to_mi_output_fun(p: *mut c_void) -> Option<mi_output_fun> {
-    if p.is_null() {
-        None
-    } else {
-        Some(unsafe { core::mem::transmute::<*mut c_void, mi_output_fun>(p) })
     }
 }
 
@@ -727,7 +716,7 @@ unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
     unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
 }
 
-fn mi_out_buf_flush(out: mi_output_fun, no_more_buf: bool, arg: *mut c_void) {
+fn mi_out_buf_flush(out: OutputCallback, no_more_buf: bool, arg: OutputCallbackArg) {
     unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
     let mut count = out_len.fetch_add(
         if no_more_buf { MI_MAX_DELAY_OUTPUT } else { 1 },
@@ -738,7 +727,7 @@ fn mi_out_buf_flush(out: mi_output_fun, no_more_buf: bool, arg: *mut c_void) {
     }
     let buf = unsafe { &mut *out_buf.0.get() };
     buf[count] = 0;
-    unsafe { out(buf.as_ptr().cast::<c_char>(), arg) };
+    unsafe { out.invoke(buf.as_ptr().cast::<c_char>(), arg) };
     if !no_more_buf {
         buf[count] = b'\n';
     }
@@ -750,19 +739,28 @@ unsafe extern "C" fn mi_out_buf_stderr(msg: *const c_char, arg: *mut c_void) {
     unsafe { mi_out_buf(msg, arg) };
 }
 
-fn mi_out_get_default(parg: Option<&mut *mut c_void>) -> mi_output_fun {
+fn mi_out_get_default(parg: Option<&mut OutputCallbackArg>) -> OutputCallback {
     if let Some(arg) = parg {
-        *arg = mi_out_arg.load(Ordering::Acquire);
+        *arg = OutputCallbackArg::from_raw(mi_out_arg.load(Ordering::Acquire));
     }
-    ptr_to_mi_output_fun(mi_out_default.load(Ordering::Acquire)).unwrap_or(mi_out_buf)
+    let callback =
+        unsafe { OutputCallback::from_storage_ptr(mi_out_default.load(Ordering::Acquire)) };
+    OutputCallback::new(callback.raw().or(Some(mi_out_buf)))
 }
 
 fn mi_add_stderr_output() {
     if !mi_out_default.load(Ordering::Acquire).is_null() {
         return;
     }
-    mi_out_buf_flush(mi_out_stderr, false, ptr::null_mut());
-    mi_out_default.store(mi_output_fun_to_ptr(mi_out_buf_stderr), Ordering::Release);
+    mi_out_buf_flush(
+        OutputCallback::new(Some(mi_out_stderr)),
+        false,
+        OutputCallbackArg::null(),
+    );
+    mi_out_default.store(
+        OutputCallback::new(Some(mi_out_buf_stderr)).storage_ptr(),
+        Ordering::Release,
+    );
     mi_out_arg.store(ptr::null_mut(), Ordering::Release);
 }
 
@@ -843,18 +841,20 @@ pub(crate) unsafe extern "C" fn _mi_fputs(
         if !mi_recurse_enter() {
             return;
         }
-        let mut default_arg = ptr::null_mut();
+        let mut default_arg = OutputCallbackArg::null();
         let default_out = mi_out_get_default(Some(&mut default_arg));
         if !prefix.is_null() {
-            unsafe { default_out(prefix, default_arg) };
+            unsafe { default_out.invoke(prefix, default_arg) };
         }
-        unsafe { default_out(message, default_arg) };
+        unsafe { default_out.invoke(message, default_arg) };
         mi_recurse_exit();
     } else if let Some(out) = out {
+        let out = OutputCallback::new(Some(out));
+        let arg = OutputCallbackArg::from_raw(arg);
         if !prefix.is_null() {
-            unsafe { out(prefix, arg) };
+            unsafe { out.invoke(prefix, arg) };
         }
-        unsafe { out(message, arg) };
+        unsafe { out.invoke(message, arg) };
     }
 }
 
@@ -1068,12 +1068,12 @@ pub(crate) unsafe extern "C" fn _mi_warning_message(fmt: *const c_char) {
 }
 
 #[inline(never)]
-pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
+pub(crate) fn _mi_error_message_fmt(err: Errno, args: fmt::Arguments<'_>) {
     mi_show_error_message(args);
     let handler = error_handler_load();
-    let arg = mi_error_arg.load(Ordering::Acquire);
-    if let Some(handler) = handler {
-        unsafe { handler(err, arg) };
+    let arg = ErrorCallbackArg::from_raw(mi_error_arg.load(Ordering::Acquire));
+    if handler.is_some() {
+        unsafe { handler.invoke(err.get(), arg) };
     } else {
         mi_error_default(err);
     }
@@ -1084,11 +1084,12 @@ pub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>) {
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_error_message(err: c_int, fmt: *const c_char) {
+    let err = Errno::new(err);
     mi_show_error_message_raw(fmt);
     let handler = error_handler_load();
-    let arg = mi_error_arg.load(Ordering::Acquire);
-    if let Some(handler) = handler {
-        unsafe { handler(err, arg) };
+    let arg = ErrorCallbackArg::from_raw(mi_error_arg.load(Ordering::Acquire));
+    if handler.is_some() {
+        unsafe { handler.invoke(err.get(), arg) };
     } else {
         mi_error_default(err);
     }
@@ -1099,7 +1100,7 @@ static MI_WARNING_MESSAGE_FMT_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_warning
 #[used]
 static MI_WARNING_MESSAGE_KEEP: unsafe extern "C" fn(*const c_char) = _mi_warning_message;
 #[used]
-static MI_ERROR_MESSAGE_FMT_KEEP: for<'a> fn(c_int, fmt::Arguments<'a>) = _mi_error_message_fmt;
+static MI_ERROR_MESSAGE_FMT_KEEP: for<'a> fn(Errno, fmt::Arguments<'a>) = _mi_error_message_fmt;
 #[used]
 static MI_ERROR_MESSAGE_KEEP: unsafe extern "C" fn(c_int, *const c_char) = _mi_error_message;
 
@@ -1248,28 +1249,29 @@ pub extern "C" fn mi_version() -> i32 {
     MI_MALLOC_VERSION
 }
 
-pub(crate) fn mi_error_default(err: i32) {
-    if err == EFAULT && (MI_DEBUG > 0 || cfg!(feature = "secure")) {
+pub(crate) fn mi_error_default(err: Errno) {
+    if err == Errno::EFAULT && (MI_DEBUG > 0 || cfg!(feature = "secure")) {
         unsafe { c_abort() };
     }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
-    mi_out_default.store(
-        mi_output_fun_to_ptr(out.unwrap_or(mi_out_stderr)),
-        Ordering::Release,
-    );
-    mi_out_arg.store(arg, Ordering::Release);
+    let callback = OutputCallback::new(Some(out.unwrap_or(mi_out_stderr)));
+    let arg = OutputCallbackArg::from_raw(arg);
+    mi_out_default.store(callback.storage_ptr(), Ordering::Release);
+    mi_out_arg.store(arg.as_ptr(), Ordering::Release);
     if let Some(out) = out {
-        mi_out_buf_flush(out, true, arg);
+        mi_out_buf_flush(OutputCallback::new(Some(out)), true, arg);
     }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_register_error(fun: Option<mi_error_fun>, arg: *mut c_void) {
-    error_handler_store(fun);
-    mi_error_arg.store(arg, Ordering::Release);
+    let callback = ErrorCallback::new(fun);
+    let arg = ErrorCallbackArg::from_raw(arg);
+    error_handler_store(callback);
+    mi_error_arg.store(arg.as_ptr(), Ordering::Release);
 }
 
 fn mi_option_init(desc: &mut mi_option_desc_t) {
@@ -1479,8 +1481,12 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
     let (out, arg) = if let Some(out) = out {
         (out, arg)
     } else {
-        let mut default_arg = ptr::null_mut();
-        (mi_out_get_default(Some(&mut default_arg)), default_arg)
+        let mut default_arg = OutputCallbackArg::null();
+        let default_out = mi_out_get_default(Some(&mut default_arg));
+        (
+            default_out.raw().unwrap_or(mi_out_buf),
+            default_arg.as_ptr(),
+        )
     };
 
     let vermajor = MI_MALLOC_VERSION / 10000;

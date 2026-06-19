@@ -11,11 +11,14 @@ use crate::arena::MI_ARENA_BCHUNK_BITS;
 use crate::bits::{
     MI_SIZE_BITS, MI_SIZE_SHIFT, MI_SIZE_SIZE, mi_bsf, mi_bsr, mi_clz, mi_ctz, mi_popcount,
 };
+use crate::core_types::{
+    ArenaPtr, SliceCount, SliceIndex, SliceRange, ThreadLocalClaimCallback, ThreadSeq,
+};
 use crate::stats::{
     MI_CBIN_COUNT, MI_CBIN_HUGE, MI_CBIN_LARGE, MI_CBIN_MEDIUM, MI_CBIN_NONE, MI_CBIN_OTHER,
     MI_CBIN_SMALL, mi_chunkbin_t,
 };
-use crate::types::{MI_ENABLE_LARGE_PAGES, mi_arena_t, mi_claim_fun_t, mi_forall_set_fun_t};
+use crate::types::{MI_ENABLE_LARGE_PAGES, mi_arena_t, mi_forall_set_fun_t};
 
 #[cfg(all(
     any(target_arch = "x86", target_arch = "x86_64"),
@@ -1191,7 +1194,7 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
 ) -> bool {
     unsafe {
         crate::mi_debug_assert!(n == 1);
-        let claim_fun = arg1 as *mut mi_claim_fun_t;
+        let claim_fun = arg1 as *mut ThreadLocalClaimCallback;
         let claim_data = &mut *(arg2 as *mut mi_claim_fun_data_t);
         let chunk = &mut (*bitmap).chunks[chunk_idx];
         let mut cidx = 0usize;
@@ -1199,7 +1202,7 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
             let slice_index = (chunk_idx * MI_BCHUNK_BITS) + cidx;
             crate::mi_debug_assert!(slice_index < mi_bitmap_max_bits(bitmap));
             let mut keep_set = true;
-            if (*claim_fun)(slice_index, claim_data.arena, &mut keep_set as *mut bool) {
+            if (*claim_fun).invoke(slice_index, claim_data.arena, &mut keep_set as *mut bool) {
                 crate::mi_debug_assert!(!keep_set);
                 *pidx = slice_index;
                 return true;
@@ -1216,33 +1219,37 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
 }
 
 /// # Safety
-/// `bitmap` and `pidx` must be valid for writes, `claim` must be callable, and `arena` must
-/// remain valid for the claim callback.
+/// `bitmap` and `pidx` must be valid for writes, `claim` must be callable, and `arena`, when
+/// present, must remain valid for the claim callback.
 #[inline(never)]
-pub unsafe fn mi_bitmap_try_find_and_claim(
+pub(crate) unsafe fn mi_bitmap_try_find_and_claim(
     bitmap: *mut mi_bitmap_t,
-    tseq: usize,
-    pidx: *mut usize,
-    claim: *mut mi_claim_fun_t,
-    arena: *mut mi_arena_t,
+    tseq: ThreadSeq,
+    pidx: &mut SliceIndex,
+    claim: ThreadLocalClaimCallback,
+    arena: Option<ArenaPtr>,
 ) -> bool {
     unsafe {
+        let mut claim = claim;
         let claim_data = mi_claim_fun_data_t { arena };
+        let mut raw_idx = pidx.get();
         mi_bitmap_find(
             bitmap,
-            tseq,
+            tseq.get(),
             1,
-            pidx,
+            ptr::addr_of_mut!(raw_idx),
             mi_bitmap_try_find_and_claim_visit,
-            claim.cast::<c_void>(),
+            ptr::addr_of_mut!(claim).cast::<c_void>(),
             &claim_data as *const mi_claim_fun_data_t as *mut c_void,
         )
+        .then(|| *pidx = SliceIndex::new(raw_idx))
+        .is_some()
     }
 }
 
 #[derive(Debug)]
 struct mi_claim_fun_data_t {
-    arena: *mut mi_arena_t,
+    arena: Option<ArenaPtr>,
 }
 
 #[inline]
@@ -1656,10 +1663,10 @@ pub unsafe fn mi_bitmap_popcount(bitmap: *mut mi_bitmap_t) -> usize {
 #[used]
 static MI_BITMAP_TRY_FIND_AND_CLAIM_KEEP: unsafe fn(
     *mut mi_bitmap_t,
-    usize,
-    *mut usize,
-    *mut mi_claim_fun_t,
-    *mut mi_arena_t,
+    ThreadSeq,
+    &mut SliceIndex,
+    ThreadLocalClaimCallback,
+    Option<ArenaPtr>,
 ) -> bool = mi_bitmap_try_find_and_claim;
 #[used]
 static MI_BITMAP_SIZE_KEEP: unsafe fn(usize, *mut usize) -> usize = mi_bitmap_size;
@@ -1711,7 +1718,21 @@ pub unsafe extern "C" fn _mi_bitmap_forall_set(
     arena: *mut mi_arena_t,
     arg: *mut c_void,
 ) -> bool {
+    unsafe { mi_bitmap_forall_set_typed(bitmap, visit, ArenaPtr::new(arena), arg) }
+}
+
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `visit` must be callable for each set bit.
+#[inline(never)]
+pub(crate) unsafe fn mi_bitmap_forall_set_typed(
+    bitmap: *mut mi_bitmap_t,
+    visit: mi_forall_set_fun_t,
+    arena: Option<ArenaPtr>,
+    arg: *mut c_void,
+) -> bool {
     unsafe {
+        let arena = arena.map(ArenaPtr::as_ptr).unwrap_or(ptr::null_mut());
+        let one = SliceCount::new_unchecked(1);
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
         for i in 0..chunkmap_max {
             let mut cmap_entry = (*bitmap).chunkmap.bfields[i].load(Ordering::Relaxed);
@@ -1724,7 +1745,8 @@ pub unsafe extern "C" fn _mi_bitmap_forall_set(
                     let mut b = chunk.bfields[j].load(Ordering::Relaxed);
                     let mut bidx = 0usize;
                     while mi_bfield_foreach_bit(&mut b, &mut bidx) {
-                        if !visit(base_idx + bidx, 1, arena, arg) {
+                        let index = SliceIndex::new(base_idx + bidx);
+                        if !visit(index.get(), one.get() as usize, arena, arg) {
                             return false;
                         }
                     }
@@ -1744,7 +1766,20 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_ranges(
     arena: *mut mi_arena_t,
     arg: *mut c_void,
 ) -> bool {
+    unsafe { mi_bitmap_forall_setc_ranges_typed(bitmap, visit, ArenaPtr::new(arena), arg) }
+}
+
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `visit` must be callable for each set range.
+#[inline(never)]
+pub(crate) unsafe fn mi_bitmap_forall_setc_ranges_typed(
+    bitmap: *mut mi_bitmap_t,
+    visit: mi_forall_set_fun_t,
+    arena: Option<ArenaPtr>,
+    arg: *mut c_void,
+) -> bool {
     unsafe {
+        let arena = arena.map(ArenaPtr::as_ptr).unwrap_or(ptr::null_mut());
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
         for i in 0..chunkmap_max {
             let mut cmap_entry = (*bitmap).chunkmap.bfields[i].load(Ordering::Relaxed);
@@ -1762,12 +1797,19 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_ranges(
                         let rng = mi_ctz(!(b >> bidx));
                         rngcount += rng;
                         let idx = base_idx + bidx;
+                        crate::mi_assert_internal!(u32::try_from(idx).is_ok());
+                        crate::mi_assert_internal!(u32::try_from(rng).is_ok());
+                        let range =
+                            SliceRange::from_raw(idx as u32, rng as u32).unwrap_or_else(|_| {
+                                crate::mi_assert_internal!(false);
+                                SliceRange::from_raw(0, 1).unwrap_unchecked()
+                            });
                         crate::mi_debug_assert!((1..=MI_BFIELD_BITS).contains(&rng));
                         crate::mi_debug_assert!((idx % MI_BFIELD_BITS) + rng <= MI_BFIELD_BITS);
                         crate::mi_debug_assert!(
                             (idx / MI_BCHUNK_BITS) < mi_bitmap_chunk_count(bitmap)
                         );
-                        if !visit(idx, rng, arena, arg) {
+                        if !visit(range.start_usize(), range.count_usize(), arena, arg) {
                             if b != 0 {
                                 chunk.bfields[j].fetch_or(b, Ordering::Relaxed);
                             }
@@ -1795,13 +1837,33 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_rangesn(
 ) -> bool {
     unsafe {
         if rngslices <= 1 {
-            return _mi_bitmap_forall_setc_ranges(bitmap, visit, arena, arg);
+            return mi_bitmap_forall_setc_ranges_typed(bitmap, visit, ArenaPtr::new(arena), arg);
         }
-        let rngslices = if rngslices > MI_BFIELD_BITS {
+        let rngslices_raw = if rngslices > MI_BFIELD_BITS {
             MI_BFIELD_BITS
         } else {
             rngslices
         };
+        crate::mi_assert_internal!(rngslices_raw > 0);
+        let rngslices = SliceCount::new_unchecked(rngslices_raw as u32);
+        mi_bitmap_forall_setc_rangesn_typed(bitmap, rngslices, visit, ArenaPtr::new(arena), arg)
+    }
+}
+
+/// # Safety
+/// `bitmap` must point to an initialized bitmap, and `visit` must be callable for each set range.
+#[inline(never)]
+pub(crate) unsafe fn mi_bitmap_forall_setc_rangesn_typed(
+    bitmap: *mut mi_bitmap_t,
+    rngslices: SliceCount,
+    visit: mi_forall_set_fun_t,
+    arena: Option<ArenaPtr>,
+    arg: *mut c_void,
+) -> bool {
+    unsafe {
+        let arena = arena.map(ArenaPtr::as_ptr).unwrap_or(ptr::null_mut());
+        let rngslices_count = rngslices;
+        let rngslices = rngslices_count.get() as usize;
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
         for i in 0..chunkmap_max {
             let mut cmap_entry = (*bitmap).chunkmap.bfields[i].load(Ordering::Relaxed);
@@ -1817,7 +1879,13 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_rangesn(
                         let rngmask = mi_bfield_mask(rngslices, shift);
                         if (b & rngmask) == rngmask {
                             let idx = base_idx + shift;
-                            if !visit(idx, rngslices, arena, arg) {
+                            crate::mi_assert_internal!(u32::try_from(idx).is_ok());
+                            let range = SliceRange::from_raw(idx as u32, rngslices_count.get())
+                                .unwrap_or_else(|_| {
+                                    crate::mi_assert_internal!(false);
+                                    SliceRange::from_raw(0, 1).unwrap_unchecked()
+                                });
+                            if !visit(range.start_usize(), range.count_usize(), arena, arg) {
                                 let mut notyet_visited = 0usize;
                                 if shift + rngslices < MI_BFIELD_BITS {
                                     notyet_visited = b & (!0usize << (shift + rngslices));

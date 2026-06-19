@@ -7,13 +7,13 @@ use core::mem::size_of;
 
 use crate::alloc::{
     _mi_page_malloc_zero_typed, _mi_theap_malloc_guarded, _mi_theap_malloc_zero,
-    _mi_theap_malloc_zero_ex, calloc_request_or_report, mi_theap_realloc_req,
+    _mi_theap_malloc_zero_ex, calloc_request_or_report,
 };
 use crate::arena::MI_ARENA_SLICE_SIZE;
 use crate::bits::MI_KiB;
+use crate::core_types::{BorrowedHeap, Errno};
 #[cfg(not(mi_c_malloc_fast))]
 use crate::free::_mi_padding_shrink;
-use crate::init::_mi_theap_empty_get;
 use crate::internal::{
     _mi_align_up_ptr, _mi_is_power_of_two, _mi_memcpy_aligned, _mi_memzero, _mi_ptr_page,
     MI_GUARDED, mi_likely, mi_page_set_has_interior_pointers, mi_page_usable_block_size,
@@ -30,7 +30,6 @@ use crate::types::{MI_SMALL_SIZE_MAX, mi_block_t, mi_heap_t, mi_theap_t};
 const MI_MAX_ALIGN_SIZE: usize = 16;
 const MI_PAGE_MAX_START_BLOCK_ALIGN2: usize = 4 * MI_KiB;
 const MI_PAGE_MAX_OVERALLOC_ALIGN: usize = MI_ARENA_SLICE_SIZE;
-const MI_EOVERFLOW: i32 = 75;
 
 #[cfg(mi_c_malloc_fast)]
 #[inline(always)]
@@ -78,25 +77,70 @@ pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> b
     ok
 }
 
-/// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
-/// `alignment` must be valid for aligned allocation.
-pub unsafe fn mi_theap_malloc_guarded_aligned(
-    mut theap: *mut mi_theap_t,
+fn aligned_layout_or_report(
     size: usize,
     alignment: usize,
+    offset: usize,
     zero: bool,
-) -> *mut c_void {
-    if MI_THEAP_INITASNULL && mi_unlikely(theap.is_null()) {
-        theap = unsafe { _mi_theap_empty_get() };
+) -> Option<(
+    crate::core_types::LayoutRequest,
+    crate::core_types::Alignment,
+    crate::core_types::AlignmentOffset,
+)> {
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        if crate::internal::MI_DEBUG > 0 {
+            _mi_error_message_fmt(
+                Errno::EOVERFLOW,
+                format_args!(
+                    "aligned allocation requires the alignment to be a power-of-two (size {size}, alignment {alignment})\n"
+                ),
+            );
+        }
+        return None;
+    };
+    let offset = crate::core_types::AlignmentOffset::new(offset);
+    let zeroed = if zero {
+        crate::core_types::Zeroed::Yes
+    } else {
+        crate::core_types::Zeroed::No
+    };
+    match crate::core_types::LayoutRequest::aligned_at(size, alignment.get(), offset, zeroed) {
+        Ok(layout) => Some((layout, alignment, offset)),
+        Err(_) => {
+            _mi_error_message_fmt(
+                Errno::EOVERFLOW,
+                format_args!(
+                    "aligned allocation request is too large (size {size}, alignment {})\n",
+                    alignment.get()
+                ),
+            );
+            None
+        }
     }
+}
+
+/// # Safety
+/// `theap` must be initialized and local to the current thread.
+/// `alignment` must be valid for aligned allocation.
+unsafe fn mi_theap_malloc_guarded_aligned(
+    theap: crate::core_types::ThreadHeapLocal,
+    layout: crate::core_types::LayoutRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
+) -> *mut c_void {
+    let size = layout.requested().get();
+    let alignment = alignment.get();
+    let offset = offset.get();
+    let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
+    let theap = theap.ptr().as_ptr();
     crate::mi_assert_internal!(alignment > 0 && alignment < MI_PAGE_MAX_OVERALLOC_ALIGN);
+    crate::mi_assert_internal!(offset == 0);
     if mi_unlikely(
         alignment >= MI_PAGE_MAX_OVERALLOC_ALIGN
             || size > (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE - alignment),
     ) {
         _mi_error_message_fmt(
-            MI_EOVERFLOW,
+            Errno::EOVERFLOW,
             format_args!(
                 "(guarded) aligned allocation request is too large (size {size}, alignment {alignment})\n"
             ),
@@ -119,39 +163,47 @@ pub unsafe fn mi_theap_malloc_guarded_aligned(
 
 #[inline]
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `theap` must be initialized and local to the current thread.
 /// If `usable` is non-null it must be writable for one `usize`.
-pub unsafe fn mi_theap_malloc_zero_no_guarded(
-    theap: *mut mi_theap_t,
-    size: usize,
-    zero: bool,
+pub(crate) unsafe fn mi_theap_malloc_zero_no_guarded(
+    theap: crate::core_types::ThreadHeapLocal,
+    layout: crate::core_types::LayoutRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
     usable: *mut usize,
 ) -> *mut c_void {
-    unsafe { _mi_theap_malloc_zero(theap, size, zero, usable) }
+    let size = layout.requested().get();
+    let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
+    crate::mi_assert_internal!(alignment.get() > 0);
+    crate::mi_assert_internal!(offset.get() < alignment.get());
+    unsafe { _mi_theap_malloc_zero(theap.ptr().as_ptr(), size, zero, usable) }
 }
 
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `theap` must be `None` only when lazy thread-heap initialization is enabled.
 /// `alignment` must be a non-zero power of two, and `usable` must be writable when non-null.
-pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
-    theap: *mut mi_theap_t,
-    size: usize,
-    alignment: usize,
-    offset: usize,
-    zero: bool,
+unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
+    theap: Option<crate::core_types::ThreadHeapLocal>,
+    layout: crate::core_types::LayoutRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
     usable: *mut usize,
 ) -> *mut c_void {
+    let size = layout.requested().get();
+    let alignment_raw = alignment.get();
+    let offset_raw = offset.get();
+    let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
     crate::mi_assert_internal!(size <= (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE));
-    crate::mi_assert_internal!(alignment != 0 && _mi_is_power_of_two(alignment));
+    crate::mi_assert_internal!(alignment_raw != 0 && _mi_is_power_of_two(alignment_raw));
 
     let p: *mut c_void;
     let oversize: usize;
-    if mi_unlikely(alignment > MI_PAGE_MAX_OVERALLOC_ALIGN) {
-        if mi_unlikely(offset != 0) {
+    if mi_unlikely(alignment_raw > MI_PAGE_MAX_OVERALLOC_ALIGN) {
+        if mi_unlikely(offset_raw != 0) {
             _mi_error_message_fmt(
-                MI_EOVERFLOW,
+                Errno::EOVERFLOW,
                 format_args!(
-                    "aligned allocation with a large alignment cannot be used with an alignment offset (size {size}, alignment {alignment}, offset {offset})\n"
+                    "aligned allocation with a large alignment cannot be used with an alignment offset (size {size}, alignment {alignment_raw}, offset {offset_raw})\n"
                 ),
             );
             return core::ptr::null_mut();
@@ -161,45 +213,68 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
         } else {
             size
         };
-        p = unsafe { _mi_theap_malloc_zero_ex(theap, oversize, zero, alignment, usable) };
+        let theap = theap
+            .map(|theap| theap.ptr().as_ptr())
+            .unwrap_or(core::ptr::null_mut());
+        p = unsafe { _mi_theap_malloc_zero_ex(theap, oversize, zero, alignment_raw, usable) };
         if p.is_null() {
             return core::ptr::null_mut();
         }
     } else {
         crate::mi_assert_internal!(
             size <= (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE)
-                && alignment <= MI_PAGE_MAX_OVERALLOC_ALIGN
+                && alignment_raw <= MI_PAGE_MAX_OVERALLOC_ALIGN
         );
-        crate::mi_assert_internal!(size < usize::MAX - alignment);
-        oversize = usize::max(size, MI_MAX_ALIGN_SIZE) + alignment - 1;
-        p = unsafe { mi_theap_malloc_zero_no_guarded(theap, oversize, zero, usable) };
+        crate::mi_assert_internal!(size < usize::MAX - alignment_raw);
+        oversize = usize::max(size, MI_MAX_ALIGN_SIZE) + alignment_raw - 1;
+        let no_guarded_layout = if zero {
+            crate::core_types::LayoutRequest::zalloc(oversize)
+        } else {
+            crate::core_types::LayoutRequest::malloc(oversize)
+        };
+        let Ok(no_guarded_layout) = no_guarded_layout else {
+            crate::mi_assert_internal!(false);
+            return core::ptr::null_mut();
+        };
+        p = if let Some(theap) = theap {
+            unsafe {
+                mi_theap_malloc_zero_no_guarded(theap, no_guarded_layout, alignment, offset, usable)
+            }
+        } else {
+            unsafe { _mi_theap_malloc_zero(core::ptr::null_mut(), oversize, zero, usable) }
+        };
         if p.is_null() {
             return core::ptr::null_mut();
         }
     }
 
-    let align_mask = alignment - 1;
-    let poffset = (p as usize + offset) & align_mask;
-    let adjust = if poffset == 0 { 0 } else { alignment - poffset };
-    crate::mi_assert_internal!(adjust < alignment);
+    let align_mask = alignment_raw - 1;
+    let poffset = (p as usize + offset_raw) & align_mask;
+    let adjust = if poffset == 0 {
+        0
+    } else {
+        alignment_raw - poffset
+    };
+    crate::mi_assert_internal!(adjust < alignment_raw);
     let aligned_p = (p as usize + adjust) as *mut c_void;
 
     let page = unsafe { _mi_ptr_page(p) };
     if aligned_p != p {
-        unsafe { mi_page_set_has_interior_pointers(page, true) };
+        unsafe {
+            mi_page_set_has_interior_pointers(crate::core_types::PagePtr::new_unchecked(page), true)
+        };
         if MI_GUARDED != 0 && adjust >= size_of::<mi_block_t>() {
             let block = p.cast::<mi_block_t>();
             let block = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
             unsafe {
-                crate::core_types::BlockLink::tagged(crate::core_types::BlockTag::ALIGNED)
-                    .write_to(block);
+                crate::core_types::BlockTag::write_aligned_to(block);
             }
         }
         unsafe { mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size) };
     }
 
     crate::mi_assert_internal!(unsafe { mi_page_usable_block_size(page) }.get() >= adjust + size);
-    crate::mi_assert_internal!(((aligned_p as usize) + offset).is_multiple_of(alignment));
+    crate::mi_assert_internal!(((aligned_p as usize) + offset_raw).is_multiple_of(alignment_raw));
     crate::mi_assert_internal!(unsafe { crate::mimalloc::mi_usable_size(aligned_p) } >= size);
     crate::mi_assert_internal!(
         unsafe { crate::mimalloc::mi_usable_size(p) }
@@ -214,40 +289,45 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
 }
 
 /// # Safety
-/// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
+/// `theap` must be `None` only when lazy thread-heap initialization is enabled.
 /// `alignment` must be a non-zero power of two, and `usable` must be writable when non-null.
-pub unsafe fn mi_theap_malloc_zero_aligned_at_generic(
-    theap: *mut mi_theap_t,
-    size: usize,
-    alignment: usize,
-    offset: usize,
-    zero: bool,
+unsafe fn mi_theap_malloc_zero_aligned_at_generic(
+    theap: Option<crate::core_types::ThreadHeapLocal>,
+    layout: crate::core_types::LayoutRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
     usable: *mut usize,
 ) -> *mut c_void {
-    crate::mi_assert_internal!(alignment != 0 && _mi_is_power_of_two(alignment));
+    let size = layout.requested().get();
+    let alignment_raw = alignment.get();
+    let offset_raw = offset.get();
+    crate::mi_assert_internal!(alignment_raw != 0 && _mi_is_power_of_two(alignment_raw));
     if mi_unlikely(size > (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE)) {
         _mi_error_message_fmt(
-            MI_EOVERFLOW,
+            Errno::EOVERFLOW,
             format_args!(
-                "aligned allocation request is too large (size {size}, alignment {alignment})\n"
+                "aligned allocation request is too large (size {size}, alignment {alignment_raw})\n"
             ),
         );
         return core::ptr::null_mut();
     }
 
-    if offset == 0 && unsafe { mi_malloc_is_naturally_aligned(size, alignment) } {
-        let p = unsafe { mi_theap_malloc_zero_no_guarded(theap, size, zero, usable) };
-        crate::mi_assert_internal!(p.is_null() || (p as usize).is_multiple_of(alignment));
-        if mi_likely(((p as usize) & (alignment - 1)) == 0) {
+    if let Some(local_theap) = theap
+        && offset_raw == 0
+        && unsafe { mi_malloc_is_naturally_aligned(size, alignment_raw) }
+    {
+        let p = unsafe {
+            mi_theap_malloc_zero_no_guarded(local_theap, layout, alignment, offset, usable)
+        };
+        crate::mi_assert_internal!(p.is_null() || (p as usize).is_multiple_of(alignment_raw));
+        if mi_likely(((p as usize) & (alignment_raw - 1)) == 0) {
             return p;
         }
         crate::mi_assert!(false);
         unsafe { crate::mimalloc::mi_free(p) };
     }
 
-    unsafe {
-        mi_theap_malloc_zero_aligned_at_overalloc(theap, size, alignment, offset, zero, usable)
-    }
+    unsafe { mi_theap_malloc_zero_aligned_at_overalloc(theap, layout, alignment, offset, usable) }
 }
 
 /// # Safety
@@ -261,53 +341,88 @@ pub unsafe fn mi_theap_malloc_zero_aligned_at(
     zero: bool,
     usable: *mut usize,
 ) -> *mut c_void {
-    if mi_unlikely(alignment == 0 || !_mi_is_power_of_two(alignment)) {
-        if crate::internal::MI_DEBUG > 0 {
-            _mi_error_message_fmt(
-                MI_EOVERFLOW,
-                format_args!(
-                    "aligned allocation requires the alignment to be a power-of-two (size {size}, alignment {alignment})\n"
-                ),
-            );
-        }
+    let Some((layout, alignment, offset)) = aligned_layout_or_report(size, alignment, offset, zero)
+    else {
         return core::ptr::null_mut();
+    };
+    let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
+    unsafe { mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, usable) }
+}
+
+/// # Safety
+/// `theap` must be `None` only when lazy thread-heap initialization is enabled.
+/// `usable` must be writable for one `usize` when non-null.
+unsafe fn mi_theap_malloc_zero_aligned_at_req(
+    theap: Option<crate::core_types::ThreadHeapLocal>,
+    layout: crate::core_types::LayoutRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
+    usable: *mut usize,
+) -> *mut c_void {
+    let size = layout.requested().get();
+    let alignment_raw = alignment.get();
+    let offset_raw = offset.get();
+    let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
+
+    if let Some(local_theap) = theap
+        && MI_GUARDED != 0
+        && offset_raw == 0
+        && alignment_raw < MI_PAGE_MAX_OVERALLOC_ALIGN
+        && unsafe { mi_theap_malloc_use_guarded(local_theap, layout.effective()) }
+    {
+        return unsafe { mi_theap_malloc_guarded_aligned(local_theap, layout, alignment, offset) };
     }
 
-    if MI_GUARDED != 0
-        && !(MI_THEAP_INITASNULL && theap.is_null())
-        && offset == 0
-        && alignment < MI_PAGE_MAX_OVERALLOC_ALIGN
-        && unsafe { mi_theap_malloc_use_guarded(theap, size) }
+    if let Some(local_theap) = theap
+        && mi_likely(size <= MI_SMALL_SIZE_MAX && alignment_raw <= size)
     {
-        return unsafe { mi_theap_malloc_guarded_aligned(theap, size, alignment, zero) };
-    }
-
-    if !(MI_THEAP_INITASNULL && theap.is_null())
-        && mi_likely(size <= MI_SMALL_SIZE_MAX && alignment <= size)
-    {
-        let align_mask = alignment - 1;
-        let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();
-        let page = unsafe { crate::internal::_mi_theap_get_free_small_page_typed(theap, padded) };
+        let theap = local_theap.ptr().as_ptr();
+        let align_mask = alignment_raw - 1;
+        let padded = layout.padded();
+        let page =
+            unsafe { crate::internal::_mi_theap_get_free_small_page_typed(local_theap, padded) };
         if mi_likely(!page.is_null() && !unsafe { (*page).free }.is_null()) {
-            let is_aligned = ((unsafe { (*page).free } as usize) + offset) & align_mask == 0;
+            let is_aligned = ((unsafe { (*page).free } as usize) + offset_raw) & align_mask == 0;
             if mi_likely(is_aligned) {
                 if !usable.is_null() {
                     unsafe {
                         *usable = mi_page_usable_block_size(page).get();
                     }
                 }
+                let active = unsafe {
+                    crate::core_types::ActivePage::new_unchecked(
+                        crate::core_types::PagePtr::new_unchecked(page),
+                    )
+                };
+                let available = unsafe { active.available().unwrap_unchecked() };
                 let p = unsafe {
-                    _mi_page_malloc_zero_typed(theap, page, padded, zero, core::ptr::null_mut())
+                    _mi_page_malloc_zero_typed(
+                        theap,
+                        available,
+                        padded,
+                        zero,
+                        core::ptr::null_mut(),
+                    )
                 };
                 crate::mi_assert_internal!(!p.is_null());
-                crate::mi_assert_internal!(((p as usize) + offset).is_multiple_of(alignment));
+                crate::mi_assert_internal!(
+                    ((p as usize) + offset_raw).is_multiple_of(alignment_raw)
+                );
                 unsafe { mi_track_malloc(p, size, zero) };
                 return p;
             }
         }
     }
 
-    unsafe { mi_theap_malloc_zero_aligned_at_generic(theap, size, alignment, offset, zero, usable) }
+    unsafe { mi_theap_malloc_zero_aligned_at_generic(theap, layout, alignment, offset, usable) }
 }
 
 #[inline]
@@ -320,15 +435,22 @@ pub unsafe fn mi_theap_malloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
+    let Some((layout, alignment, offset)) =
+        aligned_layout_or_report(size, alignment, offset, false)
+    else {
+        return core::ptr::null_mut();
+    };
+    let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
     unsafe {
-        mi_theap_malloc_zero_aligned_at(
-            theap,
-            size,
-            alignment,
-            offset,
-            false,
-            core::ptr::null_mut(),
-        )
+        mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
     }
 }
 
@@ -341,7 +463,22 @@ pub unsafe extern "C" fn mi_theap_malloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_malloc_aligned_at(theap, size, alignment, 0) }
+    let Some((layout, alignment, offset)) = aligned_layout_or_report(size, alignment, 0, false)
+    else {
+        return core::ptr::null_mut();
+    };
+    let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
+    unsafe {
+        mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
+    }
 }
 
 #[inline]
@@ -354,8 +491,21 @@ pub unsafe fn mi_theap_zalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
+    let Some((layout, alignment, offset)) = aligned_layout_or_report(size, alignment, offset, true)
+    else {
+        return core::ptr::null_mut();
+    };
+    let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
     unsafe {
-        mi_theap_malloc_zero_aligned_at(theap, size, alignment, offset, true, core::ptr::null_mut())
+        mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
     }
 }
 
@@ -368,7 +518,22 @@ pub unsafe fn mi_theap_zalloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_zalloc_aligned_at(theap, size, alignment, 0) }
+    let Some((layout, alignment, offset)) = aligned_layout_or_report(size, alignment, 0, true)
+    else {
+        return core::ptr::null_mut();
+    };
+    let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
+    unsafe {
+        mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
+    }
 }
 
 #[inline]
@@ -382,12 +547,63 @@ pub unsafe fn mi_theap_calloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    unsafe {
-        if let Some(req) = calloc_request_or_report(count, size) {
-            mi_theap_zalloc_aligned_at(theap, req.layout().requested().get(), alignment, offset)
-        } else {
-            core::ptr::null_mut()
+    let Some(request) = calloc_request_or_report(count, size) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        if crate::internal::MI_DEBUG > 0 {
+            _mi_error_message_fmt(
+                Errno::EOVERFLOW,
+                format_args!(
+                    "aligned allocation requires the alignment to be a power-of-two (size {}, alignment {alignment})\n",
+                    request.total().get()
+                ),
+            );
         }
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(offset);
+    let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
+    unsafe { mi_theap_calloc_aligned_at_req(theap, request, alignment, offset) }
+}
+
+/// # Safety
+/// `theap` must be `None` only when lazy thread-heap initialization is enabled.
+unsafe fn mi_theap_calloc_aligned_at_req(
+    theap: Option<crate::core_types::ThreadHeapLocal>,
+    request: crate::core_types::CallocRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
+) -> *mut c_void {
+    let size = request.total().get();
+    let layout = match crate::core_types::LayoutRequest::aligned_at(
+        size,
+        alignment.get(),
+        offset,
+        crate::core_types::Zeroed::Yes,
+    ) {
+        Ok(layout) => layout,
+        Err(_) => {
+            _mi_error_message_fmt(
+                Errno::EOVERFLOW,
+                format_args!(
+                    "aligned allocation request is too large (size {size}, alignment {})\n",
+                    alignment.get()
+                ),
+            );
+            return core::ptr::null_mut();
+        }
+    };
+    unsafe {
+        mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
     }
 }
 
@@ -401,7 +617,38 @@ pub unsafe fn mi_theap_calloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_calloc_aligned_at(theap, count, size, alignment, 0) }
+    let Some(request) = calloc_request_or_report(count, size) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        if crate::internal::MI_DEBUG > 0 {
+            _mi_error_message_fmt(
+                Errno::EOVERFLOW,
+                format_args!(
+                    "aligned allocation requires the alignment to be a power-of-two (size {}, alignment {alignment})\n",
+                    request.total().get()
+                ),
+            );
+        }
+        return core::ptr::null_mut();
+    };
+    let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
+    unsafe {
+        mi_theap_calloc_aligned_at_req(
+            theap,
+            request,
+            alignment,
+            crate::core_types::AlignmentOffset::new(0),
+        )
+    }
 }
 
 /// # Safety
@@ -522,7 +769,36 @@ pub unsafe extern "C" fn mi_heap_malloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_malloc_aligned_at(_mi_heap_theap(heap), size, alignment, offset) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some((layout, alignment, offset)) =
+        aligned_layout_or_report(size, alignment, offset, false)
+    else {
+        return core::ptr::null_mut();
+    };
+    unsafe { mi_heap_malloc_aligned_at_typed(heap, layout, alignment, offset) }
+}
+
+unsafe fn mi_heap_malloc_aligned_at_typed(
+    heap: BorrowedHeap,
+    layout: crate::core_types::LayoutRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
+) -> *mut c_void {
+    let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
+    let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
+    unsafe {
+        mi_theap_malloc_zero_aligned_at_req(theap, layout, alignment, offset, core::ptr::null_mut())
+    }
 }
 
 /// # Safety
@@ -533,7 +809,14 @@ pub unsafe extern "C" fn mi_heap_malloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_malloc_aligned(_mi_heap_theap(heap), size, alignment) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some((layout, alignment, offset)) = aligned_layout_or_report(size, alignment, 0, false)
+    else {
+        return core::ptr::null_mut();
+    };
+    unsafe { mi_heap_malloc_aligned_at_typed(heap, layout, alignment, offset) }
 }
 
 /// # Safety
@@ -545,7 +828,14 @@ pub unsafe extern "C" fn mi_heap_zalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_zalloc_aligned_at(_mi_heap_theap(heap), size, alignment, offset) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some((layout, alignment, offset)) = aligned_layout_or_report(size, alignment, offset, true)
+    else {
+        return core::ptr::null_mut();
+    };
+    unsafe { mi_heap_malloc_aligned_at_typed(heap, layout, alignment, offset) }
 }
 
 /// # Safety
@@ -556,7 +846,14 @@ pub unsafe extern "C" fn mi_heap_zalloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_zalloc_aligned(_mi_heap_theap(heap), size, alignment) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some((layout, alignment, offset)) = aligned_layout_or_report(size, alignment, 0, true)
+    else {
+        return core::ptr::null_mut();
+    };
+    unsafe { mi_heap_malloc_aligned_at_typed(heap, layout, alignment, offset) }
 }
 
 /// # Safety
@@ -569,7 +866,47 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_calloc_aligned_at(_mi_heap_theap(heap), count, size, alignment, offset) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some(request) = calloc_request_or_report(count, size) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        if crate::internal::MI_DEBUG > 0 {
+            _mi_error_message_fmt(
+                Errno::EOVERFLOW,
+                format_args!(
+                    "aligned allocation requires the alignment to be a power-of-two (size {}, alignment {alignment})\n",
+                    request.total().get()
+                ),
+            );
+        }
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(offset);
+    unsafe { mi_heap_calloc_aligned_at_typed(heap, request, alignment, offset) }
+}
+
+/// # Safety
+/// `heap` must reference a live heap owned by this allocator.
+unsafe fn mi_heap_calloc_aligned_at_typed(
+    heap: BorrowedHeap,
+    request: crate::core_types::CallocRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
+) -> *mut c_void {
+    let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
+    let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
+    unsafe { mi_theap_calloc_aligned_at_req(theap, request, alignment, offset) }
 }
 
 /// # Safety
@@ -581,7 +918,26 @@ pub unsafe extern "C" fn mi_heap_calloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_calloc_aligned(_mi_heap_theap(heap), count, size, alignment) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some(request) = calloc_request_or_report(count, size) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        if crate::internal::MI_DEBUG > 0 {
+            _mi_error_message_fmt(
+                Errno::EOVERFLOW,
+                format_args!(
+                    "aligned allocation requires the alignment to be a power-of-two (size {}, alignment {alignment})\n",
+                    request.total().get()
+                ),
+            );
+        }
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(0);
+    unsafe { mi_heap_calloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
@@ -596,17 +952,17 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
     offset: usize,
     zero: bool,
 ) -> *mut c_void {
-    if alignment == 0 {
+    let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
         return core::ptr::null_mut();
-    }
-    if alignment <= size_of::<usize>() && offset == 0 {
+    };
+    if alignment_typed.get() <= size_of::<usize>() && offset == 0 {
         let layout = if zero {
             crate::core_types::LayoutRequest::zalloc(newsize)
         } else {
             crate::core_types::LayoutRequest::malloc(newsize)
         };
         return match layout {
-            Ok(layout) => unsafe { mi_theap_realloc_req(theap, p, layout) },
+            Ok(layout) => unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) },
             Err(_) => core::ptr::null_mut(),
         };
     }
@@ -615,60 +971,123 @@ pub unsafe fn mi_theap_realloc_zero_aligned_at(
     } else {
         crate::core_types::Zeroed::No
     };
+    let offset = crate::core_types::AlignmentOffset::new(offset);
     let Ok(layout) =
         crate::core_types::LayoutRequest::aligned_at(newsize, alignment, offset, zeroed)
     else {
         return core::ptr::null_mut();
     };
-    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, p, layout, offset) }
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment_typed, offset) }
 }
 
 unsafe fn mi_theap_realloc_zero_aligned_at_req(
     theap: *mut mi_theap_t,
-    p: *mut c_void,
-    layout: crate::core_types::LayoutRequest,
-    offset: usize,
+    request: crate::core_types::ReallocRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
 ) -> *mut c_void {
+    let layout = request.new_layout();
     let newsize = layout.requested().get();
-    let alignment = layout.alignment().get();
+    let alignment_raw = alignment.get();
+    let offset_raw = offset.get();
     let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
+    let p = request
+        .ptr()
+        .map(|ptr| ptr.as_ptr())
+        .unwrap_or(core::ptr::null_mut());
 
-    crate::mi_assert!(alignment > 0);
-    if alignment <= size_of::<usize>() && offset == 0 {
-        return unsafe { mi_theap_realloc_req(theap, p, layout) };
+    crate::mi_assert!(alignment_raw > 0);
+    if alignment_raw <= size_of::<usize>() && offset_raw == 0 {
+        return unsafe { crate::alloc::mi_theap_realloc_req(theap, request) };
     }
     if p.is_null() {
+        let theap = if MI_THEAP_INITASNULL && theap.is_null() {
+            None
+        } else {
+            Some(unsafe {
+                crate::core_types::ThreadHeapLocal::new_unchecked(
+                    crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+                )
+            })
+        };
         return unsafe {
-            mi_theap_malloc_zero_aligned_at(
+            mi_theap_malloc_zero_aligned_at_req(
                 theap,
-                newsize,
+                layout,
                 alignment,
                 offset,
-                zero,
                 core::ptr::null_mut(),
             )
         };
     }
-    let size = unsafe { crate::mimalloc::mi_usable_size(p) };
+    let Some(old) = request.old() else {
+        return core::ptr::null_mut();
+    };
+    let size = old.usable().get();
     if newsize <= size
         && newsize >= (size - (size / 2))
-        && (p as usize + offset).is_multiple_of(alignment)
+        && (p as usize + offset_raw).is_multiple_of(alignment_raw)
     {
         return p;
     }
 
-    let newp = unsafe { mi_theap_malloc_aligned_at(theap, newsize, alignment, offset) };
+    let allocation_layout = if zero {
+        match crate::core_types::LayoutRequest::aligned_at(
+            newsize,
+            alignment_raw,
+            offset,
+            crate::core_types::Zeroed::No,
+        ) {
+            Ok(layout) => layout,
+            Err(_) => return core::ptr::null_mut(),
+        }
+    } else {
+        layout
+    };
+    let theap_local = if MI_THEAP_INITASNULL && theap.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            crate::core_types::ThreadHeapLocal::new_unchecked(
+                crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+            )
+        })
+    };
+    let newp = unsafe {
+        mi_theap_malloc_zero_aligned_at_req(
+            theap_local,
+            allocation_layout,
+            alignment,
+            offset,
+            core::ptr::null_mut(),
+        )
+    };
     if !newp.is_null() {
-        if zero && newsize > size {
-            let start = if size >= size_of::<isize>() {
-                size - size_of::<isize>()
+        let preserve = crate::core_types::PreserveBytes::new(
+            crate::core_types::UsableSize::new(size),
+            layout.requested(),
+        );
+        let preserved = preserve.get();
+        if zero && newsize > preserved {
+            let start = if preserved >= size_of::<isize>() {
+                preserved - size_of::<isize>()
             } else {
                 0
             };
             unsafe { _mi_memzero((newp as *mut u8).add(start).cast(), newsize - start) };
         }
         unsafe {
-            _mi_memcpy_aligned(newp, p, usize::min(newsize, size));
+            _mi_memcpy_aligned(newp, p, preserve.get());
             crate::mimalloc::mi_free(p);
         }
     }
@@ -687,10 +1106,38 @@ pub unsafe fn mi_theap_realloc_zero_aligned(
     alignment: usize,
     zero: bool,
 ) -> *mut c_void {
-    unsafe {
-        crate::mi_assert!(alignment > 0);
-        mi_theap_realloc_zero_aligned_at(theap, p, newsize, alignment, 0, zero)
-    }
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    let zeroed = if zero {
+        crate::core_types::Zeroed::Yes
+    } else {
+        crate::core_types::Zeroed::No
+    };
+    let offset = crate::core_types::AlignmentOffset::new(0);
+    let layout = if alignment.get() <= size_of::<usize>() {
+        if zero {
+            crate::core_types::LayoutRequest::zalloc(newsize)
+        } else {
+            crate::core_types::LayoutRequest::malloc(newsize)
+        }
+    } else {
+        crate::core_types::LayoutRequest::aligned_at(newsize, alignment.get(), offset, zeroed)
+    };
+    let Ok(layout) = layout else {
+        return core::ptr::null_mut();
+    };
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
 #[inline]
@@ -705,7 +1152,29 @@ pub unsafe fn mi_theap_realloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_realloc_zero_aligned_at(theap, p, newsize, alignment, offset, false) }
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(offset);
+    let Ok(layout) = crate::core_types::LayoutRequest::aligned_at(
+        newsize,
+        alignment.get(),
+        offset,
+        crate::core_types::Zeroed::No,
+    ) else {
+        return core::ptr::null_mut();
+    };
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
 #[inline]
@@ -719,7 +1188,34 @@ pub unsafe fn mi_theap_realloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_realloc_zero_aligned(theap, p, newsize, alignment, false) }
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(0);
+    let layout = if alignment.get() <= size_of::<usize>() {
+        crate::core_types::LayoutRequest::malloc(newsize)
+    } else {
+        crate::core_types::LayoutRequest::aligned_at(
+            newsize,
+            alignment.get(),
+            offset,
+            crate::core_types::Zeroed::No,
+        )
+    };
+    let Ok(layout) = layout else {
+        return core::ptr::null_mut();
+    };
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
 #[inline]
@@ -734,7 +1230,35 @@ pub unsafe fn mi_theap_rezalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_realloc_zero_aligned_at(theap, p, newsize, alignment, offset, true) }
+    let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    if alignment_typed.get() <= size_of::<usize>() && offset == 0 {
+        let Ok(layout) = crate::core_types::LayoutRequest::zalloc(newsize) else {
+            return core::ptr::null_mut();
+        };
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
+    }
+    let offset = crate::core_types::AlignmentOffset::new(offset);
+    let Ok(layout) = crate::core_types::LayoutRequest::aligned_at(
+        newsize,
+        alignment,
+        offset,
+        crate::core_types::Zeroed::Yes,
+    ) else {
+        return core::ptr::null_mut();
+    };
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment_typed, offset) }
 }
 
 #[inline]
@@ -748,7 +1272,34 @@ pub unsafe fn mi_theap_rezalloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_realloc_zero_aligned(theap, p, newsize, alignment, true) }
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(0);
+    let layout = if alignment.get() <= size_of::<usize>() {
+        crate::core_types::LayoutRequest::zalloc(newsize)
+    } else {
+        crate::core_types::LayoutRequest::aligned_at(
+            newsize,
+            alignment.get(),
+            offset,
+            crate::core_types::Zeroed::Yes,
+        )
+    };
+    let Ok(layout) = layout else {
+        return core::ptr::null_mut();
+    };
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
 #[inline]
@@ -764,19 +1315,51 @@ pub unsafe fn mi_theap_recalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    unsafe {
-        if let Some(req) = calloc_request_or_report(newcount, size) {
-            mi_theap_rezalloc_aligned_at(
-                theap,
-                p,
-                req.layout().requested().get(),
-                alignment,
-                offset,
-            )
-        } else {
-            core::ptr::null_mut()
-        }
+    let Some(request) = calloc_request_or_report(newcount, size) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    if alignment_typed.get() <= size_of::<usize>() && offset == 0 {
+        let layout = request.layout();
+        return unsafe { crate::alloc::mi_theap_realloc_layout(theap, p, layout) };
     }
+    let offset = crate::core_types::AlignmentOffset::new(offset);
+    let Ok(layout) = crate::core_types::LayoutRequest::aligned_at(
+        request.total().get(),
+        alignment,
+        offset,
+        crate::core_types::Zeroed::Yes,
+    ) else {
+        return core::ptr::null_mut();
+    };
+    let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(realloc_request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        realloc_request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe {
+        mi_theap_recalloc_aligned_at_req(theap, request, realloc_request, alignment_typed, offset)
+    }
+}
+
+unsafe fn mi_theap_recalloc_aligned_at_req(
+    theap: *mut mi_theap_t,
+    request: crate::core_types::CallocRequest,
+    realloc_request: crate::core_types::ReallocRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
+) -> *mut c_void {
+    crate::mi_debug_assert!(
+        request.total().get() == realloc_request.new_layout().requested().get()
+    );
+    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, realloc_request, alignment, offset) }
 }
 
 #[inline]
@@ -791,7 +1374,37 @@ pub unsafe fn mi_theap_recalloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_recalloc_aligned_at(theap, p, newcount, size, alignment, 0) }
+    let Some(request) = calloc_request_or_report(newcount, size) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(0);
+    let layout = if alignment.get() <= size_of::<usize>() {
+        Ok(request.layout())
+    } else {
+        crate::core_types::LayoutRequest::aligned_at(
+            request.total().get(),
+            alignment.get(),
+            offset,
+            crate::core_types::Zeroed::Yes,
+        )
+    };
+    let Ok(layout) = layout else {
+        return core::ptr::null_mut();
+    };
+    let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(realloc_request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        realloc_request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_theap_recalloc_aligned_at_req(theap, request, realloc_request, alignment, offset) }
 }
 
 /// # Safety
@@ -884,7 +1497,37 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_realloc_aligned_at(_mi_heap_theap(heap), p, newsize, alignment, offset) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some((layout, alignment, offset)) =
+        aligned_layout_or_report(newsize, alignment, offset, false)
+    else {
+        return core::ptr::null_mut();
+    };
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
+}
+
+/// # Safety
+/// `heap` must reference a live heap owned by this allocator.
+unsafe fn mi_heap_realloc_aligned_at_typed(
+    heap: BorrowedHeap,
+    request: crate::core_types::ReallocRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
+) -> *mut c_void {
+    let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
+    unsafe { mi_theap_realloc_zero_aligned_at_req(theap, request, alignment, offset) }
 }
 
 /// # Safety
@@ -897,7 +1540,37 @@ pub unsafe extern "C" fn mi_heap_realloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_realloc_aligned(_mi_heap_theap(heap), p, newsize, alignment) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(0);
+    let layout = if alignment.get() <= size_of::<usize>() {
+        crate::core_types::LayoutRequest::malloc(newsize)
+    } else {
+        crate::core_types::LayoutRequest::aligned_at(
+            newsize,
+            alignment.get(),
+            offset,
+            crate::core_types::Zeroed::No,
+        )
+    };
+    let Ok(layout) = layout else {
+        return core::ptr::null_mut();
+    };
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
@@ -911,7 +1584,25 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_rezalloc_aligned_at(_mi_heap_theap(heap), p, newsize, alignment, offset) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some((layout, alignment, offset)) =
+        aligned_layout_or_report(newsize, alignment, offset, true)
+    else {
+        return core::ptr::null_mut();
+    };
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
@@ -924,7 +1615,37 @@ pub unsafe extern "C" fn mi_heap_rezalloc_aligned(
     newsize: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_rezalloc_aligned(_mi_heap_theap(heap), p, newsize, alignment) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(0);
+    let layout = if alignment.get() <= size_of::<usize>() {
+        crate::core_types::LayoutRequest::zalloc(newsize)
+    } else {
+        crate::core_types::LayoutRequest::aligned_at(
+            newsize,
+            alignment.get(),
+            offset,
+            crate::core_types::Zeroed::Yes,
+        )
+    };
+    let Ok(layout) = layout else {
+        return core::ptr::null_mut();
+    };
+    let request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_heap_realloc_aligned_at_typed(heap, request, alignment, offset) }
 }
 
 /// # Safety
@@ -939,9 +1660,50 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some(request) = calloc_request_or_report(newcount, size) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment_typed) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(offset);
+    let Ok(layout) = crate::core_types::LayoutRequest::aligned_at(
+        request.total().get(),
+        alignment,
+        offset,
+        crate::core_types::Zeroed::Yes,
+    ) else {
+        return core::ptr::null_mut();
+    };
+    let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(realloc_request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        realloc_request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
     unsafe {
-        mi_theap_recalloc_aligned_at(_mi_heap_theap(heap), p, newcount, size, alignment, offset)
+        mi_heap_recalloc_aligned_at_typed(heap, request, realloc_request, alignment_typed, offset)
     }
+}
+
+/// # Safety
+/// `heap` must reference a live heap owned by this allocator.
+unsafe fn mi_heap_recalloc_aligned_at_typed(
+    heap: BorrowedHeap,
+    request: crate::core_types::CallocRequest,
+    realloc_request: crate::core_types::ReallocRequest,
+    alignment: crate::core_types::Alignment,
+    offset: crate::core_types::AlignmentOffset,
+) -> *mut c_void {
+    let theap = unsafe { _mi_heap_theap(heap.ptr().as_ptr()) };
+    unsafe { mi_theap_recalloc_aligned_at_req(theap, request, realloc_request, alignment, offset) }
 }
 
 /// # Safety
@@ -955,5 +1717,38 @@ pub unsafe extern "C" fn mi_heap_recalloc_aligned(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_recalloc_aligned(_mi_heap_theap(heap), p, newcount, size, alignment) }
+    let Some(heap) = (unsafe { BorrowedHeap::from_allocation_raw(heap) }) else {
+        return core::ptr::null_mut();
+    };
+    let Some(request) = calloc_request_or_report(newcount, size) else {
+        return core::ptr::null_mut();
+    };
+    let Some(alignment) = crate::core_types::Alignment::new(alignment) else {
+        return core::ptr::null_mut();
+    };
+    let offset = crate::core_types::AlignmentOffset::new(0);
+    let layout = if alignment.get() <= size_of::<usize>() {
+        Ok(request.layout())
+    } else {
+        crate::core_types::LayoutRequest::aligned_at(
+            request.total().get(),
+            alignment.get(),
+            offset,
+            crate::core_types::Zeroed::Yes,
+        )
+    };
+    let Ok(layout) = layout else {
+        return core::ptr::null_mut();
+    };
+    let realloc_request = if let Some(user) = crate::core_types::UserPtr::new(p) {
+        let Some(realloc_request) = (unsafe {
+            crate::alloc::mi_realloc_request_from_user(user, layout, core::ptr::null_mut())
+        }) else {
+            return core::ptr::null_mut();
+        };
+        realloc_request
+    } else {
+        crate::core_types::ReallocRequest::from_null(layout, layout.zeroed())
+    };
+    unsafe { mi_heap_recalloc_aligned_at_typed(heap, request, realloc_request, alignment, offset) }
 }

@@ -331,9 +331,9 @@ impl fmt::Debug for Allocation {
 
 #[inline]
 fn dangling_for(layout: Layout) -> NonNull<u8> {
-    // SAFETY[AUDIT:owned-allocation]: `Layout` alignments are non-zero powers
-    // of two, so the integer value is an aligned non-null sentinel for
-    // zero-sized allocations and is never dereferenced by safe code.
+    // SAFETY[AUDIT:owned-allocation]: `Layout` alignments are non-zero powers of
+    // two, so the integer value is an aligned non-null sentinel for zero-sized
+    // allocations and is never dereferenced by safe code.
     unsafe { NonNull::new_unchecked(layout.align() as *mut u8) }
 }
 

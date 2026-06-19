@@ -1,8 +1,7 @@
 //! Mechanical translation of `src/alloc-posix.c`.
 
 use crate::internal::{
-    _mi_align_up, _mi_is_aligned, _mi_is_power_of_two, _mi_memcpy, _mi_os_page_size,
-    mi_mul_overflow,
+    _mi_align_up, _mi_is_aligned, _mi_is_power_of_two, _mi_memcpy, mi_mul_overflow,
 };
 use crate::mimalloc::{
     c_wchar, mi_expand, mi_free, mi_is_in_heap_region, mi_malloc, mi_malloc_aligned, mi_realloc,
@@ -110,7 +109,7 @@ pub unsafe extern "C" fn mi_memalign(alignment: usize, size: usize) -> *mut c_vo
 /// The returned pointer, when non-null, must be released through
 /// mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_valloc(size: usize) -> *mut c_void {
-    unsafe { mi_memalign(_mi_os_page_size(), size) }
+    unsafe { mi_memalign(crate::os::_mi_os_page_size_typed().get(), size) }
 }
 
 #[unsafe(no_mangle)]
@@ -119,7 +118,7 @@ pub unsafe extern "C" fn mi_valloc(size: usize) -> *mut c_void {
 /// The returned pointer, when non-null, must be released through
 /// mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_pvalloc(size: usize) -> *mut c_void {
-    let psize = unsafe { _mi_os_page_size() };
+    let psize = unsafe { crate::os::_mi_os_page_size_typed().get() };
     if size >= usize::MAX - psize {
         return ptr::null_mut();
     }

@@ -3,7 +3,7 @@
 use core::{ffi::c_void, marker::PhantomData};
 
 use crate::core_types::BlockPtr;
-use crate::core_types::page_states::{AvailablePage, LocalPage, OwnedAbandonedPage};
+use crate::core_types::page_states::{AvailablePage, LocalPage};
 use crate::core_types::validation_extra::{AllocatedBlock, FreeBlock};
 use crate::internal::{mi_block_next, mi_block_set_next};
 use crate::types::mi_block_t;
@@ -21,13 +21,25 @@ impl PageKeys {
 /// An encoded pointer word.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct EncodedWord(pub(crate) usize);
+pub(crate) struct EncodedWord(usize);
+
+impl EncodedWord {
+    #[inline(always)]
+    pub(crate) const fn new(word: usize) -> Self {
+        Self(word)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn get(self) -> usize {
+        self.0
+    }
+}
 
 /// An encoded pointer wrapper parameterized by its referent type.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct EncodedPtr<T> {
-    pub(crate) word: EncodedWord,
+    word: EncodedWord,
     _ty: PhantomData<*mut T>,
 }
 
@@ -40,7 +52,7 @@ impl EncodedPtr<crate::types::mi_block_t> {
     #[inline(always)]
     pub(crate) unsafe fn read_word_from_raw(block: *const mi_block_t) -> Self {
         Self {
-            word: EncodedWord(unsafe { (*block.cast_mut()).next }),
+            word: EncodedWord::new(unsafe { (*block.cast_mut()).next }),
             _ty: PhantomData,
         }
     }
@@ -52,14 +64,14 @@ impl EncodedPtr<crate::types::mi_block_t> {
     /// the current tracking state.
     #[inline(always)]
     pub(crate) unsafe fn write_word_to_raw(self, block: BlockPtr) {
-        unsafe { (*block.as_ptr()).next = self.word.0 };
+        unsafe { (*block.as_ptr()).next = self.word.get() };
     }
 
     /// Wrap an unencoded raw block pointer as a free-list word.
     #[inline(always)]
     pub(crate) fn from_unencoded_raw(block: *const mi_block_t) -> Self {
         Self {
-            word: EncodedWord(block as usize),
+            word: EncodedWord::new(block as usize),
             _ty: PhantomData,
         }
     }
@@ -67,7 +79,7 @@ impl EncodedPtr<crate::types::mi_block_t> {
     /// Interpret this word as an unencoded raw block pointer.
     #[inline(always)]
     pub(crate) fn as_unencoded_raw(self) -> *mut mi_block_t {
-        self.word.0 as *mut mi_block_t
+        self.word.get() as *mut mi_block_t
     }
 
     /// Decode an encoded block-pointer word using a raw null context.
@@ -81,7 +93,7 @@ impl EncodedPtr<crate::types::mi_block_t> {
         null_context: *const c_void,
         keys: PageKeys,
     ) -> *mut mi_block_t {
-        crate::internal::mi_ptr_decode(null_context, self.word.0, &keys.0).cast()
+        crate::internal::mi_ptr_decode(null_context, self.word, &keys.0).cast()
     }
 
     /// Encode a raw block pointer using a raw null context.
@@ -97,7 +109,7 @@ impl EncodedPtr<crate::types::mi_block_t> {
     ) -> Self {
         let word = crate::internal::mi_ptr_encode(null_context, block.cast(), &keys.0);
         Self {
-            word: EncodedWord(word),
+            word,
             _ty: PhantomData,
         }
     }
@@ -119,8 +131,7 @@ impl EncodedPtr<crate::types::mi_block_t> {
         null_context: crate::core_types::PagePtr,
         keys: PageKeys,
     ) -> Option<BlockPtr> {
-        let raw =
-            crate::internal::mi_ptr_decode(null_context.as_ptr().cast(), self.word.0, &keys.0);
+        let raw = crate::internal::mi_ptr_decode(null_context.as_ptr().cast(), self.word, &keys.0);
         if raw.is_null() {
             None
         } else {
@@ -144,7 +155,7 @@ impl EncodedPtr<crate::types::mi_block_t> {
             .unwrap_or(core::ptr::null_mut());
         let word = crate::internal::mi_ptr_encode(null_context.as_ptr().cast(), p, &keys.0);
         Self {
-            word: EncodedWord(word),
+            word,
             _ty: PhantomData,
         }
     }
@@ -155,13 +166,53 @@ impl EncodedPtr<crate::types::mi_block_t> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct BlockTag(usize);
 
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct AlignedBlockTag(BlockTag);
+
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct GuardedBlockTag(BlockTag);
+
 impl BlockTag {
-    pub(crate) const ALIGNED: Self = Self(0);
+    const ALIGNED: Self = Self(0);
     // Note: MI_BLOCK_TAG_GUARDED typically is !0 in C
-    pub(crate) const GUARDED: Self = Self(!0);
+    const GUARDED: Self = Self(!0);
 
     #[inline(always)]
-    pub(crate) const fn is_guarded(self) -> bool {
+    pub(crate) const fn aligned() -> AlignedBlockTag {
+        AlignedBlockTag(Self::ALIGNED)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn guarded() -> GuardedBlockTag {
+        GuardedBlockTag(Self::GUARDED)
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn write_aligned_to(block: BlockPtr) {
+        unsafe { Self::aligned().write_to(block) };
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn write_guarded_to(block: BlockPtr) {
+        unsafe { Self::guarded().write_to(block) };
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn read_guarded_from_raw(
+        block: *const mi_block_t,
+    ) -> Option<GuardedBlockTag> {
+        let tag = unsafe { Self::read_from_raw(block) };
+        if tag.is_guarded() {
+            Some(GuardedBlockTag(tag))
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    const fn is_guarded(self) -> bool {
         self.0 == Self::GUARDED.0
     }
 
@@ -176,28 +227,38 @@ impl BlockTag {
     }
 }
 
+impl AlignedBlockTag {
+    #[inline(always)]
+    unsafe fn write_to(self, block: BlockPtr) {
+        unsafe { self.0.write_to(block) };
+    }
+}
+
+impl GuardedBlockTag {
+    #[inline(always)]
+    unsafe fn write_to(self, block: BlockPtr) {
+        unsafe { self.0.write_to(block) };
+    }
+}
+
 pub(crate) enum BlockLink {
     FreeList(EncodedPtr<crate::types::mi_block_t>),
-    Guarded(BlockTag),
+    Guarded(GuardedBlockTag),
 }
 
 impl BlockLink {
     #[inline(always)]
-    pub(crate) const fn tagged(tag: BlockTag) -> Self {
-        Self::Guarded(tag)
-    }
-
-    #[inline(always)]
-    pub(crate) unsafe fn read_tag_from_raw(block: *const mi_block_t) -> Self {
-        Self::Guarded(unsafe { BlockTag::read_from_raw(block) })
-    }
-
-    #[inline(always)]
-    pub(crate) const fn is_guarded_tag(&self) -> bool {
-        match self {
-            Self::Guarded(tag) => tag.is_guarded(),
-            Self::FreeList(_) => false,
+    pub(crate) unsafe fn read_from_raw(block: *const mi_block_t) -> Self {
+        if let Some(tag) = unsafe { BlockTag::read_guarded_from_raw(block) } {
+            Self::Guarded(tag)
+        } else {
+            Self::FreeList(unsafe { EncodedPtr::read_word_from_raw(block) })
         }
+    }
+
+    #[inline(always)]
+    pub(crate) unsafe fn is_guarded_raw(block: *const mi_block_t) -> bool {
+        unsafe { BlockTag::read_guarded_from_raw(block).is_some() }
     }
 
     #[inline(always)]
@@ -223,17 +284,14 @@ impl AvailableFreeList {
     /// block and the updated list head. This is the allocation fast path.
     ///
     /// # Safety
-    /// `page` must be a valid `AvailablePage` whose `free` field matches `self`,
-    /// and the caller must subsequently store the returned list head back into
-    /// `(*page).free` and increment `(*page).used`.
+    /// `page` must be a valid `AvailablePage`; the caller must subsequently
+    /// store the returned list head back into `(*page).free` and increment
+    /// `(*page).used`.
     #[inline(always)]
-    pub(crate) unsafe fn pop(self, page: AvailablePage) -> (AllocatedBlock, AvailableFreeList) {
-        let raw_page = page.0.as_ptr();
-        // SAFETY: the caller (`mi_page_malloc_zero`) checks `(*page).free` for
-        // null before constructing this `AvailableFreeList`, so `self.0` is
-        // always `Some` here. Using `unwrap_unchecked` keeps the hot path free
-        // of a panic branch.
-        let head = unsafe { self.0.unwrap_unchecked() };
+    pub(crate) unsafe fn pop(page: AvailablePage) -> (AllocatedBlock, AvailableFreeList) {
+        let raw_page = page.page().as_ptr();
+        let free = unsafe { AvailableFreeList::from_raw((*raw_page).free) };
+        let head = unsafe { free.0.unwrap_unchecked() };
         let head_raw = head.as_ptr();
         // SAFETY: `head` is a valid block pointer in `page`'s free list; the page
         // keys and encoding are page-local and `head_raw` is non-null.
@@ -244,7 +302,10 @@ impl AvailableFreeList {
             // SAFETY: `next_raw` is a non-null block in the same page.
             Some(unsafe { BlockPtr::new_unchecked(next_raw) })
         };
-        (AllocatedBlock(head), AvailableFreeList(next))
+        (
+            unsafe { AllocatedBlock::new_unchecked(head) },
+            AvailableFreeList(next),
+        )
     }
 
     /// Construct from a raw `mi_block_t*` head (the value of `(*page).free`).
@@ -275,8 +336,8 @@ impl LocalFreeList {
     /// into `(*page).local_free` and decrement `(*page).used`.
     #[inline(always)]
     pub(crate) unsafe fn push(self, page: LocalPage, block: FreeBlock) -> Self {
-        let raw_page = page.0.as_ptr();
-        let block_raw = block.0.as_ptr();
+        let raw_page = page.page().as_ptr();
+        let block_raw = block.block().as_ptr();
         let prev_raw = self.0.map(|b| b.as_ptr()).unwrap_or(core::ptr::null_mut());
         // SAFETY: `block_raw` is a valid block in `page`; `prev_raw` is the
         // current local_free head (null if empty). Encoding is page-local.
@@ -323,7 +384,7 @@ impl LocalFreeList {
         available: AvailableFreeList,
         force: ForceCollect,
     ) -> (AvailableFreeList, LocalFreeList) {
-        let raw_page = page.0.as_ptr();
+        let raw_page = page.page().as_ptr();
         // If local is empty, nothing to move.
         if self.0.is_none() {
             return (available, self);
@@ -355,42 +416,130 @@ impl LocalFreeList {
     }
 }
 
-/// The remote free list collected from a thread-free word.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct RemoteFreeList(pub(crate) Option<BlockPtr>);
-
-impl RemoteFreeList {
-    /// Collect the remote (thread-free) list into the page's local free list.
-    ///
-    /// Delegates to `mi_page_thread_collect_to_local`, which splices `self`'s
-    /// head into `(*page).local_free`, runs the corruption/length checks, and
-    /// decrements `(*page).used`. Returns the updated local free list read back
-    /// from the page. The `_local` argument is ignored because the raw function
-    /// reads `(*page).local_free` directly; the caller must ensure it matches.
-    ///
-    /// Constrained to `OwnedAbandonedPage` (the reclaim path); regular-page
-    /// collection uses the raw `_mi_page_free_collect` entry point directly.
-    ///
-    /// # Safety
-    /// `page` must be a valid owned abandoned page; `self` must be the head
-    /// popped from `(*page).xthread_free` via the ownership CAS protocol.
-    #[inline]
-    pub(crate) unsafe fn collect_into_local(
-        self,
-        page: OwnedAbandonedPage,
-        _local: LocalFreeList,
-    ) -> LocalFreeList {
-        let raw_page = page.0.as_ptr();
-        let head = self.0.map(|b| b.as_ptr()).unwrap_or(core::ptr::null_mut());
-        if !head.is_null() {
-            unsafe { crate::page::mi_page_thread_collect_to_local(raw_page, head) };
-        }
-        unsafe { LocalFreeList::from_raw((*raw_page).local_free) }
-    }
-}
-
 /// Represents an explicitly encoded free list representation.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct EncodedFreeList(pub(crate) Option<BlockPtr>);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core_types::{ActivePage, LocalPage, PagePtr};
+    use crate::types::{mi_block_t, mi_page_t};
+    use core::{mem::MaybeUninit, ptr};
+
+    #[test]
+    fn encoded_pointer_round_trips_block_and_null() {
+        let mut page = MaybeUninit::<mi_page_t>::uninit();
+        let mut block = mi_block_t::default();
+        unsafe {
+            let raw_page = page.as_mut_ptr();
+            #[cfg(any(
+                feature = "secure",
+                debug_assertions,
+                feature = "track-valgrind",
+                feature = "track-asan"
+            ))]
+            ptr::addr_of_mut!((*raw_page).keys).write([0x1234_5678, 0x8765_4321]);
+            let page_ptr = PagePtr::new_unchecked(raw_page);
+            let block_ptr = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
+
+            let keys = page_ptr.keys();
+            let encoded = EncodedPtr::encode_block(Some(block_ptr), page_ptr, keys);
+            assert_eq!(
+                encoded.decode_block(page_ptr, keys).map(BlockPtr::as_ptr),
+                Some(block_ptr.as_ptr())
+            );
+
+            let encoded_null = EncodedPtr::encode_block(None, page_ptr, keys);
+            assert!(encoded_null.decode_block(page_ptr, keys).is_none());
+        }
+    }
+
+    #[test]
+    fn block_link_read_from_raw_distinguishes_guarded_and_free_list_words() {
+        let mut block = mi_block_t::default();
+        unsafe {
+            let block_ptr = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
+            BlockTag::write_guarded_to(block_ptr);
+            assert!(matches!(
+                BlockLink::read_from_raw(ptr::addr_of!(block)),
+                BlockLink::Guarded(_)
+            ));
+
+            let free_link = EncodedPtr::from_unencoded_raw(ptr::null());
+            BlockLink::FreeList(free_link).write_to(block_ptr);
+            assert!(matches!(
+                BlockLink::read_from_raw(ptr::addr_of!(block)),
+                BlockLink::FreeList(_)
+            ));
+        }
+    }
+
+    #[test]
+    fn block_tag_explicit_aligned_write_is_not_guarded() {
+        let mut block = mi_block_t::default();
+        unsafe {
+            let block_ptr = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
+            BlockTag::write_guarded_to(block_ptr);
+            assert!(BlockLink::is_guarded_raw(ptr::addr_of!(block)));
+
+            BlockTag::write_aligned_to(block_ptr);
+            assert!(!BlockLink::is_guarded_raw(ptr::addr_of!(block)));
+        }
+    }
+
+    #[test]
+    fn available_pop_consumes_available_page_witness() {
+        let mut page = MaybeUninit::<mi_page_t>::uninit();
+        let mut block = mi_block_t::default();
+        unsafe {
+            let raw_page = page.as_mut_ptr();
+            #[cfg(any(
+                feature = "secure",
+                debug_assertions,
+                feature = "track-valgrind",
+                feature = "track-asan"
+            ))]
+            ptr::addr_of_mut!((*raw_page).keys).write([0x1234_5678, 0x8765_4321]);
+            ptr::addr_of_mut!((*raw_page).free).write(ptr::addr_of_mut!(block));
+            ptr::addr_of_mut!((*raw_page).used).write(0);
+            mi_block_set_next(raw_page, ptr::addr_of_mut!(block), ptr::null());
+
+            let active = ActivePage::new_unchecked(PagePtr::new_unchecked(raw_page));
+            let available = active
+                .available()
+                .expect("free head creates available page");
+            let (allocated, next) = AvailableFreeList::pop(available);
+
+            assert_eq!(allocated.block().as_ptr(), ptr::addr_of_mut!(block));
+            assert!(next.0.is_none());
+        }
+    }
+
+    #[test]
+    fn local_push_requires_free_block_witness() {
+        let mut page = MaybeUninit::<mi_page_t>::uninit();
+        let mut block = mi_block_t::default();
+        unsafe {
+            let raw_page = page.as_mut_ptr();
+            #[cfg(any(
+                feature = "secure",
+                debug_assertions,
+                feature = "track-valgrind",
+                feature = "track-asan"
+            ))]
+            ptr::addr_of_mut!((*raw_page).keys).write([0x1234_5678, 0x8765_4321]);
+            ptr::addr_of_mut!((*raw_page).local_free).write(ptr::null_mut());
+
+            let page_ptr = PagePtr::new_unchecked(raw_page);
+            let local_page = LocalPage::new_unchecked(page_ptr);
+            let block_ptr = BlockPtr::new_unchecked(ptr::addr_of_mut!(block));
+            let free = FreeBlock::new_unchecked(block_ptr);
+            let list = LocalFreeList::from_raw(ptr::null_mut()).push(local_page, free);
+
+            assert_eq!(list.0.map(BlockPtr::as_ptr), Some(block_ptr.as_ptr()));
+            assert!(mi_block_next(raw_page, block_ptr.as_ptr()).is_null());
+        }
+    }
+}

@@ -316,7 +316,7 @@ pub unsafe extern "C" fn zone_calloc(
 /// Must be called only through the macOS malloc-zone ABI.
 #[inline]
 pub unsafe extern "C" fn zone_valloc(_zone: *mut malloc_zone_t, size: usize) -> *mut c_void {
-    unsafe { crate::mimalloc::mi_malloc_aligned(size, crate::os::_mi_os_page_size()) }
+    unsafe { crate::mimalloc::mi_malloc_aligned(size, crate::os::_mi_os_page_size_typed().get()) }
 }
 
 /// # Safety

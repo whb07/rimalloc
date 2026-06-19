@@ -7,6 +7,7 @@ use core::cell::Cell;
 use core::ffi::{c_char, c_long, c_void};
 use core::mem::size_of;
 use core::ptr;
+use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 
 use crate::arena::_mi_arenas_unsafe_destroy_all;
@@ -15,15 +16,21 @@ use crate::atomic::{
     mi_lock_init, mi_lock_release, mi_lock_t,
 };
 use crate::bits::MI_SIZE_SIZE;
-use crate::heap::_mi_heap_force_destroy;
-use crate::internal::{
-    _mi_allocator_done, _mi_allocator_init, _mi_error_message, _mi_meta_free, _mi_meta_zalloc,
-    mi_memid_t, mi_memkind_t,
+use crate::core_types::{
+    BorrowedSubproc, Errno, HeapPtr, HeapVisitCallback, HeapVisitCallbackArg, MainHeap,
+    MainSubproc, MiLockGuard, MiLockPtr, SubprocPtr, ThreadHeapLocal, ThreadHeapPtr,
+    ThreadHeapState, ThreadId, TldPtr,
 };
-#[cfg(any(windows, target_os = "openbsd", target_os = "android"))]
-use crate::options::_mi_error_message_fmt;
+#[cfg(feature = "guarded")]
+use crate::core_types::{
+    GuardedConfig, GuardedSampleCount, GuardedSampleRate, GuardedSizeMax, GuardedSizeMin,
+};
+use crate::heap::{_mi_heap_force_destroy, mi_heap_destroy};
+use crate::internal::{
+    _mi_allocator_done, _mi_allocator_init, _mi_meta_free, _mi_meta_zalloc, mi_memid_t,
+};
 use crate::options::{
-    _mi_fputs, _mi_options_init, _mi_options_post_init, _mi_verbose_message,
+    _mi_error_message_fmt, _mi_fputs, _mi_options_init, _mi_options_post_init, _mi_verbose_message,
     _mi_warning_message_fmt, mi_option_get, mi_option_get_clamp, mi_option_is_enabled, mi_option_t,
 };
 use crate::stats::{
@@ -72,20 +79,12 @@ pub const fn MI_STAT_COUNT<T: Copy>(_stat: T) -> mi_stat_count_t {
     MI_STAT_COUNT_NULL()
 }
 
-#[allow(non_snake_case)]
-pub const fn MI_MEMID_INIT(kind: mi_memkind_t) -> mi_memid_t {
-    mi_memid_t {
-        mem: crate::internal::mi_memid_mem_t {
-            os: crate::internal::mi_memid_os_info_t {
-                base: ptr::null_mut(),
-                size: 0,
-            },
-        },
-        memkind: kind,
-        is_pinned: true,
-        initially_committed: true,
-        initially_zero: false,
-    }
+pub const fn mi_memid_none() -> mi_memid_t {
+    crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw()
+}
+
+pub const fn mi_memid_static() -> mi_memid_t {
+    crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().into_raw()
 }
 
 #[inline]
@@ -184,7 +183,7 @@ static mut subproc_main: MiSubprocPrefix = MiSubprocPrefix {
     thread_total_count: AtomicUsize::new(0),
     heap_count: AtomicUsize::new(0),
     heap_total_count: AtomicUsize::new(0),
-    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_NONE),
+    memid: mi_memid_none(),
     stats: MI_STATS_NULL(),
 };
 static mut subprocs: *mut mi_subproc_t = ptr::addr_of_mut!(subproc_main)
@@ -202,7 +201,7 @@ static mut tld_empty: mi_tld_t = mi_tld_t {
     theaps_lock: mi_lock_t::new(),
     recurse: false,
     is_in_threadpool: false,
-    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+    memid: mi_memid_static(),
 };
 
 #[repr(C)]
@@ -234,7 +233,7 @@ static mut tld_main: mi_tld_t = mi_tld_t {
     theaps_lock: mi_lock_t::new(),
     recurse: false,
     is_in_threadpool: false,
-    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+    memid: mi_memid_static(),
 };
 
 pub static _mi_page_empty: mi_page_t = mi_page_t {
@@ -261,7 +260,7 @@ pub static _mi_page_empty: mi_page_t = mi_page_t {
     next: ptr::null_mut(),
     prev: ptr::null_mut(),
     slice_committed: crate::arena::MI_ARENA_SLICE_SIZE,
-    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+    memid: mi_memid_static(),
 };
 
 #[allow(non_snake_case)]
@@ -401,7 +400,7 @@ pub(crate) static _mi_theap_empty: mi_theap_t = mi_theap_t {
     guarded_sample_count: 1,
     pages_free_direct: MI_SMALL_PAGES_EMPTY(),
     pages: MI_PAGE_QUEUES_EMPTY(),
-    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+    memid: mi_memid_static(),
     stats: MI_STATS_NULL(),
 };
 
@@ -435,7 +434,7 @@ pub(crate) static _mi_theap_empty_wrong: mi_theap_t = mi_theap_t {
     guarded_sample_count: 1,
     pages_free_direct: MI_SMALL_PAGES_EMPTY(),
     pages: MI_PAGE_QUEUES_EMPTY(),
-    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+    memid: mi_memid_static(),
     stats: MI_STATS_NULL(),
 };
 
@@ -474,7 +473,7 @@ static mut theap_main: mi_theap_t = mi_theap_t {
     guarded_sample_count: 1,
     pages_free_direct: MI_SMALL_PAGES_EMPTY(),
     pages: MI_PAGE_QUEUES_EMPTY(),
-    memid: MI_MEMID_INIT(mi_memkind_t::MI_MEM_STATIC),
+    memid: mi_memid_static(),
     stats: MI_STATS_NULL(),
 };
 
@@ -549,12 +548,12 @@ struct MiSubprocPrefix {
 }
 
 impl MiSubprocPrefix {
-    fn new_with_memid(seq: usize, memid: mi_memid_t) -> Self {
+    fn new_with_memid(seq: crate::core_types::SubprocSeq, memid: mi_memid_t) -> Self {
         let mut stats = mi_stats_t::default();
         // SAFETY: `stats` points to a valid local `mi_stats_t`.
         unsafe { mi_stats_header_init(&mut stats) };
         Self {
-            subproc_seq: seq,
+            subproc_seq: seq.get(),
             next: ptr::null_mut(),
             prev: ptr::null_mut(),
             arena_count: AtomicUsize::new(0),
@@ -575,11 +574,26 @@ impl MiSubprocPrefix {
 }
 
 unsafe fn mi_subproc_prefix(subproc: *mut mi_subproc_t) -> *mut MiSubprocPrefix {
-    subproc.cast::<MiSubprocPrefix>()
+    unsafe { mi_subproc_prefix_typed(SubprocPtr::new_unchecked(subproc)) }
+}
+
+unsafe fn mi_subproc_prefix_typed(subproc: SubprocPtr) -> *mut MiSubprocPrefix {
+    subproc.as_ptr().cast::<MiSubprocPrefix>()
 }
 
 unsafe fn mi_subproc_heap_main_raw(subproc: *mut mi_subproc_t) -> *mut mi_heap_t {
-    unsafe { ptr::addr_of!((*mi_subproc_prefix(subproc)).heap_main).read_unaligned() }
+    let Some(subproc) = SubprocPtr::new(subproc) else {
+        return ptr::null_mut();
+    };
+    let subproc = unsafe { BorrowedSubproc::new(subproc) };
+    unsafe { mi_subproc_heap_main_typed(subproc) }
+        .map(HeapPtr::as_ptr)
+        .unwrap_or(ptr::null_mut())
+}
+
+unsafe fn mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> Option<HeapPtr> {
+    let subproc = unsafe { mi_subproc_prefix_typed(subproc.ptr()) };
+    HeapPtr::new(unsafe { ptr::addr_of!((*subproc).heap_main).read_unaligned() })
 }
 
 unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
@@ -590,8 +604,16 @@ unsafe fn mi_heap_subproc_raw(heap: *const mi_heap_t) -> *mut mi_subproc_t {
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) -> mi_subproc_id_t {
+    let subproc = SubprocPtr::new(subproc);
+    _mi_subproc_to_id_typed(subproc)
+}
+
+fn _mi_subproc_to_id_typed(subproc: Option<SubprocPtr>) -> mi_subproc_id_t {
     mi_subproc_id_t {
-        _mi_subproc_id: subproc.cast::<c_void>(),
+        _mi_subproc_id: subproc
+            .map(SubprocPtr::as_ptr)
+            .unwrap_or(ptr::null_mut())
+            .cast::<c_void>(),
     }
 }
 
@@ -600,7 +622,14 @@ static MI_SUBPROC_TO_ID_KEEP: unsafe extern "C" fn(*mut mi_subproc_t) -> mi_subp
     _mi_subproc_to_id;
 
 unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
-    let subproc = unsafe { mi_subproc_prefix(subproc) };
+    let Some(subproc) = SubprocPtr::new(subproc) else {
+        return;
+    };
+    unsafe { mi_subproc_destroy_meta_typed(subproc) };
+}
+
+unsafe fn mi_subproc_destroy_meta_typed(subproc: SubprocPtr) {
+    let subproc = unsafe { mi_subproc_prefix_typed(subproc) };
     // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.
     unsafe {
         mi_lock_done(ptr::addr_of_mut!((*subproc).arena_reserve_lock));
@@ -635,6 +664,10 @@ unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
         .cast::<mi_subproc_t>()
 }
 
+unsafe fn mi_subproc_main_addr_typed() -> MainSubproc {
+    unsafe { MainSubproc::new_unchecked(SubprocPtr::new_unchecked(mi_subproc_main_addr())) }
+}
+
 fn mi_subproc_main_init() {
     // SAFETY: one-time process initialization for local subproc scaffolding.
     unsafe {
@@ -643,7 +676,7 @@ fn mi_subproc_main_init() {
         if !mi_memid_is_static((*main_prefix).memid) {
             _mi_options_init();
             (*main_prefix).memid =
-                crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().raw;
+                crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().into_raw();
             (*main_prefix).heaps = ptr::addr_of_mut!(heap_main).cast::<mi_heap_t>();
             (*main_prefix).heap_total_count.store(1, Ordering::Relaxed);
             (*main_prefix).heap_count.store(1, Ordering::Relaxed);
@@ -674,11 +707,18 @@ unsafe fn mi_subproc_unlink_locked(subproc: *mut MiSubprocPrefix) {
 }
 
 unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs_lock: bool) {
-    if subproc.is_null() {
+    let Some(subproc) = SubprocPtr::new(subproc) else {
         return;
-    }
-    let is_main = ptr::eq(subproc, unsafe { _mi_subproc_main() });
-    let subproc_prefix = unsafe { mi_subproc_prefix(subproc) };
+    };
+    unsafe { mi_subproc_unsafe_destroy_typed(subproc, acquire_subprocs_lock) };
+}
+
+unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_lock: bool) {
+    let subproc_raw = subproc.as_ptr();
+    let main_subproc = unsafe { mi_subproc_main_addr_typed().ptr() };
+    let is_main = ptr::eq(subproc_raw, main_subproc.as_ptr());
+    let subproc_prefix = unsafe { mi_subproc_prefix_typed(subproc) };
+    let borrowed_subproc = unsafe { BorrowedSubproc::new(subproc) };
     if acquire_subprocs_lock {
         unsafe { mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock)) };
     }
@@ -694,7 +734,10 @@ unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs
         if heap.is_null() {
             break;
         }
-        if !ptr::eq(heap, unsafe { mi_subproc_heap_main_raw(subproc) }) {
+        let main_heap = unsafe { mi_subproc_heap_main_typed(borrowed_subproc) }
+            .map(HeapPtr::as_ptr)
+            .unwrap_or(ptr::null_mut());
+        if !ptr::eq(heap, main_heap) {
             unsafe { mi_heap_destroy(heap) };
         } else {
             unsafe { _mi_heap_force_destroy(heap) };
@@ -702,18 +745,22 @@ unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs
         }
     }
 
-    unsafe { _mi_arenas_unsafe_destroy_all(subproc) };
+    {
+        let subproc = subproc_raw;
+        unsafe { _mi_arenas_unsafe_destroy_all(subproc) };
+    }
 
     if is_main {
+        let subproc = subproc_raw;
         unsafe { crate::page_map::_mi_page_map_unsafe_destroy(subproc) };
     } else {
-        let main_subproc = unsafe { mi_subproc_prefix(_mi_subproc_main()) };
+        let main_subproc = unsafe { mi_subproc_prefix_typed(main_subproc) };
         unsafe {
             _mi_stats_merge_into(
                 ptr::addr_of_mut!((*main_subproc).stats),
                 ptr::addr_of_mut!((*subproc_prefix).stats),
             );
-            mi_subproc_destroy_meta(subproc);
+            mi_subproc_destroy_meta_typed(subproc);
         }
     }
 }
@@ -722,16 +769,18 @@ unsafe fn mi_subprocs_unsafe_destroy_all() {
     mi_subproc_main_init();
     let main_subproc = unsafe { _mi_subproc_main() };
     unsafe {
-        mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock));
-        let mut subproc = subprocs;
-        while !subproc.is_null() {
-            let next = (*mi_subproc_prefix(subproc)).next;
-            if !ptr::eq(subproc, main_subproc) {
-                mi_subproc_unsafe_destroy(subproc, false);
+        {
+            let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
+            let _lock = MiLockGuard::acquire(lock);
+            let mut subproc = subprocs;
+            while !subproc.is_null() {
+                let next = (*mi_subproc_prefix(subproc)).next;
+                if !ptr::eq(subproc, main_subproc) {
+                    mi_subproc_unsafe_destroy(subproc, false);
+                }
+                subproc = next;
             }
-            subproc = next;
         }
-        mi_lock_release(ptr::addr_of_mut!(subprocs_lock));
         mi_subproc_unsafe_destroy(main_subproc, true);
     }
 }
@@ -749,7 +798,18 @@ thread_local! {
 #[cfg(target_os = "linux")]
 unsafe extern "C" {
     fn _mi_tls_theap_main_get() -> *mut mi_theap_t;
-    fn _mi_tls_theap_main_set(theap: *mut mi_theap_t);
+    #[link_name = "_mi_tls_theap_main_set"]
+    fn _mi_tls_theap_main_set_raw(theap: *mut c_void);
+}
+
+#[cfg(target_os = "linux")]
+#[inline(always)]
+unsafe fn _mi_tls_theap_main_set(theap: Option<ThreadHeapPtr>) {
+    let theap = theap
+        .map(ThreadHeapPtr::as_ptr)
+        .unwrap_or(ptr::null_mut())
+        .cast();
+    unsafe { _mi_tls_theap_main_set_raw(theap) };
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
@@ -770,7 +830,8 @@ unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
 #[inline(always)]
-unsafe fn mi_linux_x64_theap_main_set(theap: *mut mi_theap_t) {
+unsafe fn mi_linux_x64_theap_main_set(theap: Option<ThreadHeapPtr>) {
+    let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
     unsafe {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
@@ -802,7 +863,7 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
 }
 
 #[inline]
-pub(crate) fn mi_theap_main_tls_set(theap: *mut mi_theap_t) {
+pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
     #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
     unsafe {
         mi_linux_x64_theap_main_set(theap);
@@ -816,6 +877,7 @@ pub(crate) fn mi_theap_main_tls_set(theap: *mut mi_theap_t) {
     }
     #[cfg(not(target_os = "linux"))]
     {
+        let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
         THEAP_MAIN.with(|slot| slot.set(theap));
     }
 }
@@ -880,12 +942,24 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
         }
     }
 
-    if !unsafe { crate::internal::mi_theap_is_initialized(default_theap) } {
+    let Some(default_theap) = ThreadHeapPtr::new(default_theap) else {
         return;
-    }
+    };
+    unsafe { _mi_thread_done_typed(default_theap) };
+}
 
+unsafe fn _mi_thread_done_typed(default_theap: ThreadHeapPtr) {
+    let theap = match unsafe { default_theap.state() } {
+        ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => theap,
+        ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return,
+    };
+    let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+    let Ok(default_theap) = (unsafe { theap.try_local(current) }) else {
+        return;
+    };
     crate::threadlocal::_mi_thread_locals_thread_done();
 
+    let default_theap = default_theap.ptr().as_ptr();
     let tld = unsafe { (*default_theap).tld };
     let subproc = unsafe { (*tld).subproc };
     let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
@@ -928,18 +1002,15 @@ pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
 ) {
     #[cfg(feature = "guarded")]
     unsafe {
-        if theap.is_null() {
-            return;
-        }
-        (*theap).guarded_sample_rate = sample_rate;
-        (*theap).guarded_sample_count = sample_rate;
-        if (*theap).guarded_sample_rate > 1 {
-            let seed = if seed == 0 {
-                crate::internal::_mi_theap_random_next(theap)
-            } else {
-                seed
-            };
-            (*theap).guarded_sample_count = (seed % (*theap).guarded_sample_rate) + 1;
+        if let Some(theap) = ThreadHeapPtr::new(theap) {
+            let current = ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id());
+            if let Ok(theap) = theap.try_local(current) {
+                mi_theap_guarded_set_sample_rate_typed(
+                    theap,
+                    GuardedSampleRate::new(sample_rate),
+                    seed,
+                );
+            }
         }
     }
     #[cfg(not(feature = "guarded"))]
@@ -947,6 +1018,28 @@ pub unsafe extern "C" fn mi_theap_guarded_set_sample_rate(
         let _ = theap;
         let _ = sample_rate;
         let _ = seed;
+    }
+}
+
+#[cfg(feature = "guarded")]
+unsafe fn mi_theap_guarded_set_sample_rate_typed(
+    theap: ThreadHeapLocal,
+    sample_rate: GuardedSampleRate,
+    seed: usize,
+) {
+    let theap = theap.ptr().as_ptr();
+    unsafe {
+        (*theap).guarded_sample_rate = sample_rate.get();
+        let mut sample_count = GuardedSampleCount::new(sample_rate.get());
+        if sample_rate.get() > 1 {
+            let seed = if seed == 0 {
+                crate::internal::_mi_theap_random_next(theap)
+            } else {
+                seed
+            };
+            sample_count = GuardedSampleCount::new((seed % sample_rate.get()) + 1);
+        }
+        (*theap).guarded_sample_count = sample_count.get();
     }
 }
 
@@ -960,11 +1053,14 @@ pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
 ) {
     #[cfg(feature = "guarded")]
     unsafe {
-        if theap.is_null() {
-            return;
+        if let Some(theap) = ThreadHeapPtr::new(theap) {
+            let current = ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id());
+            if let Ok(theap) = theap.try_local(current) {
+                let min = GuardedSizeMin::new(min);
+                let max = GuardedSizeMax::new(if min.get() > max { min.get() } else { max });
+                mi_theap_guarded_set_size_bound_typed(theap, min, max);
+            }
         }
-        (*theap).guarded_size_min = min;
-        (*theap).guarded_size_max = if min > max { min } else { max };
     }
     #[cfg(not(feature = "guarded"))]
     {
@@ -974,25 +1070,58 @@ pub unsafe extern "C" fn mi_theap_guarded_set_size_bound(
     }
 }
 
+#[cfg(feature = "guarded")]
+unsafe fn mi_theap_guarded_set_size_bound_typed(
+    theap: ThreadHeapLocal,
+    min: GuardedSizeMin,
+    max: GuardedSizeMax,
+) {
+    let theap = theap.ptr().as_ptr();
+    unsafe {
+        (*theap).guarded_size_min = min.get();
+        (*theap).guarded_size_max = max.get();
+    }
+}
+
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
     #[cfg(feature = "guarded")]
-    {
-        unsafe {
-            mi_theap_guarded_set_sample_rate(
-                theap,
-                mi_option_get_clamp(mi_option_t::mi_option_guarded_sample_rate, 0, c_long::MAX)
-                    as usize,
-                mi_option_get(mi_option_t::mi_option_guarded_sample_seed) as usize,
-            )
-        };
-        unsafe {
-            mi_theap_guarded_set_size_bound(
-                theap,
-                mi_option_get_clamp(mi_option_t::mi_option_guarded_min, 0, c_long::MAX) as usize,
-                mi_option_get_clamp(mi_option_t::mi_option_guarded_max, 0, c_long::MAX) as usize,
-            )
-        };
+    unsafe {
+        if let Some(theap) = ThreadHeapPtr::new(theap) {
+            let current = ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id());
+            if let Ok(theap) = theap.try_local(current) {
+                let sample_rate =
+                    mi_option_get_clamp(mi_option_t::mi_option_guarded_sample_rate, 0, c_long::MAX)
+                        as usize;
+                let mut sample_count = sample_rate;
+                if sample_rate > 1 {
+                    let seed = mi_option_get(mi_option_t::mi_option_guarded_sample_seed) as usize;
+                    let seed = if seed == 0 {
+                        crate::internal::_mi_theap_random_next(theap.ptr().as_ptr())
+                    } else {
+                        seed
+                    };
+                    sample_count = (seed % sample_rate) + 1;
+                }
+                let size_min =
+                    mi_option_get_clamp(mi_option_t::mi_option_guarded_min, 0, c_long::MAX)
+                        as usize;
+                let size_max =
+                    mi_option_get_clamp(mi_option_t::mi_option_guarded_max, 0, c_long::MAX)
+                        as usize;
+                let config = GuardedConfig::from_clamped_raw(
+                    size_min,
+                    if size_min > size_max {
+                        size_min
+                    } else {
+                        size_max
+                    },
+                    sample_rate,
+                    sample_count,
+                );
+                _mi_theap_guarded_init_typed(theap, config);
+            }
+        }
     }
     #[cfg(not(feature = "guarded"))]
     {
@@ -1001,13 +1130,31 @@ pub(crate) unsafe extern "C" fn _mi_theap_guarded_init(theap: *mut mi_theap_t) {
     }
 }
 
+#[cfg(feature = "guarded")]
+unsafe fn _mi_theap_guarded_init_typed(theap: ThreadHeapLocal, config: GuardedConfig) {
+    let theap = theap.ptr().as_ptr();
+    unsafe {
+        (*theap).guarded_size_min = config.size_min().get();
+        (*theap).guarded_size_max = config.size_max().get();
+        (*theap).guarded_sample_rate = config.sample_rate().get();
+        (*theap).guarded_sample_count = config.sample_count().get();
+    }
+}
+
 /// # Safety
 /// `theap` must be valid when non-null.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_options_init(theap: *mut mi_theap_t) {
-    if theap.is_null() {
-        return;
+    if let Some(theap) = ThreadHeapPtr::new(theap) {
+        let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+        if let Ok(theap) = unsafe { theap.try_local(current) } {
+            unsafe { _mi_theap_options_init_typed(theap) };
+        }
     }
+}
+
+unsafe fn _mi_theap_options_init_typed(theap: ThreadHeapLocal) {
+    let theap = theap.ptr().as_ptr();
     unsafe {
         (*theap).allow_page_reclaim =
             mi_option_get(mi_option_t::mi_option_page_reclaim_on_free) >= 0;
@@ -1035,7 +1182,7 @@ fn mi_theap_main_init() {
     unsafe {
         if !mi_memid_is_static(theap_main.memid) {
             theap_main.memid =
-                crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().raw;
+                crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().into_raw();
             #[cfg(any(target_os = "macos", windows))]
             crate::internal::_mi_random_init_weak(ptr::addr_of_mut!(theap_main.random));
             #[cfg(not(any(target_os = "macos", windows)))]
@@ -1090,31 +1237,45 @@ const _: fn() -> *mut mi_tld_t = mi_tld_alloc;
 
 #[inline(always)]
 fn mi_tld_alloc_non_main(main_subproc: *mut mi_subproc_t) -> *mut mi_tld_t {
+    let Some(main_subproc) = SubprocPtr::new(main_subproc) else {
+        return ptr::null_mut();
+    };
+    mi_tld_alloc_non_main_typed(main_subproc)
+        .map(TldPtr::as_ptr)
+        .unwrap_or(ptr::null_mut())
+}
+
+#[inline(always)]
+fn mi_tld_alloc_non_main_typed(main_subproc: SubprocPtr) -> Option<TldPtr> {
     // SAFETY: allocates a fresh zeroed tld block and initializes its local fields.
     unsafe {
         let mut memid = mi_memid_t::default();
-        let tld =
+        let tld_raw =
             _mi_meta_zalloc(size_of::<mi_tld_t>(), ptr::addr_of_mut!(memid)).cast::<mi_tld_t>();
-        if tld.is_null() {
-            _mi_error_message(
-                crate::types::ENOMEM,
-                c"unable to allocate memory for thread local data\n".as_ptr(),
+        let Some(tld) = TldPtr::new(tld_raw) else {
+            _mi_error_message_fmt(
+                Errno::ENOMEM,
+                format_args!("unable to allocate memory for thread local data\n"),
             );
-            return ptr::null_mut();
-        }
-        (*tld).memid = memid;
-        (*tld).theaps = ptr::null_mut();
-        mi_lock_init(ptr::addr_of_mut!((*tld).theaps_lock));
-        (*tld).subproc = main_subproc;
-        (*tld).numa_node = crate::prim::_mi_prim_numa_node() as i32;
-        (*tld).thread_id = crate::prim::_mi_prim_thread_id();
-        let subproc = mi_subproc_prefix((*tld).subproc);
-        (*tld).thread_seq = (*subproc)
-            .thread_total_count
+            return None;
+        };
+        ptr::write(tld.memid_ptr(), memid);
+        tld.set_thread_heaps(None);
+        mi_lock_init(tld.thread_heaps_lock());
+        tld.set_subproc(Some(main_subproc));
+        tld.set_numa_node(crate::os::_mi_os_numa_node_typed());
+        tld.set_thread_id(Some(ThreadId::new_unchecked(
+            crate::prim::_mi_prim_thread_id(),
+        )));
+        let thread_seq = main_subproc
+            .thread_total_count_cell()
             .fetch_add(1, Ordering::Relaxed);
-        (*tld).is_in_threadpool = crate::prim::_mi_prim_thread_is_in_threadpool();
-        (*subproc).thread_count.fetch_add(1, Ordering::Relaxed);
-        tld
+        tld.set_thread_seq(crate::core_types::ThreadSeq::new(thread_seq));
+        tld.set_is_in_threadpool(crate::prim::_mi_prim_thread_is_in_threadpool());
+        main_subproc
+            .thread_count_cell()
+            .fetch_add(1, Ordering::Relaxed);
+        Some(tld)
     }
 }
 
@@ -1134,10 +1295,6 @@ fn mi_tld_free(tld: *mut mi_tld_t) {
             _mi_meta_free(tld.cast::<c_void>(), size_of::<mi_tld_t>(), (*tld).memid);
         }
     }
-}
-
-unsafe extern "C" {
-    fn mi_heap_destroy(heap: *mut mi_heap_t);
 }
 
 #[cfg(any(target_os = "openbsd", target_os = "android"))]
@@ -1187,7 +1344,7 @@ unsafe fn mi_win_tls_slot_alloc(
     } else {
         unsafe {
             _mi_error_message_fmt(
-                EFAULT,
+                Errno::EFAULT,
                 format_args!("returned tls index was too high ({})\n", index),
             );
             let _ = TlsFree(index);
@@ -1260,7 +1417,7 @@ fn mi_tls_slots_init() {
             }
             if !ok {
                 _mi_error_message_fmt(
-                    EFAULT,
+                    Errno::EFAULT,
                     format_args!(
                         "unable to allocate fast TLS user slot (0x{:x})\n",
                         _mi_theap_cached_slot
@@ -1277,7 +1434,7 @@ fn mi_tls_slots_init() {
             }
             if err != 0 {
                 _mi_error_message_fmt(
-                    EFAULT,
+                    Errno::EFAULT,
                     format_args!("unable to allocate pthread keys (error {})\n", err),
                 );
             }
@@ -1394,7 +1551,7 @@ fn mi_detect_cpu_features() {
 /// Returns a borrowed process-global opaque subproc pointer.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
-    unsafe { mi_subproc_main_addr() }
+    unsafe { mi_subproc_main_addr_typed().ptr().as_ptr() }
 }
 
 #[used]
@@ -1409,41 +1566,56 @@ pub(crate) unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
         unsafe { (*(*theap).tld).thread_id } == 0
             || unsafe { (*(*theap).tld).thread_id } == _mi_thread_id()
     );
+    let theap = unsafe { ThreadHeapPtr::new_unchecked(theap) };
+    let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+    let theap = match unsafe { theap.try_local(current) } {
+        Ok(theap) => theap,
+        Err(theap) => unsafe { ThreadHeapLocal::new_unchecked(theap) },
+    };
 
+    unsafe { _mi_theap_default_set_typed(theap, ThreadHeapPtr::new(theap_old)) };
+}
+
+unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<ThreadHeapPtr>) {
+    let theap_ptr = theap.ptr();
+    let theap_raw = theap_ptr.as_ptr();
     mi_tls_slots_init();
     if crate::prim::MI_TLS_MODEL_THREAD_LOCAL {
-        crate::prim::mi_prim_thread_local_default_set(theap);
+        crate::prim::mi_prim_thread_local_default_set(Some(theap_ptr));
     } else if crate::prim::MI_TLS_MODEL_FIXED_SLOT {
         crate::prim::mi_prim_tls_slot_set(
             crate::prim::MI_TLS_MODEL_FIXED_SLOT_DEFAULT,
-            theap.cast(),
+            theap_raw.cast(),
         );
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
         unsafe {
             mi_win_tls_slot_set(
                 _mi_theap_default_slot,
                 _mi_theap_default_expansion_slot,
-                theap.cast(),
+                theap_raw.cast(),
             );
         }
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_default_key } != 0 {
         let _ = crate::threadlocal::_mi_thread_local_set(
             unsafe { _mi_theap_default_key },
-            theap.cast(),
+            theap_raw.cast(),
         );
     }
 
-    if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
-        unsafe { crate::prim::_mi_prim_thread_associate_default_theap(theap) };
-        if unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) } {
-            mi_theap_main_tls_set(theap);
+    if unsafe { crate::internal::mi_theap_is_initialized(theap_raw) } {
+        unsafe { crate::prim::_mi_prim_thread_associate_default_theap(theap_raw) };
+        if unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_raw)) } {
+            mi_theap_main_tls_set(Some(theap_ptr));
         }
     }
 
-    if unsafe { crate::internal::mi_theap_is_initialized(theap_old) }
-        && unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_old)) }
-    {
-        mi_theap_main_tls_set(theap_old);
+    if let Some(theap_old) = theap_old {
+        let theap_old = theap_old.as_ptr();
+        if unsafe { crate::internal::mi_theap_is_initialized(theap_old) }
+            && unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_old)) }
+        {
+            mi_theap_main_tls_set(ThreadHeapPtr::new(theap_old));
+        }
     }
 }
 
@@ -1455,31 +1627,50 @@ pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
     if ptr::eq(prev, theap) {
         return;
     }
+    let theap = ThreadHeapPtr::new(theap).map(|theap| {
+        let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
+        match unsafe { theap.try_local(current) } {
+            Ok(theap) => theap,
+            Err(theap) => unsafe { ThreadHeapLocal::new_unchecked(theap) },
+        }
+    });
 
+    unsafe { _mi_theap_cached_set_typed(theap, ThreadHeapPtr::new(prev)) };
+}
+
+unsafe fn _mi_theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Option<ThreadHeapPtr>) {
+    let theap_ptr = theap.map(ThreadHeapLocal::ptr);
+    let theap_raw = theap_ptr
+        .map(ThreadHeapPtr::as_ptr)
+        .unwrap_or(ptr::null_mut());
     mi_tls_slots_init();
     if crate::prim::MI_TLS_MODEL_THREAD_LOCAL {
-        crate::prim::mi_prim_thread_local_cached_set(theap);
+        crate::prim::mi_prim_thread_local_cached_set(theap_ptr);
     } else if crate::prim::MI_TLS_MODEL_FIXED_SLOT {
         crate::prim::mi_prim_tls_slot_set(
             crate::prim::MI_TLS_MODEL_FIXED_SLOT_CACHED,
-            theap.cast(),
+            theap_raw.cast(),
         );
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
         unsafe {
             mi_win_tls_slot_set(
                 _mi_theap_cached_slot,
                 _mi_theap_cached_expansion_slot,
-                theap.cast(),
+                theap_raw.cast(),
             );
         }
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_cached_key } != 0 {
-        let _ =
-            crate::threadlocal::_mi_thread_local_set(unsafe { _mi_theap_cached_key }, theap.cast());
+        let _ = crate::threadlocal::_mi_thread_local_set(
+            unsafe { _mi_theap_cached_key },
+            theap_raw.cast(),
+        );
     }
 
     unsafe {
-        crate::internal::_mi_theap_incref(theap);
-        crate::internal::_mi_theap_decref(prev);
+        crate::internal::_mi_theap_incref(theap_raw);
+        crate::internal::_mi_theap_decref(
+            prev.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut()),
+        );
     }
 }
 
@@ -1526,7 +1717,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
         if unsafe { crate::internal::mi_theap_is_initialized(theap) }
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
         {
-            mi_theap_main_tls_set(theap);
+            mi_theap_main_tls_set(ThreadHeapPtr::new(theap));
         }
     }
     crate::mi_assert_internal!(
@@ -1554,12 +1745,18 @@ static MI_THEAP_EMPTY_GET_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_
 /// Returns the current subproc without forcing thread-local initialization.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
+    unsafe { _mi_subproc_typed().ptr().as_ptr() }
+}
+
+unsafe fn _mi_subproc_typed() -> BorrowedSubproc {
     let theap = unsafe { crate::prim::_mi_theap_default_raw() };
-    if theap.is_null() {
-        unsafe { mi_subproc_main_addr() }
+    let subproc = if theap.is_null() {
+        unsafe { mi_subproc_main_addr_typed().ptr() }
     } else {
-        unsafe { (*(*theap).tld).subproc }
-    }
+        let tld = unsafe { TldPtr::new_unchecked((*theap).tld) };
+        unsafe { tld.subproc() }.unwrap_or_else(|| unsafe { mi_subproc_main_addr_typed().ptr() })
+    };
+    unsafe { BorrowedSubproc::new(subproc) }
 }
 
 /// # Safety
@@ -1568,7 +1765,14 @@ pub(crate) unsafe extern "C" fn _mi_subproc() -> *mut mi_subproc_t {
 pub(crate) unsafe extern "C" fn _mi_subproc_from_id(
     subproc_id: mi_subproc_id_t,
 ) -> *mut mi_subproc_t {
-    subproc_id._mi_subproc_id.cast::<mi_subproc_t>()
+    unsafe { _mi_subproc_from_id_typed(subproc_id) }
+        .map(|subproc| subproc.ptr().as_ptr())
+        .unwrap_or(ptr::null_mut())
+}
+
+unsafe fn _mi_subproc_from_id_typed(subproc_id: mi_subproc_id_t) -> Option<BorrowedSubproc> {
+    SubprocPtr::new(subproc_id._mi_subproc_id.cast::<mi_subproc_t>())
+        .map(|subproc| unsafe { BorrowedSubproc::new(subproc) })
 }
 
 #[used]
@@ -1579,14 +1783,14 @@ static MI_SUBPROC_FROM_ID_KEEP: unsafe extern "C" fn(mi_subproc_id_t) -> *mut mi
 /// # Safety
 /// Returns an opaque identifier for the main subproc.
 pub unsafe extern "C" fn mi_subproc_main() -> mi_subproc_id_t {
-    unsafe { _mi_subproc_to_id(_mi_subproc_main()) }
+    _mi_subproc_to_id_typed(Some(unsafe { mi_subproc_main_addr_typed().ptr() }))
 }
 
 #[unsafe(no_mangle)]
 /// # Safety
 /// Returns the current subproc identifier for the bounded crate state.
 pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
-    unsafe { _mi_subproc_to_id(_mi_subproc()) }
+    _mi_subproc_to_id_typed(Some(unsafe { _mi_subproc_typed().ptr() }))
 }
 
 /// # Safety
@@ -1595,14 +1799,22 @@ pub unsafe extern "C" fn mi_subproc_current() -> mi_subproc_id_t {
 pub(crate) unsafe extern "C" fn _mi_subproc_heap_main(
     subproc: *mut mi_subproc_t,
 ) -> *mut mi_heap_t {
-    let heap = unsafe { mi_subproc_heap_main_raw(subproc) };
-    if !heap.is_null() {
-        return heap;
+    let subproc = unsafe { BorrowedSubproc::new(SubprocPtr::new_unchecked(subproc)) };
+    unsafe { _mi_subproc_heap_main_typed(subproc).ptr().as_ptr() }
+}
+
+unsafe fn _mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
+    let heap = unsafe { mi_subproc_heap_main_typed(subproc) };
+    if let Some(heap) = heap {
+        return unsafe { MainHeap::new_unchecked(heap) };
     }
     mi_heap_main_init();
-    let heap = unsafe { mi_subproc_heap_main_raw(subproc) };
-    crate::mi_assert_internal!(!heap.is_null());
-    heap
+    let heap = unsafe { mi_subproc_heap_main_typed(subproc) };
+    crate::mi_assert_internal!(heap.is_some());
+    let Some(heap) = heap else {
+        return unsafe { MainHeap::new_unchecked(HeapPtr::new_unchecked(mi_heap_main())) };
+    };
+    unsafe { MainHeap::new_unchecked(heap) }
 }
 
 #[used]
@@ -1691,7 +1903,7 @@ unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
     unsafe {
         _mi_theap_default_set(empty);
         _mi_theap_cached_set(empty);
-        mi_theap_main_tls_set(ptr::null_mut());
+        mi_theap_main_tls_set(None);
     }
 
     unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };
@@ -1771,7 +1983,12 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     if subproc_ptr.is_null() {
         return unsafe { _mi_subproc_to_id(ptr::null_mut()) };
     }
-    unsafe { subproc_ptr.write(MiSubprocPrefix::new_with_memid(seq, memid)) };
+    unsafe {
+        subproc_ptr.write(MiSubprocPrefix::new_with_memid(
+            crate::core_types::SubprocSeq::new(seq),
+            memid,
+        ))
+    };
     // SAFETY: initializing lock words for a freshly allocated local prefix.
     unsafe {
         mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).arena_reserve_lock));
@@ -1779,13 +1996,13 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     }
     // SAFETY: local subproc list mutation is serialized by `subprocs_lock`.
     unsafe {
-        mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock));
+        let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
+        let _lock = MiLockGuard::acquire(lock);
         (*subproc_ptr).next = subprocs;
         if !subprocs.is_null() {
             (*mi_subproc_prefix(subprocs)).prev = subproc_ptr.cast::<mi_subproc_t>();
         }
         subprocs = subproc_ptr.cast::<mi_subproc_t>();
-        mi_lock_release(ptr::addr_of_mut!(subprocs_lock));
         _mi_subproc_to_id(subproc_ptr.cast::<mi_subproc_t>())
     }
 }
@@ -1838,9 +2055,12 @@ pub unsafe extern "C" fn mi_subproc_add_current_thread(subproc_id: mi_subproc_id
     let main_prefix = unsafe { mi_subproc_prefix(main_subproc) };
     unsafe {
         (*tld).subproc = subproc;
-        (*tld).thread_seq = (*subproc_prefix)
-            .thread_total_count
-            .fetch_add(1, Ordering::Relaxed);
+        (*tld).thread_seq = crate::core_types::ThreadSeq::new(
+            (*subproc_prefix)
+                .thread_total_count
+                .fetch_add(1, Ordering::Relaxed),
+        )
+        .get();
         (*main_prefix).thread_count.fetch_sub(1, Ordering::Relaxed);
         (*subproc_prefix)
             .thread_count
@@ -1856,9 +2076,11 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
     visitor: Option<mi_heap_visit_fun>,
     arg: *mut c_void,
 ) -> bool {
-    let Some(visitor) = visitor else {
+    let visitor = HeapVisitCallback::new(visitor);
+    if !visitor.is_some() {
         return false;
     };
+    let arg = HeapVisitCallbackArg::from_raw(arg);
     let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
     if subproc.is_null() {
         return false;
@@ -1870,7 +2092,7 @@ pub unsafe extern "C" fn mi_subproc_visit_heaps(
         let mut ok = true;
         while !heap.is_null() && ok {
             let next = (*(heap.cast::<MiHeapMainPrefix>())).next;
-            ok = visitor(heap, arg);
+            ok = visitor.invoke(HeapPtr::new_unchecked(heap), arg);
             heap = next;
         }
         mi_lock_release(ptr::addr_of_mut!((*subproc_prefix).heaps_lock));
@@ -2005,15 +2227,15 @@ mod tests {
         let marker = unsafe { super::_mi_theap_empty_get() };
         let marker_addr = marker as usize;
 
-        super::mi_theap_main_tls_set(marker);
+        super::mi_theap_main_tls_set(crate::core_types::ThreadHeapPtr::new(marker));
         assert_eq!(super::mi_theap_main_tls_peek(), marker);
 
         let child = std::thread::spawn(move || {
             let marker = marker_addr as *mut crate::types::mi_theap_t;
             let before = super::mi_theap_main_tls_peek() as usize;
-            super::mi_theap_main_tls_set(marker);
+            super::mi_theap_main_tls_set(crate::core_types::ThreadHeapPtr::new(marker));
             let after = super::mi_theap_main_tls_peek() as usize;
-            super::mi_theap_main_tls_set(core::ptr::null_mut());
+            super::mi_theap_main_tls_set(None);
             (before, after)
         })
         .join()
@@ -2023,6 +2245,6 @@ mod tests {
         assert_eq!(child.1, marker_addr);
         assert_eq!(super::mi_theap_main_tls_peek(), marker);
 
-        super::mi_theap_main_tls_set(previous);
+        super::mi_theap_main_tls_set(crate::core_types::ThreadHeapPtr::new(previous));
     }
 }

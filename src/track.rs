@@ -2,41 +2,23 @@
 
 use core::ffi::c_void;
 
+use crate::core_types::TrackMode;
+
 pub const MI_TRACK_H: () = ();
 
 #[cfg(all(feature = "track-valgrind", feature = "track-asan"))]
 compile_error!("track-valgrind and track-asan are mutually exclusive");
 
-pub const MI_TRACK_VALGRIND: usize = if cfg!(feature = "track-valgrind") {
-    1
-} else {
-    0
-};
-pub const MI_TRACK_ASAN: usize = if cfg!(feature = "track-asan") { 1 } else { 0 };
+pub(crate) const MI_TRACK_MODE: TrackMode = TrackMode::CURRENT;
+pub const MI_TRACK_VALGRIND: usize = MI_TRACK_MODE.valgrind_flag();
+pub const MI_TRACK_ASAN: usize = MI_TRACK_MODE.asan_flag();
 pub const MI_TRACK_ETW: usize = 0;
 
-pub const MI_TRACK_ENABLED: usize =
-    if MI_TRACK_VALGRIND != 0 || MI_TRACK_ASAN != 0 || MI_TRACK_ETW != 0 {
-        1
-    } else {
-        0
-    };
+pub const MI_TRACK_ENABLED: usize = MI_TRACK_MODE.enabled_flag();
 
-pub const MI_TRACK_HEAP_DESTROY: usize = if MI_TRACK_VALGRIND != 0 || MI_TRACK_ETW != 0 {
-    1
-} else {
-    0
-};
+pub const MI_TRACK_HEAP_DESTROY: usize = MI_TRACK_MODE.heap_destroy_flag();
 
-pub const MI_TRACK_TOOL: &str = if MI_TRACK_VALGRIND != 0 {
-    "valgrind"
-} else if MI_TRACK_ASAN != 0 {
-    "asan"
-} else if MI_TRACK_ETW != 0 {
-    "ETW"
-} else {
-    "none"
-};
+pub const MI_TRACK_TOOL: &str = MI_TRACK_MODE.tool_name();
 
 #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
 unsafe extern "C" {

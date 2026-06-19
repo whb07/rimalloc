@@ -1482,7 +1482,7 @@ These wrappers should be added only if they can avoid dangling references, globa
 
 ## J1. Safe facade unit and integration tests
 
-- [ ] Test `MiMalloc` as global allocator.
+- [x] Test `MiMalloc` as global allocator.
   - Cases:
     - `Box`, `Vec`, `String` under `std`.
     - Multi-thread allocation/free.
@@ -1490,6 +1490,13 @@ These wrappers should be added only if they can avoid dangling references, globa
   - Validation:
     - `examples/global_allocator.rs` runs.
     - Integration test installs `MiMalloc` as global allocator in a test binary.
+  - Evidence:
+    - `tests/mimalloc_global_allocator_std.rs` installs `MiMalloc` with
+      `#[global_allocator]` and covers `Box`, `Vec`, `String`, multi-threaded
+      standard allocation/free, and a 4096-byte over-aligned `Box`.
+    - `cargo run --quiet --example global_allocator --features std` passes.
+    - `cargo test --quiet --test mimalloc_global_allocator_std --features std`
+      passes.
 
 - [ ] Test `Allocation` normal allocation.
   - Cases:

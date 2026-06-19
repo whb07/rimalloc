@@ -97,10 +97,14 @@ checks are:
 ```sh
 scripts/check-abi-symbols.sh
 scripts/check-layout.sh
+scripts/check-feature-abi.sh
 ```
 
 Extra exported symbols outside the public C headers must be classified in
 `symbols/public-symbol-classification.tsv`; otherwise the symbol check fails.
+`scripts/check-feature-abi.sh` repeats the ABI/layout and export checks for the
+layout- or symbol-sensitive `secure`, `guarded`, `track-valgrind`, and
+`track-asan` feature sets.
 
 ## Hidden Internals
 

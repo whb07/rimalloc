@@ -1463,10 +1463,18 @@ These wrappers should be added only if they can avoid dangling references, globa
     - Default raw facade remains limited to the allowlisted C-header modules.
     - `scripts/check-raw-facade.sh` enforces this shape.
 
-- [ ] Update public API inventory and changelog.
+- [x] Update public API inventory and changelog.
   - Validation:
     - `docs/api-inventory.md` matches rustdoc.
     - `CHANGELOG.md` classifies this as raw Rust path cleanup, not C ABI removal unless symbols changed.
+  - Evidence:
+    - `docs/api-inventory.md` lists the crate-root safe API, default raw
+      facade modules, `unstable-raw-internals`, C ABI symbol/layout checks, and
+      feature-aware ABI validation.
+    - `CHANGELOG.md` classifies the raw facade cutover as raw Rust path cleanup
+      under `unstable-raw-internals`, with mimalloc-compatible C ABI
+      symbols/layouts validated separately and no C ABI removal claimed.
+    - `scripts/check-api-inventory.py` and `scripts/check-docs.sh` pass.
 
 ---
 

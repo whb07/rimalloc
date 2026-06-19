@@ -1655,7 +1655,7 @@ These wrappers should be added only if they can avoid dangling references, globa
     - README links to it.
     - Crate docs link to it.
 
-- [ ] `docs/ffi-raw-split.md` or expanded `docs/abi.md` exists.
+- [x] `docs/ffi-raw-split.md` or expanded `docs/abi.md` exists.
   - Required contents:
     - Module taxonomy.
     - What belongs in `raw`.
@@ -1666,13 +1666,37 @@ These wrappers should be added only if they can avoid dangling references, globa
     - Symbol and layout validation.
   - Validation:
     - New contributors can identify where to put a new C ABI declaration or safe wrapper.
+  - Evidence:
+    - `docs/abi.md` is the expanded FFI/raw split document.
+    - `docs/abi.md` includes `Raw Rust Facade`, `Module Taxonomy`,
+      `Current File Layout`, export-boundary classification, raw facade
+      stability notes, C ABI compatibility policy, and symbol/layout validation
+      commands.
+    - The `Current File Layout` table states that new public C ABI
+      declarations belong in `src/abi.rs`, new safe APIs belong in
+      `src/lib.rs`/`src/safe.rs`, and exported C ABI implementations belong in
+      files classified by `scripts/check-ffi-boundary.py`.
+    - `scripts/check-docs.sh` passes.
 
-- [ ] `docs/unsafe-audit.md` includes safe API / FFI split proofs.
+- [x] `docs/unsafe-audit.md` includes safe API / FFI split proofs.
   - Validation:
     - Each public safe wrapper has a safety proof section.
     - Each public unsafe/raw family has caller obligations.
+  - Evidence:
+    - `docs/unsafe-audit.md` includes audit tags and proof summaries for
+      `MiMalloc` (`SAFETY[AUDIT:global-alloc]`), `Allocation`
+      (`SAFETY[AUDIT:owned-allocation]`), exported C ABI functions
+      (`SAFETY[AUDIT:ffi-export]`), raw callbacks
+      (`SAFETY[AUDIT:raw-callback]`), panic boundaries, and the deferred heap
+      wrapper slot.
+    - Its `Safe API And FFI Boundary` section documents that the raw facade is
+      unsafe/unstable, C ABI exports inherit C caller obligations, `MiMalloc`
+      and `Allocation` are the only safe wrappers, and future safe wrappers are
+      deferred pending soundness proofs.
+    - `scripts/check-safe-boundary.py` passes.
+    - `scripts/check-docs.sh` passes.
 
-- [ ] `docs/api-inventory.md` is complete.
+- [x] `docs/api-inventory.md` is complete.
   - Required inventory:
     - Crate-root safe API.
     - Raw default API.
@@ -1682,6 +1706,11 @@ These wrappers should be added only if they can avoid dangling references, globa
     - SemVer classification.
   - Validation:
     - Inventory script passes.
+  - Evidence:
+    - `docs/api-inventory.md` inventories crate-root safe API, safe trait
+      surface, raw default facade, `unstable-raw-internals`, C ABI symbols and
+      layouts, hidden internals, and SemVer classification.
+    - `scripts/check-api-inventory.py` passes.
 
 ## K2. README updates
 

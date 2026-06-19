@@ -24,57 +24,110 @@ A checkbox is not complete until its validation notes pass and the relevant docu
 
 The safe Rust API / FFI split work is complete only when all of these are true:
 
-- [ ] The crate root exposes only the safe Rust facade and the intentionally unsafe raw/FFI entrypoint module.
+- [x] The crate root exposes only the safe Rust facade and the intentionally unsafe raw/FFI entrypoint module.
   - Validation:
-    - `cargo test --test release_fast_path_audit crate_root_exposes_only_curated_rust_facade` passes.
+    - `cargo test --features unstable-raw-internals --test release_fast_path_audit crate_root_exposes_only_curated_rust_facade` passes.
     - `scripts/check-api-inventory.py` passes.
     - `cargo doc --no-deps --features std` shows no implementation module at crate root.
     - The public API inventory lists every crate-root item and classifies it as safe Rust API, raw facade, C ABI, or internal.
+  - Evidence:
+    - `docs/api-inventory.md` lists the complete crate-root surface:
+      `MiMalloc`, `Allocation`, `AllocError`, `LayoutError`,
+      `TryAllocError`, and `raw`.
+    - `scripts/check-api-inventory.py` passes.
+    - `cargo test --features unstable-raw-internals --test release_fast_path_audit crate_root_exposes_only_curated_rust_facade` passes.
+    - `cargo doc --no-deps --features std` passes.
+    - `docs/final-api-surface-review.md` records the final crate-root review.
 
-- [ ] `raw` no longer re-exports the entire mechanical-port module graph by default.
+- [x] `raw` no longer re-exports the entire mechanical-port module graph by default.
   - Validation:
     - There is an explicit allowlist for default `raw` exports.
     - `raw::internal`, `raw::page`, `raw::page_map`, `raw::theap`, `raw::arena`, `raw::os`, `raw::prim`, `raw::threadlocal`, and similar internal implementation modules are either absent, gated behind an explicit unstable feature, or classified in docs with a compatibility reason.
     - A source-shape test fails if a new implementation module is re-exported from `raw` without being added to the allowlist and docs.
+  - Evidence:
+    - `src/raw.rs` exposes the default raw allowlist and gates translated
+      implementation modules behind `unstable-raw-internals`.
+    - `docs/api-inventory.md`, `docs/abi.md`, and
+      `docs/raw-facade-migration.md` classify the default raw facade and the
+      unstable raw internals.
+    - `scripts/check-api-inventory.py` and `scripts/check-raw-facade.sh` pass.
 
-- [ ] All C ABI declarations, raw C layouts, callback types, constants, and exported C symbols have a single documented ownership location.
+- [x] All C ABI declarations, raw C layouts, callback types, constants, and exported C symbols have a single documented ownership location.
   - Validation:
     - `src/abi.rs` or `src/raw/abi.rs` owns C header declarations and `repr(C)` layout definitions.
     - FFI/export wrappers live in one or more `ffi`/`c_api`/`exports` modules, not scattered arbitrarily across implementation modules without classification.
     - `tests/release_fast_path_audit.rs` or a dedicated script enforces that `#[unsafe(no_mangle)]`, `#[export_name]`, naked ABI shims, and global assembly exports are only in approved boundary files.
+  - Evidence:
+    - `docs/abi.md` names `src/abi.rs` as the owner for public C ABI
+      declarations, raw layouts, aliases, constants, and callback type aliases.
+    - `docs/abi.md` documents where exported implementations and override
+      symbols belong.
+    - `scripts/check-ffi-boundary.py` and `scripts/check-abi-symbols.sh` pass.
 
-- [ ] Safe Rust APIs expose no raw allocator metadata pointers or lifetime-sensitive C handles unless the API is explicitly unsafe.
+- [x] Safe Rust APIs expose no raw allocator metadata pointers or lifetime-sensitive C handles unless the API is explicitly unsafe.
   - Validation:
     - `cargo doc --no-deps --features std` shows no public safe function taking or returning `*mut mi_heap_t`, `*mut mi_page_t`, `*mut mi_theap_t`, `*mut mi_arena_t`, `*mut mi_block_t`, or equivalent internal metadata pointers.
     - A compile-fail test proves that `core_types` and implementation modules are inaccessible to downstream users.
     - Any public raw-pointer function outside `raw` is marked `unsafe` and has a `# Safety` section.
+  - Evidence:
+    - `docs/safe-api.md` forbids safe APIs from exposing raw allocator
+      metadata pointers or lifetime-sensitive C handles.
+    - `src/lib.rs` rustdoc contains compile-fail examples for inaccessible
+      implementation modules and `core_types`.
+    - `scripts/check-safe-boundary.py`, `scripts/check-api-inventory.py`, and
+      `cargo doc --no-deps --features std` pass.
 
-- [ ] Safe Rust APIs have full rustdoc, examples, error behavior, panic behavior, and feature notes.
+- [x] Safe Rust APIs have full rustdoc, examples, error behavior, panic behavior, and feature notes.
   - Validation:
     - `cargo test --doc --features std` passes.
     - `cargo doc --no-deps --features std` passes with `rustdoc::broken_intra_doc_links = deny`.
     - Every public safe type has examples or a deliberate “no example because...” note.
     - Every public unsafe item has a `# Safety` section.
+  - Evidence:
+    - `src/lib.rs` and `src/safe.rs` document `MiMalloc`, `Allocation`, and
+      the safe error/status types with examples, error behavior, panic
+      behavior, and feature notes.
+    - `cargo test --doc --features std` and `scripts/check-docs.sh` pass.
+    - `docs/final-api-surface-review.md` records the rustdoc review.
 
-- [ ] The FFI/raw split preserves the dynamic C ABI surface.
+- [x] The FFI/raw split preserves the dynamic C ABI surface.
   - Validation:
     - `scripts/check-abi-symbols.sh` passes.
     - `scripts/check-layout.sh` passes.
     - C smoke examples compile and link against the produced artifact.
     - Symbol diffs show no removed mimalloc-compatible symbol unless the change is explicitly documented as a breaking ABI change.
+  - Evidence:
+    - `scripts/check-abi-symbols.sh`, `scripts/check-layout.sh`, and
+      `scripts/check-c-link-public-api.py` pass.
+    - `docs/final-api-surface-review.md` records the dynamic symbol review:
+      190 public header symbols exported, 228 public ABI symbols present, and
+      27 relevant extra exports classified.
 
-- [ ] The safe API and raw API compatibility domains are documented and enforced.
+- [x] The safe API and raw API compatibility domains are documented and enforced.
   - Validation:
     - `docs/api-inventory.md`, `docs/compatibility.md`, `docs/abi.md`, and `CHANGELOG.md` are updated.
     - Safe API changes are classified as Rust SemVer surface.
     - `raw` facade changes are classified as unstable raw Rust surface unless specifically stabilized.
     - C ABI/layout changes are classified independently from Rust SemVer.
+  - Evidence:
+    - `docs/api-inventory.md`, `docs/compatibility.md`, `docs/abi.md`, and
+      `CHANGELOG.md` classify the safe Rust API, raw Rust facade, C ABI/layout
+      surface, feature behavior, and internal implementation surface.
+    - `scripts/check-api-inventory.py`, `scripts/check-raw-facade.sh`,
+      `scripts/check-ffi-boundary.py`, and `scripts/check-abi-symbols.sh` pass.
 
-- [ ] The local signoff command set is updated for this workstream.
+- [x] The local signoff command set is updated for this workstream.
   - Validation:
     - `scripts/check-local.sh` includes API inventory, docs, features, ABI/layout, and examples.
     - A new or existing raw-facade check prevents accidental re-export creep.
     - Release policy names the safe API / FFI split checks explicitly.
+  - Evidence:
+    - `scripts/check-local.sh` runs tests, examples, API inventory, raw
+      facade, safe boundary, FFI boundary, features, lints, layout, docs,
+      package, and bench smoke gates.
+    - `scripts/check-raw-facade.sh` prevents default raw re-export creep.
+    - `docs/release.md` names the API inventory, FFI boundary, ABI symbol,
+      layout, local, and benchmark checks.
 
 ---
 
@@ -1929,7 +1982,7 @@ Before marking this TODO complete, run and record the exact output/status for:
   - Validation: exits 0 and package contents match policy.
   - Evidence: exits 0; `cargo package --list --allow-dirty` lists the
     intended package contents and `cargo package --allow-dirty --no-verify`
-    packages 176 files.
+    packages 177 files.
 
 - [x] `scripts/check-bench-smoke.sh`
   - Validation: exits 0 for changes that could affect hot paths; documentation-only/raw path changes may record why smoke/full bench is not required.
@@ -1945,59 +1998,91 @@ Before marking this TODO complete, run and record the exact output/status for:
 
 ## L3. Final API surface diff
 
-- [ ] Generate and review public API diff from before and after this workstream.
+- [x] Generate and review public API diff from before and after this workstream.
   - Validation:
     - Removed crate-root internals are intentional.
     - Safe API additions are documented.
     - Raw path changes are documented as unstable raw facade cleanup, not C ABI removal.
     - C ABI symbols are unchanged unless intentionally documented.
+  - Evidence:
+    - `docs/final-api-surface-review.md` records the public API diff review
+      across the workstream history and current checked inventory.
 
-- [ ] Generate and review rustdoc output.
+- [x] Generate and review rustdoc output.
   - Validation:
     - Crate landing page shows safe API first.
     - Raw API is visibly unsafe/low-level.
     - Internal modules are absent from root docs.
     - No broken links.
+  - Evidence:
+    - `docs/final-api-surface-review.md` records the rustdoc review.
+    - `cargo doc --no-deps --features std` and `scripts/check-docs.sh` pass.
 
-- [ ] Generate and review dynamic symbol diff.
+- [x] Generate and review dynamic symbol diff.
   - Validation:
     - No mimalloc-compatible C ABI symbols are removed.
     - No internal Rust symbols become newly exported.
     - Any extra public symbol is classified.
+  - Evidence:
+    - `docs/final-api-surface-review.md` records the dynamic symbol review.
+    - `scripts/check-abi-symbols.sh`, `scripts/check-layout.sh`,
+      `scripts/check-c-link-public-api.py`, and `scripts/check-ffi-boundary.py`
+      pass.
 
 ## L4. Final “exemplary” checklist
 
 This TODO is complete when all answers are “yes”:
 
-- [ ] Is the crate-root safe Rust API small, documented, and intentional?
+- [x] Is the crate-root safe Rust API small, documented, and intentional?
   - Validation: root rustdoc and API inventory agree.
+  - Evidence: `docs/api-inventory.md`, root rustdoc, and
+    `docs/final-api-surface-review.md` agree on the small crate-root facade.
 
-- [ ] Can safe Rust users use the allocator without learning the mechanical C-port module graph?
+- [x] Can safe Rust users use the allocator without learning the mechanical C-port module graph?
   - Validation: README quick start uses only `MiMalloc` and safe wrappers.
+  - Evidence: `README.md` quick start uses `MiMalloc`; safe wrapper docs use
+    `Allocation` and safe error/status types.
 
-- [ ] Is every raw/unsafe API visibly raw/unsafe and documented with caller obligations?
+- [x] Is every raw/unsafe API visibly raw/unsafe and documented with caller obligations?
   - Validation: raw docs and unsafe audit cover all raw families.
+  - Evidence: `src/raw.rs`, `docs/abi.md`, and `docs/unsafe-audit.md`
+    document raw caller obligations; `scripts/check-docs.sh` passes.
 
-- [ ] Is the C ABI separated from Rust semver?
+- [x] Is the C ABI separated from Rust semver?
   - Validation: compatibility docs define separate domains.
+  - Evidence: `docs/compatibility.md`, `docs/abi.md`, and
+    `docs/final-api-surface-review.md` define separate Tier S, Tier R, Tier C,
+    and Tier I domains.
 
-- [ ] Is the raw Rust facade no longer an accidental dump of implementation modules?
+- [x] Is the raw Rust facade no longer an accidental dump of implementation modules?
   - Validation: raw facade allowlist and docs enforce this.
+  - Evidence: `src/raw.rs`, `docs/api-inventory.md`, and
+    `scripts/check-raw-facade.sh` enforce the default raw facade allowlist.
 
-- [ ] Can new contributors tell where to add safe APIs, raw declarations, exported symbols, and internals?
+- [x] Can new contributors tell where to add safe APIs, raw declarations, exported symbols, and internals?
   - Validation: architecture/ABI docs answer this.
+  - Evidence: `docs/safe-api.md`, `docs/abi.md`, `docs/api-inventory.md`, and
+    `docs/release.md` document ownership and release checks.
 
-- [ ] Are public examples safe by default and unsafe only when explicitly demonstrating raw APIs?
+- [x] Are public examples safe by default and unsafe only when explicitly demonstrating raw APIs?
   - Validation: examples and doctests pass.
+  - Evidence: `cargo test --doc --features std`,
+    `cargo check --examples --features std`, and `scripts/check-docs.sh` pass.
 
-- [ ] Are feature interactions documented and checked?
+- [x] Are feature interactions documented and checked?
   - Validation: feature docs and feature sweep pass.
+  - Evidence: `docs/features.md` documents feature interactions and
+    `scripts/check-features.sh` passes.
 
-- [ ] Are ABI symbols and layouts validated after the split?
+- [x] Are ABI symbols and layouts validated after the split?
   - Validation: ABI/layout scripts pass.
+  - Evidence: `scripts/check-abi-symbols.sh`, `scripts/check-layout.sh`, and
+    `docs/final-api-surface-review.md` pass/record ABI and layout validation.
 
-- [ ] Are unsafe boundaries reviewed and auditable?
+- [x] Are unsafe boundaries reviewed and auditable?
   - Validation: lint policy, safety comments, and unsafe-audit docs pass review.
+  - Evidence: `docs/unsafe-audit.md`, `scripts/check-safe-boundary.py`,
+    `scripts/check-ffi-boundary.py`, and `scripts/check-lints.sh` pass.
 
 ---
 

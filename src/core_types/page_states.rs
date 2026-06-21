@@ -424,6 +424,53 @@ impl PagePtr {
     }
 }
 
+pub(super) fn __lint_touch() {
+    let _ = core::mem::size_of::<Retired>();
+    let _ = core::mem::size_of::<AbandonedMapped>();
+    let _ = core::mem::size_of::<Destroyed>();
+
+    let page = unsafe { PagePtr::new_unchecked(core::ptr::dangling_mut()) };
+    let retired = unsafe { RetiredPage::new_unchecked(page) };
+    let _ = retired.page();
+    let _ = retired.expire();
+    let abandoned = unsafe { AbandonedPageType::new_unchecked(page) };
+    let _ = AbandonedPageType::claim_ownership
+        as unsafe fn(AbandonedPageType) -> Option<OwnedAbandonedPage>;
+    let _ = abandoned.remote_free_page();
+    let mapped = unsafe { AbandonedMappedPageType::new_unchecked(page) };
+    let _ = mapped.remote_free_page();
+    let owned = unsafe { OwnedAbandonedPage::new_unchecked(page) };
+    let _ = owned.try_reabandon_to_mapped();
+
+    if let PageFreeOwner::Local(local) =
+        PageFreeOwner::Local(unsafe { LocalPage::new_unchecked(page) })
+    {
+        let _ = local.page();
+    }
+    if let PageFreeOwner::Foreign(foreign) =
+        PageFreeOwner::Foreign(unsafe { ForeignPage::new_unchecked(page) })
+    {
+        let _ = foreign.page();
+    }
+    if let PageAbandonOutcome::Abandoned(abandoned) = PageAbandonOutcome::Abandoned(abandoned) {
+        let _ = abandoned.page();
+    }
+    if let PageAbandonOutcome::Destroyed(destroyed) =
+        PageAbandonOutcome::Destroyed(unsafe { DestroyedPage::new_unchecked(page) })
+    {
+        let _ = destroyed.page();
+    }
+
+    let theap = unsafe { ThreadHeapPtr::new_unchecked(core::ptr::dangling_mut()) };
+    let local = unsafe { ThreadHeapLocal::new_unchecked(theap) };
+    let _ = local.borrowed();
+    let _ =
+        ThreadHeapLocal::state as unsafe fn(ThreadHeapLocal) -> crate::core_types::ThreadHeapState;
+    let _ = PagePtr::try_local
+        as unsafe fn(PagePtr, crate::core_types::ThreadId) -> Result<LocalPage, PagePtr>;
+    let _ = PagePtr::try_abandoned as unsafe fn(PagePtr) -> Result<AbandonedPageType, PagePtr>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

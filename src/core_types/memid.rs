@@ -457,6 +457,81 @@ pub(crate) struct MetaMemId {
     pub(crate) block_count: core::num::NonZeroU32,
 }
 
+pub(super) fn __lint_touch() {
+    let none = MemId::<NoneMem>::none();
+    let _ = none.as_raw();
+    let _ = MemId::<HeapMainMem>::heap_main();
+    let _ = MemId::<OsMem>::os_remap
+        as fn(
+            Option<OsMemPtr>,
+            ReservedBytes,
+            InitiallyCommitted,
+            InitiallyZero,
+            Pinned,
+        ) -> MemId<OsMem>;
+    let _ = ReservedBytes::new(0).is_zero();
+
+    if let MemIdView::None(memid) = MemIdView::None(MemId::<NoneMem>::none()) {
+        let _ = memid.into_raw();
+    }
+    if let MemIdView::Static(memid) = MemIdView::Static(MemId::<StaticMem>::static_mem()) {
+        let _ = memid.into_raw();
+    }
+    if let MemIdView::HeapMain(memid) = MemIdView::HeapMain(MemId::<HeapMainMem>::heap_main()) {
+        let _ = memid.into_raw();
+    }
+    if let MemIdView::Unknown(code) = MemIdView::Unknown(MemKindCode::NONE) {
+        let _ = code.0;
+    }
+
+    let os = OsMemId {
+        base: None,
+        size: ReservedBytes::new(0),
+        initially_committed: InitiallyCommitted(false),
+        initially_zero: InitiallyZero(false),
+        pinned: Pinned(false),
+        kind: OsMemKind::Normal,
+    };
+    let _ = (
+        os.base,
+        os.size,
+        os.initially_committed.0,
+        os.initially_zero.0,
+        os.pinned.0,
+        matches!(os.kind, OsMemKind::Normal),
+    );
+
+    let external = ExternalMemId {
+        base: None,
+        size: ReservedBytes::new(0),
+        initially_committed: InitiallyCommitted(false),
+        initially_zero: InitiallyZero(false),
+        pinned: Pinned(false),
+    };
+    let _ = (
+        external.base,
+        external.size,
+        external.initially_committed.0,
+        external.initially_zero.0,
+        external.pinned.0,
+    );
+
+    let arena = ArenaMemId {
+        arena: unsafe { ArenaPtr::new_unchecked(core::ptr::dangling_mut()) },
+        range: SliceRange::from_raw(0, 1).expect("valid lint-touch slice range"),
+        initially_committed: InitiallyCommitted(false),
+        initially_zero: InitiallyZero(false),
+        pinned: Pinned(false),
+    };
+    let _ = (
+        arena.arena,
+        arena.range,
+        arena.initially_committed.0,
+        arena.initially_zero.0,
+        arena.pinned.0,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

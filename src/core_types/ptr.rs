@@ -1358,6 +1358,142 @@ impl PageConstPtr {
     }
 }
 
+pub(super) fn __lint_touch() {
+    let _ = checked_non_null_byte_add as fn(NonNull<u8>, usize) -> Option<NonNull<u8>>;
+    let _ = checked_non_null_byte_sub as fn(NonNull<u8>, usize) -> Option<NonNull<u8>>;
+
+    let _ = PagePtr::set_block_size as unsafe fn(PagePtr, BlockSize);
+    let _ = BlockPtr::encoded_link as unsafe fn(BlockPtr) -> EncodedPtr<mi_block_t>;
+    let _ = BlockPtr::next as unsafe fn(BlockPtr, PagePtr) -> Option<BlockPtr>;
+
+    let _ = HeapPtr::subproc as unsafe fn(HeapPtr) -> Option<SubprocPtr>;
+    let _ = HeapPtr::set_subproc as unsafe fn(HeapPtr, Option<SubprocPtr>);
+    let _ = HeapPtr::thread_local_key as unsafe fn(HeapPtr) -> mi_thread_local_t;
+    let _ = HeapPtr::set_thread_local_key as unsafe fn(HeapPtr, mi_thread_local_t);
+    let _ = HeapPtr::thread_heaps as unsafe fn(HeapPtr) -> Option<ThreadHeapPtr>;
+    let _ = HeapPtr::set_thread_heaps as unsafe fn(HeapPtr, Option<ThreadHeapPtr>);
+    let _ = HeapPtr::thread_heaps_lock as unsafe fn(HeapPtr) -> *mut mi_lock_t;
+    let _ = HeapPtr::exclusive_arena as unsafe fn(HeapPtr) -> Option<ArenaPtr>;
+    let _ = HeapPtr::set_exclusive_arena as unsafe fn(HeapPtr, Option<ArenaPtr>);
+    let _ = HeapPtr::numa_node as unsafe fn(HeapPtr) -> NumaNode;
+    let _ = HeapPtr::set_numa_node as unsafe fn(HeapPtr, NumaNode);
+    let _ = HeapPtr::arena_pages_cell as unsafe fn(HeapPtr, ArenaIndex) -> *mut AtomicPtr<c_void>;
+    let _ = HeapPtr::arena_pages_lock as unsafe fn(HeapPtr) -> *mut mi_lock_t;
+    let _ = HeapPtr::stats as unsafe fn(HeapPtr) -> *mut mi_stats_t;
+
+    let _ = ThreadHeapPtr::heap_cell as unsafe fn(ThreadHeapPtr) -> AtomicPtrField<mi_heap_t>;
+    let _ = ThreadHeapPtr::refcount_cell as unsafe fn(ThreadHeapPtr) -> AtomicThreadHeapRefcount;
+    let _ = ThreadHeapPtr::set_heap as unsafe fn(ThreadHeapPtr, Option<HeapPtr>);
+    let _ = ThreadHeapPtr::heartbeat as unsafe fn(ThreadHeapPtr) -> Heartbeat;
+    let _ = ThreadHeapPtr::set_heartbeat as unsafe fn(ThreadHeapPtr, Heartbeat);
+    let _ = ThreadHeapPtr::page_queue as unsafe fn(ThreadHeapPtr, Bin) -> PageQueuePtr;
+    let _ = ThreadHeapPtr::direct_page as unsafe fn(ThreadHeapPtr, DirectBin) -> Option<PagePtr>;
+    let _ = ThreadHeapPtr::set_direct_page as unsafe fn(ThreadHeapPtr, DirectBin, Option<PagePtr>);
+    let _ = ThreadHeapPtr::stats as unsafe fn(ThreadHeapPtr) -> *mut mi_stats_t;
+
+    let _ = TldPtr::thread_id as unsafe fn(TldPtr) -> Option<ThreadId>;
+    let _ = TldPtr::set_thread_id as unsafe fn(TldPtr, Option<ThreadId>);
+    let _ = TldPtr::thread_seq as unsafe fn(TldPtr) -> ThreadSeq;
+    let _ = TldPtr::set_thread_seq as unsafe fn(TldPtr, ThreadSeq);
+    let _ = TldPtr::numa_node as unsafe fn(TldPtr) -> NumaNode;
+    let _ = TldPtr::set_numa_node as unsafe fn(TldPtr, NumaNode);
+    let _ = TldPtr::subproc as unsafe fn(TldPtr) -> Option<SubprocPtr>;
+    let _ = TldPtr::set_subproc as unsafe fn(TldPtr, Option<SubprocPtr>);
+    let _ = TldPtr::stats as unsafe fn(TldPtr) -> Option<*mut mi_stats_t>;
+    let _ = TldPtr::arena_count_cell as unsafe fn(TldPtr) -> Option<AtomicUsizeField>;
+    let _ = TldPtr::arena as unsafe fn(TldPtr, ArenaIndex) -> Option<ArenaPtr>;
+    let _ = TldPtr::set_arena as unsafe fn(TldPtr, ArenaIndex, Option<ArenaPtr>);
+    let _ = TldPtr::memid_ptr as unsafe fn(TldPtr) -> *mut mi_memid_t;
+    let _ = TldPtr::thread_heaps as unsafe fn(TldPtr) -> Option<ThreadHeapPtr>;
+    let _ = TldPtr::set_thread_heaps as unsafe fn(TldPtr, Option<ThreadHeapPtr>);
+    let _ = TldPtr::thread_heaps_lock as unsafe fn(TldPtr) -> *mut mi_lock_t;
+    let _ = TldPtr::recurse as unsafe fn(TldPtr) -> bool;
+    let _ = TldPtr::set_recurse as unsafe fn(TldPtr, bool);
+    let _ = TldPtr::is_in_threadpool as unsafe fn(TldPtr) -> bool;
+    let _ = TldPtr::set_is_in_threadpool as unsafe fn(TldPtr, bool);
+
+    let _ = ArenaPtr::memid_ptr as unsafe fn(ArenaPtr) -> *mut mi_memid_t;
+    let _ = ArenaPtr::subproc as unsafe fn(ArenaPtr) -> Option<SubprocPtr>;
+    let _ = ArenaPtr::set_subproc as unsafe fn(ArenaPtr, Option<SubprocPtr>);
+    let _ = ArenaPtr::index as unsafe fn(ArenaPtr) -> ArenaIndex;
+    let _ = ArenaPtr::set_index as unsafe fn(ArenaPtr, ArenaIndex);
+    let _ = ArenaPtr::slice_count as unsafe fn(ArenaPtr) -> SliceCount;
+    let _ = ArenaPtr::set_slice_count as unsafe fn(ArenaPtr, SliceCount);
+    let _ = ArenaPtr::numa_node as unsafe fn(ArenaPtr) -> NumaNode;
+    let _ = ArenaPtr::set_numa_node as unsafe fn(ArenaPtr, NumaNode);
+    let _ = ArenaPtr::is_exclusive as unsafe fn(ArenaPtr) -> bool;
+    let _ = ArenaPtr::set_is_exclusive as unsafe fn(ArenaPtr, bool);
+    let _ = ArenaPtr::purge_expire_cell as unsafe fn(ArenaPtr) -> AtomicI64Field;
+    let _ = ArenaPtr::parent as unsafe fn(ArenaPtr) -> Option<ArenaPtr>;
+    let _ = ArenaPtr::set_parent as unsafe fn(ArenaPtr, Option<ArenaPtr>);
+    let _ = ArenaPtr::slices_free as unsafe fn(ArenaPtr) -> *mut mi_bbitmap_t;
+    let _ = ArenaPtr::slices_committed as unsafe fn(ArenaPtr) -> *mut mi_bitmap_t;
+    let _ = ArenaPtr::slices_dirty as unsafe fn(ArenaPtr) -> *mut mi_bitmap_t;
+    let _ = ArenaPtr::slices_purge as unsafe fn(ArenaPtr) -> *mut mi_bitmap_t;
+    let _ = ArenaPtr::pages_meta as unsafe fn(ArenaPtr) -> Option<PagePtr>;
+    let _ = ArenaPtr::set_pages_meta as unsafe fn(ArenaPtr, Option<PagePtr>);
+    let _ = ArenaPtr::pages_main as unsafe fn(ArenaPtr) -> *mut mi_arena_pages_t;
+
+    let _ = SubprocPtr::sequence as unsafe fn(SubprocPtr) -> SubprocSeq;
+    let _ = SubprocPtr::set_sequence as unsafe fn(SubprocPtr, SubprocSeq);
+    let _ = SubprocPtr::set_arena_count as unsafe fn(SubprocPtr, ArenaCount, MemoryOrder);
+    let _ = SubprocPtr::purge_expire_cell as unsafe fn(SubprocPtr) -> AtomicI64Field;
+    let _ = SubprocPtr::main_heap as unsafe fn(SubprocPtr) -> Option<HeapPtr>;
+    let _ = SubprocPtr::set_main_heap as unsafe fn(SubprocPtr, Option<HeapPtr>);
+    let _ = SubprocPtr::heaps as unsafe fn(SubprocPtr) -> Option<HeapPtr>;
+    let _ = SubprocPtr::set_heaps as unsafe fn(SubprocPtr, Option<HeapPtr>);
+    let _ = SubprocPtr::heaps_lock as unsafe fn(SubprocPtr) -> MiLockPtr;
+    let _ = SubprocPtr::thread_count as unsafe fn(SubprocPtr, MemoryOrder) -> ThreadCount;
+    let _ = SubprocPtr::set_thread_count as unsafe fn(SubprocPtr, ThreadCount, MemoryOrder);
+    let _ = SubprocPtr::thread_total_count as unsafe fn(SubprocPtr, MemoryOrder) -> ThreadCount;
+    let _ = SubprocPtr::set_thread_total_count as unsafe fn(SubprocPtr, ThreadCount, MemoryOrder);
+    let _ = SubprocPtr::heap_count_cell as unsafe fn(SubprocPtr) -> AtomicUsizeField;
+    let _ = SubprocPtr::heap_count as unsafe fn(SubprocPtr, MemoryOrder) -> HeapCount;
+    let _ = SubprocPtr::set_heap_count as unsafe fn(SubprocPtr, HeapCount, MemoryOrder);
+    let _ = SubprocPtr::heap_total_count_cell as unsafe fn(SubprocPtr) -> AtomicUsizeField;
+    let _ = SubprocPtr::heap_total_count as unsafe fn(SubprocPtr, MemoryOrder) -> HeapCount;
+    let _ = SubprocPtr::set_heap_total_count as unsafe fn(SubprocPtr, HeapCount, MemoryOrder);
+    let _ = SubprocPtr::memid_ptr as unsafe fn(SubprocPtr) -> *mut mi_memid_t;
+
+    let _ = PageQueuePtr::new as fn(*mut mi_page_queue_t) -> Option<PageQueuePtr>;
+    let _ = PageQueuePtr::set_block_size as unsafe fn(PageQueuePtr, Option<BlockSize>);
+
+    let _ = UserPtr::from_non_null as fn(NonNull<c_void>) -> UserPtr;
+    let _ = UserPtr::as_non_null as fn(UserPtr) -> NonNull<c_void>;
+    let _ = UserPtr::as_const_ptr as fn(UserPtr) -> *const c_void;
+    let _ = UserPtr::as_u8_ptr as fn(UserPtr) -> *mut u8;
+    let _ = UserPtr::into_interior as fn(UserPtr) -> InteriorUserPtr;
+    let _ = UserPtr::option_as_ptr as fn(Option<UserPtr>) -> *mut c_void;
+    let _ = InteriorUserPtr::from_non_null as fn(NonNull<c_void>) -> InteriorUserPtr;
+    let _ = InteriorUserPtr::new_unchecked as unsafe fn(*mut c_void) -> InteriorUserPtr;
+    let _ = InteriorUserPtr::as_non_null as fn(InteriorUserPtr) -> NonNull<c_void>;
+    let _ = InteriorUserPtr::as_const_ptr as fn(InteriorUserPtr) -> *const c_void;
+    let _ = InteriorUserPtr::as_u8_ptr as fn(InteriorUserPtr) -> *mut u8;
+    let _ = InteriorUserPtr::as_user_ptr as fn(InteriorUserPtr) -> UserPtr;
+    let _ = InteriorUserPtr::option_as_ptr as fn(Option<InteriorUserPtr>) -> *mut c_void;
+
+    let _ = PageStart::new as fn(*mut u8) -> Option<PageStart>;
+    let _ = PageStart::new_unchecked as unsafe fn(*mut u8) -> PageStart;
+    let _ = PageStart::as_ptr as fn(PageStart) -> *mut u8;
+    let _ = PageStart::as_non_null as fn(PageStart) -> NonNull<u8>;
+    let _ = PageStart::checked_byte_add as fn(PageStart, usize) -> Option<NonNull<u8>>;
+    let _ = PageStart::checked_byte_sub as fn(PageStart, usize) -> Option<NonNull<u8>>;
+    let _ = SliceStart::new as fn(*mut u8) -> Option<SliceStart>;
+    let _ = SliceStart::new_unchecked as unsafe fn(*mut u8) -> SliceStart;
+    let _ = SliceStart::as_ptr as fn(SliceStart) -> *mut u8;
+    let _ = SliceStart::as_non_null as fn(SliceStart) -> NonNull<u8>;
+    let _ = SliceStart::checked_byte_add as fn(SliceStart, usize) -> Option<NonNull<u8>>;
+    let _ = SliceStart::checked_byte_sub as fn(SliceStart, usize) -> Option<NonNull<u8>>;
+    let _ = OsMemPtr::from_non_null as fn(NonNull<c_void>) -> OsMemPtr;
+    let _ = OsMemPtr::as_non_null as fn(OsMemPtr) -> NonNull<c_void>;
+    let _ = OsMemPtr::as_u8_non_null as fn(OsMemPtr) -> NonNull<u8>;
+    let _ = OsMemPtr::checked_byte_add as fn(OsMemPtr, usize) -> Option<OsMemPtr>;
+    let _ = OsMemPtr::checked_byte_sub as fn(OsMemPtr, usize) -> Option<OsMemPtr>;
+    let _ = PageConstPtr::new as fn(*const mi_page_t) -> Option<PageConstPtr>;
+    let _ = PageConstPtr::new_unchecked as unsafe fn(*const mi_page_t) -> PageConstPtr;
+    let _ = PageConstPtr::as_ptr as fn(PageConstPtr) -> *const mi_page_t;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

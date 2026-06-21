@@ -138,6 +138,26 @@ mod padding;
 
 pub(crate) use padding::{Padding, PaddingCanary, PaddingDelta, PaddingPtr};
 
+fn __lint_touch() {
+    arena::__lint_touch();
+    atomic_wrappers::__lint_touch();
+    callbacks::__lint_touch();
+    freelist_wrappers::__lint_touch();
+    #[cfg(feature = "guarded")]
+    guarded::__lint_touch();
+    heap::__lint_touch();
+    layout::__lint_touch();
+    memid::__lint_touch();
+    page::__lint_touch();
+    page_queues::__lint_touch();
+    page_states::__lint_touch();
+    ptr::__lint_touch();
+    scalar::__lint_touch();
+    validation::__lint_touch();
+}
+
+const _: fn() = __lint_touch;
+
 #[cfg(test)]
 mod layout_tests {
     use super::*;

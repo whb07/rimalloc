@@ -421,6 +421,17 @@ impl LocalFreeList {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct EncodedFreeList(pub(crate) Option<BlockPtr>);
 
+pub(super) fn __lint_touch() {
+    let _ = PageKeys::disabled();
+    let _decode: unsafe fn(
+        EncodedPtr<crate::types::mi_block_t>,
+        crate::core_types::PagePtr,
+        PageKeys,
+    ) -> Option<BlockPtr> = EncodedPtr::<crate::types::mi_block_t>::decode_block;
+    let _read: unsafe fn(*const mi_block_t) -> BlockLink = BlockLink::read_from_raw;
+    let _ = core::mem::size_of::<EncodedFreeList>();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

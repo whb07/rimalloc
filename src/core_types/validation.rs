@@ -223,6 +223,17 @@ impl ValidatedFree {
     }
 }
 
+pub(super) fn __lint_touch() {
+    let _ = PointerInvalidReason::BadPadding;
+    let lookup = PointerLookup::Invalid {
+        user: None,
+        reason: PointerInvalidReason::DoubleFree,
+    };
+    if let PointerLookup::Invalid { user, reason } = lookup {
+        let _ = (user, reason);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

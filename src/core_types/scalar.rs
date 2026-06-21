@@ -1026,6 +1026,35 @@ impl GoodSize {
     }
 }
 
+pub(super) fn __lint_touch() {
+    let requested = RequestedSize::new(1);
+    let _ = requested.checked_add(1);
+    let _ = requested.checked_mul(1);
+    let effective = unsafe { EffectiveSize::new_unchecked(1) };
+    let _ = effective.checked_add(1);
+    let padded = unsafe { PaddedSize::new_unchecked(1) };
+    let _ = padded.checked_add(1);
+    let _ = padded.checked_sub_padding();
+    let usable = UsableSize::new(1);
+    let _ = usable.checked_add(1);
+    let block = unsafe { BlockSize::new_unchecked(1) };
+    let _ = block.checked_add(1);
+    let _ = block.checked_usable();
+    let _ = unsafe { FullBlockSize::new_unchecked(1) };
+    let alignment = unsafe { MaybeAlignment::new_unchecked(1) };
+    let _ = alignment.is_some();
+    let _ = WordCount::new(1);
+    let _ = PageReclaimLimit::new(1).get();
+    let thread_count = ThreadCount::new(1);
+    let _ = thread_count.get();
+    let heap_count = HeapCount::new(1);
+    let _ = heap_count.get();
+    let bin = unsafe { Bin::new_unchecked(0) };
+    let _ = bin.get();
+    let _ = DirectBin::new(0);
+    let _ = SliceIndex::new(1).as_u32();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

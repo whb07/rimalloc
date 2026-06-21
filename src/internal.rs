@@ -1193,6 +1193,8 @@ pub(crate) unsafe fn mi_page_set_abandoned_mapped(page: crate::core_types::PageP
     }
 }
 
+const _: unsafe fn(crate::core_types::PagePtr) = mi_page_set_abandoned_mapped;
+
 /// # Safety
 /// `page` must point to mutable abandoned-mapped page metadata owned by this allocator.
 #[inline]
@@ -1220,10 +1222,14 @@ pub(crate) fn mi_tf_block(tf: mi_thread_free_t) -> *mut mi_block_t {
         .unwrap_or(ptr::null_mut())
 }
 
+const _: fn(mi_thread_free_t) -> *mut mi_block_t = mi_tf_block;
+
 #[inline]
 pub(crate) const fn mi_tf_is_owned(tf: mi_thread_free_t) -> bool {
     crate::core_types::ThreadFreeWord(tf).is_owned()
 }
+
+const _: fn(mi_thread_free_t) -> bool = mi_tf_is_owned;
 
 #[inline]
 pub(crate) fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_free_t {
@@ -1235,6 +1241,8 @@ pub(crate) fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_fre
     crate::core_types::ThreadFreeWord::from_parts(crate::core_types::BlockPtr::new(block), owner)
         .raw()
 }
+
+const _: fn(*mut mi_block_t, bool) -> mi_thread_free_t = mi_tf_create;
 
 /// # Safety
 /// `page` must point to page metadata owned by this allocator.

@@ -3,7 +3,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd_repo_root
 
-lint_flags=(-D warnings -A dead-code)
+lint_flags=(-D warnings)
 
 run cargo clippy --all-targets --features unstable-raw-internals -- "${lint_flags[@]}"
 run cargo clippy --benches --features "bench unstable-raw-internals" -- "${lint_flags[@]}"

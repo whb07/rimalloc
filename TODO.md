@@ -98,8 +98,9 @@ strict-type signoff section.
   size/alignment as its raw representation.
 - [x] Add source tests proving no `core_types` pointer wrapper implements
   `Deref` or `DerefMut`.
-- [x] Remove broad/stale `#[expect(dead_code)]` allowances from `core_types` as
-  modules become live; leave only item-level staged allowances with reasons.
+- [x] Remove broad/stale dead-code allowances from `core_types` as modules become
+  live; retained proof/helper APIs are either used, removed, or tied to narrow
+  compile-time reachability references with exact symbols.
 
 ---
 

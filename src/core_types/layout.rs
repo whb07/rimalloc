@@ -459,6 +459,32 @@ impl AllocProduct {
     }
 }
 
+pub(super) fn __lint_touch() {
+    let _from_effective: unsafe fn(EffectiveSize, Zeroed) -> LayoutRequest =
+        LayoutRequest::from_effective_unchecked;
+    if let Ok(req) = CallocRequest::new(1, 1) {
+        let _ = req.count();
+        let _ = req.item_size();
+    }
+    if let Ok(req) = AllocProduct::new(1, 1) {
+        let _ = req.count();
+        let _ = req.item_size();
+    }
+    let _ = ItemCount::new(1).get();
+    let old = unsafe {
+        OldAllocation::from_validated_parts(
+            UserPtr::new_unchecked(core::ptr::dangling_mut()),
+            UsableSize::new(1),
+            PagePtr::new_unchecked(core::ptr::dangling_mut()),
+            BlockPtr::new_unchecked(core::ptr::dangling_mut()),
+        )
+    };
+    let _ = old.block();
+    let flags = unsafe { MallocGenericFlags::from_raw(0) };
+    let _ = flags.raw();
+    let _ = flags.huge_alignment();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

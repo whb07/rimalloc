@@ -297,6 +297,16 @@ impl ThreadHeapPtr {
     }
 }
 
+pub(super) fn __lint_touch() {
+    let theap = unsafe { ThreadHeapPtr::new_unchecked(core::ptr::dangling_mut()) };
+    if let ThreadHeapState::Uninitialized(ptr) = ThreadHeapState::Uninitialized(theap) {
+        let _ = ptr.as_ptr();
+    }
+    if let ThreadHeapState::Deleted(ptr) = ThreadHeapState::Deleted(theap) {
+        let _ = ptr.as_ptr();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

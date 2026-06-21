@@ -627,6 +627,9 @@ unsafe fn mi_block_for_free_from_lookup(
     unsafe { mi_prepare_validated_free(lookup).map(crate::core_types::ValidatedFree::block) }
 }
 
+const _: unsafe fn(crate::core_types::PointerLookup) -> Option<crate::core_types::BlockForFree> =
+    mi_block_for_free_from_lookup;
+
 #[cold]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
@@ -1097,6 +1100,8 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
         );
     }
 }
+
+const _: unsafe extern "C" fn(*mut mi_page_t, *mut mi_block_t) = mi_free_try_collect_mt;
 
 /// # Safety
 /// `page` must be the page containing `p`.

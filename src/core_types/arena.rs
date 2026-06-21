@@ -240,6 +240,21 @@ pub(crate) struct AbandonedCountCell(pub(crate) *const AtomicUsize);
 #[repr(transparent)]
 pub(crate) struct ArenaPageCell(pub(crate) *const AtomicPtr<c_void>);
 
+pub(super) fn __lint_touch() {
+    let _ = core::mem::size_of::<SharedArena>();
+    let _ = core::mem::size_of::<ExclusiveArena>();
+    let _ = core::mem::size_of::<ParentArena>();
+    let _ = core::mem::size_of::<ArenaPageTablePtr>();
+    let _ = core::mem::size_of::<AbandonedCountCell>();
+    let _ = core::mem::size_of::<ArenaPageCell>();
+    let _new: unsafe fn(ArenaPtr) -> Option<SharedArena> = SharedArena::new;
+    let _ptr: fn(SharedArena) -> ArenaPtr = SharedArena::ptr;
+    let _new: unsafe fn(ArenaPtr) -> Option<ExclusiveArena> = ExclusiveArena::new;
+    let _ptr: fn(ExclusiveArena) -> ArenaPtr = ExclusiveArena::ptr;
+    let _new: unsafe fn(ArenaPtr) -> Option<ParentArena> = ParentArena::new;
+    let _ptr: fn(ParentArena) -> ArenaPtr = ParentArena::ptr;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

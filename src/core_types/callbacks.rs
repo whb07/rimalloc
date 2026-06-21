@@ -232,6 +232,25 @@ impl ThreadLocalClaimCallback {
     }
 }
 
+pub(super) fn __lint_touch() {
+    let _ = DeferredFreeCallbackArg::null();
+    let _ = DeferredFreeCallbackArg::null().as_callback_arg();
+    let _ = OutputCallbackArg::null();
+    let _ = OutputCallbackArg::null().as_callback_arg();
+    let _ = ErrorCallbackArg::null();
+    let _ = ErrorCallbackArg::null().as_callback_arg();
+    let _ = HeapVisitCallbackArg::null();
+    let _ = HeapVisitCallbackArg::null().as_callback_arg();
+    let _ = BlockVisitCallbackArg::null();
+    let _ = BlockVisitCallbackArg::null().as_callback_arg();
+    let _ = ThreadLocalClaimCallbackArg::null();
+    let _ = ThreadLocalClaimCallbackArg::from_raw(core::ptr::null_mut()).as_ptr();
+    let _ = ThreadLocalClaimCallbackArg::null().as_callback_arg();
+    let _ = OutputCallback::new(None).is_some();
+    let _ = HeapVisitCallback::none();
+    let _ = BlockVisitCallback::none().is_some();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

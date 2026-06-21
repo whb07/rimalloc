@@ -53,13 +53,12 @@ types remain in `src/types.rs` and C-shaped declarations remain behind
   `XThreadDelta::{is_local_fast, needs_local_slow, is_remote_plain}` preserve
   the XOR-based free-path classification shape.
 
-## Dead-Code Expectations
+## Dead-Code Discipline
 
-`core_types` intentionally uses scoped `#[expect(dead_code)]` markers only for
-checked helper wrappers that are part of a concrete strict-type invariant but
-are not exercised by every build target. These are not a license to add unused
-code. New wrappers need an immediate validation role or a source-audit-backed
-reason to exist.
+`core_types` does not rely on broad dead-code allowances. Retained proof and
+compatibility helpers must either be used by allocator code, removed, or tied to
+narrow compile-time reachability references that name the exact function,
+method, enum payload, or field being preserved.
 
 Do not add a broad module-level `#![allow(dead_code)]` to `core_types`.
 
@@ -93,6 +92,11 @@ boundary.
   platform, raw compatibility, constructor, or proof-helper boundaries. The
   current strict-type checker validates this inventory with
   `scripts/check-strict-types.py`.
+- Bare-domain `usize` parameters with allocation-size, alignment, count, index,
+  bin, capacity, reserved/used, slice-count, or block/chunk naming are likewise
+  raw ABI boundaries or explicit allowlist entries. The allowlist now requires a
+  `permanent:` or `remove:` disposition so permanent C compatibility and
+  remaining migration debt are visible separately.
 - Internal scalar domains with wrappers use typed values after raw ABI
   validation: allocation sizes/layouts (`RequestedSize`, `PaddedSize`,
   `UsableSize`, `BlockSize`), bin indexes (`Bin`, `DirectBin`), arena/page-map

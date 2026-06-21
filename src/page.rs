@@ -3242,6 +3242,23 @@ unsafe fn mi_find_page(
     }
 }
 
+const _: unsafe fn(*mut mi_page_queue_t, crate::core_types::PageQueueCount) =
+    mi_page_queue_add_count;
+const _: unsafe fn(*mut mi_page_t) -> crate::core_types::UsedBlockCount =
+    mi_page_increment_used_count;
+const _: unsafe fn(*mut mi_theap_t, *mut mi_page_queue_t, *mut mi_page_t) =
+    mi_page_queue_push_at_end_raw;
+const _: unsafe fn(
+    crate::core_types::FullPageQueue,
+    crate::core_types::QueuedPage<crate::core_types::NormalQueue>,
+) -> crate::core_types::FullPage = mi_page_queue_enqueue_from;
+const _: unsafe fn(*mut mi_theap_t, *mut mi_page_queue_t, bool) -> *mut mi_page_t =
+    mi_page_queue_find_free_ex;
+const _: unsafe fn(*mut mi_theap_t, *mut mi_page_queue_t) -> *mut mi_page_t = mi_find_free_page;
+const _: unsafe fn(*mut mi_theap_t, usize, usize, *mut mi_page_queue_t) -> *mut mi_page_t =
+    mi_huge_page_alloc;
+const _: unsafe fn(*mut mi_theap_t, usize, usize) -> *mut mi_page_t = mi_find_page;
+
 #[inline(always)]
 unsafe fn mi_find_page_typed(
     theap: crate::core_types::ThreadHeapLocal,

@@ -10,11 +10,11 @@ internal allocator code is moved toward crate-private wrapper domains.
 
 | Phase | Status | Notes |
 |---|---|---|
-| Phase 0: Status, Inventory, And Enforcement | In progress | `docs/strict-types.md` points here for status. `scripts/check-strict-types.py` and `strict-type-allowlist.txt` define the first checked raw-pointer inventory. |
-| Phase 1: Core Module Privacy And Witness Construction | In progress | Pointer wrappers are private-field transparent newtypes. Several witness constructors remain staged or directly constructible inside `core_types`. |
-| Phase 2: Scalar Domain Completion | In progress | Core size/bin/alignment wrappers exist; several domain wrappers and migrations remain outstanding. |
-| Phase 3: Pointer Domain Completion | In progress | Non-null pointer wrappers exist; broad field-helper migration remains outstanding. |
-| Phase 4-19 | Not complete | Later phases remain tracked in `TODO.md`. |
+| Phase 0: Status, Inventory, And Enforcement | Complete | `docs/strict-types.md` points here for status. `scripts/check-strict-types.py` validates raw-pointer, bare-domain `usize`, source-shape, and allowlist-disposition rules. |
+| Phase 1: Core Module Privacy And Witness Construction | Complete | Pointer and witness wrappers are private-field transparent newtypes with checked or explicitly unsafe constructors. |
+| Phase 2: Scalar Domain Completion | Complete | Size, bin, alignment, count, index, page-map, errno, and memory-accounting domains are represented by crate-private wrappers where they cross internal APIs. |
+| Phase 3: Pointer Domain Completion | Complete | Non-null pointer wrappers own metadata field helpers and avoid broad aliasing references. |
+| Phase 4-19 | Complete | The strict-type TODO checklist is complete; raw C ABI and translated compatibility seams remain documented in the checked allowlist. |
 
 ## Enforcement Status
 
@@ -33,6 +33,14 @@ Current checked rules:
 - broad metadata references, arbitrary pointer-to-`usize` round trips, and
   heap-allocating Rust library types are source-checked with documented
   allowlist entries where the current translation still requires them.
+- bare-domain `usize` parameters with allocation-size, alignment, count, index,
+  bin, capacity, or slice-count names are rejected unless they are raw ABI
+  compatibility functions or checked allowlist entries;
+- every allowlist entry must carry a disposition beginning with `permanent:` or
+  `remove:` so compatibility boundaries and migration debt are distinguishable;
+- `src/core_types` modules reject crate-level `#![allow(dead_code)]`; retained
+  proof/helper APIs must be wired through real call sites or narrow compile-time
+  reachability references instead of broad lint suppression.
 
 The allowlist is debt, not design permission. Each entry must name a removal
 task or explain why it is a permanent C/compat boundary.

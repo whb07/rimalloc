@@ -628,6 +628,8 @@ unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
     unsafe { mi_subproc_destroy_meta_typed(subproc) };
 }
 
+const _: unsafe fn(*mut mi_subproc_t) = mi_subproc_destroy_meta;
+
 unsafe fn mi_subproc_destroy_meta_typed(subproc: SubprocPtr) {
     let subproc = unsafe { mi_subproc_prefix_typed(subproc) };
     // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.

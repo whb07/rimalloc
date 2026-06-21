@@ -151,6 +151,20 @@ head load remain instruction-equivalent.
 
 ## Strict-Type Benchmark Smoke Checks
 
+**Date Generated:** 2026-06-21
+**Commit:** `fa3a191` (`Complete strict-type migration checklist`)
+**Command:** `scripts/check-bench-smoke.sh`
+**Result:** passed with exit code 0
+
+This smoke pass was run after the strict-type TODO completion commit and before
+the lint/docs polish pass. The Rust allocator comparisons in the configured
+native subset did not detect a regression for `glibc-thread`, `malloc-large`,
+`xmalloc-testN`, or `cache-scratchN`. A saved-baseline regression marker was
+observed for the C allocator `xmalloc-testN` comparison only; classify that as
+C-baseline drift, not as a Rust strict-wrapper regression.
+
+---
+
 **Date Generated:** 2026-06-19
 **Command:** `scripts/check-bench-smoke.sh`
 **Result:** passed with exit code 0

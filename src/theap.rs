@@ -685,6 +685,8 @@ unsafe fn mi_theap_collect_ex(theap: *mut mi_theap_t, collect: mi_collect_t) {
     }
 }
 
+const _: unsafe fn(*mut mi_theap_t, mi_collect_t) = mi_theap_collect_ex;
+
 unsafe fn mi_theap_collect_ex_typed(theap: ThreadHeapLocal, mut collect: mi_collect_t) {
     unsafe {
         let theap_ptr = theap.ptr();

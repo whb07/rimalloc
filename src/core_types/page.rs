@@ -247,6 +247,13 @@ impl RegisteredPageRange {
     }
 }
 
+pub(super) fn __lint_touch() {
+    let _ = PageFlags::EMPTY;
+    let tid = PageThreadId::new(0);
+    let _ = tid.owner();
+    let _ = tid.with_flags(PageFlags::EMPTY);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

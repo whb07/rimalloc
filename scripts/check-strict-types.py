@@ -42,6 +42,14 @@ PTR_USIZE_RE = re.compile(
     r"(?:ptr|page|block|base|start|aligned_p|padding_ptr|p)\s+as\s+usize\b"
 )
 HEAP_TYPES_RE = re.compile(r"\b(Vec|String|Box|Arc|Mutex|OnceLock)\b")
+BARE_DOMAIN_PARAM_RE = re.compile(
+    r"\bfn\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*?"
+    r"(?P<param>\b(?:size|newsize|oldsize|reqsize|block_size|bsize|alignment|"
+    r"offset|count|newcount|idx|index|bin|capacity|reserved|used|slice_count|"
+    r"block_idx|chunk_idx|bufsize|buf_size)\s*:\s*usize\b)",
+    re.DOTALL,
+)
+CORE_TYPES_DEAD_CODE_RE = re.compile(r"#\s*!\s*\[\s*allow\s*\(\s*dead_code\s*\)\s*\]")
 
 SKIP_DIRS = {
     ".git",
@@ -91,6 +99,7 @@ class AllowEntry:
     symbol: str
     domain: str
     reason: str
+    disposition: str
 
 
 def source_files() -> list[pathlib.Path]:
@@ -115,12 +124,20 @@ def read_allowlist() -> list[AllowEntry]:
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        parts = line.split("|", 4)
-        if len(parts) != 5:
-            raise AssertionError(f"invalid allowlist line {lineno}: expected 5 fields")
+        parts = line.split("|", 5)
+        if len(parts) != 6:
+            raise AssertionError(f"invalid allowlist line {lineno}: expected 6 fields")
         entry = AllowEntry(*[part.strip() for part in parts])
         if not entry.reason:
             raise AssertionError(f"invalid allowlist line {lineno}: missing reason")
+        if not (
+            entry.disposition.startswith("permanent:")
+            or entry.disposition.startswith("remove:")
+        ):
+            raise AssertionError(
+                f"invalid allowlist line {lineno}: disposition must start with "
+                "'permanent:' or 'remove:'"
+            )
         entries.append(entry)
     return entries
 
@@ -149,6 +166,15 @@ def is_allowed(
             continue
         return True
     return False
+
+
+def is_raw_compat_function(text: str, start: int) -> bool:
+    prefix = text[max(0, start - 180) : start]
+    return (
+        'extern "C"' in prefix
+        or "#[unsafe(no_mangle)]" in prefix
+        or "#[unsafe(export_name" in prefix
+    )
 
 
 def line_offender(rel: str, lineno: int, line: str, message: str) -> str:
@@ -187,6 +213,9 @@ def main() -> int:
         rel = path.relative_to(ROOT).as_posix()
         text = path.read_text()
 
+        if rel.startswith("src/core_types/") and CORE_TYPES_DEAD_CODE_RE.search(text):
+            offenders.append(f"{rel}: crate-level dead_code allowance in core_types module")
+
         if rel not in RAW_BOUNDARY_FILES:
             for match in RAW_POINTER_PARAM_RE.finditer(text):
                 symbol = match.group("name")
@@ -203,6 +232,24 @@ def main() -> int:
                     offenders.append(
                         f"{rel}:{line}: raw {domain} parameter in {symbol} lacks strict-type allowlist entry"
                     )
+
+            for match in BARE_DOMAIN_PARAM_RE.finditer(text):
+                if is_raw_compat_function(text, match.start()):
+                    continue
+                symbol = match.group("name")
+                if is_allowed(
+                    entries,
+                    kind="bare-domain-usize",
+                    rel=rel,
+                    symbol=symbol,
+                    domain="usize",
+                ):
+                    continue
+                line = text.count("\n", 0, match.start()) + 1
+                offenders.append(
+                    f"{rel}:{line}: bare domain usize parameter in {symbol} "
+                    "lacks strict-type allowlist entry"
+                )
 
         require_no_pattern(
             offenders,

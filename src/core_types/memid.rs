@@ -516,20 +516,22 @@ pub(super) fn __lint_touch() {
         external.pinned.0,
     );
 
-    let arena = ArenaMemId {
-        arena: unsafe { ArenaPtr::new_unchecked(core::ptr::dangling_mut()) },
-        range: SliceRange::from_raw(0, 1).expect("valid lint-touch slice range"),
-        initially_committed: InitiallyCommitted(false),
-        initially_zero: InitiallyZero(false),
-        pinned: Pinned(false),
-    };
-    let _ = (
-        arena.arena,
-        arena.range,
-        arena.initially_committed.0,
-        arena.initially_zero.0,
-        arena.pinned.0,
-    );
+    if let Ok(range) = SliceRange::from_raw(0, 1) {
+        let arena = ArenaMemId {
+            arena: unsafe { ArenaPtr::new_unchecked(core::ptr::dangling_mut()) },
+            range,
+            initially_committed: InitiallyCommitted(false),
+            initially_zero: InitiallyZero(false),
+            pinned: Pinned(false),
+        };
+        let _ = (
+            arena.arena,
+            arena.range,
+            arena.initially_committed.0,
+            arena.initially_zero.0,
+            arena.pinned.0,
+        );
+    }
 }
 
 #[cfg(test)]

@@ -140,6 +140,7 @@ Current ownership is the final layout for this migration phase:
 | C header declarations and layouts | `src/abi.rs` exposed through `raw::abi` and `raw::mimalloc` | Public `mi_*` declarations, `repr(C)` layouts, C-compatible aliases, constants, and callback type aliases mirrored from public headers. |
 | Raw C-shaped Rust facade | `src/raw.rs` | Default root `mi_*` re-exports plus `raw::abi`, `raw::mimalloc`, and `raw::headers`; translated internals are gated by `unstable-raw-internals`. |
 | Exported C ABI implementations | existing implementation files approved by `scripts/check-ffi-boundary.py` | `#[unsafe(no_mangle)]`, `#[unsafe(export_name = ...)]`, naked ABI shims, and public assembly aliases. |
+| Strict internal types | `src/core_types.rs` and `src/core_types/` | Private invariant-carrying wrappers and witness types used inside allocator internals; never part of the raw C facade or C ABI declaration owner. |
 | Internal compatibility aliases | `src/mimalloc.rs` and selected translated helpers | C-shaped helper paths used by the mechanical translation but not a public Rust API. |
 | Allocator internals | private modules such as `alloc`, `free`, `heap`, `page`, `arena`, `os`, and `threadlocal` | Implementation logic and typed invariant witnesses. |
 

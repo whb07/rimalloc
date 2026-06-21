@@ -57,6 +57,8 @@ item outside the crate-root facade or documented `raw` allowlist is
 release-blocking until classified. Any new `#[unsafe(no_mangle)]`,
 `#[unsafe(export_name = ...)]`, naked ABI shim, or `global_asm!` export outside
 approved FFI boundary files is release-blocking until classified.
+`core_types` is a private design surface for strict internal wrappers and
+invariant witnesses; it is not part of the safe API, raw facade, or C ABI.
 
 Use:
 

@@ -14,6 +14,6 @@
 - `secure` and `guarded` are hardening aids, not complete protection against
   arbitrary memory corruption or malicious unsafe callers.
 - `track-valgrind` and `track-asan` are mutually exclusive.
-- Internal strict-type migration is ongoing; `core_types` remains crate-private
-  and may change without SemVer notice.
+- Internal strict types are complete for the current migration scope, but
+  `core_types` remains crate-private and may change without SemVer notice.
 - The crate does not currently publish an allocator-api trait integration layer.

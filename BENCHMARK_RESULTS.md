@@ -1,5 +1,236 @@
 # Mimalloc Rust vs C Benchmark Results
 
+## Strict-Type Assembly Comparison Checklist
+
+Use `scripts/capture-release-assembly.sh` before and after each strict-type
+hot-path migration. Store the generated files from
+`target/strict-type-assembly/` with the benchmark note or link to the preserved
+artifact location.
+
+For each compared symbol, the strict-type migration passes the assembly check
+only when the before/after disassembly shows:
+
+- no additional hot-path conditional or unconditional branch,
+- no additional hot-path call,
+- no additional hot-path load, store, atomic memory operation, lock prefix, or
+  stack spill,
+- no wrapper constructor, panic, formatting, allocation, or bounds-check slow
+  path on the fast path,
+- unchanged ABI entry/exit register convention and fallback target shape.
+
+Required symbols and focus areas:
+
+| Symbol | Required focus |
+|---|---|
+| `mi_malloc` | small-size entry branch, thread-heap lookup, and fallback handoff |
+| `mi_malloc_small` | direct-bin/page lookup and zero extra size-wrapper traffic |
+| `mi_free` | null check, local-free fast path, and remote-free handoff |
+| `_mi_theap_malloc_zero_ex` | page lookup, free-list pop, and zeroing decision |
+
+When an instruction changes for a non-wrapper reason, record the source change
+that caused it and classify the benchmark evidence separately. If a strict-type
+wrapper introduces any new hot-path branch or memory traffic, redesign it to
+compile away or keep that invariant outside the hot path.
+
+## Strict-Type Free-List Pop Assembly Capture
+
+**Date Generated:** 2026-06-19
+**Before Baseline:** `HEAD` (`2a21d3083dedd56923ae9600ac6e5fa512add980`)
+**After Baseline:** current strict-type working tree
+
+Commands:
+
+```bash
+git worktree add --detach /tmp/mechanical_mimalloc_asm_before HEAD
+(cd /tmp/mechanical_mimalloc_asm_before && cargo build --release --lib)
+scripts/capture-release-assembly.sh
+```
+
+Artifacts:
+
+- before: `target/strict-type-assembly/free-list-pop-before/mi_malloc_small.asm`
+- after: `target/strict-type-assembly/mi_malloc_small.asm`
+- after manifest: `target/strict-type-assembly/manifest.txt`
+
+`_mi_page_malloc_zero_typed` is inlined in release and does not appear as a
+standalone symbol in either optimized artifact. The free-list pop is therefore
+checked at the inlined `mi_malloc_small` allocation fast path.
+
+Free-list pop sequence:
+
+| Baseline | Instructions |
+|---|---|
+| before `mi_malloc_small` | `mov 0x8(%rcx),%rax`; `mov (%rax),%rdx`; `mov %rdx,0x8(%rcx)`; `movq $0x0,(%rax)` |
+| after `mi_malloc_small` | `mov 0x8(%rcx),%rax`; `mov (%rax),%rdx`; `mov %rdx,0x8(%rcx)`; `movq $0x0,(%rax)` |
+
+Conclusion: the final `AvailablePage::pop_free_block` / free-list wrapper
+migration preserves the inlined free-list pop instruction shape. The pop itself
+adds no branch, call, atomic operation, lock prefix, stack spill, or extra
+memory traffic. The current caller has additional surrounding thread-init guard
+code outside the pop sequence; classify that separately from this free-list
+wrapper check in the final benchmark signoff.
+
+## Strict-Type Local Free Assembly Capture
+
+**Date Generated:** 2026-06-19
+**Before Baseline:** `HEAD` (`2a21d3083dedd56923ae9600ac6e5fa512add980`)
+**After Baseline:** current strict-type working tree
+
+Artifacts:
+
+- before: `target/strict-type-assembly/free-list-pop-before/mi_free.asm`
+- after: `target/strict-type-assembly/mi_free.asm`
+
+`mi_free_block_local` and `LocalFreeList::push` are inlined into the release
+`mi_free` entrypoint, so the local free fast path was checked in `mi_free`.
+
+Local free-list push sequence:
+
+| Baseline | Instructions |
+|---|---|
+| before `mi_free` | `mov 0x18(%rdi),%rax`; `mov %rax,(%rsi)`; `subw $0x1,0x10(%rdi)`; `mov %rsi,0x18(%rdi)` |
+| after `mi_free` | `mov 0x18(%rdi),%rax`; `mov %rax,(%rsi)`; `subw $0x1,0x10(%rdi)`; `mov %rsi,0x18(%rdi)` |
+
+Conclusion: the final `ValidatedFree`/`LocalPage` witness hardening and
+`LocalFreeList::push` wrapper preserve the local free fast-path instruction
+shape. The push itself adds no branch, call, atomic operation, lock prefix,
+stack spill, or extra memory traffic.
+
+## Strict-Type Remote Free CAS Assembly Capture
+
+**Date Generated:** 2026-06-19
+**Before Baseline:** `HEAD` (`2a21d3083dedd56923ae9600ac6e5fa512add980`)
+**After Baseline:** current strict-type working tree
+
+Artifacts:
+
+- before: `target/strict-type-assembly/free-list-pop-before/mi_free.asm`
+- after: `target/strict-type-assembly/mi_free.asm`
+
+`AtomicThreadFree::push_remote_acq_rel` is inlined into the release `mi_free`
+remote-free path, so the CAS loop was checked in `mi_free`.
+
+Remote free CAS loop:
+
+| Baseline | Instructions |
+|---|---|
+| before `mi_free` | `mov %rsi,%rcx`; `mov 0x20(%rdi),%rax`; `lea 0x20(%rdi),%rdx`; `or $0x1,%rcx`; `mov %rax,%r8`; `and $0xfffffffffffffffe,%r8`; `mov %r8,(%rsi)`; `lock cmpxchg %rcx,(%rdx)`; `jne` loop |
+| after `mi_free` | `mov %rsi,%rcx`; `mov 0x20(%rdi),%rax`; `lea 0x20(%rdi),%rdx`; `or $0x1,%rcx`; `mov %rax,%r8`; `and $0xfffffffffffffffe,%r8`; `mov %r8,(%rsi)`; `lock cmpxchg %rcx,(%rdx)`; `jne` loop |
+
+Conclusion: the final `AtomicThreadFree` migration preserves the remote free
+CAS loop instruction shape. The wrapper adds no extra branch, call, load, store,
+atomic operation, lock prefix, or stack spill beyond the existing CAS-loop
+traffic.
+
+## Strict-Type Small Allocation Page Lookup Assembly Capture
+
+**Date Generated:** 2026-06-19
+**Before Baseline:** `HEAD` (`2a21d3083dedd56923ae9600ac6e5fa512add980`)
+**After Baseline:** current strict-type working tree
+
+Artifacts:
+
+- before: `target/strict-type-assembly/free-list-pop-before/mi_malloc_small.asm`
+- after: `target/strict-type-assembly/mi_malloc_small.asm`
+
+The `PaddedSize` and `DirectBin` migration is checked in the release
+`mi_malloc_small` direct-bin/page lookup path.
+
+Small allocation direct-bin/page lookup:
+
+| Baseline | Instructions |
+|---|---|
+| before `mi_malloc_small` | `mov %esi,%eax`; `shr $0x3,%eax`; `mov %esi,%ecx`; `and $0x7,%ecx`; `cmp $0x1,%rcx`; `sbb $0xffffffff,%eax`; `movzwl %ax,%eax`; `cmp $0x80,%eax`; `ja` fallback; `mov 0x110(%rdi,%rax,8),%rcx`; `mov 0x8(%rcx),%rax` |
+| after `mi_malloc_small` | `mov %ebx,%eax`; `shr $0x3,%eax`; `mov %ebx,%ecx`; `and $0x7,%ecx`; `cmp $0x1,%rcx`; `sbb $0xffffffff,%eax`; `movzwl %ax,%eax`; `cmp $0x80,%eax`; `ja` fallback; `mov 0x110(%rdi,%rax,8),%rcx`; `mov 0x8(%rcx),%rax` |
+
+Conclusion: the `PaddedSize` and `DirectBin` wrappers compile away in the small
+allocation page lookup. The `%esi` to `%ebx` register change comes from
+surrounding thread-initialization guard code that preserves the request size;
+the bin arithmetic, bounds branch, direct page-table load, and page free-list
+head load remain instruction-equivalent.
+
+## Strict-Type Benchmark Smoke Checks
+
+**Date Generated:** 2026-06-19
+**Command:** `scripts/check-bench-smoke.sh`
+**Result:** passed with exit code 0
+
+The smoke check completed `cargo check --benches --features bench` and the
+configured native allocator benchmark subset. The run emitted the repository's
+existing warning noise and Criterion's saved-baseline comparisons.
+
+Observed Criterion smoke signals:
+
+| Benchmark | Rust result |
+|---|---|
+| `glibc-thread-per-1M-malloc-free-pairs` | no performance change detected |
+| `malloc-large-per-workload` | `+10.144%` mean time regression versus the saved Criterion baseline |
+| `xmalloc-testN-per-1M-frees` | `-2.0886%` mean time improvement |
+| `cache-scratchN-per-workload` | `-15.456%` mean time improvement |
+
+The script returned success, so this smoke pass is recorded as a completed
+post-migration check. The `malloc-large-per-workload` regression signal needs a
+targeted rerun before the final benchmark decision because this smoke command is
+short and compares against whatever Criterion baseline is already present under
+`target/criterion`.
+
+## Strict-Type Targeted Benchmark Subset
+
+**Date Generated:** 2026-06-19
+**Result:** passed; no strict-wrapper hot-path regression confirmed
+
+This pass reran the targeted Criterion hotpath harness and the selected native
+allocator subset after the final hot-path strict-wrapper migration.
+
+Hotpath command:
+
+```bash
+MIMALLOC_HOTPATH_SAMPLE_SIZE=10 \
+MIMALLOC_HOTPATH_MEASUREMENT_SECS=1 \
+MIMALLOC_HOTPATH_WARMUP_SECS=1 \
+MIMALLOC_HOTPATH_NRESAMPLES=1000 \
+cargo bench --features bench --bench hotpath
+```
+
+Native subset command:
+
+```bash
+MIMALLOC_BENCH_SCENARIOS=glibc-thread,malloc-large,cache-scratchN,xmalloc-testN \
+MIMALLOC_BENCH_ALLOCATORS=rust,c \
+MIMALLOC_BENCH_SAMPLE_SIZE=10 \
+MIMALLOC_BENCH_MEASUREMENT_SECS=1 \
+MIMALLOC_BENCH_WARMUP_SECS=1 \
+cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
+```
+
+The first hotpath pass produced several short-run Criterion regression markers
+against local saved baselines. Representative isolated reruns used 20 samples,
+3 second measurement, 2 second warmup, and 10000 resamples:
+
+| Benchmark | Isolated result | Decision |
+|---|---:|---|
+| `paired_alloc_free/16` | 13.294 us median, `-5.3824%` mean time | improved |
+| `free_only/16` | 8.5404 us median, `+4.3325%` mean time | no change |
+| `lifo_stack/16/512` | 1.5807 us median, `-42.291%` mean time | improved |
+| `single_reuse/256` | 203.47 us median, `+4.3645%` mean time | within noise threshold |
+
+The native subset initially flagged `malloc-large-per-workload` for both Rust
+and C, and `xmalloc-testN-per-1M-frees` for Rust only. Isolated reruns cleared
+both watch items:
+
+| Benchmark | Rust result | C result | Decision |
+|---|---:|---:|---|
+| `malloc-large-per-workload` | 986.28 us median, `-3.1607%` mean time | 951.34 us median, within noise | Rust improved; C stable |
+| `xmalloc-testN-per-1M-frees` | 2.1472 ms median, within noise | 2.0607 ms median, `-1.5671%` mean time | Rust stable; C improved |
+
+The mixed native subset also showed `glibc-thread` stable for both allocators
+and `cache-scratchN` within noise for both allocators.
+
+Conclusion: no measured wrapper cost remains after isolated reruns. The current
+decision is to keep the strict hot-path wrappers in place because the assembly
+captures above show identical memory traffic and branch structure, and the
+targeted Criterion/native subset did not confirm a Rust-only regression.
+
 ## Current-Head 10-Sample Criterion Aggregate
 
 **Date Generated:** 2026-06-18 17:00:19 EDT

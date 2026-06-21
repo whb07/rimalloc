@@ -24,6 +24,105 @@ fn assert_not_no_mangle_item(source_name: &str, source: &str, internal_name: &st
     );
 }
 
+fn source_item<'a>(source_name: &str, source: &'a str, marker: &str) -> &'a str {
+    let start = source
+        .find(marker)
+        .unwrap_or_else(|| panic!("{source_name} should contain {marker}"));
+    let body_start = source[start..]
+        .find('{')
+        .map(|idx| start + idx)
+        .unwrap_or_else(|| panic!("{marker} should have a body in {source_name}"));
+    let mut depth = 0usize;
+    for (offset, byte) in source[body_start..].bytes().enumerate() {
+        match byte {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &source[start..=body_start + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("{marker} body should be balanced in {source_name}");
+}
+
+fn assert_no_callback_alloc_or_unwind(source_name: &str, marker: &str, item: &str) {
+    for forbidden in [
+        "Vec<",
+        "Vec::",
+        "Box<",
+        "Box::",
+        "String::",
+        "format!",
+        "to_string(",
+        "to_owned(",
+        "alloc::",
+        "std::",
+        "malloc(",
+        "mi_malloc",
+        "mi_zalloc",
+        "mi_calloc",
+        "mi_realloc",
+        "_mi_meta_alloc",
+        "_mi_meta_zalloc",
+        "_mi_arenas_alloc",
+    ] {
+        assert!(
+            !item.contains(forbidden),
+            "{marker} in {source_name} should not allocate through {forbidden}"
+        );
+    }
+    for forbidden in [
+        "panic!",
+        "unreachable!",
+        "todo!",
+        "unimplemented!",
+        "assert!(",
+        "debug_assert!(",
+        "mi_assert_internal!",
+        "mi_debug_assert!",
+        "expect(",
+        ".unwrap(",
+        "catch_unwind",
+        "resume_unwind",
+    ] {
+        assert!(
+            !item.contains(forbidden),
+            "{marker} in {source_name} should not panic or unwind through {forbidden}"
+        );
+    }
+}
+
+fn assert_no_rust_heap_constructs(source_name: &str, marker: &str, item: &str) {
+    for forbidden in [
+        "extern crate std",
+        "use std",
+        "std::",
+        "extern crate alloc",
+        "crate::alloc::",
+        "::alloc::",
+        "use alloc::",
+        "Vec<",
+        "Vec::",
+        "Box<",
+        "Box::",
+        "String",
+        "format!",
+        "to_string(",
+        "to_owned(",
+        "_mi_meta_alloc",
+        "_mi_meta_zalloc",
+        "_mi_arenas_alloc",
+    ] {
+        assert!(
+            !item.contains(forbidden),
+            "{marker} in {source_name} should not allocate through {forbidden}"
+        );
+    }
+}
+
 fn collect_rs_sources(base: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
     for entry in fs::read_dir(dir).expect("read source directory") {
         let entry = entry.expect("read source entry");
@@ -294,12 +393,19 @@ fn options_state_uses_internal_locks_like_c() {
     assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")
             && options_rs.contains("static mut mi_error_handler_lock: mi_lock_t")
-            && options_rs.contains("mi_lock_acquire(addr_of_mut!(options_lock))")
-            && options_rs.contains("mi_lock_release(addr_of_mut!(options_lock))")
-            && options_rs.contains("mi_lock_acquire(addr_of_mut!(mi_error_handler_lock))")
-            && options_rs.contains("mi_lock_release(addr_of_mut!(mi_error_handler_lock))")
+            && options_rs.contains(
+                "let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(options_lock)));"
+            )
+            && options_rs.contains(
+                "let lock = MiLockPtr(NonNull::new_unchecked(addr_of_mut!(mi_error_handler_lock)));"
+            )
+            && options_rs.contains("let _lock = MiLockGuard::acquire(lock);")
+            && !options_rs.contains("mi_lock_acquire(addr_of_mut!(options_lock))")
+            && !options_rs.contains("mi_lock_release(addr_of_mut!(options_lock))")
+            && !options_rs.contains("mi_lock_acquire(addr_of_mut!(mi_error_handler_lock))")
+            && !options_rs.contains("mi_lock_release(addr_of_mut!(mi_error_handler_lock))")
             && options_rs.contains("#[link_name = \"abort\"]"),
-        "options state should use mimalloc's internal lock and C abort primitives"
+        "options state should use typed mimalloc lock guards and C abort primitives"
     );
     #[cfg(all(target_os = "linux", not(debug_assertions)))]
     {
@@ -434,6 +540,30 @@ fn crate_root_exposes_only_curated_rust_facade() {
 }
 
 #[test]
+fn core_types_remains_crate_private_not_public_raw_api() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+
+    assert!(
+        lib_rs.contains("pub(crate) mod core_types;")
+            && !lib_rs.contains("pub mod core_types;")
+            && !lib_rs.contains("pub use core_types")
+            && !lib_rs.contains("pub use crate::core_types"),
+        "core_types should remain crate-private at the crate root"
+    );
+
+    assert!(
+        !raw_rs.contains("mod core_types")
+            && !raw_rs.contains("pub mod core_types")
+            && !raw_rs.contains("pub use core_types")
+            && !raw_rs.contains("pub use crate::core_types")
+            && !raw_rs.contains("crate::core_types"),
+        "default raw modules should not expose core_types or strict wrapper routes"
+    );
+}
+
+#[test]
 fn abi_module_owns_c_header_declarations() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
@@ -457,6 +587,274 @@ fn abi_module_owns_c_header_declarations() {
         raw_rs.contains("pub mod abi") && raw_rs.contains("pub use crate::abi::*;"),
         "raw facade should expose ABI declarations through the ABI owner"
     );
+}
+
+#[test]
+fn abi_c_declarations_remain_raw_not_strict_typed() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
+    let declarations = source_item("src/abi.rs", &abi_rs, "unsafe extern \"C\"");
+
+    for forbidden in [
+        "crate::core_types",
+        "core_types::",
+        "NonNull",
+        "HeapPtr",
+        "ThreadHeapLocal",
+        "BorrowedHeap",
+        "LayoutRequest",
+        "RequestedSize",
+        "PaddedSize",
+        "UsableSize",
+        "BlockSize",
+        "ArenaPtr",
+        "SliceCount",
+        "SliceIndex",
+        "ThreadSeq",
+        "OsMemId",
+        "OsMemPtr",
+        "CommittedBytes",
+        "ReservedBytes",
+        "ValidatedFree",
+        "LocalPage",
+        "ForeignPage",
+        "FullPage",
+        "NormalPageQueue",
+        "FullPageQueue",
+        "MemIdView",
+        "MemoryOrder",
+    ] {
+        assert!(
+            !declarations.contains(forbidden),
+            "src/abi.rs C declarations should not expose strict type `{forbidden}`"
+        );
+    }
+
+    assert!(
+        declarations.contains("pub fn mi_malloc(size: usize) -> *mut c_void;")
+            && declarations.contains("pub fn mi_free(p: *mut c_void);")
+            && declarations.contains("pub fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void;")
+            && declarations.contains("pub fn mi_heap_new() -> *mut mi_heap_t;")
+            && declarations.contains("pub fn mi_heap_visit_blocks(\n        heap: *mut mi_heap_t,\n        visit_blocks: bool,\n        visitor: Option<mi_block_visit_fun>,\n        arg: *mut c_void,\n    ) -> bool;")
+            && declarations.contains("pub fn mi_process_info(\n        elapsed_msecs: *mut usize,"),
+        "src/abi.rs declarations should keep the C header raw pointer shape"
+    );
+}
+
+#[test]
+fn translated_raw_layouts_stay_in_types_substrate() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
+    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+
+    for layout in [
+        "pub struct mi_page_queue_t",
+        "pub struct mi_block_s",
+        "pub struct mi_heap_area_t",
+        "pub struct mi_page_s",
+        "pub struct mi_heap_s",
+        "pub struct mi_theap_s",
+        "pub struct mi_arena_s",
+        "pub struct mi_subproc_s",
+        "pub struct mi_arena_pages_s",
+        "pub struct mi_tld_s",
+    ] {
+        assert!(
+            types_rs.contains("#[repr(C)]") && types_rs.contains(layout),
+            "src/types.rs should remain the private raw repr(C) layout substrate for {layout}"
+        );
+        assert!(
+            !abi_rs.contains(layout) && !raw_rs.contains(layout),
+            "{layout} should not be redefined in public ABI/facade modules"
+        );
+    }
+
+    assert!(
+        abi_rs.contains("pub use crate::types::{")
+            && abi_rs.contains("mi_heap_t")
+            && abi_rs.contains("mi_theap_t")
+            && raw_rs.contains("pub mod abi {\n    pub use crate::abi::*;\n}")
+            && !types_rs.contains("use crate::core_types")
+            && !abi_rs.contains("core_types")
+            && !raw_rs.contains("core_types"),
+        "raw layout exposure should flow from src/types.rs through raw::abi without leaking strict wrappers"
+    );
+}
+
+#[test]
+fn public_c_layout_exposure_uses_raw_abi_facade() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
+    let api_doc =
+        fs::read_to_string(root.join("docs/api-inventory.md")).expect("read api inventory");
+
+    assert!(
+        abi_rs.contains("pub use crate::types::{")
+            && abi_rs.contains("mi_heap_area_t")
+            && abi_rs.contains("mi_heap_t")
+            && abi_rs.contains("mi_subproc_id_t")
+            && raw_rs.contains("pub mod abi {\n    pub use crate::abi::*;\n}")
+            && raw_rs.contains("pub mod mimalloc {\n    pub use crate::abi::*;\n}")
+            && raw_rs.contains("pub use mimalloc::*;"),
+        "public C layouts and aliases should be exposed through raw::abi, raw::mimalloc, and root raw C-header re-exports"
+    );
+    assert!(
+        raw_rs.contains("#[cfg(feature = \"unstable-raw-internals\")]\n#[deprecated(\n    note = \"raw implementation module path; not public API; use root raw::mi_* or raw::abi for C-header surface\"\n)]\npub mod types")
+            && api_doc.contains("By default, `raw` exposes the root C-header mirror plus `raw::abi`,\n`raw::mimalloc`, and `raw::headers`.")
+            && !lib_rs.contains("pub mod types;")
+            && !lib_rs.contains("pub mod core_types;")
+            && !raw_rs.contains("pub use crate::core_types")
+            && !abi_rs.contains("core_types"),
+        "raw::types should remain unstable internals and core_types must not be a public C layout route"
+    );
+}
+
+#[test]
+fn raw_facade_remains_c_shaped_without_strict_type_exports() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+
+    assert!(
+        raw_rs.contains("Explicit C-shaped compatibility facade")
+            && raw_rs.contains("pub mod abi {\n    pub use crate::abi::*;\n}")
+            && raw_rs.contains("pub mod mimalloc {\n    pub use crate::abi::*;\n}")
+            && raw_rs.contains("pub mod headers {\n    pub use crate::headers::*;\n}")
+            && raw_rs.contains("pub use mimalloc::*;"),
+        "src/raw.rs should keep the default facade as the C-header mirror"
+    );
+
+    for module in [
+        "alloc",
+        "alloc_aligned",
+        "alloc_override",
+        "alloc_posix",
+        "arena",
+        "arena_meta",
+        "atomic",
+        "bitmap",
+        "bits",
+        "free",
+        "heap",
+        "init",
+        "internal",
+        "libc",
+        "memory",
+        "options",
+        "os",
+        "page",
+        "page_map",
+        "prim",
+        "random",
+        "static_c",
+        "stats",
+        "theap",
+        "threadlocal",
+        "track",
+        "types",
+    ] {
+        assert!(
+            raw_rs.contains(&format!(
+                "#[cfg(feature = \"unstable-raw-internals\")]\n#[deprecated(\n    note = \"raw implementation module path; not public API; use root raw::mi_* or raw::abi for C-header surface\"\n)]\npub mod {module}"
+            )),
+            "raw::{module} should remain an explicitly unstable implementation-module facade"
+        );
+    }
+
+    for forbidden in [
+        "pub mod core_types",
+        "pub use crate::core_types",
+        "crate::core_types",
+        "core_types::",
+        "HeapPtr",
+        "ThreadHeapLocal",
+        "BorrowedHeap",
+        "LayoutRequest",
+        "RequestedSize",
+        "PaddedSize",
+        "UsableSize",
+        "BlockSize",
+        "ArenaPtr",
+        "SliceCount",
+        "SliceIndex",
+        "ThreadSeq",
+        "OsMemId",
+        "OsMemPtr",
+        "CommittedBytes",
+        "ReservedBytes",
+        "ValidatedFree",
+        "LocalPage",
+        "ForeignPage",
+        "FullPage",
+        "NormalPageQueue",
+        "FullPageQueue",
+        "MemIdView",
+        "MemoryOrder",
+    ] {
+        assert!(
+            !raw_rs.contains(forbidden),
+            "src/raw.rs should not expose strict type `{forbidden}`"
+        );
+    }
+}
+
+#[test]
+fn translated_raw_internal_test_access_requires_unstable_feature() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let tests_dir = root.join("tests");
+    let internal_modules = [
+        "alloc",
+        "alloc_aligned",
+        "alloc_override",
+        "alloc_posix",
+        "arena",
+        "arena_meta",
+        "atomic",
+        "bitmap",
+        "bits",
+        "free",
+        "heap",
+        "init",
+        "internal",
+        "libc",
+        "memory",
+        "options",
+        "os",
+        "page",
+        "page_map",
+        "prim",
+        "random",
+        "static_c",
+        "stats",
+        "theap",
+        "threadlocal",
+        "track",
+        "types",
+    ];
+
+    for entry in fs::read_dir(tests_dir).expect("read tests directory") {
+        let path = entry.expect("read tests entry").path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+
+        let source = fs::read_to_string(&path).expect("read test source");
+        let uses_raw_internal = internal_modules.iter().any(|module| {
+            source.contains(&format!("mechanical_mimalloc::raw::{module}"))
+                || source.contains(&format!("mechanical_mimalloc::raw::{{{module}"))
+                || source.contains(&format!("mechanical_mimalloc::raw::{{\n    {module}"))
+        });
+
+        if uses_raw_internal {
+            assert!(
+                source.starts_with("#![cfg(feature = \"unstable-raw-internals\")]\n"),
+                "{} imports translated raw internals without the unstable feature gate",
+                path.display()
+            );
+        }
+    }
 }
 
 #[test]
@@ -606,6 +1004,23 @@ fn public_callback_abi_inventory_stays_documented() {
         "src/abi.rs should expose callback-accepting C declarations with nullable Option callbacks"
     );
 
+    for forbidden in [
+        "OutputCallback",
+        "ErrorCallback",
+        "DeferredFreeCallback",
+        "HeapVisitCallback",
+        "BlockVisitCallback",
+        "ThreadLocalClaimCallback",
+        "CallbackArg",
+        "dyn Fn",
+        "impl Fn",
+    ] {
+        assert!(
+            !types_rs.contains(forbidden) && !abi_rs.contains(forbidden),
+            "raw callback typedefs and ABI declarations must not use {forbidden}"
+        );
+    }
+
     assert!(
         options_rs.contains("pub extern \"C\" fn mi_register_output")
             && options_rs.contains("pub extern \"C\" fn mi_register_error")
@@ -615,6 +1030,118 @@ fn public_callback_abi_inventory_stays_documented() {
             && abi_doc.contains("mi_forall_set_fun_t")
             && abi_doc.contains("unstable-raw-internals"),
         "callback registrations and internal callback families should be inventoried at their public boundary"
+    );
+}
+
+#[test]
+fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
+    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
+    let callbacks_rs = fs::read_to_string(root.join("src/core_types/callbacks.rs"))
+        .expect("read core_types/callbacks.rs");
+    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
+    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
+    let arena_rs = fs::read_to_string(root.join("src/arena.rs")).expect("read src/arena.rs");
+    let theap_rs = fs::read_to_string(root.join("src/theap.rs")).expect("read src/theap.rs");
+    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
+
+    for (source_name, source, marker) in [
+        (
+            "src/core_types/callbacks.rs",
+            callbacks_rs.as_str(),
+            "pub(crate) unsafe fn invoke(\n        self,\n        force: bool,",
+        ),
+        (
+            "src/core_types/callbacks.rs",
+            callbacks_rs.as_str(),
+            "pub(crate) unsafe fn invoke(self, message: *const c_char,",
+        ),
+        (
+            "src/core_types/callbacks.rs",
+            callbacks_rs.as_str(),
+            "pub(crate) unsafe fn invoke(self, err: i32,",
+        ),
+        (
+            "src/core_types/callbacks.rs",
+            callbacks_rs.as_str(),
+            "pub(crate) unsafe fn invoke(self, heap: HeapPtr,",
+        ),
+        (
+            "src/core_types/callbacks.rs",
+            callbacks_rs.as_str(),
+            "pub(crate) unsafe fn invoke(\n        self,\n        heap: HeapPtr,",
+        ),
+        (
+            "src/core_types/callbacks.rs",
+            callbacks_rs.as_str(),
+            "pub(crate) unsafe fn invoke(\n        self,\n        slice_index: usize,",
+        ),
+        (
+            "src/options.rs",
+            options_rs.as_str(),
+            "pub extern \"C\" fn mi_register_output",
+        ),
+        (
+            "src/options.rs",
+            options_rs.as_str(),
+            "pub extern \"C\" fn mi_register_error",
+        ),
+        (
+            "src/page.rs",
+            page_rs.as_str(),
+            "pub(crate) unsafe extern \"C\" fn _mi_deferred_free",
+        ),
+        (
+            "src/page.rs",
+            page_rs.as_str(),
+            "pub unsafe extern \"C\" fn mi_register_deferred_free",
+        ),
+        (
+            "src/arena.rs",
+            arena_rs.as_str(),
+            "pub unsafe extern \"C\" fn mi_heap_visit_blocks",
+        ),
+        (
+            "src/arena.rs",
+            arena_rs.as_str(),
+            "pub unsafe extern \"C\" fn mi_heap_visit_abandoned_blocks",
+        ),
+        (
+            "src/theap.rs",
+            theap_rs.as_str(),
+            "pub unsafe extern \"C\" fn mi_theap_visit_blocks",
+        ),
+        (
+            "src/init.rs",
+            init_rs.as_str(),
+            "pub unsafe extern \"C\" fn mi_subproc_visit_heaps",
+        ),
+    ] {
+        let item = source_item(source_name, source, marker);
+        assert_no_callback_alloc_or_unwind(source_name, marker, item);
+    }
+
+    assert!(
+        types_rs.contains("pub type mi_output_fun = unsafe extern \"C\" fn")
+            && types_rs.contains("pub type mi_error_fun = unsafe extern \"C\" fn")
+            && types_rs.contains("pub type mi_deferred_free_fun = unsafe extern \"C\" fn")
+            && types_rs.contains("pub type mi_heap_visit_fun = unsafe extern \"C\" fn")
+            && types_rs.contains("pub type mi_block_visit_fun = unsafe extern \"C\" fn")
+            && types_rs.contains("pub type mi_commit_fun_t = unsafe extern \"C\" fn")
+            && types_rs.contains("pub type mi_claim_fun_t =\n    unsafe extern \"C\" fn"),
+        "src/types.rs should keep public and unstable callback typedefs raw C ABI function pointers"
+    );
+    assert!(
+        abi_rs.contains("out: Option<mi_output_fun>")
+            && abi_rs.contains("fun: Option<mi_error_fun>")
+            && abi_rs.contains("deferred_free: Option<mi_deferred_free_fun>")
+            && abi_rs.contains("visitor: Option<mi_block_visit_fun>")
+            && abi_rs.contains("visitor: Option<mi_heap_visit_fun>")
+            && abi_rs.contains("commit_fun: Option<mi_commit_fun_t>")
+            && !types_rs.contains("CallbackArg")
+            && !abi_rs.contains("CallbackArg"),
+        "src/abi.rs should keep nullable raw callback typedefs at the C ABI boundary"
     );
 }
 
@@ -721,13 +1248,13 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     );
     assert!(
         prim_rs.contains("fn mi_linux_x64_theap_default_get()")
-            && prim_rs.contains("fn mi_linux_x64_theap_default_set(theap: *mut mi_theap_t)")
+            && prim_rs.contains("fn mi_linux_x64_theap_default_set(theap: Option<ThreadHeapPtr>)")
             && prim_rs.contains("fn mi_linux_x64_theap_cached_get()")
-            && prim_rs.contains("fn mi_linux_x64_theap_cached_set(theap: *mut mi_theap_t)")
+            && prim_rs.contains("fn mi_linux_x64_theap_cached_set(theap: Option<ThreadHeapPtr>)")
             && prim_rs.contains("__mi_theap_default@GOTTPOFF")
             && prim_rs.contains("__mi_theap_cached@GOTTPOFF")
             && init_rs.contains("fn mi_linux_x64_theap_main_get()")
-            && init_rs.contains("fn mi_linux_x64_theap_main_set(theap: *mut mi_theap_t)")
+            && init_rs.contains("fn mi_linux_x64_theap_main_set(theap: Option<ThreadHeapPtr>)")
             && init_rs.contains("__mi_theap_main@GOTTPOFF"),
         "Linux x86_64 heap TLS accessors should inline C-style initial-exec loads and stores"
     );
@@ -948,10 +1475,13 @@ fn allocation_product_paths_use_typed_requests() {
             && !aligned_rs.contains("mi_count_size_overflow")
             && !aligned_rs.contains("_mi_theap_realloc_zero(")
             && !posix_rs.contains("mi_count_size_overflow")
+            && alloc_rs.contains("fn product_size_or_report(count: usize, size: usize)")
             && alloc_rs.contains("pub(crate) fn calloc_request_or_report(")
+            && alloc_rs.contains("fn alloc_product_or_report(")
             && alloc_rs
                 .contains("crate::internal::mi_count_size_overflow(count, size, &mut total)")
             && alloc_rs.contains("crate::core_types::CallocRequest::new(count, size).ok()")
+            && alloc_rs.contains("crate::core_types::AllocProduct::new(count, size).ok()")
             && alloc_rs.contains("unsafe fn mi_theap_calloc_req(")
             && alloc_rs.contains("unsafe fn mi_theap_mallocn_req(")
             && alloc_rs.contains("unsafe fn mi_theap_realloc_req(")
@@ -960,29 +1490,40 @@ fn allocation_product_paths_use_typed_requests() {
             && alloc_rs.contains("unsafe fn mi_theap_reallocn_req(")
             && alloc_rs.contains("unsafe fn mi_theap_recalloc_req(")
             && alloc_rs.contains("crate::core_types::CallocRequest::new(count, size)")
-            && alloc_rs.contains("crate::core_types::CallocRequest::new(newcount, size)")
-            && alloc_rs.contains("crate::core_types::LayoutRequest::malloc(req.total().get())")
-            && alloc_rs.contains("crate::core_types::ReallocRequest::new(")
+            && alloc_rs.contains("alloc_product_or_report(newcount, size)")
+            && alloc_rs.contains(
+                "unsafe fn mi_theap_alloc_new_n(\n    theap: *mut mi_theap_t,\n    req: crate::core_types::AllocProduct,"
+            )
+            && alloc_rs.contains("realloc_req: crate::core_types::ReallocRequest,")
+            && alloc_rs.contains("mi_theap_recalloc_req(theap, req, realloc_req)")
+            && alloc_rs.contains("mi_theap_realloc_typed(theap, realloc_req)")
+            && alloc_rs.contains("crate::core_types::ReallocRequest::from_null(")
+            && alloc_rs.contains("crate::core_types::ReallocRequest::from_existing(")
             && alloc_rs.contains("req.zero_new_tail() == crate::core_types::Zeroed::Yes")
+            && layout_rs.contains("pub(crate) struct AllocProduct")
             && layout_rs.contains("pub(crate) struct ReallocRequest")
+            && layout_rs.contains("enum ReallocSource")
             && layout_rs.contains("pub(crate) fn zero_new_tail(&self) -> Zeroed")
             && aligned_rs.contains("unsafe fn mi_theap_realloc_zero_aligned_at_req(")
+            && aligned_rs.contains("let offset = crate::core_types::AlignmentOffset::new(offset);")
             && aligned_rs.contains(
                 "crate::core_types::LayoutRequest::aligned_at(newsize, alignment, offset, zeroed)"
             )
-            && aligned_rs.contains("mi_theap_realloc_req(theap, p, layout)")
+            && aligned_rs.contains("mi_theap_realloc_layout(theap, p, layout)")
             && aligned_rs.contains("calloc_request_or_report(count, size)")
             && aligned_rs.contains("calloc_request_or_report(newcount, size)")
             && posix_rs.contains("crate::core_types::CallocRequest::new(count, size)")
             && layout_rs.contains("pub(crate) fn layout(self) -> LayoutRequest")
             && layout_rs.contains("let total_size = count.checked_mul(size)"),
-        "calloc/mallocn/recalloc/reallocarray product-size paths should use CallocRequest as the checked multiplication boundary with one C-compatible overflow reporting adapter"
+        "calloc product-size paths should use CallocRequest, non-calloc product paths should use AllocProduct, and both should share one C-compatible overflow reporting adapter"
     );
 }
 
 #[test]
 fn realloc_validation_uses_pointer_lookup_boundary() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let aligned_rs =
+        fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read alloc_aligned.rs");
     let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
     let layout_rs =
         fs::read_to_string(root.join("src/core_types/layout.rs")).expect("read layout.rs");
@@ -992,21 +1533,48 @@ fn realloc_validation_uses_pointer_lookup_boundary() {
             "unsafe fn mi_validate_ptr_page(\n    p: *const c_void,\n    msg: *const c_char,\n) -> crate::core_types::PointerLookup"
         ) && alloc_rs.contains("crate::free::mi_validate_pointer(p.cast_mut(), msg)")
             && alloc_rs.contains("unsafe fn mi_realloc_old_allocation(")
-            && alloc_rs.contains("crate::core_types::PointerLookup::Valid {")
-            && alloc_rs.contains("user,\n                page,\n                location,")
-            && alloc_rs.contains("Some(crate::core_types::OldAllocation::new(")
-            && alloc_rs.contains("let Some(old) = mi_realloc_old_allocation(p, c\"mi_realloc\".as_ptr())")
+            && alloc_rs.contains("crate::core_types::PointerLookup::Valid(valid)")
+            && alloc_rs.contains("let user = valid.user();")
+            && alloc_rs.contains("let page = valid.page();")
+            && alloc_rs.contains("let block = valid.location().block();")
+            && alloc_rs.contains("Some(crate::core_types::OldAllocation::from_validated_parts(")
+            && alloc_rs.contains("unsafe fn mi_realloc_request_from_ptr(")
+            && alloc_rs
+                .contains("let Some(old) = mi_realloc_old_allocation(p, c\"mi_realloc\".as_ptr())")
             && alloc_rs.contains("unsafe fn mi_theap_realloc_apply(")
-            && alloc_rs.contains("let req = req.with_old(old);")
+            && alloc_rs.contains("crate::core_types::ReallocRequest::from_null(")
+            && alloc_rs.contains("crate::core_types::ReallocRequest::from_existing(")
             && alloc_rs.contains("req.old(),")
             && alloc_rs.contains("let page = old.page().as_ptr();")
             && alloc_rs.contains("let size = old.usable();")
+            && alloc_rs
+                .contains("crate::core_types::PreserveBytes::new(old.usable(), new_requested)")
+            && alloc_rs.contains("let preserved = preserve.map_or(0, |preserve| preserve.get());")
+            && alloc_rs.contains("let Some(preserve) = preserve else")
+            && alloc_rs.contains("let copysize = preserve.get();")
+            && !alloc_rs.contains("let copysize = if newsize > size { size } else { newsize };")
+            && aligned_rs.contains("let preserve = crate::core_types::PreserveBytes::new(")
+            && aligned_rs.contains("crate::core_types::UsableSize::new(size)")
+            && aligned_rs.contains("_mi_memcpy_aligned(newp, p, preserve.get())")
+            && !aligned_rs.contains("usize::min(newsize, size)")
             && alloc_rs.contains("crate::core_types::PointerLookup::Invalid { .. }")
             && layout_rs.contains("pub(crate) struct OldAllocation")
+            && layout_rs.contains("pub(crate) struct PreserveBytes(usize);")
+            && layout_rs.contains("Self(usize::min(old.get(), new.get()))")
+            && layout_rs.contains("unsafe fn new(")
+            && !layout_rs.contains("pub(crate) unsafe fn new(")
+            && layout_rs.contains("pub(crate) unsafe fn from_validated_parts(")
+            && layout_rs.contains("unsafe { Self::new(ptr, usable, page, block) }")
             && layout_rs.contains("pub(crate) fn usable(self) -> UsableSize")
             && layout_rs.contains("pub(crate) fn page(self) -> PagePtr")
+            && layout_rs.contains("enum ReallocSource")
+            && layout_rs.contains("ReallocSource::Null")
+            && layout_rs.contains("ReallocSource::Existing(old)")
+            && layout_rs.contains("pub(crate) fn from_null(")
+            && layout_rs.contains("pub(crate) fn from_existing(")
             && layout_rs.contains("pub(crate) fn old(&self) -> Option<OldAllocation>")
-            && layout_rs.contains("pub(crate) fn with_old(mut self, old: Option<OldAllocation>) -> Self")
+            && !layout_rs.contains("old: Option<OldAllocation>")
+            && !layout_rs.contains("with_old")
             && !alloc_rs.contains("unsafe fn mi_validate_ptr_page(p: *const c_void, msg: *const c_char) -> *mut mi_page_t")
             && !alloc_rs.contains("_mi_safe_ptr_page"),
         "realloc must use PointerLookup and construct OldAllocation only after validation"
@@ -1026,25 +1594,237 @@ fn generic_allocation_flags_use_typed_boundary() {
             && !page_rs.contains("zero_huge_alignment & !1")
             && !page_rs.contains("zero_huge_alignment & 1")
             && alloc_rs.contains("crate::core_types::MallocGenericFlags::new(")
-            && alloc_rs.contains("crate::core_types::MaybeHugeAlignment::new(huge_alignment)")
-            && alloc_rs.contains("crate::core_types::MaybeHugeAlignment::none()")
+            && alloc_rs.contains("fn maybe_alignment_or_report(alignment: usize)")
+            && alloc_rs.contains("crate::core_types::MaybeAlignment::new(alignment)")
+            && alloc_rs.contains("crate::core_types::MaybeHugeAlignment::new(huge_alignment.get())")
+            && alloc_rs.contains("fn no_alignment() -> crate::core_types::MaybeAlignment")
+            && alloc_rs.contains("unsafe fn mi_new_aligned_typed(")
+            && alloc_rs.contains("unsafe fn mi_new_aligned_nothrow_typed(")
+            && alloc_rs.contains("alignment: crate::core_types::Alignment,")
             && page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(")
+            && page_rs.contains("theap: crate::core_types::ThreadHeapPtr")
+            && page_rs.contains("pub(crate) unsafe fn _mi_theap_or_default_typed(")
+            && page_rs.contains("Some(crate::core_types::ThreadHeapPtr::new_unchecked(theap))")
             && page_rs.contains("layout: crate::core_types::LayoutRequest")
             && page_rs.contains("let size = layout.padded().get();")
-            && page_rs
-                .contains("crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment)")
+            && page_rs.contains("let flags = crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment)")
+            && layout_rs.contains("pub(crate) unsafe fn from_raw(raw: usize) -> Self")
             && page_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
-            && alloc_rs.contains("let layout = match crate::core_types::LayoutRequest::malloc(size)")
-            && alloc_rs.contains("let p = _mi_malloc_generic_typed(theap, layout, flags, usable)")
+            && alloc_rs.contains("fn malloc_layout_or_report(size: usize, zero: bool)")
+            && alloc_rs.contains("crate::core_types::LayoutRequest::zalloc(size)")
+            && alloc_rs.contains("crate::core_types::LayoutRequest::malloc(size)")
+            && alloc_rs.contains("let p = _mi_malloc_generic_typed(theap.ptr(), layout, flags, usable)")
             && alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
+            && alloc_rs.contains("unsafe fn mi_theap_malloc_generic(\n    theap: ThreadHeapLocal,\n    layout: crate::core_types::LayoutRequest,\n    flags: crate::core_types::MallocGenericFlags,")
+            && alloc_rs.contains("unsafe fn mi_theap_malloc_zero_req(\n    theap: *mut mi_theap_t,\n    layout: crate::core_types::LayoutRequest,\n    huge_alignment: crate::core_types::MaybeAlignment,")
+            && alloc_rs.contains("let Some(layout) = malloc_layout_or_report(size, zero)")
+            && !alloc_rs.contains("mi_theap_malloc_generic(theap, size, zero, huge_alignment, usable)")
             && layout_rs.contains("pub(crate) unsafe fn from_padded_unchecked(")
             && layout_rs.contains("requested_size = padded.get().wrapping_sub(crate::types::MI_PADDING_SIZE)")
             && page_rs.contains("flags.zeroed() == crate::core_types::Zeroed::Yes")
             && page_rs.contains("flags.huge_alignment().get()")
             && layout_rs.contains("pub(crate) struct MaybeHugeAlignment(usize);")
             && layout_rs.contains("pub(crate) struct MallocGenericFlags(usize);")
+            && !page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(\n    mut theap: *mut mi_theap_t,")
             && !page_rs.contains("pub(crate) unsafe fn _mi_malloc_generic_typed(\n    mut theap: *mut mi_theap_t,\n    size: usize,"),
         "generic allocation should use MallocGenericFlags instead of manually packing zero and huge alignment bits"
+    );
+}
+
+#[test]
+fn c_memory_order_enum_stays_in_atomic_facade() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src = root.join("src");
+    let mut sources = Vec::new();
+    collect_rs_sources(root, &src, &mut sources);
+
+    for (rel, source) in sources {
+        if rel == "src/atomic.rs" {
+            continue;
+        }
+        assert!(
+            !source.contains("mi_memory_order_e")
+                && !source.contains("mi_memory_order::")
+                && !source.contains("mi_memory_order_"),
+            "{rel} should use core_types::MemoryOrder or Ordering, not C-compatible mi_memory_order_e"
+        );
+    }
+}
+
+#[test]
+fn strict_type_modules_remain_no_std_no_heap_alloc_no_std_sync() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let core_types = root.join("src/core_types");
+    let mut sources = Vec::new();
+    collect_rs_sources(root, &core_types, &mut sources);
+
+    let allowed_core_atomic_modules = BTreeSet::from([
+        "src/core_types/arena.rs",
+        "src/core_types/atomic_wrappers.rs",
+        "src/core_types/ptr.rs",
+    ]);
+
+    for (rel, source) in sources {
+        for forbidden in [
+            "extern crate std",
+            "use std",
+            "std::",
+            "extern crate alloc",
+            "crate::alloc::",
+            "::alloc::",
+            "use alloc::",
+            "Vec<",
+            "Vec::",
+            "Box<",
+            "Box::",
+            "String",
+            "format!",
+            "to_string(",
+            "to_owned(",
+            "mi_malloc",
+            "mi_zalloc",
+            "mi_calloc",
+            "mi_realloc",
+            "mi_heap_zalloc",
+            "_mi_meta_alloc",
+            "_mi_meta_zalloc",
+            "_mi_arenas_alloc",
+            "Mutex",
+            "MutexGuard",
+            "RwLock",
+            "OnceLock",
+            "LazyLock",
+            "Condvar",
+            "std::thread",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{rel} should not introduce std, heap allocation, formatting allocation, or std sync through {forbidden}"
+            );
+        }
+
+        if source.contains("core::sync::atomic") {
+            assert!(
+                allowed_core_atomic_modules.contains(rel.as_str()),
+                "{rel} should route strict-type atomic access through the dedicated atomic/cell wrappers"
+            );
+        }
+    }
+}
+
+#[test]
+fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
+    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
+    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
+    let core_types = root.join("src/core_types");
+    let mut strict_type_sources = Vec::new();
+    collect_rs_sources(root, &core_types, &mut strict_type_sources);
+
+    for (rel, source) in strict_type_sources {
+        assert_no_rust_heap_constructs(&rel, "strict type module", &source);
+    }
+
+    for (source_name, source, marker) in [
+        (
+            "src/alloc.rs",
+            alloc_rs.as_str(),
+            "pub(crate) unsafe fn _mi_page_malloc_zero_typed(",
+        ),
+        (
+            "src/alloc.rs",
+            alloc_rs.as_str(),
+            "unsafe fn mi_theap_malloc_generic(",
+        ),
+        (
+            "src/alloc.rs",
+            alloc_rs.as_str(),
+            "unsafe fn mi_theap_malloc_zero_req(",
+        ),
+        (
+            "src/page.rs",
+            page_rs.as_str(),
+            "pub(crate) unsafe fn _mi_malloc_generic_typed(",
+        ),
+        (
+            "src/free.rs",
+            free_rs.as_str(),
+            "pub(crate) unsafe extern \"C\" fn mi_free_generic_local(",
+        ),
+        (
+            "src/free.rs",
+            free_rs.as_str(),
+            "pub(crate) unsafe extern \"C\" fn mi_free_generic_mt(",
+        ),
+        (
+            "src/free.rs",
+            free_rs.as_str(),
+            "unsafe fn mi_prepare_validated_free(",
+        ),
+        (
+            "src/free.rs",
+            free_rs.as_str(),
+            "unsafe fn mi_free_validated(",
+        ),
+        (
+            "src/free.rs",
+            free_rs.as_str(),
+            "pub(crate) unsafe fn mi_route_free(",
+        ),
+    ] {
+        let item = source_item(source_name, source, marker);
+        assert_no_rust_heap_constructs(source_name, marker, item);
+    }
+
+    for marker in [
+        "pub(crate) unsafe extern \"C\" fn mi_free_generic_local(",
+        "pub(crate) unsafe extern \"C\" fn mi_free_generic_mt(",
+        "unsafe fn mi_prepare_validated_free(",
+        "unsafe fn mi_free_validated(",
+        "pub(crate) unsafe fn mi_route_free(",
+    ] {
+        let item = source_item("src/free.rs", &free_rs, marker);
+        for forbidden in [
+            "mi_malloc(",
+            "mi_zalloc(",
+            "mi_calloc(",
+            "mi_realloc(",
+            "mi_heap_zalloc(",
+            "_mi_meta_alloc",
+            "_mi_meta_zalloc",
+            "_mi_arenas_alloc",
+        ] {
+            assert!(
+                !item.contains(forbidden),
+                "{marker} in src/free.rs should not allocate on the free hot path through {forbidden}"
+            );
+        }
+    }
+
+    assert!(
+        alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
+            && alloc_rs.contains("crate::core_types::MallocGenericFlags::new(")
+            && alloc_rs.contains("crate::core_types::RequestedSize::new(size).padded_unchecked()")
+            && alloc_rs.contains(
+                "unsafe fn mi_theap_malloc_small_zero_nonnull(\n    theap: ThreadHeapLocal,\n    size: crate::core_types::RequestedSize,"
+            )
+            && alloc_rs.contains(
+                "unsafe fn mi_heap_try_new_typed(\n    heap: BorrowedHeap,\n    size: crate::core_types::RequestedSize,"
+            )
+            && alloc_rs.contains(
+                "unsafe fn mi_heap_alloc_new_typed(\n    heap: BorrowedHeap,\n    size: crate::core_types::RequestedSize,"
+            )
+            && page_rs.contains("layout: crate::core_types::LayoutRequest")
+            && page_rs.contains("flags: crate::core_types::MallocGenericFlags")
+            && free_rs.contains(".prepare_free()")
+            && free_rs.contains("validated: crate::core_types::ValidatedFree")
+            && free_rs.contains(
+                "unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree,"
+            )
+            && free_rs.contains("let owner = validated.page().classify_for_free(current_tid);")
+            && free_rs.contains("owner: crate::core_types::PageFreeOwner,"),
+        "allocation/free hot paths should continue to consume strict-type wrappers under the no-allocation source guard"
     );
 }
 
@@ -1057,6 +1837,18 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
 
     let core_mod =
         fs::read_to_string(root.join("src/core_types/mod.rs")).expect("read core_types/mod.rs");
+    let atomic_rs = fs::read_to_string(root.join("src/atomic.rs")).expect("read src/atomic.rs");
+    let heap_rs =
+        fs::read_to_string(root.join("src/core_types/heap.rs")).expect("read core_types/heap.rs");
+    let heap_api_rs = fs::read_to_string(root.join("src/heap.rs")).expect("read src/heap.rs");
+    let ptr_rs =
+        fs::read_to_string(root.join("src/core_types/ptr.rs")).expect("read core_types/ptr.rs");
+    let scalar_rs = fs::read_to_string(root.join("src/core_types/scalar.rs"))
+        .expect("read core_types/scalar.rs");
+    let page_states_rs = fs::read_to_string(root.join("src/core_types/page_states.rs"))
+        .expect("read core_types/page_states.rs");
+    let validation_extra_rs = fs::read_to_string(root.join("src/core_types/validation_extra.rs"))
+        .expect("read core_types/validation_extra.rs");
     for module in [
         "arena",
         "atomic_wrappers",
@@ -1077,6 +1869,733 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         assert!(
             core_mod.contains(&format!("mod {module};")),
             "core_types should own the {module} semantic wrapper module"
+        );
+    }
+
+    for witness in [
+        "LocalPage",
+        "ForeignPage",
+        "AbandonedPageType",
+        "AbandonedMappedPageType",
+        "OwnedAbandonedPage",
+        "ActivePage",
+        "AvailablePage",
+        "FullPage",
+        "RetiredPage",
+        "DestroyedPage",
+    ] {
+        assert!(
+            page_states_rs.contains(&format!("pub(crate) struct {witness}(PagePtr);")),
+            "{witness} should keep its page pointer field private"
+        );
+        assert!(
+            !page_states_rs.contains(&format!("pub(crate) struct {witness}(pub(crate) PagePtr);")),
+            "{witness} should not expose tuple construction outside page_states"
+        );
+    }
+    assert!(
+        page_states_rs.contains("pub(crate) unsafe fn new_unchecked(page: PagePtr) -> Self")
+            && page_states_rs.contains("pub(crate) fn page(self) -> PagePtr"),
+        "page-state witnesses should expose explicit unchecked constructors and page accessors"
+    );
+    assert!(
+        page_states_rs.contains("pub(crate) struct ThreadHeapLocal(ThreadHeapPtr);")
+            && page_states_rs
+                .contains("pub(crate) unsafe fn new_unchecked(theap: ThreadHeapPtr) -> Self")
+            && page_states_rs.contains("pub(crate) fn ptr(self) -> ThreadHeapPtr")
+            && page_states_rs
+                .contains("pub(crate) fn borrowed(self) -> crate::core_types::ThreadHeapBorrowed")
+            && page_states_rs
+                .contains("pub(crate) unsafe fn state(self) -> crate::core_types::ThreadHeapState")
+            && !page_states_rs
+                .contains("pub(crate) struct ThreadHeapLocal(pub(crate) ThreadHeapPtr);"),
+        "ThreadHeapLocal should keep its thread-heap pointer private behind explicit construction"
+    );
+    assert!(
+        heap_rs.contains("pub(crate) struct ThreadHeapBorrowed(ThreadHeapPtr);")
+            && heap_rs.contains("pub(crate) enum ThreadHeapState")
+            && heap_rs.contains("Uninitialized(ThreadHeapPtr)")
+            && heap_rs.contains("Initialized(ThreadHeapBorrowed)")
+            && heap_rs.contains("Main(ThreadHeapBorrowed)")
+            && heap_rs.contains("Deleted(ThreadHeapPtr)")
+            && heap_rs.contains("pub(crate) unsafe fn new(theap: ThreadHeapPtr) -> Option<Self>")
+            && heap_rs.contains("if unsafe { theap.heap() }.is_some()")
+            && heap_rs.contains("pub(crate) unsafe fn try_local(")
+            && heap_rs.contains("match unsafe { self.state() }")
+            && heap_rs.contains("ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return Err(self),")
+            && heap_rs.contains("pub(crate) unsafe fn state(self) -> ThreadHeapState")
+            && heap_rs.contains("if unsafe { self.tld() }.is_none()")
+            && heap_rs.contains("crate::internal::_mi_is_heap_main(heap.as_ptr())")
+            && heap_rs.contains(
+                "const _: unsafe fn(ThreadHeapPtr) -> ThreadHeapState = ThreadHeapPtr::state;"
+            )
+            && core_mod.contains("ThreadHeapBorrowed")
+            && core_mod.contains("ThreadHeapState")
+            && core_mod.contains("assert_layout!(ThreadHeapBorrowed, ThreadHeapPtr);"),
+        "thread-heap witnesses should encode borrowed/local initialized, main, and deleted states"
+    );
+    assert!(
+        heap_api_rs.contains("HeapPtr")
+            && heap_api_rs.contains("ThreadHeapPtr")
+            && heap_api_rs.contains("unsafe fn mi_heap_theap_typed(heap: Option<HeapPtr>) -> Option<ThreadHeapPtr>")
+            && heap_api_rs.contains("unsafe { mi_heap_theap_typed(HeapPtr::new(heap)) }")
+            && heap_api_rs.contains(".map(ThreadHeapPtr::as_ptr)")
+            && heap_api_rs.contains("ThreadHeapPtr::new(unsafe { _mi_heap_theap(heap) })")
+            && !heap_api_rs.contains("pub unsafe extern \"C\" fn mi_heap_theap(heap: *mut mi_heap_t) -> *mut mi_theap_t {\n    // SAFETY: upheld by the caller contract for this C ABI boundary.\n    unsafe { _mi_heap_theap(heap) }\n}"),
+        "mi_heap_theap should parse the raw ABI pointer once and use HeapPtr/ThreadHeapPtr internally"
+    );
+    assert!(
+        ptr_rs.contains("pub(crate) unsafe fn numa_node(self) -> NumaNode")
+            && ptr_rs.contains("pub(crate) unsafe fn set_numa_node(self, node: NumaNode)")
+            && heap_api_rs.contains("HeapPtr::new(unsafe { mi_heap_main() })")
+            && heap_api_rs.contains("HeapPtr::new(heap)")
+            && heap_api_rs.contains(
+                "unsafe fn mi_heap_set_numa_affinity_typed(heap: HeapPtr, numa_node: crate::core_types::NumaNode)"
+            )
+            && heap_api_rs.contains("heap.set_numa_node(numa_node.normalize(numa_count))")
+            && !heap_api_rs.contains("(*heap).numa_node = numa_node.normalize(numa_count).get();"),
+        "mi_heap_set_numa_affinity should parse the raw ABI pointer once and use HeapPtr/NumaNode internally"
+    );
+    for witness in ["MainHeap", "OwnedHeap", "BorrowedHeap"] {
+        assert!(
+            heap_rs.contains(&format!("pub(crate) struct {witness}(HeapPtr);"))
+                && heap_rs.contains("pub(crate) unsafe fn new_unchecked(heap: HeapPtr) -> Self")
+                && heap_rs.contains("pub(crate) fn ptr(self) -> HeapPtr")
+                && !heap_rs.contains(&format!("pub(crate) struct {witness}(pub(crate) HeapPtr);")),
+            "{witness} should be a live heap wrapper with explicit construction and pointer access"
+        );
+        assert!(
+            core_mod.contains("pub(crate) use heap::")
+                && core_mod.contains(witness)
+                && core_mod.contains(&format!("assert_layout!({witness}, HeapPtr);")),
+            "{witness} should be re-exported and layout-checked"
+        );
+    }
+    assert!(
+        heap_rs.contains("pub(crate) unsafe fn new(heap: HeapPtr) -> Option<Self>")
+            && heap_rs.contains("crate::internal::_mi_is_heap_main(heap.as_ptr())")
+            && heap_rs.contains("const _: unsafe fn(HeapPtr) -> Option<MainHeap> = MainHeap::new;"),
+        "MainHeap should have a checked constructor backed by the runtime main-heap predicate"
+    );
+    assert!(
+        heap_rs.contains("const _: unsafe fn(HeapPtr) -> Option<OwnedHeap> = OwnedHeap::new;")
+            && heap_rs.contains("impl OwnedHeap {\n    /// # Safety\n    /// `heap` must point to initialized heap metadata owned by the current\n    /// delete or destroy path.\n    #[inline(always)]\n    pub(crate) unsafe fn new(heap: HeapPtr) -> Option<Self> {\n        if unsafe { crate::internal::_mi_is_heap_main(heap.as_ptr()) } {\n            None\n        } else {\n            Some(Self(heap))\n        }\n    }"),
+        "OwnedHeap should have a checked constructor that rejects the main heap"
+    );
+    assert!(
+        heap_rs.contains("pub(crate) unsafe fn from_allocation_raw(heap: *mut mi_heap_t) -> Option<Self>")
+            && heap_rs.contains("pub(crate) unsafe fn from_lookup_raw(heap: *mut mi_heap_t) -> Option<Self>")
+            && heap_rs.contains("const _: unsafe fn(*mut mi_heap_t) -> Option<BorrowedHeap> = BorrowedHeap::from_allocation_raw;")
+            && heap_rs.contains("const _: unsafe fn(*mut mi_heap_t) -> Option<BorrowedHeap> = BorrowedHeap::from_lookup_raw;")
+            && heap_rs.matches("HeapPtr::new(heap).map(Self)").count() >= 2,
+        "BorrowedHeap should have checked raw constructors for allocation and lookup contexts"
+    );
+    for witness in ["MainSubproc", "BorrowedSubproc"] {
+        assert!(
+            heap_rs.contains(&format!("pub(crate) struct {witness}(SubprocPtr);"))
+                && heap_rs.contains("pub(crate) fn ptr(self) -> SubprocPtr")
+                && !heap_rs.contains(&format!(
+                    "pub(crate) struct {witness}(pub(crate) SubprocPtr);"
+                ))
+                && core_mod.contains(witness)
+                && core_mod.contains(&format!("assert_layout!({witness}, SubprocPtr);")),
+            "{witness} should be a live subproc wrapper with explicit construction and pointer access"
+        );
+    }
+    assert!(
+        heap_rs.contains(
+            "const _: unsafe fn(SubprocPtr) -> MainSubproc = MainSubproc::new_unchecked;"
+        ) && heap_rs
+            .contains("const _: unsafe fn(SubprocPtr) -> BorrowedSubproc = BorrowedSubproc::new;"),
+        "subproc witness constructors should be compile-time checked"
+    );
+    assert!(
+        ptr_rs.contains("pub(crate) unsafe fn thread_id(self) -> Option<ThreadId>")
+            && ptr_rs
+                .contains("pub(crate) unsafe fn set_thread_id(self, thread_id: Option<ThreadId>)")
+            && ptr_rs.contains("pub(crate) unsafe fn subproc(self) -> Option<SubprocPtr>")
+            && ptr_rs
+                .contains("pub(crate) unsafe fn set_subproc(self, subproc: Option<SubprocPtr>)")
+            && ptr_rs.contains("pub(crate) unsafe fn stats(self) -> Option<*mut mi_stats_t>")
+            && ptr_rs.contains("self.subproc().map(|subproc| subproc.stats())")
+            && ptr_rs.contains(
+                "pub(crate) unsafe fn arena_count_cell(self) -> Option<AtomicUsizeField>"
+            )
+            && ptr_rs.contains(
+                "pub(crate) unsafe fn arena(self, index: ArenaIndex) -> Option<ArenaPtr>"
+            )
+            && ptr_rs.contains(
+                "pub(crate) unsafe fn set_arena(self, index: ArenaIndex, arena: Option<ArenaPtr>)"
+            )
+            && ptr_rs.contains("pub(crate) unsafe fn memid_ptr(self) -> *mut mi_memid_t"),
+        "TldPtr should expose typed thread id, subproc, stats, memid, and arena-data accessors"
+    );
+    assert!(
+        scalar_rs.contains("pub(crate) struct SubprocSeq(pub(crate) usize);")
+            && scalar_rs.contains("pub(crate) struct ArenaCount(pub(crate) usize);")
+            && scalar_rs.contains("pub(crate) struct ThreadCount(pub(crate) usize);")
+            && scalar_rs.contains("pub(crate) struct HeapCount(pub(crate) usize);")
+            && core_mod.contains("ArenaCount")
+            && core_mod.contains("ThreadCount")
+            && core_mod.contains("HeapCount")
+            && ptr_rs.contains(
+                "pub(crate) unsafe fn arena_count(self, order: MemoryOrder) -> ArenaCount"
+            )
+            && ptr_rs.contains(
+                "pub(crate) unsafe fn set_arena_count(self, count: ArenaCount, order: MemoryOrder)"
+            )
+            && ptr_rs.contains(
+                "pub(crate) unsafe fn thread_count(self, order: MemoryOrder) -> ThreadCount"
+            )
+            && ptr_rs.contains(
+                "pub(crate) unsafe fn thread_total_count(self, order: MemoryOrder) -> ThreadCount"
+            )
+            && ptr_rs
+                .contains("pub(crate) unsafe fn heap_count(self, order: MemoryOrder) -> HeapCount")
+            && ptr_rs.contains(
+                "pub(crate) unsafe fn heap_total_count(self, order: MemoryOrder) -> HeapCount"
+            ),
+        "subproc sequence and count fields should have scalar wrappers plus typed SubprocPtr accessors"
+    );
+    let heap_delete_rs = fs::read_to_string(root.join("src/heap.rs")).expect("read heap.rs");
+    let heap_delete_body = heap_delete_rs
+        .split("pub unsafe extern \"C\" fn mi_heap_delete(heap: *mut mi_heap_t)")
+        .nth(1)
+        .expect("find mi_heap_delete body");
+    let owned_reject = heap_delete_body
+        .find("let Some(heap) = (unsafe { OwnedHeap::new(heap) }) else")
+        .expect("mi_heap_delete should reject the main heap through OwnedHeap");
+    let delete_typed = heap_delete_body
+        .find("unsafe { mi_heap_delete_typed(heap) };")
+        .expect("mi_heap_delete should enter the typed delete path after validation");
+    assert!(
+        owned_reject < delete_typed,
+        "mi_heap_delete must reject MainHeap before entering the OwnedHeap delete path"
+    );
+    let heap_delete_typed_body = heap_delete_rs
+        .split("unsafe fn mi_heap_delete_typed(heap: OwnedHeap)")
+        .nth(1)
+        .expect("find mi_heap_delete_typed body");
+    assert!(
+        heap_delete_typed_body.contains("mi_heap_free_theaps(heap);")
+            && heap_delete_typed_body.contains("_mi_heap_move_pages(heap_raw, mi_heap_main());")
+            && heap_delete_typed_body.contains("mi_heap_free(heap);"),
+        "mi_heap_delete_typed should free thread heaps through OwnedHeap, move pages, and free OwnedHeap"
+    );
+    assert!(
+        heap_delete_rs.contains("unsafe fn mi_heap_delete_typed(heap: OwnedHeap)")
+            && heap_delete_rs.contains("unsafe fn mi_heap_free_theaps(heap: OwnedHeap)")
+            && heap_delete_rs.contains("unsafe fn mi_heap_free(heap: OwnedHeap)")
+            && !heap_delete_rs.contains("unsafe fn mi_heap_delete_typed(heap: MainHeap)")
+            && !heap_delete_rs.contains("unsafe fn mi_heap_free(heap: MainHeap)"),
+        "main heaps should have no typed entry point into owned deletion helpers"
+    );
+    let heap_destroy_body = heap_delete_rs
+        .split("pub unsafe extern \"C\" fn mi_heap_destroy(heap: *mut mi_heap_t)")
+        .nth(1)
+        .expect("find mi_heap_destroy body");
+    let destroy_main_reject = heap_destroy_body
+        .find("let Some(heap) = (unsafe { OwnedHeap::new(heap) }) else")
+        .expect("mi_heap_destroy should reject the main heap through OwnedHeap");
+    let force_destroy = heap_destroy_body
+        .find("mi_heap_force_destroy_owned(heap)")
+        .expect("mi_heap_destroy should force-destroy an OwnedHeap after validation");
+    assert!(
+        destroy_main_reject < force_destroy,
+        "mi_heap_destroy must reject MainHeap before the owned destroy path"
+    );
+    assert!(
+        heap_delete_rs.contains("unsafe fn mi_heap_free(heap: OwnedHeap)")
+            && heap_delete_rs.contains("unsafe fn mi_heap_force_destroy_main(heap: MainHeap)")
+            && heap_delete_rs.contains("unsafe fn mi_heap_force_destroy_owned(heap: OwnedHeap)")
+            && heap_delete_rs.contains("if let Some(heap) = MainHeap::new(heap)")
+            && heap_delete_rs.contains("} else if let Some(heap) = OwnedHeap::new(heap)"),
+        "heap deletion helpers should use OwnedHeap/MainHeap typed teardown witnesses"
+    );
+    let heap_check_owned_body = heap_delete_rs
+        .split("pub unsafe extern \"C\" fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_void) -> bool")
+        .nth(1)
+        .expect("find mi_heap_check_owned body");
+    assert!(
+        heap_check_owned_body.contains("BorrowedHeap::from_lookup_raw(heap)")
+            && heap_check_owned_body.contains("unsafe { mi_heap_check_owned_typed(heap, p) }")
+            && heap_delete_rs.contains(
+                "unsafe fn mi_heap_check_owned_typed(heap: BorrowedHeap, p: *const c_void) -> bool"
+            )
+            && heap_delete_rs.contains("OwnedHeap::new(heap.ptr())")
+            && heap_delete_rs.contains(
+                "unsafe fn mi_heap_check_owned_owned(heap: OwnedHeap, p: *const c_void) -> bool"
+            )
+            && heap_delete_rs.contains(
+                "unsafe fn mi_heap_check_owned_borrowed(heap: BorrowedHeap, p: *const c_void) -> bool"
+            ),
+        "mi_heap_check_owned should parse heap arguments through BorrowedHeap and route non-main checks through OwnedHeap"
+    );
+    let page_queues_rs = fs::read_to_string(root.join("src/core_types/page_queues.rs"))
+        .expect("read page_queues.rs");
+    for witness in ["NormalPageQueue", "HugePageQueue", "FullPageQueue"] {
+        assert!(
+            page_queues_rs.contains(&format!("pub(crate) struct {witness}(PageQueuePtr);")),
+            "{witness} should keep its queue pointer field private"
+        );
+        assert!(
+            !page_queues_rs.contains(&format!(
+                "pub(crate) struct {witness}(pub(crate) PageQueuePtr);"
+            )),
+            "{witness} should not expose tuple construction outside page_queues"
+        );
+    }
+    assert!(
+        page_queues_rs.contains("pub(crate) unsafe fn new_unchecked(ptr: PageQueuePtr) -> Self")
+            && page_queues_rs
+                .contains("pub(crate) unsafe fn new(ptr: PageQueuePtr) -> Option<Self>")
+            && page_queues_rs.contains("pub(crate) fn ptr(self) -> PageQueuePtr"),
+        "page queue witnesses should expose checked/unchecked constructors and queue accessors"
+    );
+    assert!(
+        page_queues_rs.contains("block_size.get() <= crate::types::MI_LARGE_MAX_OBJ_SIZE")
+            && page_queues_rs
+                .contains("crate::types::MI_LARGE_MAX_OBJ_SIZE + size_of::<usize>()")
+            && page_queues_rs
+                .contains("crate::types::MI_LARGE_MAX_OBJ_SIZE + (2 * size_of::<usize>())")
+            && page_queues_rs
+                .contains("const _: unsafe fn(PageQueuePtr) -> Option<NormalPageQueue> = NormalPageQueue::new;")
+            && page_queues_rs
+                .contains("const _: unsafe fn(PageQueuePtr) -> Option<HugePageQueue> = HugePageQueue::new;")
+            && page_queues_rs
+                .contains("const _: unsafe fn(PageQueuePtr) -> Option<FullPageQueue> = FullPageQueue::new;"),
+        "page queue checked constructors should inspect normal/huge/full queue block-size identity"
+    );
+    assert!(
+        page_queues_rs.contains("impl QueuedPage<NormalQueue>")
+            && page_queues_rs.contains(
+                "pub(crate) unsafe fn new(\n        page: crate::core_types::ActivePage,\n        queue: NormalPageQueue,"
+            )
+            && page_queues_rs.contains("impl QueuedPage<FullQueue>")
+            && page_queues_rs.contains(
+                "pub(crate) unsafe fn new(\n        page: crate::core_types::FullPage,\n        queue: FullPageQueue,"
+            )
+            && page_queues_rs.contains("crate::page::mi_page_queue_contains(queue.ptr().as_ptr(), page.page().as_ptr())")
+            && page_queues_rs.contains("queue: PageQueue::normal(queue)")
+            && page_queues_rs.contains("queue: PageQueue::full(queue)"),
+        "queued-page witnesses should be constructed only after matching page/queue witnesses and linked-list membership checks"
+    );
+    assert!(
+        page_queues_rs.contains("pub(crate) struct PageQueue<K> {\n    ptr: PageQueuePtr,")
+            && !page_queues_rs.contains("pub(crate) ptr: PageQueuePtr")
+            && page_queues_rs.contains("impl PageQueue<NormalQueue>")
+            && page_queues_rs.contains("impl PageQueue<FullQueue>")
+            && page_queues_rs.contains("pub(crate) fn normal(queue: NormalPageQueue) -> Self")
+            && page_queues_rs.contains("pub(crate) fn full(queue: FullPageQueue) -> Self"),
+        "generic PageQueue should keep its raw field private and expose only kind-specific constructors"
+    );
+    let memid_rs = fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read memid.rs");
+    assert!(
+        memid_rs.contains("raw: crate::internal::mi_memid_t,")
+            && !memid_rs.contains("pub(crate) raw: crate::internal::mi_memid_t,")
+            && memid_rs.contains("pub(crate) const fn into_raw(self)")
+            && memid_rs.contains("pub(crate) const fn as_raw(&self)"),
+        "MemId should keep raw mi_memid_t private behind explicit raw forwarding accessors"
+    );
+    assert!(
+        memid_rs.contains("pub(crate) enum MemIdView {")
+            && memid_rs.contains("Unknown(MemKindCode),")
+            && memid_rs
+                .contains("pub(crate) fn view(raw: crate::internal::mi_memid_t) -> MemIdView")
+            && memid_rs.contains("let os = unsafe { raw.mem.os };")
+            && memid_rs.contains("let m = unsafe { raw.mem.meta };")
+            && memid_rs.contains("let a = unsafe { raw.mem.arena };")
+            && memid_rs.contains("return MemIdView::Unknown(code);")
+            && memid_rs
+                .contains("fn memid_view_returns_unknown_for_null_meta_or_arena_union_pointers()")
+            && memid_rs.contains("fn memid_view_returns_unknown_for_invalid_arena_slice_range()")
+            && memid_rs.contains("MemKind::from(MemKindCode(99))")
+            && memid_rs.contains("MemKind::Unknown(MemKindCode(99))")
+            && memid_rs.contains("MemKind::Unknown(c) => MemIdView::Unknown(c),"),
+        "MemId::view should own union-arm reads and map unknown or corrupt discriminants to Unknown"
+    );
+    let page_core_rs =
+        fs::read_to_string(root.join("src/core_types/page.rs")).expect("read core_types/page.rs");
+    let atomic_wrappers_rs = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
+        .expect("read atomic_wrappers.rs");
+    let strict_check_rs =
+        fs::read_to_string(root.join("scripts/check-strict-types.py")).expect("read checker");
+    assert!(
+        page_core_rs.contains("pub(crate) struct PageFlags(usize);")
+            && page_core_rs.contains("pub(crate) const fn new(bits: usize) -> Option<Self>")
+            && page_core_rs.contains("if (bits & !MI_PAGE_FLAG_MASK) == 0")
+            && page_core_rs.contains("pub(crate) struct PageThreadId(usize);")
+            && page_core_rs.contains("pub(crate) fn from_parts(owner: PageOwnerId, flags: PageFlags) -> Self")
+            && page_core_rs.contains("Self(tid_val | flags.bits())")
+            && page_core_rs.contains("pub(crate) fn flags(self) -> PageFlags")
+            && page_core_rs.contains("pub(crate) fn owner_bits(self) -> usize")
+            && page_core_rs.contains("self.0 & !MI_PAGE_FLAG_MASK")
+            && page_core_rs.contains("pub(crate) fn classify_free_path(self, current: ThreadId) -> FreePathKind")
+            && atomic_wrappers_rs.contains("pub(crate) struct AtomicPageThreadId(pub(crate) AtomicUsizeField);")
+            && atomic_wrappers_rs.contains("pub(crate) unsafe fn load(self) -> PageThreadId")
+            && atomic_wrappers_rs.contains("pub(crate) unsafe fn set_flags(self, flags: PageFlags, set: bool) -> PageThreadId")
+            && atomic_wrappers_rs.contains("unsafe { self.0.fetch_or(flags.bits(), Ordering::Relaxed) }")
+            && atomic_wrappers_rs.contains("unsafe { self.0.fetch_and(!flags.bits(), Ordering::Relaxed) }")
+            && atomic_wrappers_rs.contains("pub(crate) unsafe fn store_owner(self, owner: PageOwnerId)")
+            && atomic_wrappers_rs.contains("pub(crate) unsafe fn compare_exchange_owner(\n        self,\n        expected: &mut PageThreadId,")
+            && strict_check_rs.contains("ALLOWED_XTHREAD_ID = {")
+            && strict_check_rs.contains("\"src/core_types/page.rs\"")
+            && strict_check_rs.contains("\"src/core_types/atomic_wrappers.rs\"")
+            && strict_check_rs.contains("kind=\"xthread-id-bitop\"")
+            && strict_check_rs.contains("message=\"direct xthread_id bit operation outside typed helpers\""),
+        "xthread_id bit operations should be isolated to PageThreadId/PageFlags/AtomicPageThreadId and enforced by the strict checker"
+    );
+    let freelist_rs = fs::read_to_string(root.join("src/core_types/freelist.rs"))
+        .expect("read core_types/freelist.rs");
+    assert!(
+        freelist_rs.contains("pub(crate) struct ThreadFreeWord(pub(crate) usize);")
+            && freelist_rs.contains("pub(crate) const OWNED_BIT: usize = 1;")
+            && freelist_rs.contains("let ptr_val = self.0 & !Self::OWNED_BIT;")
+            && freelist_rs.contains("pub(crate) const fn is_owned(self) -> bool")
+            && freelist_rs.contains("(self.0 & Self::OWNED_BIT) != 0")
+            && freelist_rs.contains(
+                "pub(crate) fn from_parts(head: Option<BlockPtr>, owned: ThreadFreeOwner) -> Self"
+            )
+            && freelist_rs.contains("crate::mi_assert_internal!((val & Self::OWNED_BIT) == 0);")
+            && freelist_rs.contains("Self(ptr_val | bit)")
+            && atomic_wrappers_rs
+                .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
+            && atomic_wrappers_rs.contains("pub(crate) fn load_relaxed(self) -> ThreadFreeWord")
+            && atomic_wrappers_rs.contains("pub(crate) fn push_remote_acq_rel(")
+            && atomic_wrappers_rs.contains(
+                "pub(crate) unsafe fn release_acq_rel(self, expected: &mut ThreadFreeWord) -> bool"
+            )
+            && atomic_wrappers_rs
+                .contains("pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList")
+            && atomic_wrappers_rs.contains("pub(crate) unsafe fn claim_acq_rel(self) -> bool")
+            && strict_check_rs.contains("ALLOWED_XTHREAD_FREE = {")
+            && strict_check_rs.contains("\"src/core_types/freelist.rs\"")
+            && strict_check_rs.contains("\"src/core_types/atomic_wrappers.rs\"")
+            && strict_check_rs.contains("kind=\"xthread-free-bitop\"")
+            && strict_check_rs
+                .contains("message=\"direct xthread_free bit operation outside typed helpers\""),
+        "xthread_free bit operations should be isolated to ThreadFreeWord/AtomicThreadFree and enforced by the strict checker"
+    );
+    let ptr_core_rs =
+        fs::read_to_string(root.join("src/core_types/ptr.rs")).expect("read core_types/ptr.rs");
+    let core_types_mod_rs =
+        fs::read_to_string(root.join("src/core_types/mod.rs")).expect("read core_types/mod.rs");
+    let freelist_wrappers_rs = fs::read_to_string(root.join("src/core_types/freelist_wrappers.rs"))
+        .expect("read core_types/freelist_wrappers.rs");
+    let internal_rs =
+        fs::read_to_string(root.join("src/internal.rs")).expect("read src/internal.rs");
+    let allowlist_rs =
+        fs::read_to_string(root.join("strict-type-allowlist.txt")).expect("read allowlist");
+    assert!(
+        ptr_core_rs.contains("#[repr(transparent)]\n        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]\n        pub(crate) struct $name(NonNull<$raw_type>);")
+            && ptr_core_rs.contains("#[inline(always)]\n            pub(crate) fn new(ptr: *mut $raw_type) -> Option<Self>")
+            && ptr_core_rs.contains("#[inline(always)]\n            pub(crate) unsafe fn new_unchecked(ptr: *mut $raw_type) -> Self")
+            && ptr_core_rs.contains("#[inline(always)]\n            pub(crate) fn as_ptr(self) -> *mut $raw_type")
+            && ptr_core_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]\npub(crate) struct PageConstPtr(NonNull<mi_page_t>);")
+            && page_states_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct LocalPage(PagePtr);")
+            && page_states_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct OwnedAbandonedPage(PagePtr);")
+            && page_queues_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct NormalPageQueue(PageQueuePtr);")
+            && page_queues_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct FullPageQueue(PageQueuePtr);")
+            && validation_extra_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct FreeBlock(BlockPtr);")
+            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct AvailableFreeList(pub(crate) Option<BlockPtr>);")
+            && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct LocalFreeList(pub(crate) Option<BlockPtr>);")
+            && core_types_mod_rs.contains("fn pointer_wrappers_match_nonnull_layout()")
+            && core_types_mod_rs.contains("fn optional_pointer_wrappers_are_pointer_sized()")
+            && core_types_mod_rs.contains("fn witness_wrappers_match_pointer_layout()")
+            && core_types_mod_rs.contains("fn packed_and_atomic_wrappers_match_raw_layout()"),
+        "hot strict-type wrappers should stay transparent, copyable where they carry copyable fast-path witnesses, inlineable, and covered by layout/niche tests"
+    );
+    assert!(
+        freelist_wrappers_rs.contains("pub(crate) struct EncodedPtr<T> {")
+            && freelist_wrappers_rs.contains("word: EncodedWord,")
+            && freelist_wrappers_rs.contains(
+                "pub(crate) unsafe fn read_word_from_raw(block: *const mi_block_t) -> Self"
+            )
+            && freelist_wrappers_rs
+                .contains("word: EncodedWord::new(unsafe { (*block.cast_mut()).next })")
+            && freelist_wrappers_rs
+                .contains("pub(crate) unsafe fn write_word_to_raw(self, block: BlockPtr)")
+            && freelist_wrappers_rs
+                .contains("unsafe { (*block.as_ptr()).next = self.word.get() };")
+            && freelist_wrappers_rs
+                .contains("unsafe fn read_from_raw(block: *const mi_block_t) -> Self")
+            && freelist_wrappers_rs.contains("Self(unsafe { (*block.cast_mut()).next })")
+            && freelist_wrappers_rs.contains("unsafe fn write_to(self, block: BlockPtr)")
+            && freelist_wrappers_rs.contains("unsafe { (*block.as_ptr()).next = self.0 };")
+            && freelist_wrappers_rs.contains("pub(crate) enum BlockLink {")
+            && freelist_wrappers_rs.contains("FreeList(EncodedPtr<crate::types::mi_block_t>),")
+            && freelist_wrappers_rs.contains("Guarded(GuardedBlockTag),")
+            && freelist_wrappers_rs
+                .contains("pub(crate) unsafe fn read_from_raw(block: *const mi_block_t) -> Self")
+            && freelist_wrappers_rs
+                .contains("Self::FreeList(unsafe { EncodedPtr::read_word_from_raw(block) })")
+            && freelist_wrappers_rs
+                .contains("pub(crate) unsafe fn write_to(self, block: BlockPtr)")
+            && freelist_wrappers_rs
+                .contains("Self::FreeList(link) => unsafe { link.write_word_to_raw(block) }")
+            && freelist_wrappers_rs
+                .contains("Self::Guarded(tag) => unsafe { tag.write_to(block) }")
+            && freelist_wrappers_rs
+                .contains("pub(crate) struct AvailableFreeList(pub(crate) Option<BlockPtr>);")
+            && freelist_wrappers_rs
+                .contains("pub(crate) struct LocalFreeList(pub(crate) Option<BlockPtr>);")
+            && freelist_wrappers_rs
+                .contains("let next_raw = unsafe { mi_block_next(raw_page, head_raw) };")
+            && freelist_wrappers_rs
+                .contains("unsafe { mi_block_set_next(raw_page, block_raw, prev_raw) };")
+            && ptr_core_rs
+                .contains("pub(crate) unsafe fn encoded_link(self) -> EncodedPtr<mi_block_t>")
+            && ptr_core_rs.contains("unsafe { EncodedPtr::read_word_from_raw(self.as_ptr()) }")
+            && ptr_core_rs.contains("pub(crate) unsafe fn write_link(self, link: BlockLink)")
+            && ptr_core_rs.contains("unsafe { link.write_to(self) };")
+            && ptr_core_rs
+                .contains("pub(crate) unsafe fn next(self, page: PagePtr) -> Option<BlockPtr>")
+            && ptr_core_rs.contains(
+                "pub(crate) unsafe fn set_next(self, page: PagePtr, next: Option<BlockPtr>)"
+            )
+            && ptr_core_rs.contains("unsafe { self.write_link(BlockLink::FreeList(link)) };")
+            && strict_check_rs.contains("ALLOWED_BLOCK_NEXT = {")
+            && strict_check_rs.contains("\"src/core_types/freelist_wrappers.rs\"")
+            && strict_check_rs.contains("kind=\"block-next-access\"")
+            && strict_check_rs
+                .contains("message=\"direct mi_block_s.next access outside free-list wrappers\""),
+        "mi_block_s.next reads/writes should stay behind EncodedPtr, BlockLink, BlockPtr, or free-list wrappers and strict checker coverage"
+    );
+    assert!(
+        atomic_wrappers_rs.contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")
+            && atomic_wrappers_rs
+                .contains("pub(crate) struct AtomicI64Field(pub(crate) *mut i64);")
+            && atomic_wrappers_rs
+                .contains("pub(crate) struct AtomicPtrField<T>(pub(crate) *mut *mut T);")
+            && atomic_wrappers_rs
+                .contains("let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };")
+            && atomic_wrappers_rs.contains("let atomic = unsafe { &*self.0.cast::<AtomicI64>() };")
+            && atomic_wrappers_rs
+                .contains("let atomic = unsafe { &*self.0.cast::<AtomicPtr<T>>() };")
+            && atomic_wrappers_rs
+                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize")
+            && atomic_wrappers_rs
+                .contains("pub(crate) unsafe fn store(self, value: usize, order: MemoryOrder)")
+            && atomic_wrappers_rs
+                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> i64")
+            && atomic_wrappers_rs
+                .contains("pub(crate) unsafe fn store(self, value: i64, order: MemoryOrder)")
+            && atomic_wrappers_rs
+                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T")
+            && atomic_wrappers_rs
+                .contains("pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder)")
+            && strict_check_rs.contains("ALLOWED_ATOMIC_CAST = {")
+            && strict_check_rs.contains("\"src/core_types/atomic_wrappers.rs\"")
+            && strict_check_rs.contains("kind=\"atomic-cast\"")
+            && strict_check_rs
+                .contains("message=\"pointer-to-atomic cast outside atomic field wrappers\"")
+            && strict_check_rs.contains("ATOMIC_CAST_RE = re.compile")
+            && !strict_check_rs.contains("\"src/atomic.rs\",\n}")
+            && strict_check_rs.contains("ALLOWLIST = ROOT / \"strict-type-allowlist.txt\""),
+        "pointer-to-atomic casts for allocator metadata should be centralized in typed atomic field wrappers and guarded by the strict checker"
+    );
+    assert!(
+        atomic_rs.contains("pub enum mi_memory_order_e {")
+            && atomic_rs.contains("pub type mi_memory_order = mi_memory_order_e;")
+            && atomic_rs.contains("fn load_order(order: mi_memory_order_e) -> Ordering")
+            && atomic_rs.contains("fn store_order(order: mi_memory_order_e) -> Ordering")
+            && atomic_rs.contains("fn rmw_order(order: mi_memory_order_e) -> Ordering")
+            && atomic_rs.contains("fn cas_failure_order(order: mi_memory_order_e) -> Ordering")
+            && atomic_rs.contains("pub unsafe extern \"C\" fn mi_atomic_load_explicit(p: *const usize, mo: mi_memory_order_e) -> usize")
+            && atomic_rs.contains("pub unsafe extern \"C\" fn mi_atomic_store_explicit(p: *mut usize, x: usize, mo: mi_memory_order_e)")
+            && atomic_wrappers_rs.contains("pub(crate) type MemoryOrder = Ordering;")
+            && atomic_wrappers_rs
+                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize")
+            && ptr_core_rs
+                .contains("pub(crate) unsafe fn arena_count(self, order: MemoryOrder) -> ArenaCount")
+            && ptr_core_rs.contains(
+                "pub(crate) unsafe fn set_arena_count(self, count: ArenaCount, order: MemoryOrder)"
+            )
+            && ptr_core_rs
+                .contains("pub(crate) unsafe fn heap_count(self, order: MemoryOrder) -> HeapCount"),
+        "C-compatible mi_memory_order_e should stay in the atomic facade while internal wrappers use MemoryOrder/Ordering"
+    );
+    assert!(
+        ptr_core_rs.contains("pub(crate) fn ptr_exposed_addr<T>(ptr: *const T) -> usize")
+            && ptr_core_rs.contains("ptr as usize")
+            && ptr_core_rs.contains("pub(crate) fn ptr_addr_diff<T, U>(")
+            && ptr_core_rs.contains("ptr_exposed_addr(hi).wrapping_sub(ptr_exposed_addr(lo))")
+            && ptr_core_rs.contains("pub(crate) fn ptr_align_up<T>(")
+            && ptr_core_rs.contains("crate::internal::_mi_align_up(ptr_exposed_addr(ptr), alignment) as *mut c_void")
+            && ptr_core_rs.contains("pub(crate) fn ptr_align_down<T>(")
+            && ptr_core_rs.contains("crate::internal::_mi_align_down(ptr_exposed_addr(ptr), alignment) as *mut c_void")
+            && freelist_rs.contains("pub(crate) struct ThreadFreeWord(pub(crate) usize);")
+            && freelist_rs.contains("Some(unsafe { BlockPtr::new_unchecked(ptr_val as *mut crate::types::mi_block_t) })")
+            && freelist_rs.contains("let val = ptr.as_ptr() as usize;")
+            && freelist_wrappers_rs.contains("pub(crate) struct EncodedWord(usize);")
+            && freelist_wrappers_rs.contains("word: EncodedWord::new(block as usize)")
+            && freelist_wrappers_rs.contains("self.word.get() as *mut mi_block_t")
+            && internal_rs.contains("pub(crate) fn mi_ptr_decode(")
+            && internal_rs
+                .contains("let p = (mi_rotr(x.get().wrapping_sub(keys[0]), keys[0]) ^ keys[1]) as *mut c_void;")
+            && internal_rs.contains("pub(crate) fn mi_ptr_encode(")
+            && internal_rs.contains("null as usize")
+            && internal_rs.contains("p as usize")
+            && strict_check_rs.contains("PTR_USIZE_RE = re.compile")
+            && strict_check_rs.contains("ALLOWED_PTR_USIZE = {")
+            && strict_check_rs.contains("\"src/core_types/ptr.rs\"")
+            && strict_check_rs.contains("kind=\"pointer-usize-roundtrip\"")
+            && strict_check_rs.contains("domain=\"provenance\"")
+            && strict_check_rs.contains("message=\"pointer/integer round trip outside typed provenance helpers\"")
+            && allowlist_rs.contains("pointer-usize-roundtrip|src/core_types/freelist_wrappers.rs|*|encoded-pointer|")
+            && allowlist_rs.contains("pointer-usize-roundtrip|src/internal.rs|*|packed-pointer|")
+            && allowlist_rs.contains("pointer-usize-roundtrip|src/alloc_aligned.rs|*|alignment/provenance|")
+            && allowlist_rs.contains("pointer-usize-roundtrip|src/alloc.rs|*|padding/provenance|")
+            && allowlist_rs.contains("pointer-usize-roundtrip|src/free.rs|*|validation|")
+            && allowlist_rs.contains("pointer-usize-roundtrip|src/os.rs|*|os-memory|"),
+        "pointer-to-integer round trips should stay behind typed packed-pointer/provenance helpers or explicit strict-type allowlist boundaries"
+    );
+    assert!(
+        strict_check_rs.contains("METADATA_REF_RE = re.compile")
+            && strict_check_rs.contains("kind=\"metadata-reference\"")
+            && strict_check_rs.contains("domain=\"metadata\"")
+            && strict_check_rs
+                .contains("message=\"broad raw metadata reference outside typed field helpers\"")
+            && allowlist_rs.contains("metadata-reference|src/free.rs|*|mi_page_t|")
+            && allowlist_rs.contains("metadata-reference|src/stats.rs|*|mi_heap_t|")
+            && allowlist_rs
+                .contains("metadata-reference|src/core_types/atomic_wrappers.rs|*|atomic-field|")
+            && ptr_core_rs.contains("let raw = self.as_ptr();")
+            && ptr_core_rs.contains("ptr::read(ptr::addr_of!((*raw).block_size))")
+            && ptr_core_rs
+                .contains("ptr::write(ptr::addr_of_mut!((*raw).block_size), block_size.get())")
+            && ptr_core_rs
+                .contains("AvailableFreeList::from_raw(ptr::read(ptr::addr_of!((*raw).free)))")
+            && ptr_core_rs.contains("ptr::write(ptr::addr_of_mut!((*raw).free), head)")
+            && ptr_core_rs
+                .contains("LocalFreeList::from_raw(ptr::read(ptr::addr_of!((*raw).local_free)))")
+            && ptr_core_rs.contains("ptr::write(ptr::addr_of_mut!((*raw).local_free), head)")
+            && ptr_core_rs
+                .contains("pub(crate) unsafe fn thread_id_cell(self) -> AtomicPageThreadId")
+            && ptr_core_rs
+                .contains("pub(crate) unsafe fn thread_free_cell(self) -> AtomicThreadFree")
+            && ptr_core_rs
+                .contains("pub(crate) unsafe fn heap_cell(self) -> AtomicPtrField<mi_heap_t>")
+            && ptr_core_rs
+                .contains("pub(crate) unsafe fn arena_count_cell(self) -> AtomicUsizeField")
+            && ptr_core_rs
+                .contains("pub(crate) unsafe fn heap_count_cell(self) -> AtomicUsizeField"),
+        "aliasable allocator metadata should be accessed through pointer wrapper field helpers and guarded against broad Rust references"
+    );
+    let callbacks_rs = fs::read_to_string(root.join("src/core_types/callbacks.rs"))
+        .expect("read core_types/callbacks.rs");
+    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
+    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
+    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
+    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
+    let arena_rs = fs::read_to_string(root.join("src/arena.rs")).expect("read src/arena.rs");
+    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
+    let threadlocal_rs =
+        fs::read_to_string(root.join("src/threadlocal.rs")).expect("read src/threadlocal.rs");
+    assert!(
+        callbacks_rs.contains("pub(crate) struct CallbackArg(*mut c_void);")
+            && callbacks_rs.contains("callback_arg_wrapper!(DeferredFreeCallbackArg);")
+            && callbacks_rs.contains("callback_arg_wrapper!(OutputCallbackArg);")
+            && callbacks_rs.contains("callback_arg_wrapper!(ErrorCallbackArg);")
+            && callbacks_rs.contains("callback_arg_wrapper!(HeapVisitCallbackArg);")
+            && callbacks_rs.contains("callback_arg_wrapper!(BlockVisitCallbackArg);")
+            && callbacks_rs.contains("callback_arg_wrapper!(ThreadLocalClaimCallbackArg);")
+            && callbacks_rs.contains(
+                "optional_callback_wrapper!(DeferredFreeCallback, mi_deferred_free_fun);"
+            )
+            && callbacks_rs.contains("optional_callback_wrapper!(OutputCallback, mi_output_fun);")
+            && callbacks_rs.contains("optional_callback_wrapper!(ErrorCallback, mi_error_fun);")
+            && callbacks_rs
+                .contains("optional_callback_wrapper!(HeapVisitCallback, mi_heap_visit_fun);")
+            && callbacks_rs
+                .contains("optional_callback_wrapper!(BlockVisitCallback, mi_block_visit_fun);")
+            && callbacks_rs.contains("pub(crate) struct ThreadLocalClaimCallback(mi_claim_fun_t);")
+            && core_mod.contains("DeferredFreeCallback")
+            && core_mod.contains("OutputCallback")
+            && core_mod.contains("ErrorCallback")
+            && core_mod.contains("HeapVisitCallback")
+            && core_mod.contains("BlockVisitCallback")
+            && core_mod.contains("ThreadLocalClaimCallback")
+            && core_mod.contains("DeferredFreeCallbackArg")
+            && core_mod.contains("OutputCallbackArg")
+            && core_mod.contains("ErrorCallbackArg")
+            && core_mod.contains("HeapVisitCallbackArg")
+            && core_mod.contains("BlockVisitCallbackArg")
+            && core_mod.contains("ThreadLocalClaimCallbackArg")
+            && types_rs.contains("pub type mi_output_fun = unsafe extern \"C\" fn(")
+            && types_rs.contains("pub type mi_error_fun = unsafe extern \"C\" fn(")
+            && types_rs.contains("pub type mi_deferred_free_fun = unsafe extern \"C\" fn(")
+            && types_rs.contains("pub type mi_heap_visit_fun = unsafe extern \"C\" fn(")
+            && types_rs.contains("pub type mi_block_visit_fun = unsafe extern \"C\" fn(")
+            && types_rs.contains("pub type mi_commit_fun_t = unsafe extern \"C\" fn(")
+            && types_rs.contains("pub type mi_claim_fun_t =\n    unsafe extern \"C\" fn(")
+            && abi_rs.contains("out: Option<mi_output_fun>, arg: *mut c_void")
+            && abi_rs.contains("fun: Option<mi_error_fun>, arg: *mut c_void")
+            && abi_rs.contains("deferred_free: Option<mi_deferred_free_fun>, arg: *mut c_void")
+            && abi_rs.contains("visitor: Option<mi_block_visit_fun>")
+            && abi_rs.contains("visitor: Option<mi_heap_visit_fun>")
+            && !types_rs.contains("CallbackArg")
+            && !abi_rs.contains("CallbackArg")
+            && page_rs.contains(
+                "let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);"
+            )
+            && page_rs
+                .contains("let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);")
+            && options_rs.contains(
+                "fn mi_out_get_default(parg: Option<&mut OutputCallbackArg>) -> OutputCallback"
+            )
+            && options_rs.contains("let arg = OutputCallbackArg::from_raw(arg);")
+            && options_rs.contains(
+                "let arg = ErrorCallbackArg::from_raw(mi_error_arg.load(Ordering::Acquire));"
+            )
+            && arena_rs.contains("visitor: BlockVisitCallback,")
+            && arena_rs.contains("arg: BlockVisitCallbackArg,")
+            && arena_rs.contains("BlockVisitCallback::new(Some(visitor))")
+            && arena_rs.contains("BlockVisitCallbackArg::from_raw(arg)")
+            && init_rs.contains("let visitor = HeapVisitCallback::new(visitor);")
+            && init_rs.contains("let arg = HeapVisitCallbackArg::from_raw(arg);")
+            && threadlocal_rs.contains("ThreadLocalClaimCallback::new(mi_thread_local_claim_fun)"),
+        "callback function and context pointers should be typed inside allocator internals while raw callback typedefs stay at C ABI boundaries"
+    );
+    let padding_rs =
+        fs::read_to_string(root.join("src/core_types/padding.rs")).expect("read padding.rs");
+    assert!(
+        padding_rs.contains("pub(crate) struct PaddingCanary(u32);")
+            && padding_rs.contains("pub(crate) struct PaddingDelta(u32);")
+            && !padding_rs.contains("pub(crate) struct PaddingCanary(pub(crate) u32);")
+            && !padding_rs.contains("pub(crate) struct PaddingDelta(pub(crate) u32);")
+            && padding_rs.contains("pub(crate) const fn get(self) -> u32"),
+        "padding scalar witnesses should keep backing fields private behind accessors"
+    );
+    assert!(
+        padding_rs.contains(
+            "pub(crate) struct Padding {\n    canary: PaddingCanary,\n    delta: PaddingDelta,\n}"
+        ) && padding_rs.contains(
+            "pub(crate) const fn new(canary: PaddingCanary, delta: PaddingDelta) -> Self"
+        ) && padding_rs.contains("pub(crate) const fn canary(self) -> PaddingCanary")
+            && padding_rs.contains("pub(crate) const fn delta(self) -> PaddingDelta"),
+        "Padding should keep aggregate fields private behind constructor/accessors"
+    );
+    for witness in ["AllocatedBlock", "FreeBlock"] {
+        assert!(
+            validation_extra_rs.contains(&format!("pub(crate) struct {witness}(BlockPtr);")),
+            "{witness} should keep its block pointer field private"
+        );
+    }
+    assert!(
+        validation_extra_rs.contains("pub(crate) unsafe fn new_unchecked(block: BlockPtr) -> Self")
+            && validation_extra_rs.contains(
+                "pub(in crate::core_types) unsafe fn new_unchecked(block: BlockPtr) -> Self"
+            )
+            && validation_extra_rs.contains("pub(crate) fn block(self) -> BlockPtr"),
+        "allocated/free block witnesses should expose constructors only at the needed boundary"
+    );
+    for witness in ["AllocatedBlock", "FreeBlock"] {
+        assert!(
+            !validation_extra_rs.contains(&format!(
+                "pub(crate) struct {witness}(pub(crate) BlockPtr);"
+            )),
+            "{witness} should not expose tuple construction outside validation_extra"
         );
     }
 
@@ -1140,21 +2659,36 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         }
     }
 
+    let types_spec = fs::read_to_string(root.join("TYPES_SPEC.md")).expect("read TYPES_SPEC.md");
     let atomic_wrappers = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
         .expect("read atomic wrappers");
     let padding_rs =
         fs::read_to_string(root.join("src/core_types/padding.rs")).expect("read padding wrappers");
+    let validation_types = fs::read_to_string(root.join("src/core_types/validation.rs"))
+        .expect("read core_types/validation.rs");
     let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read alloc.rs");
     let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read free.rs");
     assert!(
-        padding_rs.contains("pub(crate) fn from_page_block_keys(")
-            && padding_rs
-                .contains("pub(crate) fn for_usable(delta: usize, usable_size: UsableSize)")
+        padding_rs.contains(
+            "pub(crate) fn from_page_block_keys(page: PagePtr, block: BlockPtr, keys: PageKeys) -> Self"
+        )
+            && padding_rs.contains("page.as_ptr().cast()")
+            && padding_rs.contains("block.as_ptr().cast()")
+            && !padding_rs.contains("page: *const c_void")
+            && !padding_rs.contains("block: *const c_void")
+            && padding_rs.contains(
+                "pub(crate) fn for_usable(delta: usize, usable_size: UsableSize) -> Option<Self>"
+            )
+            && padding_rs.contains("u32::try_from(delta).ok().map(Self)")
             && alloc_rs.contains("PaddingCanary::from_page_block_keys")
+            && alloc_rs.contains("PagePtr::new_unchecked(page)")
             && alloc_rs.contains("PaddingDelta::for_usable(delta, usable_size)")
+            && alloc_rs.contains("crate::core_types::PaddingDelta::new_unchecked(delta as u32)")
             && free_rs.contains("PaddingCanary::from_page_block_keys")
+            && free_rs.contains("let page_ptr = crate::core_types::PagePtr::new_unchecked(page.cast_mut());")
+            && free_rs.contains("let block_ptr = crate::core_types::BlockPtr::new_unchecked(block.cast_mut());")
             && free_rs.contains("PaddingDelta::for_usable("),
-        "padding metadata should construct canaries from PageKeys and deltas with the usable-size bound"
+        "padding metadata should construct canaries from typed PagePtr/BlockPtr plus PageKeys and deltas with the usable-size bound"
     );
     assert!(
         atomic_wrappers
@@ -1163,11 +2697,32 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
                 .contains("pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);"),
         "AtomicThreadFree should be backed by AtomicUsizeField, matching TYPES_SPEC.md"
     );
+    assert!(
+        types_spec.contains("The thread-free atomic cell is `AtomicThreadFree(AtomicUsizeField)`")
+            && types_spec
+                .contains("Earlier\nplans used the placeholder name `ThreadFreeCell(*mut usize)`")
+            && !types_spec.contains("pub(crate) struct ThreadFreeCell(*mut usize);")
+            && types_spec.contains("pub(crate) fn push_remote_acq_rel(")
+            && types_spec.contains(
+                "pub(crate) unsafe fn release_acq_rel(self, expected: &mut ThreadFreeWord) -> bool;"
+            ),
+        "TYPES_SPEC.md should document AtomicThreadFree as the reconciled thread-free cell"
+    );
+    assert!(
+        types_spec.contains(
+            "`AbandonedCountCell` is the staged arena-domain name for the same storage now operated on by `AtomicAbandonedCount(*const AtomicUsize)`"
+        ) && types_spec.contains(
+            "`ArenaPageCell` is the staged arena-domain name for the same storage now operated on by `AtomicArenaPage(*const AtomicPtr<c_void>)`"
+        ) && types_spec.contains(
+            "`ArenaPageTablePtr` remains the non-atomic page-table pointer witness"
+        ),
+        "TYPES_SPEC.md should reconcile staged arena page-table cell names with live atomic wrappers"
+    );
 
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read page.rs");
     assert!(
         free_rs.contains(
-            "pub(crate) unsafe fn mi_free_block_local(\n    page_wrapper: crate::core_types::LocalPage,"
+            "pub(crate) unsafe fn mi_free_block_local(\n    page_wrapper: crate::core_types::LocalPage,\n    block_wrapper: crate::core_types::BlockForFree,"
         ) && free_rs.contains(
             "pub(crate) unsafe fn mi_free_block_mt(\n    page_wrapper: crate::core_types::ForeignPage,"
         ) && page_rs.contains(
@@ -1177,11 +2732,122 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     );
     assert!(
         page_rs.contains(
-            "pub(crate) unsafe fn mi_page_queue_enqueue_from(\n    to: crate::core_types::FullPageQueue,\n    from: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
+            "pub(crate) unsafe fn try_reclaim_abandoned(\n    page_wrapper: crate::core_types::OwnedAbandonedPage,\n    target: crate::core_types::ThreadHeapLocal,"
+        )
+            && page_rs.contains(
+                "pub(crate) unsafe fn _mi_theap_page_reclaim(\n    page: crate::core_types::OwnedAbandonedPage,\n    target: crate::core_types::ThreadHeapLocal,"
+            )
+            && page_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_theap_page_reclaim_raw")
+            && page_rs.contains("_mi_theap_page_reclaim(wrapper, theap_wrapper);")
+            && page_states_rs.contains("pub(crate) fn reclaim(self, _target: ThreadHeapLocal) -> ActivePage")
+            && free_rs.contains("unsafe fn mi_abandoned_page_try_reclaim(\n    page: crate::core_types::OwnedAbandonedPage,")
+            && free_rs.contains("_mi_theap_page_reclaim(\n            page,\n            crate::core_types::ThreadHeapLocal::new_unchecked")
+            && !page_rs.contains("pub(crate) unsafe fn _mi_theap_page_reclaim(\n    page: *mut mi_page_t")
+            && !page_rs.contains("pub(crate) unsafe fn _mi_theap_page_reclaim(\n    theap: *mut mi_theap_t")
+            && !free_rs.contains("unsafe fn mi_abandoned_page_try_reclaim(\n    page: *mut mi_page_t"),
+        "reclaim should accept only OwnedAbandonedPage and ThreadHeapLocal below the raw shim"
+    );
+    assert!(
+        validation_types.contains("impl BlockForFree {\n    fn new(block: BlockPtr, was_guarded: WasGuarded) -> Self")
+            && validation_types.contains("pub(crate) fn prepare_free(self) -> Option<ValidatedFree>")
+            && validation_types.contains("let block = BlockForFree::new(located.block(), located.was_guarded());")
+            && validation_types.contains("Some(ValidatedFree { user, page, block })")
+            && free_rs.contains(
+                "pub(crate) unsafe fn mi_free_block_local(\n    page_wrapper: crate::core_types::LocalPage,\n    block_wrapper: crate::core_types::BlockForFree,"
+            )
+            && free_rs.contains("mi_free_block_local(\n                    local_page,\n                    validated.block(),")
+            && !free_rs.contains("BlockForFree::new")
+            && !free_rs.contains("ValidatedFree::new"),
+        "mi_free_block_local should accept only LocalPage plus validation-created BlockForFree"
+    );
+    assert!(
+        free_rs.contains(
+            "pub(crate) unsafe fn mi_free_block_mt(\n    page_wrapper: crate::core_types::ForeignPage,\n    block_wrapper: crate::core_types::BlockForFree,"
+        )
+            && free_rs.contains("mi_free_block_mt(foreign_page, validated.block());")
+            && free_rs.contains("mi_free_block_mt(abandoned_page.remote_free_page(), validated.block());")
+            && page_states_rs.contains("pub(crate) fn remote_free_page(self) -> ForeignPage")
+            && free_rs.contains(
+                "unsafe fn mi_free_try_collect_mt_typed(\n    page: crate::core_types::OwnedAbandonedPage,\n    remote_free: crate::core_types::RemoteFreeList,"
+            )
+            && free_rs.contains(
+                "pub(crate) unsafe extern \"C\" fn mi_free_try_collect_mt(\n    page: *mut mi_page_t,\n    mt_free: *mut mi_block_t,"
+            )
+            && free_rs.contains("crate::core_types::OwnedAbandonedPage::new_unchecked")
+            && !free_rs.contains("pub(crate) unsafe fn mi_free_block_mt(\n    page: *mut mi_page_t")
+            && !free_rs.contains("unsafe fn mi_free_try_collect_mt_typed(\n    page: *mut mi_page_t"),
+        "remote free should enter through ForeignPage or abandoned-page witnesses before touching remote-free internals"
+    );
+    assert!(
+        page_rs.contains(
+            "pub(crate) unsafe fn mi_page_queue_enqueue_from(\n    to: crate::core_types::FullPageQueue,\n    page: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,"
         ) && page_rs.contains(
-            "pub(crate) unsafe fn mi_page_queue_enqueue_from_full(\n    to: crate::core_types::NormalPageQueue,\n    from: crate::core_types::FullPageQueue,\n    page: crate::core_types::FullPage,"
-        ),
+            "pub(crate) unsafe fn mi_page_queue_enqueue_from_full(\n    to: crate::core_types::NormalPageQueue,\n    page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,"
+        ) && page_queues_rs.contains("impl QueuedPage<NormalQueue>")
+            && page_queues_rs.contains("pub(crate) unsafe fn into_full(self, to: FullPageQueue)"),
         "page queue transitions should require typed queue/page witnesses"
+    );
+    assert!(
+        page_rs.contains(
+            "unsafe fn mi_page_queue_append_full_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::FullPageQueue,\n    append: crate::core_types::FullPageQueue,"
+        )
+            && page_rs.contains(
+                "pub(crate) unsafe fn _mi_page_free_full_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Full>,\n    queue: crate::core_types::FullPageQueue,"
+            )
+            && page_rs.contains("crate::core_types::FullPage::new_unchecked(page_wrapper.page())")
+            && page_rs.contains(
+                "crate::core_types::QueuedPage::<crate::core_types::FullQueue>::new(full, queue)"
+            )
+            && page_rs.contains(
+                "unsafe fn mi_page_unfull_typed(\n    page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,\n    to: crate::core_types::NormalPageQueue,"
+            )
+            && page_queues_rs.contains(
+                "pub(crate) unsafe fn new(\n        page: crate::core_types::FullPage,\n        queue: FullPageQueue,"
+            )
+            && page_queues_rs.contains("crate::page::mi_page_is_in_full(page.page().as_ptr())")
+            && page_queues_rs.contains("queue: PageQueue::full(queue)")
+            && !page_rs.contains("unsafe fn mi_page_queue_append_full_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::PageQueuePtr")
+            && !page_rs.contains("pub(crate) unsafe fn _mi_page_free_full_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Full>,\n    queue: crate::core_types::PageQueuePtr")
+            && !page_rs.contains(
+                "unsafe fn mi_page_unfull_typed(\n    page: crate::core_types::FullPage"
+        ),
+        "full-queue operations should accept only FullPage witnesses and FullPageQueue handles"
+    );
+    assert!(
+        page_queues_rs.contains(
+            "pub(crate) unsafe fn new(\n        page: crate::core_types::ActivePage,\n        queue: NormalPageQueue,"
+        )
+            && page_queues_rs.contains("let queue_ptr = queue.ptr().as_ptr();")
+            && page_queues_rs.contains("let page_ptr = page.page().as_ptr();")
+            && page_queues_rs.contains("&& !crate::page::mi_page_is_in_full(page_ptr)")
+            && page_queues_rs.contains(
+                ".is_some_and(|block_size| page.page().block_size().get() == block_size.get())"
+            )
+            && page_queues_rs.contains(
+                "crate::page::mi_page_is_huge(page_ptr)\n                        && crate::page::mi_page_queue_is_huge(queue_ptr)"
+            )
+            && page_queues_rs.contains("queue: PageQueue::normal(queue)")
+            && page_rs.contains(
+                "unsafe fn mi_page_queue_push_at_end_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
+            )
+            && page_rs.contains(
+                "unsafe fn mi_page_queue_push_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
+            )
+            && page_rs.contains(
+                "unsafe fn mi_page_queue_move_to_front_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,"
+            )
+            && page_rs.contains(
+                "pub(crate) unsafe fn _mi_page_free_active_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,\n    queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,"
+            )
+            && page_rs.contains(
+                "unsafe fn mi_page_queue_append_normal_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    append: crate::core_types::NormalPageQueue,"
+            )
+            && !page_queues_rs.contains(
+                "pub(crate) unsafe fn new(\n        page: crate::core_types::FullPage,\n        queue: NormalPageQueue,"
+            )
+            && !page_rs.contains("unsafe fn mi_page_queue_push_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::PagePtr")
+            && !page_rs.contains("pub(crate) unsafe fn _mi_page_free_active_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,\n    queued: crate::core_types::PagePtr"),
+        "normal queue operations should accept only active non-full pages matching NormalPageQueue or the huge-page sentinel queue"
     );
 }
 
@@ -1201,7 +2867,6 @@ fn phase6_dead_code_allowances_stay_intentional() {
     }
 
     let expected = BTreeMap::from([
-        ("src/core_types/mod.rs", 13),
         ("src/prim/emscripten.rs", 1),
         ("src/prim/osx.rs", 1),
         ("src/prim/wasi.rs", 1),
@@ -1216,8 +2881,8 @@ fn phase6_dead_code_allowances_stay_intentional() {
         fs::read_to_string(root.join("src/core_types/mod.rs")).expect("read core_types mod");
     assert!(
         !core_types_mod.contains("#![allow(dead_code)]")
-            && core_types_mod.matches("#[expect(dead_code").count() == 13,
-        "core_types dead_code suppression should stay scoped to compiler-proven staged modules"
+            && !core_types_mod.contains("#[expect(dead_code"),
+        "core_types dead_code suppression should stay on item-level staged allowances"
     );
     assert!(
         !actual.contains_key("src/arena.rs"),
@@ -1344,7 +3009,7 @@ fn phase6_c_compat_allowances_stay_intentional() {
         (("src/bits.rs", "non_upper_case_globals"), 1),
         (("src/headers.rs", "non_upper_case_globals"), 14),
         (("src/init.rs", "non_camel_case_types"), 1),
-        (("src/init.rs", "non_snake_case"), 8),
+        (("src/init.rs", "non_snake_case"), 7),
         (("src/init.rs", "non_upper_case_globals"), 1),
         (("src/internal.rs", "non_camel_case_types"), 1),
         (("src/internal.rs", "non_snake_case"), 1),
@@ -1493,14 +3158,26 @@ fn free_path_internals_are_not_dynamic_exports() {
     let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
     let memid_rs =
         fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read core_types/memid.rs");
+    let callbacks_rs = fs::read_to_string(root.join("src/core_types/callbacks.rs"))
+        .expect("read core_types/callbacks.rs");
     let freelist_types = fs::read_to_string(root.join("src/core_types/freelist_wrappers.rs"))
         .expect("read core_types/freelist_wrappers.rs");
     let arena_types =
         fs::read_to_string(root.join("src/core_types/arena.rs")).expect("read core_types/arena.rs");
+    let page_types =
+        fs::read_to_string(root.join("src/core_types/page.rs")).expect("read core_types/page.rs");
+    let scalar_types = fs::read_to_string(root.join("src/core_types/scalar.rs"))
+        .expect("read core_types/scalar.rs");
     let atomic_types = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
         .expect("read core_types/atomic_wrappers.rs");
+    let ptr_rs =
+        fs::read_to_string(root.join("src/core_types/ptr.rs")).expect("read core_types/ptr.rs");
     let validation_types = fs::read_to_string(root.join("src/core_types/validation.rs"))
         .expect("read core_types/validation.rs");
+    let page_states_rs = fs::read_to_string(root.join("src/core_types/page_states.rs"))
+        .expect("read core_types/page_states.rs");
+    let page_queues_rs = fs::read_to_string(root.join("src/core_types/page_queues.rs"))
+        .expect("read core_types/page_queues.rs");
     let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
     let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
     let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
@@ -1578,18 +3255,25 @@ fn free_path_internals_are_not_dynamic_exports() {
             .matches("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_safe_ptr_page(")
             .count()
             == 2
+            && page_map
+                .matches("pub(crate) unsafe fn _mi_safe_ptr_page_registered(")
+                .count()
+                == 2
+            && page_map.contains("unsafe { _mi_safe_ptr_page_registered(p) }\n        .map(|registered| registered.page().as_ptr())")
             && alloc_rs.contains("crate::free::mi_validate_pointer(p.cast_mut(), msg)")
-            && free_rs.contains("let mut page = _mi_safe_ptr_page(p);")
+            && free_rs.contains("let registered = _mi_safe_ptr_page_registered(p);")
+            && free_rs.contains("Some(registered.page())")
             && heap_rs.contains("let page: *mut mi_page_t = unsafe { _mi_safe_ptr_page(p) };")
             && heap_rs.contains("let page = _mi_safe_ptr_page(p);")
             && arena_rs.contains("let page = unsafe { _mi_safe_ptr_page(start) };"),
-        "safe pointer page lookup should keep C's _mi_safe_ptr_page local call boundary outside typed realloc validation"
+        "safe pointer page lookup should keep C's _mi_safe_ptr_page local call boundary while typed validation requires a registered-page witness"
     );
     assert!(
         theap_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_area_init(")
-            && theap_rs.contains("let bsize = mi_page_block_size(page);")
-            && theap_rs.contains("(*area).reserved = (*page).reserved as usize * bsize;")
+            && theap_rs.contains("let bsize = full_bsize.get();")
+            && theap_rs.contains("let reserved = crate::page::mi_page_reserved_count(page);")
+            && theap_rs.contains("(*area).reserved = reserved.as_usize() * bsize;")
             && theap_rs.contains("_mi_heap_area_init(ptr::addr_of_mut!(xarea.area), page);")
             && arena_rs.contains("use crate::theap::{")
             && arena_rs.contains("_mi_heap_area_init")
@@ -1604,7 +3288,8 @@ fn free_path_internals_are_not_dynamic_exports() {
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_is_theap_main(")
             && init_rs.contains("static MI_IS_THEAP_MAIN_KEEP")
             && heap_rs.contains("if _mi_is_heap_main(heap) {")
-            && heap_rs.contains("if !_mi_is_heap_main(heap) {")
+            && heap_rs.contains("if let Some(heap) = MainHeap::new(heap)")
+            && heap_rs.contains("} else if let Some(heap) = OwnedHeap::new(heap)")
             && page_rs.contains("(*page).heap = if _mi_is_heap_main(heap) {")
             && arena_rs.contains("if unsafe { _mi_is_heap_main(heap_from) }")
             && theap_rs.contains("_mi_is_heap_main(_mi_theap_heap(theap).cast_const())"),
@@ -1621,16 +3306,23 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_deferred_free(")
-            && page_rs.contains("(*theap).heartbeat = (*theap).heartbeat.wrapping_add(1);")
+            && page_rs.contains("let heartbeat = mi_theap_increment_heartbeat(theap);")
             && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .load(crate::core_types::MemoryOrder::Acquire);")
+            && page_rs.contains(
+                "let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);"
+            )
             && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n                .load(crate::core_types::MemoryOrder::Acquire);")
-            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n            .store(arg, crate::core_types::MemoryOrder::Release);")
+            && page_rs
+                .contains("let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);")
+            && page_rs.contains(".store(arg.as_ptr(), crate::core_types::MemoryOrder::Release);")
+            && page_rs.contains("let f = callback.storage_ptr();")
             && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .store(f, crate::core_types::MemoryOrder::Release);")
             && !page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free))")
             && !page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_arg))")
             && !page_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_arg)")
             && !page_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_free)")
-            && page_rs.contains("fun(force, (*theap).heartbeat, arg);")
+            && !page_rs.contains("fun(force, heartbeat.get(), arg);")
+            && page_rs.contains("callback.invoke(force, heartbeat, arg);")
             && page_rs.contains("_mi_deferred_free(theap, false);")
             && theap_rs.contains("_mi_deferred_free(theap, force);"),
         "deferred free callback dispatch should keep C's _mi_deferred_free helper boundary"
@@ -2358,7 +4050,10 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_padding_shrink(")
             && free_rs.contains("if MI_PADDING == 0")
             && free_rs.contains("mi_page_decode_padding(page, block, &mut delta, &mut bsize)")
-            && free_rs.contains("padding.write_delta(crate::core_types::PaddingDelta::for_usable(")
+            && free_rs.contains(
+                ".write_delta(\n            crate::core_types::PaddingDelta::for_usable("
+            )
+            && free_rs.contains("crate::core_types::PaddingDelta::new_unchecked(new_delta as u32)")
             && alloc_aligned_rs.contains("#[cfg(mi_c_malloc_fast)]")
             && alloc_aligned_rs.contains("\"call _mi_padding_shrink\"")
             && alloc_aligned_rs.contains("fn mi_padding_shrink_call(")
@@ -2397,9 +4092,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         alloc_rs.contains("let usable_size = mi_page_usable_block_size(page);")
             && alloc_rs.contains("let bin = mi_bin_from_usable(usable_size).as_usize();")
             && free_rs.contains("mi_bin_from_usable(bsize).as_usize()")
-            && arena_rs.contains(
-                "mi_bin_from_block_size(unsafe { crate::core_types::BlockSize::new_unchecked(block_size) })"
-            )
+            && arena_rs.contains("let bin = mi_bin_from_block_size(block_size);")
             && internal.contains("pub(crate) unsafe fn mi_page_block_size_typed(")
             && internal.contains(") -> crate::core_types::BlockSize")
             && internal.contains("mi_page_block_size_typed(page).get()")
@@ -2416,7 +4109,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("let bin = mi_page_bin_typed(page).as_usize();")
             && page_rs.contains("let bin = _mi_page_stats_bin_typed(page).as_usize();")
             && page_rs.contains("let bin = mi_bin_from_block_size(block_size).as_usize();")
-            && page_rs.contains("== mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(\n                    (*prev).block_size,")
+            && page_rs.contains("== mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(\n                    mi_page_queue_block_size_raw(prev),")
             && !page_rs.contains("pub(crate) fn _mi_bin_typed(size: usize)")
             && !alloc_rs.contains("_mi_bin_typed(")
             && !free_rs.contains("_mi_bin_typed(")
@@ -2456,6 +4149,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && internal.contains(
             "pub(crate) fn mi_direct_bin_from_padded(\n    padded: crate::core_types::PaddedSize,"
         ) && internal.contains("mi_direct_bin_from_size(padded.get())")
+            && internal.contains("let idx = crate::core_types::WordCount::from_size(size).get();")
             && internal.contains("let idx = mi_direct_bin_from_padded(padded).as_usize();")
             && page_rs.contains("let idx = mi_direct_bin_from_size(size).as_usize();")
             && !internal.contains(
@@ -2536,9 +4230,14 @@ fn free_path_internals_are_not_dynamic_exports() {
             && options_rs.contains("let use_default = match out {")
             && options_rs.contains("None => true,")
             && options_rs.contains("Some(out) => mi_output_is_c_file(out),")
+            && options_rs.contains(
+                "fn mi_out_get_default(parg: Option<&mut OutputCallbackArg>) -> OutputCallback"
+            )
             && options_rs.contains("let default_out = mi_out_get_default(Some(&mut default_arg));")
-            && options_rs.contains("unsafe { default_out(message, default_arg) };")
-            && options_rs.contains("unsafe { out(message, arg) };")
+            && options_rs.contains("unsafe { default_out.invoke(message, default_arg) };")
+            && options_rs.contains("let out = OutputCallback::new(Some(out));")
+            && options_rs.contains("let arg = OutputCallbackArg::from_raw(arg);")
+            && options_rs.contains("unsafe { out.invoke(message, arg) };")
             && stats_rs.contains("_mi_fputs(buf.out, buf.arg, ptr::null(), buf.buf);")
             && init_rs.contains("unsafe { _mi_fputs(None, ptr::null_mut(), ptr::null(), msg) };"),
         "_mi_fputs should keep C's local helper boundary and stdout/stderr default-output compatibility"
@@ -2814,11 +4513,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && options_rs.contains(
             "static MI_WARNING_MESSAGE_KEEP: unsafe extern \"C\" fn(*const c_char) = _mi_warning_message;"
         ) && options_rs.contains(
-            "#[inline(never)]\npub(crate) fn _mi_error_message_fmt(err: c_int, args: fmt::Arguments<'_>)"
+            "#[inline(never)]\npub(crate) fn _mi_error_message_fmt(err: Errno, args: fmt::Arguments<'_>)"
         ) && options_rs.contains(
             "#[inline(never)]\n#[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]\npub(crate) unsafe extern \"C\" fn _mi_error_message(err: c_int, fmt: *const c_char)"
         ) && options_rs.contains(
-            "static MI_ERROR_MESSAGE_FMT_KEEP: for<'a> fn(c_int, fmt::Arguments<'a>) = _mi_error_message_fmt;"
+            "static MI_ERROR_MESSAGE_FMT_KEEP: for<'a> fn(Errno, fmt::Arguments<'a>) = _mi_error_message_fmt;"
         ) && options_rs.contains(
             "static MI_ERROR_MESSAGE_KEEP: unsafe extern \"C\" fn(c_int, *const c_char) = _mi_error_message;"
         ) && !internal.contains("pub fn _mi_warning_message(")
@@ -2865,9 +4564,41 @@ fn free_path_internals_are_not_dynamic_exports() {
             && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_unprotect(")
             && os_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_free_ex(")
-            && os_rs.contains("if matches!(&os.kind, crate::core_types::OsMemKind::Huge) {")
-            && os_rs.contains("unsafe { mi_os_free_huge_os_pages(base, csize, subproc) };")
-            && os_rs.contains("} else {\n        unsafe {\n            mi_os_prim_free(")
+            && os_rs.contains("unsafe fn mi_os_current_subproc() -> Option<BorrowedSubproc>")
+            && os_rs.contains(
+                "unsafe fn mi_os_subproc_stats_mut(subproc: BorrowedSubproc) -> *mut mi_stats_t"
+            )
+            && os_rs.contains(
+                "unsafe fn mi_os_prim_free(\n    memid: OsMemId,\n    commit_size: CommittedBytes,\n    subproc: Option<BorrowedSubproc>,"
+            )
+            && os_rs.contains("let subproc = subproc.or_else(|| mi_os_current_subproc());")
+            && os_rs.contains("let MemIdView::Os(memid) = MemId::view(memid) else")
+            && os_rs.contains(
+                "let subproc = SubprocPtr::new(subproc).map(|subproc| unsafe { BorrowedSubproc::new(subproc) });"
+            )
+            && os_rs.contains("let addr = OsMemPtr::new(addr);")
+            && os_rs.contains("let size = ReservedBytes::new(size);")
+            && os_rs.contains(
+                "unsafe { _mi_os_free_ex_typed(addr, size, still_committed, memid, subproc) };"
+            )
+            && os_rs.contains(
+                "unsafe fn _mi_os_free_ex_typed(\n    addr: Option<OsMemPtr>,\n    size: ReservedBytes,\n    still_committed: bool,\n    os: OsMemId,\n    subproc: Option<BorrowedSubproc>,"
+            )
+            && os_rs.contains("if matches!(&os.kind, OsMemKind::Huge) {")
+            && os_rs.contains(
+                "unsafe {\n            mi_os_free_huge_os_pages(OsMemPtr::new(base), ReservedBytes::new(csize), subproc)\n        };"
+            )
+            && os_rs.contains("} else {\n        let committed = if still_committed {")
+            && os_rs.contains("unsafe { mi_os_prim_free(memid, committed, subproc) };")
+            && os_rs.contains(
+                "unsafe fn mi_os_free_huge_os_pages(\n    p: Option<OsMemPtr>,\n    size: ReservedBytes,\n    subproc: Option<BorrowedSubproc>,"
+            )
+            && os_rs.contains(
+                "mi_os_prim_free(memid, CommittedBytes::new(MI_HUGE_OS_PAGE_SIZE), subproc)"
+            )
+            && os_rs.contains(
+                "mi_os_prim_free(memid, CommittedBytes::new(MI_HUGE_OS_PAGE_SIZE), None);"
+            )
             && os_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_os_zalloc(")
             && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_alloc_aligned(")
             && os_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_os_numa_node()")
@@ -2887,10 +4618,20 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_free(")
             && page_rs.contains(
-                "pub(crate) unsafe fn _mi_page_free_internal<S>(\n    page_wrapper: crate::core_types::AllFreePage<S>,\n    queue: crate::core_types::PageQueuePtr,"
+                "pub(crate) unsafe fn _mi_page_free_active_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Active>,\n    queued: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,"
             )
-            && page_rs.contains("let _ = _mi_page_free_internal(")
-            && page_rs.contains("mi_page_queue_remove(pq, page);")
+            && page_rs.contains(
+                "pub(crate) unsafe fn _mi_page_free_full_internal(\n    page_wrapper: crate::core_types::AllFreePage<crate::core_types::Full>,\n    queue: crate::core_types::FullPageQueue,"
+            )
+            && page_rs.contains(
+                "crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new(active, queue)"
+            )
+            && page_rs.contains("let _ = _mi_page_free_active_internal(all_free, queued);")
+            && page_rs.contains("let _ = queued.remove();")
+            && page_queues_rs.contains(
+                "pub(crate) unsafe fn remove(self) -> crate::core_types::ActivePage"
+            )
+            && !page_rs.contains("pub(crate) unsafe fn _mi_page_free_internal<S>")
             && page_rs.contains("mi_page_set_theap(page, ptr::null_mut());")
             && page_rs.contains("let destroyed = _mi_arenas_page_free_typed(page_wrapper, owner);")
             && page_rs.contains("_mi_arenas_collect(false, false, (*theap).tld);")
@@ -2898,8 +4639,8 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(\n    page: crate::core_types::AllFreePage<S>,\n    owner: crate::core_types::ThreadHeapLocal,"
             )
             && arena_rs
-                .contains("unsafe { _mi_arenas_page_free(page.page.ptr.as_ptr(), owner.0.as_ptr()) };")
-            && arena_rs.contains("crate::core_types::free_all_free_page_to_arena(page, owner)")
+                .contains("unsafe { _mi_arenas_page_free(page.page().as_ptr(), owner.ptr().as_ptr()) };")
+            && arena_rs.contains("page.free_to_arena(owner)")
             && theap_rs.contains("_mi_page_free(page, pq);"),
         "page release should keep C's local _mi_page_free helper boundary while using typed all-free page witnesses internally"
     );
@@ -2911,24 +4652,21 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(") -> crate::core_types::PageAbandonOutcome {")
             && page_rs.contains("_mi_page_free_collect(page, false);")
             && page_rs.contains("if mi_page_all_free(page) {")
-            && page_rs.contains(
-                "crate::core_types::AllFreePage::active_unchecked(crate::core_types::ActivePage"
-            )
-            && page_rs.contains("crate::core_types::AllFreePage::full_unchecked")
-            && page_rs.contains("mi_page_queue_remove(pq, page);")
+            && page_rs.contains("let destroyed = match page_wrapper {")
+            && page_rs.contains("let Some(all_free) = page.mark_all_free() else {")
+            && page_rs.contains("_mi_page_free_full_internal(all_free, queue)")
+            && page_rs.contains("_mi_page_free_active_internal(all_free, queued)")
+            && page_rs.contains("QueuedPage::<crate::core_types::FullQueue>::new")
+            && page_rs.contains("QueuedPage::<crate::core_types::NormalQueue>::new")
+            && page_rs.contains("let _ = queued.remove();")
             && page_rs.contains("mi_page_set_theap(page, ptr::null_mut());")
             && page_rs.contains("_mi_arenas_page_abandon(page, theap);")
             && page_rs.contains("_mi_arenas_collect(false, false, (*theap).tld);")
-            && page_rs.contains(
-                "crate::core_types::PageAbandonOutcome::Abandoned(crate::core_types::AbandonedPage"
-            )
+            && page_rs.contains("crate::core_types::PageAbandonOutcome::Abandoned")
+            && page_rs.contains("crate::core_types::AbandonedPage::new_unchecked(page_ptr)")
             && page_rs.contains("let page_ptr = crate::core_types::PagePtr::new_unchecked(page);")
-            && page_rs.contains(
-                "crate::core_types::PageForAbandon::Full(crate::core_types::FullPage(page_ptr))"
-            )
-            && page_rs.contains(
-                "crate::core_types::PageForAbandon::Active(crate::core_types::ActivePage(page_ptr))"
-            )
+            && page_rs.contains("crate::core_types::FullPage::new_unchecked(page_ptr).for_abandon()")
+            && page_rs.contains("crate::core_types::ActivePage::new_unchecked(page_ptr).for_abandon()")
             && theap_rs.contains("_mi_page_abandon(page, pq);"),
         "page abandon should keep C's local helper boundary while using typed active/full abandon witnesses internally"
     );
@@ -2956,27 +4694,52 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("static MI_PAGE_QUEUE_IS_VALID_KEEP")
             && page_rs.contains("static MI_PAGE_QUEUE_APPEND_KEEP")
             && page_rs.contains("mi_page_thread_free_collect(page);")
-            && page_rs.contains(
-                "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),\n        ));"
-            )
-            && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
-            && page_rs.contains("let Some(head) = remote.0.map(|b| b.as_ptr()) else")
+            && page_rs.contains("let atomic_tf = crate::core_types::AtomicThreadFree(")
+            && page_rs.contains("crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*page).xthread_free))")
+            && page_rs.contains("let remote = atomic_tf.collect_acq_rel();")
+            && page_rs.contains("let Some(head) = remote.head().map(|b| b.as_ptr()) else")
             && page_rs.contains(".map(|block| block.as_ptr())")
+            && alloc_rs.contains("let block = allocated.block().as_ptr();")
+            && !alloc_rs.contains("allocated.0.as_ptr()")
+            && free_rs.contains("block_wrapper.into_free_block()")
+            && !free_rs.contains("crate::core_types::FreeBlock::new_unchecked")
+            && !free_rs.contains("crate::core_types::FreeBlock(")
+            && freelist_types.contains("AllocatedBlock::new_unchecked(head)")
+            && freelist_types.contains("pub(crate) unsafe fn pop(page: AvailablePage)")
+            && freelist_types.contains("let block_raw = block.block().as_ptr();")
+            && !freelist_types.contains("AllocatedBlock(head)")
+            && !freelist_types.contains("block.0.as_ptr()")
             && page_rs.contains("let thread_free = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),\n        ))")
             && page_rs.contains("crate::core_types::ThreadFreeWord::from_parts(\n                    None,\n                    crate::core_types::ThreadFreeOwner::Owned")
             && !page_rs.contains("crate::internal::mi_tf_create(ptr::null_mut()")
             && !page_rs.contains("crate::internal::mi_tf_block(mi_atomic_load_explicit")
             && !page_rs.contains("(*page).xthread_free == 1")
-            && freelist_types.contains("pub(crate) unsafe fn read_tag_from_raw(block: *const mi_block_t) -> Self")
+            && freelist_types.contains("pub(crate) struct AlignedBlockTag(BlockTag);")
+            && freelist_types.contains("pub(crate) struct GuardedBlockTag(BlockTag);")
+            && freelist_types.contains("pub(crate) unsafe fn write_aligned_to(block: BlockPtr)")
+            && freelist_types.contains("pub(crate) unsafe fn write_guarded_to(block: BlockPtr)")
+            && freelist_types.contains("pub(crate) unsafe fn read_guarded_from_raw(")
+            && freelist_types.contains(") -> Option<GuardedBlockTag>")
+            && freelist_types.contains("pub(crate) unsafe fn read_from_raw(block: *const mi_block_t) -> Self")
+            && freelist_types.contains("Self::FreeList(unsafe { EncodedPtr::read_word_from_raw(block) })")
             && freelist_types.contains("pub(crate) unsafe fn write_to(self, block: BlockPtr)")
-            && alloc_rs.contains("crate::core_types::BlockLink::tagged(crate::core_types::BlockTag::ALIGNED)")
-            && alloc_rs.contains("crate::core_types::BlockLink::tagged(crate::core_types::BlockTag::GUARDED)")
-            && alloc_aligned_rs.contains("crate::core_types::BlockLink::tagged(crate::core_types::BlockTag::ALIGNED)")
-            && internal.contains("crate::core_types::BlockLink::read_tag_from_raw(block).is_guarded_tag()")
-            && free_rs.contains("crate::core_types::BlockLink::read_tag_from_raw(block).is_guarded_tag()")
-            && !alloc_rs.contains("crate::core_types::BlockTag::ALIGNED\n            .write_to")
-            && !alloc_rs.contains("crate::core_types::BlockTag::GUARDED\n        .write_to")
-            && !alloc_aligned_rs.contains("crate::core_types::BlockTag::ALIGNED\n                .write_to")
+            && atomic_types.contains("pub(crate) struct RemoteFreeList(Option<BlockPtr>);")
+            && atomic_types.contains("fn from_detached_thread_free_head(head: Option<BlockPtr>) -> Self")
+            && atomic_types.contains("pub(crate) fn head(self) -> Option<BlockPtr>")
+            && atomic_types.contains("pub(crate) unsafe fn collect_into_local(")
+            && !freelist_types.contains("pub(crate) struct RemoteFreeList(pub(crate) Option<BlockPtr>)")
+            && alloc_rs.contains("crate::core_types::BlockTag::write_aligned_to(")
+            && alloc_rs.contains("crate::core_types::BlockTag::write_guarded_to(")
+            && alloc_aligned_rs.contains("crate::core_types::BlockTag::write_aligned_to(block)")
+            && internal.contains("crate::core_types::BlockLink::is_guarded_raw(block)")
+            && free_rs.contains("crate::core_types::BlockLink::is_guarded_raw(block)")
+            && !alloc_rs.contains("crate::core_types::BlockLink::tagged(")
+            && !alloc_aligned_rs.contains("crate::core_types::BlockLink::tagged(")
+            && !internal.contains("BlockLink::read_from_raw(block).is_guarded_tag()")
+            && !free_rs.contains("BlockLink::read_from_raw(block).is_guarded_tag()")
+            && !freelist_types.contains("pub(crate) const fn tagged(tag: BlockTag) -> Self")
+            && !freelist_types.contains("pub(crate) const ALIGNED: Self")
+            && !freelist_types.contains("pub(crate) const GUARDED: Self")
             && !internal.contains("(*block).next")
             && !alloc_rs.contains("(*block).next = 0")
             && !alloc_rs.contains("(*block).next = MI_BLOCK_TAG_GUARDED")
@@ -2988,16 +4751,23 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("unsafe fn mi_page_move_to_full_typed(")
             && page_rs.contains("unsafe fn mi_page_unfull_typed(")
             && page_rs.contains(
-                "pub(crate) unsafe fn mi_page_queue_enqueue_from(\n    to: crate::core_types::FullPageQueue,\n    from: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
+                "pub(crate) unsafe fn mi_page_queue_enqueue_from(\n    to: crate::core_types::FullPageQueue,\n    page: crate::core_types::QueuedPage<crate::core_types::NormalQueue>,"
             )
             && page_rs.contains(
-                "pub(crate) unsafe fn mi_page_queue_enqueue_from_full(\n    to: crate::core_types::NormalPageQueue,\n    from: crate::core_types::FullPageQueue,\n    page: crate::core_types::FullPage,"
+                "pub(crate) unsafe fn mi_page_queue_enqueue_from_full(\n    to: crate::core_types::NormalPageQueue,\n    page: crate::core_types::QueuedPage<crate::core_types::FullQueue>,"
             )
             && page_rs.contains(
-                "unsafe fn mi_page_queue_enqueue_from_raw(\n    to: crate::core_types::PageQueuePtr,\n    from: crate::core_types::PageQueuePtr,"
+                "pub(crate) unsafe fn mi_page_queue_enqueue_from_raw(\n    to: crate::core_types::PageQueuePtr,\n    from: crate::core_types::PageQueuePtr,"
             )
-            && page_rs.contains("crate::core_types::move_to_full_queue(page, from, to)")
-            && page_rs.contains("crate::core_types::unfull_page(page, from, to)")
+            && page_rs.contains("unsafe { page.into_full(to) }")
+            && page_queues_rs.contains("impl QueuedPage<NormalQueue>")
+            && page_queues_rs.contains("pub(crate) unsafe fn into_full(self, to: FullPageQueue)")
+            && page_rs.contains("unsafe { page.unfull(to) }")
+            && page_states_rs.contains("pub(crate) unsafe fn to_full(")
+            && page_queues_rs.contains("impl QueuedPage<FullQueue>")
+            && page_queues_rs
+                .contains("pub(crate) unsafe fn unfull(self, to: NormalPageQueue)")
+            && !page_states_rs.contains("pub(crate) unsafe fn unfull(")
             && !page_rs.contains("pub unsafe fn mi_page_queue_enqueue_from_ex(")
             && !page_rs.contains(
                 "pub unsafe fn mi_page_queue_enqueue_from_ex(\n    to: *mut mi_page_queue_t,"
@@ -3012,47 +4782,63 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("crate::core_types::MemIdView::Os(os) => os")
             && !page_rs.contains("(*page).memid.mem.os.base")
             && page_rs.contains(
-                "let _ = _mi_page_unfull_internal(crate::core_types::FullPage(\n            crate::core_types::PagePtr::new_unchecked(page),"
+                "let _ = _mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked("
             )
-            && page_rs.contains("mi_page_unfull_typed(\n            page_wrapper,")
+            && page_rs.contains("QueuedPage::<crate::core_types::FullQueue>::new")
+            && page_rs.contains("mi_page_unfull_typed(queued, to)")
             && page_rs
                 .contains("mi_page_move_to_full_typed(\n                crate::core_types::ActivePage")
-            && free_rs.contains("_mi_page_retire_internal(crate::core_types::AllFreePage::active_unchecked")
-            && free_rs.contains("_mi_page_unfull_internal(crate::core_types::FullPage")
-            && free_rs.contains("_mi_page_free_collect(page, false);")
-            && free_rs.contains("_mi_page_free_collect_partly(page, mt_free);")
+            && free_rs.contains("let Some(all_free) = active.mark_all_free() else {")
+            && free_rs.contains("_mi_page_retire_internal(all_free);")
+            && free_rs
+                .contains("_mi_page_unfull_internal(crate::core_types::FullPage::new_unchecked")
+            && free_rs.contains("_mi_page_free_collect(page_raw, false);")
+            && free_rs.contains("_mi_page_free_collect_partly(page_raw, mt_free.as_ptr());")
             && arena_rs.contains("crate::page::_mi_page_init(theap, page)")
-            && arena_rs.contains("_mi_page_free_collect(page, false)")
+            && arena_rs.contains("_mi_page_free_collect(page_raw, false)")
             && arena_rs.contains("_mi_page_stats_bin(page)")
             && theap_rs.contains("_mi_page_free_collect(page, true)")
-            && theap_rs.contains("_mi_page_queue_is_valid("),
+            && page_rs.contains("unsafe fn mi_page_queue_is_valid_typed(")
+            && page_rs.contains("pub(crate) unsafe fn mi_normal_page_queue_is_valid(")
+            && page_rs.contains("pub(crate) unsafe fn mi_huge_page_queue_is_valid(")
+            && page_rs.contains("pub(crate) unsafe fn mi_full_page_queue_is_valid(")
+            && theap_rs.contains("mi_normal_page_queue_is_valid(")
+            && theap_rs.contains("mi_huge_page_queue_is_valid(")
+            && theap_rs.contains("mi_full_page_queue_is_valid(")
+            && !theap_rs.contains("_mi_page_queue_is_valid("),
         "page lifecycle and page-queue helpers should keep C's local helper boundaries"
     );
     assert!(
         alloc_rs
-            .contains("pub(crate) unsafe fn _mi_page_malloc_zero_typed(\n    theap: *mut mi_theap_t,\n    page: *mut mi_page_t,\n    padded: crate::core_types::PaddedSize,")
+            .contains("pub(crate) unsafe fn _mi_page_malloc_zero_typed(\n    theap: *mut mi_theap_t,\n    available: crate::core_types::AvailablePage,\n    padded: crate::core_types::PaddedSize,")
+            && alloc_rs.contains("let page_ptr = available.page();")
             && alloc_rs.contains("let size = padded.get();")
             && alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
-            && alloc_rs.contains("padded,\n                if zero")
+            && alloc_rs.contains("let zeroed = if zero {")
             && alloc_rs.contains("_mi_page_malloc_zero_typed(")
-            && alloc_rs.contains("crate::core_types::PaddedSize::new_unchecked(size),")
+            && alloc_rs.contains("let padded = crate::core_types::PaddedSize::new_unchecked(size);")
             && alloc_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
+            && alloc_rs.contains("let Some(available) = active.available() else {")
+            && alloc_rs.contains("_mi_page_malloc_zero_typed(theap, available, padded, zero, ptr::null_mut())")
             && page_rs.contains(
-                "let p = _mi_page_malloc_zero_typed(theap, page, layout.padded(), zero, ptr::null_mut());"
+                "_mi_page_malloc_zero_typed(theap, available, layout.padded(), zero, ptr::null_mut());"
             )
-            && internal.contains("pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(\n    theap: *mut mi_theap_t,\n    padded: crate::core_types::PaddedSize,")
+            && internal.contains("pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    padded: crate::core_types::PaddedSize,")
+            && internal.contains("let theap = theap.ptr().as_ptr();")
             && internal.contains("let idx = mi_direct_bin_from_padded(padded).as_usize();")
-            && alloc_rs.contains("let page = _mi_theap_get_free_small_page_typed(theap, padded);")
+            && alloc_rs.contains("let page = _mi_theap_get_free_small_page_typed(local_theap, padded);")
+            && alloc_rs.contains("_mi_page_malloc_zero_typed(theap, available, padded, zero, usable)")
             && alloc_aligned_rs.contains(
-                "let page = unsafe { crate::internal::_mi_theap_get_free_small_page_typed(theap, padded) };"
+                "let page =\n            unsafe { crate::internal::_mi_theap_get_free_small_page_typed(local_theap, padded) };"
             )
             && alloc_aligned_rs.contains(
-                "_mi_page_malloc_zero_typed(theap, page, padded, zero, core::ptr::null_mut())"
+                "let available = unsafe { active.available().unwrap_unchecked() };"
             )
             && alloc_aligned_rs.contains(
-                "let padded = crate::core_types::RequestedSize::new(size).padded_unchecked();"
+                "_mi_page_malloc_zero_typed(\n                        theap,\n                        available,\n                        padded,"
             )
+            && alloc_aligned_rs.contains("let padded = layout.padded();")
             && !page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")
             && !alloc_aligned_rs
                 .contains("let p = _mi_page_malloc_zero(theap, page, padsize, zero);")
@@ -3064,8 +4850,16 @@ fn free_path_internals_are_not_dynamic_exports() {
         atomic_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_atomic_once_enter")
             && atomic_rs
                 .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_atomic_once_release")
-            && atomic_rs.contains("_mi_atomic_once_release(self.once);"),
-        "atomic once should keep C's enter/release helper boundaries"
+            && atomic_types.contains("pub(crate) struct OnceGuard<'a>")
+            && atomic_types
+                .contains("pub(crate) unsafe fn try_enter(once: OnceStatePtr) -> Option<Self>")
+            && atomic_types.contains("impl Drop for OnceGuard<'_>")
+            && atomic_types.contains("crate::atomic::_mi_atomic_once_release(")
+            && atomic_rs.contains("_once: crate::core_types::OnceGuard<'static>")
+            && atomic_rs.contains("crate::core_types::OnceGuard::try_enter(state)")
+            && !atomic_rs.contains("once: *mut mi_atomic_once_t,\n}")
+            && !atomic_rs.contains("_mi_atomic_once_release(self.once);"),
+        "atomic once should keep C's enter/release helper boundaries and release through typed OnceGuard Drop"
     );
     assert!(
         bitmap_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_bitmap_forall_set(")
@@ -3076,12 +4870,42 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "#[inline(never)]\npub unsafe extern \"C\" fn _mi_bitmap_forall_setc_rangesn("
             )
             && bitmap_rs
-                .contains("return _mi_bitmap_forall_setc_ranges(bitmap, visit, arena, arg);")
+                .contains("return mi_bitmap_forall_setc_ranges_typed(bitmap, visit, ArenaPtr::new(arena), arg);")
             && arena_rs.contains("_mi_bitmap_forall_setc_rangesn("),
         "bitmap traversal should keep C's set/range traversal helper boundaries"
     );
+    assert!(
+        bitmap_rs.contains(
+            "pub(crate) unsafe fn mi_bitmap_forall_set_typed(\n    bitmap: *mut mi_bitmap_t,\n    visit: mi_forall_set_fun_t,\n    arena: Option<ArenaPtr>,"
+        ) && bitmap_rs.contains("unsafe { mi_bitmap_forall_set_typed(bitmap, visit, ArenaPtr::new(arena), arg) }")
+            && bitmap_rs.contains("let index = SliceIndex::new(base_idx + bidx);")
+            && bitmap_rs.contains("visit(index.get(), one.get() as usize, arena, arg)")
+            && arena_rs.contains("ok = mi_bitmap_forall_set_typed(")
+            && arena_rs.contains("Some(arena),"),
+        "_mi_bitmap_forall_set should keep its raw extern shim but use typed arena/index wrappers internally"
+    );
+    assert!(
+        bitmap_rs.contains(
+            "pub(crate) unsafe fn mi_bitmap_forall_setc_ranges_typed(\n    bitmap: *mut mi_bitmap_t,\n    visit: mi_forall_set_fun_t,\n    arena: Option<ArenaPtr>,"
+        ) && bitmap_rs.contains("unsafe { mi_bitmap_forall_setc_ranges_typed(bitmap, visit, ArenaPtr::new(arena), arg) }")
+            && bitmap_rs.contains("let range = SliceRange::from_raw(")
+            && bitmap_rs.contains("visit(range.start_usize(), range.count_usize(), arena, arg)"),
+        "_mi_bitmap_forall_setc_ranges should keep its raw extern shim but use typed arena/range wrappers internally"
+    );
+    assert!(
+        bitmap_rs.contains(
+            "pub(crate) unsafe fn mi_bitmap_forall_setc_rangesn_typed(\n    bitmap: *mut mi_bitmap_t,\n    rngslices: SliceCount,"
+        ) && bitmap_rs.contains("let rngslices_raw = if rngslices > MI_BFIELD_BITS {")
+            && bitmap_rs.contains("crate::mi_assert_internal!(rngslices_raw > 0);")
+            && bitmap_rs.contains("let rngslices = SliceCount::new_unchecked(rngslices_raw as u32);")
+            && bitmap_rs.contains("mi_bitmap_forall_setc_rangesn_typed(bitmap, rngslices, visit, ArenaPtr::new(arena), arg)")
+            && bitmap_rs.contains("let rngslices_count = rngslices;")
+            && bitmap_rs.contains("let range = SliceRange::from_raw(idx as u32, rngslices_count.get())")
+            && bitmap_rs.contains("visit(range.start_usize(), range.count_usize(), arena, arg)"),
+        "_mi_bitmap_forall_setc_rangesn should keep its raw extern shim but use typed range/count wrappers internally"
+    );
     for marker in [
-        "#[inline(never)]\npub unsafe fn mi_bitmap_try_find_and_claim(",
+        "#[inline(never)]\npub(crate) unsafe fn mi_bitmap_try_find_and_claim(",
         "#[inline(never)]\npub unsafe fn mi_bitmap_size(",
         "#[inline(never)]\npub unsafe fn mi_bitmap_init(",
         "#[inline(never)]\npub unsafe fn mi_bitmap_unsafe_setN(",
@@ -3123,6 +4947,39 @@ fn free_path_internals_are_not_dynamic_exports() {
             "regular bitmap helper boundary marker missing: {marker}"
         );
     }
+    assert!(
+        bitmap_rs.contains(
+            "pub(crate) unsafe fn mi_bitmap_try_find_and_claim(\n    bitmap: *mut mi_bitmap_t,\n    tseq: ThreadSeq,\n    pidx: &mut SliceIndex,"
+        )
+            && bitmap_rs.contains("claim: ThreadLocalClaimCallback,\n    arena: Option<ArenaPtr>,")
+            && bitmap_rs.contains("let mut claim = claim;")
+            && bitmap_rs.contains("let mut raw_idx = pidx.get();")
+            && bitmap_rs.contains(".then(|| *pidx = SliceIndex::new(raw_idx))")
+            && bitmap_rs.contains("(*claim_fun).invoke(slice_index, claim_data.arena,")
+            && bitmap_rs.contains("arena: Option<ArenaPtr>,")
+            && threadlocal_rs.contains(
+                "let claim_fun = ThreadLocalClaimCallback::new(mi_thread_local_claim_fun);"
+            )
+            && threadlocal_rs.contains(
+                "mi_bitmap_try_find_and_claim(slots, ThreadSeq::new(0), &mut idx, claim_fun, None)"
+            )
+            && threadlocal_rs.contains("mi_key_create(idx.get(), version)")
+            && arena_rs.contains(
+                "let claim_fun = ThreadLocalClaimCallback::new(mi_arena_try_claim_abandoned);"
+            )
+            && arena_rs.contains("let mut slice_index = SliceIndex::new(0);")
+            && arena_rs.contains("claim_fun,\n                    Some(arena),")
+            && arena_rs.contains("let page = mi_arena_page_at_slice(arena, slice_index);")
+            && callbacks_rs.contains("impl ThreadLocalClaimCallback")
+            && callbacks_rs.contains("arena: Option<ArenaPtr>,")
+            && threadlocal_rs.contains("struct ThreadLocalKeepSet(ptr::NonNull<bool>);")
+            && threadlocal_rs.contains("unsafe fn from_raw(keep_set: *mut bool) -> Self")
+            && threadlocal_rs.contains("fn mi_thread_local_claim_fun_typed(\n    _slice_index: SliceIndex,\n    _arena: Option<ArenaPtr>,\n    keep_set: ThreadLocalKeepSet,")
+            && threadlocal_rs.contains("ArenaPtr::new(arena),")
+            && threadlocal_rs.contains("ThreadLocalKeepSet::from_raw(keep_set),")
+            && !bitmap_rs.contains("*mut mi_claim_fun_t"),
+        "thread-local claim callbacks should route through typed callback wrappers below raw typedefs"
+    );
     for marker in [
         "#[inline(never)]\npub unsafe fn mi_bbitmap_debug_get_bin(",
         "#[inline(never)]\npub unsafe fn mi_bbitmap_size(",
@@ -3216,12 +5073,12 @@ fn free_path_internals_are_not_dynamic_exports() {
         );
     }
     let claim_start = arena_rs
-        .find("unsafe extern \"C\" fn mi_arena_try_claim_abandoned(")
-        .expect("find mi_arena_try_claim_abandoned");
+        .find("unsafe fn mi_arena_try_claim_abandoned_at(")
+        .expect("find mi_arena_try_claim_abandoned_at");
     let claim_end = arena_rs[claim_start..]
-        .find("\n}\n\nunsafe fn mi_heap_ensure_arena_pages(")
+        .find("\n}\n\nunsafe extern \"C\" fn mi_arena_try_claim_abandoned(")
         .map(|offset| claim_start + offset)
-        .expect("find end of mi_arena_try_claim_abandoned");
+        .expect("find end of mi_arena_try_claim_abandoned_at");
     let claim_body = &arena_rs[claim_start..claim_end];
     assert!(
         !claim_body.contains("mi_arena_page_at_slice(")
@@ -3231,17 +5088,34 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         arena_rs.contains(
-            "unsafe fn mi_arena_slice_start(\n    arena: *mut mi_arena_t,\n    slice_index: crate::core_types::SliceIndex,"
+            "unsafe { mi_arena_try_claim_abandoned_at(SliceIndex::new(slice_index), arena, keep_abandoned) }"
+        ),
+        "abandoned arena page callback should parse raw slice indexes at the C ABI boundary"
+    );
+    assert!(
+        arena_rs.contains(
+            "unsafe fn mi_arena_slice_start(\n    arena: ArenaPtr,\n    slice_index: crate::core_types::SliceIndex,"
         ) && arena_rs.contains(
-            "unsafe fn mi_arena_page_at_slice(\n    arena: *mut mi_arena_t,\n    slice_index: crate::core_types::SliceIndex,"
-        ) && arena_rs.contains(
-            "mi_arena_page_at_slice(arena, crate::core_types::SliceIndex::new(slice_index))"
-        ) && arena_rs.contains(
-            "mi_arena_slice_start(arena, crate::core_types::SliceIndex::new(slice_index))"
-        ) && arena_rs.contains("mi_arena_slice_start(arena, range.start()).cast::<c_void>()")
-            && !arena_rs.contains("mi_arena_page_at_slice(arena, slice_index)")
-            && !arena_rs.contains("mi_arena_slice_start(arena, slice_index).cast::<c_void>()"),
-        "arena slice address/page helpers should receive typed SliceIndex values"
+            "unsafe fn mi_arena_page_at_slice(\n    arena: ArenaPtr,\n    slice_index: crate::core_types::SliceIndex,"
+        ) && arena_rs.contains("unsafe fn mi_heap_visit_page_at_index(\n    slice_index: SliceIndex,")
+            && arena_rs.contains("unsafe fn mi_arena_try_claim_abandoned_at(\n    slice_index: SliceIndex,")
+            && arena_rs.contains("    slice_index: SliceIndex,\n    pbit_of_page:")
+            && arena_rs.contains("mi_heap_visit_page_at_index(SliceIndex::new(slice_index), arena, arg)")
+            && arena_rs.contains(
+                "mi_arena_try_claim_abandoned_at(SliceIndex::new(slice_index), arena, keep_abandoned)"
+            )
+            && arena_rs
+                .contains("mi_arena_page_at_slice(ArenaPtr::new_unchecked(arena), slice_index)")
+            && arena_rs.contains("let page = mi_arena_page_at_slice(arena, slice_index);")
+            && arena_rs.contains(
+                "mi_arena_slice_start(arena_ptr, crate::core_types::SliceIndex::new(slice_index))"
+            )
+            && arena_rs.contains(
+                "mi_arena_slice_start(ArenaPtr::new_unchecked(arena), range.start())\n            .as_ptr()\n            .cast::<c_void>()"
+            )
+            && !arena_rs.contains("unsafe fn mi_arena_page_at_slice(\n    arena: *mut mi_arena_t,")
+            && !arena_rs.contains("unsafe fn mi_arena_slice_start(\n    arena: *mut mi_arena_t,"),
+        "arena slice address/page helpers should receive typed ArenaPtr and SliceIndex values"
     );
     assert!(
         arena_types.contains(
@@ -3252,10 +5126,14 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         arena_rs.contains(
-            "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange)"
+            "unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::SliceRange)"
         ) && arena_rs.contains(
+            "unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) -> bool"
+        ) && arena_rs.contains(
+            "unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::SliceRange) -> bool"
+        ) && !arena_rs.contains(
             "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange) -> bool"
-        ) && arena_rs.contains(
+        ) && !arena_rs.contains(
             "unsafe fn mi_arena_try_purge_range(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> bool"
         ) && arena_rs.contains("match crate::core_types::MemId::view(memid)")
             && arena_rs.contains("crate::core_types::MemIdView::Arena(arena_memid)")
@@ -3267,19 +5145,17 @@ fn free_path_internals_are_not_dynamic_exports() {
             && memid_rs.contains("impl MemId<ExternalMem>")
             && memid_rs.contains("pub(crate) fn external(")
             && arena_rs.contains(
-                "memid = crate::core_types::MemId::<crate::core_types::NoneMem>::none().raw;"
+                "memid = crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw();"
             )
             && arena_rs
                 .contains("crate::core_types::MemId::<crate::core_types::ExternalMem>::external")
             && arena_rs.contains("crate::core_types::MemIdView::External(external)")
             && os_rs.contains("crate::core_types::MemIdView::External(external)")
-            && arena_rs.contains("let os_size = external.size.0;")
+            && arena_rs.contains("let os_size = external.size.get();")
             && arena_rs.contains("bit_of_page = match crate::core_types::MemId::view(unsafe { (*page).memid })")
             && arena_rs.contains("crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize")
-            && os_rs.contains("external.size.0")
-            && os_rs.contains(
-                "let crate::core_types::MemIdView::Os(os) = crate::core_types::MemId::view(memid)"
-            )
+            && os_rs.contains("external.size.get()")
+            && os_rs.contains("let MemIdView::Os(memid) = MemId::view(memid) else")
             && memid_rs.contains("pub(crate) fn os_huge(")
             && memid_rs.contains("fn os_with_kind(")
             && internal.contains("crate::core_types::MemId::<crate::core_types::OsMem>::os(")
@@ -3307,10 +5183,17 @@ fn free_path_internals_are_not_dynamic_exports() {
             && theap_rs.contains("match crate::core_types::MemId::view(memid)")
             && theap_rs.contains("crate::core_types::MemIdView::HeapMain(_)")
             && theap_rs.contains("crate::core_types::MemIdView::Meta(_)")
-            && theap_rs.contains("mi_memid_is_refcounted((*theap).memid)")
-            && theap_rs.matches("crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*theap).refcount))").count() == 3
-            && theap_rs.contains(".fetch_add(1, crate::core_types::MemoryOrder::AcqRel)")
-            && theap_rs.contains(".fetch_sub(1, crate::core_types::MemoryOrder::AcqRel)")
+            && theap_rs.contains("mi_memid_is_refcounted((*theap.as_ptr()).memid)")
+            && atomic_types.contains(
+                "pub(crate) struct AtomicThreadHeapRefcount(pub(crate) AtomicUsizeField);"
+            )
+            && atomic_types.contains("pub(crate) unsafe fn incref_acq_rel(self) -> usize")
+            && atomic_types.contains("pub(crate) unsafe fn decref_acq_rel(self) -> usize")
+            && ptr_rs.contains("pub(crate) unsafe fn refcount_cell(self) -> AtomicThreadHeapRefcount")
+            && theap_rs.matches(".refcount_cell()").count() == 3
+            && theap_rs.contains(".incref_acq_rel();")
+            && theap_rs.contains(".decref_acq_rel()")
+            && !theap_rs.contains("AtomicUsizeField(ptr::addr_of_mut!((*theap).refcount))")
             && !theap_rs.contains("mi_atomic_increment_acq_rel(ptr::addr_of_mut!((*theap).refcount))")
             && !theap_rs.contains("mi_atomic_fetch_sub_explicit(\n            ptr::addr_of_mut!((*theap).refcount),")
             && !theap_rs.contains("memid.mem.os.")
@@ -3320,7 +5203,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && memid_rs.contains("impl MemId<StaticMem>")
             && memid_rs.contains("pub(crate) const fn static_mem() -> Self")
             && init_rs.contains(
-                "crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().raw"
+                "crate::core_types::MemId::<crate::core_types::StaticMem>::static_mem().into_raw()"
             )
             && init_rs.contains("!mi_memid_is_static((*main_prefix).memid)")
             && init_rs.contains("!mi_memid_is_static(theap_main.memid)")
@@ -3339,8 +5222,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("pub unsafe fn _mi_memid_create(")
             && !internal.contains("raw.memkind = memkind")
             && internal.contains("mi_page_is_in_arena(page)")
-            && internal.contains("crate::core_types::MemId::<crate::core_types::MetaMem>::meta(")
-            && internal.contains("core::num::NonZeroU32::new_unchecked(block_count as u32)")
+            && arena_meta_rs.contains("MemId::<MetaMem>::meta(")
+            && arena_meta_rs.contains("NonZeroU32::new_unchecked(block_count as u32)")
             && memid_rs.contains("impl MemId<MetaMem>")
             && memid_rs.contains("is_pinned: true")
             && memid_rs.contains("initially_committed: true")
@@ -3364,30 +5247,75 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize)"
             )
             && !arena_rs.contains(
+                "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange)"
+            )
+            && !arena_rs.contains(
                 "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize)"
             ),
         "arena free/purge path should dispatch through MemIdView and carry SliceRange"
     );
     assert!(
         page_map.contains(
-            "unsafe fn mi_page_map_ensure_committed(\n    idx: usize,\n    slice_count: crate::core_types::SliceCount,"
+            "unsafe fn mi_page_map_ensure_committed(\n    idx: crate::core_types::PageMapIndex,\n    slice_count: crate::core_types::SliceCount,"
         ) && page_map.contains(
-            "unsafe fn mi_page_map_set_range_prim(\n    page: *mut mi_page_t,\n    mut idx: usize,\n    mut sub_idx: usize,\n    slice_count: crate::core_types::SliceCount,"
+            "unsafe fn mi_page_map_ensure_committed(\n    idx: crate::core_types::PageMapIndex,\n    submap: *mut mi_submap_t,"
         ) && page_map.contains(
-            "unsafe fn mi_page_map_set_range(\n    page: *mut mi_page_t,\n    idx: usize,\n    sub_idx: usize,\n    slice_count: crate::core_types::SliceCount,"
-        ) && page_map
-            .contains("let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count)")
+            "unsafe fn mi_page_map_set_range_prim(\n    page: PagePtr,\n    mut idx: crate::core_types::PageMapIndex,\n    mut sub_idx: crate::core_types::PageMapSubIndex,\n    slice_count: crate::core_types::SliceCount,"
+        ) && page_map.contains(
+            "unsafe fn mi_page_map_clear_range_prim("
+        ) && page_map.contains(
+            "unsafe fn mi_page_map_set_range(\n    page: PagePtr,\n    idx: crate::core_types::PageMapIndex,\n    sub_idx: crate::core_types::PageMapSubIndex,\n    slice_count: crate::core_types::SliceCount,"
+        ) && page_map.contains(
+            "unsafe fn mi_page_map_clear_range("
+        ) && page_map.contains("unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool")
+            && page_map.contains("unsafe fn mi_page_map_unregister_typed(page: PagePtr)")
+            && page_map.contains("let slice_count = SliceCount::from_usize(slice_count)?;")
+            && page_map.contains("unsafe { mi_page_map_register_typed(page) }")
+            && page_map.contains("unsafe { mi_page_map_unregister_typed(page) };")
             && !page_map.contains("unsafe fn mi_page_map_ensure_committed(idx: usize, slice_count: usize)")
+            && !page_map.contains("unsafe fn mi_page_map_ensure_committed(idx: usize, submap:")
             && !page_map.contains("unsafe fn mi_page_map_set_range_prim(\n    page: *mut mi_page_t,\n    mut idx: usize,\n    mut sub_idx: usize,\n    mut slice_count: usize,")
-            && !page_map.contains("unsafe fn mi_page_map_set_range(\n    page: *mut mi_page_t,\n    idx: usize,\n    sub_idx: usize,\n    slice_count: usize,"),
-        "page-map range helpers should validate raw counts once and carry typed SliceCount internally"
+            && !page_map.contains("unsafe fn mi_page_map_set_range_prim(\n    page: *mut mi_page_t,\n    mut idx: usize,\n    mut sub_idx: usize,\n    slice_count: crate::core_types::SliceCount,")
+            && !page_map.contains("unsafe fn mi_page_map_set_range_prim(\n    page: *mut mi_page_t,\n    mut idx: crate::core_types::PageMapIndex,")
+            && !page_map.contains("unsafe fn mi_page_map_set_range(\n    page: *mut mi_page_t,\n    idx: usize,\n    sub_idx: usize,\n    slice_count: usize,")
+            && !page_map.contains("fn mi_page_map_get_idx(\n    page: *mut mi_page_t,"),
+        "page-map range helpers should validate raw indexes/counts once and carry typed indexes plus SliceCount internally"
+    );
+    assert!(
+        arena_rs.contains("SliceCount::from_usize_const(mi_slice_count_of_size(")
+            && memid_rs.contains("slice_index: range.start_u32()")
+            && memid_rs.contains("slice_count: range.count_u32()")
+            && page_map.contains("let slice_count = SliceCount::from_usize(slice_count)?;")
+            && !arena_rs.contains(" as u32")
+            && !page_map.contains(" as u32")
+            && !memid_rs.contains(" as u32")
+            && !arena_rs.contains("SliceRange::from_raw(slice_index as")
+            && !arena_rs.contains("SliceRange::from_raw(slice_index, slice_count as")
+            && !page_map.contains("SliceCount::from_usize(slice_count as"),
+        "arena and page-map slice fields should use checked typed conversions instead of lossy casts"
+    );
+    assert!(
+        page_types.contains("pub(crate) struct RegisteredPageRange {\n    page: PagePtr,\n    index: PageMapIndex,\n    sub_index: PageMapSubIndex,\n    slice_count: SliceCount,\n}")
+            && page_types.contains("pub(crate) unsafe fn new_unchecked(\n        page: PagePtr,\n        index: PageMapIndex,\n        sub_index: PageMapSubIndex,\n        slice_count: SliceCount,\n    ) -> Self")
+            && page_types.contains("pub(crate) fn page(self) -> PagePtr")
+            && page_types.contains("pub(crate) fn index(self) -> PageMapIndex")
+            && page_types.contains("pub(crate) fn sub_index(self) -> PageMapSubIndex")
+            && page_types.contains("pub(crate) fn slice_count(self) -> SliceCount")
+            && page_map.contains("crate::core_types::RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count)\n    };")
+            && page_map.contains("crate::mi_debug_assert!(registered.page().as_ptr() == page.as_ptr());")
+            && page_map.contains("crate::mi_debug_assert!(registered.index() == idx);")
+            && page_map.contains("crate::mi_debug_assert!(registered.sub_index() == sub_idx);")
+            && page_map.contains("crate::mi_debug_assert!(registered.slice_count() == slice_count);")
+            && page_map.contains("Some(unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) })"),
+        "RegisteredPageRange should be an opaque page-map registration witness over PagePtr, PageMapIndex, PageMapSubIndex, and SliceCount"
     );
     assert!(
         atomic_types.contains("pub(crate) struct AtomicPtrField<T>(pub(crate) *mut *mut T);")
-            && atomic_types.contains("pub(crate) unsafe fn load(self, order: Ordering) -> *mut T")
+            && atomic_types
+                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T")
             && atomic_types.contains("expected: &mut *mut T,")
             && page_map.contains(
-                "let atomic_submap = crate::core_types::AtomicPtrField(unsafe { _mi_page_map.add(idx) });"
+                "crate::core_types::AtomicPtrField(unsafe { _mi_page_map.add(idx.get()) });"
             )
             && page_map.contains("atomic_submap.load(crate::core_types::MemoryOrder::Acquire)")
             && page_map.contains("atomic_submap.compare_exchange_acq_rel(&mut expect, new_sub)")
@@ -3409,10 +5337,21 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         arena_rs.contains(
             "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> mi_memid_t"
-        ) && arena_rs.contains("unsafe { *memid = mi_memid_create_arena(arena, range) };")
+        ) && arena_rs.contains("memid: unsafe { mi_memid_create_arena(arena, range) },")
             && arena_rs.contains("let Some((arena, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else")
             && arena_rs.contains("unsafe { *slice_index = range.start_usize() };")
             && arena_rs.contains("unsafe { *slice_count = range.count_usize() };")
+            && scalar_types.contains("pub(crate) fn as_u32(self) -> Option<u32>")
+            && scalar_types.contains("pub(crate) const fn from_usize_const(count: usize) -> Option<Self>")
+            && arena_types.contains("pub(crate) fn start_u32(self) -> u32")
+            && arena_types.contains("pub(crate) const fn count_u32(self) -> u32")
+            && memid_rs.contains("slice_index: range.start_u32()")
+            && memid_rs.contains("slice_count: range.count_u32()")
+            && arena_rs.contains("SliceCount::from_usize_const(mi_slice_count_of_size(")
+            && !arena_rs.contains("mi_slice_count_of_size(MI_SMALL_PAGE_SIZE) as u32")
+            && !arena_rs.contains("mi_slice_count_of_size(MI_MEDIUM_PAGE_SIZE) as u32")
+            && !arena_rs.contains("mi_slice_count_of_size(MI_LARGE_PAGE_SIZE) as u32")
+            && !memid_rs.contains("range.start().0 as u32")
             && !arena_rs.contains(
                 "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    slice_index: usize,\n    slice_count: usize,"
             )
@@ -3421,10 +5360,45 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         arena_rs.contains(
-            "unsafe fn mi_arena_try_alloc_at(\n    arena: *mut mi_arena_t,\n    slice_count: crate::core_types::SliceCount,"
-        ) && arena_rs.contains("let p = mi_arena_try_alloc_at(arena, slice_count, commit, tseq, memid);")
+            "unsafe fn mi_arena_try_alloc_at(\n    arena: ArenaPtr,\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains(") -> Option<(*mut c_void, crate::core_types::ArenaAllocation)>")
+            && arena_types.contains(
+                "pub(crate) struct ArenaAllocation {\n    pub(crate) arena: ArenaPtr,\n    pub(crate) range: SliceRange,\n    pub(crate) memid: crate::internal::mi_memid_t,\n}"
+            )
+            && arena_rs.contains("let mut allocation = crate::core_types::ArenaAllocation {")
+            && arena_rs.contains("unsafe { *memid = allocation.assume_init().memid };")
+            && arena_rs.contains("mi_arena_try_alloc_at(arena, slice_count, commit, tseq)")
+            && !arena_rs.contains(
+                "unsafe fn mi_arena_try_alloc_at(\n    arena: *mut mi_arena_t,\n    slice_count: crate::core_types::SliceCount,"
+            )
             && !arena_rs.contains("mi_arena_try_alloc_at(arena, slice_count.get() as usize"),
-        "arena allocation helper should accept typed SliceCount from its callers"
+        "arena allocation helper should accept typed SliceCount and return ArenaAllocation"
+    );
+    assert!(
+        arena_rs.contains(
+            "unsafe fn mi_arenas_try_alloc(\n    heap: BorrowedHeap,\n    slice_count: crate::core_types::SliceCount,"
+        ) && arena_rs.contains("    alignment: crate::core_types::Alignment,")
+            && arena_rs.contains("    req_arena: Option<ArenaPtr>,")
+            && arena_rs.contains("    numa_node: crate::core_types::NumaNode,")
+            && arena_rs.contains("let Some(subproc) = (unsafe { heap.ptr().subproc() }) else")
+            && arena_rs.contains("heap: HeapPtr::new(heap),")
+            && arena_rs.contains("crate::core_types::NumaNode::new(numa_node),")
+            && arena_rs.contains("req_arena: ArenaPtr::new(req_arena),")
+            && arena_rs.contains("let Some(heap_ptr) = HeapPtr::new(heap) else")
+            && arena_rs.contains("BorrowedHeap::new_unchecked(heap_ptr),")
+            && !arena_rs.contains(
+                "unsafe fn mi_arenas_try_alloc(\n    heap: *mut mi_heap_t,"
+            ),
+        "arena try-alloc should receive typed heap, requested arena, slice count, and NUMA node below raw entry points"
+    );
+    assert!(
+        arena_types.contains("#[repr(transparent)]\npub(crate) struct SharedArena(pub(crate) ArenaPtr);")
+            && arena_types.contains("#[repr(transparent)]\npub(crate) struct ExclusiveArena(pub(crate) ArenaPtr);")
+            && arena_types.contains("#[repr(transparent)]\npub(crate) struct ParentArena(pub(crate) ArenaPtr);")
+            && arena_types.contains("impl SharedArena {\n    /// # Safety\n    /// `arena` must point to initialized arena metadata.\n    #[inline(always)]\n    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {\n        if unsafe { arena.is_exclusive() } {")
+            && arena_types.contains("impl ExclusiveArena {\n    /// # Safety\n    /// `arena` must point to initialized arena metadata.\n    #[inline(always)]\n    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {\n        if unsafe { arena.is_exclusive() } {")
+            && arena_types.contains("impl ParentArena {\n    /// # Safety\n    /// `arena` must point to initialized arena metadata.\n    #[inline(always)]\n    pub(crate) unsafe fn new(arena: ArenaPtr) -> Option<Self> {\n        if unsafe { arena.parent().is_none() } {"),
+        "arena role wrappers should have checked constructors based on raw arena state"
     );
     assert!(
         arena_rs.contains(
@@ -3436,10 +5410,10 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && arena_rs.contains(
             "unsafe fn mi_arena_bbitmap_init(\n    slice_count: crate::core_types::SliceCount,"
         ) && arena_rs.contains(
-            "unsafe fn mi_arena_initialize(\n    subproc: *mut mi_subproc_t,\n    start: *mut c_void,\n    slice_count: crate::core_types::SliceCount,"
+            "unsafe fn mi_arena_initialize(\n    subproc: SubprocPtr,\n    start: OsMemPtr,\n    slice_count: crate::core_types::SliceCount,"
         ) && arena_rs.contains("let slice_count_usize = slice_count.get() as usize;")
             && arena_rs.contains("let Some(typed_slice_count) = crate::core_types::SliceCount::from_usize(slice_count)")
-            && arena_rs.contains("mi_arena_initialize(\n                subproc,\n                start,\n                typed_slice_count,")
+            && arena_rs.contains("mi_arena_initialize(\n                SubprocPtr::new_unchecked(subproc),\n                OsMemPtr::new_unchecked(start),\n                typed_slice_count,")
             && !arena_rs.contains("unsafe fn mi_arena_pages_size(slice_count: usize")
             && !arena_rs.contains("unsafe fn mi_arena_info_slices_needed(slice_count: usize")
             && !arena_rs.contains("unsafe fn mi_arena_bitmap_init(slice_count: usize")
@@ -3456,12 +5430,16 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && arena_rs.contains(
             "unsafe fn mi_arenas_page_regular_alloc(\n    theap: *mut mi_theap_t,\n    slice_count: crate::core_types::SliceCount,"
         ) && arena_rs.contains("let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count)")
+            && arena_rs.contains("let block_size_typed = unsafe { crate::core_types::BlockSize::new_unchecked(block_size) };")
+            && arena_rs.contains(
+                "let block_alignment_typed =\n        unsafe { crate::core_types::MaybeAlignment::new_unchecked(block_alignment) };",
+            )
             && arena_rs.contains("const MI_SMALL_PAGE_SLICE_COUNT: crate::core_types::SliceCount")
             && arena_rs.contains("const MI_MEDIUM_PAGE_SLICE_COUNT: crate::core_types::SliceCount")
             && arena_rs.contains("const MI_LARGE_PAGE_SLICE_COUNT: crate::core_types::SliceCount")
-            && arena_rs.contains("mi_arenas_page_regular_alloc(theap, MI_SMALL_PAGE_SLICE_COUNT, block_size)")
-            && arena_rs.contains("mi_arenas_page_regular_alloc(theap, MI_MEDIUM_PAGE_SLICE_COUNT, block_size)")
-            && arena_rs.contains("mi_arenas_page_regular_alloc(theap, MI_LARGE_PAGE_SLICE_COUNT, block_size)")
+            && arena_rs.contains("mi_arenas_page_regular_alloc(theap, MI_SMALL_PAGE_SLICE_COUNT, block_size_typed)")
+            && arena_rs.contains("mi_arenas_page_regular_alloc(theap, MI_MEDIUM_PAGE_SLICE_COUNT, block_size_typed)")
+            && arena_rs.contains("mi_arenas_page_regular_alloc(theap, MI_LARGE_PAGE_SLICE_COUNT, block_size_typed)")
             && !arena_rs.contains("unsafe fn mi_arenas_page_try_find_abandoned(\n    theap: *mut mi_theap_t,\n    slice_count: usize,")
             && !arena_rs.contains("unsafe fn mi_arenas_page_alloc_fresh_area(\n    theap: *mut mi_theap_t,\n    slice_count: usize,")
             && !arena_rs.contains("unsafe fn mi_arenas_page_alloc_fresh(\n    theap: *mut mi_theap_t,\n    slice_count: usize,")
@@ -3506,9 +5484,11 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena purge expiry should use typed atomic i64 field wrappers"
     );
     assert!(
-        atomic_types.contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")
+            atomic_types.contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")
             && atomic_types.contains("desired: usize,")
-            && atomic_types.contains("Ordering::AcqRel,\n            Ordering::Acquire,")
+            && atomic_types.contains(
+                "atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire)"
+            )
             && arena_rs
                 .matches("ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count)")
                 .count()
@@ -3525,58 +5505,199 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena_count compare-exchange should use AtomicUsizeField"
     );
     assert!(
-        atomic_types.contains("pub(crate) unsafe fn store(self, value: *mut T, order: Ordering)")
+        atomic_types
+            .contains("pub(crate) struct AtomicAbandonedCount(pub(crate) *const AtomicUsize);")
+            && atomic_types.contains("impl AtomicAbandonedCount")
+            && atomic_types.contains("pub(crate) unsafe fn load_relaxed(self) -> usize")
+            && atomic_types
+                .contains("pub(crate) unsafe fn fetch_add_relaxed(self, value: usize) -> usize")
+            && atomic_types
+                .contains("pub(crate) unsafe fn fetch_sub_relaxed(self, value: usize) -> usize")
+            && arena_rs.contains(
+                "unsafe fn mi_heap_abandoned_count(\n    heap: *mut mi_heap_t,\n    bin: crate::core_types::Bin,"
+            )
+            && arena_rs.contains("abandoned_count[bin.as_usize()]")
+            && arena_rs.contains("let Some(typed_bin) = crate::core_types::Bin::new(bin as u16) else")
+            && arena_rs.contains("crate::mi_assert_internal!(false);\n                                break;")
+            && arena_rs.contains("mi_heap_abandoned_count(heap, typed_bin).load_relaxed() > 0")
+            && arena_rs.contains("mi_heap_abandoned_count(heap, bin).load_relaxed() == 0")
+            && arena_rs.contains("mi_heap_abandoned_count(heap, bin).fetch_add_relaxed(1)")
+            && arena_rs.contains("mi_heap_abandoned_count(heap, bin).fetch_sub_relaxed(1)")
+            && !arena_rs.contains(".abandoned_count[bin].load(Ordering::Relaxed)")
+            && !arena_rs.contains(".abandoned_count[bin].fetch_add(1, Ordering::Relaxed)")
+            && !arena_rs.contains(".abandoned_count[bin].fetch_sub(1, Ordering::Relaxed)")
+            && !arena_rs.contains(".abandoned_count[i].load(Ordering::Relaxed)"),
+        "arena abandoned-count atomics should go through AtomicAbandonedCount with typed Bin indexes"
+    );
+    assert!(
+        atomic_types
+            .contains("pub(crate) struct AtomicArenaPage(pub(crate) *const AtomicPtr<c_void>);")
+            && atomic_types.contains("impl AtomicArenaPage")
+            && atomic_types.contains(
+                "pub(crate) unsafe fn load_acquire(self) -> *mut crate::types::mi_arena_pages_t"
+            )
+            && atomic_types.contains(
+                "pub(crate) unsafe fn store_release(self, value: *mut crate::types::mi_arena_pages_t)"
+            )
+            && arena_rs.contains(
+                "unsafe fn mi_arena_index(arena: *mut mi_arena_t) -> crate::core_types::ArenaIndex"
+            )
+            && !arena_rs.contains(
+                "unsafe fn mi_heap_arena_page_cell(\n    heap: *mut mi_heap_t,\n    arena_idx: crate::core_types::ArenaIndex,"
+            )
+            && arena_rs.contains(
+                "unsafe fn mi_heap_arena_page_cell(\n    heap: BorrowedHeap,\n    arena_idx: crate::core_types::ArenaIndex,"
+            )
+            && arena_rs.contains(
+                "unsafe fn mi_heap_ensure_arena_pages(\n    heap: BorrowedHeap,\n    arena: ArenaPtr,\n    arena_idx: ArenaIndex,"
+            )
+            && arena_rs.contains("arena_pages[arena_idx.get() as usize]")
+            && arena_rs.matches("mi_heap_arena_page_cell(heap, arena_idx).load_acquire()").count()
+                == 1
+            && arena_rs
+                .matches("mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire()")
+                .count()
+                == 2
+            && arena_rs
+                .contains("mi_heap_arena_page_cell(heap, arena_idx).store_release(arena_pages.cast())")
+            && !arena_rs.contains(".arena_pages[arena_idx].load(Ordering::Acquire)")
+            && !arena_rs.contains(".arena_pages[arena_idx]\n                    .store")
+            && !arena_rs.contains(".arena_pages[i].load(Ordering::Acquire)"),
+        "heap arena page-table atomics should use AtomicArenaPage with typed ArenaIndex values"
+    );
+    assert!(
+        atomic_types
+            .contains("pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder)")
             && atomic_types.contains("pub(crate) unsafe fn compare_exchange_release(")
             && arena_rs
                 .matches("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(")
                 .count()
-                == 6
+                == 1
+            && arena_rs.contains(
+                "unsafe fn mi_subproc_arena_cell(\n    subproc: *mut mi_subproc_t,\n    arena_idx: ArenaIndex,"
+            )
+            && arena_rs.contains(
+                "unsafe fn mi_arena_from_index_typed(subproc: SubprocPtr, arena_idx: ArenaIndex)"
+            )
             && arena_rs
                 .matches("(*subproc.cast::<MiSubprocPrefix>()).arenas[")
                 .count()
-                == 6
+                == 1
+            && arena_rs.contains("let Some(arena_idx) = ArenaIndex::from_usize(idx)")
+            && arena_rs
+                .matches("mi_arena_from_index_typed(")
+                .count()
+                >= 5
             && arena_rs
                 .matches(".compare_exchange_release(&mut expected, arena)")
                 .count()
                 == 2
             && arena_rs
                 .contains(".store(ptr::null_mut(), crate::core_types::MemoryOrder::Release);")
+            && !arena_rs.contains("mi_arena_from_index(subproc, i)")
             && !arena_rs.contains("mi_atomic_cas_ptr_strong_release")
             && !arena_rs.contains("mi_atomic_store_ptr_release")
             && !arena_rs.contains("mi_atomic_load_ptr_acquire"),
-        "arena table pointer atomics should use AtomicPtrField"
+        "arena table pointer atomics should use AtomicPtrField with typed ArenaIndex values"
     );
     assert!(
         free_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign")
-            && free_rs.contains("crate::mi_assert!(_mi_page_ptr_unalign(page, p) == p.cast());")
             && free_rs.contains(
-                "pub(crate) unsafe fn mi_validate_block_from_ptr(\n    page: *const mi_page_t,\n    p: *mut c_void,\n) -> crate::core_types::PointerLookup"
+                "crate::mi_assert!(_mi_page_ptr_unalign(page_raw, user_raw) == user_raw.cast());"
             )
-            && free_rs.contains("let block = if mi_page_has_interior_pointers(page) || MI_SECURE > 0")
+            && free_rs.contains(
+                "pub(crate) unsafe fn mi_validate_block_from_ptr(\n    page: crate::core_types::PagePtr,\n    user: crate::core_types::UserPtr,\n) -> crate::core_types::PointerLookup"
+            )
+            && free_rs.contains("let location = mi_pointer_location(page, user, MI_SECURE > 0, true);")
+            && free_rs.contains("unsafe fn mi_lookup_pointer_page(")
+            && free_rs.contains("user: crate::core_types::UserPtr,")
+            && free_rs.contains(") -> Option<crate::core_types::PagePtr>")
+            && free_rs.contains("let registered_page = mi_lookup_pointer_page(user_ptr);")
+            && free_rs.contains("unsafe fn mi_pointer_location(")
+            && free_rs.contains("page: crate::core_types::PagePtr,")
+            && free_rs.contains("user: crate::core_types::UserPtr,")
+            && free_rs.contains(") -> crate::core_types::PointerLocation")
+            && free_rs.contains("let page_raw = page.as_ptr();")
+            && free_rs.contains("let user_raw = user.as_ptr();")
+            && free_rs.contains("let block = if mi_page_has_interior_pointers(page_raw) || force_unalign")
             && free_rs.contains("PointerLocation::Guarded")
             && validation_types.contains("pub(crate) struct LocatedBlock")
+            && validation_types.contains("pub(crate) struct GuardedBlock(BlockPtr);")
+            && validation_types.contains("pub(crate) fn after_guarded_detection(block: BlockPtr) -> Self")
             && validation_types.contains("impl PointerLocation")
             && validation_types.contains("pub(crate) fn located_block(self) -> LocatedBlock")
+            && validation_types.contains("Valid(ValidPointerLookup)")
+            && validation_types.contains("pub(crate) struct ValidPointerLookup {\n    user: UserPtr,\n    page: PagePtr,\n    location: PointerLocation,")
+            && validation_types.contains("pub(crate) fn valid(user: UserPtr, page: PagePtr, location: PointerLocation) -> Self")
             && validation_types.contains("pub(crate) struct BlockForFree {\n    block: BlockPtr,\n    was_guarded: WasGuarded,")
             && validation_types.contains("pub(crate) fn is_guarded(self) -> bool")
+            && validation_types
+                .contains("pub(crate) fn into_free_block(self) -> crate::core_types::FreeBlock")
             && validation_types.contains("pub(crate) struct ValidatedFree {\n    user: UserPtr,\n    page: PagePtr,\n    block: BlockForFree,")
+            && validation_types.contains("pub(crate) fn prepare_free(self) -> Option<ValidatedFree>")
+            && validation_types.contains("ValidatedFree { user, page, block }")
             && validation_types.contains("pub(crate) fn page(self) -> PagePtr")
             && validation_types.contains("pub(crate) fn block(self) -> BlockForFree")
+            && free_rs.contains("/// # Safety\n/// `lookup` must come from validating the same page/user pair that is about to\n/// be freed by the generic free path.")
+            && free_rs.contains("/// the block; this boundary consumes the lookup and performs any required\n/// guarded-block unprotection before returning the freeable block witness.")
             && free_rs.contains("unsafe fn mi_block_for_free_from_lookup(")
-            && free_rs.contains("let located = location.located_block();")
+            && free_rs.contains("let validated = lookup.prepare_free()?;")
+            && free_rs.contains("unsafe fn mi_prepare_validated_free(")
+            && free_rs.contains("mi_prepare_validated_free(lookup).map(crate::core_types::ValidatedFree::block)")
             && free_rs.contains("let block = block_wrapper.block().as_ptr();")
             && free_rs.contains("let was_guarded = block_wrapper.is_guarded();")
             && free_rs.contains("let page = validated.page().as_ptr();")
-            && free_rs.contains("crate::core_types::LocalPage(validated.page())")
             && free_rs.contains("validated.block()")
-            && free_rs.contains("crate::core_types::BlockForFree::new(\n            located.block(),\n            located.was_guarded(),\n        )")
-            && alloc_rs.contains("let block = location.block();")
-            && free_rs.contains(
-                "mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))"
+            && free_rs.contains("let path = page_tid.classify_free_path(current_tid);")
+            && free_rs.contains("let owner = validated.page().classify_for_free(current_tid);")
+            && free_rs.contains("crate::core_types::PageFreeOwner::Local(local_page)")
+            && free_rs.contains("owner: crate::core_types::PageFreeOwner,")
+            && free_rs.contains("crate::core_types::PageFreeOwner::Foreign(foreign_page)")
+            && free_rs.contains("mi_free_block_local(\n                    local_page,")
+            && free_rs.contains("mi_free_block_mt(foreign_page, validated.block());")
+            && page_states_rs.contains("pub(crate) fn remote_free_page(self) -> ForeignPage")
+            && free_rs.contains("mi_free_block_mt(abandoned_page.remote_free_page(), validated.block());")
+            && !free_rs.contains("let delta = page_tid.xor_current(current_tid);")
+            && !source_item(
+                "src/free.rs",
+                &free_rs,
+                "pub(crate) unsafe fn mi_free_ex_slow("
             )
+            .contains("LocalPage::new_unchecked")
+            && !source_item(
+                "src/free.rs",
+                &free_rs,
+                "pub(crate) unsafe fn mi_free_ex_slow("
+            )
+            .contains("ForeignPage::new_unchecked")
+            && free_rs.contains("GuardedBlock::after_guarded_detection(block)")
+            && free_rs.contains("GuardedBlock::after_guarded_detection(block_ptr)")
+            && free_rs.contains("if let Some(validated) = mi_prepare_validated_free(mi_validate_pointer(p, msg))")
+            && free_rs.contains("let location = mi_pointer_location(page_ptr, user_ptr, false, false);")
+            && free_rs.contains("PointerLookup::valid(user_ptr, page_ptr, location)")
+            && free_rs.matches("mi_block_check_unguard(validated.page(), validated.block(), validated.user())").count() == 1
+            && !free_rs.contains("let Some((validated, located))")
+            && !free_rs.contains("let block_raw = if mi_page_has_interior_pointers(page_raw)")
+            && alloc_rs.contains("let block = valid.location().block();")
+            && free_rs.matches("let page = crate::core_types::PagePtr::new_unchecked(page);").count() == 2
+            && free_rs.matches("let user = crate::core_types::UserPtr::new_unchecked(p);").count() == 2
+            && free_rs
+                .matches("mi_prepare_validated_free(mi_validate_block_from_ptr(page, user))")
+                .count()
+                == 2
+            && free_rs.contains("LocalPage::new_unchecked(validated.page())")
+            && free_rs.contains("ForeignPage::new_unchecked(validated.page())")
+            && !free_rs.contains("mi_block_for_free_from_lookup(mi_validate_block_from_ptr(page, user))")
+            && !free_rs.contains("mi_block_for_free_from_lookup(page, p, mi_validate_block_from_ptr(page, p))")
+            && !validation_types.contains("Valid {\n        user: UserPtr")
             && !validation_types.contains("pub(crate) block: BlockPtr")
             && !validation_types.contains("pub(crate) page: PagePtr")
+            && !validation_types.contains("pub(crate) struct GuardedBlock(pub(crate) BlockPtr);")
+            && !validation_types.contains("pub(crate) fn new(user: UserPtr")
+            && !validation_types.contains("pub(crate) fn new(block: BlockPtr")
+            && !free_rs.contains("BlockForFree::new")
+            && !free_rs.contains("ValidatedFree::new")
             && !free_rs.contains("validated.block,")
             && !free_rs.contains("PointerLocation::BlockStart(b) => (b, false)")
             && !free_rs.contains("pub unsafe fn mi_validate_block_from_ptr(\n    page: *const mi_page_t,\n    p: *mut c_void,\n) -> *mut mi_block_t"),
@@ -3599,9 +5720,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && heap_rs.contains(
                 "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_heap_force_destroy"
             )
-            && heap_rs.contains("_mi_heap_move_pages(heap, mi_heap_main());")
-            && heap_rs.contains("_mi_heap_destroy_pages(heap);")
-            && heap_rs.contains("unsafe { _mi_heap_force_destroy(heap) };"),
+            && heap_rs.contains("_mi_heap_move_pages(heap_raw, mi_heap_main());")
+            && heap_rs.contains("_mi_heap_destroy_pages(heap.as_ptr());")
+            && heap_rs.contains("unsafe { mi_heap_force_destroy_owned(heap) };"),
         "heap delete/destroy should keep C's heap page movement and force-destroy helper boundaries"
     );
     assert!(
@@ -3617,12 +5738,33 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("mi_arenas_try_alloc(")
             && arena_rs.contains("mi_arena_os_alloc_aligned(")
             && arena_rs.contains("_mi_arenas_alloc_aligned(")
-            && arena_rs.contains("mi_arenas_contain_ex(p, ptr::null_mut())")
+            && arena_rs.contains("mi_arenas_contain_ex(InteriorUserPtr::new(p.cast_mut()), None)")
             && arena_rs.contains("static MI_ARENAS_CONTAIN_KEEP")
             && arena_rs.contains("mi_arenas_unsafe_destroy(subproc)")
             && theap_rs.contains("let theap = _mi_arenas_alloc(")
             && init_rs.contains("_mi_arenas_unsafe_destroy_all(subproc)"),
         "arena allocation, containment, and unsafe destroy helpers should keep C's local call boundaries"
+    );
+    assert!(
+        arena_rs.contains("struct ArenaAllocTypedArgs {\n    heap: Option<HeapPtr>,\n    layout: crate::core_types::LayoutRequest,\n    align_offset: crate::core_types::AlignmentOffset,")
+            && arena_rs.contains("unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs)")
+            && arena_rs.contains("let size = layout.requested();")
+            && arena_rs.contains("let alignment = layout.alignment();")
+            && arena_rs.contains("arena_slice_count: Option<crate::core_types::SliceCount>,")
+            && arena_rs.contains("fn mi_arena_slice_count_for_request(\n    size: crate::core_types::RequestedSize,")
+            && arena_rs.contains("crate::core_types::SliceCount::from_usize(mi_slice_count_of_size(size.get()))")
+            && arena_rs.contains("arena_slice_count: mi_arena_slice_count_for_request(layout.requested())")
+            && arena_rs.contains("crate::core_types::LayoutRequest::aligned_at(")
+            && arena_rs.contains("crate::core_types::AlignmentOffset::new(align_offset)")
+            && arena_rs.contains("struct ArenaAllocArgs {\n    heap: Option<HeapPtr>,\n    size: crate::core_types::RequestedSize,")
+            && arena_rs.contains("unsafe fn mi_arenas_alloc_typed(args: ArenaAllocArgs)")
+            && arena_rs.contains("crate::core_types::LayoutRequest::aligned(size.get(), alignment)")
+            && arena_rs.contains("let size = crate::core_types::RequestedSize::new(size);")
+            && arena_rs.contains("crate::core_types::AlignmentOffset::new(0)")
+            && arena_rs.contains("req_arena: ArenaPtr::new(req_arena)")
+            && arena_rs.contains("tseq: crate::core_types::ThreadSeq::new(tseq)")
+            && arena_rs.contains("numa_node: crate::core_types::NumaNode::new(numa_node)"),
+        "arena allocation ABI wrappers should parse raw size/alignment into typed layout domains before using arena internals"
     );
     assert!(
         arena_rs.contains(
@@ -3633,7 +5775,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("crate::core_types::MemIdView::Arena(_)")
             && !arena_rs.contains("(*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA")
             && !arena_rs.contains("(*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA")
-            && arena_rs.contains("_mi_page_associated_theap_peek(page)")
+            && arena_rs.contains("_mi_page_associated_theap_peek(crate::core_types::PagePtr::new_unchecked(page))")
             && arena_rs.contains("_mi_arenas_page_abandon(page, theap)")
             && free_rs.contains("crate::core_types::MemId::view((*page).memid)")
             && free_rs.contains("crate::core_types::MemIdView::Arena(_)")
@@ -3674,12 +5816,20 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_init")
-            && theap_rs.contains("unsafe {\n        crate::mi_assert_internal!(!tld.is_null());")
-            && theap_rs.contains("_mi_theap_init(theap, heap, tld);\n        theap"),
-        "_mi_theap_create should keep C's _mi_theap_init call boundary"
+            && theap_rs.contains("let Some(theap) = ThreadHeapPtr::new(theap) else")
+            && theap_rs.contains("let Some(heap) = HeapPtr::new(heap) else")
+            && theap_rs.contains("let Some(tld) = TldPtr::new(tld) else")
+            && theap_rs.contains(
+                "unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)"
+            )
+            && theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_create")
+            && theap_rs.contains("unsafe fn _mi_theap_create_typed(heap: HeapPtr, tld: TldPtr) -> Option<ThreadHeapPtr>")
+            && theap_rs.contains("unsafe { _mi_theap_create_typed(heap, tld) }\n        .map(ThreadHeapPtr::as_ptr)")
+            && theap_rs.contains("_mi_theap_init_typed(theap, heap, tld);\n        Some(theap)"),
+        "_mi_theap_create and _mi_theap_init should parse raw metadata pointers once and use typed wrappers below the ABI shim"
     );
     assert!(
-        theap_rs.contains("_mi_memcpy_aligned(\n            theap.cast(),")
+        theap_rs.contains("_mi_memcpy_aligned(\n            theap_raw.cast(),")
             && internal.contains("unsafe fn mi_cpu_movsb_max() -> usize")
             && internal.contains("\"mov {max}, qword ptr [rip + _mi_cpu_movsb_max]\"")
             && internal.contains("if n <= mi_cpu_movsb_max()")
@@ -3700,18 +5850,56 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("find _mi_theap_random_next after _mi_theap_init");
     let theap_init_body = &theap_rs[theap_init_start..theap_init_end];
     assert!(
-        theap_init_body
-            .contains("(*theap).cookie = _mi_random_next(ptr::addr_of_mut!((*theap).random)) | 1;")
-            && !theap_init_body.contains("_mi_theap_random_next(theap)"),
+        theap_init_body.contains(
+            "(*theap_raw).cookie = _mi_random_next(ptr::addr_of_mut!((*theap_raw).random)) | 1;"
+        ) && !theap_init_body.contains("_mi_theap_random_next(theap)"),
         "_mi_theap_init should match C's optimized artifact by calling _mi_random_next directly for the cookie"
     );
     assert!(
-        atomic_types.contains("pub(crate) unsafe fn fetch_add(self, value: usize, order: Ordering) -> usize")
-            && atomic_types.contains("pub(crate) unsafe fn fetch_sub(self, value: usize, order: Ordering) -> usize")
-            && theap_init_body.contains("crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*theap).refcount))\n            .store(1, crate::core_types::MemoryOrder::SeqCst);")
-            && !theap_init_body.contains("mi_atomic_store_explicit(\n        ptr::addr_of_mut!((*theap).refcount),")
+        atomic_types.contains(
+            "pub(crate) unsafe fn fetch_add(self, value: usize, order: MemoryOrder) -> usize"
+        ) && atomic_types.contains(
+            "pub(crate) unsafe fn fetch_sub(self, value: usize, order: MemoryOrder) -> usize"
+        ) && atomic_types.contains("pub(crate) unsafe fn store_seq_cst(self, value: usize)")
+            && theap_init_body.contains("theap.refcount_cell().store_seq_cst(1);")
+            && theap_init_body.contains("theap.set_tld(Some(tld));")
+            && theap_init_body.contains("theap.set_heap(Some(heap));")
+            && !theap_init_body.contains(
+                "mi_atomic_store_explicit(\n        ptr::addr_of_mut!((*theap).refcount),"
+            )
             && !theap_init_body.contains("(*theap).refcount = 1;"),
-        "_mi_theap_init should initialize C's atomic refcount through a typed seq_cst atomic store"
+        "_mi_theap_init should initialize C's thread-heap metadata through typed wrapper accessors"
+    );
+    assert!(
+        atomic_types.contains("pub(crate) struct AtomicGuard<'a>")
+            && atomic_types.contains(
+                "pub(crate) unsafe fn try_acquire(field: AtomicUsizeField) -> Option<Self>"
+            )
+            && atomic_types.contains("impl Drop for AtomicGuard<'_>")
+            && atomic_types.contains("self.field.store(0, Ordering::Release)")
+            && atomic_rs.contains("_guard: crate::core_types::AtomicGuard<'static>")
+            && atomic_rs.contains("crate::core_types::AtomicGuard::try_acquire(field)")
+            && !atomic_rs.contains("guard: *mut mi_atomic_guard_t,\n}")
+            && !atomic_rs.contains("mi_atomic_store_release(self.guard.cast::<usize>(), 0);"),
+        "atomic guard scopes should acquire and release through typed AtomicGuard Drop"
+    );
+    assert!(
+        atomic_types.contains(
+            "pub(crate) struct MiLockPtr(pub(crate) NonNull<crate::types::mi_lock_t_pub>)"
+        ) && atomic_types.contains("pub(crate) struct MiLockGuard<'a>")
+            && atomic_types.contains("pub(crate) unsafe fn acquire(lock: MiLockPtr) -> Self")
+            && atomic_types.contains("crate::atomic::mi_lock_acquire(lock.0.as_ptr())")
+            && atomic_types.contains("impl Drop for MiLockGuard<'_>")
+            && atomic_types.contains("crate::atomic::mi_lock_release(self.lock.0.as_ptr())")
+            && ptr_rs.contains("pub(crate) unsafe fn arena_reserve_lock(self) -> MiLockPtr")
+            && ptr_rs.contains("pub(crate) unsafe fn heaps_lock(self) -> MiLockPtr")
+            && arena_rs.contains("MiLockGuard::acquire(subproc.arena_reserve_lock())")
+            && init_rs.contains(
+                "let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));"
+            )
+            && init_rs.contains("let _lock = MiLockGuard::acquire(lock);")
+            && options_rs.contains("let _lock = MiLockGuard::acquire(lock);"),
+        "subproc and options locks should acquire and release through typed MiLockGuard Drop"
     );
     assert!(
         atomic_types.contains(
@@ -3780,6 +5968,19 @@ fn free_path_internals_are_not_dynamic_exports() {
             && init_rs.contains("core::arch::global_asm!(\".hidden subproc_main\")")
             && init_rs.contains("#[cfg_attr(target_os = \"linux\", unsafe(no_mangle))]")
             && init_rs.contains("unsafe fn mi_subproc_main_addr()")
+            && init_rs.contains("unsafe fn mi_subproc_main_addr_typed() -> MainSubproc")
+            && init_rs.contains(
+                "MainSubproc::new_unchecked(SubprocPtr::new_unchecked(mi_subproc_main_addr()))"
+            )
+            && init_rs.contains(
+                "unsafe fn mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> Option<HeapPtr>"
+            )
+            && init_rs.contains("fn _mi_subproc_to_id_typed(subproc: Option<SubprocPtr>)")
+            && init_rs.contains("unsafe fn _mi_subproc_typed() -> BorrowedSubproc")
+            && init_rs.contains("unsafe fn _mi_subproc_from_id_typed(subproc_id: mi_subproc_id_t)")
+            && init_rs.contains(
+                "unsafe fn _mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap"
+            )
             && init_rs.contains("\"lea {main}, [rip + subproc_main]\"")
             && !init_rs.contains("mi_subproc_main_ptr")
             && init_rs.contains("crate::prim::_mi_theap_default_raw()")
@@ -3799,9 +6000,9 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("find _mi_subproc_main keep marker");
     let subproc_main_body = &init_rs[subproc_main_start..subproc_main_end];
     assert!(
-        subproc_main_body.contains("unsafe { mi_subproc_main_addr() }")
+        subproc_main_body.contains("unsafe { mi_subproc_main_addr_typed().ptr().as_ptr() }")
             && !subproc_main_body.contains("mi_subproc_main_init()"),
-        "_mi_subproc_main should match C's direct &subproc_main helper without process initialization"
+        "_mi_subproc_main should use the typed main-subproc helper without process initialization"
     );
     let subproc_start = init_rs
         .find("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")
@@ -3812,10 +6013,15 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("find _mi_subproc_from_id marker");
     let subproc_body = &init_rs[subproc_start..subproc_end];
     assert!(
-        subproc_body.contains("unsafe { mi_subproc_main_addr() }")
+        subproc_body.contains("unsafe { _mi_subproc_typed().ptr().as_ptr() }")
+            && subproc_body.contains("let subproc = if theap.is_null() {")
+            && subproc_body.contains("unsafe { mi_subproc_main_addr_typed().ptr() }")
+            && subproc_body.contains("let tld = unsafe { TldPtr::new_unchecked((*theap).tld) };")
+            && subproc_body.contains("unsafe { tld.subproc() }")
+            && subproc_body.contains("unsafe { BorrowedSubproc::new(subproc) }")
             && !subproc_body.contains("_mi_subproc_main()")
             && !subproc_body.contains("mi_subproc_main_init()"),
-        "_mi_subproc should use C's direct main-subproc fallback on a null raw default theap"
+        "_mi_subproc should parse the raw default theap into typed subproc wrappers without process initialization"
     );
     let mi_heap_main_start = init_rs
         .find("pub unsafe extern \"C\" fn mi_heap_main")
@@ -3898,10 +6104,15 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("find _mi_subproc_heap_main keep marker");
     let subproc_heap_main_body = &init_rs[subproc_heap_main_start..subproc_heap_main_end];
     assert!(
-        subproc_heap_main_body.contains("let heap = unsafe { mi_subproc_heap_main_raw(subproc) };")
+        subproc_heap_main_body.contains(
+            "let subproc = unsafe { BorrowedSubproc::new(SubprocPtr::new_unchecked(subproc)) };"
+        ) && subproc_heap_main_body
+            .contains("unsafe { _mi_subproc_heap_main_typed(subproc).ptr().as_ptr() }")
+            && subproc_heap_main_body
+                .contains("let heap = unsafe { mi_subproc_heap_main_typed(subproc) };")
             && !subproc_heap_main_body.contains("subproc.is_null()")
             && !subproc_heap_main_body.contains("ptr::null_mut()"),
-        "_mi_subproc_heap_main should match C's valid-subproc contract without a Rust-only null fast-path branch"
+        "_mi_subproc_heap_main should enter the typed subproc wrapper path without a Rust-only null fast-path branch"
     );
     let thread_done_start = init_rs
         .find("pub(crate) unsafe extern \"C\" fn _mi_thread_done")
@@ -4001,7 +6212,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         alloc_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn mi_theap_try_new")
             && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_try_new")
             && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_try_new")
-            && alloc_rs.contains("mi_heap_try_new(heap, size, false)")
+            && alloc_rs.contains("mi_heap_try_new_typed(heap, size, false)")
             && alloc_rs.contains("mi_try_new(size, true)")
             && alloc_rs.contains("static MI_THEAP_TRY_NEW_KEEP")
             && alloc_rs.contains("static MI_TRY_NEW_KEEP")
@@ -4016,17 +6227,29 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("static MI_THEAP_PAGE_RECLAIM_KEEP")
             && page_rs.contains("mi_theap_page_reclaim_raw;")
             && page_rs.contains("_mi_theap_page_reclaim(wrapper, theap_wrapper);")
-            && page_rs.contains("let wrapper = crate::core_types::OwnedAbandonedPage(page_ptr);")
+            && page_rs
+                .contains("let wrapper = crate::core_types::OwnedAbandonedPage::new_unchecked(page_ptr);")
             && !page_rs.contains("pub unsafe extern \"C\" fn _mi_theap_page_reclaim")
-            && atomic_types.contains("pub(crate) unsafe fn compare_exchange_release(\n        self,\n        expected: &mut PageThreadId,")
+            && atomic_types.contains("pub(crate) unsafe fn load(self) -> PageThreadId")
+            && atomic_types.contains("pub(crate) unsafe fn store_owner(self, owner: PageOwnerId)")
+            && atomic_types.contains("pub(crate) unsafe fn compare_exchange_owner(\n        self,\n        expected: &mut PageThreadId,")
             && internal.contains("let atomic_tid = crate::core_types::AtomicPageThreadId(\n            crate::core_types::AtomicUsizeField(")
+            && internal.contains("atomic_tid.load().raw()")
+            && internal.contains("let mut old = atomic_tid.load();")
+            && internal.contains("atomic_tid.compare_exchange_owner(&mut old, new)")
             && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);")
             && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);")
-            && page_rs.contains("let flag = crate::core_types::PageFlags::from_low_bits(newflag);")
+            && page_rs.contains("let Some(flag) = crate::core_types::PageFlags::new(newflag) else")
             && page_rs.contains("let old = atomic_tid.set_flags(flag, set);")
+            && page_rs.contains("let tid = atomic_tid.load();")
+            && page_rs.contains("let mut xtid_old = atomic_tid.load();")
             && page_rs.contains("let xtid = xtid_old.with_owner(owner);")
-            && page_rs.contains("atomic_tid.compare_exchange_release(&mut xtid_old, xtid)")
-            && arena_rs.contains("unsafe { atomic_tid.set_owner_release(crate::core_types::PageOwnerId::AbandonedMapped) };")
+            && page_rs.contains("atomic_tid.compare_exchange_owner(&mut xtid_old, xtid)")
+            && arena_rs.contains("unsafe { atomic_tid.store_owner(crate::core_types::PageOwnerId::AbandonedMapped) };")
+            && !internal.contains("atomic_tid.load_relaxed().raw()")
+            && !internal.contains("atomic_tid.compare_exchange_release(&mut old, new)")
+            && !page_rs.contains("atomic_tid.compare_exchange_release(&mut xtid_old, xtid)")
+            && !arena_rs.contains("atomic_tid.set_owner_release(crate::core_types::PageOwnerId::AbandonedMapped)")
             && !internal.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
             && !internal.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
             && !page_rs.contains("mi_atomic_cas_weak_release(&mut (*page).xthread_id")
@@ -4036,42 +6259,63 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(
                 "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),\n        ));"
             )
-            && page_rs.contains("let remote = atomic_tf.take_head_preserving_owner();")
+            && page_rs.contains("let remote = atomic_tf.collect_acq_rel();")
             && page_rs.contains("remote.collect_into_local(page_wrapper, local);")
+            && !page_rs.contains("atomic_tf.take_head_preserving_owner()")
+            && atomic_types.contains("pub(crate) fn push_remote_acq_rel(")
             && atomic_types.contains(
-                "pub(crate) unsafe fn compare_exchange_release_ownership("
+                "pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList"
+            )
+            && atomic_types.contains("pub(crate) unsafe fn claim_acq_rel(self) -> bool")
+            && atomic_types.contains(
+                "pub(crate) unsafe fn release_acq_rel(self, expected: &mut ThreadFreeWord) -> bool"
             )
             && atomic_types.contains("fn field(self) -> AtomicUsizeField")
             && atomic_types.contains("self.field().compare_exchange_weak(")
             && atomic_types.contains("self.field().fetch_or(1, Ordering::AcqRel)")
             && !atomic_types.contains("AtomicUsize::from_ptr(self.0)")
             && !atomic_types.contains("self.0.cast::<core::sync::atomic::AtomicUsize>()")
+            && !atomic_types.contains("as_atomic(")
+            && !atomic_types.contains("atomic_ref(")
+            && !atomic_types.contains("-> &'static Atomic")
+            && atomic_types.contains("Atomic access to a raw `usize` field.")
+            && atomic_types.contains("Atomic access to a raw `i64` field.")
+            && atomic_types.contains("Atomic access to a raw pointer field.")
             && internal.contains("crate::core_types::ThreadFreeWord(tf)\n        .head()")
             && internal.contains("crate::core_types::ThreadFreeWord(tf).is_owned()")
             && internal.contains("crate::core_types::ThreadFreeWord::from_parts(")
+            && internal.contains("pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t")
+            && internal.contains("atomic_tf\n            .load_relaxed()\n            .head()")
+            && internal.contains("pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool")
+            && internal.contains("atomic_tf.load_relaxed().is_owned()")
             && internal.contains("let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),")
-            && internal.contains("atomic_tf.claim_ownership()")
+            && internal.contains("atomic_tf.claim_acq_rel()")
+            && !internal.contains("atomic_tf.claim_ownership()")
             && arena_rs.contains("(*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(\n            None,\n            crate::core_types::ThreadFreeOwner::Unowned,")
             && !arena_rs.contains("(*page).xthread_free = 0")
             && free_rs.contains(
                 "let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),\n        ));"
             )
-            && free_rs.contains(
-                "while !atomic_tf.compare_exchange_release_ownership(&mut tf_expect)"
-            )
+            && free_rs.contains("match atomic_tf.push_remote_acq_rel(&mut tf_old, bp)")
+            && free_rs.contains("while !atomic_tf.release_acq_rel(&mut tf_expect)")
             && free_rs.contains("tf_expect = atomic_tf.load_relaxed();")
+            && !free_rs.contains("atomic_tf.compare_exchange_push(")
+            && !free_rs.contains("atomic_tf.compare_exchange_release_ownership(")
             && !free_rs.contains("mi_tf_create(expected_thread_free")
             && arena_rs.contains(
                 "let atomic_tf =\n        crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(unsafe {\n            ptr::addr_of_mut!((*page).xthread_free)\n        }));"
             )
             && arena_rs.contains("let mut tf_old = atomic_tf.load_relaxed();")
             && arena_rs.contains("while tf_old.head().is_some()")
-            && arena_rs.contains("if unsafe { atomic_tf.compare_exchange_release_ownership(&mut tf_old) }")
+            && arena_rs.contains("if unsafe { atomic_tf.release_acq_rel(&mut tf_old) }")
+            && !arena_rs.contains("atomic_tf.compare_exchange_release_ownership(")
             && !arena_rs.contains("mi_tf_create(ptr::null_mut(), false)")
             && page_rs.contains(
                 "unsafe fn mi_page_queue_push_at_end_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    queue: crate::core_types::NormalPageQueue,\n    page: crate::core_types::ActivePage,"
             )
-            && page_rs.contains("mi_page_queue_push_at_end_typed(\n            crate::core_types::ThreadHeapLocal")
+            && page_rs.contains(
+                "mi_page_queue_push_at_end_typed(\n            crate::core_types::ThreadHeapLocal::new_unchecked"
+            )
             && page_rs.contains("crate::core_types::NormalPageQueue")
             && page_rs.contains("crate::core_types::ActivePage"),
         "_mi_theap_page_reclaim should keep C's local abandoned-page reclaim helper boundary while collecting remote frees through typed wrappers"
@@ -4085,30 +6329,43 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("static MI_PAGE_FRESH_ALLOC_KEEP")
             && page_rs.contains("mi_page_free_list_extend(page, bsize, extend);")
             && page_rs.contains("if !mi_page_extend_free(theap, page)")
-            && page_rs.contains("let page = mi_page_fresh_alloc(theap, pq, (*pq).block_size, 0);")
+            && page_rs.contains("let block_size = mi_page_queue_block_size_raw(pq);")
+            && page_rs.contains("let page = mi_page_fresh_alloc(theap, pq, block_size, 0);")
+            && page_rs
+                .contains("crate::mi_assert_internal!(block_size == mi_page_block_size(page));")
             && page_rs
                 .contains("let page = mi_page_fresh_alloc(theap, pq, block_size, page_alignment);"),
         "fresh-page allocation and page free-list extension should keep C's local helper boundaries"
     );
     assert!(
-        free_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_abandoned_page_try_reclaim")
+        free_rs.contains(
+            "unsafe fn mi_abandoned_page_try_reclaim(\n    page: crate::core_types::OwnedAbandonedPage,"
+        )
             && free_rs.contains(
                 "#[inline(never)]\npub unsafe extern \"C\" fn mi_page_usable_aligned_size_of"
             )
             && free_rs.contains("static MI_ABANDONED_PAGE_TRY_RECLAIM_KEEP")
             && free_rs.contains("static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP")
             && free_rs.contains("&& mi_abandoned_page_try_reclaim(page, reclaim_on_free)")
-            && free_rs.contains(
-                "_mi_theap_page_reclaim(\n            crate::core_types::OwnedAbandonedPage"
-            )
+            && free_rs.contains("_mi_theap_page_reclaim(\n            page,")
+            && free_rs.contains("crate::core_types::OwnedAbandonedPage::new_unchecked")
+            && free_rs.contains("unsafe fn mi_free_try_collect_mt_typed")
             && !free_rs.contains("_mi_theap_page_reclaim(theap, page)")
             && free_rs.contains("mi_page_usable_aligned_size_of_typed(page, p)"),
-        "abandoned-page reclaim should keep C helper boundaries while routing internal reclaim through typed page/heap witnesses"
+        "abandoned-page reclaim should route internal abandoned-page collection through typed page/heap witnesses"
     );
     assert!(
         theap_rs.contains(
             "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_area_visit_blocks"
         ) && theap_rs.contains("static MI_THEAP_AREA_VISIT_BLOCKS_KEEP")
+            && theap_rs.contains("visitor: BlockVisitCallback")
+            && theap_rs.contains("arg: BlockVisitCallbackArg")
+            && theap_rs.contains("let heap = HeapPtr::new_unchecked(mi_page_heap(page));")
+            && callbacks_rs
+                .contains("pub(crate) unsafe fn invoke(self, heap: HeapPtr, arg: HeapVisitCallbackArg) -> bool")
+            && callbacks_rs.contains("heap: HeapPtr,\n        area: *const mi_heap_area_t,")
+            && callbacks_rs.contains("fun(heap.as_ptr(), area, block, block_size, arg.as_ptr())")
+            && init_rs.contains("ok = visitor.invoke(HeapPtr::new_unchecked(heap), arg);")
             && theap_rs.contains("mi_get_fast_divisor(bsize, &mut magic, &mut shift);")
             && arena_rs.contains(
                 "_mi_theap_area_visit_blocks(ptr::addr_of!(area), page, (*vinfo).visitor, (*vinfo).arg)"
@@ -4128,8 +6385,9 @@ fn free_path_internals_are_not_dynamic_exports() {
         arena_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_page_alloc")
             && arena_rs.contains("static MI_ARENAS_PAGE_ALLOC_KEEP")
-            && page_rs
-                .contains("let page = _mi_arenas_page_alloc(theap, block_size, page_alignment);"),
+            && page_rs.contains(
+                "let page = _mi_arenas_page_alloc(theap, block_size, page_alignment.get());",
+            ),
         "arena page allocation should keep C's _mi_arenas_page_alloc local helper boundary"
     );
     assert!(
@@ -4157,12 +6415,17 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     assert!(
         theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")
+            && theap_rs.contains("unsafe fn _mi_theap_incref_typed(theap: ThreadHeapPtr)")
             && theap_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_decref")
-            && theap_rs.contains("#[inline(always)]\nunsafe fn mi_theap_decref_inline")
-            && theap_rs.contains("mi_theap_decref_inline(theap);\n        true")
+            && theap_rs.contains("#[inline(always)]\nunsafe fn mi_theap_decref_inline(theap: ThreadHeapPtr)")
+            && theap_rs.contains("mi_theap_decref_inline(ThreadHeapPtr::new_unchecked(theap));\n        true")
+            && theap_rs.contains("unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: bool)")
+            && theap_rs.contains("match theap.state()")
+            && theap_rs.contains("ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap)")
+            && theap_rs.contains("ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return")
             && !theap_rs.contains("    _mi_theap_decref(theap);\n    true"),
-        "_mi_theap_free should inline C's decref tail while preserving the standalone _mi_theap_decref helper for other call sites"
+        "_mi_theap_free should inline C's decref tail while incref/decref/delete use typed thread-heap wrappers below their raw shims"
     );
     assert!(
         theap_rs

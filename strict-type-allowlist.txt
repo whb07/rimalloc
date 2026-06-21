@@ -1,0 +1,75 @@
+# Strict-type migration allowlist.
+#
+# Format:
+#   kind|path|symbol|domain|reason
+#
+# `symbol` may be `*` only for file-level translated C, raw ABI, platform, or
+# proof-helper compatibility boundaries. Entries that are not active checker
+# matches or true compatibility boundaries should be removed.
+
+raw-pointer-parameter|src/alloc.rs|*|mi_heap_t|Translated C allocation boundary: heap entry points mirror upstream raw signatures before immediate local wrapping.
+raw-pointer-parameter|src/alloc.rs|*|mi_theap_t|Translated C allocation boundary: thread-heap entry points mirror upstream raw signatures before local typed dispatch.
+raw-pointer-parameter|src/alloc_aligned.rs|*|mi_block_t|Translated C aligned-allocation boundary: guarded block handoff mirrors upstream raw block signatures.
+raw-pointer-parameter|src/alloc_aligned.rs|*|mi_heap_t|Translated C aligned-allocation boundary: heap ABI shims retain raw parameters before local wrapping.
+raw-pointer-parameter|src/alloc_aligned.rs|*|mi_theap_t|Translated C aligned-allocation boundary: thread-heap ABI shims retain raw parameters before typed layout dispatch.
+raw-pointer-parameter|src/arena.rs|*|mi_page_t|Translated C arena boundary: arena metadata page operations mirror upstream raw page callbacks.
+raw-pointer-parameter|src/arena.rs|*|mi_heap_t|Translated C arena boundary: heap visitor/deletion callbacks preserve upstream raw heap parameters.
+raw-pointer-parameter|src/arena.rs|*|mi_theap_t|Translated C arena boundary: page allocation paths preserve upstream thread-heap parameters at the arena edge.
+raw-pointer-parameter|src/arena.rs|*|mi_arena_t|Translated C arena boundary: arena internals own raw arena records before ArenaPtr wrapping.
+raw-pointer-parameter|src/arena.rs|*|mi_subproc_t|Translated C arena boundary: subproc-owned arena operations preserve upstream raw subproc records.
+raw-pointer-parameter|src/bitmap.rs|*|mi_arena_t|Translated C bitmap boundary: arena bitmap helpers operate on raw arena records owned by arena metadata.
+raw-pointer-parameter|src/free.rs|*|mi_page_t|Translated C free boundary: validation receives raw page values from pointer lookup before ownership witnesses are constructed.
+raw-pointer-parameter|src/heap.rs|*|mi_heap_t|Translated C heap boundary: lifecycle APIs retain raw heap shims at public/raw compatibility edges.
+raw-pointer-parameter|src/internal.rs|*|mi_page_t|Translated C internal boundary: inline helpers mirror upstream raw page signatures and wrap at call sites where required.
+raw-pointer-parameter|src/internal.rs|*|mi_block_t|Translated C internal boundary: block-link helpers expose raw block parameters for compatibility with encoded free-list words.
+raw-pointer-parameter|src/internal.rs|*|mi_theap_t|Translated C internal boundary: allocation helpers preserve upstream thread-heap parameters at raw dispatch edges.
+raw-pointer-parameter|src/page.rs|*|mi_page_t|Translated C page boundary: page operations own raw page records and construct typed witnesses for checked paths.
+raw-pointer-parameter|src/page.rs|*|mi_block_t|Translated C page boundary: page free-list extension preserves upstream raw block traversal signatures.
+raw-pointer-parameter|src/page.rs|*|mi_theap_t|Translated C page boundary: page allocation and queue paths preserve upstream thread-heap parameters at dispatch edges.
+raw-pointer-parameter|src/page_map.rs|*|mi_page_t|Translated C page-map boundary: registration receives raw page records from the page-map compatibility layer.
+raw-pointer-parameter|src/page_map.rs|*|mi_subproc_t|Translated C page-map boundary: teardown receives raw subproc records from the subproc compatibility layer.
+raw-pointer-parameter|src/prim.rs|*|mi_heap_t|Platform primitive boundary: heap/thread-heap bridge mirrors upstream TLS/raw primitive signatures.
+raw-pointer-parameter|src/prim/unix.rs|*|mi_theap_t|Platform TLS boundary: Unix thread association stores raw thread-heap records in platform TLS.
+raw-pointer-parameter|src/prim/windows.rs|*|mi_theap_t|Platform TLS boundary: Windows thread association stores raw thread-heap records in platform TLS.
+raw-pointer-parameter|src/prim/wasi.rs|*|mi_theap_t|Platform TLS boundary: WASI thread association stores raw thread-heap records in platform TLS.
+raw-pointer-parameter|src/prim/emscripten.rs|*|mi_theap_t|Platform TLS boundary: Emscripten thread association stores raw thread-heap records in platform TLS.
+raw-pointer-parameter|src/stats.rs|*|mi_heap_t|Translated C stats boundary: stats APIs inspect raw heap records passed from raw heap lifecycle paths.
+raw-pointer-parameter|src/stats.rs|*|mi_theap_t|Translated C stats boundary: aggregation walks raw thread-heap records owned by upstream layout.
+raw-pointer-parameter|src/theap.rs|*|mi_page_t|Translated C thread-heap boundary: page visitation callbacks preserve upstream raw page parameters.
+raw-pointer-parameter|src/theap.rs|*|mi_heap_t|Translated C thread-heap boundary: heap lifecycle bridge preserves raw heap parameters at ownership transitions.
+raw-pointer-parameter|src/theap.rs|*|mi_theap_t|Translated C thread-heap boundary: thread-heap lifecycle owns raw records before typed witnesses are constructed.
+raw-pointer-parameter|src/init.rs|*|mi_heap_t|Translated C initialization boundary: subproc main-heap helpers preserve raw heap records from static layout.
+raw-pointer-parameter|src/init.rs|*|mi_theap_t|Translated C initialization boundary: TLS initialization preserves raw thread-heap records from static layout.
+raw-pointer-parameter|src/init.rs|*|mi_subproc_t|Translated C initialization boundary: subproc construction/destruction owns raw subproc records.
+raw-pointer-parameter|src/os.rs|*|mi_subproc_t|OS compatibility boundary: memory helpers receive raw subproc records below the raw OS allocation layer.
+raw-pointer-parameter|src/threadlocal.rs|*|mi_arena_t|Thread-local claim callback boundary: callback receives raw arena records from upstream-compatible traversal.
+raw-pointer-parameter|src/core_types/freelist_wrappers.rs|*|mi_block_t|Compatibility proof boundary: free-list wrappers are the owning module for raw block-link reads/writes.
+raw-pointer-parameter|src/core_types/ptr.rs|*|mi_page_t|Compatibility constructor: PageConstPtr accepts raw page pointers and immediately wraps them.
+raw-pointer-parameter|src/core_types/heap.rs|from_allocation_raw|mi_heap_t|Compatibility constructor: BorrowedHeap accepts raw allocation-boundary heap pointers and immediately wraps them.
+raw-pointer-parameter|src/core_types/heap.rs|from_lookup_raw|mi_heap_t|Compatibility constructor: BorrowedHeap accepts raw lookup-boundary heap pointers and immediately wraps them.
+
+metadata-reference|src/bitmap.rs|*|bitmap|Translated C bitmap boundary: bitmap internals borrow raw bitmap words without allocator metadata ownership.
+metadata-reference|src/free.rs|*|mi_page_t|Translated C free boundary: validation borrows raw page metadata while constructing typed free witnesses.
+metadata-reference|src/options.rs|*|options|Compatibility boundary: global option/output state uses raw cells outside allocator metadata ownership.
+metadata-reference|src/prim/unix.rs|*|platform|Platform primitive raw pointer scanning remains outside allocator metadata ownership.
+metadata-reference|src/prim/windows.rs|*|platform|Windows primitive/ETW callbacks remain platform raw-pointer boundaries.
+metadata-reference|src/random.rs|*|random|Translated C random boundary: random context raw references are not allocator metadata ownership.
+metadata-reference|src/stats.rs|*|mi_heap_t|Translated C stats boundary: stats aggregation borrows raw heap metadata from upstream layout.
+metadata-reference|src/core_types/atomic_wrappers.rs|*|atomic-field|Compatibility proof boundary: this module owns short-lived atomic field references.
+
+pointer-usize-roundtrip|src/alloc.rs|*|padding/provenance|Translated C allocation boundary: padding pointer arithmetic preserves upstream provenance checks.
+pointer-usize-roundtrip|src/alloc_aligned.rs|*|alignment/provenance|Translated C aligned-allocation boundary: alignment arithmetic preserves upstream pointer provenance checks.
+pointer-usize-roundtrip|src/arena.rs|*|arena-range|Translated C arena boundary: arena containment checks use integer ranges compatible with upstream metadata layout.
+pointer-usize-roundtrip|src/core_types/arena.rs|*|slice-index|Typed arena constructors narrow raw slice index values.
+pointer-usize-roundtrip|src/core_types/freelist_wrappers.rs|*|encoded-pointer|Free-list wrappers own encoded pointer word packing.
+pointer-usize-roundtrip|src/free.rs|*|validation|Translated C free boundary: pointer validation preserves upstream integer range checks before typed user pointers are accepted.
+pointer-usize-roundtrip|src/internal.rs|*|packed-pointer|Translated C internal boundary: packed free-list words preserve upstream pointer tagging semantics.
+pointer-usize-roundtrip|src/libc.rs|*|output-buffer|Compatibility boundary: raw output buffer bounds checks use integer addresses.
+pointer-usize-roundtrip|src/os.rs|*|os-memory|OS compatibility boundary: raw memory range arithmetic preserves OS allocation/deallocation contracts.
+pointer-usize-roundtrip|src/prim/unix.rs|*|platform|Platform primitive alignment checks remain raw compatibility code.
+pointer-usize-roundtrip|src/prim/wasi.rs|*|platform|WASI primitive memory range checks remain raw compatibility code.
+pointer-usize-roundtrip|src/theap.rs|*|area-visitor|Translated C thread-heap boundary: area visitor offsets preserve upstream callback address ranges.
+
+atomic-cast|src/atomic.rs|*|atomic-field|Compatibility boundary: raw mimalloc atomic primitive layer owns C-shaped atomic casts.
+
+heap-allocating-type|src/prim/windows.rs|*|String|Windows environment primitive uses platform string conversion outside allocator hot paths.

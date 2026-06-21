@@ -623,23 +623,31 @@ Invariant: all BlockPtr values stored in ThreadFreeWord must have low bit zero. 
 
 8.5 Atomic thread-free cell
 
-#[repr(transparent)]
-pub(crate) struct ThreadFreeCell(*mut usize);
+The thread-free atomic cell is `AtomicThreadFree(AtomicUsizeField)`. Earlier
+plans used the placeholder name `ThreadFreeCell(*mut usize)`, but
+`AtomicThreadFree` is the single cell type and subsumes that role without
+exposing a raw pointer field.
 
 Required API:
 
-impl ThreadFreeCell {
+impl AtomicThreadFree {
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord;
-    pub(crate) fn compare_exchange_push(
+    pub(crate) fn push_remote_acq_rel(
         self,
         old: &mut ThreadFreeWord,
         block: BlockPtr,
     ) -> Result<ThreadFreeWord, ThreadFreeWord>;
-    pub(crate) fn claim_ownership(self) -> bool;
-    pub(crate) fn release_ownership(self, expected_head: Option<BlockPtr>) -> bool;
+    pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList;
+    pub(crate) unsafe fn claim_acq_rel(self) -> bool;
+    pub(crate) unsafe fn release_acq_rel(self, expected: &mut ThreadFreeWord) -> bool;
 }
 
-The remote free CAS loop must call this typed cell rather than directly using mi_atomic_load_explicit, mi_atomic_cas_weak_acq_rel, and raw address casts.
+Compatibility shims may keep the older `compare_exchange_push`,
+`claim_ownership`, and `release_ownership` names for raw or compatibility
+callers, but allocator hot paths call the acq-rel operation names directly. The
+remote free CAS loop must call this typed cell rather than
+directly using mi_atomic_load_explicit, mi_atomic_cas_weak_acq_rel, and raw
+address casts.
 
 9. Page queue types
 
@@ -821,6 +829,12 @@ Required rules:
 * Arena page table indexing uses ArenaIndex, not usize.
 * A page registered in the page map must produce a RegisteredPageRange witness before pointer-to-page lookup can return a trusted PagePtr.
 
+Reconciliation with §13.2:
+
+* `AbandonedCountCell` is the staged arena-domain name for the same storage now operated on by `AtomicAbandonedCount(*const AtomicUsize)`. New abandoned-count operations should be added to `AtomicAbandonedCount`, not to a second cell wrapper.
+* `ArenaPageCell` is the staged arena-domain name for the same storage now operated on by `AtomicArenaPage(*const AtomicPtr<c_void>)`. New heap arena page-table atomic operations should be added to `AtomicArenaPage`, not to a second cell wrapper.
+* `ArenaPageTablePtr` remains the non-atomic page-table pointer witness. It should be adopted when arena page-table ownership and slice/page-map registration move below typed arena APIs in Phase 10.
+
 12. MemId data types
 
 The current memid model uses a #[repr(i32)] mi_memkind_t, a union mi_memid_mem_t, and a mi_memid_t struct containing union plus discriminator and flags.  There is already at least one helper that checks memkind before reading an arena union arm.  This must become a complete typed model.
@@ -905,6 +919,13 @@ pub(crate) enum OsMemKind {
     Huge,
     Remap,
 }
+pub(crate) struct ExternalMemId {
+    base: Option<OsMemPtr>,
+    size: ReservedBytes,
+    initially_committed: InitiallyCommitted,
+    initially_zero: InitiallyZero,
+    pinned: Pinned,
+}
 pub(crate) struct ArenaMemId {
     arena: ArenaPtr,
     range: SliceRange,
@@ -934,8 +955,23 @@ impl MemId<OsMem> {
         large: Pinned,
     ) -> Self;
 }
+impl MemId<ExternalMem> {
+    pub(crate) fn external(
+        base: Option<OsMemPtr>,
+        size: ReservedBytes,
+        committed: InitiallyCommitted,
+        zero: InitiallyZero,
+        pinned: Pinned,
+    ) -> Self;
+}
 impl MemId<ArenaMem> {
-    pub(crate) fn arena(arena: ArenaPtr, range: SliceRange) -> Self;
+    pub(crate) fn arena(
+        arena: ArenaPtr,
+        range: SliceRange,
+        committed: InitiallyCommitted,
+        zero: InitiallyZero,
+        pinned: Pinned,
+    ) -> Self;
 }
 impl MemId<MetaMem> {
     pub(crate) fn meta(
@@ -984,9 +1020,14 @@ impl AtomicPageThreadId {
 }
 impl AtomicThreadFree {
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord;
-    pub(crate) fn push_remote_acq_rel(self, block: BlockPtr) -> RemotePushOutcome;
-    pub(crate) fn collect_acq_rel(self) -> Option<RemoteFreeList>;
-    pub(crate) fn claim_acq_rel(self) -> bool;
+    pub(crate) fn push_remote_acq_rel(
+        self,
+        old: &mut ThreadFreeWord,
+        block: BlockPtr,
+    ) -> Result<ThreadFreeWord, ThreadFreeWord>;
+    pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList;
+    pub(crate) unsafe fn claim_acq_rel(self) -> bool;
+    pub(crate) unsafe fn release_acq_rel(self, expected: &mut ThreadFreeWord) -> bool;
 }
 
 Pointer-to-atomic casts are allowed only inside AtomicUsizeField. The wrapper must document alignment, aliasing, and atomic access requirements once.

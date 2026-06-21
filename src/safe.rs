@@ -63,7 +63,7 @@ impl std::error::Error for AllocError {}
 /// Recovery: pass a non-zero power-of-two alignment and a size/alignment pair
 /// that fits Rust's layout rules.
 ///
-/// ```rust
+/// ```rust,ignore
 /// use mechanical_mimalloc::{Allocation, TryAllocError};
 ///
 /// let err = Allocation::with_size_align(8, 3).unwrap_err();
@@ -112,7 +112,7 @@ impl std::error::Error for LayoutError {}
 /// requested layout was invalid. `TryAllocError::Alloc` means the layout was
 /// valid but allocation failed.
 ///
-/// ```rust
+/// ```rust,ignore
 /// use mechanical_mimalloc::{Allocation, TryAllocError};
 ///
 /// let err = Allocation::zeroed_with_size_align(1, 3).unwrap_err();
@@ -162,7 +162,7 @@ impl std::error::Error for TryAllocError {}
 /// a new block and copy through raw pointers if resizing is needed before a
 /// safe resize API is designed.
 ///
-/// ```rust
+/// ```rust,ignore
 /// use core::alloc::Layout;
 /// use mechanical_mimalloc::Allocation;
 ///

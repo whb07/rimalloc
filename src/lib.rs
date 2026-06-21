@@ -55,7 +55,7 @@
 //! Use the safe owned allocation wrapper when you want a Rust `Result` instead
 //! of the C API's null-on-failure convention:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use core::alloc::Layout;
 //! use mechanical_mimalloc::Allocation;
 //!

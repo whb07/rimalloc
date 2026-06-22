@@ -2836,3 +2836,72 @@ Decision:
   `glibc-thread`, and Redis time in the guardrail, and increased RSS on
   `xmalloc-testN` and `alloc-testN`.
 - This does not satisfy the no-regression constraint.
+
+### Candidate 6: Non-Null Partly Collect Typed Head
+
+Rationale:
+
+- `_mi_page_free_collect_partly` is a hot helper under `xmalloc-testN`.
+- The raw ABI wrapper must keep accepting a nullable `head`, but the hot
+  `mi_free_try_collect_mt_typed` caller has already proven a non-null
+  `BlockPtr` through `RemoteFreeList::head()`.
+- Prototype changed `_mi_page_free_collect_partly_typed` to take `BlockPtr`
+  directly and routed the hot caller to the typed helper, while keeping the raw
+  null-tolerant wrapper and preserving the `OwnedAbandonedPage`,
+  `RemoteFreeList`, `LocalPage`, and `BlockPtr` witness checks.
+
+Codegen effect:
+
+- `.text` shrank by 48 bytes:
+  - baseline: 190,598 bytes
+  - candidate: 190,550 bytes
+- Candidate `.text` hash:
+  `7cd0ca9321da3fd8bc804f4eaeceb2976db2b816dd152b075126c3bc03f374c2`.
+- Candidate allocator hash:
+  `e7606c232872546ece5762029d67b235aa733a3818e144bcaf73a2eb35b94088`.
+- Tradeoff: `_mi_page_free_collect_partly` disappeared as a separate release
+  symbol and its body was inlined into `mi_free_try_collect_mt_typed`, growing
+  that helper from 399 to 631 bytes. The total `.text` still shrank because the
+  raw wrapper and duplicate head handling were removed from the hot path.
+
+Focused `perf stat -r 5 -d` on `xmalloc-testN`:
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.014630s | 5.008349s | -0.13% |
+| task-clock | 149.03B | 140.70B | -5.59% |
+| instructions | 560.94B | 515.97B | -8.02% |
+| cycles | 631.39B | 596.32B | -5.56% |
+| branches | 141.88B | 128.97B | -9.10% |
+| branch misses | 196.25M | 257.57M | +31.24% |
+| L1 loads | 160.28B | 144.51B | -9.84% |
+| L1 load misses | 6.40B | 6.35B | -0.80% |
+
+Dedicated `xmalloc-testN` validation:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test -r=20`
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal8-nonnull-partly-xmalloc-r20-20260622.csv`
+
+| Metric | Candidate delta |
+| --- | ---: |
+| Mean time | +0.60% |
+| Median time | -0.23% |
+| Trim-1 time | +0.59% |
+| Paired wins | 6/20 |
+| Mean RSS | -13.04% |
+| Mean user time | -4.63% |
+| Mean system time | +55.45% |
+| Mean page reclaims | -0.21% |
+
+Decision:
+
+- Rejected and reverted.
+- The instruction, user-time, and RSS reductions are real enough to note, but
+  the dedicated `xmalloc-testN` harness regressed mean and trimmed time and only
+  won 6 of 20 paired runs.
+- The large system-time increase is a bad tradeoff and likely explains why the
+  counter win did not become a reliable wall-time win.
+- No broad guardrail run was done because the target scenario already failed
+  the no-regression bar.

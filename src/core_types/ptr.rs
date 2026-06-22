@@ -530,6 +530,27 @@ impl ThreadHeapPtr {
     }
 
     /// # Safety
+    /// The thread-heap pointer must refer to writable thread-heap metadata, and
+    /// `start <= end`.
+    #[inline(always)]
+    pub(crate) unsafe fn fill_direct_pages(
+        self,
+        start: DirectBin,
+        end: DirectBin,
+        page: Option<PagePtr>,
+    ) {
+        let raw = self.as_ptr();
+        let start = start.as_usize();
+        let end = end.as_usize();
+        crate::mi_assert_internal!(start <= end);
+        let page = page.map(PagePtr::as_ptr).unwrap_or(ptr::null_mut());
+        unsafe {
+            let pages = ptr::addr_of_mut!((*raw).pages_free_direct).cast::<*mut mi_page_t>();
+            core::slice::from_raw_parts_mut(pages.add(start), end - start + 1).fill(page);
+        }
+    }
+
+    /// # Safety
     /// The thread-heap pointer must refer to thread-heap metadata whose stats
     /// field is valid.
     #[inline(always)]

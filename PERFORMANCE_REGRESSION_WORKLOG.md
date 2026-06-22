@@ -1710,3 +1710,716 @@ Decision:
 - `sh6benchN`, `sh8benchN`, and `cache-scratchN` have very small absolute
   elapsed times, so their large percentage swings should be interpreted with
   that quantization in mind.
+
+## 2026-06-21 Follow-Up Goal: Typed-Preserving Performance Candidates
+
+Goal:
+
+- Investigate the five remaining candidate areas from the full perf sweep:
+  xmalloc free/collect, generic allocation queue search, fast malloc/free entry
+  shape, aligned allocation, and page free-list extension.
+- Preserve the typed allocator invariants. Do not bypass validation, remove
+  witnesses, weaken wrappers, or paper over warnings.
+- Accept only changes with repeatable, non-noise improvements and no material
+  regressions across the relevant mimalloc-bench scenarios.
+
+Baseline:
+
+- Git HEAD at goal start: `530592d Document follow-up performance experiments`.
+- Tracked working tree was clean; only pre-existing untracked analysis and
+  benchmark artifacts were present.
+- Rebuilt the current Rust allocator and copied it to both:
+  - `target/bench-allocators/libmimalloc-rust.so`
+  - `target/bench-allocators/libmimalloc-rust-baseline.so`
+
+Perf sweep reference:
+
+- Directory: `mimalloc-bench/out/bench/perf-all-rust-20260621-212327`
+- Practical sweep skipped external/unavailable suites: `leanN`, `mathlib`,
+  `linux`, `spec`, and `security`.
+
+Initial candidate order:
+
+1. Page free-list extension: try replacing the internal raw C-ABI wrapper call
+   with direct typed helper calls from `mi_page_extend_free_typed`.
+2. Xmalloc partial collect: inspect whether the local-to-available promotion can
+   stay direct while preserving the `LocalPage`/free-list wrappers.
+3. Generic queue search: compare Rust/C control flow before attempting any
+   queue-state change, because heap collection may mutate queues.
+4. Fast malloc/free entry shape: inspect codegen/perf before changing public
+   ABI wrappers.
+5. Aligned allocation: avoid repeating the rejected usable-size pass-through
+   experiment unless new evidence points there.
+
+### Candidate: Direct Typed Page Free-List Extension
+
+Change tried:
+
+- In `mi_page_extend_free_typed`, replace calls through the private raw
+  `mi_page_free_list_extend`/`mi_page_free_list_extend_secure` wrappers with
+  direct calls to `mi_page_free_list_extend_typed` and
+  `mi_page_free_list_extend_secure_typed`.
+- Constructed `BlockSize` once from the already-validated page block size.
+- Removed the now-unused private secure raw wrapper rather than suppressing the
+  resulting dead-code warning.
+
+Type-system assessment:
+
+- The attempted change preserved the existing `PagePtr` witness and introduced
+  no new unchecked raw-page path beyond the already-required
+  `BlockSize::new_unchecked(bsize)` conversion.
+- No validation or witness wiring was weakened.
+
+Correctness checks:
+
+- `cargo build --release --lib` succeeded.
+- `cargo test --lib free::tests::free_validation_covers_null_invalid_and_bad_alignment -- --exact --nocapture`
+  passed in debug mode.
+- `cargo test --release --lib` is not a clean gate today:
+  - `core_types::scalar::tests::requested_size_padding_checks_overflow` and
+    `core_types::scalar::tests::size_wrappers_return_typed_errors_for_checked_arithmetic`
+    fail independently in release mode because overflow checks are optimized
+    differently than the tests expect.
+  - `free::tests::free_validation_covers_null_invalid_and_bad_alignment`
+    segfaults independently in release mode but passes in debug mode.
+  - These failures are not from the page free-list extension path, but they mean
+    release unit tests cannot currently be used as a clean accept/reject gate for
+    allocator performance experiments.
+
+Focused 5-run benchmark:
+
+```sh
+../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test sh8bench rptest larson-sized glibc-thread -r=5
+```
+
+Artifacts:
+
+```text
+mimalloc-bench/out/bench/bench-goal-typed-extend-r5-20260621-214025.log
+mimalloc-bench/out/bench/benchres-goal-typed-extend-r5-20260621-214025.csv
+```
+
+Negative time means the candidate is faster:
+
+| Test | Mean | Median | Trim-1 | Paired Faster |
+| --- | ---: | ---: | ---: | ---: |
+| glibc-thread | rexp +1.20% | rexp +1.45% | rexp +1.28% | 0/5 |
+| larsonN-sized | rexp +2.03% | rexp +3.25% | rexp +2.42% | 2/5 |
+| rptestN | rexp +8.51% | rexp +9.23% | rexp +7.05% | 1/5 |
+| sh8benchN | rexp +2.48% | tied | tied | 1/5 |
+| xmalloc-testN | rexp +0.55% | rexp +0.46% | rexp +0.92% | 1/5 |
+
+Decision:
+
+- Rejected and reverted.
+- This path did not produce a repeatable improvement and regressed protected
+  scenarios, especially `rptestN`, `larsonN-sized`, and `glibc-thread`.
+- Do not retry the direct wrapper-elision version of page free-list extension
+  without fresh codegen evidence that explains the regression.
+
+### Candidate: Direct Local-Free Promotion in Partial Collect
+
+Change tried:
+
+- In `_mi_page_free_collect_partly_typed`, when a remote collect moved blocks
+  into `local_free` and `free` was still empty, directly promoted the non-empty
+  `LocalFreeList` into `AvailableFreeList`.
+- Used the existing `LocalPage`/`PagePtr` witness path and
+  `PagePtr::set_free`/`PagePtr::set_local_free`; did not write raw page fields
+  for the list heads directly.
+- Kept the explicit `free_is_zero = false` update from the existing quick
+  collect helper.
+
+Type-system assessment:
+
+- The attempted change preserved the existing page witness and typed free-list
+  wrappers.
+- It did skip the generic `mi_page_free_quick_collect_typed` helper after
+  reproducing the same local preconditions at the call site, so the risk was
+  code-shape and duplicated invariant maintenance, not weakened validation.
+
+Correctness checks:
+
+- `cargo build --release --lib` succeeded.
+- No new compiler warnings were introduced beyond the existing 264 warnings.
+
+Focused 5-run benchmark:
+
+```sh
+../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test sh8bench rptest larson-sized glibc-thread -r=5
+```
+
+Artifacts:
+
+```text
+mimalloc-bench/out/bench/bench-goal-partial-collect-r5-20260621-214856.log
+mimalloc-bench/out/bench/benchres-goal-partial-collect-r5-20260621-214856.csv
+```
+
+Negative time means the candidate is faster:
+
+| Test | Mean | Median | Trim-1 | Paired Faster |
+| --- | ---: | ---: | ---: | ---: |
+| glibc-thread | rexp +0.62% | rexp +0.72% | rexp +0.72% | 1/5 |
+| larsonN-sized | rexp -1.35% | rexp +0.10% | rexp -0.59% | 3/5 |
+| rptestN | rexp -3.18% | rexp -1.56% | rexp -2.77% | 4/5 |
+| sh8benchN | rexp -4.80% | tied | rexp -1.37% | 2/5 |
+| xmalloc-testN | rexp -1.11% | rexp -1.84% | rexp -1.54% | 4/5 |
+
+Decision:
+
+- Rejected and reverted.
+- The target path improved `xmalloc-testN`, and `rptestN` also improved, but
+  `glibc-thread` regressed consistently across mean, median, trim-1, and paired
+  runs.
+- Do not retry duplicating the quick-collect local promotion inline unless a
+  later change removes the `glibc-thread` cost or codegen shows a way to keep
+  the helper abstraction while eliminating the target overhead.
+
+### Candidate: Direct Typed Queue First-Update Calls
+
+Change tried:
+
+- Added a private `mi_theap_queue_first_update_if_normal_typed` helper that
+  takes `ThreadHeapLocal` and `PageQueuePtr`.
+- Routed internal queue remove/push/enqueue call sites through that typed helper
+  instead of the public raw `mi_theap_queue_first_update` shim.
+- Preserved the existing `mi_theap_contains_queue` internal assertion and the
+  `NormalPageQueue` check; this was a code-shape experiment, not a witness or
+  validation weakening.
+- Added a type-checked sentinel reference for the raw shim after it became
+  internally unused, matching the existing raw-helper sentinel pattern in
+  `src/page.rs`.
+
+Type-system assessment:
+
+- The attempted change kept the same typed heap and queue wrappers at internal
+  call sites.
+- It did not expose raw queue mutation or bypass queue membership invariants.
+
+Correctness checks:
+
+- Initial build introduced one additional dead-code warning because the raw
+  shim was no longer referenced.
+- Fixed that by adding a real type-checked sentinel reference, not by allowing
+  dead code.
+- `cargo build --release --lib` then succeeded with the existing 264 warnings.
+
+Focused 5-run benchmark:
+
+```sh
+../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test sh8bench rptest larson-sized glibc-thread -r=5
+```
+
+Artifacts:
+
+```text
+mimalloc-bench/out/bench/bench-goal-typed-queue-update-r5-20260621-215818.log
+mimalloc-bench/out/bench/benchres-goal-typed-queue-update-r5-20260621-215818.csv
+```
+
+Negative time means the candidate is faster:
+
+| Test | Mean | Median | Trim-1 | Paired Faster |
+| --- | ---: | ---: | ---: | ---: |
+| glibc-thread | rexp -2.04% | rexp -1.62% | rexp -1.93% | 5/5 |
+| larsonN-sized | rexp -0.89% | rexp -0.33% | rexp -0.08% | 4/5 |
+| rptestN | rexp -1.28% | rexp -0.13% | rexp -1.00% | 3/5 |
+| sh8benchN | rexp -7.69% | rexp -7.69% | rexp -8.86% | 4/5 |
+| xmalloc-testN | rexp -1.56% | rexp -3.20% | rexp -2.28% | 4/5 |
+
+Broad 10-run guardrail:
+
+```sh
+../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp redis rocksdb larson-sized rptest xmalloc-test sh8bench sh6bench glibc-simple glibc-thread alloc-test mstress barnes cfrac espresso -r=10
+```
+
+Artifacts:
+
+```text
+mimalloc-bench/out/bench/bench-goal-typed-queue-update-guard-r10-20260621-220402.log
+mimalloc-bench/out/bench/benchres-goal-typed-queue-update-guard-r10-20260621-220402.csv
+```
+
+Note: `cache-scratch` and `cache-thrash` were passed to the harness but treated
+as unknown options by this `bench.sh` invocation, so they were not included in
+this guardrail.
+
+Negative time means the candidate is faster:
+
+| Test | Mean | Median | Trim-1 | Trim-2 | Paired Faster |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| alloc-test1 | rexp -0.99% | rexp -0.95% | rexp -1.01% | rexp -0.95% | 6/10 |
+| alloc-testN | rexp +1.36% | rexp +0.46% | rexp +1.48% | rexp +0.69% | 2/10 |
+| barnes | rexp -1.02% | rexp -0.70% | rexp -1.16% | rexp -0.85% | 8/10 |
+| cfrac | rexp +0.40% | rexp -0.18% | rexp +0.27% | rexp +0.12% | 3/10 |
+| espresso | rexp +0.07% | rexp +0.17% | rexp +0.04% | rexp +0.06% | 3/10 |
+| glibc-simple | rexp -1.44% | rexp -1.09% | rexp -1.44% | rexp -1.33% | 8/10 |
+| glibc-thread | rexp -1.09% | rexp -0.60% | rexp -1.16% | rexp -0.95% | 10/10 |
+| larsonN-sized | rexp -1.11% | rexp -0.81% | rexp -0.82% | rexp -0.87% | 6/10 |
+| mstressN | rexp -0.12% | tied | rexp -0.08% | tied | 4/10 |
+| redis | rexp +0.31% | rexp +1.14% | rexp +0.58% | rexp +0.76% | 3/10 |
+| rocksdb | rexp -0.03% | rexp -0.28% | rexp -0.07% | rexp -0.19% | 4/10 |
+| rptestN | rexp -1.20% | rexp -1.41% | rexp -1.20% | rexp -1.51% | 7/10 |
+| sh6benchN | rexp -24.11% | rexp -28.57% | rexp -24.78% | rexp -25.00% | 10/10 |
+| sh8benchN | rexp +3.75% | rexp +4.17% | rexp +3.65% | rexp +3.47% | 0/10 |
+| xmalloc-testN | rexp -0.69% | rexp -0.69% | rexp -0.80% | rexp -0.92% | 7/10 |
+
+Decision:
+
+- Rejected and reverted.
+- The focused benchmark was encouraging, and the broad guardrail confirmed
+  improvements in `glibc-thread`, `larsonN-sized`, `rptestN`, `xmalloc-testN`,
+  `sh6benchN`, and several non-target scenarios.
+- The change still fails the goal because `sh8benchN` regressed in all 10
+  paired guardrail runs, `alloc-testN` regressed after trimming, and Redis
+  moved slower on median/trimmed means.
+- Do not retry direct typed queue-first-update routing as a broad change unless
+  a future profile isolates why `sh8benchN` loses. A narrower version would need
+  to preserve the `glibc-thread`/`rptestN` wins while avoiding normal push/remove
+  paths used by `sh8benchN`.
+
+### Candidate: Fast Malloc/Free Entry Shape
+
+Change tried:
+
+- No source change was made.
+- Audited the current release fast entry shape before attempting any patch,
+  because prior work already tuned this area with layout padding and
+  assembly-level tests.
+
+Findings:
+
+- `src/alloc_override.rs` already provides release `mi_c_malloc_fast` assembly
+  entry points for the hot allocation/free override surface:
+  - `malloc`, `mi_malloc`, and `__libc_malloc` share the direct-TLS small
+    allocation fast path.
+  - `calloc`, `mi_calloc`, and `__libc_calloc` share the direct-TLS small
+    zero-allocation fast path.
+  - C++ `operator new`/array-new use the same direct-TLS allocation shape.
+  - `free`, `mi_free`, `__libc_free`, unsized C++ delete, and unsized array-delete
+    share one assembly free fast path.
+  - sized delete and aligned sized delete forward through the C-shaped
+    `mi_free`/`mi_free_size_aligned` stubs.
+- `src/free.rs` already defines the release forwarding wrappers
+  `mi_free_size -> mi_free`, `mi_free_size_aligned -> mi_free_size`, and
+  `mi_free_aligned -> mi_free`.
+- The release artifact confirmed the expected public symbol grouping:
+  `malloc`/`mi_malloc`, `calloc`/`mi_calloc`, `free`/`mi_free`, separate
+  free-size/aligned stubs, and direct-TLS `mi_malloc_aligned`.
+- `tests/release_fast_path_audit.rs` already guards this shape, including
+  direct TLS, C-style free/delete aliases, forwarding stubs, entry `endbr64`,
+  and layout-sensitive padding.
+
+Type-system assessment:
+
+- The existing assembly is intentionally limited to ABI override entry points
+  where C signatures are required. Internal allocator invariants still cross
+  through typed page/free-list/layout witnesses after the entry fast path.
+- A new edit here would likely be either layout padding churn or broader raw
+  ABI surface, not a typed-preserving improvement. That would not satisfy the
+  goal without fresh profile evidence.
+
+Decision:
+
+- Audited and left unchanged.
+- Do not retry malloc/free entry reshaping unless a new profile shows a concrete
+  remaining entry wrapper sample. The current known fast entry mismatches have
+  already been addressed and are covered by release audit tests.
+
+### Candidate: Aligned Allocation Path
+
+Change tried:
+
+- No source change was made.
+- Audited the aligned allocation path and the benchmark call surface instead of
+  repeating the earlier usable-size/aligned pass-through experiments.
+
+Findings:
+
+- `rptest` calls `memalign` on Linux. That path routes through
+  `mi_memalign -> mi_malloc_aligned`.
+- The current release `mi_malloc_aligned` is already a naked direct-TLS wrapper
+  that tail-jumps to `mi_theap_malloc_aligned`, matching the prior C-shape fix.
+- `src/alloc_aligned.rs` keeps the important internal invariants typed:
+  `LayoutRequest`, `Alignment`, `AlignmentOffset`, `ThreadHeapLocal`,
+  `PaddedSize`, `ActivePage`, and `AvailablePage` are still used on the hot
+  aligned allocation path.
+- The aligned page allocation path already uses `_mi_page_malloc_zero_typed`
+  and the release `_mi_padding_shrink` helper boundary is intentionally kept to
+  match C.
+- Perf report searches from the full sweep did not show new hot samples in
+  less-common aligned variants such as `mi_zalloc_aligned` or
+  `mi_calloc_aligned`. Adding direct-TLS wrappers there would be speculative and
+  unlikely to affect the measured mimalloc-bench scenarios.
+
+Type-system assessment:
+
+- The only obvious way to shorten the aligned path further would be to bypass or
+  duplicate typed layout/alignment checks. That would weaken the typed wiring or
+  increase divergence from the audited path.
+- The existing hot path already has the typed-preserving C-shape wrapper that
+  was previously measured and accepted.
+
+Decision:
+
+- Audited and left unchanged.
+- Do not retry aligned wrapper reshaping unless a new profile shows a specific
+  aligned symbol as hot after `mi_malloc_aligned`'s direct-TLS wrapper. Future
+  candidates should preserve `LayoutRequest`, `Alignment`, `AlignmentOffset`,
+  and the page/free-list witnesses rather than introducing raw shortcuts.
+
+### Guardrail: Direct Page-Cache Typed Boundary
+
+Change kept:
+
+- Restored the page queue direct-bin update boundary to typed wrappers without
+  changing the generated release code:
+  - `mi_theap_queue_first_update_typed` now derives the direct cache slot with
+    `mi_direct_bin_from_size(size)` and carries it as `DirectBin`.
+  - Queue bin comparisons now route through `BlockSize` and `Bin` instead of
+    open-coded raw `mi_bin_impl(...)` calls at this boundary.
+  - The direct page-cache fill now goes through
+    `ThreadHeapPtr::fill_direct_pages(DirectBin, DirectBin, Option<PagePtr>)`.
+- Updated release audit tests to match current source shape while preserving
+  the stricter requirements:
+  - direct cache fill must use `DirectBin`, `PagePtr`, and `ThreadHeapPtr`;
+  - free validation must continue returning `PointerLookup` and `BlockForFree`;
+  - realloc must build `OldAllocation` only after validation;
+  - the fast entry shape remains direct-TLS and ABI-only.
+
+Type-system assessment:
+
+- This change does not weaken any witness wiring. The raw pointer slice fill is
+  now encapsulated behind `ThreadHeapPtr::fill_direct_pages`, and callers must
+  provide typed direct-bin bounds plus an optional typed page pointer.
+- The boundary remains `unsafe` because it writes thread-heap metadata, but the
+  public surface is narrower than the raw open-coded form it replaces.
+
+Verification:
+
+- `cargo fmt --check` passed.
+- `git diff --check` passed.
+- `cargo clippy --lib --features unstable-raw-internals -- -D clippy::all`
+  passed.
+- `cargo test --quiet --test release_fast_path_audit --features unstable-raw-internals`
+  passed: 36 passed, 0 failed.
+- `cargo build --release --lib` passed. It still reports the repository's
+  existing translated dead-code-style rustc warnings; no lint suppression was
+  added for this change.
+
+10-run benchmark guardrail:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp redis rocksdb larson-sized rptest xmalloc-test sh8bench glibc-thread alloc-test -r=10`
+- Allocators used: only `rbase` and `rexp`.
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal-typed-boundary-r10-20260621-225423.csv`
+- Baseline and candidate libraries were byte-identical after the typed wrapper
+  change:
+  `43e8cca6dcf8ae9352556266c7081f7bfbda9485044f008d20f993dc4216c5db`
+  for both `libmimalloc-rust-baseline.so` and `libmimalloc-rust.so`.
+- The disassembly of `mechanical_mimalloc::page::mi_theap_queue_first_update`
+  was identical. Any benchmark deltas below are therefore run noise, not
+  generated-code differences from this source change.
+
+| scenario | n | base median | candidate median | median delta | base mean | candidate mean | mean delta | candidate faster runs |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| redis | 10/10 | 2.680s | 2.670s | -0.37% | 2.678s | 2.696s | +0.66% | 5/10 |
+| rocksdb | 10/10 | 3.580s | 3.595s | +0.42% | 3.588s | 3.584s | -0.11% | 4/10 |
+| larsonN-sized | 10/10 | 2.050s | 2.077s | +1.34% | 2.067s | 2.088s | +1.02% | 3/10 |
+| rptestN | 10/10 | 1.515s | 1.562s | +3.07% | 1.499s | 1.546s | +3.19% | 4/10 |
+| xmalloc-testN | 10/10 | 0.219s | 0.211s | -3.42% | 0.219s | 0.212s | -2.97% | 10/10 |
+| sh8benchN | 10/10 | 0.240s | 0.240s | +0.00% | 0.244s | 0.237s | -2.87% | 5/10 |
+| glibc-thread | 10/10 | 0.420s | 0.420s | +0.00% | 0.421s | 0.421s | +0.12% | 4/10 |
+| alloc-test1 | 10/10 | 2.095s | 2.085s | -0.48% | 2.102s | 2.089s | -0.62% | 8/10 |
+| alloc-testN | 10/10 | 2.190s | 2.205s | +0.68% | 2.225s | 2.226s | +0.04% | 2/10 |
+
+Decision:
+
+- Kept the typed boundary/audit fix because it restores the intended type
+  wiring and compiles to the same release library as the saved baseline.
+- No performance optimization candidate from this pass was accepted. The
+  rejected candidates remain documented above so the same broad changes are not
+  retried without new profile evidence.
+
+## 2026-06-22 Follow-Up Goal: RSS/CPU Candidate Experiments
+
+Goal:
+
+- Evaluate the next performance candidates for RSS and CPU:
+  free-list refill/page extension, cross-thread free and reclaim, branch
+  layout/cold splitting, narrow queue-search/cache update, and Redis
+  realloc/usable-size leftovers.
+- Use appropriate diagnostics before changing source: `perf`, flamegraph tools,
+  heap/RSS tools where useful, and generated assembly inspection.
+- Keep only typed-preserving changes. Do not loosen validation, typestate,
+  witness, or atomic wrapper wiring.
+- Keep `cargo fmt`, clippy, targeted tests, and benchmark guardrails happy.
+- If source or assembly becomes simpler without regressions, weigh the
+  maintenance and type-safety tradeoff before deciding whether to keep it.
+
+Tooling available on this host:
+
+- `perf`
+- `inferno-flamegraph`
+- `heaptrack`
+- `AMDuProfPcm`
+- `AMDuProfCLI`
+- `objdump` / `llvm-objdump`
+- `rustfilt`
+
+Baseline setup:
+
+- Current tracked tree at the start of this goal includes the typed direct
+  page-cache boundary/audit fix from the previous goal.
+- The existing `mimalloc-bench/rust-baseline-vs-candidate.allocators` descriptor
+  compares only `rbase` and `rexp`.
+
+Baseline/profiling notes:
+
+- Saved the current release allocator as both baseline and candidate before
+  starting this follow-up pass:
+  - `target/bench-allocators/libmimalloc-rust-baseline.so`
+  - `target/bench-allocators/libmimalloc-rust.so`
+- Both copies initially hashed to
+  `43e8cca6dcf8ae9352556266c7081f7bfbda9485044f008d20f993dc4216c5db`.
+- `perf stat -d -r 3` was run on the Rust baseline for the high-signal
+  scenarios before source changes:
+
+| scenario | elapsed | IPC | branch miss rate | L1d load miss rate | notes |
+| --- | ---: | ---: | ---: | ---: | --- |
+| xmalloc-testN | 5.025s | 0.91 | 0.18% | 4.03% | Hot allocator self-time includes collect/refill/reabandon. |
+| glibc-thread | 2.026s | 1.77 | 5.01% | 7.43% | Branch-heavy free/delete and malloc entry paths dominate allocator time. |
+| rptestN | 16.023s | 0.15 | 9.68% | 16.76% | Mostly workload `memset`; allocator symbols are not the main cost. |
+
+`perf record` / flamegraph artifacts:
+
+- `mimalloc-bench/out/bench/perf-goal2-xmalloc-rust-20260622.data`
+- `mimalloc-bench/out/bench/perf-goal2-glibc-thread-rust-20260622.data`
+- `mimalloc-bench/out/bench/perf-goal2-rptest-rust-20260622.data`
+- Matching `.svg` flamegraphs and `perf-goal2-report-*.txt` reports are in
+  the same directory.
+
+Top-symbol findings:
+
+- `xmalloc-testN` flat/self allocator time:
+  - `mechanical_mimalloc::free::mi_free_try_collect_mt_typed`: 15.97%
+  - `mechanical_mimalloc::page::mi_page_free_list_extend`: 7.18%
+  - `mechanical_mimalloc::page::_mi_page_free_collect_partly`: 6.71%
+  - `mechanical_mimalloc::arena::_mi_arenas_page_try_reabandon_to_mapped`: 4.30%
+  - `mechanical_mimalloc::free::mi_abandoned_page_try_reclaim`: 2.59%
+- `glibc-thread`:
+  - benchmark loop dominates total runtime, but allocator self-time is mainly
+    `mi_malloc`, `operator delete[]`, and `_mi_malloc_generic_typed`.
+  - branch miss rate is materially higher than `xmalloc-testN`, so entry and
+    rare-path layout remain worth testing.
+- `rptestN`:
+  - `__memset_avx2_unaligned_erms` accounts for most sampled time. Allocator
+    source changes are unlikely to move this scenario unless a later profile
+    shows a specific allocator symbol.
+
+Assembly findings before prototypes:
+
+- Rust and C `mi_page_free_list_extend` generate similarly compact loops. The
+  source is not an obvious performance target unless a change makes the source
+  simpler without changing codegen.
+- C has a separate `mi_abandoned_page_try_reclaim.cold` symbol. The Rust build
+  has `mi_abandoned_page_try_reclaim` as one ordinary function, called from the
+  already-cold `mi_free_try_collect_mt_typed` path.
+- Rust `mi_malloc`/`__libc_malloc` entry code is already close to the C entry
+  shape, so the next low-risk candidate is cold-path function layout rather
+  than bypassing typed validation or direct TLS wrappers.
+
+Tooling decision:
+
+- `perf`, `inferno-collapse-perf`, `inferno-flamegraph`, `objdump`,
+  `llvm-objdump`, and `rustfilt` are suitable for this pass.
+- `heaptrack` also interposes allocation, so it is not a clean diagnostic for
+  the current `LD_PRELOAD` allocator comparisons. It should only be used on a
+  separate non-interposed target or for qualitative investigation where the
+  allocator-under-test result is not treated as benchmark evidence.
+
+Prototype candidate queue:
+
+1. Try a narrow cold/inline split for abandoned-page reclaim, matching the C
+   layout signal while preserving `OwnedAbandonedPage` and
+   `PageReclaimOnFree`.
+2. If useful or codegen-simplifying, try the same for arena reabandon-to-mapped.
+3. Re-check queue direct-cache update and free-list refill only if assembly or
+   profiles show a concrete generated-code simplification opportunity.
+4. Re-profile Redis/rocksdb/larson only after a candidate survives focused
+   allocator benchmarks, so we do not chase noise.
+
+### Candidate: Cold-Split Abandoned Reclaim
+
+Prototype:
+
+- Temporarily added `#[cold] #[inline(never)]` to
+  `mi_abandoned_page_try_reclaim`.
+- Type safety impact: none; it preserved `OwnedAbandonedPage` and
+  `PageReclaimOnFree` exactly.
+
+Assembly result:
+
+- The reclaim body itself stayed the same.
+- `mi_free_try_collect_mt_typed` moved the reclaim call behind the common
+  returns and became slightly tighter in the normal path.
+
+Focused 5-run benchmark:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp redis rocksdb larson-sized rptest xmalloc-test glibc-thread alloc-test -r=5`
+- Allocators used: only `rbase` and `rexp`.
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal2-cold-reclaim-r5-20260622-081328.csv`
+
+| scenario | n | base median | cand median | median delta | base mean | cand mean | mean delta | cand faster | RSS delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| alloc-test1 | 5/5 | 2.100s | 2.100s | +0.00% | 2.108s | 2.104s | -0.19% | 2/5 | +0.14% |
+| alloc-testN | 5/5 | 2.180s | 2.200s | +0.92% | 2.208s | 2.252s | +1.99% | 0/5 | -0.13% |
+| glibc-thread | 5/5 | 0.418s | 0.417s | -0.24% | 0.419s | 0.420s | +0.33% | 2/5 | +0.09% |
+| larsonN-sized | 5/5 | 2.102s | 2.093s | -0.43% | 2.096s | 2.092s | -0.19% | 2/5 | +0.20% |
+| redis | 5/5 | 2.660s | 2.660s | +0.00% | 2.692s | 2.668s | -0.88% | 3/5 | +0.82% |
+| rocksdb | 5/5 | 3.580s | 3.610s | +0.84% | 3.576s | 3.594s | +0.50% | 1/5 | -0.21% |
+| rptestN | 5/5 | 1.538s | 1.490s | -3.12% | 1.499s | 1.490s | -0.64% | 2/5 | -0.88% |
+| xmalloc-testN | 5/5 | 0.218s | 0.219s | +0.46% | 0.216s | 0.218s | +0.74% | 1/5 | -0.21% |
+
+Decision:
+
+- Rejected and reverted.
+- Reason: modest source/assembly layout improvement did not translate into a
+  broad win. `xmalloc-testN`, `rocksdb`, and `alloc-testN` regressed in the
+  aggregate, and there was no RSS improvement.
+
+### Candidate: Cold-Split Reabandon-To-Mapped Wrapper
+
+Prototype:
+
+- Temporarily added `#[cold] #[inline(never)]` to
+  `mi_abandoned_page_try_reabandon_to_mapped`.
+- Type safety impact: none; it preserved the `OwnedAbandonedPage` boundary.
+
+Assembly result:
+
+- `mi_free_try_collect_mt_typed` became much smaller because duplicated inline
+  reabandon checks moved behind one typed helper call.
+- Tradeoff: workloads that actually hit reabandon pay another call and lose the
+  inline branch checks.
+
+Focused 3-run benchmark:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp redis rocksdb larson-sized rptest xmalloc-test glibc-thread alloc-test -r=3`
+- Allocators used: only `rbase` and `rexp`.
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal2-cold-reabandon-r3-20260622-081845.csv`
+
+| scenario | n | base median | cand median | median delta | base mean | cand mean | mean delta | cand faster | RSS delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| alloc-test1 | 3/3 | 2.100s | 2.100s | +0.00% | 2.113s | 2.093s | -0.95% | 2/3 | -1.04% |
+| alloc-testN | 3/3 | 2.180s | 2.200s | +0.92% | 2.187s | 2.197s | +0.46% | 1/3 | -0.96% |
+| glibc-thread | 3/3 | 0.433s | 0.439s | +1.39% | 0.432s | 0.435s | +0.54% | 1/3 | +0.77% |
+| larsonN-sized | 3/3 | 2.110s | 2.191s | +3.84% | 2.095s | 2.161s | +3.17% | 1/3 | +1.28% |
+| redis | 3/3 | 2.700s | 2.700s | +0.00% | 2.806s | 2.720s | -3.08% | 1/3 | +0.65% |
+| rocksdb | 3/3 | 3.570s | 3.570s | +0.00% | 3.643s | 3.590s | -1.46% | 2/3 | -1.46% |
+| rptestN | 3/3 | 1.515s | 1.573s | +3.83% | 1.547s | 1.567s | +1.34% | 1/3 | +0.29% |
+| xmalloc-testN | 3/3 | 0.213s | 0.217s | +1.88% | 0.215s | 0.216s | +0.78% | 1/3 | -0.63% |
+
+Decision:
+
+- Rejected and reverted.
+- Reason: although the caller assembly was cleaner, the benchmark filter showed
+  clear regressions in `larsonN-sized`, `rptestN`, `xmalloc-testN`,
+  `glibc-thread`, and `alloc-testN`.
+
+### Candidate: Count-Based Free-List Refill Loop
+
+Prototype:
+
+- Temporarily rewrote `mi_page_free_list_extend_typed` to link `1..extend` and
+  set the final block once, instead of looping through the last block and then
+  overwriting its `next`.
+- Type safety impact: none; it kept `PagePtr`, `BlockSize`, and `BlockPtr`
+  wiring.
+
+Assembly result:
+
+- Rejected before benchmarking.
+- The original pointer loop compiles to the compact C-shaped sequence with no
+  callee-saved register saves.
+- The count-based loop caused LLVM to generate a larger unrolled function with
+  multiple callee-saved register pushes. Since `mi_page_free_list_extend` is
+  hot in `xmalloc-testN`, this is a bad tradeoff despite simpler source.
+
+Decision:
+
+- Rejected and reverted.
+- Do not retry count-based refill loops unless LLVM codegen changes or a future
+  profile shows a different bottleneck inside the refill loop.
+
+### Queue Search / Direct Cache Decision
+
+Findings:
+
+- `mi_theap_queue_first_update_typed` was already covered by the previous typed
+  direct-cache boundary work and compiled to the same release library as the
+  saved baseline.
+- `mi_page_queue_find_free_ex_typed` keeps the same tail-recursive retry shape
+  as C. The Rust optimizer already turns the retry into an in-function jump
+  rather than an extra call frame.
+
+Decision:
+
+- No source change accepted.
+- A manual loop rewrite would be speculative and likely increase the size of an
+  already-large allocator fallback. Revisit only with a profile that points to
+  the retry itself, not the broader queue search.
+
+### Redis / RocksDB / Heap Diagnostics Decision
+
+Findings:
+
+- The rejected candidates were all run with Redis and RocksDB included in the
+  allocator set, so these scenarios were not skipped.
+- Redis results remained noisy and did not identify a new source-level
+  candidate after the previous realloc/usable-size work.
+- `heaptrack` is not appropriate as benchmark evidence for these
+  `LD_PRELOAD` allocator comparisons because it interposes allocation itself.
+
+Decision:
+
+- No new Redis/RocksDB-specific source change accepted in this pass.
+- Future Redis/RocksDB work should profile the server process directly, but the
+  candidate must still be confirmed with normal non-interposed benchmark runs.
+
+### Final Verification For This Follow-Up Goal
+
+Final source state:
+
+- No performance prototype from this follow-up goal was kept.
+- The final release allocator copied back to
+  `target/bench-allocators/libmimalloc-rust.so` is byte-identical to the saved
+  baseline:
+  `43e8cca6dcf8ae9352556266c7081f7bfbda9485044f008d20f993dc4216c5db`.
+- The existing typed direct page-cache boundary/audit work from the previous
+  goal remains in the tree.
+
+Verification:
+
+- `cargo fmt --check` passed.
+- `git diff --check` passed.
+- `cargo clippy --lib --features unstable-raw-internals -- -D clippy::all`
+  passed.
+- `cargo test --quiet --test release_fast_path_audit --features unstable-raw-internals`
+  passed: 36 passed, 0 failed.
+- `cargo test --quiet --features unstable-raw-internals` passed across the
+  broader suite. Some tests intentionally print allocator error/assertion
+  messages while validating failure behavior; the test result was still clean.
+
+Outcome:
+
+- The tried candidates produced either noisy/no real wins or direct regressions.
+- Keeping the final source unchanged from the previous accepted typed-boundary
+  state is the correct tradeoff for now: no type-system weakening, no benchmark
+  regression accepted, and no speculative source cleanup that worsens assembly.

@@ -1328,7 +1328,8 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && override_rs.contains(".set __libc_free, free")
             && override_rs.contains(".set _ZdlPv, free")
             && override_rs.contains(".set _ZdaPv, free")
-            && override_rs.contains(".fill 0x540,1,0x90")
+            && override_rs.contains(".fill 0x30,1,0x90")
+            && override_rs.contains(".fill 0x520,1,0x90")
             && override_rs.contains("page_map = sym crate::page_map::_mi_page_map")
             && override_rs.contains("retire = sym crate::page::_mi_page_retire")
             && override_rs.contains("collect_mt = sym crate::free::mi_free_try_collect_mt")
@@ -1499,7 +1500,8 @@ fn allocation_product_paths_use_typed_requests() {
             && alloc_rs.contains("mi_theap_realloc_typed(theap, realloc_req)")
             && alloc_rs.contains("crate::core_types::ReallocRequest::from_null(")
             && alloc_rs.contains("crate::core_types::ReallocRequest::from_existing(")
-            && alloc_rs.contains("req.zero_new_tail() == crate::core_types::Zeroed::Yes")
+            && alloc_rs.contains("zero_new_tail == crate::core_types::Zeroed::Yes")
+            && alloc_rs.contains("req.zero_new_tail(),")
             && layout_rs.contains("pub(crate) struct AllocProduct")
             && layout_rs.contains("pub(crate) struct ReallocRequest")
             && layout_rs.contains("enum ReallocSource")
@@ -1536,12 +1538,14 @@ fn realloc_validation_uses_pointer_lookup_boundary() {
             && alloc_rs.contains("crate::core_types::PointerLookup::Valid(valid)")
             && alloc_rs.contains("let user = valid.user();")
             && alloc_rs.contains("let page = valid.page();")
-            && alloc_rs.contains("let block = valid.location().block();")
+            && alloc_rs.contains("let location = valid.location();")
+            && alloc_rs.contains("let block = location.block();")
             && alloc_rs.contains("Some(crate::core_types::OldAllocation::from_validated_parts(")
             && alloc_rs.contains("unsafe fn mi_realloc_request_from_ptr(")
             && alloc_rs
                 .contains("let Some(old) = mi_realloc_old_allocation(p, c\"mi_realloc\".as_ptr())")
-            && alloc_rs.contains("unsafe fn mi_theap_realloc_apply(")
+            && alloc_rs.contains("unsafe fn mi_theap_realloc_validated_core(")
+            && alloc_rs.contains("zero_new_tail: crate::core_types::Zeroed,")
             && alloc_rs.contains("crate::core_types::ReallocRequest::from_null(")
             && alloc_rs.contains("crate::core_types::ReallocRequest::from_existing(")
             && alloc_rs.contains("req.old(),")
@@ -4070,8 +4074,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(
                 "#[inline(never)]\npub extern \"C\" fn _mi_bin_size(bin: usize) -> usize"
             )
-            && page_rs
-                .contains("fn mi_bin_from_raw_size(size: usize) -> crate::core_types::Bin")
+            && page_rs.contains("pub(crate) fn mi_bin_impl(size: usize) -> usize")
+            && page_rs.contains("fn mi_bin_from_raw_size(size: usize) -> crate::core_types::Bin")
             && page_rs.contains(
                 "pub(crate) fn mi_bin_from_padded(padded: crate::core_types::PaddedSize)"
             )
@@ -4081,7 +4085,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains(
                 "pub(crate) fn mi_bin_from_usable(usable: crate::core_types::UsableSize)"
             )
-            && page_rs.contains("mi_bin(size)")
+            && page_rs.contains("mi_bin_impl(size)")
             && page_rs.contains("_mi_theap_empty")
             && page_rs.contains(".pages[bin].block_size")
             && page_rs.contains("_mi_bin_size(mi_bin_from_padded(padded).as_usize())")
@@ -4151,10 +4155,17 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && internal.contains("mi_direct_bin_from_size(padded.get())")
             && internal.contains("let idx = crate::core_types::WordCount::from_size(size).get();")
             && internal.contains("let idx = mi_direct_bin_from_padded(padded).as_usize();")
-            && page_rs.contains("let idx = mi_direct_bin_from_size(size).as_usize();")
+            && page_rs.contains("let direct_idx = mi_direct_bin_from_size(size);")
+            && page_rs.contains("let idx = direct_idx.as_usize();")
+            && page_rs.contains(".direct_page(direct_idx)")
+            && page_rs.contains("theap_ptr.fill_direct_pages(")
+            && ptr_rs.contains(
+                "pub(crate) unsafe fn fill_direct_pages(\n        self,\n        start: DirectBin,\n        end: DirectBin,"
+            )
             && !internal.contains(
                 "let idx = _mi_wsize_from_size(size);\n    (*theap).pages_free_direct[idx]"
-            ),
+            )
+            && !page_rs.contains("pages_free_direct"),
         "direct page-cache indexes should pass through DirectBin before pages_free_direct indexing"
     );
     assert!(
@@ -5679,7 +5690,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.matches("mi_block_check_unguard(validated.page(), validated.block(), validated.user())").count() == 1
             && !free_rs.contains("let Some((validated, located))")
             && !free_rs.contains("let block_raw = if mi_page_has_interior_pointers(page_raw)")
-            && alloc_rs.contains("let block = valid.location().block();")
+            && alloc_rs.contains("let location = valid.location();")
+            && alloc_rs.contains("let block = location.block();")
             && free_rs.matches("let page = crate::core_types::PagePtr::new_unchecked(page);").count() == 2
             && free_rs.matches("let user = crate::core_types::UserPtr::new_unchecked(p);").count() == 2
             && free_rs

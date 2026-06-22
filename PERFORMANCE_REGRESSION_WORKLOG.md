@@ -2777,3 +2777,62 @@ Decision:
 - The source is slightly closer to the upstream C ordering, and the generated
   release `.text` is unchanged, so there is no expected mimalloc-bench
   regression.
+
+### Candidate 5: Remove Cold Attribute From Collect-MT Helper
+
+Rationale:
+
+- `mi_free_try_collect_mt_typed` is the top Rust allocator hotspot in
+  `xmalloc-testN`, but it was marked `#[cold]`.
+- Upstream C marks this helper noinline but not cold.
+- Prototype removed `#[cold]` from both the typed helper and the raw ABI wrapper,
+  while keeping `#[inline(never)]`, the typed `OwnedAbandonedPage`/
+  `RemoteFreeList` boundary, and all assertions/checks.
+
+Codegen effect:
+
+- `.text` grew by 32 bytes:
+  - baseline: 190,598 bytes
+  - candidate: 190,630 bytes
+- Candidate hash: `6b2c3024defd4fb590f612eef41ca9a3c33ca47a6afda599530b994e04568784`.
+
+Focused `perf stat -r 5 -d`:
+
+| Scenario | Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: | ---: |
+| `xmalloc-testN` | elapsed | 5.019900s | 5.011215s | -0.17% |
+| `xmalloc-testN` | instructions | 548.77B | 550.30B | +0.28% |
+| `xmalloc-testN` | cycles | 622.29B | 620.15B | -0.34% |
+| `xmalloc-testN` | branches | 138.88B | 139.07B | +0.13% |
+| `glibc-thread` | elapsed | 2.003032s | 2.003051s | tied |
+| `glibc-thread` | instructions | 420.20B | 411.99B | -1.95% |
+| `glibc-thread` | cycles | 244.05B | 238.44B | -2.30% |
+| `glibc-thread` | branches | 52.96B | 51.93B | -1.95% |
+
+Guardrail benchmark:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp redis rocksdb larson-sized rptest xmalloc-test glibc-thread alloc-test -r=5`
+- Artifacts:
+  - `mimalloc-bench/out/bench/bench-goal7-no-cold-collect-mt-guard-r5-20260622.log`
+  - `mimalloc-bench/out/bench/benchres-goal7-no-cold-collect-mt-guard-r5-20260622.csv`
+
+| Scenario | Time mean | Time median | Time trim-1 | Paired wins | RSS mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `alloc-test1` | -0.38% | -0.48% | -0.48% | 2/5 | +0.21% |
+| `alloc-testN` | +0.73% | +0.45% | +0.76% | 1/5 | +3.27% |
+| `glibc-thread` | +0.14% | +0.24% | +0.16% | 1/5 | -1.73% |
+| `larsonN-sized` | +1.13% | +1.97% | +1.37% | 1/5 | +0.08% |
+| `redis` | +0.60% | +0.00% | +0.00% | 2/5 | -0.11% |
+| `rocksdb` | +0.06% | -0.28% | -0.09% | 1/5 | -0.11% |
+| `rptestN` | -1.82% | -5.24% | -2.55% | 4/5 | +0.59% |
+| `xmalloc-testN` | -1.74% | -1.83% | -1.99% | 4/5 | +6.41% |
+
+Decision:
+
+- Rejected and reverted.
+- The focused perf counters and target `xmalloc-testN`/`rptestN` harness rows
+  were promising, but the candidate regressed `larsonN-sized`, `alloc-testN`,
+  `glibc-thread`, and Redis time in the guardrail, and increased RSS on
+  `xmalloc-testN` and `alloc-testN`.
+- This does not satisfy the no-regression constraint.

@@ -20,8 +20,8 @@ use crate::internal::{
     __mi_stat_counter_increase, __mi_stat_increase, _mi_align_up, _mi_is_heap_main, _mi_os_commit,
     _mi_os_good_alloc_size, _mi_os_page_size_typed, _mi_page_malloc_zero_typed, _mi_ptr_page,
     _mi_theap_heap, _mi_theap_random_next, _mi_wsize_from_size, MI_DEBUG, MI_SECURE, mi_block_next,
-    mi_block_set_next, mi_direct_bin_from_size, mi_mem_is_zero, mi_page_all_free, mi_page_area,
-    mi_page_block_size, mi_page_committed_typed, mi_page_contains_address, mi_page_flags,
+    mi_block_set_next, mi_mem_is_zero, mi_page_all_free, mi_page_area, mi_page_block_size,
+    mi_page_committed_typed, mi_page_contains_address, mi_page_flags,
     mi_page_has_interior_pointers, mi_page_immediate_available, mi_page_is_expandable,
     mi_page_is_mostly_used, mi_page_is_singleton, mi_page_queue, mi_page_set_has_interior_pointers,
     mi_page_set_keys, mi_page_slice_offset_of, mi_page_slice_start, mi_page_start,
@@ -74,8 +74,8 @@ fn align_up(size: usize, alignment: usize) -> usize {
     (size + alignment - 1) & !(alignment - 1)
 }
 
-#[inline(never)]
-pub extern "C" fn mi_bin(size: usize) -> usize {
+#[inline(always)]
+pub(crate) fn mi_bin_impl(size: usize) -> usize {
     let mut wsize = size.div_ceil(size_of::<usize>());
     if MI_ALIGN4W {
         if wsize <= 4 {
@@ -105,13 +105,18 @@ pub extern "C" fn mi_bin(size: usize) -> usize {
 }
 
 #[inline(never)]
+pub extern "C" fn mi_bin(size: usize) -> usize {
+    mi_bin_impl(size)
+}
+
+#[inline(never)]
 pub extern "C" fn _mi_bin(size: usize) -> usize {
-    mi_bin(size)
+    mi_bin_impl(size)
 }
 
 #[inline(always)]
 fn mi_bin_from_raw_size(size: usize) -> crate::core_types::Bin {
-    let bin = mi_bin(size);
+    let bin = mi_bin_impl(size);
     crate::mi_debug_assert!(u16::try_from(bin).is_ok());
     crate::mi_debug_assert!(bin < crate::types::MI_BIN_COUNT);
     unsafe { crate::core_types::Bin::new_unchecked(bin as u16) }
@@ -592,7 +597,6 @@ pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
     unsafe {
         let page_ptr = PagePtr::new_unchecked(page);
         let page_const = PageConstPtr::new_unchecked(page);
-        let page = page_ptr.as_ptr();
         let cpage = page_const.as_ptr();
 
         crate::mi_assert_internal!(mi_page_is_valid_init(page_ptr));
@@ -603,6 +607,7 @@ pub unsafe fn _mi_page_is_valid(page: *mut mi_page_t) -> bool {
             feature = "track-asan"
         ))]
         if MI_SECURE != 0 {
+            let page = page_ptr.as_ptr();
             crate::mi_assert_internal!((*page).keys[0] != 0);
         }
         if !mi_page_is_abandoned(cpage) {
@@ -2350,28 +2355,26 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
             return;
         }
 
-        let page = queue.ptr().first().unwrap_or_else(|| {
-            crate::core_types::PagePtr::new_unchecked(ptr::addr_of!(_mi_page_empty).cast_mut())
-        });
+        let page = queue
+            .ptr()
+            .first()
+            .map(crate::core_types::PagePtr::as_ptr)
+            .unwrap_or_else(|| ptr::addr_of!(_mi_page_empty).cast_mut());
 
-        let idx = mi_direct_bin_from_size(size).as_usize();
-        let direct_bin = mi_direct_bin_from_size(size);
-        if theap.ptr().direct_page(direct_bin) == Some(page) {
+        let idx = crate::core_types::WordCount::from_size(size).get();
+        crate::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
+        let theap_raw = theap.ptr().as_ptr();
+        if (*theap_raw).pages_free_direct[idx] == page {
             return;
         }
 
-        let theap_raw = theap.ptr().as_ptr();
         let start = if idx <= 1 {
             0
         } else {
             crate::mi_assert_internal!(pq > ptr::addr_of_mut!((*theap_raw).pages[0]));
-            let bin = mi_bin_from_block_size(block_size).as_usize();
+            let bin = mi_bin_impl(size);
             let mut prev = pq.sub(1);
-            while bin
-                == mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(
-                    mi_page_queue_block_size_raw(prev),
-                ))
-                .as_usize()
+            while bin == mi_bin_impl(mi_page_queue_block_size_raw(prev))
                 && prev > ptr::addr_of_mut!((*theap_raw).pages[0])
             {
                 prev = prev.sub(1);
@@ -2381,12 +2384,9 @@ pub(crate) unsafe fn mi_theap_queue_first_update_typed(
         };
 
         crate::mi_assert_internal!(start <= idx);
-        for sz in start..=idx {
-            theap.ptr().set_direct_page(
-                crate::core_types::DirectBin::new_unchecked(sz as u16),
-                Some(page),
-            );
-        }
+        let len = idx - start + 1;
+        let pages_free = ptr::addr_of_mut!((*theap_raw).pages_free_direct).cast::<*mut mi_page_t>();
+        core::slice::from_raw_parts_mut(pages_free.add(start), len).fill(page);
     }
 }
 
@@ -2580,13 +2580,7 @@ unsafe fn mi_page_queue_push_at_end_typed(
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
     unsafe {
         mi_page_queue_push_at_end_internal(theap, queue.ptr(), page.page());
-        match crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new(page, queue) {
-            Some(queued) => queued,
-            None => {
-                crate::mi_assert_internal!(false);
-                core::hint::unreachable_unchecked()
-            }
-        }
+        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(page, queue)
     }
 }
 
@@ -2598,14 +2592,7 @@ unsafe fn mi_page_queue_push_typed(
 ) -> crate::core_types::QueuedPage<crate::core_types::NormalQueue> {
     unsafe {
         mi_page_queue_push_internal(theap, queue.ptr(), page.page());
-
-        match crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new(page, queue) {
-            Some(queued) => queued,
-            None => {
-                crate::mi_assert_internal!(false);
-                core::hint::unreachable_unchecked()
-            }
-        }
+        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(page, queue)
     }
 }
 
@@ -2944,18 +2931,12 @@ unsafe fn mi_page_queue_find_free_ex_typed(
                         crate::core_types::PagePtr::new_unchecked(page_candidate),
                     );
                     let all_free = crate::core_types::AllFreePage::active_unchecked(active);
-                    match crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new(
-                        active, queue,
-                    ) {
-                        Some(queued) => {
-                            let _ = _mi_page_free_active_internal(all_free, queued);
-                            page_candidate = page;
-                        }
-                        None => {
-                            crate::mi_assert_internal!(false);
-                            page_candidate = page;
-                        }
-                    }
+                    let queued =
+                        crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
+                            active, queue,
+                        );
+                    let _ = _mi_page_free_active_internal(all_free, queued);
+                    page_candidate = page;
                 } else if mi_page_used_count(page) >= mi_page_used_count(page_candidate)
                     && !mi_page_is_mostly_used(page)
                 {
@@ -3013,12 +2994,10 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             let active = crate::core_types::ActivePage::new_unchecked(
                 crate::core_types::PagePtr::new_unchecked(page),
             );
-            let Some(queued) =
-                crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new(active, queue)
-            else {
-                crate::mi_assert_internal!(false);
-                return None;
-            };
+            let queued =
+                crate::core_types::QueuedPage::<crate::core_types::NormalQueue>::new_unchecked(
+                    active, queue,
+                );
             let _ = mi_page_queue_move_to_front_typed(theap, queue, queued);
             mi_page_reset_retire_expire(page);
         }

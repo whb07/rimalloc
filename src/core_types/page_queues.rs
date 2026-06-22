@@ -176,6 +176,20 @@ impl QueuedPage<NormalQueue> {
         }
     }
 
+    /// # Safety
+    /// `page` must be known to be currently linked in `queue`, not marked full,
+    /// and have a block size compatible with `queue`.
+    #[inline(always)]
+    pub(crate) unsafe fn new_unchecked(
+        page: crate::core_types::ActivePage,
+        queue: NormalPageQueue,
+    ) -> Self {
+        Self {
+            page: page.page(),
+            queue: PageQueue::normal(queue),
+        }
+    }
+
     #[inline(always)]
     pub(crate) unsafe fn remove(self) -> crate::core_types::ActivePage {
         unsafe {

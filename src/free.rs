@@ -849,6 +849,15 @@ pub(crate) unsafe fn mi_route_usable_size_typed(
         if p.is_null() {
             return crate::core_types::UsableSize::new(0);
         }
+        if MI_DEBUG == 0 && !cfg!(feature = "secure") && MI_GUARDED == 0 {
+            let Some(user) = crate::core_types::UserPtr::new(p.cast_mut()) else {
+                return crate::core_types::UsableSize::new(0);
+            };
+            let Some(page) = mi_lookup_pointer_page(user) else {
+                return crate::core_types::UsableSize::new(0);
+            };
+            return _mi_usable_size_typed(p, page.as_ptr());
+        }
         match mi_validate_pointer(p.cast_mut(), msg) {
             crate::core_types::PointerLookup::Valid(valid) => {
                 let located = valid.location().located_block();
@@ -1124,6 +1133,28 @@ pub(crate) unsafe fn mi_page_usable_aligned_size_of_typed(
         let adjust = p.cast::<u8>().offset_from(block.cast::<u8>());
         crate::mi_assert_internal!(adjust >= 0 && adjust as usize <= size.get());
         size.checked_sub(adjust as usize)
+            .unwrap_or_else(|_| crate::core_types::UsableSize::new(0))
+    }
+}
+
+/// # Safety
+/// `page` and `location` must come from the same successful pointer validation.
+#[inline(always)]
+pub(crate) unsafe fn mi_usable_size_from_validated_location(
+    page: crate::core_types::PagePtr,
+    location: crate::core_types::PointerLocation,
+) -> crate::core_types::UsableSize {
+    unsafe {
+        let located = location.located_block();
+        let was_guarded = located.was_guarded() == crate::core_types::WasGuarded::Yes;
+        let size =
+            mi_page_usable_size_of_typed(page.as_ptr(), located.block().as_ptr(), was_guarded);
+        let adjust = located.offset().0;
+        if adjust == 0 {
+            return size;
+        }
+        crate::mi_assert_internal!(adjust <= size.get());
+        size.checked_sub(adjust)
             .unwrap_or_else(|_| crate::core_types::UsableSize::new(0))
     }
 }

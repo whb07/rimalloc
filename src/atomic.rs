@@ -815,12 +815,10 @@ pub unsafe extern "C" fn mi_lock_try_acquire(lock: *mut mi_lock_t) -> bool {
 pub unsafe extern "C" fn mi_lock_acquire(lock: *mut mi_lock_t) {
     let err = unsafe { pthread_mutex_lock(ptr::addr_of_mut!((*lock).mutex)) };
     if err != 0 {
-        unsafe {
-            crate::options::_mi_error_message_fmt(
-                crate::core_types::Errno::new(err),
-                format_args!("internal error: lock cannot be acquired\n"),
-            )
-        };
+        crate::options::_mi_error_message_fmt(
+            crate::core_types::Errno::new(err),
+            format_args!("internal error: lock cannot be acquired\n"),
+        );
     }
 }
 

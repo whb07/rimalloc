@@ -55,8 +55,12 @@ pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
 #[cfg(mi_c_malloc_fast)]
 core::arch::global_asm!(".globl _Znam", ".type _Znam,@function", ".set _Znam, _Znwm",);
 
+// Keep the fast override entrypoints on the validated cache-line layout. The
+// sized-delete stubs below remove an extra Rust call frame; this pad avoids
+// regressing Redis while preserving the larson win from the stubs.
 #[cfg(all(not(windows), mi_c_malloc_fast))]
 core::arch::global_asm!(
+    ".fill 0x30,1,0x90",
     ".globl free",
     ".type free,@function",
     ".p2align 4",
@@ -124,7 +128,27 @@ core::arch::global_asm!(
     ".globl __libc_free",
     ".type __libc_free,@function",
     ".set __libc_free, free",
-    ".fill 0x540,1,0x90",
+    ".globl _ZdlPvm",
+    ".type _ZdlPvm,@function",
+    ".p2align 4",
+    "_ZdlPvm:",
+    "endbr64",
+    "jmp mi_free",
+    ".size _ZdlPvm, .-_ZdlPvm",
+    ".globl _ZdaPvm",
+    ".type _ZdaPvm,@function",
+    ".set _ZdaPvm, _ZdlPvm",
+    ".globl _ZdlPvmSt11align_val_t",
+    ".type _ZdlPvmSt11align_val_t,@function",
+    ".p2align 4",
+    "_ZdlPvmSt11align_val_t:",
+    "endbr64",
+    "jmp mi_free_size_aligned",
+    ".size _ZdlPvmSt11align_val_t, .-_ZdlPvmSt11align_val_t",
+    ".globl _ZdaPvmSt11align_val_t",
+    ".type _ZdaPvmSt11align_val_t,@function",
+    ".set _ZdaPvmSt11align_val_t, _ZdlPvmSt11align_val_t",
+    ".fill 0x520,1,0x90",
     ".globl malloc",
     ".type malloc,@function",
     ".p2align 4",
@@ -667,7 +691,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array(p: *mut c_void) {
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "_ZdlPvm")]
 pub unsafe extern "C" fn mi_cxx_delete_sized(p: *mut c_void, n: usize) {
     unsafe { crate::mimalloc::mi_free_size(p, n) }
@@ -675,7 +699,7 @@ pub unsafe extern "C" fn mi_cxx_delete_sized(p: *mut c_void, n: usize) {
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "_ZdaPvm")]
 pub unsafe extern "C" fn mi_cxx_delete_array_sized(p: *mut c_void, n: usize) {
     unsafe { crate::mimalloc::mi_free_size(p, n) }
@@ -699,7 +723,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array_aligned(p: *mut c_void, al: usize) 
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "_ZdlPvmSt11align_val_t")]
 pub unsafe extern "C" fn mi_cxx_delete_sized_aligned(p: *mut c_void, n: usize, al: usize) {
     unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }
@@ -707,7 +731,7 @@ pub unsafe extern "C" fn mi_cxx_delete_sized_aligned(p: *mut c_void, n: usize, a
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(mi_c_malloc_fast)))]
 #[unsafe(export_name = "_ZdaPvmSt11align_val_t")]
 pub unsafe extern "C" fn mi_cxx_delete_array_sized_aligned(p: *mut c_void, n: usize, al: usize) {
     unsafe { crate::mimalloc::mi_free_size_aligned(p, n, al) }

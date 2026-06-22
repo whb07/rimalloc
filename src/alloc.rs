@@ -1188,8 +1188,9 @@ unsafe fn mi_realloc_old_allocation(
             crate::core_types::PointerLookup::Valid(valid) => {
                 let user = valid.user();
                 let page = valid.page();
-                let block = valid.location().block();
-                let usable = _mi_usable_size_typed(user.as_ptr(), page.as_ptr());
+                let location = valid.location();
+                let block = location.block();
+                let usable = crate::free::mi_usable_size_from_validated_location(page, location);
                 // SAFETY: `PointerLookup::Valid` proves `user` belongs to `page` and
                 // supplies the block start derived by the validation boundary.
                 Some(crate::core_types::OldAllocation::from_validated_parts(
@@ -1222,19 +1223,19 @@ pub(crate) unsafe extern "C" fn _mi_theap_realloc_zero(
     }
 }
 
-unsafe fn mi_theap_realloc_apply(
+#[inline(always)]
+unsafe fn mi_theap_realloc_validated_core(
     theap: ThreadHeapLocal,
     old: Option<crate::core_types::OldAllocation>,
-    req: crate::core_types::ReallocRequest,
+    layout: crate::core_types::LayoutRequest,
+    zero_new_tail: crate::core_types::Zeroed,
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
     unsafe {
-        let p = req
-            .ptr()
-            .map(|ptr| ptr.as_ptr())
+        let p = old
+            .map(|old| old.ptr().as_ptr())
             .unwrap_or(core::ptr::null_mut());
-        let layout = req.new_layout();
         let new_requested = layout.requested();
         let newsize = new_requested.get();
         let (page, size) = if let Some(old) = old {
@@ -1269,7 +1270,7 @@ unsafe fn mi_theap_realloc_apply(
             let preserve =
                 old.map(|old| crate::core_types::PreserveBytes::new(old.usable(), new_requested));
             let preserved = preserve.map_or(0, |preserve| preserve.get());
-            if req.zero_new_tail() == crate::core_types::Zeroed::Yes && newsize > preserved {
+            if zero_new_tail == crate::core_types::Zeroed::Yes && newsize > preserved {
                 let start = if preserved >= size_of::<isize>() {
                     preserved - size_of::<isize>()
                 } else {
@@ -1294,17 +1295,13 @@ unsafe fn mi_theap_realloc_apply(
     }
 }
 
-unsafe fn mi_realloc_request_from_ptr(
+unsafe fn mi_realloc_old_from_ptr(
     p: *mut c_void,
-    layout: crate::core_types::LayoutRequest,
     usable_pre: *mut usize,
-) -> Option<crate::core_types::ReallocRequest> {
+) -> Option<Option<crate::core_types::OldAllocation>> {
     unsafe {
         let Some(_user) = crate::core_types::UserPtr::new(p) else {
-            return Some(crate::core_types::ReallocRequest::from_null(
-                layout,
-                layout.zeroed(),
-            ));
+            return Some(None);
         };
         let Some(old) = mi_realloc_old_allocation(p, c"mi_realloc".as_ptr()) else {
             if !usable_pre.is_null() {
@@ -1312,11 +1309,27 @@ unsafe fn mi_realloc_request_from_ptr(
             }
             return None;
         };
-        Some(crate::core_types::ReallocRequest::from_existing(
-            old,
-            layout,
-            layout.zeroed(),
-        ))
+        Some(Some(old))
+    }
+}
+
+unsafe fn mi_realloc_request_from_ptr(
+    p: *mut c_void,
+    layout: crate::core_types::LayoutRequest,
+    usable_pre: *mut usize,
+) -> Option<crate::core_types::ReallocRequest> {
+    unsafe {
+        match mi_realloc_old_from_ptr(p, usable_pre)? {
+            Some(old) => Some(crate::core_types::ReallocRequest::from_existing(
+                old,
+                layout,
+                layout.zeroed(),
+            )),
+            None => Some(crate::core_types::ReallocRequest::from_null(
+                layout,
+                layout.zeroed(),
+            )),
+        }
     }
 }
 
@@ -1354,16 +1367,33 @@ pub unsafe extern "C" fn mi_theap_realloc(
         let Some(layout) = malloc_layout_or_report(newsize, false) else {
             return ptr::null_mut();
         };
-        let Some(req) = mi_realloc_request_from_ptr(p, layout, ptr::null_mut()) else {
+        let Some(old) = mi_realloc_old_from_ptr(p, ptr::null_mut()) else {
             return ptr::null_mut();
         };
         if theap.is_null() && MI_THEAP_INITASNULL {
-            return mi_theap_realloc_request_raw(theap, req, ptr::null_mut(), ptr::null_mut());
+            let Some(theap) = _mi_theap_or_default_typed(theap) else {
+                return ptr::null_mut();
+            };
+            return mi_theap_realloc_validated_core(
+                ThreadHeapLocal::new_unchecked(theap),
+                old,
+                layout,
+                layout.zeroed(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+            );
         }
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };
-        mi_theap_realloc_typed(ThreadHeapLocal::new_unchecked(theap), req)
+        mi_theap_realloc_validated_core(
+            ThreadHeapLocal::new_unchecked(theap),
+            old,
+            layout,
+            layout.zeroed(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
     }
 }
 
@@ -1371,7 +1401,16 @@ unsafe fn mi_theap_realloc_typed(
     theap: ThreadHeapLocal,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    unsafe { mi_theap_realloc_apply(theap, req.old(), req, ptr::null_mut(), ptr::null_mut()) }
+    unsafe {
+        mi_theap_realloc_validated_core(
+            theap,
+            req.old(),
+            req.new_layout(),
+            req.zero_new_tail(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    }
 }
 
 pub(crate) unsafe fn mi_theap_realloc_req(
@@ -1381,17 +1420,27 @@ pub(crate) unsafe fn mi_theap_realloc_req(
     unsafe { mi_theap_realloc_request_raw(theap, req, ptr::null_mut(), ptr::null_mut()) }
 }
 
+#[inline(always)]
 pub(crate) unsafe fn mi_theap_realloc_layout(
     theap: *mut mi_theap_t,
     p: *mut c_void,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
     unsafe {
-        if let Some(req) = mi_realloc_request_from_ptr(p, layout, ptr::null_mut()) {
-            mi_theap_realloc_req(theap, req)
-        } else {
-            ptr::null_mut()
-        }
+        let Some(old) = mi_realloc_old_from_ptr(p, ptr::null_mut()) else {
+            return ptr::null_mut();
+        };
+        let Some(theap) = _mi_theap_or_default_typed(theap) else {
+            return ptr::null_mut();
+        };
+        mi_theap_realloc_validated_core(
+            ThreadHeapLocal::new_unchecked(theap),
+            old,
+            layout,
+            layout.zeroed(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
     }
 }
 
@@ -1401,7 +1450,16 @@ unsafe fn mi_theap_realloc_request(
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_realloc_apply(theap, req.old(), req, usable_pre, usable_post) }
+    unsafe {
+        mi_theap_realloc_validated_core(
+            theap,
+            req.old(),
+            req.new_layout(),
+            req.zero_new_tail(),
+            usable_pre,
+            usable_post,
+        )
+    }
 }
 
 unsafe fn mi_theap_realloc_request_raw(

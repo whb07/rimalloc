@@ -2672,3 +2672,65 @@ Decision:
   system-time increase.
 - This reinforces the current rule for `xmalloc-testN`: instruction/RSS wins
   alone are not enough if `bench.sh` relative time moves the wrong way.
+
+### Candidate 3: Defer Reclaim-On-Free Option Read
+
+Rationale:
+
+- `mi_free_try_collect_mt_typed` read
+  `mi_option_page_reclaim_on_free` before checking whether the page became fully
+  free.
+- `_mi_option_get_fast` is a noinline fast-load boundary. If the page is freed
+  immediately, the reclaim option is unused.
+- Prototype moved the `PageReclaimOnFree` construction after
+  `mi_abandoned_page_try_free(page)`, preserving the typed wrapper and all
+  reclaim/type assertions.
+
+Codegen effect:
+
+- `.text` shrank by 16 bytes:
+  - baseline: 190,598 bytes
+  - candidate: 190,582 bytes
+- The immediate-free path skipped the option call.
+- The non-empty path gained a `used == 0` branch before the option read, so this
+  candidate depends on the frequency of the immediate-free exit.
+- Candidate hash: `ae493abfc4b8924b786cc521c06736783b7c0e4b2c0f59f6985d2d3316208939`.
+
+Focused `perf stat -r 5 -d` on `xmalloc-testN`:
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.010382s | 5.013120s | tied |
+| task-clock | 147.85B | 147.85B | +0.00% |
+| instructions | 549.72B | 549.65B | -0.01% |
+| cycles | 625.30B | 620.73B | -0.73% |
+| branches | 139.08B | 138.02B | -0.76% |
+| branch misses | 197.66M | 196.71M | -0.48% |
+| L1 loads | 156.88B | 158.46B | +1.00% |
+| L1 load misses | 6.28B | 6.32B | +0.64% |
+
+Dedicated `xmalloc-testN` validation:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test -r=20`
+- Artifacts:
+  - `mimalloc-bench/out/bench/bench-goal6-option-defer-xmalloc-r20-20260622.log`
+  - `mimalloc-bench/out/bench/benchres-goal6-option-defer-xmalloc-r20-20260622.csv`
+
+| Metric | Candidate delta |
+| --- | ---: |
+| Mean time | +0.84% |
+| Median time | +1.40% |
+| Trim-1 time | +0.91% |
+| Paired wins | 7/20 |
+| Mean RSS | +0.99% |
+| Mean user time | -0.78% |
+| Mean system time | +6.28% |
+
+Decision:
+
+- Rejected and reverted.
+- The branch/cycle counter movement was not enough to offset the added
+  non-empty-path branch in the benchmark harness.
+- Since both time and RSS moved the wrong way in the dedicated run, this is not
+  a neutral simplification candidate.

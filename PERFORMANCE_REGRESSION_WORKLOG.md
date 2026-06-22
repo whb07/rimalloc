@@ -2583,3 +2583,92 @@ Decision:
   stronger 20-run validation.
 - This does not satisfy the "do not regress other scenarios" constraint, and the
   final typed caller guard remains unchanged.
+
+### Tooling Notes: AMDuProf And Heaptrack
+
+AMDuProf:
+
+- `AMDuProfCLI collect --config tbp` works in this environment.
+- Collection command:
+  `AMDuProfCLI collect --config tbp -o amduprof-goal4-xmalloc-rust-tbp /usr/bin/env LD_PRELOAD=.../libmimalloc-rust.so ./xmalloc-test -w 32 -t 5 -s 64`
+- Report artifact:
+  `mimalloc-bench/out/bench/amduprof-goal4-xmalloc-rust-tbp/AMDuProf-env-TBP_Jun-22-2026_16-52-36/report.csv`
+- The report warned about kallsyms mismatch, but the user-space hotspot summary
+  was still useful.
+- AMDuProf agreed with `perf` on the `xmalloc-testN` hot path:
+  `mi_free`, `mi_free_try_collect_mt_typed`, `mi_page_free_list_extend`,
+  `_mi_page_free_collect_partly`, `_mi_arenas_page_try_reabandon_to_mapped`,
+  and `mi_abandoned_page_try_reclaim`.
+
+Heaptrack:
+
+- Short diagnostic command:
+  `heaptrack --record-only -o heaptrack-goal4-xmalloc-rust.gz /usr/bin/env LD_PRELOAD=.../libmimalloc-rust.so ./xmalloc-test -w 32 -t 1 -s 64`
+- Artifact:
+  `mimalloc-bench/out/bench/heaptrack-goal4-xmalloc-rust.gz.zst`
+- Result: heaptrack reported only 225 allocations, mostly libc locale/env setup.
+  It does not observe the allocator-under-test traffic usefully when mimalloc is
+  itself injected with `LD_PRELOAD`.
+- Decision: do not use heaptrack output as benchmark evidence for the preloaded
+  allocator scenarios; keep it only as a diagnostic limitation note.
+
+### Candidate 2: Cold-Split Thread-Free Corruption Reports
+
+Rationale:
+
+- `_mi_page_free_collect_partly` is hot in `xmalloc-testN`.
+- Its normal path included stack reservation and formatted error-message setup
+  for two corruption branches that should be unreachable in valid benchmark
+  execution.
+- Prototype moved the two `_mi_error_message_fmt` calls into private
+  `#[cold] #[inline(never)]` helpers while preserving the same corruption
+  checks and messages.
+
+Codegen effect:
+
+- `.text` shrank by 128 bytes:
+  - baseline: 190,598 bytes
+  - candidate: 190,470 bytes
+- `_mi_page_free_collect_partly` no longer reserved stack space in the normal
+  path and moved the two format setup paths behind calls to cold helpers.
+- Candidate hash: `f510dbb34ad232b35f9fa85f46421f79e5401077111aaace849768a7243d029e`.
+
+Focused `perf stat -r 10 -d` on `xmalloc-testN`:
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.013590s | 5.010392s | tied |
+| task-clock | 147.91B | 145.11B | -1.90% |
+| instructions | 552.72B | 543.46B | -1.67% |
+| cycles | 624.15B | 609.18B | -2.40% |
+| branches | 139.70B | 138.33B | -0.99% |
+| branch misses | 200.02M | 220.20M | +10.09% |
+| L1 loads | 157.85B | 155.99B | -1.18% |
+| L1 load misses | 6.32B | 6.37B | +0.82% |
+
+Dedicated `xmalloc-testN` validation:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test -r=20`
+- Artifacts:
+  - `mimalloc-bench/out/bench/bench-goal5-cold-error-xmalloc-r20-20260622.log`
+  - `mimalloc-bench/out/bench/benchres-goal5-cold-error-xmalloc-r20-20260622.csv`
+
+| Metric | Candidate delta |
+| --- | ---: |
+| Mean time | +0.77% |
+| Median time | +1.18% |
+| Trim-1 time | +0.80% |
+| Paired wins | 6/20 |
+| Mean RSS | -0.48% |
+| Mean user time | -2.27% |
+| Mean system time | +23.60% |
+
+Decision:
+
+- Rejected and reverted.
+- The candidate reduced generated code size and retired work under `perf`, but
+  the benchmark harness showed a repeatable relative-time regression and a large
+  system-time increase.
+- This reinforces the current rule for `xmalloc-testN`: instruction/RSS wins
+  alone are not enough if `bench.sh` relative time moves the wrong way.

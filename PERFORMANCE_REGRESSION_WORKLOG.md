@@ -2423,3 +2423,163 @@ Outcome:
 - Keeping the final source unchanged from the previous accepted typed-boundary
   state is the correct tradeoff for now: no type-system weakening, no benchmark
   regression accepted, and no speculative source cleanup that worsens assembly.
+
+## 2026-06-22 Follow-Up Goal: Broad RSS/CPU Tuning
+
+Goal:
+
+- Improve mimalloc-bench performance by lowering RSS and/or reducing CPU work.
+- Keep typed witnesses, validation, typestate, and atomic-wrapper assertions
+  intact. No raw shortcut is acceptable unless the existing local invariants
+  already prove it and the public/internal typed boundary remains stronger or
+  equivalent.
+- Do not accept source changes that materially regress other mimalloc-bench
+  scenarios.
+- Favor a neutral wall-time candidate only if it clearly simplifies source
+  and/or lowers generated instruction count without weakening invariants.
+- Use runtime tools before editing source: `perf`, Inferno flamegraphs,
+  `heaptrack` where allocator interposition does not invalidate evidence,
+  AMDuProf tooling where useful, and assembly inspection.
+- Keep `cargo fmt`, targeted tests, clippy, and broader tests passing before
+  each commit. Commit and push accepted batches after checks pass.
+
+Starting point:
+
+- Baseline commit pushed before this goal: `ab8568f`.
+- Current accepted source state includes the typed direct page-cache boundary
+  and audit update from the previous goal.
+- Rebuilt the release library and copied it to both:
+  - `target/bench-allocators/libmimalloc-rust.so`
+  - `target/bench-allocators/libmimalloc-rust-baseline.so`
+- Baseline, candidate, and release library hash:
+  `43e8cca6dcf8ae9352556266c7081f7bfbda9485044f008d20f993dc4216c5db`.
+
+Available tooling:
+
+- `perf`
+- `inferno-collapse-perf`
+- `inferno-flamegraph`
+- `heaptrack`
+- `AMDuProfCLI`
+- `AMDuProfPcm`
+- `llvm-objdump`
+- `rustfilt`
+
+Initial focus:
+
+1. Re-profile residual watch items from the previous pass:
+   `xmalloc-testN`, `glibc-thread`, and related free/collect/refill paths.
+2. Use focused direct counters and profiles before choosing any source edit.
+3. Treat Redis, larson-sized, and RocksDB as guardrails unless fresh profiles
+   identify a new concrete hot-path mismatch.
+
+### Candidate 1: Fast MemKind Guard In Reabandon Probe
+
+Profile setup:
+
+- Direct `perf stat -r 10 -d` on:
+  - `env LD_PRELOAD=.../libmimalloc-rust-baseline.so ./xmalloc-test -w 32 -t 5 -s 64`
+  - `env LD_PRELOAD=.../libmimalloc-rust.so ./xmalloc-test -w 32 -t 5 -s 64`
+  - `env LD_PRELOAD=.../libmimalloc-rust-baseline.so ./glibc-thread 32`
+  - `env LD_PRELOAD=.../libmimalloc-rust.so ./glibc-thread 32`
+- `perf record -F 999 -g` plus flat reports for C and Rust `xmalloc-testN`.
+
+Baseline profile observations:
+
+- `xmalloc-testN` direct Rust vs C remained wall-time tied, but Rust showed a
+  meaningful instruction/control-flow gap:
+  - Rust: 544.18B instructions, 137.85B branches, 624.46B cycles.
+  - C: 500.94B instructions, 123.73B branches, 594.67B cycles.
+- `glibc-thread` was already effectively parity:
+  - Rust: 416.60B instructions, 52.51B branches, 240.72B cycles.
+  - C: 415.64B instructions, 52.44B branches, 239.75B cycles.
+- Flat `xmalloc-testN` Rust self time pointed at
+  `mi_free_try_collect_mt_typed` and the free/collect/reabandon path.
+
+Source/codegen rationale:
+
+- The Rust caller guard in `mi_abandoned_page_try_reabandon_to_mapped` used
+  `MemId::view((*page).memid)` and matched `MemIdView::Arena(_)`.
+- Upstream C uses a cheap caller prefilter:
+  `page->memid.memkind != MI_MEM_ARENA || mi_page_is_abandoned_mapped(page)`.
+- The Rust arena helper still validates the typed arena payload before mutating
+  arena state via `_mi_arenas_page_try_reabandon_to_mapped_internal`, so the
+  prototype only changed the hot caller prefilter and did not remove the final
+  typed guard.
+
+Prototype:
+
+```rust
+if (*page).memid.memkind != crate::internal::mi_memkind_t::MI_MEM_ARENA
+    || mi_page_is_abandoned_mapped(page)
+{
+    return false;
+}
+```
+
+Assembly effect:
+
+- `.text` shrank by 96 bytes:
+  - baseline: 190,598 bytes
+  - candidate: 190,502 bytes
+- `mi_free_try_collect_mt_typed` no longer emitted the caller-side arena pointer
+  null check and slice-range validation sequence before the reabandon call.
+- Candidate hash: `3fc36ad8f012d3c43f65ef491c962fa0fef630c15c3e93b7a9927b5123076a6a`.
+
+Focused counter results:
+
+| Scenario | Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: | ---: |
+| `xmalloc-testN` | elapsed | 5.012289s | 5.011590s | tied |
+| `xmalloc-testN` | instructions | 561.53B | 529.75B | -5.66% |
+| `xmalloc-testN` | branches | 142.06B | 134.16B | -5.56% |
+| `xmalloc-testN` | cycles | 627.92B | 616.54B | -1.81% |
+| `glibc-thread` | elapsed | 2.003218s | 2.002886s | tied |
+| `glibc-thread` | instructions | 413.96B | 417.33B | +0.82% |
+| `glibc-thread` | branches | 52.19B | 52.61B | +0.80% |
+| `glibc-thread` | cycles | 240.23B | 242.10B | +0.78% |
+
+Guardrail benchmark:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp redis rocksdb larson-sized rptest xmalloc-test glibc-thread alloc-test -r=5`
+- Artifacts:
+  - `mimalloc-bench/out/bench/bench-goal4-memkind-guard-r5-20260622.log`
+  - `mimalloc-bench/out/bench/benchres-goal4-memkind-guard-r5-20260622.csv`
+
+| Scenario | Time mean | Time median | Time trim-1 | Paired wins | RSS mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `alloc-test1` | -1.14% | -0.48% | -0.95% | 5/5 | +0.06% |
+| `alloc-testN` | +0.18% | +0.45% | +0.45% | 1/5 | -2.04% |
+| `glibc-thread` | +0.42% | +0.24% | +0.00% | 2/5 | +0.04% |
+| `larsonN-sized` | -0.32% | -1.16% | -0.95% | 3/5 | -0.42% |
+| `redis` | +0.89% | +0.00% | +0.74% | 2/5 | +0.32% |
+| `rocksdb` | -0.45% | +0.00% | -0.19% | 2/5 | +0.57% |
+| `rptestN` | -0.91% | -4.19% | -3.58% | 3/5 | +0.74% |
+| `xmalloc-testN` | +1.51% | +3.32% | +2.05% | 1/5 | -1.64% |
+
+Dedicated `xmalloc-testN` validation:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test -r=20`
+- Artifacts:
+  - `mimalloc-bench/out/bench/bench-goal4-memkind-xmalloc-r20-20260622.log`
+  - `mimalloc-bench/out/bench/benchres-goal4-memkind-xmalloc-r20-20260622.csv`
+
+| Metric | Candidate delta |
+| --- | ---: |
+| Mean time | +0.54% |
+| Median time | +1.40% |
+| Trim-1 time | +0.57% |
+| Paired wins | 7/20 |
+| Mean RSS | -1.53% |
+| Mean user time | -1.06% |
+
+Decision:
+
+- Rejected and reverted.
+- The instruction-count and RSS improvements are real, and the source is simpler,
+  but the target `bench.sh` `xmalloc-testN` relative time regressed in the
+  stronger 20-run validation.
+- This does not satisfy the "do not regress other scenarios" constraint, and the
+  final typed caller guard remains unchanged.

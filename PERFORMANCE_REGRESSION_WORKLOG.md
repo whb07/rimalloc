@@ -216,6 +216,289 @@ Fails because `track-valgrind` and `track-asan` are mutually exclusive.
 6. Before declaring success, run a broader mimalloc-bench subset to check for
    regressions outside `redis` and `larson-sized`.
 
+## 2026-06-22 Follow-Up Goal
+
+Objective:
+
+- Try the four identified follow-up areas:
+  - deterministic hot symbol layout,
+  - ABI wrapper audit,
+  - validated hot-path flattening,
+  - residual `glibc-thread` / `xmalloc-test` investigation.
+- Keep only source changes that show repeatable benchmark improvement beyond
+  ordinary noise and do not regress the existing Redis, larson, or RocksDB
+  results.
+
+Baseline setup:
+
+```sh
+cargo build --release --lib
+cp target/release/libmechanical_mimalloc.so target/bench-allocators/libmimalloc-rust.so
+cp target/release/libmechanical_mimalloc.so target/bench-allocators/libmimalloc-rust-baseline.so
+```
+
+Temporary allocator descriptors:
+
+```text
+mimalloc-bench/rust-baseline-vs-candidate.allocators
+mimalloc-bench/c-rust-baseline-candidate.allocators
+```
+
+Allocator names:
+
+```text
+rbase = committed Rust baseline from f4d8f4d
+rexp  = current experiment build
+cmi   = C mimalloc
+```
+
+### 1. Deterministic Hot Symbol Layout
+
+Experiment:
+
+- Replaced the pre-`free` `.fill 0x30,1,0x90` pad with `.p2align 6`.
+- Release build succeeded and the exported hot symbol addresses matched the
+  saved Rust baseline exactly:
+
+```text
+0000000000016700 T operator delete[](void*)
+00000000000167a0 T operator delete[](void*, unsigned long)
+0000000000016700 T mi_free
+0000000000016de0 T mi_free_size
+0000000000016ce0 T mi_malloc
+```
+
+Focused benchmark:
+
+```sh
+../../bench.sh --external=../../rust-baseline-vs-candidate.allocators \
+  rbase rexp redis larson-sized -r=5
+```
+
+Artifact:
+
+```text
+mimalloc-bench/out/bench/benchres-followup-p2align-layout-redis-larson-r5-20260622-202645.csv
+```
+
+Results versus saved Rust baseline:
+
+| Test | Mean | Median | Trim1 | Trim2 |
+| --- | ---: | ---: | ---: | ---: |
+| `redis` | rexp +1.95% | rexp +0.75% | rexp +1.24% | rexp +0.75% |
+| `larsonN-sized` | rexp +0.74% | rexp +1.35% | rexp +0.76% | rexp +1.35% |
+
+Conclusion:
+
+- Rejected. This did not produce a real improvement and may slightly regress
+  the target scenarios.
+- Restored the explicit `.fill 0x30` pad.
+- Do not retry `.p2align 6` as a standalone deterministic-layout cleanup.
+
+### 2. ABI Wrapper Audit
+
+Benchmark dynamic imports:
+
+```text
+larson-sized:
+  operator new[](unsigned long)
+  operator delete[](void*, unsigned long)
+
+xmalloc-test:
+  malloc
+  free
+
+glibc-thread:
+  malloc
+  free
+
+redis-server:
+  malloc
+  free
+  calloc
+  realloc
+  malloc_usable_size
+```
+
+Rust and C both route non-primary delete/free wrappers through PLT jumps for
+the comparable symbols, so the remaining wrapper shape is not a Rust-only
+defect.
+
+Flat `perf record` artifacts:
+
+```text
+mimalloc-bench/out/bench/perf-followup-abi-larson-rust-20260622.data
+mimalloc-bench/out/bench/perf-followup-abi-larson-c-20260622.data
+```
+
+Top Rust allocator-side samples:
+
+```text
+8.02% operator new[](unsigned long)
+6.97% operator delete[](void*)
+5.19% mi_page_queue_find_free_ex_typed
+3.52% _mi_malloc_generic_typed
+2.54% operator delete[](void*, unsigned long)@plt
+2.13% mi_theap_queue_first_update
+```
+
+Top C allocator-side samples:
+
+```text
+11.46% operator new[](unsigned long)
+9.09% operator delete[](void*)
+5.62% mi_page_queue_find_free_ex
+2.58% _mi_malloc_generic
+1.66% operator delete[](void*, unsigned long)@plt
+1.51% mi_bin
+0.97% mi_page_queue_remove
+```
+
+Conclusion:
+
+- No source change accepted for the ABI wrapper item.
+- The hot benchmark ABI surface is already covered by the existing fast
+  `operator new[]`, `free`, and sized-delete stubs.
+- Extra aligned/nothrow C++ wrapper stubs would not affect Redis,
+  `xmalloc-test`, `glibc-thread`, or the current larson binary.
+- Continue in the typed page allocation/search path instead of adding wrapper
+  variants speculatively.
+
+### 3. Validated Hot-Path Flattening
+
+Experiment:
+
+- `_mi_malloc_generic_typed` wrote `usable` from `mi_page_usable_block_size`
+  before calling `_mi_page_malloc_zero_typed`.
+- `_mi_page_malloc_zero_typed` already computes the same usable block size for
+  tracking and zeroing work after popping the block.
+- Tested passing `usable` into `_mi_page_malloc_zero_typed` and doing the
+  write from the existing local `bsize`.
+
+Build/code-shape notes:
+
+- Release build succeeded.
+- Primary hot exported symbols stayed at the same addresses as the saved
+  Rust baseline:
+
+```text
+0000000000016700 T operator delete[](void*)
+00000000000167a0 T operator delete[](void*, unsigned long)
+0000000000016700 T mi_free
+0000000000016de0 T mi_free_size
+0000000000016ce0 T mi_malloc
+```
+
+Initial focused benchmark:
+
+```sh
+../../bench.sh --external=../../rust-baseline-vs-candidate.allocators \
+  rbase rexp redis larson-sized xmalloc-test glibc-thread -r=5
+```
+
+Artifact:
+
+```text
+mimalloc-bench/out/bench/benchres-followup-usable-pass-r5-20260622-203254.csv
+```
+
+Initial results versus saved Rust baseline:
+
+| Test | Mean | Median | Trim1 | Trim2 |
+| --- | ---: | ---: | ---: | ---: |
+| `larsonN-sized` | rexp -2.85% | rexp -3.70% | rexp -3.47% | rexp -3.70% |
+| `redis` | rexp -0.30% | rexp -1.47% | rexp -0.99% | rexp -1.47% |
+| `xmalloc-testN` | rexp -0.09% | rexp +0.47% | tied | rexp +0.47% |
+| `glibc-thread` | rexp -0.48% | tied | rexp -0.24% | tied |
+
+Longer validation:
+
+```sh
+../../bench.sh --external=../../rust-baseline-vs-candidate.allocators \
+  rbase rexp redis larson-sized rocksdb xmalloc-test glibc-thread -r=10
+```
+
+Artifact:
+
+```text
+mimalloc-bench/out/bench/benchres-followup-usable-pass-r10-20260622-203646.csv
+```
+
+Ten-run results versus saved Rust baseline:
+
+| Test | Paired faster | Mean | Median | Trim1 | Trim2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `larsonN-sized` | 7/10 | rexp -0.44% | rexp +0.80% | rexp -0.38% | rexp -0.42% |
+| `redis` | 5/10 | rexp -0.08% | tied | rexp -0.10% | rexp -0.12% |
+| `rocksdb` | 6/10 | rexp -0.74% | rexp -1.10% | rexp -0.86% | rexp -0.87% |
+| `xmalloc-testN` | 4/10 | rexp +0.14% | rexp -0.23% | rexp +0.17% | rexp +0.08% |
+| `glibc-thread` | 6/10 | rexp -0.24% | rexp -0.36% | rexp -0.24% | rexp -0.31% |
+
+Decision:
+
+- Rejected and reverted.
+- The first five-run result looked promising, but the ten-run did not confirm a
+  real larson improvement; the median moved the wrong way and the trimmed
+  means were below 0.5%.
+- Redis, RocksDB, `xmalloc-testN`, and `glibc-thread` stayed in a small noise
+  band. RocksDB looked slightly better in this run, but the effect size was
+  too small to accept a source change by itself.
+- Do not retry this exact usable-size pass-through as a performance fix unless
+  a future profile shows a stronger, isolated reason to revisit it.
+
+### 4. Residual `glibc-thread` / `xmalloc-testN`
+
+Benchmark observation:
+
+- The rejected flattening experiment did not materially change either residual
+  scenario.
+- In the ten-run validation, `xmalloc-testN` was effectively noise:
+  rexp +0.14% mean, rexp -0.23% median, rexp +0.17% trim1, rexp +0.08%
+  trim2.
+- `glibc-thread` was also effectively noise:
+  rexp -0.24% mean, rexp -0.36% median, rexp -0.24% trim1, rexp -0.31%
+  trim2.
+
+Perf-counter check:
+
+```sh
+perf stat -r 5 -e task-clock,cycles,instructions,branches,branch-misses \
+  env LD_PRELOAD=<allocator> ./xmalloc-test -w 32 -t 5 -s 64
+perf stat -r 5 -e task-clock,cycles,instructions,branches,branch-misses \
+  env LD_PRELOAD=<allocator> ./glibc-thread 32
+```
+
+Artifacts:
+
+```text
+mimalloc-bench/out/bench/perf-followup-residual-xmalloc-rust-20260622.stat
+mimalloc-bench/out/bench/perf-followup-residual-xmalloc-c-20260622.stat
+mimalloc-bench/out/bench/perf-followup-residual-glibc-thread-rust-20260622.stat
+mimalloc-bench/out/bench/perf-followup-residual-glibc-thread-c-20260622.stat
+```
+
+Results:
+
+| Test | Allocator | Elapsed | Task-clock | Cycles | Instructions | Branch misses |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `xmalloc-testN` | Rust | 5.01055s | 148.65B | 633.77B | 553.41B | 225.21M |
+| `xmalloc-testN` | C | 5.01229s | 141.65B | 606.45B | 496.91B | 308.82M |
+| `glibc-thread` | Rust | 2.002933s | 62.11B | 237.64B | 417.08B | 2526.56M |
+| `glibc-thread` | C | 2.003175s | 63.51B | 241.41B | 422.10B | 2574.60M |
+
+Conclusion:
+
+- No source change accepted.
+- `xmalloc-testN` shows Rust doing more instructions and branches than C, but
+  elapsed time is tied over five perf repetitions and the benchmark ten-run is
+  within noise. This is a possible future code-size/instruction-count cleanup,
+  not a confirmed wall-time regression.
+- `glibc-thread` is already at parity with C by elapsed time and slightly lower
+  than C on task-clock, cycles, instructions, and branch misses in this run.
+- Future residual work should start with allocator-side flat/callgraph profiles
+  for `xmalloc-testN`, not with source rewrites, and should require a larger
+  elapsed-time signal than the current sub-percent movements.
+
 ## 2026-06-21 Larson Queue Fill Experiment
 
 Observation:

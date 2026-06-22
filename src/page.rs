@@ -658,7 +658,6 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
         };
 
         let capacity = mi_page_capacity_count(page);
-        let used = mi_page_used_count(page);
         let max_count = capacity.as_usize();
         let mut count = 1usize;
         let head = head_block.as_ptr();
@@ -675,7 +674,9 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
         if count > max_count {
             _mi_error_message_fmt(Errno::EFAULT, format_args!("corrupted thread-free list\n"));
             return local;
-        } else if count > used.as_usize() {
+        }
+        let used = mi_page_used_count(page);
+        if count > used.as_usize() {
             _mi_error_message_fmt(
                 Errno::EFAULT,
                 format_args!("corrupted meta-data in thread-free list\n"),

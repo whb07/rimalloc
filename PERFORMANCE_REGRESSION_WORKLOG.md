@@ -2734,3 +2734,46 @@ Decision:
   non-empty-path branch in the benchmark harness.
 - Since both time and RSS moved the wrong way in the dedicated run, this is not
   a neutral simplification candidate.
+
+### Candidate 4: Defer Thread-Collect Used-Count Read
+
+Rationale:
+
+- `mi_page_thread_collect_to_local_typed` loaded the page `used` count before
+  walking the detached remote-free list.
+- `used` is only needed after the capacity corruption check. Moving the load to
+  the second corruption check narrows the source-level live range and matches
+  the C shape more closely.
+- The change preserves the same `OwnedAbandonedPage`, `RemoteFreeList`,
+  `LocalFreeList`, `PageCapacity`, and `PageUsed` typed wrappers and keeps both
+  corruption checks unchanged.
+
+Codegen/performance effect:
+
+- No runtime performance claim.
+- Full `.text` section was byte-identical between baseline and candidate:
+  `6c0228c11e541361e13fc948441c6b604ce591a068c113f4d4961233a2abbbcd`.
+- `mechanical_mimalloc::page::_mi_page_free_collect_partly` disassembly was
+  unchanged.
+- Candidate library hash:
+  `2eb9c59071b38c2c8b3a81b904e09239f8aa350b379b04f198dbf95cee10ae67`.
+
+Verification:
+
+- `cargo fmt --check` passed.
+- `cargo build --release --lib` passed with the existing translated dead-code
+  warnings.
+- `cargo clippy --lib --features unstable-raw-internals -- -D clippy::all`
+  passed.
+- `cargo test --quiet --test release_fast_path_audit --features unstable-raw-internals`
+  passed: 36 passed, 0 failed.
+- `cargo test --quiet --features unstable-raw-internals` passed across the
+  broader suite. Some tests intentionally print allocator error/assertion
+  messages while validating failure behavior.
+
+Decision:
+
+- Accepted as a neutral source cleanup, not as a measured RSS/CPU win.
+- The source is slightly closer to the upstream C ordering, and the generated
+  release `.text` is unchanged, so there is no expected mimalloc-bench
+  regression.

@@ -917,7 +917,7 @@ unsafe fn mi_abandoned_page_try_reabandon_to_mapped(
 
 unsafe fn mi_abandoned_page_unown_from_free(
     page: crate::core_types::OwnedAbandonedPage,
-    expected_thread_free: crate::core_types::RemoteFreeList,
+    mut tf_expect: crate::core_types::ThreadFreeWord,
 ) {
     unsafe {
         let page_raw = page.page().as_ptr();
@@ -928,10 +928,6 @@ unsafe fn mi_abandoned_page_unown_from_free(
         let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
             ptr::addr_of_mut!((*page_raw).xthread_free),
         ));
-        let mut tf_expect = crate::core_types::ThreadFreeWord::from_parts(
-            expected_thread_free.head(),
-            crate::core_types::ThreadFreeOwner::Owned,
-        );
         while !atomic_tf.release_acq_rel(&mut tf_expect) {
             crate::mi_assert_internal!(tf_expect.is_owned());
             while tf_expect.head().is_some() {
@@ -1045,15 +1041,20 @@ unsafe fn mi_free_try_collect_mt_typed(
             crate::mi_assert_internal!(false);
             return;
         };
-        let mut expected_thread_free = remote_free;
-        if (*page_raw).block_size <= MI_SMALL_SIZE_MAX {
+        let expected_thread_free = if (*page_raw).block_size <= MI_SMALL_SIZE_MAX {
             crate::mi_assert_internal!(crate::page::mi_page_reserved_count(page_raw).get() >= 16);
             _mi_page_free_collect_partly(page_raw, mt_free.as_ptr());
+            crate::core_types::ThreadFreeWord::from_parts(
+                Some(mt_free),
+                crate::core_types::ThreadFreeOwner::Owned,
+            )
         } else {
             _mi_page_free_collect(page_raw, false);
-            expected_thread_free =
-                crate::core_types::RemoteFreeList::from_detached_thread_free_head(None);
-        }
+            crate::core_types::ThreadFreeWord::from_parts(
+                None,
+                crate::core_types::ThreadFreeOwner::Owned,
+            )
+        };
 
         let reclaim_on_free_raw = _mi_option_get_fast(mi_option_t::mi_option_page_reclaim_on_free);
         let reclaim_on_free = crate::core_types::PageReclaimOnFree::new(reclaim_on_free_raw);

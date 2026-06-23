@@ -3842,3 +3842,62 @@ Decision:
 - Do not retry a generic `_mi_heap_theap_peek` cold split unless it is scoped
   tightly enough to shrink the hot reabandon helper and avoid total `.text`
   growth.
+
+### Candidate 21: Packed Thread-Free Expected Word Boundary
+
+Rationale:
+
+- The residual profile still points at `mi_free_try_collect_mt_typed` and the
+  abandoned-page collect/unown path.
+- `mi_abandoned_page_unown_from_free` only needs the expected packed
+  `xthread_free` word for the ownership-release CAS, but its interface accepted
+  a `RemoteFreeList` and rebuilt the packed `ThreadFreeWord` internally.
+- Passing the packed word directly makes the helper's contract more exact while
+  preserving the same remote-list witness and CAS assertions.
+
+Change:
+
+- Changed `mi_abandoned_page_unown_from_free` to take the expected
+  `ThreadFreeWord` directly.
+- Kept `RemoteFreeList` as the input witness to `mi_free_try_collect_mt_typed`.
+- Constructed the owned expected word after the small/large collection branch:
+  the small path preserves the collected remote head, and the large path uses
+  the owned empty word.
+
+Type-safety impact:
+
+- Neutral to slightly positive. The raw remote-list witness still enters through
+  `RemoteFreeList`, and the unown helper now receives the exact packed domain
+  type it compares against `(*page).xthread_free`.
+- No validation, typestate witness, corruption check, assertion, or
+  atomic-wrapper check was removed or weakened.
+
+Codegen result:
+
+- The first prototype constructed the owned word before
+  `_mi_page_free_collect_partly`; release `.text` stayed the same size but the
+  hash changed to
+  `28fcd1c005cc5778d1605a909fa116364c56bd272aa030bff1bbfb2909a8d192`.
+  Normalized disassembly showed only the `or $1` moving before the partial
+  collect call, so that form was not kept.
+- The final expression constructs the owned word after collection and restored
+  byte-identical release code:
+  - size: 190,598 bytes
+  - `.text` hash:
+    `6c0228c11e541361e13fc948441c6b604ce591a068c113f4d4961233a2abbbcd`
+- Hot symbol sizes stayed unchanged:
+  - `mi_page_free_list_extend`: 0x5a
+  - `_mi_arenas_page_try_reabandon_to_mapped`: 0xd1
+  - `_mi_page_free_collect_partly`: 0x114
+  - `_mi_page_free_collect`: 0x18b
+  - `mi_free_try_collect_mt_typed`: 0x18f
+  - `mi_abandoned_page_try_reclaim`: 0x1e4
+  - `mi_page_queue_find_free_ex_typed`: 0x373
+  - `_mi_malloc_generic_typed`: 0x4b4
+
+Decision:
+
+- Accepted as a neutral source/type-boundary cleanup, not as a measured RSS or
+  CPU improvement.
+- Since release `.text` is byte-identical to the accepted baseline, this makes
+  no mimalloc-bench runtime claim.

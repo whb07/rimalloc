@@ -3945,8 +3945,10 @@ Tool availability:
 - `heaptrack` and `heaptrack_print` were available, but this candidate changes
   control flow/codegen rather than allocation shape, so heaptrack was not used
   for the go/no-go decision.
-- `/opt/AMDuProf_5.2-606/bin/AMDuProf` was installed but failed to launch due
-  to missing `libxcb-xinerama.so.0`; no AMDuProf results were used.
+- `/opt/AMDuProf_5.2-606/bin/AMDuProfCLI` is available and should be used for
+  future AMD uProf profiling. The GUI-style `AMDuProf` launcher failed due to
+  missing `libxcb-xinerama.so.0`; no AMDuProfCLI results were collected for
+  this candidate.
 
 Codegen result:
 

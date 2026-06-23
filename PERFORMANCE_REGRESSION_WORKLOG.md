@@ -3603,6 +3603,67 @@ Decision:
 - Final checks stayed clean, and the hot release `.text` remained
   byte-identical, so no mimalloc-bench runtime claim is made.
 
+### Candidate 18: Remote Free-List Non-Null Head Constructor
+
+Rationale:
+
+- Several raw C-compatibility wrappers and remote-free-list collection paths
+  built a detached remote list with
+  `RemoteFreeList::from_detached_thread_free_head(Some(BlockPtr::new_unchecked(...)))`
+  after they had already proved the raw head pointer was non-null.
+- The optional constructor is still useful for genuinely optional remote-list
+  heads, but non-null detached-head construction is clearer when expressed as
+  a `RemoteFreeList` operation instead of repeating `Some(...)` at the call
+  sites.
+
+Change:
+
+- Added `RemoteFreeList::from_detached_head(BlockPtr)`.
+- Routed five non-null call sites through it:
+  `mi_page_thread_collect_to_local`, `_mi_page_free_collect_partly`,
+  `_mi_page_free_collect_partly_typed`, `mi_free_block_mt`, and the raw
+  `mi_free_try_collect_mt` wrapper.
+
+Type-safety impact:
+
+- Neutral to slightly positive for readability. The existing
+  `BlockPtr::new_unchecked(...)` conversions remain at the same call sites,
+  after the same null checks/proofs as before.
+- No validation, witness construction, typestate boundary, corruption check,
+  or atomic-wrapper assertion was removed or weakened.
+- No new raw-pointer constructor was added; the helper accepts an already typed
+  `BlockPtr`.
+
+Codegen result:
+
+- Prototype release build succeeded.
+- Release `.text` stayed byte-identical to the accepted baseline:
+  - size: 190,598 bytes
+  - `.text` hash:
+    `6c0228c11e541361e13fc948441c6b604ce591a068c113f4d4961233a2abbbcd`
+- Hot symbol sizes stayed unchanged:
+  - `mi_malloc`: 0x51
+  - `mi_free`: 0x9e
+  - `mi_page_free_list_extend`: 0x5a
+  - `_mi_page_free_collect_partly`: 0x114
+  - `_mi_page_free_collect`: 0x18b
+  - `mi_free_try_collect_mt_typed`: 0x18f
+  - `mi_page_queue_find_free_ex_typed`: 0x373
+  - `_mi_malloc_generic_typed`: 0x4b4
+- The full `.so` hash changed because non-code sections changed, but the
+  executable `.text` and hot symbols did not.
+- Final allocator copy verification:
+  - `target/release/libmechanical_mimalloc.so`,
+    `target/bench-allocators/libmimalloc-rust.so`, and
+    `target/bench-allocators/libmimalloc-rust-baseline.so` all hashed to
+    `cc64c8b12aef7625f78490c404e46b9f50a1f100bd812734798da85848e5f302`.
+
+Decision:
+
+- Accepted as a neutral source cleanup, not as a measured RSS/CPU win.
+- Since release `.text` is byte-identical, this makes no mimalloc-bench
+  runtime claim and does not require runtime benchmark attribution.
+
 ### Candidate 17: Thread-Free Packed Word Update Helpers
 
 Rationale:

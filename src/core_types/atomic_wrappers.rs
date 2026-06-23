@@ -354,6 +354,11 @@ impl RemoteFreeList {
     }
 
     #[inline(always)]
+    pub(crate) fn from_detached_head(head: BlockPtr) -> Self {
+        Self(Some(head))
+    }
+
+    #[inline(always)]
     pub(crate) fn head(self) -> Option<BlockPtr> {
         self.0
     }

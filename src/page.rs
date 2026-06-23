@@ -634,8 +634,7 @@ pub unsafe fn mi_page_thread_collect_to_local(page: *mut mi_page_t, head: *mut m
         }
 
         let page_ptr = PagePtr::new_unchecked(page);
-        let remote =
-            RemoteFreeList::from_detached_thread_free_head(Some(BlockPtr::new_unchecked(head)));
+        let remote = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(head));
         let local = LocalFreeList::from_raw((*page).local_free);
         let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
         let _ = mi_page_thread_collect_to_local_typed(owned_page, remote, local);
@@ -807,8 +806,7 @@ pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head
         }
         let page_ptr = PagePtr::new_unchecked(page);
         let local_page = LocalPage::new_unchecked(page_ptr);
-        let remote_head =
-            RemoteFreeList::from_detached_thread_free_head(Some(BlockPtr::new_unchecked(head)));
+        let remote_head = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(head));
         _mi_page_free_collect_partly_typed(local_page, remote_head);
     }
 }
@@ -830,8 +828,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
         let next = mi_block_next(page, head);
         if !next.is_null() {
             mi_block_set_next(page, head, ptr::null());
-            let remote_tail =
-                RemoteFreeList::from_detached_thread_free_head(Some(BlockPtr::new_unchecked(next)));
+            let remote_tail = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(next));
             let local = LocalFreeList::from_raw((*page).local_free);
             let owned_page = OwnedAbandonedPage::new_unchecked(page_ptr);
             let _ = mi_page_thread_collect_to_local_typed(owned_page, remote_tail, local);

@@ -471,9 +471,9 @@ pub(crate) unsafe fn mi_free_block_mt(
                 crate::core_types::OwnedAbandonedPage::new_unchecked(
                     crate::core_types::PagePtr::new_unchecked(page),
                 ),
-                crate::core_types::RemoteFreeList::from_detached_thread_free_head(Some(
+                crate::core_types::RemoteFreeList::from_detached_head(
                     crate::core_types::BlockPtr::new_unchecked(block),
-                )),
+                ),
             );
         }
     }
@@ -1096,9 +1096,9 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
             crate::core_types::OwnedAbandonedPage::new_unchecked(
                 crate::core_types::PagePtr::new_unchecked(page),
             ),
-            crate::core_types::RemoteFreeList::from_detached_thread_free_head(Some(
+            crate::core_types::RemoteFreeList::from_detached_head(
                 crate::core_types::BlockPtr::new_unchecked(mt_free),
-            )),
+            ),
         );
     }
 }

@@ -3034,3 +3034,107 @@ Decision:
 - The narrower routing did not preserve the broad candidate's useful wins
   without the prior regressions, so this queue-update direction remains closed
   unless a future profile isolates a more specific call site.
+
+### Candidate 9: Refill Last-Block Link Skip
+
+Rationale:
+
+- A fresh current-profile pass on `xmalloc-testN` still showed the same hot set:
+  `mi_free_try_collect_mt_typed`, `mi_page_free_list_extend`,
+  `_mi_page_free_collect_partly`, reabandon/reclaim helpers, and `mi_malloc`.
+- The already-tried collect/reclaim/queue directions either regressed wall time
+  or guardrails. The remaining concrete C/Rust mismatch was the hot refill
+  helper: C's `mi_page_free_list_extend` was 74 bytes, while Rust's typed
+  wrapper compiled to 90 bytes.
+- Prototype changed the refill loop from `while block <= last` to
+  `while block < last`, then set `last.next` once. This avoids writing the
+  last block's next pointer to the one-past block and immediately overwriting
+  it with the old free-list head.
+- The typed boundary was unchanged: the path still used `PagePtr`,
+  `BlockSize`, and `BlockPtr::set_next`; no raw free-list writes or assertion
+  weakening were introduced.
+
+Codegen effect:
+
+- `.text` size was unchanged from the accepted baseline:
+  - baseline: 190,598 bytes
+  - candidate: 190,598 bytes
+- Candidate `.text` hash:
+  `e24d613e19c4a462ddd0bea9cbe19a8720b781c4b315ede4c65daff511b8c2f6`.
+- Candidate allocator hash:
+  `e7502f9daef17e64e09e8d2516a56fe69358c8ff60406d870d6c3d27c4efe427`.
+- `mi_page_free_list_extend` remained a 90-byte symbol. The branch condition
+  changed, but the generated function did not shrink.
+
+Fresh current-profile artifacts:
+
+- `mimalloc-bench/out/bench/perf-goal11-xmalloc-current-rust-20260622-210944.stat`
+- `mimalloc-bench/out/bench/perf-goal11-xmalloc-current-rust-20260622-211026.data`
+- Matching flat/children reports:
+  `perf-goal11-xmalloc-current-rust-20260622-211026.flat.txt` and
+  `perf-goal11-xmalloc-current-rust-20260622-211026.children.txt`.
+
+Focused `perf stat -r 5 -d` on `xmalloc-testN`:
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.00968 | 5.01072 | +0.02% |
+| task-clock | 147.22B | 146.19B | -0.70% |
+| instructions | 545.03B | 535.13B | -1.82% |
+| cycles | 628.36B | 624.79B | -0.57% |
+| branches | 137.78B | 135.27B | -1.82% |
+| branch misses | 205.84M | 212.81M | +3.39% |
+| L1 loads | 155.64B | 152.44B | -2.06% |
+| L1 load misses | 6.25B | 6.20B | -0.94% |
+
+Dedicated `xmalloc-testN` validation:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test -r=20`
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal11-refill-last-skip-xmalloc-r20-20260622-211705.csv`
+
+| Metric | Candidate delta |
+| --- | ---: |
+| Mean time | -0.60% |
+| Median time | -1.82% |
+| Trim-1 time | -0.64% |
+| Paired wins | 11/20 |
+| Mean RSS | +3.19% |
+| Median RSS | +2.37% |
+| Trim-1 RSS | +2.36% |
+| Mean user time | -0.08% |
+| Mean system time | +1.81% |
+| Mean page reclaims | +0.32% |
+
+Focused guardrail benchmark:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp redis rocksdb larson-sized rptest xmalloc-test sh8bench glibc-thread alloc-test -r=5`
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal11-refill-last-skip-guard-r5-20260622-212458.csv`
+
+| Scenario | Time mean | Time median | Time trim-1 | Paired wins | RSS mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `redis` | -0.59% | -1.49% | -1.00% | 3/5 | +0.41% |
+| `rocksdb` | -0.46% | -0.29% | -0.38% | 4/5 | +0.20% |
+| `larsonN-sized` | -0.81% | -0.10% | -0.51% | 3/5 | +0.09% |
+| `rptestN` | +7.60% | +4.42% | +7.20% | 1/5 | +0.21% |
+| `xmalloc-testN` | -2.47% | -3.64% | -3.63% | 4/5 | +4.28% |
+| `sh8benchN` | +0.79% | +0.00% | +0.00% | 1/5 | +0.10% |
+| `glibc-thread` | +0.38% | +0.00% | -0.08% | 1/5 | -1.79% |
+| `alloc-test1` | +0.00% | +0.48% | +0.16% | 1/5 | -0.05% |
+| `alloc-testN` | +0.64% | +0.92% | +0.76% | 0/5 | -1.30% |
+
+Decision:
+
+- Rejected and reverted.
+- The target `xmalloc-testN` wall-time result was mildly positive and perf
+  showed fewer retired instructions, but RSS regressed materially on the target
+  run and guardrail.
+- The guardrail failed the no-regression bar: `rptestN` regressed strongly,
+  `alloc-testN` lost every paired run, and `sh8benchN`, `glibc-thread`, and
+  `alloc-test1` also moved the wrong way on time aggregates.
+- This refill-loop direction should not be retried without new codegen evidence
+  that actually shrinks the hot refill helper or changes its generated loop
+  shape materially.

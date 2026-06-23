@@ -949,3 +949,29 @@ cargo test --features unstable-raw-internals
 cargo bench --features bench,compare,bench-diagnostics --benches --no-run
 CARGO_TARGET_DIR=target/bench-diagnostics-check cargo build --release --features bench-diagnostics
 ```
+
+## Branchless-Code Follow-Up - 2026-06-23
+
+A focused branchless-code pass did not retain any source change.
+
+Summary:
+
+- `xmalloc-testN` branch misses remained low at about 0.21%, so branch
+  prediction itself is still not the primary bottleneck.
+- `mi_page_free_list_extend` is a top branch-miss symbol, but annotation shows
+  the samples on the refill loop/backedge rather than a removable value-choice
+  branch.
+- `_mi_page_free_collect`, `mi_free_try_collect_mt_typed`, and
+  `mi_page_queue_find_free_ex_typed` mostly branch around side effects
+  (collection, CAS retry, reclaim, queue mutation, or freeing). These are poor
+  branchless rewrite targets without a semantic restructuring.
+- `mi_page_queue_find_free_ex_typed` already uses `cmov` for the candidate-page
+  selection in release codegen.
+
+Rejected branchless candidate:
+
+- Rewriting the small-bin return in `mi_bin_impl` with `.max(1)` removed a
+  small inlined branch and shrank `.text` by 96 bytes, but guardrails regressed:
+  `glibc-thread` +33.83%, `alloc-test1` +14.49%, `alloc-testN` +18.24%, and
+  `sh8benchN` +6.17% mean time in the focused reject probe.
+- Decision: reverted; no retained code change.

@@ -4087,3 +4087,107 @@ cargo test --features unstable-raw-internals
 cargo bench --features bench,compare,bench-diagnostics --benches --no-run
 CARGO_TARGET_DIR=target/bench-diagnostics-check cargo build --release --features bench-diagnostics
 ```
+
+## 2026-06-23 Branchless-Code Pass
+
+Objective:
+
+- Find branchless rewrites in hot mimalloc-bench paths.
+- Keep only changes with a measured benefit or a defensible neutral
+  simplification/codegen reduction, without weakening typed witnesses,
+  assertions, ownership checks, or scenario guardrails.
+
+Baseline:
+
+- Focused release perf run:
+  `target/branchless-2026-06-23/baseline_xmalloc_rust.stat`
+- Plain release size:
+  `.text 190486`, `Total 346356`
+- Branch-miss profile:
+  `target/branchless-2026-06-23/baseline_branch_misses.data`
+
+Findings:
+
+- Branch misses remain low for `xmalloc-testN` at about 0.21% of branches.
+- The top branch-miss symbols are mostly loop/CAS/slow-path decisions rather
+  than simple value selections:
+  `mi_page_free_list_extend`, `mi_malloc`,
+  `_mi_page_free_collect`, `mi_free_try_collect_mt_typed`,
+  `mi_page_queue_find_free_ex_typed`.
+- `mi_page_queue_find_free_ex_typed` already uses `cmov` for the page-candidate
+  choice in release assembly.
+- `_mi_page_free_collect` and `mi_free_try_collect_mt_typed` branches guard
+  list mutation, CAS retry, collection, reclaim, or abandon/free side effects;
+  they are not safe branchless candidates.
+
+### Candidate: branchless small-bin return in `mi_bin_impl`
+
+Prototype:
+
+- Replaced the small-bin return selection:
+  `if wsize <= 1 { 1 } else { (wsize + 1) & !1 }`
+  with `((wsize + 1) & !1).max(1)` for the aligned-word cases, and similarly
+  used `wsize.max(1)` for the fallback small-bin case.
+- Type-system impact: none. The candidate stayed within `mi_bin_impl` and did
+  not alter page ownership, validation, assertions, or typed witnesses.
+
+Codegen effect:
+
+- Release `.text` shrank from 190486 to 190390 bytes.
+- `_mi_malloc_generic_typed` shrank to 0x496 bytes.
+- The inlined small-bin path removed the `wsize < 2` jump and became:
+  `inc; and` before the bin dispatch.
+
+Focused `perf stat -r 5` on `xmalloc-testN`:
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.01412s | 5.01264s | -0.03% |
+| task-clock | 151.654B | 152.380B | +0.48% |
+| cycles | 652.312B | 653.383B | +0.16% |
+| instructions | 489.661B | 494.174B | +0.92% |
+| branches | 120.185B | 121.254B | +0.89% |
+| branch misses | 251.511M | 251.343M | -0.07% |
+| cache misses | 999.172M | 966.197M | -3.30% |
+
+Focused `bench.sh` target run:
+
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-small-bin-branchless-xmalloc-r20-20260623.csv`
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| Mean time | 0.2162s | 0.21475s | -0.67% |
+| Median time | 0.2175s | 0.213s | -2.07% |
+| Trim-1 time | 0.21622s | 0.21456s | -0.77% |
+| Paired time wins |  | 9/20 | mixed |
+| Mean RSS | 89606 | 87680 | -2.15% |
+| Median RSS | 90308 | 88218 | -2.31% |
+| Mean user time | 145.99s | 144.94s | -0.72% |
+| Mean system time | 2.376s | 2.698s | +13.53% |
+
+Focused reject guardrail:
+
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-small-bin-branchless-reject-guards-r3-20260623.csv`
+
+| Scenario | Mean time delta | Median time delta | Paired wins | RSS mean delta |
+| --- | ---: | ---: | ---: | ---: |
+| `sh8benchN` | +6.17% | +3.57% | 0/3 | +8.69% |
+| `glibc-thread` | +33.83% | +33.18% | 0/3 | +4.95% |
+| `alloc-test1` | +14.49% | +14.83% | 0/3 | +0.42% |
+| `alloc-testN` | +18.24% | +19.27% | 0/3 | -1.08% |
+
+Decision:
+
+- Rejected and reverted.
+- The candidate produced a real code-size/codegen simplification and a mildly
+  favorable `xmalloc-testN` bench result, but it failed the no-regression bar
+  badly on sensitive guardrails.
+- Do not retry this `mi_bin_impl` branchless-small-bin rewrite unless a future
+  profile explains why the changed bin-selection shape no longer causes the
+  `glibc-thread`/`alloc-test` regressions.
+
+Net retained code changes from this pass:
+
+- None.

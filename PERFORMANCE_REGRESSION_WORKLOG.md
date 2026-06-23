@@ -3804,3 +3804,41 @@ Decision:
 - This one-past refill-loop expression should not be retried unless new codegen
   evidence shows a smaller helper; it neither simplified generated code nor
   reduced the hot symbol.
+
+### Candidate 20: Cold Split Heap-Theap Peek Fallback
+
+Rationale:
+
+- Fresh `xmalloc-testN` profiles still showed
+  `_mi_arenas_page_try_reabandon_to_mapped` and
+  `mi_abandoned_page_try_reclaim` in the residual Rust hot set.
+- C's `_mi_arenas_page_try_reabandon_to_mapped` keeps the cached heap/theap
+  check in the main symbol but sends the `_mi_heap_theap_get_peek` fallback to a
+  cold fragment.
+- Prototype split Rust's `_mi_heap_theap_peek` fallback into a private
+  `#[cold] #[inline(never)]` helper while preserving the same cached fast path,
+  raw heap lookup, and typed `ThreadHeapPtr` construction at callers.
+
+Type-safety impact:
+
+- No witness, validation, assertion, or raw-pointer boundary was changed.
+- The same `_mi_heap_theap_get_peek(heap)` implementation was called; only the
+  call placement was changed.
+
+Codegen result:
+
+- Rejected before runtime benchmarking.
+- Release `.text` grew from 190,598 to 190,822 bytes.
+- `.text` hash changed to
+  `100dcd913c85d01d4e6682671a9042de5ca9e5ca4df02ec74d9fc5290d1769c1`.
+- `_mi_arenas_page_try_reabandon_to_mapped` grew from 0xd1 to 0xd4 bytes.
+- `mi_abandoned_page_try_reclaim` shrank from 0x1e4 to 0x1dc bytes, but the
+  broader code-size/layout cost was a bad tradeoff and did not match C's
+  smaller hot reabandon shape.
+
+Decision:
+
+- Rejected and reverted.
+- Do not retry a generic `_mi_heap_theap_peek` cold split unless it is scoped
+  tightly enough to shrink the hot reabandon helper and avoid total `.text`
+  growth.

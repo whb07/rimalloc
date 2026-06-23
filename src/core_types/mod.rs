@@ -81,9 +81,9 @@ pub(crate) use validation::{
 };
 
 pub(crate) use memid::{
-    ArenaMem, BlockIndex, CommittedBytes, ExternalMem, InitiallyCommitted, InitiallyZero, MemId,
-    MemIdView, MemKindCode, MetaMem, NoneMem, OsMem, OsMemId, OsMemKind, Pinned, ReservedBytes,
-    StaticMem,
+    ArenaMem, ArenaMemId, BlockIndex, CommittedBytes, ExternalMem, InitiallyCommitted,
+    InitiallyZero, MemId, MemIdView, MemKindCode, MetaMem, NoneMem, OsMem, OsMemId, OsMemKind,
+    Pinned, ReservedBytes, StaticMem,
 };
 
 pub(crate) use page_states::{

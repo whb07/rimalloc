@@ -3531,14 +3531,21 @@ unsafe fn _mi_arenas_page_abandon_internal(
 pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
     page: *mut mi_page_t,
 ) -> bool {
+    let page_raw = page;
     let page = unsafe {
         crate::core_types::OwnedAbandonedPage::new_unchecked(PagePtr::new_unchecked(page))
     };
-    unsafe { _mi_arenas_page_try_reabandon_to_mapped_internal(page) }
+    let arena_memid = match crate::core_types::MemId::view(unsafe { (*page_raw).memid }) {
+        crate::core_types::MemIdView::Arena(arena_memid) => arena_memid,
+        _ => return false,
+    };
+    unsafe { _mi_arenas_page_try_reabandon_to_mapped_arena(page, arena_memid) }
 }
 
-unsafe fn _mi_arenas_page_try_reabandon_to_mapped_internal(
+#[inline(never)]
+pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
     page: crate::core_types::OwnedAbandonedPage,
+    _arena_memid: crate::core_types::ArenaMemId,
 ) -> bool {
     let page = page.page().as_ptr();
     crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
@@ -3555,10 +3562,7 @@ unsafe fn _mi_arenas_page_try_reabandon_to_mapped_internal(
     crate::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
     crate::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
 
-    if unsafe { mi_page_is_full_local(page) }
-        || unsafe { mi_page_is_abandoned_mapped(page) }
-        || !unsafe { mi_page_memid_is_arena(page) }
-    {
+    if unsafe { mi_page_is_full_local(page) } || unsafe { mi_page_is_abandoned_mapped(page) } {
         return false;
     }
 

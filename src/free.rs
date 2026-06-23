@@ -4,7 +4,7 @@ use core::ffi::{CStr, c_char, c_void};
 use core::{cmp, ptr};
 
 use crate::arena::{
-    _mi_arenas_page_free, _mi_arenas_page_try_reabandon_to_mapped, _mi_arenas_page_unabandon,
+    _mi_arenas_page_free, _mi_arenas_page_try_reabandon_to_mapped_arena, _mi_arenas_page_unabandon,
 };
 use crate::bits::MI_INTPTR_SIZE;
 use crate::core_types::Errno;
@@ -902,16 +902,21 @@ unsafe fn mi_abandoned_page_try_reabandon_to_mapped(
         if mi_page_is_mostly_used(page) {
             return false;
         }
-        if !matches!(
-            crate::core_types::MemId::view((*page).memid),
-            crate::core_types::MemIdView::Arena(_)
-        ) || mi_page_is_abandoned_mapped(page)
-        {
+        let arena_memid = match crate::core_types::MemId::view((*page).memid) {
+            crate::core_types::MemIdView::Arena(arena_memid) => arena_memid,
+            _ => return false,
+        };
+        if mi_page_is_abandoned_mapped(page) {
             return false;
         }
 
         crate::mi_assert!(!mi_page_is_full(page));
-        _mi_arenas_page_try_reabandon_to_mapped(page)
+        _mi_arenas_page_try_reabandon_to_mapped_arena(
+            crate::core_types::OwnedAbandonedPage::new_unchecked(
+                crate::core_types::PagePtr::new_unchecked(page),
+            ),
+            arena_memid,
+        )
     }
 }
 

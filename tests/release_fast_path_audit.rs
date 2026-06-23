@@ -5784,24 +5784,35 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("numa_node: crate::core_types::NumaNode::new(numa_node)"),
         "arena allocation ABI wrappers should parse raw size/alignment into typed layout domains before using arena internals"
     );
+    let reabandon_arena = source_item(
+        "src/arena.rs",
+        &arena_rs,
+        "pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena",
+    );
     assert!(
         arena_rs.contains(
             "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arenas_page_try_reabandon_to_mapped"
         )
+            && arena_rs.contains(
+                "pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(\n    page: crate::core_types::OwnedAbandonedPage,\n    _arena_memid: crate::core_types::ArenaMemId,"
+            )
             && arena_rs.contains("unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool")
             && arena_rs.contains("crate::core_types::MemId::view(unsafe { (*page).memid })")
-            && arena_rs.contains("crate::core_types::MemIdView::Arena(_)")
+            && arena_rs.contains("crate::core_types::MemIdView::Arena(arena_memid)")
             && !arena_rs.contains("(*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA")
             && !arena_rs.contains("(*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA")
             && arena_rs.contains("_mi_page_associated_theap_peek(crate::core_types::PagePtr::new_unchecked(page))")
             && arena_rs.contains("_mi_arenas_page_abandon(page, theap)")
+            && !reabandon_arena.contains("mi_page_memid_is_arena(page)")
+            && !reabandon_arena.contains("MemId::view")
             && free_rs.contains("crate::core_types::MemId::view((*page).memid)")
-            && free_rs.contains("crate::core_types::MemIdView::Arena(_)")
+            && free_rs.contains("crate::core_types::MemIdView::Arena(arena_memid)")
             && !free_rs.contains(
                 "(*page).memid.memkind != crate::internal::mi_memkind_t::MI_MEM_ARENA"
             )
-            && free_rs.contains("_mi_arenas_page_try_reabandon_to_mapped(page)"),
-        "free path should keep C's arena page reabandon-to-mapped helper boundary"
+            && free_rs.contains("_mi_arenas_page_try_reabandon_to_mapped_arena(")
+            && !free_rs.contains("_mi_arenas_page_try_reabandon_to_mapped(page)"),
+        "free path should validate arena memids and carry the witness into the crate-local reabandon helper"
     );
     assert!(
         arena_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arena_id_none")

@@ -3901,3 +3901,132 @@ Decision:
   CPU improvement.
 - Since release `.text` is byte-identical to the accepted baseline, this makes
   no mimalloc-bench runtime claim.
+
+### Candidate 22: Arena Reabandon Validated-Memid Witness
+
+Rationale:
+
+- `mi_abandoned_page_try_reabandon_to_mapped` already validates the page memid
+  through `MemId::view((*page).memid)` before reabandoning an abandoned page to
+  the mapped state.
+- The raw `_mi_arenas_page_try_reabandon_to_mapped` helper then repeated the
+  same structural arena-memid validation through `mi_page_memid_is_arena(page)`.
+- A previous raw `memkind` shortcut was rejected because it weakened the check
+  and regressed `xmalloc-testN`. This candidate keeps structural validation and
+  carries the resulting `ArenaMemId` witness into a crate-private helper.
+
+Change:
+
+- Re-exported `ArenaMemId` from `core_types`.
+- Added crate-private
+  `_mi_arenas_page_try_reabandon_to_mapped_arena(OwnedAbandonedPage,
+  ArenaMemId)`.
+- Kept the raw extern `_mi_arenas_page_try_reabandon_to_mapped(*mut
+  mi_page_t)` boundary and made it validate `MemId::view` before calling the
+  typed helper.
+- Changed the free-side path to match on `MemIdView::Arena(arena_memid)` and
+  pass the witness into the typed helper. No raw `memkind` comparisons were
+  introduced.
+- Updated the release fast-path audit to assert that the raw/free paths keep
+  structural memid validation and that the crate-private helper does not repeat
+  `MemId::view`.
+
+Type-safety impact:
+
+- Neutral to slightly positive. The eliminated check is only eliminated below a
+  witness-bearing helper signature; raw extern callers and the free-side caller
+  still perform structural `MemId::view` validation.
+- No assertion, typestate witness, atomic-wrapper check, or corruption check was
+  removed or weakened.
+
+Tool availability:
+
+- `perf` was available and used for counter validation.
+- `heaptrack` and `heaptrack_print` were available, but this candidate changes
+  control flow/codegen rather than allocation shape, so heaptrack was not used
+  for the go/no-go decision.
+- `/opt/AMDuProf_5.2-606/bin/AMDuProf` was installed but failed to launch due
+  to missing `libxcb-xinerama.so.0`; no AMDuProf results were used.
+
+Codegen result:
+
+- Release `.text` shrank from 190,598 to 190,550 bytes.
+- Candidate `.text` hash:
+  `09bb70a0c2b9d8c29261ea347bd15b3c5104491ad31f00d0a112a90091118cc0`.
+- `_mi_arenas_page_try_reabandon_to_mapped_arena` is 0xa8 bytes; the prior raw
+  helper was 0xd1 bytes.
+- Unchanged hot symbol sizes:
+  - `mi_free_try_collect_mt_typed`: 0x18f
+  - `mi_abandoned_page_try_reclaim`: 0x1e4
+  - `_mi_page_free_collect`: 0x18b
+  - `_mi_page_free_collect_partly`: 0x114
+  - `mi_page_queue_find_free_ex_typed`: 0x373
+  - `_mi_malloc_generic_typed`: 0x4b4
+
+Focused perf counter validation:
+
+```sh
+perf stat -d -r 5 -o perf-goal22-xmalloc-rbase-r5-20260623.stat -- \
+  env LD_PRELOAD=target/bench-allocators/libmimalloc-rust-baseline.so \
+  ./xmalloc-test -w 32 -t 5 -s 64
+perf stat -d -r 5 -o perf-goal22-xmalloc-rexp-r5-20260623.stat -- \
+  env LD_PRELOAD=target/bench-allocators/libmimalloc-rust-candidate.so \
+  ./xmalloc-test -w 32 -t 5 -s 64
+```
+
+Results:
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.01182s | 5.010486s | -0.03% |
+| task-clock | 148.21B | 146.10B | -1.42% |
+| cycles | 627.11B | 620.73B | -1.02% |
+| instructions | 549.08B | 512.51B | -6.66% |
+| branches | 138.81B | 129.17B | -6.95% |
+| branch misses | 200.24M | 214.59M | +7.17% |
+| L1 loads | 156.66B | 148.18B | -5.41% |
+| L1 load misses | 6.29B | 6.23B | -0.97% |
+
+Benchmark guardrails:
+
+Artifact:
+
+```text
+mimalloc-bench/out/bench/benchres-goal22-reabandon-arena-r5-20260623.csv
+```
+
+Five-repeat results versus saved Rust baseline:
+
+| Test | Mean | Median | Trim1 | Paired faster |
+| --- | ---: | ---: | ---: | ---: |
+| `xmalloc-testN` | rexp -2.28% | rexp -3.62% | rexp -3.47% | 4/5 |
+| `glibc-thread` | rexp -0.79% | rexp -0.47% | rexp -0.78% | 4/5 |
+| `larsonN-sized` | rexp -0.39% | rexp +0.44% | rexp -0.10% | 3/5 |
+| `redis` | rexp +0.60% | rexp +0.75% | rexp +0.50% | 1/5 |
+| `rocksdb` | rexp +0.06% | rexp +0.29% | rexp +0.38% | 2/5 |
+
+Because Redis looked mildly worse in the first guardrail run, a focused
+ten-repeat validation was run:
+
+Artifact:
+
+```text
+mimalloc-bench/out/bench/benchres-goal22-reabandon-xmalloc-redis-r10-20260623.csv
+```
+
+Ten-repeat focused results:
+
+| Test | Mean | Median | Trim1 | Trim2 | Paired faster |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `xmalloc-testN` | rexp +0.37% | rexp -0.23% | rexp +0.29% | rexp +0.31% | 4/10 |
+| `redis` | rexp -1.01% | rexp -0.74% | rexp -1.37% | rexp -0.98% | 4/10 |
+
+Decision:
+
+- Accepted as an instruction/code-size cleanup with neutral wall time, not as a
+  confirmed RSS improvement.
+- The target `xmalloc-testN` wall time did not remain consistently faster in
+  the ten-repeat run, but `perf` confirmed materially fewer retired
+  instructions and branches, and guardrails did not show a clear regression.
+- The rejected raw `memkind` shortcut remains rejected; the accepted form is the
+  witness-carrying structural-validation form only.

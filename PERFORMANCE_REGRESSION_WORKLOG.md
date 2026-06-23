@@ -3553,3 +3553,52 @@ Decision:
   byte-identical. The maintenance win is that nullable raw thread-free head
   conversion now belongs to the typed thread-free wrapper instead of being
   repeated at call sites.
+
+### Candidate 16: Preserve Observed Thread-Free CAS Word
+
+Rationale:
+
+- `AtomicThreadFree::push_remote_acq_rel` already receives the observed
+  `xthread_free` word in `expected` after a failed weak CAS.
+- The failure path decomposed that observed packed word through `head()` and
+  `is_owned()`, then rebuilt it with `ThreadFreeWord::from_parts`.
+- Other thread-free CAS failure paths keep the observed word directly. Doing
+  the same here removes a redundant decode/rebuild round trip while preserving
+  the exact allocator-owned atomic word.
+
+Change:
+
+- On weak-CAS failure, assign `*old = ThreadFreeWord(expected)` directly.
+
+Type-safety impact:
+
+- Neutral. The change remains inside `AtomicThreadFree`, the typed wrapper that
+  owns raw `xthread_free` atomic storage.
+- No validation, witness construction, typestate boundary, corruption check, or
+  atomic-wrapper assertion was removed or weakened.
+- `ThreadFreeWord::from_parts` still owns construction from separately typed
+  head/owner inputs; this path is different because the raw word came from the
+  allocator-owned atomic field itself.
+
+Codegen result:
+
+- Prototype release build succeeded.
+- Release `.text` stayed byte-identical to the accepted baseline:
+  - size: 190,598 bytes
+  - `.text` hash:
+    `6c0228c11e541361e13fc948441c6b604ce591a068c113f4d4961233a2abbbcd`
+- Hot symbol sizes stayed unchanged:
+  - `mi_malloc`: 0x51
+  - `mi_free`: 0x9e
+  - `mi_page_free_list_extend`: 0x5a
+  - `_mi_page_free_collect_partly`: 0x114
+  - `_mi_page_free_collect`: 0x18b
+  - `mi_free_try_collect_mt_typed`: 0x18f
+  - `mi_page_queue_find_free_ex_typed`: 0x373
+  - `_mi_malloc_generic_typed`: 0x4b4
+
+Decision:
+
+- Accepted as a neutral source cleanup, not as a measured RSS/CPU win.
+- Final checks stayed clean, and the hot release `.text` remained
+  byte-identical, so no mimalloc-bench runtime claim is made.

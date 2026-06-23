@@ -418,14 +418,7 @@ impl AtomicThreadFree {
         } {
             Ok(new_tf)
         } else {
-            *old = ThreadFreeWord::from_parts(
-                ThreadFreeWord(expected).head(),
-                if ThreadFreeWord(expected).is_owned() {
-                    crate::core_types::ThreadFreeOwner::Owned
-                } else {
-                    crate::core_types::ThreadFreeOwner::Unowned
-                },
-            );
+            *old = ThreadFreeWord(expected);
             Err(*old)
         }
     }

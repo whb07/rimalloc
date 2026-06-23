@@ -164,7 +164,7 @@ impl PagePtr {
     #[inline(always)]
     pub(crate) unsafe fn set_free(self, free: AvailableFreeList) {
         let raw = self.as_ptr();
-        let head = free.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut());
+        let head = free.as_raw();
         unsafe { ptr::write(ptr::addr_of_mut!((*raw).free), head) };
     }
 
@@ -181,10 +181,7 @@ impl PagePtr {
     #[inline(always)]
     pub(crate) unsafe fn set_local_free(self, local_free: LocalFreeList) {
         let raw = self.as_ptr();
-        let head = local_free
-            .0
-            .map(BlockPtr::as_ptr)
-            .unwrap_or(ptr::null_mut());
+        let head = local_free.as_raw();
         unsafe { ptr::write(ptr::addr_of_mut!((*raw).local_free), head) };
     }
 

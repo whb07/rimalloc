@@ -684,13 +684,9 @@ pub(crate) unsafe fn mi_page_thread_collect_to_local_typed(
             return local;
         }
 
-        mi_block_set_next(
-            page,
-            last,
-            local.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut()),
-        );
+        mi_block_set_next(page, last, local.as_raw());
         let new_local = LocalFreeList(Some(head_block));
-        (*page).local_free = new_local.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut());
+        (*page).local_free = new_local.as_raw();
 
         crate::mi_assert_internal!(u16::try_from(count).is_ok());
         crate::mi_assert_internal!(used.get() >= count as u16);
@@ -767,11 +763,8 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
         let page = page.page().as_ptr();
         let new_available = AvailableFreeList(Some(local_head));
         let new_local = LocalFreeList(None);
-        (*page).free = new_available
-            .0
-            .map(BlockPtr::as_ptr)
-            .unwrap_or(ptr::null_mut());
-        (*page).local_free = new_local.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut());
+        (*page).free = new_available.as_raw();
+        (*page).local_free = new_local.as_raw();
         (*page).free_is_zero = false;
         true
     }
@@ -797,8 +790,8 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
             ForceCollect::No
         };
         let (available, local) = local.collect_into_available(local_page, available, force_collect);
-        (*page).free = available.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut());
-        (*page).local_free = local.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut());
+        (*page).free = available.as_raw();
+        (*page).local_free = local.as_raw();
         if moved_local {
             (*page).free_is_zero = false;
         }

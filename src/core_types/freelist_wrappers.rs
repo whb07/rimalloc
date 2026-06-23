@@ -1,6 +1,6 @@
 //! DT-8: Free-list wrappers and EncodedPtr domain types.
 
-use core::{ffi::c_void, marker::PhantomData};
+use core::{ffi::c_void, marker::PhantomData, ptr};
 
 use crate::core_types::BlockPtr;
 use crate::core_types::page_states::{AvailablePage, LocalPage};
@@ -280,6 +280,12 @@ impl BlockLink {
 pub(crate) struct AvailableFreeList(pub(crate) Option<BlockPtr>);
 
 impl AvailableFreeList {
+    /// Return the raw nullable head stored in `(*page).free`.
+    #[inline(always)]
+    pub(crate) fn as_raw(self) -> *mut mi_block_t {
+        self.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut())
+    }
+
     /// Pop a block off the page's available free list, returning the allocated
     /// block and the updated list head. This is the allocation fast path.
     ///
@@ -327,6 +333,12 @@ impl AvailableFreeList {
 pub(crate) struct LocalFreeList(pub(crate) Option<BlockPtr>);
 
 impl LocalFreeList {
+    /// Return the raw nullable head stored in `(*page).local_free`.
+    #[inline(always)]
+    pub(crate) fn as_raw(self) -> *mut mi_block_t {
+        self.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut())
+    }
+
     /// Push a freed block onto the page's local free list, returning the new
     /// list head. This is the local free fast path.
     ///
@@ -338,7 +350,7 @@ impl LocalFreeList {
     pub(crate) unsafe fn push(self, page: LocalPage, block: FreeBlock) -> Self {
         let raw_page = page.page().as_ptr();
         let block_raw = block.block().as_ptr();
-        let prev_raw = self.0.map(|b| b.as_ptr()).unwrap_or(core::ptr::null_mut());
+        let prev_raw = self.as_raw();
         // SAFETY: `block_raw` is a valid block in `page`; `prev_raw` is the
         // current local_free head (null if empty). Encoding is page-local.
         unsafe { mi_block_set_next(raw_page, block_raw, prev_raw) };

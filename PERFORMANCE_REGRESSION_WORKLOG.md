@@ -3293,3 +3293,135 @@ Decision:
 - The static-error-message cleanup should only be reconsidered if a future
   layout-preserving variant can keep the 192-byte shrink without moving the
   guardrail scenarios in the wrong direction.
+
+## 2026-06-23 Continuation: State Recheck And Neutral Wrapper Cleanup
+
+Resumed state:
+
+- The tracked tree was clean at resume, with only pre-existing untracked
+  scratch/benchmark files under the workspace.
+- There is no tracked `WORKLOG.md`; this file remains the canonical performance
+  worklog.
+- The current accepted release allocator `.text` section is unchanged from the
+  saved Rust baseline:
+  - size: 190,598 bytes
+  - `.text` hash:
+    `6c0228c11e541361e13fc948441c6b604ce591a068c113f4d4961233a2abbbcd`
+  - allocator hash before this source cleanup:
+    `2eb9c59071b38c2c8b3a81b904e09239f8aa350b379b04f198dbf95cee10ae67`
+
+Redis profile recheck:
+
+- Re-read the existing direct Redis server-side `perf report` artifacts:
+  - `mimalloc-bench/out/bench/perf-goal-report-redis-long-cmi.txt`
+  - `mimalloc-bench/out/bench/perf-goal-report-redis-long-rmi.txt`
+- The profile state still matches the earlier Redis conclusion:
+  - libc/Redis `memmove`, ziplist, command parsing, and reply handling dominate
+    the total profile.
+  - Rust allocator samples are mainly `mi_malloc_usable_size`,
+    `mi_theap_realloc_validated_core`, `mi_theap_realloc_layout`, `realloc`,
+    and `mi_malloc`.
+  - C allocator samples are flatter around `mi_theap_realloc`,
+    `malloc_usable_size`, `mi_malloc`, and `operator delete[]`.
+- The existing accepted Redis work already targeted that mismatch by keeping
+  the typed `OldAllocation`/`LayoutRequest` boundary while deriving usable size
+  from validated pointer-location data and flattening the private realloc
+  layout/core boundary. There was no new Redis-specific source candidate from
+  this re-read alone.
+
+### Candidate 12: Nested Medium Reclaim Gate
+
+Prototype:
+
+- Changed the reclaim-on-free gate in `mi_free_try_collect_mt_typed` from one
+  compound condition to a nested medium-size branch:
+
+```rust
+if (*page_raw).block_size <= MI_MEDIUM_MAX_OBJ_SIZE {
+    if reclaim_on_free.is_enabled() && mi_abandoned_page_try_reclaim(page, reclaim_on_free) {
+        return;
+    }
+}
+```
+
+Type-safety impact:
+
+- None. The same `OwnedAbandonedPage` and `PageReclaimOnFree` typed values
+  reached `mi_abandoned_page_try_reclaim`, and all existing reclaim assertions
+  and checks stayed in place.
+
+Codegen result:
+
+- Rejected before runtime benchmarking.
+- Release `.text` stayed byte-identical to the accepted baseline:
+  `6c0228c11e541361e13fc948441c6b604ce591a068c113f4d4961233a2abbbcd`.
+- Release allocator hash stayed
+  `2eb9c59071b38c2c8b3a81b904e09239f8aa350b379b04f198dbf95cee10ae67`.
+- Hot symbol sizes and `mi_free_try_collect_mt_typed` disassembly were
+  unchanged.
+
+Decision:
+
+- Rejected and reverted.
+- The source was not materially simpler, produced no instruction/code-size
+  change, and therefore had no neutral simplification value.
+
+### Candidate 13: Free-List Raw Head Accessors
+
+Rationale:
+
+- Several hot page collection paths repeatedly converted typed
+  `AvailableFreeList` and `LocalFreeList` wrappers back to raw nullable
+  `mi_block_t*` values by open-coding:
+  `list.0.map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut())`.
+- The conversion is a boundary operation owned by the typed wrapper itself.
+  Centralizing it clarifies that the raw pointer is only the storage format of
+  `page.free` / `page.local_free`; it does not bypass or weaken the wrapper.
+
+Change:
+
+- Added `#[inline(always)] as_raw()` to:
+  - `AvailableFreeList`
+  - `LocalFreeList`
+- Routed existing typed free/local-list store sites through those methods:
+  - `PagePtr::set_free`
+  - `PagePtr::set_local_free`
+  - `mi_page_thread_collect_to_local_typed`
+  - `mi_page_free_quick_collect_typed`
+  - `_mi_page_free_collect`
+- `LocalFreeList::push` now uses `self.as_raw()` for the previous local-list
+  head.
+
+Type-safety impact:
+
+- Neutral to slightly positive for maintainability. The wrappers still expose
+  typed `Option<BlockPtr>` internally, and the new method is only the explicit
+  storage conversion for page metadata fields.
+- No validation, witness construction, corruption check, typestate boundary, or
+  atomic-wrapper assertion was removed or weakened.
+
+Codegen result:
+
+- Release build succeeded.
+- Release `.text` stayed byte-identical to the accepted baseline:
+  - size: 190,598 bytes
+  - `.text` hash:
+    `6c0228c11e541361e13fc948441c6b604ce591a068c113f4d4961233a2abbbcd`
+- Hot symbol sizes stayed unchanged:
+  - `mi_malloc`: 0x51
+  - `mi_free`: 0x9e
+  - `mi_free_size`: 0x9
+  - `mi_free_try_collect_mt_typed`: 0x18f
+  - `_mi_page_free_collect_partly`: 0x114
+  - `_mi_page_free_collect`: 0x18b
+  - `mi_page_free_list_extend`: 0x5a
+  - `mi_page_queue_find_free_ex_typed`: 0x373
+  - `_mi_malloc_generic_typed`: 0x4b4
+
+Decision:
+
+- Accepted as a neutral source cleanup, not as a measured RSS/CPU win.
+- No mimalloc-bench runtime claim is made because the release `.text` is
+  byte-identical. The maintenance win is that raw nullable free-list storage
+  conversion now belongs to the typed free-list wrappers instead of being
+  repeated at page call sites.

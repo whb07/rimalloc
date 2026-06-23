@@ -3138,3 +3138,60 @@ Decision:
 - This refill-loop direction should not be retried without new codegen evidence
   that actually shrinks the hot refill helper or changes its generated loop
   shape materially.
+
+### Candidate 10: Out-of-Line Reclaim Queue-Length Check
+
+Rationale:
+
+- A C/Rust code-size comparison showed Rust's
+  `mi_abandoned_page_try_reclaim` at 0x1e4 bytes versus C's 0x17e-byte hot
+  symbol plus a 0x17-byte cold fragment.
+- The mismatch came partly from Rust inlining the bin/queue lookup through
+  `mi_page_queue_len_is_atmost`, while C calls `_mi_bin` from the reclaim
+  queue-limit path.
+- Prototype added `#[inline(never)]` to `mi_page_queue_len_is_atmost` only.
+  The function kept its existing `ThreadHeapLocal`, `BlockSize`, and
+  `PageQueueCount` typed parameters and its existing queue/count assertions;
+  no witness or assertion was weakened.
+
+Codegen effect:
+
+- `.text` size was unchanged from the accepted baseline:
+  - baseline: 190,598 bytes
+  - candidate: 190,598 bytes
+- Candidate `.text` hash:
+  `cc0658075c21ab44a3088e8eae6d12baa7a3de21bc90346140174d679a7235a3`.
+- Candidate allocator hash:
+  `290c90c5de31a1ac1aea7f1ceee145ff292daaefc7294526f36ebe3d79a264b6`.
+- `mi_abandoned_page_try_reclaim` shrank from 0x1e4 bytes to 0x16d bytes.
+- The new out-of-line `mi_page_queue_len_is_atmost` symbol was 0x71 bytes.
+- The combined helper plus reclaim body was therefore 6 bytes smaller, but
+  section size did not shrink due to alignment/layout effects.
+
+Focused `perf stat -r 5 -d` on `xmalloc-testN`:
+
+- Baseline artifact:
+  `mimalloc-bench/out/bench/perf-goal12-reclaim-queue-noinline-baseline-r5-20260622-213150.stat`
+- Candidate artifact:
+  `mimalloc-bench/out/bench/perf-goal12-reclaim-queue-noinline-candidate-r5-20260622-213221.stat`
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.00977 | 5.01335 | +0.07% |
+| task-clock | 148.34B | 150.54B | +1.48% |
+| instructions | 547.35B | 562.62B | +2.79% |
+| cycles | 632.92B | 635.73B | +0.44% |
+| branches | 138.55B | 141.83B | +2.37% |
+| branch misses | 198.76M | 182.85M | -8.00% |
+| L1 loads | 156.23B | 160.52B | +2.74% |
+| L1 load misses | 6.326B | 6.330B | +0.05% |
+
+Decision:
+
+- Rejected and reverted.
+- Although the reclaim symbol became smaller, the extra call made the target
+  CPU counters worse: retired instructions, task-clock, cycles, branches, and
+  L1 loads all increased on the direct `xmalloc-testN` perf pass.
+- The branch-miss reduction was not enough to offset the broader CPU cost, and
+  the unchanged `.text` size meant there was no neutral code-size/simplification
+  reason to keep the attribute.

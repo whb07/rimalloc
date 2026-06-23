@@ -2905,3 +2905,75 @@ Decision:
   counter win did not become a reliable wall-time win.
 - No broad guardrail run was done because the target scenario already failed
   the no-regression bar.
+
+### Candidate 7: Non-Null Partly Collect Typed Head, Out-of-Line
+
+Rationale:
+
+- Candidate 6 showed that removing the duplicate null-head handling could reduce
+  instructions and RSS, but inlining the partial collect body into
+  `mi_free_try_collect_mt_typed` grew the hot helper and failed target
+  wall-time validation.
+- Prototype kept the raw nullable ABI wrapper, changed the typed helper to take
+  a non-null `BlockPtr`, routed the hot caller directly to that typed helper,
+  and added `#[inline(never)]` to keep the partial-collect body out of
+  `mi_free_try_collect_mt_typed`.
+- The typed witness boundary was not weakened: the raw wrapper still checked
+  null before constructing `BlockPtr`, and the hot caller already had a
+  non-null `BlockPtr` from `RemoteFreeList::head()`.
+
+Codegen effect:
+
+- `.text` size was unchanged from the accepted baseline:
+  - baseline: 190,598 bytes
+  - candidate: 190,598 bytes
+- Candidate `.text` hash:
+  `4e60cc12005fed733a1fe312a1612747ac924a55d52bb8a8582c8d41b42208c0`.
+- Candidate allocator hash:
+  `d68328c88a9536ccf564ea3ae5e25eb00911a34c5ae1fbd03a21b3d8d3683836`.
+- `mi_free_try_collect_mt_typed` stayed at 399 bytes instead of growing to the
+  631-byte Candidate 6 shape.
+- `_mi_page_free_collect_partly_typed` remained a separate 276-byte symbol.
+
+Focused `perf stat -r 5 -d` on `xmalloc-testN`:
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.010800s | 5.011107s | +0.01% |
+| task-clock | 147.10B | 148.90B | +1.23% |
+| instructions | 541.55B | 560.76B | +3.55% |
+| cycles | 623.28B | 626.59B | +0.53% |
+| branches | 136.99B | 141.99B | +3.65% |
+| branch misses | 205.61M | 194.59M | -5.36% |
+| L1 loads | 154.71B | 160.18B | +3.53% |
+| L1 load misses | 6.68B | 6.40B | -4.18% |
+
+Dedicated `xmalloc-testN` validation:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test -r=20`
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal9-nonnull-partly-noinline-xmalloc-r20-20260622.csv`
+
+| Metric | Candidate delta |
+| --- | ---: |
+| Mean time | +0.26% |
+| Median time | +0.24% |
+| Trim-1 time | +0.31% |
+| Paired time wins | 9/20 |
+| Mean RSS | +0.97% |
+| Median RSS | +0.15% |
+| Trim-1 RSS | +0.75% |
+| Mean user time | -0.06% |
+| Mean system time | +4.07% |
+| Mean page reclaims | +2.63% |
+
+Decision:
+
+- Rejected and reverted.
+- Keeping the typed helper out-of-line fixed Candidate 6's hot-helper size
+  growth, but it also removed the instruction/RSS advantage that made the
+  earlier prototype worth measuring.
+- The target harness regressed mean, median, and trimmed time, and RSS also
+  regressed, so this does not satisfy the performance or no-regression bar.
+- No broad guardrail run was done because the target scenario already failed.

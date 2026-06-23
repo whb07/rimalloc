@@ -457,14 +457,7 @@ pub(crate) unsafe fn mi_free_block_mt(
 
         let mut tf_old = atomic_tf.load_relaxed();
         loop {
-            mi_block_set_next(
-                page,
-                block,
-                tf_old
-                    .head()
-                    .map(|p| p.as_ptr())
-                    .unwrap_or(core::ptr::null_mut()),
-            );
+            mi_block_set_next(page, block, tf_old.head_raw());
             let bp = crate::core_types::BlockPtr::new_unchecked(block);
             match atomic_tf.push_remote_acq_rel(&mut tf_old, bp) {
                 Ok(_) => break,

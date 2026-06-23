@@ -706,12 +706,9 @@ pub unsafe fn mi_page_thread_free_collect(page: *mut mi_page_t) {
             ptr::addr_of_mut!((*page).xthread_free),
         ));
         let remote = atomic_tf.collect_acq_rel();
-        let Some(head) = remote.head().map(|b| b.as_ptr()) else {
+        if remote.is_empty() {
             return;
-        };
-        crate::mi_assert_internal!(!head.is_null());
-        let remote =
-            RemoteFreeList::from_detached_thread_free_head(Some(BlockPtr::new_unchecked(head)));
+        }
         let _ = mi_page_thread_free_collect_typed(local_page, remote);
     }
 }
@@ -848,14 +845,7 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             let atomic_tf = crate::core_types::AtomicThreadFree(
                 crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*page).xthread_free)),
             );
-            crate::mi_assert_internal!(
-                atomic_tf
-                    .load_relaxed()
-                    .head()
-                    .map(|block| block.as_ptr())
-                    .unwrap_or(ptr::null_mut())
-                    == head
-            );
+            crate::mi_assert_internal!(atomic_tf.load_relaxed().head_raw() == head);
             crate::mi_assert_internal!(mi_block_next(page, head).is_null());
             _mi_page_free_collect(page, false);
         }

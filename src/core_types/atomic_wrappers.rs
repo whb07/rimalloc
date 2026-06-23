@@ -358,6 +358,11 @@ impl RemoteFreeList {
         self.0
     }
 
+    #[inline(always)]
+    pub(crate) fn is_empty(self) -> bool {
+        self.0.is_none()
+    }
+
     /// Collect the remote (thread-free) list into the page's local free list.
     ///
     /// Delegates to `mi_page_thread_collect_to_local_typed`, which splices

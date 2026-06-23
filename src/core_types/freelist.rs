@@ -23,14 +23,24 @@ impl ThreadFreeWord {
         self.0
     }
 
+    /// Return the nullable raw block head stored in the thread-free word.
+    ///
+    /// Use `head()` when a non-null value needs a typed `BlockPtr`; this is only
+    /// for storage and C-compatibility boundaries that already expect null.
+    #[inline(always)]
+    pub(crate) fn head_raw(self) -> *mut crate::types::mi_block_t {
+        let ptr_val = self.0 & !Self::OWNED_BIT;
+        ptr_val as *mut crate::types::mi_block_t
+    }
+
     #[inline(always)]
     pub(crate) fn head(self) -> Option<BlockPtr> {
-        let ptr_val = self.0 & !Self::OWNED_BIT;
-        if ptr_val == 0 {
+        let ptr = self.head_raw();
+        if ptr.is_null() {
             None
         } else {
             // SAFETY: The block pointer is non-null if not 0.
-            Some(unsafe { BlockPtr::new_unchecked(ptr_val as *mut crate::types::mi_block_t) })
+            Some(unsafe { BlockPtr::new_unchecked(ptr) })
         }
     }
 
@@ -68,11 +78,13 @@ mod tests {
         assert_eq!(owned.raw(), ThreadFreeWord::OWNED_BIT);
         assert!(owned.is_owned());
         assert!(owned.head().is_none());
+        assert!(owned.head_raw().is_null());
 
         let unowned = ThreadFreeWord::from_parts(None, ThreadFreeOwner::Unowned);
         assert_eq!(unowned.raw(), 0);
         assert!(!unowned.is_owned());
         assert!(unowned.head().is_none());
+        assert!(unowned.head_raw().is_null());
     }
 
     #[test]
@@ -83,6 +95,7 @@ mod tests {
         let word = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
         assert!(word.is_owned());
         assert_eq!(word.head().map(BlockPtr::as_ptr), Some(head.as_ptr()));
+        assert_eq!(word.head_raw(), head.as_ptr());
         assert_eq!(
             word.raw() & !ThreadFreeWord::OWNED_BIT,
             head.as_ptr() as usize

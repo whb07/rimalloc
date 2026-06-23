@@ -3488,3 +3488,68 @@ Decision:
 - The small xmalloc RSS/user-time signal and code-size reduction were not enough
   to offset broader guardrail regressions, especially `rptestN` and
   `sh8benchN`.
+
+### Candidate 15: Thread-Free Raw Head Accessor
+
+Rationale:
+
+- Several thread-free call sites converted a typed `ThreadFreeWord` head to a
+  nullable raw block pointer by open-coding:
+  `head().map(BlockPtr::as_ptr).unwrap_or(ptr::null_mut())`.
+- `mi_page_thread_free_collect` also converted a `RemoteFreeList` head to a raw
+  pointer and immediately rebuilt the same typed remote list before collecting
+  it.
+- This mirrors Candidate 13's free-list raw-head cleanup: the raw nullable value
+  is a storage/C-compatibility boundary and belongs on the wrapper instead of at
+  each call site.
+
+Change:
+
+- Added `ThreadFreeWord::head_raw()` for the nullable raw `mi_block_t*` head.
+- Routed existing raw-head conversion sites through `head_raw()`:
+  - `mi_free_block_mt`
+  - `mi_tf_block`
+  - `mi_page_thread_free`
+  - `_mi_page_free_collect_partly_typed`'s debug assertion
+- Added `RemoteFreeList::is_empty()` and used it in
+  `mi_page_thread_free_collect` to avoid the raw-pointer round trip.
+- Extended the existing `ThreadFreeWord` unit tests to cover `head_raw()`.
+- Documented `src/core_types/freelist.rs` as the checked
+  `packed-thread-free` pointer/integer round-trip boundary in
+  `strict-type-allowlist.txt`, and updated the release fast-path audit to
+  require the centralized `head_raw()` boundary.
+
+Type-safety impact:
+
+- Neutral to slightly positive for maintainability. `head()` remains the API for
+  call sites that need a typed non-null `BlockPtr`; `head_raw()` is explicitly
+  documented as the nullable storage/C-compatibility view.
+- No validation, witness construction, corruption check, typestate boundary, or
+  atomic-wrapper assertion was removed or weakened.
+
+Codegen result:
+
+- Release build succeeded.
+- Release `.text` stayed byte-identical to the accepted baseline:
+  - size: 190,598 bytes
+  - `.text` hash:
+    `6c0228c11e541361e13fc948441c6b604ce591a068c113f4d4961233a2abbbcd`
+- `.rodata` also stayed byte-identical:
+  `4f92b774af71ed72c53696e9e0e0c94767292dfa977bfeb3dd7e21d039706b46`
+- Hot symbol sizes stayed unchanged:
+  - `mi_malloc`: 0x51
+  - `mi_free`: 0x9e
+  - `mi_free_try_collect_mt_typed`: 0x18f
+  - `_mi_page_free_collect_partly`: 0x114
+  - `_mi_page_free_collect`: 0x18b
+  - `mi_page_free_list_extend`: 0x5a
+  - `mi_page_queue_find_free_ex_typed`: 0x373
+  - `_mi_malloc_generic_typed`: 0x4b4
+
+Decision:
+
+- Accepted as a neutral source cleanup, not as a measured RSS/CPU win.
+- No mimalloc-bench runtime claim is made because the hot release `.text` is
+  byte-identical. The maintenance win is that nullable raw thread-free head
+  conversion now belongs to the typed thread-free wrapper instead of being
+  repeated at call sites.

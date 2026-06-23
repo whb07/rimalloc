@@ -1216,10 +1216,7 @@ pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::Pag
 
 #[inline]
 pub(crate) fn mi_tf_block(tf: mi_thread_free_t) -> *mut mi_block_t {
-    crate::core_types::ThreadFreeWord(tf)
-        .head()
-        .map(|block| block.as_ptr())
-        .unwrap_or(ptr::null_mut())
+    crate::core_types::ThreadFreeWord(tf).head_raw()
 }
 
 const _: fn(mi_thread_free_t) -> *mut mi_block_t = mi_tf_block;
@@ -1252,11 +1249,7 @@ pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
         let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
             ptr::addr_of_mut!((*(page as *mut mi_page_t)).xthread_free),
         ));
-        atomic_tf
-            .load_relaxed()
-            .head()
-            .map(|block| block.as_ptr())
-            .unwrap_or(ptr::null_mut())
+        atomic_tf.load_relaxed().head_raw()
     }
 }
 

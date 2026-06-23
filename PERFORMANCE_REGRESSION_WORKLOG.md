@@ -3723,3 +3723,84 @@ Decision:
 - Accepted as a neutral source cleanup, not as a measured RSS/CPU win.
 - Since release `.text` is byte-identical, this makes no mimalloc-bench
   runtime claim and does not require runtime benchmark attribution.
+
+### Candidate 19: One-Past Refill Loop Bound
+
+Fresh profile setup:
+
+- Refreshed direct `perf stat -d -r 3` for the current accepted Rust allocator
+  and the C allocator on:
+  `xmalloc-test -w 32 -t 5 -s 64`.
+- Artifacts:
+  - `mimalloc-bench/out/bench/perf-goal19-xmalloc-rust-r3-20260623.stat`
+  - `mimalloc-bench/out/bench/perf-goal19-xmalloc-c-r3-20260623.stat`
+  - `mimalloc-bench/out/bench/perf-goal19-xmalloc-rust-20260623.data`
+  - `mimalloc-bench/out/bench/perf-goal19-xmalloc-c-20260623.data`
+  - matching `*-flat-20260623.txt` and `*-children-20260623.txt` reports
+
+Fresh counter observations:
+
+| Metric | C | Rust | Rust delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.011245s | 5.010710s | tied |
+| task-clock | 138.76B | 146.90B | +5.87% |
+| instructions | 486.01B | 534.91B | +10.06% |
+| cycles | 595.27B | 629.85B | +5.81% |
+| branches | 119.76B | 135.52B | +13.17% |
+| branch misses | 274.52M | 206.72M | -24.70% |
+| L1 loads | 139.27B | 152.72B | +9.66% |
+| L1 load misses | 6.217B | 6.219B | +0.03% |
+
+Fresh profile observations:
+
+- The profile still points at the same residual hot path and does not invalidate
+  earlier rejected candidates:
+  - `mi_free_try_collect_mt_typed`: Rust 15.27% self vs C 12.75%
+  - `_mi_page_free_collect_partly`: Rust 6.82% vs C 5.28%
+  - `mi_page_free_list_extend`: Rust 6.73% vs C 6.61%
+  - `_mi_arenas_page_try_reabandon_to_mapped`: Rust 4.40% vs C 3.67%
+  - `mi_abandoned_page_try_reclaim`: Rust 2.89% vs C 2.55%
+  - `mi_page_queue_find_free_ex_typed`: Rust 1.61% vs C 1.41%
+- The apparent `operator delete[]` difference is only symbol alias naming:
+  Rust aliases `operator delete`, `operator delete[]`, and `mi_free` at the same
+  address, like C.
+
+Prototype:
+
+- Tried a narrower refill-loop shape than rejected Candidate 9.
+- Candidate 9 skipped the transient last-block link write. This prototype kept
+  the current/C behavior but expressed the bound as a one-past `end` pointer:
+
+```rust
+let end = mi_page_block_at(page_raw, page_area, bsize, capacity.as_usize() + extend);
+let mut block = start;
+while block < end {
+    let next = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
+    BlockPtr::new_unchecked(block).set_next(page, BlockPtr::new(next));
+    block = next;
+}
+let last = block.cast::<u8>().sub(bsize).cast::<mi_block_t>();
+```
+
+Type-safety impact:
+
+- No typed witness, assertion, validation, or raw-pointer boundary was changed.
+- The prototype kept the existing `PagePtr`, `BlockSize`, and `BlockPtr::set_next`
+  path and preserved the current transient write to the last block before
+  overwriting it with the old free-list head.
+
+Codegen result:
+
+- Rejected before runtime benchmarking.
+- Release `.text` size stayed 190,598 bytes, but the hash changed to
+  `76c63ae306d3a9087a56f24f2d9273f73ebee52b7d0d4eae0b18c54a818e0508`.
+- `mi_page_free_list_extend` grew from 0x5a to 0x5d bytes.
+- The generated loop did not match the smaller C shape; it introduced extra
+  bound/subtraction work.
+
+Decision:
+
+- Rejected and reverted.
+- This one-past refill-loop expression should not be retried unless new codegen
+  evidence shows a smaller helper; it neither simplified generated code nor
+  reduced the hot symbol.

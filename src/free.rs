@@ -898,25 +898,40 @@ unsafe fn mi_abandoned_page_try_reabandon_to_mapped(
     page: crate::core_types::OwnedAbandonedPage,
 ) -> bool {
     unsafe {
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::reabandon_attempt();
         let page = page.page().as_ptr();
         if mi_page_is_mostly_used(page) {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::reabandon_fail_mostly_used();
             return false;
         }
         let arena_memid = match crate::core_types::MemId::view((*page).memid) {
             crate::core_types::MemIdView::Arena(arena_memid) => arena_memid,
-            _ => return false,
+            _ => {
+                #[cfg(feature = "bench-diagnostics")]
+                crate::bench_diagnostics::reabandon_fail_non_arena();
+                return false;
+            }
         };
         if mi_page_is_abandoned_mapped(page) {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::reabandon_fail_already_mapped();
             return false;
         }
 
         crate::mi_assert!(!mi_page_is_full(page));
-        _mi_arenas_page_try_reabandon_to_mapped_arena(
+        let reabandoned = _mi_arenas_page_try_reabandon_to_mapped_arena(
             crate::core_types::OwnedAbandonedPage::new_unchecked(
                 crate::core_types::PagePtr::new_unchecked(page),
             ),
             arena_memid,
-        )
+        );
+        #[cfg(feature = "bench-diagnostics")]
+        if reabandoned {
+            crate::bench_diagnostics::reabandon_success();
+        }
+        reabandoned
     }
 }
 
@@ -967,6 +982,8 @@ unsafe fn mi_abandoned_page_try_reclaim(
     reclaim_on_free: crate::core_types::PageReclaimOnFree,
 ) -> bool {
     unsafe {
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::abandoned_reclaim_attempt();
         let page_raw = page.page().as_ptr();
         crate::mi_assert_internal!(mi_page_is_owned(page_raw));
         crate::mi_assert_internal!(mi_page_is_abandoned(page_raw));
@@ -975,14 +992,20 @@ unsafe fn mi_abandoned_page_try_reclaim(
         crate::mi_assert_internal!(reclaim_on_free.is_enabled());
 
         if !_mi_thread_is_initialized() {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::abandoned_reclaim_fail_thread_uninit();
             return false;
         }
 
         let Some(theap) = _mi_page_associated_theap_peek(page.page()) else {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::abandoned_reclaim_fail_no_theap();
             return false;
         };
         let theap = theap.as_ptr();
         if !(*theap).allow_page_reclaim {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::abandoned_reclaim_fail_reclaim_disabled();
             return false;
         }
 
@@ -1016,6 +1039,8 @@ unsafe fn mi_abandoned_page_try_reclaim(
                 max_reclaim,
             )
         {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::abandoned_reclaim_fail_queue_limit();
             return false;
         }
 
@@ -1027,6 +1052,8 @@ unsafe fn mi_abandoned_page_try_reclaim(
             ),
         );
         __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reclaim_on_free), 1);
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::abandoned_reclaim_success();
         true
     }
 }

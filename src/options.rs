@@ -1341,6 +1341,8 @@ fn mi_option_get_fast_impl(option: mi_option_t) -> c_long {
 
 #[inline(never)]
 pub(crate) extern "C" fn _mi_option_get_fast(option: mi_option_t) -> c_long {
+    #[cfg(feature = "bench-diagnostics")]
+    crate::bench_diagnostics::option_read(option);
     mi_option_get_fast_impl(option)
 }
 

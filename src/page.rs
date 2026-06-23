@@ -12,8 +12,8 @@ use crate::arena::{
 };
 use crate::bits::{MI_KiB, MI_SIZE_SIZE};
 use crate::core_types::{
-    AvailableFreeList, BlockPtr, Errno, ForceCollect, LocalFreeList, LocalPage, OwnedAbandonedPage,
-    PageConstPtr, PageKeys, PagePtr, PageQueuePtr, RemoteFreeList,
+    AvailableFreeList, BlockPtr, Errno, LocalFreeList, LocalPage, OwnedAbandonedPage, PageConstPtr,
+    PageKeys, PagePtr, PageQueuePtr, RemoteFreeList,
 };
 use crate::init::{_mi_page_empty, _mi_theap_empty, _mi_theap_empty_wrong};
 use crate::internal::{
@@ -772,24 +772,40 @@ pub(crate) unsafe fn mi_page_free_quick_collect_typed(
 pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool) {
     unsafe {
         crate::mi_assert_internal!(!page.is_null());
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::page_free_collect_call(force);
 
         mi_page_thread_free_collect(page);
 
-        let page_ptr = PagePtr::new_unchecked(page);
-        let local_page = LocalPage::new_unchecked(page_ptr);
-        let available = AvailableFreeList::from_raw((*page).free);
-        let local = LocalFreeList::from_raw((*page).local_free);
-        let moved_local = local.0.is_some() && (available.0.is_none() || force);
-        let force_collect = if force {
-            ForceCollect::Yes
+        if !(*page).local_free.is_null() {
+            if (*page).free.is_null() {
+                (*page).free = (*page).local_free;
+                (*page).local_free = ptr::null_mut();
+                (*page).free_is_zero = false;
+                #[cfg(feature = "bench-diagnostics")]
+                crate::bench_diagnostics::page_free_collect_moved_to_free(false);
+            } else if force {
+                let mut tail = (*page).local_free;
+                loop {
+                    let next = mi_block_next(page, tail);
+                    if next.is_null() {
+                        break;
+                    }
+                    tail = next;
+                }
+                mi_block_set_next(page, tail, (*page).free);
+                (*page).free = (*page).local_free;
+                (*page).local_free = ptr::null_mut();
+                (*page).free_is_zero = false;
+                #[cfg(feature = "bench-diagnostics")]
+                crate::bench_diagnostics::page_free_collect_moved_to_free(true);
+            } else {
+                #[cfg(feature = "bench-diagnostics")]
+                crate::bench_diagnostics::page_free_collect_noop_local_blocked();
+            }
         } else {
-            ForceCollect::No
-        };
-        let (available, local) = local.collect_into_available(local_page, available, force_collect);
-        (*page).free = available.as_raw();
-        (*page).local_free = local.as_raw();
-        if moved_local {
-            (*page).free_is_zero = false;
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::page_free_collect_local_empty();
         }
 
         crate::mi_assert_internal!(!force || (*page).local_free.is_null());
@@ -801,6 +817,8 @@ pub unsafe extern "C" fn _mi_page_free_collect(page: *mut mi_page_t, force: bool
 #[inline(never)]
 pub unsafe extern "C" fn _mi_page_free_collect_partly(page: *mut mi_page_t, head: *mut mi_block_t) {
     unsafe {
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::page_free_collect_partly_call(head.is_null());
         if head.is_null() {
             return;
         }
@@ -827,6 +845,8 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
         let head = head_block.as_ptr();
         let next = mi_block_next(page, head);
         if !next.is_null() {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::page_free_collect_partly_detached();
             mi_block_set_next(page, head, ptr::null());
             let remote_tail = RemoteFreeList::from_detached_head(BlockPtr::new_unchecked(next));
             let local = LocalFreeList::from_raw((*page).local_free);
@@ -844,6 +864,8 @@ pub(crate) unsafe fn _mi_page_free_collect_partly_typed(
             );
             crate::mi_assert_internal!(atomic_tf.load_relaxed().head_raw() == head);
             crate::mi_assert_internal!(mi_block_next(page, head).is_null());
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::page_free_collect_partly_final_collect();
             _mi_page_free_collect(page, false);
         }
     }
@@ -1223,6 +1245,8 @@ unsafe fn mi_page_free_list_extend_secure_typed(
     unsafe {
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
+        #[cfg(feature = "bench-diagnostics")]
+        crate::bench_diagnostics::free_list_extend(extend);
         if MI_SECURE < 3 {
             crate::mi_assert_internal!(page.free().0.is_none());
             crate::mi_assert_internal!(page.local_free().0.is_none());
@@ -2895,6 +2919,8 @@ unsafe fn mi_page_queue_find_free_ex_typed(
             .first()
             .map(PagePtr::as_ptr)
             .unwrap_or(ptr::null_mut());
+        #[cfg(feature = "bench-diagnostics")]
+        let mut failed_extend = false;
 
         while !page.is_null() {
             let next = (*page).next;
@@ -2960,12 +2986,18 @@ unsafe fn mi_page_queue_find_free_ex_typed(
                 crate::mi_assert_internal!(mi_page_is_expandable(page));
                 if !mi_page_extend_free(theap_raw, page) {
                     page = ptr::null_mut();
+                    #[cfg(feature = "bench-diagnostics")]
+                    {
+                        failed_extend = true;
+                    }
                 }
             }
             crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
         }
 
         if page.is_null() {
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::page_queue_search(count.get(), false, failed_extend);
             _mi_theap_collect_retired_typed(theap, false);
             let Some(slice_count) = crate::core_types::SliceCount::from_usize(
                 crate::internal::mi_slice_count_of_size(block_size.get()),
@@ -2995,6 +3027,8 @@ unsafe fn mi_page_queue_find_free_ex_typed(
                 );
             let _ = mi_page_queue_move_to_front_typed(theap, queue, queued);
             mi_page_reset_retire_expire(page);
+            #[cfg(feature = "bench-diagnostics")]
+            crate::bench_diagnostics::page_queue_search(count.get(), true, failed_extend);
         }
         crate::mi_assert_internal!(page.is_null() || mi_page_immediate_available(page));
 

@@ -28,6 +28,7 @@ use criterion::{
 };
 use std::env;
 use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr;
@@ -53,6 +54,8 @@ struct DylibAllocator {
     new_array: unsafe extern "C" fn(usize) -> *mut c_void,
     delete_array: unsafe extern "C" fn(*mut c_void),
     delete_array_sized: unsafe extern "C" fn(*mut c_void, usize),
+    bench_diagnostics_reset: Option<unsafe extern "C" fn()>,
+    bench_diagnostics_json: Option<unsafe extern "C" fn(*mut c_char, usize) -> usize>,
 }
 
 #[derive(Clone, Copy)]
@@ -110,6 +113,32 @@ impl BenchAllocator {
                 }
             }
         }
+    }
+
+    fn bench_diagnostics_reset(self) {
+        let reset = match self {
+            BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => alloc.bench_diagnostics_reset,
+        };
+        if let Some(reset) = reset {
+            unsafe { reset() };
+        }
+    }
+
+    fn bench_diagnostics_json(self) -> Option<String> {
+        let to_json = match self {
+            BenchAllocator::Rust(alloc) | BenchAllocator::C(alloc) => alloc.bench_diagnostics_json,
+        }?;
+        let mut buf = vec![0 as c_char; 4096];
+        let needed = unsafe { to_json(buf.as_mut_ptr(), buf.len()) };
+        if needed + 1 > buf.len() {
+            buf.resize(needed + 1, 0);
+            let _ = unsafe { to_json(buf.as_mut_ptr(), buf.len()) };
+        }
+        Some(
+            unsafe { CStr::from_ptr(buf.as_ptr()) }
+                .to_string_lossy()
+                .into_owned(),
+        )
     }
 
     unsafe fn memalign(self, alignment: usize, size: usize) -> *mut u8 {
@@ -382,6 +411,11 @@ mod dylib {
         }
     }
 
+    unsafe fn optional_symbol(handle: *mut c_void, name: &CStr) -> Option<*mut c_void> {
+        let ptr = unsafe { dlsym(handle, name.as_ptr()) };
+        if ptr.is_null() { None } else { Some(ptr) }
+    }
+
     pub fn load_allocator(path: &Path) -> DylibAllocator {
         let path = CString::new(path.as_os_str().as_encoded_bytes()).unwrap_or_else(|_| {
             panic!(
@@ -405,6 +439,8 @@ mod dylib {
             let new_array = symbol(handle, c"_Znam");
             let delete_array = symbol(handle, c"_ZdaPv");
             let delete_array_sized = symbol(handle, c"_ZdaPvm");
+            let bench_diagnostics_reset = optional_symbol(handle, c"mi_bench_diagnostics_reset");
+            let bench_diagnostics_json = optional_symbol(handle, c"mi_bench_diagnostics_json");
 
             DylibAllocator {
                 malloc: std::mem::transmute::<
@@ -435,6 +471,14 @@ mod dylib {
                     *mut c_void,
                     unsafe extern "C" fn(*mut c_void, usize),
                 >(delete_array_sized),
+                bench_diagnostics_reset: bench_diagnostics_reset
+                    .map(|ptr| std::mem::transmute::<*mut c_void, unsafe extern "C" fn()>(ptr)),
+                bench_diagnostics_json: bench_diagnostics_json.map(|ptr| {
+                    std::mem::transmute::<
+                        *mut c_void,
+                        unsafe extern "C" fn(*mut c_char, usize) -> usize,
+                    >(ptr)
+                }),
             }
         }
     }
@@ -483,6 +527,61 @@ fn allocators(root: &Path) -> Vec<BenchAllocator> {
             other => panic!("unknown MIMALLOC_BENCH_ALLOCATORS entry `{other}`"),
         })
         .collect()
+}
+
+fn bench_diagnostics_path() -> Option<PathBuf> {
+    env::var_os("MIMALLOC_BENCH_DIAGNOSTICS").map(PathBuf::from)
+}
+
+fn write_json_string(out: &mut impl std::io::Write, value: &str) -> std::io::Result<()> {
+    out.write_all(b"\"")?;
+    for ch in value.chars() {
+        match ch {
+            '"' => out.write_all(br#"\""#)?,
+            '\\' => out.write_all(br#"\\"#)?,
+            '\n' => out.write_all(br#"\n"#)?,
+            '\r' => out.write_all(br#"\r"#)?,
+            '\t' => out.write_all(br#"\t"#)?,
+            ch if ch.is_control() => write!(out, "\\u{:04x}", ch as u32)?,
+            ch => write!(out, "{ch}")?,
+        }
+    }
+    out.write_all(b"\"")
+}
+
+fn write_bench_diagnostics(
+    path: Option<&Path>,
+    scenario: &str,
+    allocator: BenchAllocator,
+    iters: u64,
+    elapsed: Duration,
+) {
+    let Some(path) = path else {
+        return;
+    };
+    let Some(counters) = allocator.bench_diagnostics_json() else {
+        return;
+    };
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap_or_else(|err| {
+            panic!(
+                "failed to open MIMALLOC_BENCH_DIAGNOSTICS output {}: {err}",
+                path.display()
+            )
+        });
+    file.write_all(b"{\"scenario\":").unwrap();
+    write_json_string(&mut file, scenario).unwrap();
+    file.write_all(b",\"allocator\":").unwrap();
+    write_json_string(&mut file, allocator.name()).unwrap();
+    writeln!(
+        file,
+        ",\"iters\":{iters},\"elapsed_nanos\":{},\"counters\":{counters}}}",
+        elapsed.as_nanos()
+    )
+    .unwrap();
 }
 
 fn scenarios() -> Vec<Scenario> {
@@ -4430,6 +4529,7 @@ fn bench_native_ports(c: &mut Criterion) {
     let root = workspace_root();
     let scenarios = scenarios();
     let allocators = allocators(&root);
+    let diagnostics_path = bench_diagnostics_path();
 
     assert!(
         !scenarios.is_empty(),
@@ -4461,10 +4561,8 @@ fn bench_native_ports(c: &mut Criterion) {
     );
 
     for scenario in &scenarios {
-        let mut group = c.benchmark_group(format!(
-            "mimalloc-bench-native/{}",
-            scenario.benchmark_name()
-        ));
+        let scenario_name = scenario.benchmark_name();
+        let mut group = c.benchmark_group(format!("mimalloc-bench-native/{scenario_name}"));
         group.sample_size(sample_size);
         group.measurement_time(measurement_time);
         group.warm_up_time(warm_up_time);
@@ -4475,10 +4573,18 @@ fn bench_native_ports(c: &mut Criterion) {
             }
             group.bench_function(BenchmarkId::from_parameter(allocator.name()), |b| {
                 b.iter_custom(|iters| {
+                    allocator.bench_diagnostics_reset();
                     let mut total = Duration::ZERO;
                     for _ in 0..iters {
                         total += unsafe { (scenario.run)(allocator) };
                     }
+                    write_bench_diagnostics(
+                        diagnostics_path.as_deref(),
+                        &scenario_name,
+                        allocator,
+                        iters,
+                        total,
+                    );
                     total
                 });
             });

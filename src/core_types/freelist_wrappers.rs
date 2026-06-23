@@ -370,64 +370,6 @@ impl LocalFreeList {
     }
 }
 
-/// How forceful a free-list collection should be.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum ForceCollect {
-    No,
-    Yes,
-}
-
-impl LocalFreeList {
-    /// Move the local free list into the page's available (`free`) list.
-    ///
-    /// Mirrors step 2 of `_mi_page_free_collect` (the local→available move/splice).
-    /// Does NOT collect the remote thread-free list — that is
-    /// `RemoteFreeList::collect_into_local`. The caller is responsible for
-    /// writing the returned `(available, local)` back into `(*page).free` /
-    /// `(*page).local_free` and clearing `free_is_zero` if applicable.
-    ///
-    /// # Safety
-    /// `page` must be a valid `LocalPage` whose `local_free` field matches
-    /// `self` and whose `free` field matches `available`.
-    #[inline]
-    pub(crate) unsafe fn collect_into_available(
-        self,
-        page: LocalPage,
-        available: AvailableFreeList,
-        force: ForceCollect,
-    ) -> (AvailableFreeList, LocalFreeList) {
-        let raw_page = page.page().as_ptr();
-        // If local is empty, nothing to move.
-        if self.0.is_none() {
-            return (available, self);
-        }
-        match (available.0, force) {
-            // available is empty: move local -> available directly.
-            (None, _) => (AvailableFreeList(self.0), LocalFreeList(None)),
-            // available non-empty, not forced: leave unchanged (matches the
-            // `else` branch of `_mi_page_free_collect` which skips the merge).
-            (Some(_), ForceCollect::No) => (available, self),
-            // available non-empty, forced: splice local tail -> available head,
-            // then move local -> available.
-            (Some(avail_head), ForceCollect::Yes) => {
-                let Some(local_head) = self.0.map(|head| head.as_ptr()) else {
-                    return (available, self);
-                };
-                let mut tail = local_head;
-                loop {
-                    let next = unsafe { mi_block_next(raw_page, tail) };
-                    if next.is_null() {
-                        break;
-                    }
-                    tail = next;
-                }
-                unsafe { mi_block_set_next(raw_page, tail, avail_head.as_ptr()) };
-                (AvailableFreeList(self.0), LocalFreeList(None))
-            }
-        }
-    }
-}
-
 /// Represents an explicitly encoded free list representation.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug)]

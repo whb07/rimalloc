@@ -4032,3 +4032,58 @@ Decision:
   instructions and branches, and guardrails did not show a clear regression.
 - The rejected raw `memkind` shortcut remains rejected; the accepted form is the
   witness-carrying structural-validation form only.
+
+## 2026-06-23 Hotspot Action Pass
+
+Objective:
+
+- Execute the actionable items in `MIMALLOC_BENCH_HOTSPOT_REPORT.md`.
+- Keep only changes with a clear measured benefit or a defensible neutral
+  simplification/instruction-reduction case.
+- Preserve the strict type-system assertions/checks and avoid scenario
+  regressions.
+
+Retained changes:
+
+- `_mi_page_free_collect` now performs the local-free to free-list move/splice
+  directly in the C-shaped hot path instead of going through the single-use
+  `ForceCollect`/`LocalFreeList::collect_into_available` helper.
+- Removed the now-dead `ForceCollect` helper path.
+- Added feature-gated `bench-diagnostics` counters and optional JSONL emission
+  from `mimalloc_bench`.
+
+Rejected change:
+
+- Directly rewriting `_mi_page_free_collect_partly_typed` was tested and
+  reverted because it removed the isolated instruction/branch benefit.
+
+Measurement summary:
+
+| Metric | Baseline | Final/accepted | Decision |
+| --- | ---: | ---: | --- |
+| Plain release `.text` | 190550 bytes | 190486 bytes | keep, smaller |
+| Plain release total | 346356 bytes | 346356 bytes | neutral |
+| Isolated xmalloc instructions | 499.218B | 488.940B | favorable in isolated run |
+| Isolated xmalloc branches | 122.463B | 119.697B | favorable in isolated run |
+| Final fresh xmalloc elapsed | 5.0103s | 5.0132s | neutral/noisy |
+| Final fresh xmalloc instructions | 499.218B | 501.315B | neutral/noisy |
+
+Diagnostics smoke finding:
+
+- `xmalloc-testN` is dominated by partial collection and abandoned reclaim:
+  `page_free_collect_partly_calls=117938526`,
+  `abandoned_reclaim_attempts=117820053`,
+  `option_reads_page_reclaim_on_free=117938712`.
+- Bitmap use is measurable but much smaller:
+  `bitmap_find_clear_attempts=118830`.
+
+Validation:
+
+```text
+cargo fmt --check
+git diff --check
+cargo clippy --features bench,compare --benches --tests
+cargo test --features unstable-raw-internals
+cargo bench --features bench,compare,bench-diagnostics --benches --no-run
+CARGO_TARGET_DIR=target/bench-diagnostics-check cargo build --release --features bench-diagnostics
+```

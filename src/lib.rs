@@ -22,6 +22,7 @@
 //!   builds without this feature use `no_std`.
 //! - `bench`: enables Criterion benchmarks and implies `std`.
 //! - `compare`: enables comparison-oriented benchmark/test code.
+//! - `bench-diagnostics`: enables benchmark-only hotspot counters.
 //! - `secure`: enables secure-mode padding and encoded free lists.
 //! - `guarded`: enables guarded allocation sampling.
 //! - `track-valgrind`: enables Valgrind tracking shims.
@@ -124,6 +125,8 @@ mod alloc_posix;
 mod arena;
 mod arena_meta;
 mod atomic;
+#[cfg(feature = "bench-diagnostics")]
+mod bench_diagnostics;
 mod bitmap;
 mod bits;
 pub(crate) mod core_types;

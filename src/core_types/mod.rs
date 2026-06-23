@@ -95,8 +95,7 @@ pub(crate) use page_states::{
 pub(crate) use validation_extra::FreeBlock;
 
 pub(crate) use freelist_wrappers::{
-    AvailableFreeList, BlockLink, BlockTag, EncodedPtr, EncodedWord, ForceCollect, LocalFreeList,
-    PageKeys,
+    AvailableFreeList, BlockLink, BlockTag, EncodedPtr, EncodedWord, LocalFreeList, PageKeys,
 };
 
 pub(crate) use free_actions::LocalFreeMode;

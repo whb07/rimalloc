@@ -3195,3 +3195,101 @@ Decision:
 - The branch-miss reduction was not enough to offset the broader CPU cost, and
   the unchanged `.text` size meant there was no neutral code-size/simplification
   reason to keep the attribute.
+
+### Candidate 11: Raw Static Error Messages In Partial Collect
+
+Rationale:
+
+- `_mi_page_free_collect_partly` is still a persistent `xmalloc-testN` hot
+  helper.
+- Its typed Rust body preserved C's two corruption checks in
+  `mi_page_thread_collect_to_local_typed`, but reported the static corruption
+  strings through `_mi_error_message_fmt(format_args!(...))`.
+- C reports the same two static strings through `_mi_error_message`, avoiding
+  per-call `fmt::Arguments` setup in the partial-collect symbol.
+- Prototype changed only those two static messages to `_mi_error_message` with
+  the same `EFAULT` errno. The corruption checks, returns, error handler path,
+  and typed `RemoteFreeList`/`LocalFreeList` invariants were unchanged.
+
+Codegen effect:
+
+- `.text` shrank by 192 bytes:
+  - baseline: 190,598 bytes
+  - candidate: 190,406 bytes
+- Candidate `.text` hash:
+  `b9ad602db874ffd77c5c9e1a76693fbac46470d1f6c53c80275e7671e145e27c`.
+- Candidate allocator hash:
+  `d015a5d91266b51a3bb892f2b92d292e7eb25d55b897c785a8711ed07edf3a5c`.
+- `_mi_page_free_collect_partly` shrank from 0x114 bytes to 0xde bytes.
+- `mi_free_try_collect_mt_typed` stayed at 0x18f bytes.
+- `mi_page_free_list_extend` stayed at 0x5a bytes.
+
+Focused `perf stat -r 5 -d` on `xmalloc-testN`:
+
+- Baseline artifact:
+  `mimalloc-bench/out/bench/perf-goal13-static-error-baseline-r5-20260622-213818.stat`
+- Candidate artifact:
+  `mimalloc-bench/out/bench/perf-goal13-static-error-candidate-r5-20260622-213849.stat`
+
+| Metric | Baseline | Candidate | Delta |
+| --- | ---: | ---: | ---: |
+| elapsed | 5.01481 | 5.01146 | -0.07% |
+| task-clock | 148.09B | 147.90B | -0.13% |
+| instructions | 550.27B | 543.70B | -1.19% |
+| cycles | 630.73B | 626.15B | -0.73% |
+| branches | 139.22B | 138.53B | -0.49% |
+| branch misses | 201.66M | 200.45M | -0.60% |
+| L1 loads | 157.20B | 156.72B | -0.31% |
+| L1 load misses | 6.350B | 6.257B | -1.47% |
+
+Dedicated `xmalloc-testN` validation:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp xmalloc-test -r=20`
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal13-static-error-xmalloc-r20-20260622-214301.csv`
+
+| Metric | Candidate delta |
+| --- | ---: |
+| Mean time | -0.34% |
+| Median time | -0.23% |
+| Trim-1 time | -0.38% |
+| Paired wins | 10/20 |
+| Mean RSS | +0.68% |
+| Median RSS | +1.51% |
+| Trim-1 RSS | +0.96% |
+| Mean user time | +0.47% |
+| Mean system time | -2.67% |
+| Mean page reclaims | +4.04% |
+
+Focused guardrail benchmark:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp redis rocksdb larson-sized rptest xmalloc-test sh8bench glibc-thread alloc-test -r=5`
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal13-static-error-guard-r5-20260622-215046.csv`
+
+| Scenario | Time mean | Time median | Time trim-1 | Paired wins | RSS mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `redis` | +1.36% | +0.76% | +0.50% | 1/5 | +0.56% |
+| `rocksdb` | -0.28% | +0.29% | +0.29% | 2/5 | +4.65% |
+| `larsonN-sized` | +1.64% | +1.13% | +1.21% | 1/5 | +1.14% |
+| `rptestN` | -7.22% | -7.98% | -7.22% | 3/5 | +7.80% |
+| `xmalloc-testN` | +0.65% | +0.00% | +1.09% | 1/5 | +0.97% |
+| `sh8benchN` | +3.25% | +0.00% | +1.35% | 2/5 | -0.66% |
+| `glibc-thread` | -0.05% | +0.00% | -0.08% | 1/5 | -0.48% |
+| `alloc-test1` | -0.86% | -0.96% | -0.64% | 4/5 | +0.32% |
+| `alloc-testN` | -0.45% | +0.00% | +0.30% | 2/5 | -3.19% |
+
+Decision:
+
+- Rejected and reverted.
+- This was the strongest neutral-code-simplification candidate so far: it
+  preserved the corruption checks and reduced both `.text` and direct
+  `xmalloc-testN` CPU counters.
+- The guardrail did not meet the no-regression bar. Redis, `larsonN-sized`,
+  `xmalloc-testN`, and `sh8benchN` all regressed on mean/trimmed time, and
+  RocksDB plus `rptestN` showed unacceptable RSS increases.
+- The static-error-message cleanup should only be reconsidered if a future
+  layout-preserving variant can keep the 192-byte shrink without moving the
+  guardrail scenarios in the wrong direction.

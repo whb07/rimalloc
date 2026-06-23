@@ -50,6 +50,20 @@ impl ThreadFreeWord {
     }
 
     #[inline(always)]
+    pub(crate) const fn with_owner(self, owned: ThreadFreeOwner) -> Self {
+        let bit = match owned {
+            ThreadFreeOwner::Owned => Self::OWNED_BIT,
+            ThreadFreeOwner::Unowned => 0,
+        };
+        Self((self.0 & !Self::OWNED_BIT) | bit)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn without_head(self) -> Self {
+        Self(self.0 & Self::OWNED_BIT)
+    }
+
+    #[inline(always)]
     pub(crate) fn from_parts(head: Option<BlockPtr>, owned: ThreadFreeOwner) -> Self {
         let ptr_val = match head {
             Some(ptr) => {
@@ -100,5 +114,37 @@ mod tests {
             word.raw() & !ThreadFreeWord::OWNED_BIT,
             head.as_ptr() as usize
         );
+    }
+
+    #[test]
+    fn thread_free_word_updates_owner_without_decoding_head() {
+        let mut block = crate::types::mi_block_t::default();
+        let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
+        let word = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
+
+        let unowned = word.with_owner(ThreadFreeOwner::Unowned);
+        assert!(!unowned.is_owned());
+        assert_eq!(unowned.head().map(BlockPtr::as_ptr), Some(head.as_ptr()));
+
+        let owned = unowned.with_owner(ThreadFreeOwner::Owned);
+        assert_eq!(owned.raw(), word.raw());
+    }
+
+    #[test]
+    fn thread_free_word_clears_head_without_decoding_owner() {
+        let mut block = crate::types::mi_block_t::default();
+        let head = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(block)) };
+        let owned = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Owned);
+        let unowned = ThreadFreeWord::from_parts(Some(head), ThreadFreeOwner::Unowned);
+
+        let owned_without_head = owned.without_head();
+        assert!(owned_without_head.is_owned());
+        assert!(owned_without_head.head().is_none());
+        assert_eq!(owned_without_head.raw(), ThreadFreeWord::OWNED_BIT);
+
+        let unowned_without_head = unowned.without_head();
+        assert!(!unowned_without_head.is_owned());
+        assert!(unowned_without_head.head().is_none());
+        assert_eq!(unowned_without_head.raw(), 0);
     }
 }

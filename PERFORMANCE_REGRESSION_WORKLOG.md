@@ -3602,3 +3602,63 @@ Decision:
 - Accepted as a neutral source cleanup, not as a measured RSS/CPU win.
 - Final checks stayed clean, and the hot release `.text` remained
   byte-identical, so no mimalloc-bench runtime claim is made.
+
+### Candidate 17: Thread-Free Packed Word Update Helpers
+
+Rationale:
+
+- `AtomicThreadFree::release_acq_rel` decoded a packed `ThreadFreeWord` head
+  and rebuilt it with `ThreadFreeWord::from_parts` only to clear the owned bit.
+- `AtomicThreadFree::collect_acq_rel` decoded the owner bit and rebuilt a
+  no-head word only to detach the remote-list head.
+- `AtomicThreadFree::release_ownership` had an open-coded raw bit clear even
+  though the packed `xthread_free` word already has a typed domain wrapper.
+- These operations are all packed-word transformations, so they belong on
+  `ThreadFreeWord` instead of being repeated as decode/rebuild or raw bit
+  operations in the atomic wrapper.
+
+Change:
+
+- Added `ThreadFreeWord::with_owner(...)` for preserving the packed head while
+  changing only the owner bit.
+- Added `ThreadFreeWord::without_head()` for preserving the owner bit while
+  clearing the packed remote-list head.
+- Routed `AtomicThreadFree::{release_acq_rel, collect_acq_rel,
+  release_ownership}` through those helpers.
+- Added unit tests for the two packed-word transformations.
+
+Type-safety impact:
+
+- Neutral to slightly positive for maintainability. The raw
+  pointer/integer-bit manipulation stays in `ThreadFreeWord`, the domain type
+  already allowlisted as the `packed-thread-free` boundary.
+- No validation, witness construction, typestate boundary, corruption check, or
+  atomic-wrapper assertion was removed or weakened. The previous
+  `from_parts(expected.head(), Unowned)` path decoded a head from the same
+  packed word and then re-packed it; the new helper preserves the same head bits
+  directly inside the packed-word domain type.
+
+Codegen result:
+
+- Prototype release build succeeded.
+- Release `.text` stayed byte-identical to the accepted baseline:
+  - size: 190,598 bytes
+  - `.text` hash:
+    `6c0228c11e541361e13fc948441c6b604ce591a068c113f4d4961233a2abbbcd`
+- Full release allocator hash stayed byte-identical:
+  `26ade306320a7f9b848b3bce7b44d310b9114efa4df99a8fc0b178d70b896036`
+- Hot symbol sizes stayed unchanged:
+  - `mi_malloc`: 0x51
+  - `mi_free`: 0x9e
+  - `mi_page_free_list_extend`: 0x5a
+  - `_mi_page_free_collect_partly`: 0x114
+  - `_mi_page_free_collect`: 0x18b
+  - `mi_free_try_collect_mt_typed`: 0x18f
+  - `mi_page_queue_find_free_ex_typed`: 0x373
+  - `_mi_malloc_generic_typed`: 0x4b4
+
+Decision:
+
+- Accepted as a neutral source cleanup, not as a measured RSS/CPU win.
+- Final checks stayed clean, and the hot release `.text` remained
+  byte-identical, so no mimalloc-bench runtime claim is made.

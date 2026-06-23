@@ -443,7 +443,7 @@ impl AtomicThreadFree {
         if !expected.is_owned() {
             return false;
         }
-        let new = ThreadFreeWord::from_parts(expected.head(), ThreadFreeOwner::Unowned);
+        let new = expected.with_owner(ThreadFreeOwner::Unowned);
         let mut raw_expected = expected.raw();
         if unsafe {
             self.field().compare_exchange_weak(
@@ -484,12 +484,7 @@ impl AtomicThreadFree {
             if head.is_none() {
                 return RemoteFreeList::from_detached_thread_free_head(None);
             }
-            let owner = if old.is_owned() {
-                ThreadFreeOwner::Owned
-            } else {
-                ThreadFreeOwner::Unowned
-            };
-            let new = ThreadFreeWord::from_parts(None, owner);
+            let new = old.without_head();
             let mut raw_old = old.raw();
             if unsafe {
                 self.field().compare_exchange_weak(
@@ -545,8 +540,8 @@ impl AtomicThreadFree {
     pub(crate) unsafe fn release_ownership(self, _expected_head: Option<BlockPtr>) -> bool {
         loop {
             let current = unsafe { self.field().load(Ordering::Acquire) };
-            // Preserve the head pointer (all bits except the owned bit).
-            let new = current & !1usize;
+            let current_word = ThreadFreeWord(current);
+            let new = current_word.with_owner(ThreadFreeOwner::Unowned).raw();
             let mut expected = current;
             if unsafe {
                 self.field().compare_exchange_weak(
@@ -556,7 +551,7 @@ impl AtomicThreadFree {
                     Ordering::Relaxed,
                 )
             } {
-                return (current & 1) == 1;
+                return current_word.is_owned();
             }
         }
     }

@@ -3425,3 +3425,66 @@ Decision:
   byte-identical. The maintenance win is that raw nullable free-list storage
   conversion now belongs to the typed free-list wrappers instead of being
   repeated at page call sites.
+
+### Candidate 14: Collect-MT Cached Block Size
+
+Rationale:
+
+- `mi_free_try_collect_mt_typed` read `page->block_size` for the small-page
+  collect branch and then read it again for the medium-page reclaim gate.
+- A prototype cached the value in a local `block_size` after remote-free
+  validation, before the small/large collect branch.
+- The goal was to reduce repeated metadata loads in a hot free-side helper
+  without changing the typed `OwnedAbandonedPage`, `RemoteFreeList`, or
+  `PageReclaimOnFree` boundaries.
+
+Type-safety impact:
+
+- No witness construction, validation, corruption check, typestate boundary, or
+  atomic-wrapper assertion was removed or weakened.
+- The behavioral assumption was that the intervening collect paths do not
+  mutate `page->block_size`; this matches the page metadata model, but the
+  runtime result did not justify keeping the source change.
+
+Codegen result:
+
+- Release build succeeded.
+- Release `.text` shrank from 190,598 bytes to 190,582 bytes.
+- `mi_free_try_collect_mt_typed` shrank from 0x18f to 0x17d bytes.
+- The generated code traded the second memory load for a callee-saved `r15`
+  value in the function prologue/body.
+
+Focused measurement:
+
+- Direct `perf stat -d -r 5` on `xmalloc-test -w 32 -t 5 -s 64`:
+  - elapsed: +0.04%
+  - task-clock: -1.42%
+  - instructions: -0.47%
+  - cycles: -1.78%
+  - branches: -2.85%
+  - branch-misses: +8.35%
+  - L1 load misses: +5.87%
+- Dedicated `xmalloc-testN` r20 artifact:
+  `mimalloc-bench/out/bench/benchres-goal14-block-size-local-xmalloc-r20-20260622-221436.csv`
+  - elapsed: +0.28%
+  - RSS: -3.25%
+  - user time: -1.59%
+  - sys time: +17.68%
+
+Guardrail measurement:
+
+- Guardrail r5 artifact:
+  `mimalloc-bench/out/bench/benchres-goal14-block-size-local-guard-r5-20260622-222219.csv`
+- Average candidate deltas versus the accepted baseline:
+  - `xmalloc-testN`: elapsed -0.37%, RSS -2.35%, user -1.01%, sys +15.53%
+  - `rptestN`: elapsed +5.85%, RSS -2.79%, user +9.44%, sys +3.20%
+  - `sh8benchN`: elapsed +5.04%, RSS +0.41%, user +2.25%, sys +2.20%
+  - `redis`: elapsed +0.73%, RSS +0.08%, user tied, sys +6.25%
+  - `alloc-testN`: elapsed +0.55%, RSS +0.70%, user +0.53%, sys +21.05%
+
+Decision:
+
+- Rejected and reverted.
+- The small xmalloc RSS/user-time signal and code-size reduction were not enough
+  to offset broader guardrail regressions, especially `rptestN` and
+  `sh8benchN`.

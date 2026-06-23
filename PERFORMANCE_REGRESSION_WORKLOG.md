@@ -2977,3 +2977,60 @@ Decision:
 - The target harness regressed mean, median, and trimmed time, and RSS also
   regressed, so this does not satisfy the performance or no-regression bar.
 - No broad guardrail run was done because the target scenario already failed.
+
+### Candidate 8: Source-Queue Typed First-Update Routing
+
+Rationale:
+
+- An earlier broad queue-first-update candidate improved several scenarios but
+  regressed `sh8benchN`, `alloc-testN`, and Redis.
+- Prototype tried the narrower version suggested by that result: route only
+  source-queue first updates after removing a first page through a typed helper,
+  while leaving push and target-enqueue first updates on the existing raw shim.
+- The helper preserved the same `mi_theap_contains_queue` assertion, accepted
+  `ThreadHeapLocal` and `PageQueuePtr` witnesses, and only called
+  `mi_theap_queue_first_update_typed` after proving `NormalPageQueue`.
+
+Codegen effect:
+
+- `.text` shrank by 96 bytes:
+  - baseline: 190,598 bytes
+  - candidate: 190,502 bytes
+- Candidate `.text` hash:
+  `7eed7de3c80555e46a9f386c00d7febc10e6a23e8cf6ad1f7bd57c97547d629e`.
+- Candidate allocator hash:
+  `10e4eca5a0ea1bb4359e7bb43ca606fdfbf27e36df6c7fb77ef636081bf8ae5c`.
+- Hot free/collect sizes stayed stable:
+  - `mi_free_try_collect_mt_typed`: 399 bytes
+  - `mi_page_free_list_extend`: 90 bytes
+  - `mi_theap_queue_first_update`: 464 bytes
+
+Focused guardrail benchmark:
+
+- Command:
+  `../../bench.sh --external=../../rust-baseline-vs-candidate.allocators rbase rexp redis rocksdb larson-sized rptest xmalloc-test sh8bench glibc-thread alloc-test -r=5`
+- Artifact:
+  `mimalloc-bench/out/bench/benchres-goal10-queue-source-update-r5-20260622.csv`
+
+| Scenario | Time mean | Time median | Time trim-1 | Paired wins | RSS mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `alloc-test1` | -0.29% | +0.00% | -0.16% | 2/5 | +0.26% |
+| `alloc-testN` | +0.09% | +0.45% | +0.15% | 1/5 | -1.87% |
+| `glibc-thread` | -0.05% | +0.95% | +0.71% | 2/5 | -0.40% |
+| `larsonN-sized` | +0.74% | +1.37% | +0.72% | 2/5 | -1.02% |
+| `redis` | +1.49% | +0.00% | +0.73% | 2/5 | -0.42% |
+| `rocksdb` | -0.74% | -0.85% | -0.95% | 3/5 | -0.52% |
+| `rptestN` | -2.35% | -7.15% | -4.23% | 2/5 | -0.57% |
+| `sh8benchN` | -5.38% | +4.17% | -3.90% | 2/5 | +1.19% |
+| `xmalloc-testN` | +1.30% | +2.34% | +1.40% | 0/5 | -7.92% |
+
+Decision:
+
+- Rejected and reverted.
+- The `.text` shrink and RSS reductions on several scenarios were not enough:
+  `xmalloc-testN` regressed in every paired run, and the candidate also
+  regressed `redis`, `larsonN-sized`, `alloc-testN`, and median/trimmed
+  `glibc-thread` time.
+- The narrower routing did not preserve the broad candidate's useful wins
+  without the prior regressions, so this queue-update direction remains closed
+  unless a future profile isolates a more specific call site.

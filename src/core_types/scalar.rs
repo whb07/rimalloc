@@ -181,6 +181,32 @@ impl UsableSize {
     }
 }
 
+/// Nullable `usize*` out-parameter used by `mi_u*` allocation/free APIs.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct UsableOut(*mut usize);
+
+impl UsableOut {
+    #[inline(always)]
+    pub(crate) const fn new(out: *mut usize) -> Self {
+        Self(out)
+    }
+
+    #[inline(always)]
+    pub(crate) const fn as_ptr(self) -> *mut usize {
+        self.0
+    }
+
+    /// # Safety
+    /// If non-null, the wrapped pointer must be valid for a `usize` write.
+    #[inline(always)]
+    pub(crate) unsafe fn write_if_present(self, usable: UsableSize) {
+        if !self.0.is_null() {
+            unsafe { *self.0 = usable.get() };
+        }
+    }
+}
+
 /// Raw page block size (includes padding). Never zero.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -1037,6 +1063,8 @@ pub(super) fn __lint_touch() {
     let _ = padded.checked_sub_padding();
     let usable = UsableSize::new(1);
     let _ = usable.checked_add(1);
+    let usable_out = UsableOut::new(core::ptr::null_mut());
+    let _ = usable_out.as_ptr();
     let block = unsafe { BlockSize::new_unchecked(1) };
     let _ = block.checked_add(1);
     let _ = block.checked_usable();

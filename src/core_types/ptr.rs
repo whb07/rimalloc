@@ -259,6 +259,32 @@ impl PagePtr {
             let _ = (self, keys);
         }
     }
+
+    /// # Safety
+    /// The page pointer must refer to initialized page metadata with a non-null
+    /// block-area start.
+    #[inline(always)]
+    pub(crate) unsafe fn start(self) -> PageStart {
+        let raw = self.as_ptr();
+        unsafe { PageStart::new_unchecked(ptr::read(ptr::addr_of!((*raw).page_start))) }
+    }
+
+    /// # Safety
+    /// The page pointer must refer to initialized page metadata.
+    #[inline(always)]
+    pub(crate) unsafe fn byte_size(self) -> usize {
+        unsafe { self.block_size().get() * self.reserved().as_usize() }
+    }
+
+    /// # Safety
+    /// The page pointer must refer to initialized page metadata.
+    #[inline(always)]
+    pub(crate) unsafe fn contains_user(self, user: UserPtr) -> bool {
+        let start = ptr_exposed_addr(unsafe { self.start() }.as_ptr());
+        let end = start.wrapping_add(unsafe { self.byte_size() });
+        let user = ptr_exposed_addr(user.as_ptr());
+        start <= user && user < end
+    }
 }
 
 define_ptr_wrapper!(

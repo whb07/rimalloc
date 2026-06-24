@@ -176,9 +176,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
 
         let block = (*page).free;
         crate::mi_assert_internal!(!block.is_null() && _mi_ptr_page(block.cast()) == page);
-        if !usable.is_null() {
-            *usable = mi_page_usable_block_size(page).get();
-        }
+        crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
 
         let (allocated, _) = available.pop_free_block();
         let block = allocated.block().as_ptr();

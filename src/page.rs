@@ -523,9 +523,10 @@ pub(crate) unsafe fn mi_page_list_count(page: PagePtr, mut head: *mut mi_block_t
 #[inline]
 pub(crate) unsafe fn mi_page_list_is_valid(page: PagePtr, mut p: *mut mi_block_t) -> bool {
     unsafe {
-        let page = page.as_ptr();
-        let mut psize = 0usize;
-        let page_area = mi_page_area(page, &mut psize).cast::<mi_block_t>();
+        let page_ptr = page;
+        let page = page_ptr.as_ptr();
+        let psize = page_ptr.byte_size();
+        let page_area = page_ptr.start().as_ptr().cast::<mi_block_t>();
         let end = page_area.cast::<u8>().add(psize).cast::<mi_block_t>();
         while !p.is_null() {
             if p < page_area || p >= end {
@@ -1254,7 +1255,7 @@ unsafe fn mi_page_free_list_extend_secure_typed(
         let capacity = page.capacity();
         crate::mi_assert_internal!(capacity.as_usize() + extend <= page.reserved().as_usize());
         crate::mi_assert_internal!(bsize == page.block_size().get());
-        let page_area = mi_page_start(page_raw).cast::<c_void>();
+        let page_area = page.start().as_ptr().cast::<c_void>();
 
         let mut shift = MI_MAX_SLICE_SHIFT;
         while (extend >> shift) == 0 {
@@ -1336,11 +1337,11 @@ unsafe fn mi_page_free_list_extend_typed(
         let capacity = page.capacity();
         crate::mi_assert_internal!(capacity.as_usize() + extend <= page.reserved().as_usize());
         crate::mi_assert_internal!(bsize == page.block_size().get());
-        let page_area = mi_page_start(page_raw).cast::<c_void>();
+        let page_area = page.start().as_ptr().cast::<c_void>();
         let start = mi_page_block_at(page_raw, page_area, bsize, capacity.as_usize());
         let last = mi_page_block_at(page_raw, page_area, bsize, capacity.as_usize() + extend - 1);
         let mut block = start;
-        while block <= last {
+        while block < last {
             let next = block.cast::<u8>().add(bsize).cast::<mi_block_t>();
             crate::core_types::BlockPtr::new_unchecked(block)
                 .set_next(page, crate::core_types::BlockPtr::new(next));
@@ -3424,9 +3425,7 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
         ));
         crate::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
 
-        if !usable.is_null() {
-            *usable = mi_page_usable_block_size(page).get();
-        }
+        crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
         let available = active.available().unwrap_unchecked();
         let p =
             _mi_page_malloc_zero_typed(theap, available, layout.padded(), zero, ptr::null_mut());

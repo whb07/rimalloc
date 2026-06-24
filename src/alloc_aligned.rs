@@ -392,10 +392,9 @@ unsafe fn mi_theap_malloc_zero_aligned_at_req(
         if mi_likely(!page.is_null() && !unsafe { (*page).free }.is_null()) {
             let is_aligned = ((unsafe { (*page).free } as usize) + offset_raw) & align_mask == 0;
             if mi_likely(is_aligned) {
-                if !usable.is_null() {
-                    unsafe {
-                        *usable = mi_page_usable_block_size(page).get();
-                    }
+                unsafe {
+                    crate::core_types::UsableOut::new(usable)
+                        .write_if_present(mi_page_usable_block_size(page));
                 }
                 let active = unsafe {
                     crate::core_types::ActivePage::new_unchecked(

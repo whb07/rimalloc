@@ -14,11 +14,11 @@ use crate::internal::{
     _mi_os_page_size_typed, _mi_ptr_page, _mi_safe_ptr_page_registered, _mi_theap_heap, MI_DEBUG,
     MI_ENCODE_FREELIST, MI_GUARDED, MI_LARGE_MAX_OBJ_SIZE, MI_MiB, MI_PADDING, MI_PADDING_CHECK,
     MI_SECURE, MI_TRACK_ENABLED, mi_block_next, mi_block_nextx, mi_block_ptr_is_guarded,
-    mi_block_set_next, mi_is_in_same_page, mi_page_all_free, mi_page_block_size,
-    mi_page_contains_address, mi_page_has_interior_pointers, mi_page_is_abandoned_mapped,
-    mi_page_is_full, mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_keys,
-    mi_page_queue, mi_page_start, mi_page_thread_free, mi_page_usable_block_size,
-    mi_page_xthread_id, mi_theap_is_initialized,
+    mi_block_set_next_typed, mi_is_in_same_page, mi_page_all_free, mi_page_block_size,
+    mi_page_has_interior_pointers, mi_page_is_abandoned_mapped, mi_page_is_full,
+    mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_keys, mi_page_queue,
+    mi_page_start, mi_page_thread_free, mi_page_usable_block_size, mi_page_xthread_id,
+    mi_theap_is_initialized,
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
@@ -434,8 +434,10 @@ pub(crate) unsafe fn mi_free_block_mt(
     block_wrapper: crate::core_types::BlockForFree,
 ) {
     unsafe {
-        let page = page_wrapper.page().as_ptr();
-        let block = block_wrapper.block().as_ptr();
+        let page_ptr = page_wrapper.page();
+        let page = page_ptr.as_ptr();
+        let block_ptr = block_wrapper.block();
+        let block = block_ptr.as_ptr();
         let was_guarded = block_wrapper.is_guarded();
         mi_stat_free(page, block);
         mi_track_free_size(
@@ -451,15 +453,12 @@ pub(crate) unsafe fn mi_free_block_mt(
             _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
         }
 
-        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
-            ptr::addr_of_mut!((*page).xthread_free),
-        ));
+        let atomic_tf = page_ptr.thread_free_cell();
 
         let mut tf_old = atomic_tf.load_relaxed();
         loop {
-            mi_block_set_next(page, block, tf_old.head_raw());
-            let bp = crate::core_types::BlockPtr::new_unchecked(block);
-            match atomic_tf.push_remote_acq_rel(&mut tf_old, bp) {
+            mi_block_set_next_typed(page_ptr, block_ptr, tf_old.head());
+            match atomic_tf.push_remote_acq_rel(&mut tf_old, block_ptr) {
                 Ok(_) => break,
                 Err(_) => continue, // tf_old is updated by the atomic wrapper
             }
@@ -471,9 +470,7 @@ pub(crate) unsafe fn mi_free_block_mt(
                 crate::core_types::OwnedAbandonedPage::new_unchecked(
                     crate::core_types::PagePtr::new_unchecked(page),
                 ),
-                crate::core_types::RemoteFreeList::from_detached_head(
-                    crate::core_types::BlockPtr::new_unchecked(block),
-                ),
+                crate::core_types::RemoteFreeList::from_detached_head(block_ptr),
             );
         }
     }
@@ -563,7 +560,7 @@ unsafe fn mi_lookup_pointer_page(
         if MI_DEBUG != 0 || cfg!(feature = "secure") {
             let registered = _mi_safe_ptr_page_registered(p);
             match registered {
-                Some(registered) if mi_page_contains_address(registered.page().as_ptr(), p) => {
+                Some(registered) if registered.page().contains_user(user) => {
                     Some(registered.page())
                 }
                 _ => None,
@@ -754,9 +751,7 @@ unsafe fn mi_prepare_validated_free(
 unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable: *mut usize) {
     unsafe {
         let page = validated.page().as_ptr();
-        if !usable.is_null() {
-            *usable = mi_page_usable_block_size(page).get();
-        }
+        crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
 
         let current_tid = crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id());
         let page_tid = crate::core_types::PageThreadId::new(mi_page_xthread_id(page));

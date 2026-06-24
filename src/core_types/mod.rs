@@ -30,7 +30,7 @@ pub(crate) use scalar::{
     Errno, FullBlockSize, GoodSize, HeapCount, HeapSeq, Heartbeat, MaybeAlignment, NumaNode,
     OsPageSize, PaddedSize, PageCapacity, PageMapIndex, PageMapSubIndex, PageQueueCount,
     PageReclaimLimit, PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire,
-    SliceCount, SliceIndex, StatsBin, SubprocSeq, ThreadCount, ThreadSeq, UsableSize,
+    SliceCount, SliceIndex, StatsBin, SubprocSeq, ThreadCount, ThreadSeq, UsableOut, UsableSize,
     UsedBlockCount, WordCount,
 };
 
@@ -251,6 +251,7 @@ mod layout_tests {
         assert_layout!(EffectiveSize, NonZeroUsize);
         assert_layout!(PaddedSize, NonZeroUsize);
         assert_layout!(UsableSize, usize);
+        assert_layout!(UsableOut, *mut usize);
         assert_layout!(BlockSize, NonZeroUsize);
         assert_layout!(FullBlockSize, NonZeroUsize);
         assert_layout!(Alignment, NonZeroUsize);

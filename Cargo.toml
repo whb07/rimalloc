@@ -70,7 +70,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(mi_sanitizer_runtime)"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(mi_sanitizer_runtime)", "cfg(miri)"] }
 
 [lints.rustdoc]
 broken_intra_doc_links = "deny"
@@ -92,6 +92,7 @@ codegen-units = 1
 [dev-dependencies]
 criterion = "0.5"
 libc = "0.2"
+loom = "0.7.2"
 rand = "0.8"
 
 [[bench]]

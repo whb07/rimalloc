@@ -2,7 +2,10 @@
 
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
-#[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
+#[cfg(any(
+    miri,
+    not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))
+))]
 use core::cell::Cell;
 use core::ffi::{c_char, c_long, c_void};
 use core::mem::size_of;
@@ -644,7 +647,7 @@ unsafe fn mi_subproc_destroy_meta_typed(subproc: SubprocPtr) {
     }
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(not(miri), target_os = "linux", target_arch = "x86_64"))]
 #[inline(always)]
 unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
     let main: *mut mi_subproc_t;
@@ -658,7 +661,7 @@ unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
     main
 }
 
-#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+#[cfg(any(miri, not(all(target_os = "linux", target_arch = "x86_64"))))]
 #[inline(always)]
 unsafe fn mi_subproc_main_addr() -> *mut mi_subproc_t {
     ptr::addr_of_mut!(subproc_main)
@@ -787,13 +790,19 @@ unsafe fn mi_subprocs_unsafe_destroy_all() {
     }
 }
 
-#[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
+#[cfg(any(
+    miri,
+    not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))
+))]
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(8);
 
-#[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
+#[cfg(any(
+    miri,
+    not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))
+))]
 thread_local! {
     static THREAD_ID: Cell<usize> = const { Cell::new(0) };
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(miri, not(target_os = "linux")))]
     static THEAP_MAIN: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
@@ -814,7 +823,12 @@ unsafe fn _mi_tls_theap_main_set(theap: Option<ThreadHeapPtr>) {
     unsafe { _mi_tls_theap_main_set_raw(theap) };
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+#[cfg(all(
+    not(miri),
+    target_os = "linux",
+    target_arch = "x86_64",
+    not(target_env = "musl")
+))]
 #[inline(always)]
 unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
     let theap: *mut mi_theap_t;
@@ -830,7 +844,12 @@ unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
     theap
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+#[cfg(all(
+    not(miri),
+    target_os = "linux",
+    target_arch = "x86_64",
+    not(target_env = "musl")
+))]
 #[inline(always)]
 unsafe fn mi_linux_x64_theap_main_set(theap: Option<ThreadHeapPtr>) {
     let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
@@ -847,18 +866,28 @@ unsafe fn mi_linux_x64_theap_main_set(theap: Option<ThreadHeapPtr>) {
 
 #[inline]
 pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
-    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    #[cfg(miri)]
+    {
+        THEAP_MAIN.with(Cell::get)
+    }
+    #[cfg(all(
+        not(miri),
+        target_os = "linux",
+        target_arch = "x86_64",
+        not(target_env = "musl")
+    ))]
     unsafe {
         mi_linux_x64_theap_main_get()
     }
     #[cfg(all(
+        not(miri),
         target_os = "linux",
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
     unsafe {
         _mi_tls_theap_main_get()
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(miri, target_os = "linux")))]
     {
         THEAP_MAIN.with(Cell::get)
     }
@@ -866,18 +895,29 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
 
 #[inline]
 pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
-    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    #[cfg(miri)]
+    {
+        let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
+        THEAP_MAIN.with(|slot| slot.set(theap));
+    }
+    #[cfg(all(
+        not(miri),
+        target_os = "linux",
+        target_arch = "x86_64",
+        not(target_env = "musl")
+    ))]
     unsafe {
         mi_linux_x64_theap_main_set(theap);
     }
     #[cfg(all(
+        not(miri),
         target_os = "linux",
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
     unsafe {
         _mi_tls_theap_main_set(theap);
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(miri, target_os = "linux")))]
     {
         let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
         THEAP_MAIN.with(|slot| slot.set(theap));
@@ -885,7 +925,10 @@ pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
 }
 
 #[inline]
-#[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
+#[cfg(any(
+    miri,
+    not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))
+))]
 pub(crate) fn fallback_thread_id() -> mi_threadid_t {
     THREAD_ID.with(|slot| {
         let tid = slot.get();
@@ -1465,6 +1508,7 @@ fn mi_tls_slots_done() {
 }
 
 #[cfg(all(
+    not(miri),
     any(target_arch = "x86", target_arch = "x86_64"),
     not(target_env = "msvc")
 ))]
@@ -1490,7 +1534,11 @@ fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
     true
 }
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_env = "msvc"))]
+#[cfg(all(
+    not(miri),
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_env = "msvc"
+))]
 fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
     let regs = {
         #[cfg(target_arch = "x86")]
@@ -1511,7 +1559,7 @@ fn mi_cpuid(regs4: *mut u32, level: u32, sublevel: u32) -> bool {
     true
 }
 
-#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(any(miri, not(any(target_arch = "x86", target_arch = "x86_64"))))]
 fn mi_cpuid(_regs4: *mut u32, _level: u32, _sublevel: u32) -> bool {
     false
 }

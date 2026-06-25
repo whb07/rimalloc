@@ -1790,9 +1790,11 @@ mod tests {
 
         let thread_id = unsafe { ThreadId::new_unchecked(0x1000) };
         let mut raw_subproc = MaybeUninit::<mi_subproc_t>::zeroed();
-        let subproc = unsafe { SubprocPtr::new_unchecked(raw_subproc.as_mut_ptr()) };
+        let raw_subproc = raw_subproc.as_mut_ptr();
+        let subproc = unsafe { SubprocPtr::new_unchecked(raw_subproc) };
         let mut raw_theap = MaybeUninit::<mi_theap_t>::zeroed();
-        let theap = unsafe { ThreadHeapPtr::new_unchecked(raw_theap.as_mut_ptr()) };
+        let raw_theap = raw_theap.as_mut_ptr();
+        let theap = unsafe { ThreadHeapPtr::new_unchecked(raw_theap) };
 
         unsafe {
             tld.set_thread_id(Some(thread_id));
@@ -1812,13 +1814,11 @@ mod tests {
             Some(subproc.as_ptr())
         );
         assert_eq!(unsafe { tld.stats() }, unsafe {
-            Some(ptr::addr_of_mut!((*raw_subproc.as_mut_ptr()).stats))
+            Some(ptr::addr_of_mut!((*raw_subproc).stats))
         });
         assert_eq!(
             unsafe { tld.arena_count_cell().map(|cell| cell.0) },
-            unsafe {
-                Some(ptr::addr_of_mut!((*raw_subproc.as_mut_ptr()).arena_count).cast::<usize>())
-            }
+            unsafe { Some(ptr::addr_of_mut!((*raw_subproc).arena_count).cast::<usize>()) }
         );
         assert_eq!(
             unsafe { tld.thread_heaps().map(ThreadHeapPtr::as_ptr) },
@@ -1834,7 +1834,8 @@ mod tests {
         });
 
         let mut raw_arena = MaybeUninit::<mi_arena_t>::zeroed();
-        let arena = unsafe { ArenaPtr::new_unchecked(raw_arena.as_mut_ptr()) };
+        let raw_arena = raw_arena.as_mut_ptr();
+        let arena = unsafe { ArenaPtr::new_unchecked(raw_arena) };
         let arena_index = ArenaIndex::new(1).unwrap();
         unsafe { tld.set_arena(arena_index, Some(arena)) };
         assert_eq!(

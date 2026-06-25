@@ -10,3 +10,4 @@ run cargo test --quiet --features std --test property_alloc_sequences
 run cargo test --quiet --features std --test fuzz_alloc_sequences
 run cargo test --quiet --features std --test original_test_stress
 run cargo test --quiet --features std --test thread_stats_regression
+run scripts/check-concurrency-models.sh

@@ -10,7 +10,6 @@ readme = "README.md"
 documentation = "https://docs.rs/mechanical_mimalloc"
 keywords = ["allocator", "mimalloc", "ffi", "no-std"]
 categories = ["memory-management", "external-ffi-bindings"]
-publish = false
 include = [
   "/Cargo.toml",
   "/Cargo.lock",
@@ -26,6 +25,7 @@ include = [
   "/tests/**",
   "/examples/**",
   "/benches/**",
+  "/benchmarks/**",
   "/docs/**",
   "/scripts/**",
   "/build.rs",
@@ -70,6 +70,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(mi_sanitizer_runtime)"] }
 
 [lints.rustdoc]
 broken_intra_doc_links = "deny"

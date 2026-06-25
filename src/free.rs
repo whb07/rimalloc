@@ -17,8 +17,7 @@ use crate::internal::{
     mi_block_set_next_typed, mi_is_in_same_page, mi_page_all_free, mi_page_block_size,
     mi_page_has_interior_pointers, mi_page_is_abandoned_mapped, mi_page_is_full,
     mi_page_is_mostly_used, mi_page_is_owned, mi_page_is_singleton, mi_page_keys, mi_page_queue,
-    mi_page_start, mi_page_thread_free, mi_page_usable_block_size, mi_page_xthread_id,
-    mi_theap_is_initialized,
+    mi_page_start, mi_page_thread_free, mi_page_usable_block_size, mi_theap_is_initialized,
 };
 use crate::options::{_mi_error_message_fmt, mi_option_is_enabled, mi_option_t};
 use crate::page::{
@@ -436,8 +435,8 @@ pub(crate) unsafe fn mi_free_block_mt(
     unsafe {
         let page_ptr = page_wrapper.page();
         let page = page_ptr.as_ptr();
-        let block_ptr = block_wrapper.block();
-        let block = block_ptr.as_ptr();
+        let bp = block_wrapper.block();
+        let block = bp.as_ptr();
         let was_guarded = block_wrapper.is_guarded();
         mi_stat_free(page, block);
         mi_track_free_size(
@@ -453,12 +452,14 @@ pub(crate) unsafe fn mi_free_block_mt(
             _mi_memset_aligned(block.cast::<c_void>(), MI_DEBUG_FREED as i32, dbgsize);
         }
 
-        let atomic_tf = page_ptr.thread_free_cell();
+        let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(
+            ptr::addr_of_mut!((*page).xthread_free),
+        ));
 
         let mut tf_old = atomic_tf.load_relaxed();
         loop {
-            mi_block_set_next_typed(page_ptr, block_ptr, tf_old.head());
-            match atomic_tf.push_remote_acq_rel(&mut tf_old, block_ptr) {
+            mi_block_set_next_typed(page_ptr, bp, tf_old.head());
+            match atomic_tf.push_remote_acq_rel(&mut tf_old, bp) {
                 Ok(_) => break,
                 Err(_) => continue, // tf_old is updated by the atomic wrapper
             }
@@ -470,7 +471,7 @@ pub(crate) unsafe fn mi_free_block_mt(
                 crate::core_types::OwnedAbandonedPage::new_unchecked(
                     crate::core_types::PagePtr::new_unchecked(page),
                 ),
-                crate::core_types::RemoteFreeList::from_detached_head(block_ptr),
+                crate::core_types::RemoteFreeList::from_detached_head(bp),
             );
         }
     }
@@ -754,7 +755,7 @@ unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable:
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
 
         let current_tid = crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id());
-        let page_tid = crate::core_types::PageThreadId::new(mi_page_xthread_id(page));
+        let page_tid = validated.page().thread_id_cell().load_relaxed();
         let path = page_tid.classify_free_path(current_tid);
         let owner = validated.page().classify_for_free(current_tid);
 
@@ -1371,8 +1372,31 @@ mod tests {
         PageOwnerId::Thread(ThreadId::new(_mi_thread_id()).expect("current thread id is valid"))
     }
 
+    struct ShowErrorsGuard {
+        previous: core::ffi::c_long,
+    }
+
+    impl ShowErrorsGuard {
+        fn disabled() -> Self {
+            let option = crate::options::mi_option_t::mi_option_show_errors;
+            let previous = crate::options::mi_option_get(option);
+            crate::options::mi_option_set(option, 0);
+            Self { previous }
+        }
+    }
+
+    impl Drop for ShowErrorsGuard {
+        fn drop(&mut self) {
+            crate::options::mi_option_set(
+                crate::options::mi_option_t::mi_option_show_errors,
+                self.previous,
+            );
+        }
+    }
+
     #[test]
     fn free_validation_covers_null_invalid_and_bad_alignment() {
+        let _quiet_expected_errors = ShowErrorsGuard::disabled();
         unsafe {
             assert!(matches!(
                 mi_validate_pointer(ptr::null_mut(), c"free-test".as_ptr()),
@@ -1531,6 +1555,7 @@ mod tests {
     #[test]
     fn free_checks_cover_double_free_detection() {
         let mut fixture = FreeFixture::new(current_thread_owner(), PageFlags::EMPTY);
+        let _quiet_expected_errors = ShowErrorsGuard::disabled();
         unsafe {
             let page = fixture.page().as_ptr();
             let block = fixture.block(0).as_ptr();

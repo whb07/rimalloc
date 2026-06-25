@@ -1,8 +1,9 @@
 # Safe Rust API Policy
 
 The safe Rust API is intentionally narrow. This crate is primarily a
-mimalloc-compatible C ABI allocator artifact, with a small experimental safe
-Rust allocation facade.
+mimalloc-compatible C ABI allocator artifact, with Rust wrappers that encode
+the allocator ownership, initialization, heap lifetime, callback, and snapshot
+rules that can be upheld without caller discipline.
 
 ## Design Rules
 
@@ -35,54 +36,29 @@ private unless explicitly exposed through an audited unstable-internals gate.
 ## Current Safe Surface
 
 - `MiMalloc`: `GlobalAlloc` facade backed by the allocator.
-- `Allocation`: owned byte allocation wrapper that frees on drop.
-- `AllocError`, `LayoutError`, `TryAllocError`: allocation and layout error
-  types for the owned wrapper.
+- `Allocation`: owned byte allocation wrapper that frees on drop and supports
+  ownership-preserving resize.
+- `InitializedAllocation`: initialized owned byte allocation wrapper that can
+  expose `&[u8]` and `&mut [u8]`.
+- `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
+  `InitializedHeapAllocation`: heap ownership and heap-tied allocation wrappers
+  that prevent deleting an owned heap while safe heap allocations are live.
+- `Options` and `OptionKey`: supported safe allocator options with typed errors
+  for invalid or immutable keys.
+- `StatsSnapshot`, `StatCount`, and `StatTotal`: owned non-printing statistics
+  snapshots and typed statistic values.
+- `ProcessInfo`: typed process allocator information; unavailable fields are
+  represented with `Option`.
+- `ErrorCallbackGuard` and `DeferredFreeCallbackGuard`: RAII callback guards
+  that restore previous callback registrations on drop and catch Rust panics
+  before returning through the callback ABI.
+- `AllocError`, `LayoutError`, `TryAllocError`, `ResizeError`,
+  `ResizeErrorKind`, `HeapError`, `OptionError`, `StatsError`, and
+  `CallbackError`: typed failure states for the safe API.
 
-Safe heap, stats, options, process-info, and callback APIs are not stabilized.
-They should remain raw/unsafe until the wrapper can enforce ownership,
-lifetime, aliasing, threading, and reentrancy invariants internally.
-There is no safe callback registration API, safe callback closure API, or safe
-RAII callback guard. Any future safe callback guard must prove whether `Drop`
-unregisters the callback or restores the previous registration, how dangling
-contexts are prevented, how panics are stopped before the C ABI boundary, and
-whether callback bodies may allocate through this allocator.
-
-## Deferred Safe Heap API
-
-No safe `Heap`, `MainHeap`, `HeapRef`, or `HeapAllocation` API is stabilized for
-the next release milestone. The raw heap functions remain available only under
-the unsafe `raw` facade.
-
-A future safe heap API needs a separate design that proves:
-
-- owned heaps cannot be destroyed while safe allocations tied to that heap are
-  live,
-- borrowed main-heap handles cannot be deleted,
-- safe allocation methods encode the heap/allocation lifetime relationship,
-- thread mobility and concurrent access are explicit trait decisions, and
-- raw interop methods cannot transfer deletion rights accidentally.
-
-Until that design exists, there is no safe `Heap::new`, heap allocation method,
-safe heap `collect`, safe heap destroy, `Heap::as_raw`, or `Heap::from_raw`.
-
-## Deferred Safe Stats, Options, And Process APIs
-
-No safe `StatsSnapshot`, `Options`, `ProcessInfo`, or callback API is
-stabilized for the next release milestone. The corresponding C-shaped APIs
-remain under the unsafe `raw` facade.
-
-A future safe stats API must return owned numeric snapshots and document
-process-wide, heap-local, thread-local, reset, and merge semantics without
-returning references into allocator metadata.
-
-A future safe options API must specify initialization order, runtime mutability,
-threading, diagnostics, and callback/output behavior. Safe option diagnostics
-must avoid allocator recursion in allocator-critical contexts.
-
-A future safe process-info API must return owned numeric values and represent
-unsupported platform fields with `Option` or typed errors. Raw out-pointer
-behavior remains under `raw`.
+Raw heap, stats, option, process-info, and callback functions remain available
+under `raw` for C-shaped integration and parity testing. Safe wrappers do not
+expose raw allocator metadata pointers or transfer raw deletion rights.
 
 ## Naming Conventions
 
@@ -121,8 +97,12 @@ Safe APIs translate raw C failure conventions at the safe boundary:
 | --- | --- |
 | Null from an allocation request with a valid `Layout` | `AllocError` |
 | Invalid size/alignment convenience arguments | `LayoutError` |
+| Resize layout failure or allocation failure | `ResizeError` preserving the original allocation |
 | Convenience constructor failure after layout validation | `TryAllocError::Alloc` |
-| Unsupported platform or feature for a future safe API | a typed `UnsupportedError` or equivalent, if that API is added |
+| Heap creation or unsupported heap operation | `HeapError` |
+| Invalid, immutable, or unsupported option | `OptionError` |
+| Unavailable stats or too-small JSON buffer | `StatsError` |
+| Unsupported callback registration | `CallbackError` |
 | Raw errno-style behavior | remains under `raw` until wrapped by a typed safe API |
 
 ## Feature Expectations

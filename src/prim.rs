@@ -676,11 +676,11 @@ mod tests {
     fn elf_process_lifecycle_hooks_are_registered() {
         assert_eq!(
             super::_MI_PROCESS_ATTACH_CTOR as usize,
-            super::mi_process_attach as usize
+            super::mi_process_attach as *const () as usize
         );
         assert_eq!(
             super::_MI_PROCESS_DETACH_DTOR as usize,
-            super::mi_process_detach as usize
+            super::mi_process_detach as *const () as usize
         );
     }
 }

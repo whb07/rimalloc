@@ -615,6 +615,21 @@ fn error_handler_store(fun: ErrorCallback) {
 }
 
 #[inline]
+pub(crate) fn registered_error_callback() -> (Option<mi_error_fun>, *mut c_void) {
+    (
+        error_handler_load().raw(),
+        mi_error_arg.load(Ordering::Acquire),
+    )
+}
+
+#[inline]
+pub(crate) fn restore_error_callback(snapshot: (Option<mi_error_fun>, *mut c_void)) {
+    let (fun, arg) = snapshot;
+    error_handler_store(ErrorCallback::new(fun));
+    mi_error_arg.store(arg, Ordering::Release);
+}
+
+#[inline]
 fn option_value_load(idx: usize) -> c_long {
     OPTION_VALUES[idx].load(Ordering::Relaxed) as c_long
 }

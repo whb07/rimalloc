@@ -16,6 +16,7 @@ EXPORT_FILE_CLASSIFICATION = {
     "src/alloc_override.rs": "malloc-cxx-override",
     "src/alloc_posix.rs": "c-abi",
     "src/arena.rs": "c-abi-internal-classified",
+    "src/bench_diagnostics.rs": "benchmark-diagnostics",
     "src/free.rs": "c-abi",
     "src/heap.rs": "c-abi",
     "src/init.rs": "runtime-boundary",

@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "notes": [
+    "Criterion medians are nanoseconds per measured iteration.",
+    "max_ratio is the allowed current_median_ns / baseline_median_ns ratio.",
+    "Baselines are intentionally release-gate data, not correctness tests; update them only from a reviewed release benchmark run on the documented benchmark host."
+  ],
+  "thresholds": [
+    {
+      "id": "hotpath/paired_alloc_free/mechanical_mimalloc/16",
+      "category": "hot-path allocation",
+      "baseline_median_ns": 40000.0,
+      "max_ratio": 1.25
+    },
+    {
+      "id": "mimalloc-bench-native/glibc-thread-per-1M-malloc-free-pairs/rust",
+      "category": "multithreaded workload",
+      "baseline_median_ns": 25000000.0,
+      "max_ratio": 1.30
+    },
+    {
+      "id": "mimalloc-bench-native/malloc-large-per-workload/rust",
+      "category": "hot-path large allocation",
+      "baseline_median_ns": 25000000.0,
+      "max_ratio": 1.30
+    },
+    {
+      "id": "mimalloc-bench-native/cache-scratchN-per-workload/rust",
+      "category": "aligned/cache workload",
+      "baseline_median_ns": 104000000.0,
+      "max_ratio": 1.30
+    },
+    {
+      "id": "mimalloc-bench-native/xmalloc-testN-per-1M-frees/rust",
+      "category": "realloc/free workload",
+      "baseline_median_ns": 25000000.0,
+      "max_ratio": 1.30
+    },
+    {
+      "id": "mimalloc-bench-native/glibc-thread-per-1M-malloc-free-pairs/c-mimalloc-3.3.2",
+      "category": "upstream mimalloc comparison",
+      "baseline_median_ns": 25000000.0,
+      "max_ratio": 1.30
+    }
+  ]
+}

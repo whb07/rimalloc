@@ -14,8 +14,18 @@ implementation internals.
 
 - `MiMalloc`: Tier S Rust `GlobalAlloc` facade.
 - `Allocation`: Tier S owned byte allocation wrapper backed by `MiMalloc`.
-- `AllocError`, `LayoutError`, `TryAllocError`: Tier S Rust-native error/status types
-  for the safe allocation wrapper.
+- `InitializedAllocation`: Tier S initialized owned byte allocation wrapper.
+- `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, `InitializedHeapAllocation`:
+  Tier S heap ownership and heap-tied allocation wrappers.
+- `Options`, `OptionKey`: Tier S supported allocator option controls.
+- `StatsSnapshot`, `StatCount`, `StatTotal`: Tier S non-printing statistics
+  snapshot wrappers.
+- `ProcessInfo`: Tier S typed process allocator information.
+- `ErrorCallbackGuard`, `DeferredFreeCallbackGuard`: Tier S callback guards
+  that restore prior callback state on drop.
+- `AllocError`, `LayoutError`, `ResizeError`, `ResizeErrorKind`,
+  `TryAllocError`, `HeapError`, `OptionError`, `StatsError`, `CallbackError`:
+  Tier S Rust-native error/status types for the safe API.
 - `raw`: Tier R explicit C-shaped compatibility facade.
 
 Implementation modules such as allocation, page, heap, arena, OS, primitive,
@@ -26,15 +36,19 @@ re-exported from the crate root.
 
 `MiMalloc` implements `core::alloc::GlobalAlloc`. `Allocation` owns one byte
 allocation and releases it on drop, translating C-style null allocation failure
-into Rust `Result` values.
+into Rust `Result` values. `InitializedAllocation` exposes safe `&[u8]` and
+`&mut [u8]` access only after construction paths that guarantee initialized
+bytes or an explicit unsafe initialization assertion.
 
-No safe Rust `Heap`, `MainHeap`, `HeapRef`, `HeapAllocation`, `StatsSnapshot`,
-`Options`, or allocator-trait wrapper is stabilized yet. Raw heap functions
-remain under `raw`; safe heap wrappers are intentionally deferred until their
-ownership, lifetime, threading, and deletion semantics are designed.
-Safe stats, options, process-info, and callback wrappers are also intentionally
-deferred until their snapshot ownership, runtime mutability, recursion, and
-platform semantics are designed.
+`Heap`, `MainHeap`, `HeapRef`, `HeapAllocation`, and
+`InitializedHeapAllocation` provide heap-scoped allocation without exposing raw
+heap pointers through safe APIs. Heap-tied allocations borrow the heap so safe
+code cannot delete an owned heap while live heap allocations still exist.
+
+`Options`, `StatsSnapshot`, `ProcessInfo`, `ErrorCallbackGuard`, and
+`DeferredFreeCallbackGuard` cover supported runtime controls and observations
+without requiring callers to pass raw out-pointers or manage callback
+restoration manually. Unsupported or unavailable cases return typed Rust errors.
 
 Adding a safe wrapper requires documenting how it enforces ownership, lifetime,
 aliasing, nullability, alignment, threading, and unwind requirements without
@@ -50,10 +64,33 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
 - `Allocation`: implements `Drop` and `Debug`; has manual `Send`/`Sync` impls
   documented in `docs/unsafe-audit.md`; intentionally does not implement
   `Copy` or `Clone`.
+- `InitializedAllocation`: implements `Drop` through `Allocation` ownership and
+  `Debug`; intentionally does not expose uninitialized bytes.
+- `Heap`: implements `Drop` and `Debug`; owns and deletes a mimalloc heap.
+- `HeapRef`: `Copy` borrowed heap handle used to tie heap allocations to a
+  heap lifetime.
+- `MainHeap`: `Copy` handle for the process main heap; it never deletes the
+  main heap.
+- `HeapAllocation`: implements `Drop` and `Debug`; frees through the heap
+  allocation family and carries the heap lifetime.
+- `InitializedHeapAllocation`: initialized heap-tied byte allocation wrapper.
+- `Options`: namespace type for supported safe allocator options.
+- `OptionKey`: closed supported-option key set; invalid raw keys are rejected.
+- `StatsSnapshot`: non-printing copy of allocator statistics.
+- `StatCount`, `StatTotal`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`,
+  `PartialOrd`, and `Ord` typed integer wrappers.
+- `ProcessInfo`: typed process allocator information with unavailable fields
+  represented as `Option`.
+- `ErrorCallbackGuard`, `DeferredFreeCallbackGuard`: restore previous callback
+  registrations on drop and catch panics before callback ABI return.
 - `AllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
 - `LayoutError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
+- `ResizeError`, `ResizeErrorKind`, `HeapError`, `OptionError`, `StatsError`,
+  and `CallbackError`: typed failure states for safe allocation, heap, option,
+  stats, and callback APIs; implement `Display` and `std::error::Error` when
+  `std` is enabled where owned allocation preservation permits.
 - `TryAllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
 

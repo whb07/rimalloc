@@ -286,12 +286,12 @@ raw facade and must not be stabilized without adding them to this inventory and
 documenting the same nullability, lifetime, threading, reentrancy, and unwind
 contract.
 
-Callback registration remains raw and unsafe. The crate does not expose safe
-RAII callback guards or safe callback-closure registration. A future safe
-callback wrapper must prove how it prevents dangling callback contexts, whether
-drop unregisters the callback or restores the previous registration, how panic
-or unwind is prevented at the C boundary, and which callback bodies may allocate
-through this allocator without violating the documented reentrancy contract.
+Raw callback registration remains unsafe. Safe `ErrorCallbackGuard` and
+`DeferredFreeCallbackGuard` wrappers are available for callback families where
+the crate can tie the callback context to a Rust borrow, restore the previous
+registration on drop, and catch panic or unwind before returning across the
+callback C ABI boundary. Output callbacks remain raw until output recursion and
+diagnostic allocation semantics are designed.
 
 ## Null, Errno, and Error Behavior
 

@@ -1,0 +1,108 @@
+name: Validation
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  linux-x86_64:
+    name: Linux x86_64 full validation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test std surface
+        run: cargo test --quiet --features std
+      - name: Lints and feature matrix
+        run: |
+          scripts/check-lints.sh
+          scripts/check-features.sh
+      - name: ABI, layout, and boundaries
+        run: |
+          scripts/check-api-inventory.py
+          scripts/check-safe-boundary.py
+          scripts/check-ffi-boundary.py
+          scripts/check-raw-facade.sh
+          scripts/check-layout.sh
+          scripts/check-abi-symbols.sh
+          scripts/check-strict-types.py
+      - name: Release no-default build
+        run: cargo build --release --no-default-features
+      - name: Build-tool diagnostics
+        run: scripts/check-build-tools.sh
+      - name: Package smoke
+        run: scripts/check-package.sh
+
+  linux-aarch64:
+    name: Linux aarch64 core validation
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Core tests
+        run: cargo test --quiet --features std
+      - name: Layout matrix
+        run: scripts/check-layout.sh
+
+  macos:
+    name: macOS validation
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: macOS allocator and override tests
+        run: |
+          cargo test --quiet --features std
+          cargo test --quiet --features std --test original_main_override
+
+  windows:
+    name: Windows validation
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Windows allocator tests
+        run: cargo test --quiet --features std
+
+  safety-stress:
+    name: Safety and stress tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Stress, fuzz, oversize, alignment, and zero-size coverage
+        run: scripts/check-safety-stress.sh
+
+  address-sanitizer:
+    name: AddressSanitizer
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly Rust with rust-src
+        run: rustup toolchain install nightly --component rust-src
+      - name: ASan representative tests
+        run: SANITIZER=address SANITIZER_TOOLCHAIN=nightly scripts/check-sanitizers.sh
+
+  thread-sanitizer:
+    name: ThreadSanitizer
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly Rust with rust-src
+        run: rustup toolchain install nightly --component rust-src
+      - name: TSan concurrency tests
+        run: SANITIZER=thread SANITIZER_TOOLCHAIN=nightly scripts/check-sanitizers.sh
+
+  valgrind:
+    name: Valgrind tracking parity
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+      - name: Valgrind tracking parity
+        run: scripts/check-valgrind-tracking-parity.py

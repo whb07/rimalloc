@@ -216,7 +216,7 @@ pub(crate) unsafe extern "C" fn _mi_random_next(ctx: *mut mi_random_ctx_t) -> us
 
 #[inline(never)]
 pub(crate) extern "C" fn _mi_os_random_weak(extra_seed: usize) -> usize {
-    let mut x = (_mi_os_random_weak as usize) ^ extra_seed;
+    let mut x = (_mi_os_random_weak as *const () as usize) ^ extra_seed;
     x ^= _mi_prim_clock_now() as usize;
     let max = ((x ^ (x >> 17)) & 0x0F) + 1;
     let mut i = 0usize;

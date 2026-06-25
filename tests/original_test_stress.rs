@@ -3,7 +3,7 @@
 #[path = "original_testhelper.rs"]
 mod original_testhelper;
 
-use core::ffi::c_void;
+use core::ffi::{c_char, c_void};
 use core::ptr;
 use std::os::raw::c_long;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
@@ -32,6 +32,12 @@ static transfer: [AtomicPtr<c_void>; TRANSFERS] =
     [const { AtomicPtr::new(ptr::null_mut()) }; TRANSFERS];
 
 type ThreadEntryFun = fn(isize);
+
+unsafe extern "C" fn discard_mimalloc_output(_msg: *const c_char, _arg: *mut c_void) {}
+
+fn print_stats_quietly() {
+    unsafe { raw::mi_stats_print_out(Some(discard_mimalloc_output), ptr::null_mut()) };
+}
 
 fn test_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -307,7 +313,7 @@ fn test_stress() {
         }
     }
 
-    unsafe { raw::mi_stats_print(ptr::null_mut()) };
+    print_stats_quietly();
 
     for heap_ptr in prev_heaps {
         if !heap_ptr.is_null() {
@@ -385,7 +391,7 @@ fn main(argc: usize, argv: &[&str]) -> i32 {
 
     unsafe {
         raw::mi_collect(true);
-        raw::mi_stats_print(ptr::null_mut());
+        print_stats_quietly();
     }
 
     original_testhelper::print_test_summary()

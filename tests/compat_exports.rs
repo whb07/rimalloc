@@ -1,8 +1,26 @@
 use core::ffi::{c_uchar, c_void};
 use core::ptr;
 use std::ffi::CString;
+use std::os::raw::c_long;
 
 use mechanical_mimalloc::raw::mimalloc::*;
+
+struct ShowErrorsGuard(c_long);
+
+impl ShowErrorsGuard {
+    unsafe fn disabled() -> Self {
+        let option = mi_option_t::mi_option_show_errors;
+        let previous = unsafe { mi_option_get(option) };
+        unsafe { mi_option_set(option, 0) };
+        Self(previous)
+    }
+}
+
+impl Drop for ShowErrorsGuard {
+    fn drop(&mut self) {
+        unsafe { mi_option_set(mi_option_t::mi_option_show_errors, self.0) };
+    }
+}
 
 fn assert_aligned_at(p: *mut c_void, alignment: usize, offset: usize) {
     assert!(!p.is_null());
@@ -56,6 +74,7 @@ fn aligned_recalloc_compat_exports_preserve_and_zero_extend() {
         assert_zeroed(p, 0, 32);
         mi_free(p);
 
+        let _quiet_expected_errors = ShowErrorsGuard::disabled();
         assert!(mi_aligned_recalloc(ptr::null_mut(), usize::MAX, 2, 64).is_null());
         assert!(mi_aligned_offset_recalloc(ptr::null_mut(), usize::MAX, 2, 64, 16).is_null());
     }

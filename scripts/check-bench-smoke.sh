@@ -4,6 +4,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd_repo_root
 
 run cargo check --benches --features bench
+run scripts/check-bench-thresholds.py --self-test
 
 run env \
   MIMALLOC_HOTPATH_SAMPLE_SIZE="${MIMALLOC_HOTPATH_SAMPLE_SIZE:-10}" \
@@ -19,3 +20,8 @@ run env \
   MIMALLOC_BENCH_MEASUREMENT_SECS="${MIMALLOC_BENCH_MEASUREMENT_SECS:-1}" \
   MIMALLOC_BENCH_WARMUP_SECS="${MIMALLOC_BENCH_WARMUP_SECS:-1}" \
   cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
+
+run scripts/check-bench-thresholds.py \
+  --thresholds benchmarks/thresholds.json \
+  --criterion-dir target/criterion \
+  --csv-out target/criterion/benchmark-thresholds-smoke.csv

@@ -3166,6 +3166,25 @@ pub unsafe extern "C" fn mi_register_deferred_free(
     }
 }
 
+pub(crate) unsafe fn registered_deferred_free_callback()
+-> (Option<mi_deferred_free_fun>, *mut c_void) {
+    unsafe {
+        let fun_ptr = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
+            .load(crate::core_types::MemoryOrder::Acquire);
+        let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);
+        let arg = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
+            .load(crate::core_types::MemoryOrder::Acquire);
+        (callback.raw(), arg)
+    }
+}
+
+pub(crate) unsafe fn restore_deferred_free_callback(
+    snapshot: (Option<mi_deferred_free_fun>, *mut c_void),
+) {
+    let (fun, arg) = snapshot;
+    unsafe { mi_register_deferred_free(fun, arg) };
+}
+
 #[inline]
 unsafe fn mi_huge_page_alloc(
     theap: *mut mi_theap_t,

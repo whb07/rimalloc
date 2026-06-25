@@ -129,7 +129,7 @@ fn production_profiles_abort_on_panic() {
 }
 
 #[test]
-fn callback_unwind_policy_is_documented_and_has_no_safe_wrapper() {
+fn callback_unwind_policy_is_documented_and_safe_guards_catch_panics() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
     let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
@@ -140,7 +140,9 @@ fn callback_unwind_policy_is_documented_and_has_no_safe_wrapper() {
     assert!(
         raw_rs.contains("Raw callbacks registered through this facade must not panic or unwind")
             && abi_doc.contains("Callbacks must not unwind across the C ABI boundary.")
-            && abi_doc.contains("panic\nor unwind is prevented at the C boundary"),
+            && abi_doc.contains(
+                "catch panic or unwind before returning across the\ncallback C ABI boundary"
+            ),
         "raw facade and ABI docs should state that callbacks must not unwind"
     );
     assert!(
@@ -150,17 +152,25 @@ fn callback_unwind_policy_is_documented_and_has_no_safe_wrapper() {
         "public callback type docs should include panic/unwind behavior"
     );
 
-    for source in [safe_rs.as_str(), lib_rs.as_str()] {
-        assert!(
-            !source.contains("CallbackGuard")
-                && !source.contains("register_callback")
-                && !source.contains("catch_unwind")
-                && !source.contains("mi_register_output")
-                && !source.contains("mi_register_error")
-                && !source.contains("mi_register_deferred_free"),
-            "safe facade has no callback wrapper that would need catch/abort unwind containment"
-        );
-    }
+    assert!(
+        lib_rs.contains("ErrorCallbackGuard")
+            && lib_rs.contains("DeferredFreeCallbackGuard")
+            && safe_rs.contains("pub struct ErrorCallbackGuard")
+            && safe_rs.contains("pub struct DeferredFreeCallbackGuard"),
+        "safe callback guards should be explicit crate-root APIs"
+    );
+    assert!(
+        safe_rs.contains("std::panic::catch_unwind")
+            && safe_rs.contains("error_callback_trampoline")
+            && safe_rs.contains("deferred_free_callback_trampoline")
+            && safe_rs.contains("mi_register_error")
+            && safe_rs.contains("mi_register_deferred_free"),
+        "safe callback guards should catch Rust panics before callback ABI return"
+    );
+    assert!(
+        !safe_rs.contains("mi_register_output"),
+        "safe API should not expose an output callback guard until output recursion semantics are designed"
+    );
 }
 
 #[test]

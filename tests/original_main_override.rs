@@ -1,7 +1,7 @@
 #[path = "original_testhelper.rs"]
 mod original_testhelper;
 
-use core::ffi::c_void;
+use core::ffi::{c_char, c_void};
 use std::ffi::{CStr, CString};
 use std::mem;
 use std::ptr;
@@ -36,6 +36,12 @@ const PERF2_ITERS: usize = 128;
 const PERF3_ITERS: usize = 2;
 const PERF4_ITERS: usize = 256;
 const PERF5_ITERS: usize = 512;
+
+unsafe extern "C" fn discard_mimalloc_output(_msg: *const c_char, _arg: *mut c_void) {}
+
+fn print_stats_quietly() {
+    unsafe { raw::mi_stats_print_out(Some(discard_mimalloc_output), ptr::null_mut()) };
+}
 
 #[derive(Default)]
 struct SomeStruct {
@@ -144,7 +150,7 @@ fn original_main_override_c_main() -> i32 {
         raw::mi_free(p2);
 
         let _ = original_testhelper::check("main-override.c:mi_version", raw::mi_version() > 0);
-        raw::mi_stats_print(ptr::null_mut());
+        print_stats_quietly();
     }
 
     original_testhelper::print_test_summary()
@@ -631,7 +637,7 @@ fn original_main_override_cpp_main() -> i32 {
     test_perf4();
     test_perf5();
     theap_thread_free_huge_smoke();
-    unsafe { raw::mi_stats_print(ptr::null_mut()) };
+    print_stats_quietly();
     0
 }
 

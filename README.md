@@ -3,23 +3,22 @@
 Mechanical Rust translation foundation for mimalloc 3.3.2.
 
 This crate is a mimalloc-compatible C ABI allocator artifact. It also provides
-a narrow, experimental safe Rust allocation facade. It is not yet a broad safe
-Rust heap, options, or stats abstraction.
+safe Rust allocation, heap, options, statistics, process-info, and callback
+guard facades over the translated allocator.
 
 This repository currently builds both:
 
 - an `rlib` for Rust tests, benchmarks, and experimental integration, and
 - a `cdylib` that exports mimalloc-compatible C ABI symbols.
 
-The C ABI compatibility surface is the primary target today. The safe Rust API
-is intentionally small and experimental while the allocator invariants are still
-being audited.
+The C ABI compatibility surface and the crate-root safe Rust facade are both
+tracked by source-shape, layout, symbol, lint, package, and benchmark gates.
 
 ## API Surfaces
 
-- Safe Rust facade: crate-root `MiMalloc`, `Allocation`, and allocation error
-  types. This is the only Rust API intended to be usable without an unsafe
-  block.
+- Safe Rust facade: crate-root `MiMalloc`, owned allocation wrappers, heap
+  wrappers, supported options, non-printing stats snapshots, process
+  information, callback guards, and their typed error/status types.
 - Raw Rust facade: `mechanical_mimalloc::raw`, a C-shaped Rust path for
   low-level tests, benchmarks, and integration code that can uphold mimalloc's
   unsafe pointer and lifetime contracts. The raw Rust path surface is not
@@ -66,14 +65,10 @@ unsafe {
 
 ## Status
 
-This crate is not published and `Cargo.toml` has `publish = false`. The crate
-root exposes only the small safe Rust facade (`MiMalloc`, `Allocation`, and
-allocation error types) plus the explicit `raw` facade; implementation modules
-are private so translation structure does not become an accidental SemVer
-contract.
-Safe heap, stats, options, process-info, and callback wrappers are intentionally
-absent until their ownership, lifetime, threading, initialization, recursion,
-and platform semantics are designed and audited.
+This crate is pre-release at version `0.1.0` and is configured for packaging.
+The crate root exposes only the intended safe Rust facade plus the explicit
+`raw` facade; implementation modules are private so translation structure does
+not become an accidental SemVer contract.
 The raw Rust facade is unstable as a Rust path surface; use it only behind an
 explicit unsafe boundary and expect inventory or migration notes before treating
 paths as stable.

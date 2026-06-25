@@ -1,20 +1,20 @@
 # Compatibility Policy
 
-This repository is pre-release and `publish = false`, but compatibility domains
-are tracked now so accidental public commitments do not leak out of the
-mechanical translation.
+This repository is pre-release, but compatibility domains are tracked now so
+accidental public commitments do not leak out of the mechanical translation.
 
 This crate is a mimalloc-compatible C ABI allocator artifact. It also provides
-a narrow, experimental safe Rust allocation facade. It is not yet a broad safe
-Rust heap, options, or stats abstraction.
+safe Rust allocation, heap, options, statistics, process-info, and callback
+guard facades over the translated allocator.
 
 ## Public API Tiers
 
 ### Tier S: Safe Rust API
 
-The crate-root safe API is the Rust SemVer surface. Today it contains
-`MiMalloc`, `Allocation`, and the allocation error/status types listed in
-`docs/api-inventory.md`.
+The crate-root safe API is the Rust SemVer surface. It contains `MiMalloc`,
+owned allocation wrappers, heap wrappers, supported options, non-printing stats
+snapshots, process information, callback guards, and the typed error/status
+types listed in `docs/api-inventory.md`.
 
 Compatibility-sensitive changes include removing or renaming public safe items,
 changing public method signatures, changing trait implementations, changing

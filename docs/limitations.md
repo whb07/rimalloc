@@ -1,10 +1,9 @@
 # Known Limitations
 
-- The crate is pre-release and `publish = false`.
-- The safe Rust API is intentionally limited to `MiMalloc`, `Allocation`, and
-  allocation error/status types.
-- Safe wrappers for heaps, options, stats, and allocator-owned handles are not
-  stabilized.
+- The crate is pre-release at version `0.1.0`; SemVer commitments are scoped by
+  `docs/compatibility.md`.
+- The safe Rust API intentionally covers only the crate-root wrappers listed in
+  `docs/api-inventory.md`.
 - The `raw` facade exposes C-shaped unsafe APIs and should not be treated as a
   safe Rust abstraction.
 - Linux x86_64 GNU is the only maintained target tier today.

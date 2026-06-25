@@ -1,6 +1,6 @@
 # Release Policy
 
-This repository is pre-release and `publish = false`.
+This repository is pre-release at version `0.1.0`, with packaging enabled.
 
 Before publishing or tagging a release:
 

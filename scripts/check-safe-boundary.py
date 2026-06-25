@@ -10,6 +10,9 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SAFE_BOUNDARY_FILES = ["src/lib.rs", "src/safe.rs"]
 AUDIT_TAG = "SAFETY[AUDIT:"
+ALLOWED_PUBLIC_UNSAFE = {
+    "src/safe.rs": {"assume_initialized"},
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -17,11 +20,20 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def public_unsafe_items(text: str) -> list[str]:
+def public_unsafe_items(rel: str, text: str) -> list[str]:
     offenders: list[str] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
-        if re.search(r"\bpub\s+unsafe\s+(fn|extern|trait|impl)\b", stripped):
+        match = re.search(
+            r"\bpub\s+unsafe\s+(?P<kind>fn|extern|trait|impl)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)?",
+            stripped,
+        )
+        if not match:
+            continue
+        name = match.group("name") or ""
+        if name in ALLOWED_PUBLIC_UNSAFE.get(rel, set()):
+            continue
+        if match:
             offenders.append(f"line {lineno}: {stripped}")
     return offenders
 
@@ -54,7 +66,7 @@ def main() -> int:
 
     for rel in SAFE_BOUNDARY_FILES:
         text = (ROOT / rel).read_text()
-        all_public_unsafe.extend(f"{rel}:{item}" for item in public_unsafe_items(text))
+        all_public_unsafe.extend(f"{rel}:{item}" for item in public_unsafe_items(rel, text))
         all_untagged.extend(f"{rel}:{item}" for item in untagged_boundary_unsafe(text))
 
     require(
@@ -68,7 +80,7 @@ def main() -> int:
     )
 
     print(
-        "ok: safe facade unsafe boundary has no public unsafe items "
+        "ok: safe facade unsafe boundary has only allowlisted public unsafe items "
         "and all unsafe blocks are audit-tagged"
     )
     return 0

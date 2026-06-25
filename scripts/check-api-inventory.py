@@ -14,7 +14,27 @@ EXPECTED_ROOT_ITEMS = {
     "MiMalloc",
     "Allocation",
     "AllocError",
+    "CallbackError",
+    "DeferredFreeCallbackGuard",
+    "ErrorCallbackGuard",
+    "Heap",
+    "HeapAllocation",
+    "HeapError",
+    "HeapRef",
+    "InitializedAllocation",
+    "InitializedHeapAllocation",
     "LayoutError",
+    "MainHeap",
+    "OptionError",
+    "OptionKey",
+    "Options",
+    "ProcessInfo",
+    "ResizeError",
+    "ResizeErrorKind",
+    "StatCount",
+    "StatTotal",
+    "StatsError",
+    "StatsSnapshot",
     "TryAllocError",
 }
 
@@ -68,7 +88,9 @@ def root_public_items(lib_rs: str) -> set[str]:
     items.update(re.findall(r"^pub type\s+([A-Za-z0-9_]+)\b", lib_rs, flags=re.M))
 
     for group in re.findall(r"^pub use\s+[A-Za-z0-9_:]+::\{([^}]+)\};", lib_rs, flags=re.M):
-        items.update(item.strip().split(" as ")[-1] for item in group.split(","))
+        items.update(
+            item.strip().split(" as ")[-1] for item in group.split(",") if item.strip()
+        )
 
     return items
 

@@ -58,13 +58,20 @@ AddressSanitizer is available through:
 scripts/check-sanitizers.sh
 ```
 
-The script uses a nightly toolchain, `-Zsanitizer=address`, `-Zbuild-std`, and
-the `std` feature. Sanitizer runs are expected to be Linux x86_64 GNU evidence
-unless the report says otherwise. TSan and UBSan are not currently part of the
-maintained signoff set; claims about those tools require adding explicit scripts
-and documenting known false positives.
-Maintainers can also run the manual GitHub Actions hardening workflow for ASan
-evidence.
+ThreadSanitizer is available through:
+
+```sh
+SANITIZER=thread scripts/check-sanitizers.sh
+```
+
+The script uses a nightly toolchain, `-Zbuild-std`, aborting test panic
+strategy, and the `std` feature. It sets `mi_sanitizer_runtime` so sanitizer
+builds can disable libc allocator interposition exports that conflict with the
+sanitizer runtimes. Sanitizer runs are expected to be Linux x86_64 GNU evidence
+unless the report says otherwise. UBSan is not currently part of the maintained
+signoff set; claims about that tool require adding explicit scripts and
+documenting known false positives. Maintainers can also run the manual GitHub
+Actions hardening workflow for ASan and TSan evidence.
 
 `track-asan` is allocator tracking instrumentation, not a substitute for running
 the sanitizer toolchain. `track-asan` and `track-valgrind` are mutually

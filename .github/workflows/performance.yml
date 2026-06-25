@@ -1,0 +1,19 @@
+name: Performance
+
+on:
+  workflow_dispatch:
+
+jobs:
+  benchmark-gates:
+    name: Release benchmark gates
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run release benchmark gates
+        run: scripts/check-bench-smoke.sh
+      - name: Upload machine-readable benchmark thresholds
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-thresholds
+          path: target/criterion/benchmark-thresholds-smoke.csv

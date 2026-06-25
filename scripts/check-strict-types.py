@@ -106,6 +106,8 @@ def source_files() -> list[pathlib.Path]:
     files: list[pathlib.Path] = []
     for path in ROOT.rglob("*.rs"):
         rel_parts = path.relative_to(ROOT).parts
+        if rel_parts == ("build.rs",):
+            continue
         if any(part in SKIP_DIRS for part in rel_parts):
             continue
         files.append(path)

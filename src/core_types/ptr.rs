@@ -313,12 +313,25 @@ impl BlockPtr {
     /// `page` must be the page that owns this block link.
     #[inline(always)]
     pub(crate) unsafe fn next(self, page: PagePtr) -> Option<BlockPtr> {
+        unsafe {
+            crate::track::mi_track_mem_defined(
+                self.as_ptr().cast(),
+                core::mem::size_of::<mi_block_t>(),
+            )
+        };
         let link = unsafe { self.encoded_link() };
-        if crate::types::MI_ENCODE_FREELIST != 0 {
+        let next = if crate::types::MI_ENCODE_FREELIST != 0 {
             unsafe { link.decode_block(page, page.keys()) }
         } else {
             BlockPtr::new(link.as_unencoded_raw())
-        }
+        };
+        unsafe {
+            crate::track::mi_track_mem_noaccess(
+                self.as_ptr().cast(),
+                core::mem::size_of::<mi_block_t>(),
+            )
+        };
+        next
     }
 
     /// # Safety
@@ -326,6 +339,12 @@ impl BlockPtr {
     /// null or a block in the same encoded free-list domain.
     #[inline(always)]
     pub(crate) unsafe fn set_next(self, page: PagePtr, next: Option<BlockPtr>) {
+        unsafe {
+            crate::track::mi_track_mem_undefined(
+                self.as_ptr().cast(),
+                core::mem::size_of::<mi_block_t>(),
+            )
+        };
         let link = if crate::types::MI_ENCODE_FREELIST != 0 {
             unsafe { EncodedPtr::encode_block(next, page, page.keys()) }
         } else {
@@ -336,6 +355,12 @@ impl BlockPtr {
             )
         };
         unsafe { self.write_link(BlockLink::FreeList(link)) };
+        unsafe {
+            crate::track::mi_track_mem_noaccess(
+                self.as_ptr().cast(),
+                core::mem::size_of::<mi_block_t>(),
+            )
+        };
     }
 }
 define_ptr_wrapper!(HeapPtr, mi_heap_t, "Non-null raw heap metadata");

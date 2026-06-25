@@ -42,15 +42,18 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   classified by the FFI/export boundary checks.
 - `SAFETY[AUDIT:raw-callback]`: raw callback entrypoints and callback storage.
   Callers must provide ABI-compatible function pointers and user data that stay
-  valid for the documented call duration. Safe callback wrappers are deferred;
-  no safe callback registration API, callback closure API, or RAII callback
-  guard is currently exposed. Adding one requires a soundness proof for context
-  lifetime, unregister/restore-on-drop behavior, panic containment, and
-  allocator reentrancy.
+  valid for the documented call duration.
+- `SAFETY[AUDIT:safe-callback]`: safe callback guards. Guard construction
+  registers a trampoline with a borrowed callback context, stores the previous
+  registration, restores that previous registration on drop, and catches Rust
+  panics before callback ABI return. Output callbacks remain raw until output
+  recursion and diagnostic allocation semantics are designed.
 - `SAFETY[AUDIT:panic-boundary]`: no-std panic/personality shims and aborting
   assertion paths. These paths must not allocate or unwind.
-- `SAFETY[AUDIT:heap-wrapper]`: reserved for a future safe heap wrapper. No
-  safe heap wrapper is currently exposed.
+- `SAFETY[AUDIT:safe-heap]`: safe heap wrappers. Owned heaps delete exactly
+  once on drop, main-heap handles never delete the main heap, and heap-tied
+  allocations carry the heap borrow lifetime so safe code cannot delete a heap
+  while its safe allocations are live.
 
 ## Safe API And FFI Boundary
 
@@ -63,12 +66,18 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   lifetime, alignment, and threading rules.
 - `MiMalloc` is the only safe global allocator facade. Its unsafe trait impl is
   tagged with `SAFETY[AUDIT:global-alloc]`.
-- `Allocation` is the only owned safe allocation wrapper. It has raw pointer
-  escape hatches, no safe byte-slice access, no raw ownership-transfer API, and
-  tagged `Send`/`Sync` proofs under `SAFETY[AUDIT:owned-allocation]`.
-- Future safe heap, stats, options, process-info, and callback wrappers are
-  deferred until their ownership, aliasing, lifetime, initialization,
-  recursion, concurrency, platform, and unwind behavior are designed.
+- `Allocation` and `InitializedAllocation` are owned safe allocation wrappers.
+  `Allocation` has raw pointer escape hatches and no safe byte-slice access
+  until initialized. `InitializedAllocation` exposes byte slices only after a
+  zeroed construction path or explicit unsafe initialization assertion.
+- `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
+  `InitializedHeapAllocation` encode heap ownership and heap-allocation
+  lifetimes without exposing raw deletion rights.
+- `Options`, `StatsSnapshot`, and `ProcessInfo` wrap supported allocator
+  controls and observations without raw out-pointers in safe caller code.
+- `ErrorCallbackGuard` and `DeferredFreeCallbackGuard` prevent dangling
+  callback contexts with Rust borrows, restore previous callback registrations
+  on drop, and catch callback panics before ABI return.
 - Raw pointer escape hatches from safe types must document invalidation, null or
   sentinel behavior, caller free restrictions, use-after-move/drop behavior,
   aliasing, and thread restrictions.
@@ -81,6 +90,6 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
 - Any new unsafe wrapper must document caller obligations.
 - Any new safe wrapper around raw allocator state must explain how it enforces
   ownership, lifetime, and aliasing invariants.
-- `scripts/check-safe-boundary.py` enforces that the safe facade has no public
-  unsafe Rust items and that boundary unsafe blocks in the safe facade carry
-  stable audit tags.
+- `scripts/check-safe-boundary.py` enforces that the safe facade has only
+  allowlisted public unsafe Rust items and that boundary unsafe blocks in the
+  safe facade carry stable audit tags.

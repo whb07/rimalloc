@@ -392,7 +392,7 @@ impl PagePtr {
     }
 
     pub(crate) unsafe fn try_abandoned(self) -> Result<AbandonedPageType, PagePtr> {
-        let tid = crate::core_types::PageThreadId::new(unsafe { (*self.as_ptr()).xthread_id });
+        let tid = unsafe { self.thread_id_cell().load_relaxed() };
         if tid.is_abandoned() {
             Ok(unsafe { AbandonedPageType::new_unchecked(self) })
         } else {
@@ -404,7 +404,7 @@ impl PagePtr {
         self,
         current: crate::core_types::ThreadId,
     ) -> PageFreeOwner {
-        let tid = crate::core_types::PageThreadId::new(unsafe { (*self.as_ptr()).xthread_id });
+        let tid = unsafe { self.thread_id_cell().load_relaxed() };
         if tid.is_abandoned() {
             PageFreeOwner::Abandoned(unsafe { AbandonedPageType::new_unchecked(self) })
         } else if tid.is_abandoned_mapped() {

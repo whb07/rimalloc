@@ -1,7 +1,25 @@
 use core::ffi::c_void;
 use core::ptr;
+use std::os::raw::c_long;
 
 use mechanical_mimalloc::raw::mimalloc::*;
+
+struct ShowErrorsGuard(c_long);
+
+impl ShowErrorsGuard {
+    unsafe fn disabled() -> Self {
+        let option = mi_option_t::mi_option_show_errors;
+        let previous = unsafe { mi_option_get(option) };
+        unsafe { mi_option_set(option, 0) };
+        Self(previous)
+    }
+}
+
+impl Drop for ShowErrorsGuard {
+    fn drop(&mut self) {
+        unsafe { mi_option_set(mi_option_t::mi_option_show_errors, self.0) };
+    }
+}
 
 #[derive(Clone, Copy)]
 struct Block {
@@ -294,8 +312,11 @@ unsafe fn run_program(input: &[u8]) {
         }
     }
 
-    assert!(unsafe { mi_mallocn(usize::MAX, 2) }.is_null());
-    assert!(unsafe { mi_calloc(usize::MAX, 2) }.is_null());
+    {
+        let _quiet_expected_errors = unsafe { ShowErrorsGuard::disabled() };
+        assert!(unsafe { mi_mallocn(usize::MAX, 2) }.is_null());
+        assert!(unsafe { mi_calloc(usize::MAX, 2) }.is_null());
+    }
 
     for block in blocks {
         unsafe { block.assert_invariants(heap) };

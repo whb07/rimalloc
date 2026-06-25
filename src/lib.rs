@@ -1,8 +1,8 @@
 //! Mechanical Rust translation foundation for mimalloc 3.3.2.
 //!
 //! This crate is a mimalloc-compatible C ABI allocator artifact. It also
-//! provides a narrow, experimental safe Rust allocation facade. It is not yet a
-//! broad safe Rust heap, options, or stats abstraction.
+//! provides safe Rust allocation, heap, options, statistics, process-info, and
+//! callback guard facades over the translated allocator.
 //!
 //! This crate is currently a dual artifact:
 //!
@@ -10,9 +10,10 @@
 //! - an `rlib` with a deliberately small Rust-facing surface for tests,
 //!   benchmarks, and experimental integration.
 //!
-//! The Rust API is not yet stabilized. Use [`MiMalloc`] as a global allocator
-//! when a Rust `GlobalAlloc` facade is needed, [`Allocation`] when a small
-//! owned byte allocation wrapper is enough, or [`raw`] for the explicit C-shaped
+//! Use [`MiMalloc`] as a global allocator when a Rust `GlobalAlloc` facade is
+//! needed, [`Allocation`] for owned byte allocations, [`Heap`] for safe heap
+//! ownership, [`Options`] and [`StatsSnapshot`] for non-printing allocator
+//! controls and observations, or [`raw`] for the explicit C-shaped
 //! compatibility surface. Implementation modules are crate-private so internal
 //! translation structure does not become an accidental SemVer contract.
 //!
@@ -34,8 +35,8 @@
 //!
 //! The exported C ABI and [`raw`] facade are unsafe by design: callers must
 //! uphold mimalloc's pointer ownership, layout, alignment, threading, and
-//! lifetime requirements. Safe Rust APIs are intentionally limited until those
-//! invariants are documented and tested at the wrapper boundary.
+//! lifetime requirements. Safe Rust APIs encode ownership, initialization, and
+//! heap lifetimes at the wrapper boundary.
 //!
 //! # Examples
 //!
@@ -103,6 +104,10 @@
 //! use mechanical_mimalloc::core_types::ValidatedFree;
 //! ```
 
+// Mechanical translation retains C ABI/platform helpers that are exercised only
+// through selected targets, feature combinations, or external links.
+#![allow(dead_code)]
+#![cfg_attr(mi_sanitizer_runtime, feature(sanitize))]
 #![cfg_attr(
     all(
         not(test),
@@ -153,15 +158,19 @@ mod threadlocal;
 mod track;
 mod types;
 
-pub use safe::{AllocError, Allocation, LayoutError, TryAllocError};
+pub use safe::{
+    AllocError, Allocation, CallbackError, DeferredFreeCallbackGuard, ErrorCallbackGuard, Heap,
+    HeapAllocation, HeapError, HeapRef, InitializedAllocation, InitializedHeapAllocation,
+    LayoutError, MainHeap, OptionError, OptionKey, Options, ProcessInfo, ResizeError,
+    ResizeErrorKind, StatCount, StatTotal, StatsError, StatsSnapshot, TryAllocError,
+};
 
 /// Rust [`GlobalAlloc`](core::alloc::GlobalAlloc) facade backed by the crate's
 /// mimalloc implementation.
 ///
-/// This wrapper is intentionally small. It does not expose heap handles,
-/// options, or statistics as safe Rust APIs yet because those invariants are
-/// still being audited. Use [`raw`] for the C-shaped surface while that work
-/// continues.
+/// This wrapper is intentionally small and process-wide. Use [`Heap`] for
+/// heap-scoped allocation ownership, [`Options`] for supported safe options,
+/// and [`StatsSnapshot`] for non-printing statistics.
 ///
 /// # `GlobalAlloc` scope
 ///

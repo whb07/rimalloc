@@ -13,9 +13,25 @@ fn initialized_stats() -> mi_stats_t {
     }
 }
 
+fn prewarm_allocator_state() {
+    for size in [1usize, 32, 64, 128, 1024, 4096, 64 * 1024, 1024 * 1024] {
+        let p = unsafe { mi_malloc(size) };
+        assert!(!p.is_null());
+        unsafe { mi_free(p) };
+    }
+
+    let worker = thread::spawn(|| unsafe {
+        let p = mi_malloc(128);
+        assert!(!p.is_null());
+        mi_free(p);
+    });
+    worker.join().unwrap();
+}
+
 #[test]
 fn joined_worker_threads_return_current_thread_stats_to_main() {
     unsafe { mi_process_init() };
+    prewarm_allocator_state();
 
     let mut before = initialized_stats();
     assert!(unsafe { mi_stats_get(&mut before) });

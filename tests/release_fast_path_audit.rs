@@ -492,9 +492,13 @@ fn crate_root_exposes_only_curated_rust_facade() {
     assert!(
         lib_rs.contains("pub mod raw;")
             && lib_rs.contains("pub struct MiMalloc;")
-            && lib_rs
-                .contains("pub use safe::{AllocError, Allocation, LayoutError, TryAllocError};"),
-        "crate root should expose the explicit raw facade and the small safe Rust allocator facade"
+            && lib_rs.contains("CallbackError")
+            && lib_rs.contains("DeferredFreeCallbackGuard")
+            && lib_rs.contains("ErrorCallbackGuard")
+            && lib_rs.contains("HeapAllocation")
+            && lib_rs.contains("InitializedAllocation")
+            && lib_rs.contains("StatsSnapshot"),
+        "crate root should expose the explicit raw facade and finalized safe Rust allocator facade"
     );
 
     for module in [
@@ -1146,7 +1150,7 @@ fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
 }
 
 #[test]
-fn safe_callback_registration_remains_deferred() {
+fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
     let safe_doc =
@@ -1157,35 +1161,34 @@ fn safe_callback_registration_remains_deferred() {
     let safe_rs = fs::read_to_string(root.join("src/safe.rs")).expect("read src/safe.rs");
 
     assert!(
-        abi_doc.contains("Callback registration remains raw and unsafe.")
-            && abi_doc.contains("does not expose safe\nRAII callback guards")
-            && abi_doc.contains("prevents dangling callback contexts")
-            && abi_doc
-                .contains("drop unregisters the callback or restores the previous registration")
-            && abi_doc.contains("which callback bodies may allocate\nthrough this allocator"),
-        "docs/abi.md should keep callback registration raw unless a sound safe wrapper is designed"
+        abi_doc.contains("Raw callback registration remains unsafe.")
+            && abi_doc.contains("Safe `ErrorCallbackGuard` and\n`DeferredFreeCallbackGuard`")
+            && abi_doc.contains("restore the previous\nregistration on drop")
+            && abi_doc.contains(
+                "catch panic or unwind before returning across the\ncallback C ABI boundary"
+            )
+            && abi_doc.contains("Output callbacks remain raw"),
+        "docs/abi.md should document the safe callback guard proof and remaining raw output callback gap"
     );
     assert!(
-        safe_doc.contains("There is no safe callback registration API")
-            && safe_doc.contains("safe\nRAII callback guard")
-            && unsafe_doc.contains("no safe callback registration API")
-            && unsafe_doc.contains("unregister/restore-on-drop behavior")
-            && unsafe_doc.contains("allocator reentrancy"),
-        "safe API and unsafe audit docs should defer safe callback wrappers with required proof topics"
+        safe_doc.contains("`ErrorCallbackGuard` and `DeferredFreeCallbackGuard`")
+            && safe_doc.contains("restore previous callback registrations on drop")
+            && safe_doc.contains("catch Rust panics")
+            && unsafe_doc.contains("SAFETY[AUDIT:safe-callback]")
+            && unsafe_doc.contains("restores that previous registration on drop")
+            && unsafe_doc.contains("catches Rust\n  panics before callback ABI return"),
+        "safe API and unsafe audit docs should prove safe callback guard lifetime, restore, and unwind behavior"
     );
 
-    for source in [lib_rs.as_str(), safe_rs.as_str()] {
-        assert!(
-            !source.contains("mi_register_output")
-                && !source.contains("mi_register_error")
-                && !source.contains("mi_register_deferred_free")
-                && !source.contains("register_callback")
-                && !source.contains("CallbackGuard")
-                && !source.contains("OutputCallback")
-                && !source.contains("ErrorCallback"),
-            "safe facade should not expose callback registration or callback guard APIs"
-        );
-    }
+    assert!(
+        lib_rs.contains("ErrorCallbackGuard")
+            && lib_rs.contains("DeferredFreeCallbackGuard")
+            && safe_rs.contains("std::panic::catch_unwind")
+            && safe_rs.contains("mi_register_error")
+            && safe_rs.contains("mi_register_deferred_free")
+            && !safe_rs.contains("mi_register_output"),
+        "safe facade should expose only callback guards that catch panics and restore previous registrations"
+    );
 }
 
 #[test]
@@ -1290,7 +1293,7 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
             && build_rs.contains("cargo:rustc-cfg=mi_c_malloc_fast")
             && build_rs.contains("src/tls_shim.c")
             && build_rs.contains("src/tls_recurse_shim.c")
-            && build_rs.contains(".arg(&tls_obj)\n        .arg(&recurse_obj)"),
+            && build_rs.contains("ar.arg(\"crs\").arg(&lib).arg(&tls_obj).arg(&recurse_obj);"),
         "assembly malloc fast override must be limited to the supported target"
     );
     assert!(
@@ -2876,6 +2879,7 @@ fn phase6_dead_code_allowances_stay_intentional() {
     }
 
     let expected = BTreeMap::from([
+        ("src/lib.rs", 1),
         ("src/prim/emscripten.rs", 1),
         ("src/prim/osx.rs", 1),
         ("src/prim/wasi.rs", 1),

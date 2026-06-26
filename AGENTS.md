@@ -64,6 +64,17 @@ If tasked to perform a large series of tasks, break the work down into an ordere
 
 When the user gives an explicit, numbered instruction to complete a specific set of tasks (e.g. “implement the first 50 tasks”), treat that instruction as the primary directive. Break the work into an ordered sequence and execute it task-by-task until complete, even if the total scope is large.
 
+## 5. Mandatory Rust Verification
+
+**Always run formatting, linting, and tests before declaring work complete.**
+
+For Rust code changes, run:
+- `cargo fmt --all`
+- `cargo clippy --workspace --all-targets --all-features`
+- `cargo test --workspace --all-targets --all-features`
+
+If any command cannot be run or fails for reasons unrelated to your changes, report that explicitly in the final response. Do not silently skip these checks.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

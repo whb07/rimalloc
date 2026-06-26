@@ -110,7 +110,7 @@ fn compile_tls_shim() {
 fn link_linux_cdylib_exports() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set by cargo"));
     let version_script = out_dir.join("mimalloc.exports");
-    let exports = r#"{
+    let exports = r"{
   global:
     _Zda*;
     _Zdl*;
@@ -133,7 +133,7 @@ fn link_linux_cdylib_exports() {
   local:
     *;
 };
-"#;
+";
 
     std::fs::write(&version_script, exports).expect("failed to write Linux export script");
     println!(
@@ -184,8 +184,8 @@ fn main() {
     let asan = env::var_os("CARGO_FEATURE_TRACK_ASAN").is_some();
 
     match (valgrind, asan) {
-        (true, false) => compile_track_shim(&["MI_TRACK_VALGRIND=1"], &[]),
+        (true, _) => compile_track_shim(&["MI_TRACK_VALGRIND=1"], &[]),
         (false, true) => compile_track_shim(&["MI_TRACK_ASAN=1"], &["-fsanitize=address"]),
-        _ => {}
+        (false, false) => {}
     }
 }

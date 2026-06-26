@@ -541,7 +541,7 @@ unsafe extern "C" fn mi_heap_delete_page(
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
-        let arena = unsafe {
+        let arena_id = unsafe {
             mi_page_arena_pages(
                 PagePtr::new_unchecked(page),
                 &mut slice_index,
@@ -566,11 +566,12 @@ unsafe extern "C" fn mi_heap_delete_page(
         let mut theap_target = unsafe { (*info).theap_target };
 
         let mut arena_pages_target =
-            unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena) };
+            unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena_id) };
         if arena_pages_target.is_null() {
             heap_target = unsafe { mi_heap_main() };
             theap_target = unsafe { mi_heap_theap(heap_target) };
-            arena_pages_target = unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena) };
+            arena_pages_target =
+                unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena_id) };
             crate::mi_assert_internal!(!arena_pages_target.is_null());
         }
         crate::mi_assert_internal!(unsafe {

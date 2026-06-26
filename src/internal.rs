@@ -1230,13 +1230,16 @@ const _: fn(mi_thread_free_t) -> bool = mi_tf_is_owned;
 
 #[inline]
 pub(crate) fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_free_t {
-    let owner = if owned {
+    let free_owner = if owned {
         crate::core_types::ThreadFreeOwner::Owned
     } else {
         crate::core_types::ThreadFreeOwner::Unowned
     };
-    crate::core_types::ThreadFreeWord::from_parts(crate::core_types::BlockPtr::new(block), owner)
-        .raw()
+    crate::core_types::ThreadFreeWord::from_parts(
+        crate::core_types::BlockPtr::new(block),
+        free_owner,
+    )
+    .raw()
 }
 
 const _: fn(*mut mi_block_t, bool) -> mi_thread_free_t = mi_tf_create;

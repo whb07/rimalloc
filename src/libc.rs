@@ -52,6 +52,7 @@ static MI_TOUPPER_KEEP: extern "C" fn(c_char) -> c_char = _mi_toupper;
 /// `s` and `t`, when non-null, must point to readable C strings for at least
 /// `n` bytes or until their first nul byte.
 #[inline(never)]
+#[allow(clippy::many_single_char_names)]
 pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char, n: usize) -> i32 {
     if s.is_null() || t.is_null() || n == 0 {
         return 0;
@@ -75,6 +76,7 @@ pub(crate) unsafe extern "C" fn _mi_strnicmp(s: *const c_char, t: *const c_char,
 ///
 /// `s` and `t`, when non-null, must point to readable nul-terminated C strings.
 #[inline(never)]
+#[allow(clippy::many_single_char_names)]
 pub(crate) unsafe extern "C" fn _mi_streq(s: *const c_char, t: *const c_char) -> bool {
     if s.is_null() && t.is_null() {
         return true;

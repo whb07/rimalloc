@@ -27,7 +27,7 @@ use criterion::{
     BenchmarkId, Criterion, SamplingMode, Throughput, criterion_group, criterion_main,
 };
 use std::env;
-use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
+use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;

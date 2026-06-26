@@ -907,10 +907,9 @@ fn mi_bchunk_try_find_and_clearNX(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
                     crate::mi_debug_assert!(*pidx < MI_BCHUNK_BITS);
                     crate::mi_debug_assert!(*pidx + n <= MI_BCHUNK_BITS);
                     return true;
-                } else {
-                    b0 = chunk.bfields[i].load(Ordering::Acquire);
-                    b = b0;
                 }
+                b0 = chunk.bfields[i].load(Ordering::Acquire);
+                b = b0;
             } else {
                 b = b & b.wrapping_add(mi_bfield_one() << idx);
             }
@@ -936,6 +935,7 @@ fn mi_bchunk_try_find_and_clearNX(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
 }
 
 #[inline(never)]
+#[allow(clippy::many_single_char_names)]
 fn mi_bchunk_try_find_and_clearNC(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut usize) -> bool {
     if n == 0 || n > MI_BCHUNK_BITS {
         return false;
@@ -2181,9 +2181,8 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
                             crate::mi_debug_assert!(*pidx + n <= mi_bbitmap_max_bits(bbitmap));
                             found = true;
                             return false;
-                        } else {
-                            mi_bbitmap_chunkmap_try_clear(&mut *bbitmap, chunk_idx);
                         }
+                        mi_bbitmap_chunkmap_try_clear(&mut *bbitmap, chunk_idx);
                         true
                     });
                 if found {

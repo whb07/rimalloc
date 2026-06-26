@@ -2,7 +2,16 @@
 #include <stddef.h>
 
 #if MI_TRACK_VALGRIND
-#include <valgrind/memcheck.h>
+#if defined(__has_include) && __has_include(<valgrind/memcheck.h>)
+#  include <valgrind/memcheck.h>
+#else
+#  define VALGRIND_MALLOCLIKE_BLOCK(p, size, rzB, is_zeroed) ((void)0)
+#  define VALGRIND_FREELIKE_BLOCK(p, rzB) ((void)0)
+#  define VALGRIND_RESIZEINPLACE_BLOCK(p, old_size, new_size, rzB) ((void)0)
+#  define VALGRIND_MAKE_MEM_DEFINED(p, size) ((void)0)
+#  define VALGRIND_MAKE_MEM_UNDEFINED(p, size) ((void)0)
+#  define VALGRIND_MAKE_MEM_NOACCESS(p, size) ((void)0)
+#endif
 
 void _mi_track_malloc_size_shim(void* p, size_t reqsize, size_t size, bool zero) {
   (void)reqsize;

@@ -354,8 +354,11 @@ pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
                 );
             }
         } else {
-            let bpsize = mi_page_block_size(page);
-            __mi_stat_decrease(ptr::addr_of_mut!((*theap).stats.malloc_huge), bpsize);
+            let page_block_size = mi_page_block_size(page);
+            __mi_stat_decrease(
+                ptr::addr_of_mut!((*theap).stats.malloc_huge),
+                page_block_size,
+            );
         }
     }
 }

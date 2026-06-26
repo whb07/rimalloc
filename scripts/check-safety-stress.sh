@@ -8,6 +8,7 @@ run cargo test --quiet --features std --test aligned_exports
 run cargo test --quiet --features std --test oversize_allocations
 run cargo test --quiet --features std --test property_alloc_sequences
 run cargo test --quiet --features std --test fuzz_alloc_sequences
+run python3 scripts/check-differential-trace.py
 run cargo test --quiet --features std --test original_test_stress
 run cargo test --quiet --features std --test thread_stats_regression
 run scripts/check-concurrency-models.sh

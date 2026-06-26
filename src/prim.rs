@@ -106,6 +106,21 @@ thread_local! {
     static TLS_THEAP_CACHED: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[inline]
+fn mi_prim_apple_tls_slot(slot: usize) -> *mut c_void {
+    let tcb: *mut *mut c_void;
+    unsafe {
+        core::arch::asm!(
+            "mrs {tcb}, tpidrro_el0",
+            "bic {tcb}, {tcb}, #7",
+            tcb = out(reg) tcb,
+            options(nostack, preserves_flags, readonly),
+        );
+        *tcb.add(slot)
+    }
+}
+
 #[cfg(target_os = "emscripten")]
 pub(crate) use emscripten::{
     _mi_prim_alloc, _mi_prim_alloc_huge_os_pages, _mi_prim_commit, _mi_prim_decommit,
@@ -246,6 +261,10 @@ unsafe fn mi_linux_x64_theap_cached_set(theap: Option<ThreadHeapPtr>) {
 pub fn mi_prim_tls_slot(slot: usize) -> *mut c_void {
     #[cfg(not(target_os = "linux"))]
     {
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        if slot == 0 {
+            return mi_prim_apple_tls_slot(slot);
+        }
         if MI_TLS_MODEL_FIXED_SLOT {
             match slot {
                 MI_TLS_MODEL_FIXED_SLOT_DEFAULT => TLS_SLOT_DEFAULT.with(Cell::get),
@@ -296,7 +315,14 @@ pub fn __mi_prim_thread_id() -> mi_threadid_t {
         }
         tid
     }
-    #[cfg(not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl"))))]
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        mi_prim_tls_slot(0) as mi_threadid_t
+    }
+    #[cfg(not(any(
+        all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")),
+        all(target_os = "macos", target_arch = "aarch64")
+    )))]
     {
         crate::init::fallback_thread_id()
     }

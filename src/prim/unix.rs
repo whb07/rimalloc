@@ -36,7 +36,7 @@ pub const GRND_NONBLOCK: c_int = 1;
 pub const MPOL_PREFERRED: c_ulong = 1;
 pub const R_OK: c_int = 4;
 pub const RUSAGE_SELF: c_int = 0;
-pub const PTHREAD_KEY_INVALID: pthread_key_t = u32::MAX;
+pub const PTHREAD_KEY_INVALID: pthread_key_t = pthread_key_t::MAX;
 
 #[cfg(any(
     target_os = "linux",
@@ -133,6 +133,9 @@ pub const MAP_HUGE_2MB: c_int = 21 << MAP_HUGE_SHIFT;
 pub const MAP_HUGE_1GB: c_int = 30 << MAP_HUGE_SHIFT;
 
 type c_ulong = u64;
+#[cfg(target_os = "macos")]
+type pthread_key_t = c_ulong;
+#[cfg(not(target_os = "macos"))]
 type pthread_key_t = c_uint;
 type ssize_t = isize;
 

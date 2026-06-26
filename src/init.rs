@@ -2115,6 +2115,7 @@ unsafe fn mi_process_init_inner() {
             crate::threadlocal::_mi_thread_locals_init();
             let _ = crate::page_map::_mi_page_map_init();
             crate::prim::_mi_prim_thread_init_auto_done();
+            _mi_theap_default_set(ptr::addr_of_mut!(theap_main));
             if !crate::prim::_mi_thread_is_initialized()
                 && !_mi_thread_init_theap_default().is_null()
             {

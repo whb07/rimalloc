@@ -1181,7 +1181,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: u
             fn arc4random_buf(buf: *mut c_void, nbytes: usize);
         }
         unsafe { arc4random_buf(buf, buf_len) };
-        return true;
+        true
     }
 
     #[cfg(any(target_os = "linux", target_os = "haiku"))]

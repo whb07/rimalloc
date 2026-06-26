@@ -1721,7 +1721,7 @@ unsafe fn mi_cpu_movsb_max() -> usize {
 #[inline]
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 unsafe fn mi_cpu_movsb_max() -> usize {
-    crate::init::_mi_cpu_movsb_max
+    unsafe { crate::init::_mi_cpu_movsb_max }
 }
 
 #[inline]
@@ -1741,7 +1741,7 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 #[inline]
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 unsafe fn mi_cpu_stosb_max() -> usize {
-    crate::init::_mi_cpu_stosb_max
+    unsafe { crate::init::_mi_cpu_stosb_max }
 }
 
 /// # Safety

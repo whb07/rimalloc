@@ -26,7 +26,9 @@ use crate::page::{
     mi_normal_page_queue_is_valid, mi_page_is_abandoned, mi_page_theap,
 };
 use crate::prim::{__mi_theap_empty, _mi_theap_default};
-use crate::random::{_mi_random_init, _mi_random_next, _mi_random_split};
+#[cfg(not(any(target_os = "macos", windows)))]
+use crate::random::_mi_random_init;
+use crate::random::{_mi_random_next, _mi_random_split};
 use crate::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
 use crate::types::{
     MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_SMALL_PAGE_SIZE,

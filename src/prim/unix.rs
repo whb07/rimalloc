@@ -13,7 +13,9 @@ use core::ptr;
 use core::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
 
 use crate::arena::MI_ARENA_SLICE_ALIGN;
-use crate::bits::{MI_GiB, MI_MiB};
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use crate::bits::MI_GiB;
+use crate::bits::MI_MiB;
 use crate::internal::{
     _mi_preloading, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen, _mi_toupper, MI_DEBUG,
 };
@@ -182,7 +184,10 @@ pub struct rusage {
 
 #[cfg(unix)]
 unsafe extern "C" {
+    #[cfg(not(target_vendor = "apple"))]
     fn __errno_location() -> *mut c_int;
+    #[cfg(target_vendor = "apple")]
+    fn __error() -> *mut c_int;
     fn getenv(name: *const c_char) -> *const c_char;
     fn open(path: *const c_char, oflag: c_int, ...) -> c_int;
     fn read(fd: c_int, buf: *mut c_void, count: usize) -> ssize_t;
@@ -309,7 +314,14 @@ const SYS_Getrandom: c_long = -1;
 
 #[inline]
 fn mi_last_errno() -> c_int {
-    unsafe { *__errno_location() }
+    #[cfg(target_vendor = "apple")]
+    unsafe {
+        *__error()
+    }
+    #[cfg(not(target_vendor = "apple"))]
+    unsafe {
+        *__errno_location()
+    }
 }
 
 /// # Safety

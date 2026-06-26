@@ -1,7 +1,9 @@
 //! Arena management
 
 use core::ffi::{c_int, c_long, c_void};
-use core::mem::{MaybeUninit, offset_of, size_of};
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use core::mem::offset_of;
+use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 

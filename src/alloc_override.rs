@@ -273,6 +273,8 @@ pub struct mi_interpose_s {
     pub target: *const c_void,
 }
 
+unsafe impl Sync for mi_interpose_s {}
+
 #[macro_export]
 macro_rules! MI_INTERPOSE_FUN {
     ($oldfun:path, $newfun:path) => {

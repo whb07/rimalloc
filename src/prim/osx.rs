@@ -279,7 +279,7 @@ pub unsafe extern "C" fn mi_malloc_jumpstart(_cookie: uintptr_t) -> c_int {
 /// forwarded zone.
 #[inline]
 pub unsafe extern "C" fn zone_size(zone: *mut malloc_zone_t, p: *const c_void) -> usize {
-    if mi_any_heap_contains(p) {
+    if unsafe { mi_any_heap_contains(p) } {
         unsafe { crate::mimalloc::mi_usable_size(p) }
     } else if !unsafe { is_mimalloc_zone(zone) } {
         match unsafe { (*zone).size } {
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn zone_valloc(_zone: *mut malloc_zone_t, size: usize) -> 
 /// forwarded zone.
 #[inline]
 pub unsafe extern "C" fn zone_free(zone: *mut malloc_zone_t, p: *mut c_void) {
-    if mi_any_heap_contains(p.cast_const()) {
+    if unsafe { mi_any_heap_contains(p.cast_const()) } {
         unsafe { crate::mimalloc::mi_free(p) };
     } else if !unsafe { is_mimalloc_zone(zone) }
         && let Some(free_fn) = unsafe { (*zone).free }
@@ -346,7 +346,7 @@ pub unsafe extern "C" fn zone_realloc(
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    if p.is_null() || mi_any_heap_contains(p.cast_const()) {
+    if p.is_null() || unsafe { mi_any_heap_contains(p.cast_const()) } {
         unsafe { crate::mimalloc::mi_realloc(p, newsize) }
     } else if !unsafe { is_mimalloc_zone(zone) } {
         match unsafe { (*zone).realloc } {
@@ -494,7 +494,7 @@ pub unsafe extern "C" fn zone_check(_zone: *mut malloc_zone_t) -> boolean_t {
 /// `p` must be null or an allocation pointer suitable for ownership queries.
 #[inline]
 pub unsafe extern "C" fn zone_from_ptr(p: *const c_void) -> *mut malloc_zone_t {
-    if mi_any_heap_contains(p) {
+    if unsafe { mi_any_heap_contains(p) } {
         unsafe { mi_get_default_zone() }
     } else {
         null_mut()

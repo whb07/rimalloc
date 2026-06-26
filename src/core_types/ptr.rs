@@ -1693,16 +1693,16 @@ mod tests {
 
     #[test]
     fn heap_ptr_field_helpers_read_and_write_heap_fields() {
-        let mut raw_heap = MaybeUninit::<mi_heap_t>::zeroed();
-        let raw_heap = raw_heap.as_mut_ptr();
+        let mut heap_storage = MaybeUninit::<mi_heap_t>::zeroed();
+        let raw_heap = heap_storage.as_mut_ptr();
         let heap = unsafe { HeapPtr::new_unchecked(raw_heap) };
 
-        let mut raw_subproc = MaybeUninit::<mi_subproc_t>::zeroed();
-        let subproc = unsafe { SubprocPtr::new_unchecked(raw_subproc.as_mut_ptr()) };
-        let mut raw_theap = MaybeUninit::<mi_theap_t>::zeroed();
-        let theap = unsafe { ThreadHeapPtr::new_unchecked(raw_theap.as_mut_ptr()) };
-        let mut raw_arena = MaybeUninit::<mi_arena_t>::zeroed();
-        let arena = unsafe { ArenaPtr::new_unchecked(raw_arena.as_mut_ptr()) };
+        let mut subproc_storage = MaybeUninit::<mi_subproc_t>::zeroed();
+        let subproc = unsafe { SubprocPtr::new_unchecked(subproc_storage.as_mut_ptr()) };
+        let mut theap_storage = MaybeUninit::<mi_theap_t>::zeroed();
+        let theap = unsafe { ThreadHeapPtr::new_unchecked(theap_storage.as_mut_ptr()) };
+        let mut arena_storage = MaybeUninit::<mi_arena_t>::zeroed();
+        let arena = unsafe { ArenaPtr::new_unchecked(arena_storage.as_mut_ptr()) };
 
         unsafe {
             heap.set_subproc(Some(subproc));
@@ -1752,14 +1752,14 @@ mod tests {
 
     #[test]
     fn thread_heap_ptr_field_helpers_read_and_write_thread_heap_fields() {
-        let mut raw_theap = MaybeUninit::<mi_theap_t>::zeroed();
-        let raw_theap = raw_theap.as_mut_ptr();
+        let mut theap_storage = MaybeUninit::<mi_theap_t>::zeroed();
+        let raw_theap = theap_storage.as_mut_ptr();
         let theap = unsafe { ThreadHeapPtr::new_unchecked(raw_theap) };
 
-        let mut raw_tld = MaybeUninit::<mi_tld_t>::zeroed();
-        let tld = unsafe { TldPtr::new_unchecked(raw_tld.as_mut_ptr()) };
-        let mut raw_heap = MaybeUninit::<mi_heap_t>::zeroed();
-        let heap = unsafe { HeapPtr::new_unchecked(raw_heap.as_mut_ptr()) };
+        let mut tld_storage = MaybeUninit::<mi_tld_t>::zeroed();
+        let tld = unsafe { TldPtr::new_unchecked(tld_storage.as_mut_ptr()) };
+        let mut heap_storage = MaybeUninit::<mi_heap_t>::zeroed();
+        let heap = unsafe { HeapPtr::new_unchecked(heap_storage.as_mut_ptr()) };
 
         unsafe {
             theap.set_tld(Some(tld));

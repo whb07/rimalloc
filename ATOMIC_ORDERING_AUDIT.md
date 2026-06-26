@@ -14,6 +14,8 @@ supported default matrix:
   relaxed. The lock and once helpers match `atomic.h`/`libc.c`: lock acquire is
   CAS `AcqRel` with `Acquire` failure, release is `Release`, once entry loads
   `Acquire`, claims with CAS `AcqRel`, and publishes completion with `Release`.
+- `src/bench_diagnostics.rs`: diagnostic counters use relaxed atomics because
+  they are process-local measurement aids and do not publish allocator metadata.
 - `src/arena.rs`: arena publication and lookup orderings match C arena/page
   ownership paths. Published `arena_pages` pointers use `Release` stores and
   `Acquire` loads; abandoned counters and local heap counts stay relaxed as in C;

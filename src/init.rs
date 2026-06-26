@@ -340,16 +340,16 @@ const MI_PAGE_QUEUE_WORD_SIZES: [usize; MI_BIN_COUNT] = [
     65536,
     81920,
     98304,
-    114688,
-    131072,
-    163840,
-    196608,
-    229376,
-    262144,
-    327680,
-    393216,
-    458752,
-    524288,
+    114_688,
+    131_072,
+    163_840,
+    196_608,
+    229_376,
+    262_144,
+    327_680,
+    393_216,
+    458_752,
+    524_288,
     crate::stats::MI_LARGE_MAX_OBJ_WSIZE + 1,
     crate::stats::MI_LARGE_MAX_OBJ_WSIZE + 2,
 ];
@@ -448,7 +448,7 @@ static mut theap_main: mi_theap_t = mi_theap_t {
     heartbeat: 0,
     cookie: 0,
     random: mi_random_ctx_t {
-        input: [0x846ca68b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        input: [0x846c_a68b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         output: [0; 16],
         output_available: 0,
         weak: true,
@@ -2163,6 +2163,7 @@ unsafe fn mi_process_init_inner() {
             crate::threadlocal::_mi_thread_locals_init();
             let _ = crate::page_map::_mi_page_map_init();
             crate::prim::_mi_prim_thread_init_auto_done();
+            _mi_theap_default_set(ptr::addr_of_mut!(theap_main));
             if !crate::prim::_mi_thread_is_initialized()
                 && !_mi_thread_init_theap_default().is_null()
             {

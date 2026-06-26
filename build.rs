@@ -125,7 +125,7 @@ fn compile_tls_shim() {
 fn link_linux_cdylib_exports() {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let version_script = out_dir.join("mimalloc.exports");
-    let exports = r#"{
+    let exports = r"{
   global:
     _Zda*;
     _Zdl*;
@@ -148,7 +148,7 @@ fn link_linux_cdylib_exports() {
   local:
     *;
 };
-"#;
+";
 
     std::fs::write(&version_script, exports).expect("failed to write Linux export script");
     println!(
@@ -182,6 +182,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CXX");
     println!("cargo:rerun-if-env-changed=AR");
     println!("cargo:rustc-check-cfg=cfg(mi_c_malloc_fast)");
+    println!("cargo:rustc-check-cfg=cfg(mi_osx_interpose)");
     println!("cargo:rustc-check-cfg=cfg(mi_internal_c_probe)");
     println!("cargo:rustc-check-cfg=cfg(mi_sanitizer_runtime)");
 
@@ -207,13 +208,16 @@ fn main() {
             println!("cargo:warning=skipping TLS shim on unsupported target_os={target_os}");
         }
     }
+    if target_os == "macos" && profile == "release" {
+        println!("cargo:rustc-cfg=mi_osx_interpose");
+    }
 
     let valgrind = env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_some();
     let asan = env::var_os("CARGO_FEATURE_TRACK_ASAN").is_some();
 
     match (valgrind, asan) {
-        (true, false) => compile_track_shim(&["MI_TRACK_VALGRIND=1"], &[]),
+        (true, _) => compile_track_shim(&["MI_TRACK_VALGRIND=1"], &[]),
         (false, true) => compile_track_shim(&["MI_TRACK_ASAN=1"], &["-fsanitize=address"]),
-        _ => {}
+        (false, false) => {}
     }
 }

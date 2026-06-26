@@ -88,7 +88,8 @@ Default features are empty.
 - `track-valgrind`: enable Valgrind tracking shims.
 - `track-asan`: enable ASan tracking shims.
 
-`track-valgrind` and `track-asan` are mutually exclusive.
+When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
+builds, Valgrind mode takes precedence.
 
 ## Supported Targets
 
@@ -109,6 +110,18 @@ scripts/check-local.sh
 Individual entrypoints are available under `scripts/` for formatting, lints,
 feature sweeps, ABI symbols, layout, docs, packaging, benchmark smoke/full
 runs, Miri, sanitizers, and environment capture.
+
+For direct Clippy runs, use the Cargo alias:
+
+```sh
+cargo clippy-strict
+```
+
+The alias expands to `cargo clippy --all-targets --all-features`; lint levels
+are defined in `Cargo.toml`, so plain `cargo clippy` uses the same deny policy
+for Cargo's default target/feature selection. The `scripts/check-lints.sh`
+entrypoint remains the compatibility sweep for feature combinations that cannot
+be enabled together.
 
 Benchmark evidence is tracked in `BENCHMARK_RESULTS.md`; policy and thresholds
 are documented in `docs/performance.md`. Performance-sensitive changes should

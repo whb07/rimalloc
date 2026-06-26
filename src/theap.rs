@@ -26,7 +26,9 @@ use crate::page::{
     mi_normal_page_queue_is_valid, mi_page_is_abandoned, mi_page_theap,
 };
 use crate::prim::{__mi_theap_empty, _mi_theap_default};
-use crate::random::{_mi_random_init, _mi_random_next, _mi_random_split};
+#[cfg(not(any(target_os = "macos", windows)))]
+use crate::random::_mi_random_init;
+use crate::random::{_mi_random_next, _mi_random_split};
 use crate::stats::{__mi_stat_decrease_mt, __mi_stat_increase_mt, _mi_stats_merge_into};
 use crate::types::{
     MI_ARENA_MIN_OBJ_SIZE, MI_BIN_COUNT, MI_BIN_FULL, MI_BIN_HUGE, MI_SMALL_PAGE_SIZE,
@@ -884,23 +886,23 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
         }
 
         mi_lock_acquire(ptr::addr_of_mut!((*tld_raw).theaps_lock));
-        let head: *mut mi_theap_t = (*tld_raw).theaps;
+        let tld_theaps_head: *mut mi_theap_t = (*tld_raw).theaps;
         (*theap_raw).tprev = ptr::null_mut();
-        (*theap_raw).tnext = head;
-        if !head.is_null() {
-            (*head).tprev = theap_raw;
+        (*theap_raw).tnext = tld_theaps_head;
+        if !tld_theaps_head.is_null() {
+            (*tld_theaps_head).tprev = theap_raw;
         }
         (*tld_raw).theaps = theap_raw;
         mi_lock_release(ptr::addr_of_mut!((*tld_raw).theaps_lock));
 
-        if head.is_null() {
+        if tld_theaps_head.is_null() {
             #[cfg(any(target_os = "macos", windows))]
             crate::internal::_mi_random_init_weak(ptr::addr_of_mut!((*theap_raw).random));
             #[cfg(not(any(target_os = "macos", windows)))]
             _mi_random_init(ptr::addr_of_mut!((*theap_raw).random));
         } else {
             _mi_random_split(
-                ptr::addr_of_mut!((*head).random),
+                ptr::addr_of_mut!((*tld_theaps_head).random),
                 ptr::addr_of_mut!((*theap_raw).random),
             );
         }
@@ -909,11 +911,11 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
         __mi_stat_increase_mt(&mut (*_mi_subproc()).stats.theaps, 1);
 
         mi_lock_acquire(ptr::addr_of_mut!((*heap_raw).theaps_lock));
-        let head = (*heap_raw).theaps;
+        let heap_theaps_head = (*heap_raw).theaps;
         (*theap_raw).hprev = ptr::null_mut();
-        (*theap_raw).hnext = head;
-        if !head.is_null() {
-            (*head).hprev = theap_raw;
+        (*theap_raw).hnext = heap_theaps_head;
+        if !heap_theaps_head.is_null() {
+            (*heap_theaps_head).hprev = theap_raw;
         }
         (*heap_raw).theaps = theap_raw;
         mi_lock_release(ptr::addr_of_mut!((*heap_raw).theaps_lock));

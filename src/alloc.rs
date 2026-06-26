@@ -57,10 +57,12 @@ unsafe fn mi_set_errno(err: c_int) {
 
 #[cfg(target_vendor = "apple")]
 unsafe fn mi_set_errno(err: c_int) {
-    unsafe extern "C" {
-        fn __error() -> *mut c_int;
+    unsafe {
+        unsafe extern "C" {
+            fn __error() -> *mut c_int;
+        }
+        *__error() = err;
     }
-    *__error() = err;
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]

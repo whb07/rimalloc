@@ -156,11 +156,11 @@ pub unsafe extern "C" fn mi_heap_new_in_arena(exclusive_arena_id: mi_arena_id_t)
 
         let subproc = (*heap).subproc;
         mi_lock_acquire(ptr::addr_of_mut!((*subproc).heaps_lock));
-        let head = (*subproc).heaps;
+        let heap_head = (*subproc).heaps;
         (*heap).prev = ptr::null_mut();
-        (*heap).next = head;
-        if !head.is_null() {
-            (*head).prev = heap;
+        (*heap).next = heap_head;
+        if !heap_head.is_null() {
+            (*heap_head).prev = heap;
         }
         (*subproc).heaps = heap;
         mi_lock_release(ptr::addr_of_mut!((*subproc).heaps_lock));

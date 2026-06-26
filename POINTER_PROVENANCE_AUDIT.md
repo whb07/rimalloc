@@ -31,6 +31,8 @@ Shared invariants:
 
 Per-file review:
 
+- `src/abi.rs`: public ABI declarations preserve raw C pointer shapes for
+  external callers; no ownership is created by declaration-only casts.
 - `src/alloc.rs`: public count/size allocation paths use overflow helpers before
   allocating; page and block pointer use is delegated to checked heap/page
   helpers.
@@ -48,10 +50,20 @@ Per-file review:
   metadata page mappings and checks block indexes/counts against `mi_memid_t`.
 - `src/atomic.rs`: pointer casts centralize C-compatible atomic access to
   allocator-owned atomic fields; ordering is covered by `ATOMIC_ORDERING_AUDIT.md`.
+- `src/bench_diagnostics.rs`: diagnostic pointer and integer markers are limited
+  to test/benchmark instrumentation and do not feed allocator ownership.
 - `src/bitmap.rs`: bit indexes are converted to bitmap word indexes with bounded
   counts; scan and claim loops stay within the caller-provided bitmap storage.
 - `src/bits.rs`: bit-scan, rotate, and power-of-two helpers use integer-only
   arithmetic equivalent to C intrinsics.
+- `src/core_types/arena.rs`, `src/core_types/atomic_wrappers.rs`,
+  `src/core_types/callbacks.rs`, `src/core_types/freelist.rs`,
+  `src/core_types/freelist_wrappers.rs`, `src/core_types/guarded.rs`,
+  `src/core_types/layout.rs`, `src/core_types/memid.rs`,
+  `src/core_types/padding.rs`, `src/core_types/ptr.rs`,
+  `src/core_types/scalar.rs`, and `src/core_types/track.rs`: typed wrappers
+  encode allocator layout, pointer, scalar, callback, and tracking invariants;
+  arithmetic remains a checked facade over the same C-compatible metadata.
 - `src/free.rs`: free paths compute block starts, padding locations, and guarded
   page addresses only after page lookup/ownership checks.
 - `src/headers.rs`: macro casts preserve C header API types and forward to the
@@ -90,6 +102,8 @@ Per-file review:
 - `src/random.rs`: wrapping arithmetic is intentional ChaCha/hash mixing; context
   pointer values are used only as entropy seeds, not dereferenced after integer
   conversion.
+- `src/safe.rs`: safe facade pointer casts are limited to forwarding caller-owned
+  handles into the raw ABI after preserving the public API contract.
 - `src/stats.rs`: output-buffer pointer increments are bounded by buffer size;
   stat-to-process-info conversions clamp negative counters before casting.
 - `src/theap.rs`: page/block visitors walk initialized page areas with capacity

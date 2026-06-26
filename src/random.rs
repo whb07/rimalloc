@@ -8,6 +8,7 @@ use crate::types::{mi_msecs_t, mi_random_ctx_t};
 const MI_CHACHA_ROUNDS: usize = 20;
 
 #[inline]
+#[allow(clippy::many_single_char_names)]
 fn qround(x: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize) {
     x[a] = x[a].wrapping_add(x[b]);
     x[d] = mi_rotl32(x[d] ^ x[a], 16);

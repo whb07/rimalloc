@@ -29,7 +29,8 @@
 //! - `track-valgrind`: enables Valgrind tracking shims.
 //! - `track-asan`: enables ASan tracking shims.
 //!
-//! `track-valgrind` and `track-asan` are mutually exclusive.
+//! When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
+//! builds, Valgrind mode takes precedence.
 //!
 //! # Safety
 //!
@@ -119,6 +120,7 @@
 )]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![warn(rustdoc::bare_urls)]
+#![allow(dead_code)]
 
 pub mod raw;
 

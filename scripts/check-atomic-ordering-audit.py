@@ -15,6 +15,7 @@ AUDITED_RUST_FILES = {
     "src/arena.rs",
     "src/arena_meta.rs",
     "src/atomic.rs",
+    "src/bench_diagnostics.rs",
     "src/bitmap.rs",
     "src/core_types/atomic_wrappers.rs",
     "src/heap.rs",

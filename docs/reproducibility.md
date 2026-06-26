@@ -30,11 +30,29 @@ scripts/check-fmt.sh
 ## Linting
 
 Clippy uses `clippy.toml` with the crate MSRV from `Cargo.toml` and
-`rust-toolchain.toml`. Lints are checked by:
+`rust-toolchain.toml`. The lint deny policy lives in `Cargo.toml`, including
+Rust warnings and the `clippy::all`, `clippy::pedantic`, `clippy::nursery`, and
+`clippy::cargo` groups.
+
+For direct Clippy runs, use:
+
+```sh
+cargo clippy-strict
+```
+
+This Cargo alias expands to `cargo clippy --all-targets --all-features`.
+Running plain `cargo clippy` applies the same lint deny policy, but only to
+Cargo's default target and feature selection.
+
+The full repository lint entrypoint is:
 
 ```sh
 scripts/check-lints.sh
 ```
+
+Use the script when you need the repository's feature matrix checks, including
+mutually exclusive feature combinations that cannot be represented by one
+`--all-features` invocation.
 
 ## Benchmark Reproduction
 

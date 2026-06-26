@@ -13,7 +13,9 @@ use core::ptr;
 use core::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
 
 use crate::arena::MI_ARENA_SLICE_ALIGN;
-use crate::bits::{MI_GiB, MI_MiB};
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use crate::bits::MI_GiB;
+use crate::bits::MI_MiB;
 use crate::internal::{
     _mi_preloading, _mi_strlcpy, _mi_strlen, _mi_strnicmp, _mi_strnlen, _mi_toupper, MI_DEBUG,
 };
@@ -34,7 +36,7 @@ pub const GRND_NONBLOCK: c_int = 1;
 pub const MPOL_PREFERRED: c_ulong = 1;
 pub const R_OK: c_int = 4;
 pub const RUSAGE_SELF: c_int = 0;
-pub const PTHREAD_KEY_INVALID: pthread_key_t = u32::MAX;
+pub const PTHREAD_KEY_INVALID: pthread_key_t = pthread_key_t::MAX;
 
 #[cfg(any(
     target_os = "linux",
@@ -131,6 +133,9 @@ pub const MAP_HUGE_2MB: c_int = 21 << MAP_HUGE_SHIFT;
 pub const MAP_HUGE_1GB: c_int = 30 << MAP_HUGE_SHIFT;
 
 type c_ulong = u64;
+#[cfg(target_os = "macos")]
+type pthread_key_t = c_ulong;
+#[cfg(not(target_os = "macos"))]
 type pthread_key_t = c_uint;
 type ssize_t = isize;
 
@@ -182,7 +187,10 @@ pub struct rusage {
 
 #[cfg(unix)]
 unsafe extern "C" {
+    #[cfg(not(target_vendor = "apple"))]
     fn __errno_location() -> *mut c_int;
+    #[cfg(target_vendor = "apple")]
+    fn __error() -> *mut c_int;
     fn getenv(name: *const c_char) -> *const c_char;
     fn open(path: *const c_char, oflag: c_int, ...) -> c_int;
     fn read(fd: c_int, buf: *mut c_void, count: usize) -> ssize_t;
@@ -309,7 +317,14 @@ const SYS_Getrandom: c_long = -1;
 
 #[inline]
 fn mi_last_errno() -> c_int {
-    unsafe { *__errno_location() }
+    #[cfg(target_vendor = "apple")]
+    unsafe {
+        *__error()
+    }
+    #[cfg(not(target_vendor = "apple"))]
+    unsafe {
+        *__errno_location()
+    }
 }
 
 /// # Safety
@@ -1166,7 +1181,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: u
             fn arc4random_buf(buf: *mut c_void, nbytes: usize);
         }
         unsafe { arc4random_buf(buf, buf_len) };
-        return true;
+        true
     }
 
     #[cfg(any(target_os = "linux", target_os = "haiku"))]

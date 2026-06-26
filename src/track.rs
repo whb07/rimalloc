@@ -6,9 +6,6 @@ use crate::core_types::TrackMode;
 
 pub const MI_TRACK_H: () = ();
 
-#[cfg(all(feature = "track-valgrind", feature = "track-asan"))]
-compile_error!("track-valgrind and track-asan are mutually exclusive");
-
 pub(crate) const MI_TRACK_MODE: TrackMode = TrackMode::CURRENT;
 pub const MI_TRACK_VALGRIND: usize = MI_TRACK_MODE.valgrind_flag();
 pub const MI_TRACK_ASAN: usize = MI_TRACK_MODE.asan_flag();

@@ -1230,13 +1230,16 @@ const _: fn(mi_thread_free_t) -> bool = mi_tf_is_owned;
 
 #[inline]
 pub(crate) fn mi_tf_create(block: *mut mi_block_t, owned: bool) -> mi_thread_free_t {
-    let owner = if owned {
+    let free_owner = if owned {
         crate::core_types::ThreadFreeOwner::Owned
     } else {
         crate::core_types::ThreadFreeOwner::Unowned
     };
-    crate::core_types::ThreadFreeWord::from_parts(crate::core_types::BlockPtr::new(block), owner)
-        .raw()
+    crate::core_types::ThreadFreeWord::from_parts(
+        crate::core_types::BlockPtr::new(block),
+        free_owner,
+    )
+    .raw()
 }
 
 const _: fn(*mut mi_block_t, bool) -> mi_thread_free_t = mi_tf_create;
@@ -1739,7 +1742,7 @@ unsafe fn mi_cpu_movsb_max() -> usize {
 #[inline]
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 unsafe fn mi_cpu_movsb_max() -> usize {
-    crate::init::_mi_cpu_movsb_max
+    unsafe { crate::init::_mi_cpu_movsb_max }
 }
 
 #[inline]
@@ -1759,7 +1762,7 @@ unsafe fn mi_cpu_stosb_max() -> usize {
 #[inline]
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 unsafe fn mi_cpu_stosb_max() -> usize {
-    crate::init::_mi_cpu_stosb_max
+    unsafe { crate::init::_mi_cpu_stosb_max }
 }
 
 /// # Safety

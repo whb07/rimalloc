@@ -1,7 +1,9 @@
 //! Arena management
 
 use core::ffi::{c_int, c_long, c_void};
-use core::mem::{MaybeUninit, offset_of, size_of};
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use core::mem::offset_of;
+use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
@@ -55,9 +57,10 @@ use crate::theap::{_mi_heap_area_init, _mi_theap_area_visit_blocks};
 use crate::track::{mi_track_mem_defined, mi_track_mem_undefined};
 use crate::types::{
     MI_BIN_COUNT, MI_ENABLE_LARGE_PAGES, MI_PAGE_ALIGN, MI_PAGE_MAX_OVERALLOC_ALIGN,
-    MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE, MI_SMALL_SIZE_MAX, mi_arena_id_t,
-    mi_arena_t, mi_block_visit_fun, mi_commit_fun_t, mi_heap_area_t, mi_heap_t, mi_msecs_t,
-    mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_local_t, mi_tld_t,
+    MI_PAGE_MAX_START_BLOCK_ALIGN2, MI_PAGE_META_ALIGNED_FREE_SMALL, MI_PAGE_MIN_COMMIT_SIZE,
+    MI_SMALL_SIZE_MAX, mi_arena_id_t, mi_arena_t, mi_block_visit_fun, mi_commit_fun_t,
+    mi_heap_area_t, mi_heap_t, mi_msecs_t, mi_page_t, mi_subproc_t, mi_theap_t, mi_thread_local_t,
+    mi_tld_t,
 };
 
 pub const MI_ARENA_SLICE_SIZE: usize = 8192 * size_of::<usize>();
@@ -538,7 +541,7 @@ unsafe extern "C" fn mi_heap_delete_page(
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
-        let arena = unsafe {
+        let arena_id = unsafe {
             mi_page_arena_pages(
                 PagePtr::new_unchecked(page),
                 &mut slice_index,
@@ -563,11 +566,12 @@ unsafe extern "C" fn mi_heap_delete_page(
         let mut theap_target = unsafe { (*info).theap_target };
 
         let mut arena_pages_target =
-            unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena) };
+            unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena_id) };
         if arena_pages_target.is_null() {
             heap_target = unsafe { mi_heap_main() };
             theap_target = unsafe { mi_heap_theap(heap_target) };
-            arena_pages_target = unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena) };
+            arena_pages_target =
+                unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena_id) };
             crate::mi_assert_internal!(!arena_pages_target.is_null());
         }
         crate::mi_assert_internal!(unsafe {
@@ -2899,7 +2903,7 @@ unsafe fn mi_page_block_start(block_size: crate::core_types::BlockSize, os_align
     if os_align {
         MI_PAGE_ALIGN
     } else if crate::internal::_mi_is_power_of_two(block_size)
-        && block_size <= MI_PAGE_BLOCK_START_MAX_OFFSET
+        && block_size <= MI_PAGE_MAX_START_BLOCK_ALIGN2
     {
         _mi_align_up(crate::internal::mi_page_info_size(), block_size)
     } else if block_size != 0 && block_size.is_multiple_of(MI_PAGE_OSPAGE_BLOCK_ALIGN2) {

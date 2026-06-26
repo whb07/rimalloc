@@ -27,6 +27,8 @@ shared invariants:
 
 Per-file review:
 
+- `src/abi.rs`: raw declarations expose the C ABI surface without adding
+  allocator ownership assumptions.
 - `src/alloc.rs`: allocation fast paths dereference heaps, theaps, pages, and
   free-list blocks after initialization and size-class selection. Usable-size
   out-pointers are checked for null before writes. Overflow-prone count/size
@@ -48,9 +50,22 @@ Per-file review:
 - `src/atomic.rs`: raw atomic pointer casts are centralized here and mapped to
   C mimalloc atomic operations. Ordering equivalence is covered by
   `ATOMIC_ORDERING_AUDIT.md`.
+- `src/bench_diagnostics.rs`: unsafe diagnostic hooks are test/benchmark support
+  and do not mutate allocator metadata outside the measured path.
 - `src/bitmap.rs`: bitmap word pointers are derived from caller-provided bitmap
   storage and bounded by bit counts; set/clear/claim transitions use atomic word
   operations equivalent to C.
+- `src/core_types/arena.rs`, `src/core_types/atomic_wrappers.rs`,
+  `src/core_types/callbacks.rs`, `src/core_types/freelist.rs`,
+  `src/core_types/freelist_wrappers.rs`, `src/core_types/guarded.rs`,
+  `src/core_types/heap.rs`, `src/core_types/layout.rs`,
+  `src/core_types/memid.rs`, `src/core_types/padding.rs`,
+  `src/core_types/page.rs`, `src/core_types/page_queues.rs`,
+  `src/core_types/page_states.rs`, `src/core_types/ptr.rs`,
+  `src/core_types/scalar.rs`, `src/core_types/validation.rs`, and
+  `src/core_types/validation_extra.rs`: typed newtypes and validation helpers
+  confine raw metadata, page, heap, callback, freelist, and scalar invariants to
+  small wrappers used by the translated allocator paths.
 - `src/free.rs`: free paths recover page metadata from owned block pointers,
   validate page ownership where C does, and route remote frees through delayed
   free queues instead of mutating foreign-thread page state directly.
@@ -64,6 +79,8 @@ Per-file review:
   blocks, encoded free-list links, memids, and memcpy/memset wrappers. Callers
   are responsible for passing allocator-owned pointers; helpers are small and
   C-invariant preserving.
+- `src/lib.rs`: crate-level exported allocator configuration keeps unsafe global
+  allocator wiring at the public boundary.
 - `src/libc.rs`: libc FFI calls are thin wrappers around platform C APIs with
   C-compatible argument passing.
 - `src/mimalloc.rs`: declarations expose the public ABI surface for tests and
@@ -98,6 +115,9 @@ Per-file review:
   allocator-owned range metadata in memids.
 - `src/random.rs`: entropy buffer writes use slice creation only after checking
   for null and length, and random contexts are caller-owned allocator metadata.
+- `src/raw.rs`: raw module re-exports preserve the C ABI contract for callers.
+- `src/safe.rs`: safe facade wrappers forward to raw allocator APIs while keeping
+  unsafe pointer use at the boundary.
 - `src/stats.rs`: stats pointers are null-checked for public getters, and
   internal merges operate on allocator-owned stats structures. Callback output
   uses C-compatible function pointers.

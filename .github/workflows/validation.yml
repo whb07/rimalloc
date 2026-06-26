@@ -75,6 +75,16 @@ jobs:
       - name: Stress, fuzz, oversize, alignment, and zero-size coverage
         run: scripts/check-safety-stress.sh
 
+  miri:
+    name: Miri core unsafe validation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nightly Rust with Miri
+        run: rustup toolchain install nightly --component miri --component rust-src
+      - name: Run Miri stacked and tree-borrows checks
+        run: scripts/check-miri-all.sh
+
   address-sanitizer:
     name: AddressSanitizer
     runs-on: ubuntu-24.04

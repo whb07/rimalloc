@@ -328,7 +328,7 @@ unsafe extern "C" {
     pub fn malloc_good_size(size: usize) -> usize;
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 unsafe extern "C" {
     fn strndup(s: *const c_char, n: usize) -> *mut c_char;
     fn aligned_alloc(alignment: usize, size: usize) -> *mut c_void;
@@ -351,7 +351,7 @@ unsafe extern "C" {
     fn _ZnamRKSt9nothrow_t(n: usize, tag: mi_nothrow_t) -> *mut c_void;
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 #[used]
 #[unsafe(link_section = "__DATA,__interpose")]
 pub static _mi_interposes: [mi_interpose_s; 12] = [
@@ -369,17 +369,17 @@ pub static _mi_interposes: [mi_interpose_s; 12] = [
     MI_INTERPOSE_FUN!(vfree, crate::mimalloc::mi_cfree),
 ];
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 pub static _mi_interposes_10_7: [mi_interpose_s; 1] =
     [MI_INTERPOSE_FUN!(strndup, crate::mimalloc::mi_strndup)];
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 pub static _mi_interposes_10_15: [mi_interpose_s; 1] = [MI_INTERPOSE_FUN!(
     aligned_alloc,
     crate::mimalloc::mi_aligned_alloc
 )];
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 #[used]
 #[unsafe(link_section = "__DATA,__interpose")]
 pub static _mi_cxx_interposes: [mi_interpose_s; 8] = [

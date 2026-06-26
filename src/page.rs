@@ -2301,7 +2301,7 @@ pub unsafe fn mi_theap_page_queue_of(
             crate::core_types::ThreadHeapPtr::new_unchecked(theap),
         );
         let block_size = crate::core_types::BlockSize::new_unchecked(mi_page_block_size(page));
-        let pq = if mi_page_is_in_full(page) {
+        let pq = if mi_page_is_in_full(page) || mi_page_is_huge(page) {
             crate::core_types::PageQueuePtr::new_unchecked(ptr::addr_of_mut!(
                 (*theap.ptr().as_ptr()).pages[bin]
             ))

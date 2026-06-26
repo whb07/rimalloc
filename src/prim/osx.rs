@@ -542,7 +542,7 @@ pub unsafe extern "C" fn zone_unregister(_zone: *mut malloc_zone_t) {
     // nothing
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 #[used]
 #[unsafe(link_section = "__DATA,__interpose")]
 pub static _mi_zone_interposes: [mi_interpose_s; 27] = [
@@ -593,7 +593,7 @@ pub static _mi_zone_interposes: [mi_interpose_s; 27] = [
     MI_INTERPOSE_ZONE!(zone_valloc),
 ];
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 /// # Safety
 ///
 /// Must be called during macOS process initialization before allocator override
@@ -624,7 +624,7 @@ pub unsafe extern "C" fn _mi_macos_override_malloc() {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 #[used]
 #[unsafe(link_section = "__DATA,__mod_init_func")]
 pub static _mi_macos_override_malloc_ctor: unsafe extern "C" fn() = _mi_macos_override_malloc;

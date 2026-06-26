@@ -157,6 +157,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_GUARDED");
     println!("cargo:rerun-if-env-changed=CXX");
     println!("cargo:rustc-check-cfg=cfg(mi_c_malloc_fast)");
+    println!("cargo:rustc-check-cfg=cfg(mi_osx_interpose)");
     println!("cargo:rustc-check-cfg=cfg(mi_internal_c_probe)");
 
     if target_os != "windows" {
@@ -174,6 +175,9 @@ fn main() {
             println!("cargo:rustc-cfg=mi_c_malloc_fast");
         }
         compile_tls_shim();
+    }
+    if target_os == "macos" && profile == "release" {
+        println!("cargo:rustc-cfg=mi_osx_interpose");
     }
 
     let valgrind = env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_some();

@@ -51,12 +51,16 @@ fn production_lines(contents: &str) -> Vec<(usize, &str)> {
             continue;
         }
 
-        if trimmed.starts_with("#[cfg(test)]") {
+        if trimmed.starts_with("#[cfg(test)]") || trimmed.starts_with("#[cfg(all(test,") {
             pending_test_cfg = true;
             continue;
         }
 
-        if pending_test_cfg && trimmed.starts_with("mod tests") {
+        if pending_test_cfg
+            && (trimmed.starts_with("mod ")
+                || trimmed.starts_with("pub mod ")
+                || trimmed.starts_with("pub(crate) mod "))
+        {
             skip_test_module = true;
             brace_depth = line
                 .matches('{')

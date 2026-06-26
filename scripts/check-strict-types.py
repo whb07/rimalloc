@@ -118,6 +118,56 @@ def strip_line_comment(line: str) -> str:
     return line.split("//", 1)[0]
 
 
+def is_test_cfg_attr(trimmed: str) -> bool:
+    return trimmed.startswith("#[cfg(test)]") or trimmed.startswith("#[cfg(all(test,")
+
+
+def is_module_start(trimmed: str) -> bool:
+    return (
+        trimmed.startswith("mod ")
+        or trimmed.startswith("pub mod ")
+        or trimmed.startswith("pub(crate) mod ")
+    )
+
+
+def production_source_text(text: str) -> str:
+    lines: list[str] = []
+    skip_test_module = False
+    pending_test_cfg = False
+    brace_depth = 0
+
+    for line in text.splitlines():
+        trimmed = line.lstrip()
+
+        if skip_test_module:
+            lines.append("")
+            brace_depth += line.count("{")
+            brace_depth -= line.count("}")
+            if brace_depth <= 0:
+                skip_test_module = False
+                brace_depth = 0
+            continue
+
+        if is_test_cfg_attr(trimmed):
+            pending_test_cfg = True
+            lines.append("")
+            continue
+
+        if pending_test_cfg and is_module_start(trimmed):
+            skip_test_module = True
+            brace_depth = line.count("{") - line.count("}")
+            lines.append("")
+            if brace_depth <= 0:
+                skip_test_module = False
+            pending_test_cfg = False
+            continue
+
+        pending_test_cfg = False
+        lines.append(line)
+
+    return "\n".join(lines)
+
+
 def read_allowlist() -> list[AllowEntry]:
     entries: list[AllowEntry] = []
     if not ALLOWLIST.exists():
@@ -213,7 +263,7 @@ def main() -> int:
 
     for path in source_files():
         rel = path.relative_to(ROOT).as_posix()
-        text = path.read_text()
+        text = production_source_text(path.read_text())
 
         if rel.startswith("src/core_types/") and CORE_TYPES_DEAD_CODE_RE.search(text):
             offenders.append(f"{rel}: crate-level dead_code allowance in core_types module")

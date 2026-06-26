@@ -82,8 +82,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install nightly Rust with Miri
         run: rustup toolchain install nightly --component miri --component rust-src
-      - name: Run Miri stacked and tree-borrows checks
-        run: scripts/check-miri-all.sh
+      - name: Run Miri stacked, tree-borrows, strict, and strict tree-borrows checks
+        run: bash scripts/check-miri-all.sh
 
   address-sanitizer:
     name: AddressSanitizer

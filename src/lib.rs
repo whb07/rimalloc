@@ -148,6 +148,7 @@ mod os;
 mod page;
 mod page_map;
 mod prim;
+mod provenance;
 mod random;
 mod safe;
 #[path = "static.rs"]

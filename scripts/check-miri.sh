@@ -26,6 +26,10 @@ if [[ "${MIRI_SYMBOLIC_ALIGNMENT_CHECK:-1}" != "0" ]]; then
   append_default_miri_flag "-Zmiri-symbolic-alignment-check"
 fi
 
+if [[ "${MIRI_STRICT_PROVENANCE:-0}" != "0" ]]; then
+  append_default_miri_flag "-Zmiri-strict-provenance"
+fi
+
 case "${borrow_model}" in
   stacked | "") ;;
   tree | tree-borrows)

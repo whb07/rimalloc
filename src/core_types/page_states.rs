@@ -508,7 +508,7 @@ mod tests {
     #[test]
     fn active_available_and_pop_free_block_update_page_state() {
         let mut page = MaybeUninit::<mi_page_t>::uninit();
-        let mut block = mi_block_t { next: 0 };
+        let mut block = mi_block_t::default();
         unsafe {
             let raw = page.as_mut_ptr();
             ptr::addr_of_mut!((*raw).free).write(ptr::addr_of_mut!(block));
@@ -520,6 +520,7 @@ mod tests {
                 feature = "track-asan"
             ))]
             ptr::addr_of_mut!((*raw).keys).write([0, 0]);
+            crate::internal::mi_block_set_next(raw, ptr::addr_of_mut!(block), ptr::null());
 
             let active = ActivePage::new_unchecked(PagePtr::new_unchecked(raw));
             let available = active.available().expect("non-null free head is available");

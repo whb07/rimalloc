@@ -2427,37 +2427,63 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     assert!(
         ptr_core_rs.contains("pub(crate) fn ptr_exposed_addr<T>(ptr: *const T) -> usize")
             && ptr_core_rs.contains("ptr as usize")
+            && ptr_core_rs.contains("ptr.addr()")
             && ptr_core_rs.contains("pub(crate) fn ptr_addr_diff<T, U>(")
             && ptr_core_rs.contains("ptr_exposed_addr(hi).wrapping_sub(ptr_exposed_addr(lo))")
             && ptr_core_rs.contains("pub(crate) fn ptr_align_up<T>(")
-            && ptr_core_rs.contains("crate::internal::_mi_align_up(ptr_exposed_addr(ptr), alignment) as *mut c_void")
+            && ptr_core_rs
+                .contains(".map_addr(|addr| crate::internal::_mi_align_up(addr, alignment))")
+            && ptr_core_rs.contains(
+                "crate::internal::_mi_align_up(ptr_exposed_addr(ptr), alignment) as *mut c_void"
+            )
             && ptr_core_rs.contains("pub(crate) fn ptr_align_down<T>(")
-            && ptr_core_rs.contains("crate::internal::_mi_align_down(ptr_exposed_addr(ptr), alignment) as *mut c_void")
+            && ptr_core_rs
+                .contains(".map_addr(|addr| crate::internal::_mi_align_down(addr, alignment))")
+            && ptr_core_rs.contains(
+                "crate::internal::_mi_align_down(ptr_exposed_addr(ptr), alignment) as *mut c_void"
+            )
             && freelist_rs.contains("pub(crate) struct ThreadFreeWord(pub(crate) usize);")
-            && freelist_rs.contains("pub(crate) fn head_raw(self) -> *mut crate::types::mi_block_t")
+            && freelist_rs
+                .contains("pub(crate) fn head_raw(self) -> *mut crate::types::mi_block_t")
+            && freelist_rs.contains("crate::provenance::resolve_address(ptr_val)")
             && freelist_rs.contains("ptr_val as *mut crate::types::mi_block_t")
             && freelist_rs.contains("Some(unsafe { BlockPtr::new_unchecked(ptr) })")
-            && freelist_rs.contains("let val = ptr.as_ptr() as usize;")
+            && freelist_rs.contains("let val = crate::core_types::ptr_exposed_addr(ptr.as_ptr());")
+            && freelist_rs.contains("crate::provenance::remember_address(val, ptr.as_ptr());")
             && freelist_wrappers_rs.contains("pub(crate) struct EncodedWord(usize);")
-            && freelist_wrappers_rs.contains("word: EncodedWord::new(block as usize)")
-            && freelist_wrappers_rs.contains("self.word.get() as *mut mi_block_t")
+            && freelist_wrappers_rs
+                .contains("let word = crate::core_types::ptr_exposed_addr(block);")
+            && freelist_wrappers_rs.contains("crate::provenance::remember_address(word, block);")
+            && freelist_wrappers_rs.contains("word as *mut mi_block_t")
             && internal_rs.contains("pub(crate) fn mi_ptr_decode(")
-            && internal_rs
-                .contains("let p = (mi_rotr(x.get().wrapping_sub(keys[0]), keys[0]) ^ keys[1]) as *mut c_void;")
+            && internal_rs.contains(
+                "let decoded_addr = mi_rotr(x.get().wrapping_sub(keys[0]), keys[0]) ^ keys[1];"
+            )
+            && internal_rs.contains("crate::provenance::resolve_encoded(x.get(), null, keys)")
+            && internal_rs.contains("let p = decoded_addr as *mut c_void;")
             && internal_rs.contains("pub(crate) fn mi_ptr_encode(")
-            && internal_rs.contains("null as usize")
-            && internal_rs.contains("p as usize")
+            && internal_rs.contains("crate::core_types::ptr_exposed_addr(null)")
+            && internal_rs.contains("crate::core_types::ptr_exposed_addr(p)")
+            && internal_rs
+                .contains("crate::provenance::remember_encoded(word.get(), null, keys, p);")
             && strict_check_rs.contains("PTR_USIZE_RE = re.compile")
             && strict_check_rs.contains("ALLOWED_PTR_USIZE = {")
             && strict_check_rs.contains("\"src/core_types/ptr.rs\"")
             && strict_check_rs.contains("kind=\"pointer-usize-roundtrip\"")
             && strict_check_rs.contains("domain=\"provenance\"")
-            && strict_check_rs.contains("message=\"pointer/integer round trip outside typed provenance helpers\"")
-            && allowlist_rs.contains("pointer-usize-roundtrip|src/core_types/freelist_wrappers.rs|*|encoded-pointer|")
+            && strict_check_rs.contains(
+                "message=\"pointer/integer round trip outside typed provenance helpers\""
+            )
+            && allowlist_rs.contains(
+                "pointer-usize-roundtrip|src/core_types/freelist_wrappers.rs|*|encoded-pointer|"
+            )
             && allowlist_rs.contains("pointer-usize-roundtrip|src/internal.rs|*|packed-pointer|")
-            && allowlist_rs.contains("pointer-usize-roundtrip|src/alloc_aligned.rs|*|alignment/provenance|")
+            && allowlist_rs
+                .contains("pointer-usize-roundtrip|src/alloc_aligned.rs|*|alignment/provenance|")
             && allowlist_rs.contains("pointer-usize-roundtrip|src/alloc.rs|*|padding/provenance|")
-            && allowlist_rs.contains("pointer-usize-roundtrip|src/core_types/freelist.rs|*|packed-thread-free|")
+            && allowlist_rs.contains(
+                "pointer-usize-roundtrip|src/core_types/freelist.rs|*|packed-thread-free|"
+            )
             && allowlist_rs.contains("pointer-usize-roundtrip|src/free.rs|*|validation|")
             && allowlist_rs.contains("pointer-usize-roundtrip|src/os.rs|*|os-memory|"),
         "pointer-to-integer round trips should stay behind typed packed-pointer/provenance helpers or explicit strict-type allowlist boundaries"

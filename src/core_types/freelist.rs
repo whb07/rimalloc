@@ -30,7 +30,20 @@ impl ThreadFreeWord {
     #[inline(always)]
     pub(crate) fn head_raw(self) -> *mut crate::types::mi_block_t {
         let ptr_val = self.0 & !Self::OWNED_BIT;
-        ptr_val as *mut crate::types::mi_block_t
+        if ptr_val == 0 {
+            return core::ptr::null_mut();
+        }
+
+        #[cfg(miri)]
+        {
+            crate::provenance::resolve_address(ptr_val)
+                .unwrap_or_else(|| crate::provenance::missing_address(ptr_val))
+        }
+
+        #[cfg(not(miri))]
+        {
+            ptr_val as *mut crate::types::mi_block_t
+        }
     }
 
     #[inline(always)]
@@ -67,8 +80,9 @@ impl ThreadFreeWord {
     pub(crate) fn from_parts(head: Option<BlockPtr>, owned: ThreadFreeOwner) -> Self {
         let ptr_val = match head {
             Some(ptr) => {
-                let val = ptr.as_ptr() as usize;
+                let val = crate::core_types::ptr_exposed_addr(ptr.as_ptr());
                 crate::mi_assert_internal!((val & Self::OWNED_BIT) == 0);
+                crate::provenance::remember_address(val, ptr.as_ptr());
                 val
             }
             None => 0,

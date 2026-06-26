@@ -70,8 +70,10 @@ impl EncodedPtr<crate::types::mi_block_t> {
     /// Wrap an unencoded raw block pointer as a free-list word.
     #[inline(always)]
     pub(crate) fn from_unencoded_raw(block: *const mi_block_t) -> Self {
+        let word = crate::core_types::ptr_exposed_addr(block);
+        crate::provenance::remember_address(word, block);
         Self {
-            word: EncodedWord::new(block as usize),
+            word: EncodedWord::new(word),
             _ty: PhantomData,
         }
     }
@@ -79,7 +81,21 @@ impl EncodedPtr<crate::types::mi_block_t> {
     /// Interpret this word as an unencoded raw block pointer.
     #[inline(always)]
     pub(crate) fn as_unencoded_raw(self) -> *mut mi_block_t {
-        self.word.get() as *mut mi_block_t
+        let word = self.word.get();
+        if word == 0 {
+            return ptr::null_mut();
+        }
+
+        #[cfg(miri)]
+        {
+            crate::provenance::resolve_address(word)
+                .unwrap_or_else(|| crate::provenance::missing_address(word))
+        }
+
+        #[cfg(not(miri))]
+        {
+            word as *mut mi_block_t
+        }
     }
 
     /// Decode an encoded block-pointer word using a raw null context.

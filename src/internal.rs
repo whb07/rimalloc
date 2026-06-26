@@ -1496,11 +1496,26 @@ pub(crate) fn mi_ptr_decode(
     x: crate::core_types::EncodedWord,
     keys: &[usize; 2],
 ) -> *mut c_void {
-    let p = (mi_rotr(x.get().wrapping_sub(keys[0]), keys[0]) ^ keys[1]) as *mut c_void;
-    if ptr::eq(p.cast_const(), null) {
-        ptr::null_mut()
-    } else {
-        p
+    let decoded_addr = mi_rotr(x.get().wrapping_sub(keys[0]), keys[0]) ^ keys[1];
+
+    #[cfg(miri)]
+    {
+        if decoded_addr == crate::core_types::ptr_exposed_addr(null) {
+            ptr::null_mut()
+        } else {
+            crate::provenance::resolve_encoded(x.get(), null, keys)
+                .unwrap_or_else(|| crate::provenance::missing_encoded(x.get(), null, keys))
+        }
+    }
+
+    #[cfg(not(miri))]
+    {
+        let p = decoded_addr as *mut c_void;
+        if ptr::eq(p.cast_const(), null) {
+            ptr::null_mut()
+        } else {
+            p
+        }
     }
 }
 
@@ -1511,11 +1526,14 @@ pub(crate) fn mi_ptr_encode(
     keys: &[usize; 2],
 ) -> crate::core_types::EncodedWord {
     let x = if p.is_null() {
-        null as usize
+        crate::core_types::ptr_exposed_addr(null)
     } else {
-        p as usize
+        crate::core_types::ptr_exposed_addr(p)
     };
-    crate::core_types::EncodedWord::new(mi_rotl(x ^ keys[1], keys[0]).wrapping_add(keys[0]))
+    let word =
+        crate::core_types::EncodedWord::new(mi_rotl(x ^ keys[1], keys[0]).wrapping_add(keys[0]));
+    crate::provenance::remember_encoded(word.get(), null, keys, p);
+    word
 }
 
 #[inline]

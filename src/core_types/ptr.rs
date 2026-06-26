@@ -53,7 +53,15 @@ macro_rules! define_ptr_wrapper {
 
 #[inline(always)]
 pub(crate) fn ptr_exposed_addr<T>(ptr: *const T) -> usize {
-    ptr as usize
+    #[cfg(miri)]
+    {
+        ptr.addr()
+    }
+
+    #[cfg(not(miri))]
+    {
+        ptr as usize
+    }
 }
 
 #[inline(always)]
@@ -68,12 +76,34 @@ pub(crate) fn ptr_is_aligned<T>(ptr: *const T, alignment: usize) -> bool {
 
 #[inline(always)]
 pub(crate) fn ptr_align_up<T>(ptr: *const T, alignment: usize) -> *mut c_void {
-    crate::internal::_mi_align_up(ptr_exposed_addr(ptr), alignment) as *mut c_void
+    #[cfg(miri)]
+    {
+        ptr.cast::<u8>()
+            .map_addr(|addr| crate::internal::_mi_align_up(addr, alignment))
+            .cast_mut()
+            .cast::<c_void>()
+    }
+
+    #[cfg(not(miri))]
+    {
+        crate::internal::_mi_align_up(ptr_exposed_addr(ptr), alignment) as *mut c_void
+    }
 }
 
 #[inline(always)]
 pub(crate) fn ptr_align_down<T>(ptr: *const T, alignment: usize) -> *mut c_void {
-    crate::internal::_mi_align_down(ptr_exposed_addr(ptr), alignment) as *mut c_void
+    #[cfg(miri)]
+    {
+        ptr.cast::<u8>()
+            .map_addr(|addr| crate::internal::_mi_align_down(addr, alignment))
+            .cast_mut()
+            .cast::<c_void>()
+    }
+
+    #[cfg(not(miri))]
+    {
+        crate::internal::_mi_align_down(ptr_exposed_addr(ptr), alignment) as *mut c_void
+    }
 }
 
 #[inline(always)]
@@ -2158,12 +2188,18 @@ mod tests {
             base.cast::<c_void>()
         );
 
-        let high = unsafe { PageStart::new_unchecked(usize::MAX as *mut u8) };
-        assert!(high.checked_byte_add(1).is_none());
+        #[cfg(not(miri))]
+        {
+            let high = unsafe { PageStart::new_unchecked(usize::MAX as *mut u8) };
+            assert!(high.checked_byte_add(1).is_none());
+        }
         let low = unsafe { SliceStart::new_unchecked(ptr::dangling_mut::<u8>()) };
         assert!(low.checked_byte_sub(2).is_none());
-        let high_os = unsafe { OsMemPtr::new_unchecked(usize::MAX as *mut c_void) };
-        assert!(high_os.checked_byte_add(1).is_none());
+        #[cfg(not(miri))]
+        {
+            let high_os = unsafe { OsMemPtr::new_unchecked(usize::MAX as *mut c_void) };
+            assert!(high_os.checked_byte_add(1).is_none());
+        }
     }
 
     #[test]

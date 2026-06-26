@@ -120,7 +120,6 @@
 )]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![warn(rustdoc::bare_urls)]
-#![allow(dead_code)]
 
 pub mod raw;
 

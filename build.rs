@@ -31,12 +31,11 @@ fn run_tool(description: &str, tool_env: &str, command: &mut Command) {
              Install the tool or set {tool_env} to a working executable."
         )
     });
-    if !status.success() {
-        panic!(
-            "{description} tool `{program}` ({tool_env}) exited with {status}; command `{program} {args}`. \
-             Check target toolchain support or set {tool_env} to a compatible executable."
-        );
-    }
+    assert!(
+        status.success(),
+        "{description} tool `{program}` ({tool_env}) exited with {status}; command `{program} {args}`. \
+         Check target toolchain support or set {tool_env} to a compatible executable."
+    );
 }
 
 fn compile_track_shim(defines: &[&str], flags: &[&str]) {

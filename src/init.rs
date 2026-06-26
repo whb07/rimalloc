@@ -2215,7 +2215,7 @@ static MI_AUTO_PROCESS_INIT_KEEP: unsafe extern "C" fn() = _mi_auto_process_init
 /// # Safety
 /// Public C ABI wrapper for process-global initialization.
 pub unsafe extern "C" fn mi_process_init() {
-    unsafe { mi_process_init_inner() };
+    unsafe { _mi_auto_process_init() };
 }
 
 /// # Safety

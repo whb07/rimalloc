@@ -65,10 +65,14 @@ unsafe fn test_heap_walk() {
     let heap = unsafe { raw::mi_heap_new() };
     assert!(!heap.is_null());
 
-    let _p1 = unsafe { raw::mi_heap_malloc(heap, 16 * 2_097_152) };
-    let _p2 = unsafe { raw::mi_heap_malloc(heap, 2_067_152) };
-    let _p3 = unsafe { raw::mi_heap_malloc(heap, 2_097_160) };
-    let _p4 = unsafe { raw::mi_heap_malloc(heap, 24_576) };
+    let p1 = unsafe { raw::mi_heap_malloc(heap, 16 * 2_097_152) };
+    let p2 = unsafe { raw::mi_heap_malloc(heap, 2_067_152) };
+    let p3 = unsafe { raw::mi_heap_malloc(heap, 2_097_160) };
+    let p4 = unsafe { raw::mi_heap_malloc(heap, 24_576) };
+    assert!(!p1.is_null());
+    assert!(!p2.is_null());
+    assert!(!p3.is_null());
+    assert!(!p4.is_null());
 
     let mut state = VisitState::default();
     let ok = unsafe {

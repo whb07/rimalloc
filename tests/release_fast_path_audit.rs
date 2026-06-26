@@ -264,9 +264,9 @@ fn preloading_state_matches_c_mimalloc_lifecycle() {
         "allocation-triggered thread init should call mi_process_init, not the constructor-only auto init path"
     );
     assert!(
-        source[process_init..process_done].contains("mi_process_init_inner()")
-            && !source[process_init..process_done].contains("_mi_auto_process_init()"),
-        "mi_process_init should not clear preloading; only _mi_auto_process_init should"
+        source[process_init..process_done].contains("_mi_auto_process_init()")
+            && !source[process_init..process_done].contains("mi_process_init_inner()"),
+        "mi_process_init should enter the same post-preload activation path as process attach"
     );
     assert!(
         source[process_init_inner..process_init].contains("_mi_process_is_initialized = true;"),
@@ -2950,10 +2950,13 @@ fn phase6_clippy_allowances_stay_intentional() {
 
     let expected = BTreeMap::from([
         (("src/arena.rs", "too_many_arguments"), 5),
+        (("src/bitmap.rs", "many_single_char_names"), 1),
         (("src/free.rs", "absurd_extreme_comparisons"), 1),
+        (("src/libc.rs", "many_single_char_names"), 2),
         (("src/os.rs", "absurd_extreme_comparisons"), 3),
         (("src/os.rs", "too_many_arguments"), 1),
         (("src/page.rs", "absurd_extreme_comparisons"), 1),
+        (("src/random.rs", "many_single_char_names"), 1),
     ]);
 
     assert_eq!(
@@ -4376,8 +4379,8 @@ fn free_path_internals_are_not_dynamic_exports() {
     );
     for marker in [
         "#[inline(never)]\npub(crate) extern \"C\" fn _mi_toupper(",
-        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnicmp(",
-        "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_streq(",
+        "#[inline(never)]\n#[allow(clippy::many_single_char_names)]\npub(crate) unsafe extern \"C\" fn _mi_strnicmp(",
+        "#[inline(never)]\n#[allow(clippy::many_single_char_names)]\npub(crate) unsafe extern \"C\" fn _mi_streq(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strlcpy(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strlcat(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_strnlen(",
@@ -5082,7 +5085,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         "#[inline(never)]\nfn mi_bchunk_try_clearNC(",
         "#[inline(never)]\nfn mi_bchunk_try_find_and_clear8(",
         "#[inline(never)]\nfn mi_bchunk_try_find_and_clearNX(",
-        "#[inline(never)]\nfn mi_bchunk_try_find_and_clearNC(",
+        "#[inline(never)]\n#[allow(clippy::many_single_char_names)]\nfn mi_bchunk_try_find_and_clearNC(",
         "#[inline(never)]\nfn mi_bitmap_chunkmap_try_clear(",
         "#[inline(never)]\nfn mi_bbitmap_set_chunk_bin(",
         "#[inline(never)]\nfn mi_bbitmap_chunkmap_try_clear(",

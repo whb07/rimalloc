@@ -1183,7 +1183,8 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
     let unsafe_doc =
         fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read docs/unsafe-audit.md");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
-    let safe_rs = fs::read_to_string(root.join("src/safe.rs")).expect("read src/safe.rs");
+    let safe_callbacks_rs =
+        fs::read_to_string(root.join("src/safe/callbacks.rs")).expect("read safe callbacks");
 
     assert!(
         abi_doc.contains("Raw callback registration remains unsafe.")
@@ -1208,10 +1209,10 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
     assert!(
         lib_rs.contains("ErrorCallbackGuard")
             && lib_rs.contains("DeferredFreeCallbackGuard")
-            && safe_rs.contains("std::panic::catch_unwind")
-            && safe_rs.contains("mi_register_error")
-            && safe_rs.contains("mi_register_deferred_free")
-            && !safe_rs.contains("mi_register_output"),
+            && safe_callbacks_rs.contains("std::panic::catch_unwind")
+            && safe_callbacks_rs.contains("mi_register_error")
+            && safe_callbacks_rs.contains("mi_register_deferred_free")
+            && !safe_callbacks_rs.contains("mi_register_output"),
         "safe facade should expose only callback guards that catch panics and restore previous registrations"
     );
 }

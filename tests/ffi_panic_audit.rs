@@ -139,6 +139,8 @@ fn callback_unwind_policy_is_documented_and_safe_guards_catch_panics() {
     let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
     let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
     let safe_rs = fs::read_to_string(root.join("src/safe.rs")).expect("read src/safe.rs");
+    let safe_callbacks_rs =
+        fs::read_to_string(root.join("src/safe/callbacks.rs")).expect("read safe callbacks");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
 
     assert!(
@@ -159,20 +161,23 @@ fn callback_unwind_policy_is_documented_and_safe_guards_catch_panics() {
     assert!(
         lib_rs.contains("ErrorCallbackGuard")
             && lib_rs.contains("DeferredFreeCallbackGuard")
-            && safe_rs.contains("pub struct ErrorCallbackGuard")
-            && safe_rs.contains("pub struct DeferredFreeCallbackGuard"),
+            && safe_rs.contains(
+                "pub use callbacks::{CallbackError, DeferredFreeCallbackGuard, ErrorCallbackGuard};"
+            )
+            && safe_callbacks_rs.contains("pub struct ErrorCallbackGuard")
+            && safe_callbacks_rs.contains("pub struct DeferredFreeCallbackGuard"),
         "safe callback guards should be explicit crate-root APIs"
     );
     assert!(
-        safe_rs.contains("std::panic::catch_unwind")
-            && safe_rs.contains("error_callback_trampoline")
-            && safe_rs.contains("deferred_free_callback_trampoline")
-            && safe_rs.contains("mi_register_error")
-            && safe_rs.contains("mi_register_deferred_free"),
+        safe_callbacks_rs.contains("std::panic::catch_unwind")
+            && safe_callbacks_rs.contains("error_callback_trampoline")
+            && safe_callbacks_rs.contains("deferred_free_callback_trampoline")
+            && safe_callbacks_rs.contains("mi_register_error")
+            && safe_callbacks_rs.contains("mi_register_deferred_free"),
         "safe callback guards should catch Rust panics before callback ABI return"
     );
     assert!(
-        !safe_rs.contains("mi_register_output"),
+        !safe_callbacks_rs.contains("mi_register_output"),
         "safe API should not expose an output callback guard until output recursion semantics are designed"
     );
 }

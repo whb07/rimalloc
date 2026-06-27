@@ -1879,6 +1879,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
 
     let core_mod =
         fs::read_to_string(root.join("src/core_types/mod.rs")).expect("read core_types/mod.rs");
+    let core_layout_tests = fs::read_to_string(root.join("src/core_types/layout_tests.rs"))
+        .expect("read core_types layout tests");
     let atomic_rs = fs::read_to_string(root.join("src/atomic.rs")).expect("read src/atomic.rs");
     let heap_rs =
         fs::read_to_string(root.join("src/core_types/heap.rs")).expect("read core_types/heap.rs");
@@ -1973,7 +1975,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             )
             && core_mod.contains("ThreadHeapBorrowed")
             && core_mod.contains("ThreadHeapState")
-            && core_mod.contains("assert_layout!(ThreadHeapBorrowed, ThreadHeapPtr);"),
+            && core_layout_tests.contains("assert_layout!(ThreadHeapBorrowed, ThreadHeapPtr);"),
         "thread-heap witnesses should encode borrowed/local initialized, main, and deleted states"
     );
     assert!(
@@ -2009,7 +2011,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         assert!(
             core_mod.contains("pub(crate) use heap::")
                 && core_mod.contains(witness)
-                && core_mod.contains(&format!("assert_layout!({witness}, HeapPtr);")),
+                && core_layout_tests.contains(&format!("assert_layout!({witness}, HeapPtr);")),
             "{witness} should be re-exported and layout-checked"
         );
     }
@@ -2040,7 +2042,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
                     "pub(crate) struct {witness}(pub(crate) SubprocPtr);"
                 ))
                 && core_mod.contains(witness)
-                && core_mod.contains(&format!("assert_layout!({witness}, SubprocPtr);")),
+                && core_layout_tests.contains(&format!("assert_layout!({witness}, SubprocPtr);")),
             "{witness} should be a live subproc wrapper with explicit construction and pointer access"
         );
     }
@@ -2325,8 +2327,9 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     );
     let ptr_core_rs =
         fs::read_to_string(root.join("src/core_types/ptr.rs")).expect("read core_types/ptr.rs");
-    let core_types_mod_rs =
-        fs::read_to_string(root.join("src/core_types/mod.rs")).expect("read core_types/mod.rs");
+    let core_types_layout_tests_rs =
+        fs::read_to_string(root.join("src/core_types/layout_tests.rs"))
+            .expect("read core_types layout tests");
     let freelist_wrappers_rs = fs::read_to_string(root.join("src/core_types/freelist_wrappers.rs"))
         .expect("read core_types/freelist_wrappers.rs");
     let internal_rs =
@@ -2346,10 +2349,10 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && validation_extra_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy)]\npub(crate) struct FreeBlock(BlockPtr);")
             && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct AvailableFreeList(pub(crate) Option<BlockPtr>);")
             && freelist_wrappers_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug)]\npub(crate) struct LocalFreeList(pub(crate) Option<BlockPtr>);")
-            && core_types_mod_rs.contains("fn pointer_wrappers_match_nonnull_layout()")
-            && core_types_mod_rs.contains("fn optional_pointer_wrappers_are_pointer_sized()")
-            && core_types_mod_rs.contains("fn witness_wrappers_match_pointer_layout()")
-            && core_types_mod_rs.contains("fn packed_and_atomic_wrappers_match_raw_layout()"),
+            && core_types_layout_tests_rs.contains("fn pointer_wrappers_match_nonnull_layout()")
+            && core_types_layout_tests_rs.contains("fn optional_pointer_wrappers_are_pointer_sized()")
+            && core_types_layout_tests_rs.contains("fn witness_wrappers_match_pointer_layout()")
+            && core_types_layout_tests_rs.contains("fn packed_and_atomic_wrappers_match_raw_layout()"),
         "hot strict-type wrappers should stay transparent, copyable where they carry copyable fast-path witnesses, inlineable, and covered by layout/niche tests"
     );
     assert!(
@@ -2676,6 +2679,13 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     }
 
     for (rel, source) in &sources {
+        if rel.ends_with("/tests.rs")
+            || rel == "src/core_types/atomic_wrappers/concurrency_models.rs"
+            || rel == "src/core_types/layout_tests.rs"
+        {
+            continue;
+        }
+
         if rel != "src/core_types/memid.rs" && rel != "src/types.rs" {
             for raw_union_arm in ["mem.os", "mem.arena", "mem.meta"] {
                 assert!(

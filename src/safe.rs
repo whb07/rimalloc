@@ -564,6 +564,26 @@ impl RawAllocation {
     }
 }
 
+impl Drop for RawAllocation {
+    fn drop(&mut self) {
+        if self.layout.size() != 0 {
+            // SAFETY[AUDIT:owned-allocation]: non-zero `Allocation` values are
+            // constructed only from successful `MiMalloc` allocation calls and
+            // are freed exactly once from `Drop`.
+            unsafe { MiMalloc.dealloc(self.ptr.as_ptr(), self.layout) };
+        }
+    }
+}
+
+impl fmt::Debug for RawAllocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawAllocation")
+            .field("ptr", &self.ptr)
+            .field("layout", &self.layout)
+            .finish()
+    }
+}
+
 /// Owned allocation whose bytes are initialized and safe to view as a byte slice.
 #[must_use]
 pub struct InitializedAllocation {
@@ -1725,26 +1745,6 @@ unsafe extern "C" fn deferred_free_callback_trampoline<F: FnMut(bool, u64)>(
     #[cfg(not(any(feature = "std", test)))]
     {
         callback(force, heartbeat);
-    }
-}
-
-impl Drop for RawAllocation {
-    fn drop(&mut self) {
-        if self.layout.size() != 0 {
-            // SAFETY[AUDIT:owned-allocation]: non-zero `Allocation` values are
-            // constructed only from successful `MiMalloc` allocation calls and
-            // are freed exactly once from `Drop`.
-            unsafe { MiMalloc.dealloc(self.ptr.as_ptr(), self.layout) };
-        }
-    }
-}
-
-impl fmt::Debug for RawAllocation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RawAllocation")
-            .field("ptr", &self.ptr)
-            .field("layout", &self.layout)
-            .finish()
     }
 }
 

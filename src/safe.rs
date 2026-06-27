@@ -267,6 +267,17 @@ struct RawAllocation {
     layout: Layout,
 }
 
+// SAFETY[AUDIT:owned-allocation]: `RawAllocation` has unique ownership of a
+// block allocated by mimalloc. Mimalloc supports freeing allocations from a
+// different thread, and this private owner does not expose references into the
+// block.
+unsafe impl Send for RawAllocation {}
+
+// SAFETY[AUDIT:owned-allocation]: shared references to `RawAllocation` expose
+// only metadata and a raw pointer. Safe code cannot read or mutate allocation
+// contents through `&RawAllocation`.
+unsafe impl Sync for RawAllocation {}
+
 // SAFETY[AUDIT:owned-allocation]: `Allocation` has unique ownership of a block
 // allocated by mimalloc. Mimalloc supports freeing allocations from a different
 // thread, and safe methods do not expose references into the block.

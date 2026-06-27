@@ -895,6 +895,8 @@ fn raw_pointer_nullability_policy_stays_documented() {
     let ptr_rs =
         fs::read_to_string(root.join("src/core_types/ptr.rs")).expect("read src/core_types/ptr.rs");
     let safe_rs = fs::read_to_string(root.join("src/safe.rs")).expect("read src/safe.rs");
+    let safe_errors_rs =
+        fs::read_to_string(root.join("src/safe/errors.rs")).expect("read src/safe/errors.rs");
     let aligned_exports =
         fs::read_to_string(root.join("tests/aligned_exports.rs")).expect("read aligned_exports");
     let compat_exports =
@@ -941,7 +943,7 @@ fn raw_pointer_nullability_policy_stays_documented() {
     );
 
     assert!(
-        safe_rs.contains("Cause: mimalloc returned null for a valid Rust [`Layout`].")
+        safe_errors_rs.contains("Cause: mimalloc returned null for a valid Rust [`Layout`].")
             && safe_rs.contains("let ptr = NonNull::new(ptr).ok_or(AllocError { layout })?;")
             && safe_rs.contains("pub const fn as_non_null(&self) -> NonNull<u8>")
             && safe_rs.contains("pub const fn as_ptr(&self) -> *mut u8")

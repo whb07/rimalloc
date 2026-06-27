@@ -257,6 +257,7 @@ impl<A: fmt::Debug> std::error::Error for ResizeError<A> {}
 /// let _use_after_move = allocation.len();
 /// drop(moved);
 /// ```
+#[must_use]
 pub struct Allocation {
     raw: RawAllocation,
 }
@@ -564,6 +565,7 @@ impl RawAllocation {
 }
 
 /// Owned allocation whose bytes are initialized and safe to view as a byte slice.
+#[must_use]
 pub struct InitializedAllocation {
     raw: RawAllocation,
 }
@@ -727,6 +729,7 @@ impl std::error::Error for HeapError {}
 /// }
 /// drop(leaked);
 /// ```
+#[must_use]
 pub struct Heap {
     ptr: NonNull<crate::types::mi_heap_t>,
 }
@@ -779,6 +782,7 @@ impl fmt::Debug for Heap {
 
 /// Borrowed heap handle used to tie heap allocations to a heap lifetime.
 #[derive(Clone, Copy)]
+#[must_use]
 pub struct HeapRef<'heap> {
     ptr: NonNull<crate::types::mi_heap_t>,
     _marker: PhantomData<&'heap Heap>,
@@ -812,6 +816,7 @@ impl fmt::Debug for HeapRef<'_> {
 
 /// Borrowed process main heap handle.
 #[derive(Clone, Copy, Debug)]
+#[must_use]
 pub struct MainHeap {
     ptr: NonNull<crate::types::mi_heap_t>,
 }
@@ -851,6 +856,7 @@ impl MainHeap {
 ///     heap.allocate(Layout::from_size_align(32, 8).unwrap()).unwrap()
 /// }
 /// ```
+#[must_use]
 pub struct HeapAllocation<'heap> {
     raw: RawHeapAllocation<'heap>,
 }
@@ -1122,6 +1128,7 @@ impl fmt::Debug for HeapAllocation<'_> {
 }
 
 /// Heap allocation whose bytes are initialized.
+#[must_use]
 pub struct InitializedHeapAllocation<'heap> {
     raw: RawHeapAllocation<'heap>,
 }
@@ -1331,6 +1338,7 @@ impl std::error::Error for StatsError {}
 
 /// Typed statistics count.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[must_use]
 pub struct StatCount(i64);
 
 impl StatCount {
@@ -1347,6 +1355,7 @@ impl StatCount {
 
 /// Typed statistics byte total.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[must_use]
 pub struct StatTotal(usize);
 
 impl StatTotal {
@@ -1372,6 +1381,7 @@ impl StatTotal {
 
 /// Non-printing snapshot of mimalloc statistics.
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct StatsSnapshot {
     raw: crate::stats::mi_stats_t,
 }
@@ -1454,6 +1464,7 @@ impl StatsSnapshot {
 
 /// Safe process allocator information.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[must_use]
 pub struct ProcessInfo {
     elapsed_msecs: usize,
     user_msecs: usize,
@@ -1594,6 +1605,7 @@ impl std::error::Error for CallbackError {}
 /// }
 /// drop(guard);
 /// ```
+#[must_use]
 pub struct ErrorCallbackGuard<'a, F: FnMut(i32)> {
     previous: (Option<crate::types::mi_error_fun>, *mut c_void),
     _callback: &'a mut F,
@@ -1633,6 +1645,7 @@ impl<F: FnMut(i32)> Drop for ErrorCallbackGuard<'_, F> {
 /// }
 /// drop(guard);
 /// ```
+#[must_use]
 pub struct DeferredFreeCallbackGuard<'a, F: FnMut(bool, u64)> {
     previous: (Option<crate::types::mi_deferred_free_fun>, *mut c_void),
     _callback: &'a mut F,

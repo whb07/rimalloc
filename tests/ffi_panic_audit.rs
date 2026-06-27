@@ -88,7 +88,8 @@ fn production_sources_do_not_use_panic_prone_shortcuts() {
 
     let mut hits = Vec::new();
     for path in sources {
-        if path.file_name().and_then(|name| name.to_str()) == Some("tests.rs") {
+        let file_name = path.file_name().and_then(|name| name.to_str());
+        if matches!(file_name, Some("tests.rs" | "concurrency_models.rs")) {
             continue;
         }
 

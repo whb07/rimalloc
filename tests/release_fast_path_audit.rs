@@ -2232,6 +2232,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         "generic PageQueue should keep its raw field private and expose only kind-specific constructors"
     );
     let memid_rs = fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read memid.rs");
+    let memid_tests_rs =
+        fs::read_to_string(root.join("src/core_types/memid/tests.rs")).expect("read memid tests");
     assert!(
         memid_rs.contains("raw: crate::internal::mi_memid_t,")
             && !memid_rs.contains("pub(crate) raw: crate::internal::mi_memid_t,")
@@ -2248,11 +2250,12 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && memid_rs.contains("let m = unsafe { raw.mem.meta };")
             && memid_rs.contains("let a = unsafe { raw.mem.arena };")
             && memid_rs.contains("return MemIdView::Unknown(code);")
-            && memid_rs
+            && memid_tests_rs
                 .contains("fn memid_view_returns_unknown_for_null_meta_or_arena_union_pointers()")
-            && memid_rs.contains("fn memid_view_returns_unknown_for_invalid_arena_slice_range()")
-            && memid_rs.contains("MemKind::from(MemKindCode(99))")
-            && memid_rs.contains("MemKind::Unknown(MemKindCode(99))")
+            && memid_tests_rs
+                .contains("fn memid_view_returns_unknown_for_invalid_arena_slice_range()")
+            && memid_tests_rs.contains("MemKind::from(MemKindCode(99))")
+            && memid_tests_rs.contains("MemKind::Unknown(MemKindCode(99))")
             && memid_rs.contains("MemKind::Unknown(c) => MemIdView::Unknown(c),"),
         "MemId::view should own union-arm reads and map unknown or corrupt discriminants to Unknown"
     );

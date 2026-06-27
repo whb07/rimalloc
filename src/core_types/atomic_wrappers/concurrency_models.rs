@@ -1,4 +1,3 @@
-
 use crate::core_types::{ThreadFreeOwner, ThreadFreeWord};
 use loom::sync::Arc;
 use loom::sync::atomic::{AtomicUsize as LoomAtomicUsize, Ordering as LoomOrdering};

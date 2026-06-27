@@ -169,6 +169,28 @@ fn clippy_allowance_counts(sources: &[(String, String)]) -> BTreeMap<(&str, &str
     counts
 }
 
+fn package_clippy_lints(manifest: &str) -> BTreeMap<&str, &str> {
+    let section_start = manifest
+        .find("[lints.clippy]")
+        .expect("manifest has clippy lint section");
+    let section = &manifest[section_start..];
+    let section_end = section[1..]
+        .find("\n[")
+        .map_or(section.len(), |idx| idx + 1);
+    let mut lints = BTreeMap::new();
+    for line in section[..section_end].lines().skip(1) {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((name, value)) = line.split_once('=') else {
+            continue;
+        };
+        lints.insert(name.trim(), value.trim());
+    }
+    lints
+}
+
 fn rust_allowance_counts<'a>(
     sources: &'a [(String, String)],
     lints: &'static [&'static str],
@@ -2973,6 +2995,89 @@ fn phase6_clippy_allowances_stay_intentional() {
         safe_rs.starts_with("#![deny(clippy::must_use_candidate)]"),
         "safe Rust facade should locally deny missing must-use markers even while translated internals keep the package allowance"
     );
+}
+
+#[test]
+fn package_clippy_allowances_stay_intentional() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).expect("read manifest");
+    let lints = package_clippy_lints(&manifest);
+
+    let allowed = BTreeSet::from([
+        "borrow_as_ptr",
+        "bool_to_int_with_if",
+        "branches_sharing_code",
+        "cast_lossless",
+        "cast_possible_truncation",
+        "cast_possible_wrap",
+        "cast_precision_loss",
+        "cast_ptr_alignment",
+        "cast_sign_loss",
+        "checked_conversions",
+        "doc_markdown",
+        "elidable_lifetime_names",
+        "explicit_iter_loop",
+        "if_not_else",
+        "inline_always",
+        "items_after_statements",
+        "iter_with_drain",
+        "large_stack_arrays",
+        "literal_string_with_formatting_args",
+        "manual_let_else",
+        "many_single_char_names",
+        "map_unwrap_or",
+        "match_same_arms",
+        "match_wild_err_arm",
+        "missing_const_for_fn",
+        "missing_errors_doc",
+        "must_use_candidate",
+        "needless_continue",
+        "needless_pass_by_ref_mut",
+        "needless_pass_by_value",
+        "needless_raw_string_hashes",
+        "no_effect_underscore_binding",
+        "option_if_let_else",
+        "option_option",
+        "ptr_as_ptr",
+        "ptr_cast_constness",
+        "pub_underscore_fields",
+        "redundant_closure_for_method_calls",
+        "redundant_pub_crate",
+        "ref_as_ptr",
+        "semicolon_if_nothing_returned",
+        "significant_drop_tightening",
+        "similar_names",
+        "single_match_else",
+        "suboptimal_flops",
+        "too_many_lines",
+        "trivially_copy_pass_by_ref",
+        "uninlined_format_args",
+        "unnecessary_semicolon",
+        "unnecessary_wraps",
+        "unreadable_literal",
+        "use_self",
+        "used_underscore_binding",
+        "used_underscore_items",
+        "useless_let_if_seq",
+        "while_float",
+        "wildcard_imports",
+    ]);
+
+    let actual_allowed: BTreeSet<_> = lints
+        .iter()
+        .filter_map(|(lint, level)| (*level == "\"allow\"").then_some(*lint))
+        .collect();
+    assert_eq!(
+        actual_allowed, allowed,
+        "package-level Clippy allowances should stay on the audited mechanical-translation allowlist"
+    );
+
+    for lint in ["all", "cargo", "nursery", "pedantic", "missing_safety_doc"] {
+        assert!(
+            !matches!(lints.get(lint), Some(&"\"allow\"")),
+            "{lint} must not become a package-level allowance"
+        );
+    }
 }
 
 #[test]

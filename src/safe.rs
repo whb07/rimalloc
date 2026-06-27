@@ -209,24 +209,19 @@ impl<A: fmt::Debug> std::error::Error for ResizeError<A> {}
 /// drop. It intentionally does not expose heap handles, options, statistics, or
 /// allocator-owned metadata.
 ///
-/// `Allocation` currently keeps a single move-only type with raw pointer access
-/// only. [`Allocation::new`] returns uninitialized memory; safe code can query
-/// the layout and raw pointer, but it cannot read bytes through a safe slice
-/// API. Callers that use the raw pointer must initialize memory before reading
-/// it.
+/// `Allocation` is the uninitialized allocation type. [`Allocation::new`]
+/// returns uninitialized memory; safe code can query the layout and raw pointer,
+/// but it cannot read bytes through a safe slice API. Callers that use the raw
+/// pointer must initialize memory before reading it.
 ///
-/// [`Allocation::zeroed`] returns memory initialized to zero, but this type
-/// still does not expose safe byte-slice access. Future slice APIs will be
-/// added only with an initialization model that cannot expose uninitialized
-/// bytes through safe code.
+/// [`Allocation::zeroed`] returns [`InitializedAllocation`], which exposes safe
+/// byte-slice access because every byte is initialized to zero.
 ///
 /// Zero-sized allocations do not call the allocator. They store an aligned
 /// sentinel pointer and drop is a no-op.
 ///
 /// `Allocation` is move-only. Dropping it frees the allocation exactly once;
-/// there is no `Clone`, `Copy`, `from_raw`, `into_raw`, or resize API. Allocate
-/// a new block and copy through raw pointers if resizing is needed before a
-/// safe resize API is designed.
+/// there is no `Clone`, `Copy`, `from_raw`, or `into_raw` API.
 ///
 /// ```rust,ignore
 /// use core::alloc::Layout;
@@ -236,6 +231,7 @@ impl<A: fmt::Debug> std::error::Error for ResizeError<A> {}
 /// let allocation = Allocation::zeroed(layout).unwrap();
 /// assert_eq!(allocation.len(), 32);
 /// assert!(!allocation.is_empty());
+/// assert!(allocation.as_bytes().iter().all(|byte| *byte == 0));
 /// ```
 ///
 /// Uninitialized allocations do not expose safe byte-slice reads:
@@ -262,9 +258,12 @@ impl<A: fmt::Debug> std::error::Error for ResizeError<A> {}
 /// drop(moved);
 /// ```
 pub struct Allocation {
+    raw: RawAllocation,
+}
+
+struct RawAllocation {
     ptr: NonNull<u8>,
     layout: Layout,
-    initialized: bool,
 }
 
 // SAFETY[AUDIT:owned-allocation]: `Allocation` has unique ownership of a block
@@ -282,13 +281,13 @@ impl Allocation {
     /// Allocates an uninitialized byte block for `layout`.
     #[inline]
     pub fn new(layout: Layout) -> Result<Self, AllocError> {
-        Self::allocate(layout, false)
+        RawAllocation::allocate(layout, false).map(|raw| Self { raw })
     }
 
     /// Allocates a zero-initialized byte block for `layout`.
     #[inline]
-    pub fn zeroed(layout: Layout) -> Result<Self, AllocError> {
-        Self::allocate(layout, true)
+    pub fn zeroed(layout: Layout) -> Result<InitializedAllocation, AllocError> {
+        InitializedAllocation::zeroed(layout)
     }
 
     /// Builds a layout from `size` and `align`, then allocates an uninitialized
@@ -303,42 +302,19 @@ impl Allocation {
     /// Builds a layout from `size` and `align`, then allocates a zeroed byte
     /// block.
     #[inline]
-    pub fn zeroed_with_size_align(size: usize, align: usize) -> Result<Self, TryAllocError> {
+    pub fn zeroed_with_size_align(
+        size: usize,
+        align: usize,
+    ) -> Result<InitializedAllocation, TryAllocError> {
         let layout = Layout::from_size_align(size, align)
             .map_err(|_| TryAllocError::Layout(LayoutError { size, align }))?;
         Self::zeroed(layout).map_err(TryAllocError::Alloc)
     }
 
-    #[inline]
-    fn allocate(layout: Layout, zeroed: bool) -> Result<Self, AllocError> {
-        if layout.size() == 0 {
-            return Ok(Self {
-                ptr: dangling_for(layout),
-                layout,
-                initialized: true,
-            });
-        }
-
-        let ptr = unsafe {
-            if zeroed {
-                MiMalloc.alloc_zeroed(layout)
-            } else {
-                MiMalloc.alloc(layout)
-            }
-        };
-
-        let ptr = NonNull::new(ptr).ok_or(AllocError { layout })?;
-        Ok(Self {
-            ptr,
-            layout,
-            initialized: zeroed,
-        })
-    }
-
     /// Returns the layout used to allocate this block.
     #[inline]
     pub const fn layout(&self) -> Layout {
-        self.layout
+        self.raw.layout
     }
 
     /// Returns the requested allocation size in bytes.
@@ -347,13 +323,13 @@ impl Allocation {
     /// are initialized.
     #[inline]
     pub const fn len(&self) -> usize {
-        self.layout.size()
+        self.raw.layout.size()
     }
 
     /// Returns whether this is a zero-sized allocation.
     #[inline]
     pub const fn is_empty(&self) -> bool {
-        self.layout.size() == 0
+        self.raw.layout.size() == 0
     }
 
     /// Returns the allocation pointer as [`NonNull<u8>`].
@@ -365,7 +341,7 @@ impl Allocation {
     /// be dereferenced.
     #[inline]
     pub const fn as_non_null(&self) -> NonNull<u8> {
-        self.ptr
+        self.raw.ptr
     }
 
     /// Returns the allocation pointer.
@@ -377,7 +353,7 @@ impl Allocation {
     /// be dereferenced.
     #[inline]
     pub const fn as_ptr(&self) -> *mut u8 {
-        self.ptr.as_ptr()
+        self.raw.ptr.as_ptr()
     }
 
     /// Resizes this allocation to `new_layout`.
@@ -386,7 +362,16 @@ impl Allocation {
     /// failure, the original allocation is returned inside [`ResizeError`].
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
-        self.resize_impl(new_layout, false)
+        self.raw
+            .resize_uninitialized(new_layout)
+            .map(|raw| Self { raw })
+            .map_err(|err| {
+                let (raw, kind) = err.into_parts();
+                ResizeError {
+                    allocation: Self { raw },
+                    kind,
+                }
+            })
     }
 
     /// Builds a layout from `size` and `align`, then resizes this allocation.
@@ -408,6 +393,71 @@ impl Allocation {
         self.resize(layout)
     }
 
+    /// Converts this allocation into an initialized byte allocation when the
+    /// allocation was produced by an older safe initialized constructor.
+    ///
+    /// New code should use [`Allocation::zeroed`] or
+    /// [`InitializedAllocation::zeroed`] directly; those constructors return an
+    /// initialized allocation type.
+    #[inline]
+    pub fn into_initialized(self) -> Result<InitializedAllocation, Self> {
+        Err(self)
+    }
+
+    /// Marks this allocation initialized after the caller has initialized every
+    /// byte through raw pointers.
+    ///
+    /// # Safety
+    ///
+    /// The caller must have initialized every byte in the allocation before
+    /// calling this method.
+    ///
+    /// ```rust,compile_fail
+    /// use core::alloc::Layout;
+    /// use mechanical_mimalloc::Allocation;
+    ///
+    /// let layout = Layout::from_size_align(16, 8).unwrap();
+    /// let allocation = Allocation::new(layout).unwrap();
+    /// let _initialized = allocation.assume_initialized();
+    /// ```
+    #[inline]
+    pub unsafe fn assume_initialized(self) -> InitializedAllocation {
+        InitializedAllocation { raw: self.raw }
+    }
+}
+
+impl RawAllocation {
+    #[inline]
+    fn allocate(layout: Layout, zeroed: bool) -> Result<Self, AllocError> {
+        if layout.size() == 0 {
+            return Ok(Self {
+                ptr: dangling_for(layout),
+                layout,
+            });
+        }
+
+        let ptr = unsafe {
+            if zeroed {
+                MiMalloc.alloc_zeroed(layout)
+            } else {
+                MiMalloc.alloc(layout)
+            }
+        };
+
+        let ptr = NonNull::new(ptr).ok_or(AllocError { layout })?;
+        Ok(Self { ptr, layout })
+    }
+
+    #[inline]
+    fn resize_uninitialized(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
+        self.resize_impl(new_layout, false)
+    }
+
+    #[inline]
+    fn resize_initialized(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
+        self.resize_impl(new_layout, true)
+    }
+
     #[inline]
     fn resize_impl(
         self,
@@ -421,7 +471,6 @@ impl Allocation {
 
         let old_size = old_layout.size();
         let new_size = new_layout.size();
-        let old_initialized = self.initialized;
         let old = ManuallyDrop::new(self);
 
         if new_size == 0 {
@@ -433,14 +482,15 @@ impl Allocation {
             return Ok(Self {
                 ptr: dangling_for(new_layout),
                 layout: new_layout,
-                initialized: true,
             });
         }
 
         if old_size == 0 {
-            return match Self::allocate(new_layout, zero_grown_tail) {
-                Ok(mut allocation) => {
-                    allocation.initialized = old_initialized || zero_grown_tail;
+            return match Self::allocate(new_layout, false) {
+                Ok(allocation) => {
+                    if zero_grown_tail {
+                        allocation.zero_tail(0);
+                    }
                     Ok(allocation)
                 }
                 Err(err) => Err(ResizeError {
@@ -462,23 +512,17 @@ impl Allocation {
                     kind: ResizeErrorKind::Alloc(AllocError { layout: new_layout }),
                 });
             };
-            if zero_grown_tail && new_size > old_size {
-                // SAFETY[AUDIT:owned-allocation]: the new allocation is valid
-                // for `new_size` bytes and the tail is within the grown range.
-                unsafe {
-                    ptr.as_ptr()
-                        .add(old_size)
-                        .write_bytes(0, new_size - old_size)
-                };
-            }
-            return Ok(Self {
+            let allocation = Self {
                 ptr,
                 layout: new_layout,
-                initialized: old_initialized && (new_size <= old_size || zero_grown_tail),
-            });
+            };
+            if zero_grown_tail && new_size > old_size {
+                allocation.zero_tail(old_size);
+            }
+            return Ok(allocation);
         }
 
-        let new_allocation = match Self::allocate(new_layout, zero_grown_tail) {
+        let new_allocation = match Self::allocate(new_layout, false) {
             Ok(allocation) => allocation,
             Err(err) => {
                 return Err(ResizeError {
@@ -497,50 +541,31 @@ impl Allocation {
             );
             MiMalloc.dealloc(old.ptr.as_ptr(), old_layout);
         }
-        Ok(Self {
-            initialized: old_initialized && (new_size <= old_size || zero_grown_tail),
-            ..new_allocation
-        })
-    }
-
-    /// Converts this allocation into an initialized byte allocation when the
-    /// allocation was produced by a safe initialized constructor such as
-    /// [`Allocation::zeroed`].
-    #[inline]
-    pub fn into_initialized(self) -> Result<InitializedAllocation, Self> {
-        if self.initialized {
-            Ok(InitializedAllocation { allocation: self })
-        } else {
-            Err(self)
+        if zero_grown_tail && new_size > old_size {
+            new_allocation.zero_tail(old_size);
         }
+        Ok(new_allocation)
     }
 
-    /// Marks this allocation initialized after the caller has initialized every
-    /// byte through raw pointers.
-    ///
-    /// # Safety
-    ///
-    /// The caller must have initialized every byte in the allocation before
-    /// calling this method.
-    ///
-    /// ```rust,compile_fail
-    /// use core::alloc::Layout;
-    /// use mechanical_mimalloc::Allocation;
-    ///
-    /// let layout = Layout::from_size_align(16, 8).unwrap();
-    /// let allocation = Allocation::new(layout).unwrap();
-    /// let _initialized = allocation.assume_initialized();
-    /// ```
     #[inline]
-    pub unsafe fn assume_initialized(mut self) -> InitializedAllocation {
-        self.initialized = true;
-        InitializedAllocation { allocation: self }
+    fn zero_tail(&self, initialized_prefix: usize) {
+        let len = self.layout.size();
+        if initialized_prefix < len {
+            // SAFETY[AUDIT:owned-allocation]: `initialized_prefix..len` is within
+            // the live allocation and is being initialized with zero bytes.
+            unsafe {
+                self.ptr
+                    .as_ptr()
+                    .add(initialized_prefix)
+                    .write_bytes(0, len - initialized_prefix)
+            };
+        }
     }
 }
 
 /// Owned allocation whose bytes are initialized and safe to view as a byte slice.
 pub struct InitializedAllocation {
-    allocation: Allocation,
+    raw: RawAllocation,
 }
 
 // SAFETY[AUDIT:owned-allocation]: this wrapper has the same unique ownership as
@@ -553,28 +578,40 @@ unsafe impl Sync for InitializedAllocation {}
 
 impl InitializedAllocation {
     #[inline]
+    pub fn zeroed(layout: Layout) -> Result<Self, AllocError> {
+        RawAllocation::allocate(layout, true).map(|raw| Self { raw })
+    }
+
+    #[inline]
+    pub fn zeroed_with_size_align(size: usize, align: usize) -> Result<Self, TryAllocError> {
+        let layout = Layout::from_size_align(size, align)
+            .map_err(|_| TryAllocError::Layout(LayoutError { size, align }))?;
+        Self::zeroed(layout).map_err(TryAllocError::Alloc)
+    }
+
+    #[inline]
     pub const fn layout(&self) -> Layout {
-        self.allocation.layout()
+        self.raw.layout
     }
 
     #[inline]
     pub const fn len(&self) -> usize {
-        self.allocation.len()
+        self.raw.layout.size()
     }
 
     #[inline]
     pub const fn is_empty(&self) -> bool {
-        self.allocation.is_empty()
+        self.raw.layout.size() == 0
     }
 
     #[inline]
     pub const fn as_non_null(&self) -> NonNull<u8> {
-        self.allocation.as_non_null()
+        self.raw.ptr
     }
 
     #[inline]
     pub const fn as_ptr(&self) -> *mut u8 {
-        self.allocation.as_ptr()
+        self.raw.ptr.as_ptr()
     }
 
     #[inline]
@@ -593,22 +630,24 @@ impl InitializedAllocation {
 
     #[inline]
     pub fn into_allocation(self) -> Allocation {
-        self.allocation
+        Allocation { raw: self.raw }
+    }
+
+    #[inline]
+    pub fn into_initialized(self) -> Result<Self, Allocation> {
+        Ok(self)
     }
 
     /// Resizes this initialized allocation, zeroing any newly exposed tail
     /// bytes so the result remains initialized.
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
-        match self.allocation.resize_impl(new_layout, true) {
-            Ok(mut allocation) => {
-                allocation.initialized = true;
-                Ok(Self { allocation })
-            }
+        match self.raw.resize_initialized(new_layout) {
+            Ok(raw) => Ok(Self { raw }),
             Err(err) => {
-                let (allocation, kind) = err.into_parts();
+                let (raw, kind) = err.into_parts();
                 Err(ResizeError {
-                    allocation: Self { allocation },
+                    allocation: Self { raw },
                     kind,
                 })
             }
@@ -636,11 +675,7 @@ impl InitializedAllocation {
     /// Allocates a new initialized allocation and copies this allocation's bytes.
     #[inline]
     pub fn try_clone_zeroed_contents(&self) -> Result<Self, AllocError> {
-        let mut cloned = Allocation::zeroed(self.layout())?
-            .into_initialized()
-            .map_err(|_| AllocError {
-                layout: self.layout(),
-            })?;
+        let mut cloned = RawAllocation::allocate(self.layout(), false).map(|raw| Self { raw })?;
         cloned.as_mut_bytes().copy_from_slice(self.as_bytes());
         Ok(cloned)
     }
@@ -649,7 +684,7 @@ impl InitializedAllocation {
 impl fmt::Debug for InitializedAllocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("InitializedAllocation")
-            .field("allocation", &self.allocation)
+            .field("raw", &self.raw)
             .finish()
     }
 }
@@ -760,9 +795,7 @@ impl<'heap> HeapRef<'heap> {
         self,
         layout: Layout,
     ) -> Result<InitializedHeapAllocation<'heap>, AllocError> {
-        let mut allocation = HeapAllocation::allocate_in(self.ptr, layout, true)?;
-        allocation.initialized = true;
-        Ok(InitializedHeapAllocation { allocation })
+        InitializedHeapAllocation::allocate_zeroed_in(self.ptr, layout)
     }
 
     #[inline]
@@ -819,14 +852,80 @@ impl MainHeap {
 /// }
 /// ```
 pub struct HeapAllocation<'heap> {
+    raw: RawHeapAllocation<'heap>,
+}
+
+struct RawHeapAllocation<'heap> {
     ptr: NonNull<u8>,
     layout: Layout,
     heap: NonNull<crate::types::mi_heap_t>,
-    initialized: bool,
     _marker: PhantomData<&'heap Heap>,
 }
 
 impl<'heap> HeapAllocation<'heap> {
+    #[inline]
+    fn allocate_in(
+        heap: NonNull<crate::types::mi_heap_t>,
+        layout: Layout,
+        zeroed: bool,
+    ) -> Result<Self, AllocError> {
+        RawHeapAllocation::allocate_in(heap, layout, zeroed).map(|raw| Self { raw })
+    }
+
+    #[inline]
+    pub const fn layout(&self) -> Layout {
+        self.raw.layout
+    }
+
+    #[inline]
+    pub const fn len(&self) -> usize {
+        self.raw.layout.size()
+    }
+
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.raw.layout.size() == 0
+    }
+
+    #[inline]
+    pub const fn as_ptr(&self) -> *mut u8 {
+        self.raw.ptr.as_ptr()
+    }
+
+    #[inline]
+    pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
+        self.raw
+            .resize_uninitialized(new_layout)
+            .map(|raw| Self { raw })
+            .map_err(|err| {
+                let (raw, kind) = err.into_parts();
+                ResizeError {
+                    allocation: Self { raw },
+                    kind,
+                }
+            })
+    }
+
+    #[inline]
+    pub fn resize_with_size_align(
+        self,
+        size: usize,
+        align: usize,
+    ) -> Result<Self, ResizeError<Self>> {
+        let layout = match Layout::from_size_align(size, align) {
+            Ok(layout) => layout,
+            Err(_) => {
+                return Err(ResizeError {
+                    allocation: self,
+                    kind: ResizeErrorKind::Layout(LayoutError { size, align }),
+                });
+            }
+        };
+        self.resize(layout)
+    }
+}
+
+impl<'heap> RawHeapAllocation<'heap> {
     #[inline]
     fn allocate_in(
         heap: NonNull<crate::types::mi_heap_t>,
@@ -838,7 +937,6 @@ impl<'heap> HeapAllocation<'heap> {
                 ptr: dangling_for(layout),
                 layout,
                 heap,
-                initialized: true,
                 _marker: PhantomData,
             });
         }
@@ -872,52 +970,18 @@ impl<'heap> HeapAllocation<'heap> {
             ptr,
             layout,
             heap,
-            initialized: zeroed,
             _marker: PhantomData,
         })
     }
 
     #[inline]
-    pub const fn layout(&self) -> Layout {
-        self.layout
-    }
-
-    #[inline]
-    pub const fn len(&self) -> usize {
-        self.layout.size()
-    }
-
-    #[inline]
-    pub const fn is_empty(&self) -> bool {
-        self.layout.size() == 0
-    }
-
-    #[inline]
-    pub const fn as_ptr(&self) -> *mut u8 {
-        self.ptr.as_ptr()
-    }
-
-    #[inline]
-    pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
+    fn resize_uninitialized(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
         self.resize_impl(new_layout, false)
     }
 
     #[inline]
-    pub fn resize_with_size_align(
-        self,
-        size: usize,
-        align: usize,
-    ) -> Result<Self, ResizeError<Self>> {
-        let layout = match Layout::from_size_align(size, align) {
-            Ok(layout) => layout,
-            Err(_) => {
-                return Err(ResizeError {
-                    allocation: self,
-                    kind: ResizeErrorKind::Layout(LayoutError { size, align }),
-                });
-            }
-        };
-        self.resize(layout)
+    fn resize_initialized(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
+        self.resize_impl(new_layout, true)
     }
 
     #[inline]
@@ -933,7 +997,6 @@ impl<'heap> HeapAllocation<'heap> {
 
         let old_size = old_layout.size();
         let new_size = new_layout.size();
-        let old_initialized = self.initialized;
         let old = ManuallyDrop::new(self);
 
         if new_size == 0 {
@@ -946,7 +1009,6 @@ impl<'heap> HeapAllocation<'heap> {
                 ptr: dangling_for(new_layout),
                 layout: new_layout,
                 heap: old.heap,
-                initialized: true,
                 _marker: PhantomData,
             });
         }
@@ -977,24 +1039,19 @@ impl<'heap> HeapAllocation<'heap> {
                     kind: ResizeErrorKind::Alloc(AllocError { layout: new_layout }),
                 });
             };
-            if zero_grown_tail && new_size > old_size {
-                // SAFETY[AUDIT:safe-heap]: the tail is inside the grown allocation.
-                unsafe {
-                    ptr.as_ptr()
-                        .add(old_size)
-                        .write_bytes(0, new_size - old_size)
-                };
-            }
-            return Ok(Self {
+            let allocation = Self {
                 ptr,
                 layout: new_layout,
                 heap: old.heap,
-                initialized: old_initialized && (new_size <= old_size || zero_grown_tail),
                 _marker: PhantomData,
-            });
+            };
+            if zero_grown_tail && new_size > old_size {
+                allocation.zero_tail(old_size);
+            }
+            return Ok(allocation);
         }
 
-        let new_allocation = match Self::allocate_in(old.heap, new_layout, zero_grown_tail) {
+        let new_allocation = match Self::allocate_in(old.heap, new_layout, false) {
             Ok(allocation) => allocation,
             Err(err) => {
                 return Err(ResizeError {
@@ -1015,14 +1072,29 @@ impl<'heap> HeapAllocation<'heap> {
                 crate::mimalloc::mi_free(old.ptr.as_ptr().cast::<c_void>());
             }
         }
-        Ok(Self {
-            initialized: old_initialized && (new_size <= old_size || zero_grown_tail),
-            ..new_allocation
-        })
+        if zero_grown_tail && new_size > old_size {
+            new_allocation.zero_tail(old_size);
+        }
+        Ok(new_allocation)
+    }
+
+    #[inline]
+    fn zero_tail(&self, initialized_prefix: usize) {
+        let len = self.layout.size();
+        if initialized_prefix < len {
+            // SAFETY[AUDIT:safe-heap]: `initialized_prefix..len` is inside the
+            // live heap allocation and is being initialized with zero bytes.
+            unsafe {
+                self.ptr
+                    .as_ptr()
+                    .add(initialized_prefix)
+                    .write_bytes(0, len - initialized_prefix)
+            };
+        }
     }
 }
 
-impl Drop for HeapAllocation<'_> {
+impl Drop for RawHeapAllocation<'_> {
     fn drop(&mut self) {
         if self.layout.size() != 0 {
             // SAFETY[AUDIT:safe-heap]: this value owns a live mimalloc block.
@@ -1031,41 +1103,56 @@ impl Drop for HeapAllocation<'_> {
     }
 }
 
-impl fmt::Debug for HeapAllocation<'_> {
+impl fmt::Debug for RawHeapAllocation<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("HeapAllocation")
+        f.debug_struct("RawHeapAllocation")
             .field("ptr", &self.ptr)
             .field("layout", &self.layout)
             .field("heap", &self.heap)
-            .field("initialized", &self.initialized)
+            .finish()
+    }
+}
+
+impl fmt::Debug for HeapAllocation<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HeapAllocation")
+            .field("raw", &self.raw)
             .finish()
     }
 }
 
 /// Heap allocation whose bytes are initialized.
 pub struct InitializedHeapAllocation<'heap> {
-    allocation: HeapAllocation<'heap>,
+    raw: RawHeapAllocation<'heap>,
 }
 
 impl<'heap> InitializedHeapAllocation<'heap> {
     #[inline]
+    fn allocate_zeroed_in(
+        heap: NonNull<crate::types::mi_heap_t>,
+        layout: Layout,
+    ) -> Result<Self, AllocError> {
+        RawHeapAllocation::allocate_in(heap, layout, true).map(|raw| Self { raw })
+    }
+
+    #[inline]
     pub const fn layout(&self) -> Layout {
-        self.allocation.layout()
+        self.raw.layout
     }
 
     #[inline]
     pub const fn len(&self) -> usize {
-        self.allocation.len()
+        self.raw.layout.size()
     }
 
     #[inline]
     pub const fn is_empty(&self) -> bool {
-        self.allocation.is_empty()
+        self.raw.layout.size() == 0
     }
 
     #[inline]
     pub const fn as_ptr(&self) -> *mut u8 {
-        self.allocation.as_ptr()
+        self.raw.ptr.as_ptr()
     }
 
     #[inline]
@@ -1083,14 +1170,28 @@ impl<'heap> InitializedHeapAllocation<'heap> {
 
     #[inline]
     pub fn into_allocation(self) -> HeapAllocation<'heap> {
-        self.allocation
+        HeapAllocation { raw: self.raw }
+    }
+
+    #[inline]
+    pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
+        match self.raw.resize_initialized(new_layout) {
+            Ok(raw) => Ok(Self { raw }),
+            Err(err) => {
+                let (raw, kind) = err.into_parts();
+                Err(ResizeError {
+                    allocation: Self { raw },
+                    kind,
+                })
+            }
+        }
     }
 }
 
 impl fmt::Debug for InitializedHeapAllocation<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("InitializedHeapAllocation")
-            .field("allocation", &self.allocation)
+            .field("raw", &self.raw)
             .finish()
     }
 }
@@ -1614,7 +1715,7 @@ unsafe extern "C" fn deferred_free_callback_trampoline<F: FnMut(bool, u64)>(
     }
 }
 
-impl Drop for Allocation {
+impl Drop for RawAllocation {
     fn drop(&mut self) {
         if self.layout.size() != 0 {
             // SAFETY[AUDIT:owned-allocation]: non-zero `Allocation` values are
@@ -1625,12 +1726,19 @@ impl Drop for Allocation {
     }
 }
 
+impl fmt::Debug for RawAllocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawAllocation")
+            .field("ptr", &self.ptr)
+            .field("layout", &self.layout)
+            .finish()
+    }
+}
+
 impl fmt::Debug for Allocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Allocation")
-            .field("ptr", &self.ptr)
-            .field("layout", &self.layout)
-            .field("initialized", &self.initialized)
+            .field("raw", &self.raw)
             .finish()
     }
 }

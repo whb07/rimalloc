@@ -7,7 +7,8 @@ use core::ptr;
 use core::ptr::NonNull;
 
 use super::{
-    AllocError, LayoutError, ResizeError, ResizeErrorKind, StatsError, StatsSnapshot, dangling_for,
+    AllocError, LayoutError, ResizeError, ResizeErrorKind, StatsError, StatsSnapshot,
+    allocations::dangling_for,
 };
 
 /// Error returned by safe heap ownership APIs.

@@ -152,6 +152,9 @@ fn clippy_allowance_counts(sources: &[(String, String)]) -> BTreeMap<(&str, &str
     let mut counts = BTreeMap::new();
     for (rel, source) in sources {
         for line in source.lines() {
+            if !line.contains("allow(clippy::") && !line.contains("expect(clippy::") {
+                continue;
+            }
             let Some(start) = line.find("clippy::") else {
                 continue;
             };
@@ -2963,6 +2966,12 @@ fn phase6_clippy_allowances_stay_intentional() {
         clippy_allowance_counts(&sources),
         expected,
         "localized Clippy allowances should remain limited to audited C-shaped arity and secure/debug constant comparisons"
+    );
+
+    let safe_rs = fs::read_to_string(root.join("src/safe.rs")).expect("read safe facade");
+    assert!(
+        safe_rs.starts_with("#![deny(clippy::must_use_candidate)]"),
+        "safe Rust facade should locally deny missing must-use markers even while translated internals keep the package allowance"
     );
 }
 

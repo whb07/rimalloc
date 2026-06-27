@@ -1,3 +1,5 @@
+#![deny(clippy::must_use_candidate)]
+
 use core::alloc::{GlobalAlloc, Layout};
 use core::ffi::{CStr, c_long, c_void};
 use core::fmt;

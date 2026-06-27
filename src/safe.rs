@@ -299,6 +299,14 @@ unsafe impl Send for Allocation {}
 // caller boundary.
 unsafe impl Sync for Allocation {}
 
+impl fmt::Debug for Allocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Allocation")
+            .field("raw", &self.raw)
+            .finish()
+    }
+}
+
 impl Allocation {
     /// Allocates an uninitialized byte block for `layout`.
     #[inline]
@@ -1800,14 +1808,6 @@ unsafe extern "C" fn deferred_free_callback_trampoline<F: FnMut(bool, u64)>(
     #[cfg(not(any(feature = "std", test)))]
     {
         callback(force, heartbeat);
-    }
-}
-
-impl fmt::Debug for Allocation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Allocation")
-            .field("raw", &self.raw)
-            .finish()
     }
 }
 

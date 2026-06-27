@@ -40,6 +40,7 @@ pub struct AllocError {
 
 impl AllocError {
     #[inline]
+    #[must_use]
     pub const fn layout(self) -> Layout {
         self.layout
     }
@@ -87,11 +88,13 @@ pub struct LayoutError {
 
 impl LayoutError {
     #[inline]
+    #[must_use]
     pub const fn size(self) -> usize {
         self.size
     }
 
     #[inline]
+    #[must_use]
     pub const fn align(self) -> usize {
         self.align
     }
@@ -168,26 +171,31 @@ pub struct ResizeError<A> {
 
 impl<A> ResizeError<A> {
     #[inline]
+    #[must_use]
     pub const fn kind(&self) -> ResizeErrorKind {
         self.kind
     }
 
     #[inline]
+    #[must_use]
     pub const fn allocation(&self) -> &A {
         &self.allocation
     }
 
     #[inline]
+    #[must_use]
     pub const fn allocation_mut(&mut self) -> &mut A {
         &mut self.allocation
     }
 
     #[inline]
+    #[must_use]
     pub fn into_allocation(self) -> A {
         self.allocation
     }
 
     #[inline]
+    #[must_use]
     pub fn into_parts(self) -> (A, ResizeErrorKind) {
         (self.allocation, self.kind)
     }
@@ -325,6 +333,7 @@ impl Allocation {
 
     /// Returns the layout used to allocate this block.
     #[inline]
+    #[must_use]
     pub const fn layout(&self) -> Layout {
         self.raw.layout
     }
@@ -334,12 +343,14 @@ impl Allocation {
     /// This is metadata only; it does not prove that the allocation contents
     /// are initialized.
     #[inline]
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.raw.layout.size()
     }
 
     /// Returns whether this is a zero-sized allocation.
     #[inline]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.raw.layout.size() == 0
     }
@@ -352,6 +363,7 @@ impl Allocation {
     /// zero-sized allocations this is an aligned sentinel pointer and must not
     /// be dereferenced.
     #[inline]
+    #[must_use]
     pub const fn as_non_null(&self) -> NonNull<u8> {
         self.raw.ptr
     }
@@ -364,6 +376,7 @@ impl Allocation {
     /// zero-sized allocations this is an aligned sentinel pointer and must not
     /// be dereferenced.
     #[inline]
+    #[must_use]
     pub const fn as_ptr(&self) -> *mut u8 {
         self.raw.ptr.as_ptr()
     }
@@ -623,31 +636,37 @@ impl InitializedAllocation {
     }
 
     #[inline]
+    #[must_use]
     pub const fn layout(&self) -> Layout {
         self.raw.layout
     }
 
     #[inline]
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.raw.layout.size()
     }
 
     #[inline]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.raw.layout.size() == 0
     }
 
     #[inline]
+    #[must_use]
     pub const fn as_non_null(&self) -> NonNull<u8> {
         self.raw.ptr
     }
 
     #[inline]
+    #[must_use]
     pub const fn as_ptr(&self) -> *mut u8 {
         self.raw.ptr.as_ptr()
     }
 
     #[inline]
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         // SAFETY[AUDIT:owned-allocation]: `InitializedAllocation` guarantees
         // all bytes in the stored layout are initialized for reads.
@@ -655,6 +674,7 @@ impl InitializedAllocation {
     }
 
     #[inline]
+    #[must_use]
     pub fn as_mut_bytes(&mut self) -> &mut [u8] {
         // SAFETY[AUDIT:owned-allocation]: `&mut self` guarantees unique access
         // to the initialized allocation bytes.
@@ -910,21 +930,25 @@ impl<'heap> HeapAllocation<'heap> {
     }
 
     #[inline]
+    #[must_use]
     pub const fn layout(&self) -> Layout {
         self.raw.layout
     }
 
     #[inline]
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.raw.layout.size()
     }
 
     #[inline]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.raw.layout.size() == 0
     }
 
     #[inline]
+    #[must_use]
     pub const fn as_ptr(&self) -> *mut u8 {
         self.raw.ptr.as_ptr()
     }
@@ -1174,26 +1198,31 @@ impl<'heap> InitializedHeapAllocation<'heap> {
     }
 
     #[inline]
+    #[must_use]
     pub const fn layout(&self) -> Layout {
         self.raw.layout
     }
 
     #[inline]
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.raw.layout.size()
     }
 
     #[inline]
+    #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.raw.layout.size() == 0
     }
 
     #[inline]
+    #[must_use]
     pub const fn as_ptr(&self) -> *mut u8 {
         self.raw.ptr.as_ptr()
     }
 
     #[inline]
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         // SAFETY[AUDIT:safe-heap]: initialized heap allocation guarantees
         // readable initialized bytes.
@@ -1201,6 +1230,7 @@ impl<'heap> InitializedHeapAllocation<'heap> {
     }
 
     #[inline]
+    #[must_use]
     pub fn as_mut_bytes(&mut self) -> &mut [u8] {
         // SAFETY[AUDIT:safe-heap]: `&mut self` guarantees unique access.
         unsafe { core::slice::from_raw_parts_mut(self.as_ptr(), self.len()) }
@@ -1285,6 +1315,7 @@ impl OptionKey {
     }
 
     #[inline]
+    #[must_use]
     pub const fn as_raw(self) -> i32 {
         self.raw_option().as_i32()
     }
@@ -1379,6 +1410,7 @@ impl StatCount {
     }
 
     #[inline]
+    #[must_use]
     pub const fn get(self) -> i64 {
         self.0
     }
@@ -1396,6 +1428,7 @@ impl StatTotal {
     }
 
     #[inline]
+    #[must_use]
     pub const fn get(self) -> usize {
         self.0
     }
@@ -1548,46 +1581,55 @@ impl ProcessInfo {
     }
 
     #[inline]
+    #[must_use]
     pub const fn elapsed_msecs(self) -> usize {
         self.elapsed_msecs
     }
 
     #[inline]
+    #[must_use]
     pub const fn user_msecs(self) -> usize {
         self.user_msecs
     }
 
     #[inline]
+    #[must_use]
     pub const fn system_msecs(self) -> usize {
         self.system_msecs
     }
 
     #[inline]
+    #[must_use]
     pub const fn current_rss(self) -> Option<StatTotal> {
         self.current_rss
     }
 
     #[inline]
+    #[must_use]
     pub const fn peak_rss(self) -> Option<StatTotal> {
         self.peak_rss
     }
 
     #[inline]
+    #[must_use]
     pub const fn current_commit(self) -> Option<StatTotal> {
         self.current_commit
     }
 
     #[inline]
+    #[must_use]
     pub const fn peak_commit(self) -> Option<StatTotal> {
         self.peak_commit
     }
 
     #[inline]
+    #[must_use]
     pub const fn page_faults(self) -> Option<StatCount> {
         self.page_faults
     }
 
     #[inline]
+    #[must_use]
     pub const fn page_size(self) -> Option<usize> {
         self.page_size
     }

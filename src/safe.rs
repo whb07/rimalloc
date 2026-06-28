@@ -443,7 +443,10 @@ mod tests {
             let mut callback = |_err: i32| {
                 hits += 1;
             };
-            let _guard = ErrorCallbackGuard::new(&mut callback).expect("guard");
+            // SAFETY: this test holds the process-wide callback test lock,
+            // triggers the callback synchronously, and restores the original
+            // registration before releasing the lock.
+            let _guard = unsafe { ErrorCallbackGuard::new(&mut callback).expect("guard") };
             crate::options::_mi_error_message_fmt(
                 crate::core_types::Errno::EINVAL,
                 format_args!("safe error callback guard test\n"),
@@ -474,7 +477,10 @@ mod tests {
             let mut callback = |_err: i32| {
                 panic!("callback panic should be caught");
             };
-            let _guard = ErrorCallbackGuard::new(&mut callback).expect("guard");
+            // SAFETY: this test holds the process-wide callback test lock,
+            // triggers the callback synchronously, and restores the original
+            // registration before releasing the lock.
+            let _guard = unsafe { ErrorCallbackGuard::new(&mut callback).expect("guard") };
             crate::options::_mi_error_message_fmt(
                 crate::core_types::Errno::EINVAL,
                 format_args!("safe panic callback guard test\n"),
@@ -492,7 +498,10 @@ mod tests {
         let original = unsafe { crate::page::registered_deferred_free_callback() };
         {
             let mut callback = |_force: bool, _heartbeat: u64| {};
-            let _guard = DeferredFreeCallbackGuard::new(&mut callback).expect("guard");
+            // SAFETY: this test holds the process-wide callback test lock and
+            // only observes registration state without concurrent allocator
+            // callback entry.
+            let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback).expect("guard") };
             let current = unsafe { crate::page::registered_deferred_free_callback() };
             assert!(current.0.is_some());
         }

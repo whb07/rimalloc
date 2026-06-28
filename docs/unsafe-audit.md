@@ -43,10 +43,12 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
 - `SAFETY[AUDIT:raw-callback]`: raw callback entrypoints and callback storage.
   Callers must provide ABI-compatible function pointers and user data that stay
   valid for the documented call duration.
-- `SAFETY[AUDIT:safe-callback]`: safe callback guards. Guard construction
+- `SAFETY[AUDIT:safe-callback]`: callback guards. Unsafe guard construction
   registers a trampoline with a borrowed callback context, stores the previous
   registration, restores that previous registration on drop, and catches Rust
-  panics before callback ABI return. Output callbacks remain raw until output
+  panics before callback ABI return in `std` and test builds. Callers must
+  prevent concurrent registration changes and concurrent or reentrant callback
+  entry for the same borrowed `FnMut`. Output callbacks remain raw until output
   recursion and diagnostic allocation semantics are designed.
 - `SAFETY[AUDIT:panic-boundary]`: no-std panic/personality shims and aborting
   assertion paths. These paths must not allocate or unwind.
@@ -77,7 +79,37 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   controls and observations without raw out-pointers in safe caller code.
 - `ErrorCallbackGuard` and `DeferredFreeCallbackGuard` prevent dangling
   callback contexts with Rust borrows, restore previous callback registrations
-  on drop, and catch callback panics before ABI return.
+  on drop, and catch callback panics before ABI return in `std` and test builds.
+  Their constructors are unsafe because mimalloc registers process-global
+  callbacks and upstream does not provide a single-threaded, non-reentrant
+  guarantee strong enough for safe borrowed `FnMut` mutation.
+
+## Callback Threading And Reentry Audit
+
+- Error callbacks: upstream declares `mi_register_error` in
+  `mimalloc-3.3.2/include/mimalloc.h:186-187`, stores the process-global
+  `mi_error_handler` in `mimalloc-3.3.2/src/options.c:579,604-606`, and invokes
+  it from `_mi_error_message` in `mimalloc-3.3.2/src/options.c:609-620`.
+  The Rust translation stores the handler behind `mi_error_handler_lock` for
+  registration in `src/options.rs:585-629` and invokes a loaded handler in
+  `src/options.rs:1086-1111`. These locations do not restrict invocation to the
+  registering thread or rule out another error callback becoming active while a
+  borrowed callback is live.
+- Deferred-free callbacks: upstream declares `mi_register_deferred_free` in
+  `mimalloc-3.3.2/include/mimalloc.h:180-181`, explicitly notes that programs
+  should install a single deferred-free handler before allocation in
+  `mimalloc-3.3.2/src/page.c:888`, stores callback and argument in atomic
+  globals in `mimalloc-3.3.2/src/page.c:889-905`, and invokes the callback from
+  `_mi_deferred_free` in `mimalloc-3.3.2/src/page.c:892-901`. The Rust
+  translation mirrors the atomic global registration and invocation in
+  `src/page.rs:3114-3185`. Invocation is suppressed for reentry on a given
+  thread heap via `theap->tld->recurse`, but the process-global callback can be
+  reached by allocator activity on different thread heaps.
+- Decision: borrowed `FnMut` callback guards cannot remain safe under the
+  documented upstream contract. Construction is unsafe and requires callers to
+  serialize registration, restoration, and callback entry for the borrowed
+  closure. The trampolines retain panic containment for `std` and test builds;
+  optimized `no_std` callers must not panic from callbacks.
 - Raw pointer escape hatches from safe types must document invalidation, null or
   sentinel behavior, caller free restrictions, use-after-move/drop behavior,
   aliasing, and thread restrictions.

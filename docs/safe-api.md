@@ -49,9 +49,9 @@ private unless explicitly exposed through an audited unstable-internals gate.
   snapshots and typed statistic values.
 - `ProcessInfo`: typed process allocator information; unavailable fields are
   represented with `Option`.
-- `ErrorCallbackGuard` and `DeferredFreeCallbackGuard`: RAII callback guards
-  that restore previous callback registrations on drop and catch Rust panics
-  before returning through the callback ABI.
+- `ErrorCallbackGuard` and `DeferredFreeCallbackGuard`: unsafe-to-construct
+  RAII callback guards that restore previous callback registrations on drop and
+  catch Rust panics before returning through the callback ABI.
 - `AllocError`, `LayoutError`, `TryAllocError`, `ResizeError`,
   `ResizeErrorKind`, `HeapError`, `OptionError`, `StatsError`, and
   `CallbackError`: typed failure states for the safe API.
@@ -102,7 +102,7 @@ Safe APIs translate raw C failure conventions at the safe boundary:
 | Heap creation or unsupported heap operation | `HeapError` |
 | Invalid, immutable, or unsupported option | `OptionError` |
 | Unavailable stats or too-small JSON buffer | `StatsError` |
-| Unsupported callback registration | `CallbackError` |
+| Unsupported callback registration or unsafe callback guard construction | `CallbackError` |
 | Raw errno-style behavior | remains under `raw` until wrapped by a typed safe API |
 
 ## Feature Expectations

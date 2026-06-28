@@ -120,8 +120,7 @@ cargo clippy-strict
 The alias expands to `cargo clippy --all-targets --all-features`; lint levels
 are defined in `Cargo.toml`, so plain `cargo clippy` uses the same deny policy
 for Cargo's default target/feature selection. The `scripts/check-lints.sh`
-entrypoint remains the compatibility sweep for feature combinations that cannot
-be enabled together.
+entrypoint remains the compatibility sweep for the tracked feature matrix.
 
 Benchmark evidence is tracked in `BENCHMARK_RESULTS.md`; policy and thresholds
 are documented in `docs/performance.md`. Performance-sensitive changes should

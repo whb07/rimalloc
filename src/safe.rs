@@ -246,10 +246,7 @@ mod tests {
 
     #[test]
     fn initialized_allocation_exposes_safe_slices_and_clone() {
-        let allocation = Allocation::zeroed_with_size_align(32, 8)
-            .expect("allocation")
-            .into_initialized()
-            .expect("initialized");
+        let allocation = Allocation::zeroed_with_size_align(32, 8).expect("allocation");
         assert!(allocation.as_bytes().iter().all(|byte| *byte == 0));
 
         let mut allocation = allocation;
@@ -267,9 +264,6 @@ mod tests {
     #[test]
     fn uninitialized_allocation_requires_explicit_initialization() {
         let allocation = Allocation::with_size_align(8, 8).expect("allocation");
-        let allocation = allocation
-            .into_initialized()
-            .expect_err("uninitialized allocation should not expose bytes");
         for idx in 0..allocation.len() {
             unsafe { allocation.as_ptr().add(idx).write((idx + 1) as u8) };
         }
@@ -279,10 +273,7 @@ mod tests {
 
     #[test]
     fn initialized_resize_zeroes_grown_tail() {
-        let mut allocation = Allocation::zeroed_with_size_align(4, 4)
-            .expect("allocation")
-            .into_initialized()
-            .expect("initialized");
+        let mut allocation = Allocation::zeroed_with_size_align(4, 4).expect("allocation");
         allocation.as_mut_bytes().copy_from_slice(&[1, 2, 3, 4]);
         let resized = allocation
             .resize(Layout::from_size_align(8, 4).expect("layout"))

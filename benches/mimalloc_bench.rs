@@ -621,7 +621,7 @@ fn scenarios() -> Vec<Scenario> {
 
     let selected = csv_env("MIMALLOC_BENCH_SCENARIOS");
     if selected.is_empty() {
-        if criterion_test_mode() {
+        if cargo_test_smoke_mode() {
             scenarios.truncate(1);
         }
         scenarios
@@ -633,10 +633,34 @@ fn scenarios() -> Vec<Scenario> {
     }
 }
 
-fn criterion_test_mode() -> bool {
+fn cargo_test_smoke_mode() -> bool {
     // `cargo bench` passes `--bench`; `cargo test --all-targets` runs the bench
     // binary without it, where this target should stay a bounded smoke check.
-    !env::args().any(|arg| arg == "--bench")
+    cargo_test_smoke_mode_from_args(env::args())
+}
+
+fn cargo_test_smoke_mode_from_args<I, S>(args: I) -> bool
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    !args.into_iter().any(|arg| arg.as_ref() == "--bench")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn cargo_test_without_bench_flag_uses_smoke_mode() {
+        assert!(super::cargo_test_smoke_mode_from_args(["mimalloc_bench"]));
+    }
+
+    #[test]
+    fn cargo_bench_with_bench_flag_uses_full_mode() {
+        assert!(!super::cargo_test_smoke_mode_from_args([
+            "mimalloc_bench",
+            "--bench",
+        ]));
+    }
 }
 
 mod pthread {

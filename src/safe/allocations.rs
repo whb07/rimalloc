@@ -224,17 +224,6 @@ impl Allocation {
         self.resize(layout)
     }
 
-    /// Converts this allocation into an initialized byte allocation when the
-    /// allocation was produced by an older safe initialized constructor.
-    ///
-    /// New code should use [`Allocation::zeroed`] or
-    /// [`InitializedAllocation::zeroed`] directly; those constructors return an
-    /// initialized allocation type.
-    #[inline]
-    pub fn into_initialized(self) -> Result<InitializedAllocation, Self> {
-        Err(self)
-    }
-
     /// Marks this allocation initialized after the caller has initialized every
     /// byte through raw pointers.
     ///
@@ -490,11 +479,6 @@ impl InitializedAllocation {
     #[inline]
     pub fn into_allocation(self) -> Allocation {
         Allocation { raw: self.raw }
-    }
-
-    #[inline]
-    pub fn into_initialized(self) -> Result<Self, Allocation> {
-        Ok(self)
     }
 
     /// Resizes this initialized allocation, zeroing any newly exposed tail

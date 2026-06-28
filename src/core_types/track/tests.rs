@@ -2,7 +2,10 @@ use super::*;
 
 #[test]
 fn current_mode_matches_enabled_features() {
-    #[cfg(feature = "track-valgrind")]
+    #[cfg(all(feature = "track-valgrind", feature = "track-asan"))]
+    assert_eq!(TrackMode::CURRENT, TrackMode::Valgrind);
+
+    #[cfg(all(feature = "track-valgrind", not(feature = "track-asan")))]
     assert_eq!(TrackMode::CURRENT, TrackMode::Valgrind);
 
     #[cfg(all(not(feature = "track-valgrind"), feature = "track-asan"))]

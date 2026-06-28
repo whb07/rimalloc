@@ -53,6 +53,12 @@ scripts/check-lints.sh
 Use the script when you need the repository's feature matrix checks, including
 the separate tracking feature builds and their aggregate tooling combination.
 
+Package-level Clippy allowances are intentional mechanical-translation debt, not
+the style target for new Rust facade code. `tests/release_fast_path_audit.rs`
+keeps both the package allowance set and localized source allowances on fixed
+inventories; new allowances should be local and justified by C ABI parity,
+translated C shape, or measured hot-path code shape.
+
 ## Benchmark Reproduction
 
 Benchmark command lines and environment variables must be preserved in

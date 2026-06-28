@@ -16,3 +16,12 @@ fn default_tracking_mode_is_disabled() {
     assert_eq!(track::MI_TRACK_HEAP_DESTROY, 0);
     assert_eq!(track::MI_TRACK_TOOL, "none");
 }
+
+#[cfg(all(feature = "track-valgrind", feature = "track-asan"))]
+#[test]
+fn aggregate_tracking_features_prefer_valgrind() {
+    assert_eq!(track::MI_TRACK_ENABLED, 1);
+    assert_eq!(track::MI_TRACK_VALGRIND, 1);
+    assert_eq!(track::MI_TRACK_ASAN, 0);
+    assert_eq!(track::MI_TRACK_TOOL, "valgrind");
+}

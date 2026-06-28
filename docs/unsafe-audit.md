@@ -43,6 +43,10 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
 - `SAFETY[AUDIT:raw-callback]`: raw callback entrypoints and callback storage.
   Callers must provide ABI-compatible function pointers and user data that stay
   valid for the documented call duration.
+- `SAFETY[AUDIT:raw-macro-boundary]`: public raw macro expansion. Typed raw
+  allocation macros and C header override macros expand to unsafe raw C-shaped
+  calls without internal unsafe blocks, so the downstream expansion site must
+  provide the unsafe boundary.
 - `SAFETY[AUDIT:safe-callback]`: callback guards. Unsafe guard construction
   registers a trampoline with a borrowed callback context, stores the previous
   registration, restores that previous registration on drop, and catches Rust
@@ -115,6 +119,17 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   serialize registration, restoration, and callback entry for the borrowed
   closure. The trampolines retain panic containment for `std` and test builds;
   optimized `no_std` callers must not panic from callbacks.
+- `error_callback_trampoline::<F>` is registered only by
+  `ErrorCallbackGuard::new`. `arg` must be the non-null `&mut F` pointer stored
+  by the guard for the active registration lifetime; the trampoline returns
+  early for null, catches panics in `std` and test builds, and otherwise invokes
+  the borrowed callback under the caller's no-concurrent-entry obligation.
+- `deferred_free_callback_trampoline::<F>` is registered only by
+  `DeferredFreeCallbackGuard::new`. `arg` must be the non-null `&mut F` pointer
+  stored by the guard for the active registration lifetime; `force` and
+  `heartbeat` are forwarded exactly from mimalloc, panics are caught in `std`
+  and test builds, and no concurrent or reentrant entry may access the same
+  borrowed callback.
 - Raw pointer escape hatches from safe types must document invalidation, null or
   sentinel behavior, caller free restrictions, use-after-move/drop behavior,
   aliasing, and thread restrictions.

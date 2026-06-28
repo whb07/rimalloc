@@ -1,5 +1,9 @@
 //! Mechanical translation of header-level override macros.
 
+// SAFETY[AUDIT:raw-macro-boundary]: header override macros intentionally expand
+// through public raw C-shaped functions without internal `unsafe` blocks.
+// Downstream callers must use an unsafe boundary for the expanded raw calls.
+
 #[macro_export]
 macro_rules! malloc {
     ($n:expr) => {

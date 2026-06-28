@@ -362,17 +362,17 @@ Scope: turn the allocator review findings into small, verifiable actions. Each i
 
 ## 7. Add Targeted Unsafe-Audit Coverage
 
-- [ ] Add an audit entry for every unsafe callback trampoline.
+- [x] Add an audit entry for every unsafe callback trampoline.
   - Places: `src/safe/callbacks.rs`, `docs/unsafe-audit.md`.
   - Action: document argument validity, lifetime, unwind, thread, and reentry invariants.
   - Validation: source search finds `SAFETY[AUDIT:safe-callback]` entries mirrored in `docs/unsafe-audit.md`.
 
-- [ ] Add an audit entry for raw macro unsafe-boundary policy.
+- [x] Add an audit entry for raw macro unsafe-boundary policy.
   - Places: `src/abi.rs`, `src/headers.rs`, `docs/abi.md`.
   - Action: document which macros require caller unsafe and which are intentionally safe wrappers, if any.
   - Validation: compile-fail tests align with the documented policy.
 
-- [ ] Add an audit entry for retained raw auto-trait impls.
+- [x] Add an audit entry for retained raw auto-trait impls.
   - Places: `src/types.rs`, `docs/unsafe-audit.md`.
   - Action: document why each retained raw `Send`/`Sync` impl is sound.
   - Validation: every retained `unsafe impl Send` or `unsafe impl Sync` in `src/types.rs` has a nearby safety comment and audit reference.

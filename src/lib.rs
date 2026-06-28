@@ -97,6 +97,13 @@
 //! mechanical_mimalloc::raw::mi_free(p.cast());
 //! ```
 //!
+//! Header override macros follow the same raw unsafe-boundary policy:
+//!
+//! ```rust,compile_fail
+//! let p = mechanical_mimalloc::malloc!(64);
+//! mechanical_mimalloc::_aligned_free!(p);
+//! ```
+//!
 //! ```rust,compile_fail
 //! let p = mechanical_mimalloc::mi_zalloc_tp!(u64);
 //! mechanical_mimalloc::raw::mi_free(p.cast());

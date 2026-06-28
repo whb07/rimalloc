@@ -54,6 +54,9 @@ pub const MI_HAS_HEAP_STL_ALLOCATOR: usize = 1;
 // macros. They intentionally expand through the public raw C-shaped facade, not
 // crate-private internals, so downstream macro expansion observes header-like
 // allocation semantics.
+// SAFETY[AUDIT:raw-macro-boundary]: these typed macros intentionally do not
+// wrap raw allocation calls in internal `unsafe` blocks. Callers must expand
+// them inside an unsafe boundary, matching the raw C-shaped function contract.
 #[macro_export]
 macro_rules! mi_malloc_tp {
     ($tp:ty) => {{ $crate::raw::mi_malloc(core::mem::size_of::<$tp>()) as *mut $tp }};

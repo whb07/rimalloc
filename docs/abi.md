@@ -224,6 +224,26 @@ in `src/abi.rs`; those macros intentionally expand through root `raw::mi_*` so
 downstream macro users see C-header behavior. `scripts/check-ffi-boundary.py`
 fails if any other source file re-enters the public raw/ABI `mi_*` facade.
 
+## Raw Macro Unsafe Boundary
+
+Public raw macros are compatibility conveniences over the raw C-shaped facade,
+not safe Rust wrappers.
+
+- Typed allocation macros in `src/abi.rs` (`mi_malloc_tp!`, `mi_zalloc_tp!`,
+  `mi_calloc_tp!`, `mi_mallocn_tp!`, `mi_reallocn_tp!`, and the heap typed
+  variants) expand directly to `raw::mi_*` calls and pointer casts. They do not
+  contain internal `unsafe` blocks, so callers must use them inside an unsafe
+  boundary. The compile-fail doctests in `src/lib.rs` cover each typed macro
+  form outside unsafe.
+- Header override macros in `src/headers.rs` (`malloc!`, `realloc!`, C++
+  operator shims, aligned allocation shims, and related header spellings)
+  likewise expand through public `raw::mi_*` calls without internal `unsafe`
+  blocks. They require caller-side unsafe for the same pointer ownership,
+  layout, lifetime, and threading obligations as the raw functions they call.
+- There are no intentionally safe public allocation macros today. Any future
+  safe macro must expand only to safe APIs such as `Allocation` or `Heap`
+  wrappers and must be documented separately from the raw macro boundary.
+
 ## Naming Rules
 
 The dynamic C ABI preserves upstream mimalloc symbol spelling. Public C symbols,

@@ -830,6 +830,38 @@ fn raw_facade_remains_c_shaped_without_strict_type_exports() {
 }
 
 #[test]
+fn raw_macro_unsafe_boundary_policy_stays_documented() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
+    let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
+    let headers_rs = fs::read_to_string(root.join("src/headers.rs")).expect("read headers.rs");
+    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
+    let unsafe_doc =
+        fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read unsafe audit");
+
+    assert!(
+        abi_rs.contains("SAFETY[AUDIT:raw-macro-boundary]")
+            && headers_rs.contains("SAFETY[AUDIT:raw-macro-boundary]")
+            && unsafe_doc.contains("SAFETY[AUDIT:raw-macro-boundary]")
+            && abi_doc.contains("## Raw Macro Unsafe Boundary"),
+        "raw macro unsafe-boundary audit tag should be mirrored in source and docs"
+    );
+    assert!(
+        abi_doc.contains("Typed allocation macros in `src/abi.rs`")
+            && abi_doc.contains("Header override macros in `src/headers.rs`")
+            && abi_doc.contains("There are no intentionally safe public allocation macros today")
+            && lib_rs.contains("Header override macros follow the same raw unsafe-boundary policy")
+            && lib_rs.contains("mechanical_mimalloc::malloc!(64)"),
+        "raw macro docs should distinguish typed/header macros and state that all current public allocation macros require caller unsafe"
+    );
+    assert!(
+        !abi_rs.contains("unsafe { $crate::raw::")
+            && !headers_rs.contains("unsafe { $crate::raw::"),
+        "public raw macros should not hide raw calls inside internal unsafe blocks"
+    );
+}
+
+#[test]
 fn translated_raw_internal_test_access_requires_unstable_feature() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = root.join("tests");
@@ -1211,7 +1243,12 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
             && safe_doc.contains("catch Rust panics")
             && unsafe_doc.contains("SAFETY[AUDIT:safe-callback]")
             && unsafe_doc.contains("restores that previous registration on drop")
-            && unsafe_doc.contains("catches Rust\n  panics before callback ABI return"),
+            && unsafe_doc.contains("catches Rust\n  panics before callback ABI return")
+            && unsafe_doc.contains("`error_callback_trampoline::<F>`")
+            && unsafe_doc.contains("`deferred_free_callback_trampoline::<F>`")
+            && unsafe_doc.contains(
+                "no concurrent or reentrant entry may access the same\n  borrowed callback"
+            ),
         "safe API and unsafe audit docs should prove safe callback guard lifetime, restore, and unwind behavior"
     );
 

@@ -145,61 +145,61 @@ Scope: turn the allocator review findings into small, verifiable actions. Each i
 
 ### 3.1 Inventory every exported header macro
 
-- [ ] List all `#[macro_export]` macros in `src/headers.rs`.
+- [x] List all `#[macro_export]` macros in `src/headers.rs`.
   - Place: `src/headers.rs`.
   - Action: create an inventory grouped by target API: allocation, aligned allocation, POSIX, C++ operator shim, or unsupported/internal-only.
   - Validation: add the inventory to `docs/api-inventory.md` or a nearby source comment.
 
-- [ ] For each `src/headers.rs` macro, classify whether it is intended public Rust API.
+- [x] For each `src/headers.rs` macro, classify whether it is intended public Rust API.
   - Places: `src/headers.rs`, `docs/api-inventory.md`.
   - Action: mark each macro as public compatibility surface, internal parity-only, or candidate for removal/feature gating.
   - Validation: inventory names every exported macro exactly once.
 
 ### 3.2 Route public macros through public raw paths
 
-- [ ] Change `malloc!` to use a public raw path.
+- [x] Change `malloc!` to use a public raw path.
   - Place: `src/headers.rs` macro `malloc!`.
   - Action: replace `$crate::alloc::mi_malloc` with `$crate::raw::mi_malloc` if the macro remains public.
   - Validation: downstream smoke crate can invoke the macro from an explicit unsafe block.
 
-- [ ] Change `realloc!` to use a public raw path.
+- [x] Change `realloc!` to use a public raw path.
   - Place: `src/headers.rs` macro `realloc!`.
   - Action: route through `$crate::raw::mi_realloc`.
   - Validation: downstream smoke crate builds.
 
-- [ ] Change string/allocation macros to use public raw paths or gate them.
+- [x] Change string/allocation macros to use public raw paths or gate them.
   - Places: `strdup!`, `_strdup!`, `realpath!`, `_wcsdup!`, `_dupenv_s!` in `src/headers.rs`.
   - Action: route through `raw` when a stable public raw function exists; otherwise hide behind an internal/unstable feature.
   - Validation: compile-fail coverage rejects private-module expansion from a downstream crate.
 
-- [ ] Change POSIX allocation macros to use public raw paths or gate them.
+- [x] Change POSIX allocation macros to use public raw paths or gate them.
   - Places: `reallocarray!`, `posix_memalign!`, `cfree!`, `valloc!`, `memalign!` in `src/headers.rs`.
   - Action: route through `raw` when intended public; otherwise hide behind an internal/unstable feature.
   - Validation: downstream smoke crate builds for supported public macros.
 
-- [ ] Change aligned allocation macros to use public raw paths or gate them.
+- [x] Change aligned allocation macros to use public raw paths or gate them.
   - Places: `_expand!`, `_recalloc!`, `_aligned_recalloc!`, `_aligned_malloc!`, `_aligned_free!`, `_aligned_offset_realloc!` in `src/headers.rs`.
   - Action: route through `raw` when intended public; otherwise hide behind an internal/unstable feature.
   - Validation: downstream smoke crate builds for supported public macros.
 
-- [ ] Change C++ operator macros to use public raw paths or gate them.
+- [x] Change C++ operator macros to use public raw paths or gate them.
   - Places: `operatornew!`, `operatornew_array!`, `operatornew_nothrow!`, `operatornew_array_nothrow!`, and `operatordelete*` macros in `src/headers.rs`.
   - Action: route through `raw` when intended public; otherwise hide behind an internal/unstable feature.
   - Validation: downstream smoke crate builds for supported public macros.
 
 ### 3.3 Confirm macro export behavior
 
-- [ ] Add downstream macro expansion tests.
+- [x] Add downstream macro expansion tests.
   - Place: `tests/` or a package smoke-test script.
   - Action: create a temporary external crate that imports and expands representative public macros.
   - Validation: smoke test passes without referencing private modules.
 
-- [ ] Add negative coverage for gated/private macros.
+- [x] Add negative coverage for gated/private macros.
   - Place: docs compile-fail or package smoke test.
   - Action: prove macros not intended as public API are not available by default.
   - Validation: compile-fail test rejects default use.
 
-- [ ] Re-run API inventory after header macro changes.
+- [x] Re-run API inventory after header macro changes.
   - Place: repository scripts.
   - Action: confirm public macro boundary matches the documented inventory.
   - Validation: `scripts/check-api-inventory.py` exits 0.

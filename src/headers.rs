@@ -3,140 +3,140 @@
 #[macro_export]
 macro_rules! malloc {
     ($n:expr) => {
-        $crate::alloc::mi_malloc($n)
+        $crate::raw::mi_malloc($n)
     };
 }
 
 #[macro_export]
 macro_rules! realloc {
     ($p:expr, $n:expr) => {
-        $crate::mimalloc::mi_realloc($p, $n)
+        $crate::raw::mi_realloc($p, $n)
     };
 }
 
 #[macro_export]
 macro_rules! strdup {
     ($s:expr) => {
-        $crate::alloc::mi_strdup($s)
+        $crate::raw::mi_strdup($s)
     };
 }
 
 #[macro_export]
 macro_rules! _strdup {
     ($s:expr) => {
-        $crate::alloc::mi_strdup($s)
+        $crate::raw::mi_strdup($s)
     };
 }
 
 #[macro_export]
 macro_rules! realpath {
     ($f:expr, $n:expr) => {
-        $crate::alloc::mi_theap_realpath($crate::prim::_mi_theap_default(), $f, $n)
+        $crate::raw::mi_realpath($f, $n)
     };
 }
 
 #[macro_export]
 macro_rules! reallocarray {
     ($p:expr, $c:expr, $n:expr) => {
-        $crate::alloc_posix::mi_reallocarray($p, $c, $n)
+        $crate::raw::mi_reallocarray($p, $c, $n)
     };
 }
 
 #[macro_export]
 macro_rules! posix_memalign {
     ($p:expr, $a:expr, $n:expr) => {
-        $crate::alloc_posix::mi_posix_memalign($p, $a, $n)
+        $crate::raw::mi_posix_memalign($p, $a, $n)
     };
 }
 
 #[macro_export]
 macro_rules! _expand {
     ($p:expr, $n:expr) => {
-        $crate::alloc_posix::mi__expand($p, $n)
+        $crate::raw::mi__expand($p, $n)
     };
 }
 
 #[macro_export]
 macro_rules! _recalloc {
     ($p:expr, $c:expr, $n:expr) => {
-        $crate::mimalloc::mi_recalloc($p, $c, $n)
+        $crate::raw::mi_recalloc($p, $c, $n)
     };
 }
 
 #[macro_export]
 macro_rules! _aligned_recalloc {
     ($p:expr, $c:expr, $n:expr, $a:expr) => {
-        $crate::alloc_aligned::mi_aligned_recalloc($p, $c, $n, $a)
+        $crate::raw::mi_aligned_recalloc($p, $c, $n, $a)
     };
 }
 
 #[macro_export]
 macro_rules! _wcsdup {
     ($s:expr) => {
-        $crate::alloc_posix::mi_wcsdup($s)
+        $crate::raw::mi_wcsdup($s)
     };
 }
 
 #[macro_export]
 macro_rules! _dupenv_s {
     ($buf:expr, $n:expr, $nm:expr) => {
-        $crate::alloc_posix::mi_dupenv_s($buf, $n, $nm)
+        $crate::raw::mi_dupenv_s($buf, $n, $nm)
     };
 }
 
 #[macro_export]
 macro_rules! reallocf {
     ($p:expr, $n:expr) => {
-        $crate::alloc::mi_reallocf($p, $n)
+        $crate::raw::mi_reallocf($p, $n)
     };
 }
 
 #[macro_export]
 macro_rules! malloc_usable_size {
     ($p:expr) => {
-        $crate::free::mi_usable_size($p)
+        $crate::raw::mi_malloc_usable_size($p)
     };
 }
 
 #[macro_export]
 macro_rules! cfree {
     ($p:expr) => {
-        $crate::alloc_posix::mi_cfree($p)
+        $crate::raw::mi_cfree($p)
     };
 }
 
 #[macro_export]
 macro_rules! valloc {
     ($n:expr) => {
-        $crate::alloc_posix::mi_valloc($n)
+        $crate::raw::mi_valloc($n)
     };
 }
 
 #[macro_export]
 macro_rules! memalign {
     ($a:expr, $n:expr) => {
-        $crate::alloc_posix::mi_memalign($a, $n)
+        $crate::raw::mi_memalign($a, $n)
     };
 }
 
 #[macro_export]
 macro_rules! _aligned_malloc {
     ($n:expr, $a:expr) => {
-        $crate::mimalloc::mi_malloc_aligned($n, $a)
+        $crate::raw::mi_malloc_aligned($n, $a)
     };
 }
 
 #[macro_export]
 macro_rules! _aligned_free {
     ($p:expr) => {
-        $crate::mimalloc::mi_free($p)
+        $crate::raw::mi_free($p)
     };
 }
 
 #[macro_export]
 macro_rules! _aligned_offset_realloc {
     ($p:expr, $n:expr, $a:expr, $o:expr) => {
-        $crate::alloc_aligned::mi_realloc_aligned_at($p, $n, $a, $o)
+        $crate::raw::mi_realloc_aligned_at($p, $n, $a, $o)
     };
 }
 
@@ -149,14 +149,14 @@ pub const mi_decl_new_nothrow: () = ();
 #[macro_export]
 macro_rules! operatordelete {
     ($p:expr) => {
-        $crate::mimalloc::mi_free($p)
+        $crate::raw::mi_free($p)
     };
 }
 
 #[macro_export]
 macro_rules! operatordelete_array {
     ($p:expr) => {
-        $crate::mimalloc::mi_free($p)
+        $crate::raw::mi_free($p)
     };
 }
 
@@ -164,7 +164,7 @@ macro_rules! operatordelete_array {
 macro_rules! operatordelete_nothrow {
     ($p:expr, $tag:expr) => {{
         let _ = &$tag;
-        $crate::mimalloc::mi_free($p)
+        $crate::raw::mi_free($p)
     }};
 }
 
@@ -172,21 +172,21 @@ macro_rules! operatordelete_nothrow {
 macro_rules! operatordelete_array_nothrow {
     ($p:expr, $tag:expr) => {{
         let _ = &$tag;
-        $crate::mimalloc::mi_free($p)
+        $crate::raw::mi_free($p)
     }};
 }
 
 #[macro_export]
 macro_rules! operatornew {
     ($n:expr) => {
-        $crate::mimalloc::mi_new($n)
+        $crate::raw::mi_new($n)
     };
 }
 
 #[macro_export]
 macro_rules! operatornew_array {
     ($n:expr) => {
-        $crate::mimalloc::mi_new($n)
+        $crate::raw::mi_new($n)
     };
 }
 
@@ -194,7 +194,7 @@ macro_rules! operatornew_array {
 macro_rules! operatornew_nothrow {
     ($n:expr, $tag:expr) => {{
         let _ = &$tag;
-        $crate::mimalloc::mi_new_nothrow($n)
+        $crate::raw::mi_new_nothrow($n)
     }};
 }
 
@@ -202,49 +202,49 @@ macro_rules! operatornew_nothrow {
 macro_rules! operatornew_array_nothrow {
     ($n:expr, $tag:expr) => {{
         let _ = &$tag;
-        $crate::mimalloc::mi_new_nothrow($n)
+        $crate::raw::mi_new_nothrow($n)
     }};
 }
 
 #[macro_export]
 macro_rules! operatordelete_sized {
     ($p:expr, $n:expr) => {
-        $crate::free::mi_free_size($p, $n)
+        $crate::raw::mi_free_size($p, $n)
     };
 }
 
 #[macro_export]
 macro_rules! operatordelete_array_sized {
     ($p:expr, $n:expr) => {
-        $crate::free::mi_free_size($p, $n)
+        $crate::raw::mi_free_size($p, $n)
     };
 }
 
 #[macro_export]
 macro_rules! operatordelete_aligned {
     ($p:expr, $al:expr) => {
-        $crate::free::mi_free_aligned($p, $al as usize)
+        $crate::raw::mi_free_aligned($p, $al as usize)
     };
 }
 
 #[macro_export]
 macro_rules! operatordelete_array_aligned {
     ($p:expr, $al:expr) => {
-        $crate::free::mi_free_aligned($p, $al as usize)
+        $crate::raw::mi_free_aligned($p, $al as usize)
     };
 }
 
 #[macro_export]
 macro_rules! operatordelete_sized_aligned {
     ($p:expr, $n:expr, $al:expr) => {
-        $crate::free::mi_free_size_aligned($p, $n, $al as usize)
+        $crate::raw::mi_free_size_aligned($p, $n, $al as usize)
     };
 }
 
 #[macro_export]
 macro_rules! operatordelete_array_sized_aligned {
     ($p:expr, $n:expr, $al:expr) => {
-        $crate::free::mi_free_size_aligned($p, $n, $al as usize)
+        $crate::raw::mi_free_size_aligned($p, $n, $al as usize)
     };
 }
 
@@ -252,7 +252,7 @@ macro_rules! operatordelete_array_sized_aligned {
 macro_rules! operatordelete_aligned_nothrow {
     ($p:expr, $al:expr, $tag:expr) => {{
         let _ = &$tag;
-        $crate::free::mi_free_aligned($p, $al as usize)
+        $crate::raw::mi_free_aligned($p, $al as usize)
     }};
 }
 
@@ -260,21 +260,21 @@ macro_rules! operatordelete_aligned_nothrow {
 macro_rules! operatordelete_array_aligned_nothrow {
     ($p:expr, $al:expr, $tag:expr) => {{
         let _ = &$tag;
-        $crate::free::mi_free_aligned($p, $al as usize)
+        $crate::raw::mi_free_aligned($p, $al as usize)
     }};
 }
 
 #[macro_export]
 macro_rules! operatornew_aligned {
     ($n:expr, $al:expr) => {
-        $crate::mimalloc::mi_new_aligned($n, $al as usize)
+        $crate::raw::mi_new_aligned($n, $al as usize)
     };
 }
 
 #[macro_export]
 macro_rules! operatornew_array_aligned {
     ($n:expr, $al:expr) => {
-        $crate::mimalloc::mi_new_aligned($n, $al as usize)
+        $crate::raw::mi_new_aligned($n, $al as usize)
     };
 }
 
@@ -282,7 +282,7 @@ macro_rules! operatornew_array_aligned {
 macro_rules! operatornew_aligned_nothrow {
     ($n:expr, $al:expr, $tag:expr) => {{
         let _ = &$tag;
-        $crate::mimalloc::mi_new_aligned_nothrow($n, $al as usize)
+        $crate::raw::mi_new_aligned_nothrow($n, $al as usize)
     }};
 }
 
@@ -290,7 +290,7 @@ macro_rules! operatornew_aligned_nothrow {
 macro_rules! operatornew_array_aligned_nothrow {
     ($n:expr, $al:expr, $tag:expr) => {{
         let _ = &$tag;
-        $crate::mimalloc::mi_new_aligned_nothrow($n, $al as usize)
+        $crate::raw::mi_new_aligned_nothrow($n, $al as usize)
     }};
 }
 

@@ -119,6 +119,66 @@ scripts/check-raw-facade.sh
 Current raw users and raw module classifications are tracked in
 `docs/raw-facade-migration.md`.
 
+### Header Override Macros
+
+The exported macros in `src/headers.rs` are Tier R public compatibility
+surface. They model C header override and C++ operator shim spellings while
+expanding through public `raw::mi_*` paths so downstream crates do not observe
+implementation modules. There are no internal-only or gated header macros in
+the default build today.
+
+Allocation and string macros:
+
+- `malloc`
+- `realloc`
+- `strdup`
+- `_strdup`
+- `realpath`
+- `reallocf`
+- `malloc_usable_size`
+
+POSIX and platform allocation macros:
+
+- `reallocarray`
+- `posix_memalign`
+- `cfree`
+- `valloc`
+- `memalign`
+- `_wcsdup`
+- `_dupenv_s`
+
+Aligned and Windows-style allocation macros:
+
+- `_expand`
+- `_recalloc`
+- `_aligned_recalloc`
+- `_aligned_malloc`
+- `_aligned_free`
+- `_aligned_offset_realloc`
+
+C++ operator shim macros:
+
+- `operatornew`
+- `operatornew_array`
+- `operatornew_nothrow`
+- `operatornew_array_nothrow`
+- `operatornew_aligned`
+- `operatornew_array_aligned`
+- `operatornew_aligned_nothrow`
+- `operatornew_array_aligned_nothrow`
+- `operatordelete`
+- `operatordelete_array`
+- `operatordelete_nothrow`
+- `operatordelete_array_nothrow`
+- `operatordelete_sized`
+- `operatordelete_array_sized`
+- `operatordelete_aligned`
+- `operatordelete_array_aligned`
+- `operatordelete_sized_aligned`
+- `operatordelete_array_sized_aligned`
+- `operatordelete_aligned_nothrow`
+- `operatordelete_array_aligned_nothrow`
+
 ## docs.rs Behavior
 
 `Cargo.toml` builds docs.rs with the `std` feature so safe error traits and

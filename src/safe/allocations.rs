@@ -191,7 +191,6 @@ impl Allocation {
     ///
     /// On success, bytes up to `min(old_len, new_len)` are preserved. On
     /// failure, the original allocation is returned inside [`ResizeError`].
-    /// Builds a layout from `size` and `align`, then resizes this allocation.
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
         self.raw
@@ -206,6 +205,7 @@ impl Allocation {
             })
     }
 
+    /// Builds a layout from `size` and `align`, then resizes this allocation.
     #[inline]
     pub fn resize_with_size_align(
         self,

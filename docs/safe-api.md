@@ -60,6 +60,17 @@ Raw heap, stats, option, process-info, and callback functions remain available
 under `raw` for C-shaped integration and parity testing. Safe wrappers do not
 expose raw allocator metadata pointers or transfer raw deletion rights.
 
+## Pre-release Migration Notes
+
+The pre-release `Allocation::into_initialized` and
+`InitializedAllocation::into_initialized` methods were removed because they did
+not perform a meaningful runtime conversion. Code that allocates zeroed memory
+should use `Allocation::zeroed`, `Allocation::zeroed_with_size_align`, or the
+matching `InitializedAllocation` constructors, which return
+`InitializedAllocation` directly. Code that fills an uninitialized `Allocation`
+through raw pointers must keep that transition explicit with unsafe
+`Allocation::assume_initialized` after every byte has been initialized.
+
 ## Naming Conventions
 
 - Rust-facing names use idiomatic Rust names: `MiMalloc`, `Allocation`, `Heap`,

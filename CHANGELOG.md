@@ -30,6 +30,11 @@ All notable changes to this repository should be recorded here.
 
 - Remove broad implementation-module exposure from the default `raw` facade by
   gating those modules behind `unstable-raw-internals`.
+- Remove the pre-release `Allocation::into_initialized` and
+  `InitializedAllocation::into_initialized` methods. `Allocation::zeroed` and
+  `Allocation::zeroed_with_size_align` now return `InitializedAllocation`
+  directly, and callers that initialize uninitialized allocation bytes through
+  raw pointers should use unsafe `Allocation::assume_initialized`.
 
 ### Safety
 

@@ -1,6 +1,8 @@
 //! Mechanical translation of `src/alloc-aligned.c`.
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains upstream C allocation variants that are reached only by selected ABI
+// exports or feature/platform combinations.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::c_void;
 use core::mem::size_of;

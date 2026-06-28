@@ -1,6 +1,8 @@
 //! Atomic and bit primitives
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains the upstream C atomic facade and memory-order helpers; not every
+// translated intrinsic is used on every Rust target or feature set.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 #[cfg(all(target_os = "linux", not(debug_assertions)))]
 use core::ffi::c_int;

@@ -1,6 +1,7 @@
 //! Options, stats, random, thread, init helpers
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains upstream option aliases for C header compatibility.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 #[cfg(not(target_os = "linux"))]
 use core::cell::Cell;

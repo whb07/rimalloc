@@ -1,6 +1,8 @@
 //! Mechanical translation of the early `src/theap.c` helper slice.
 
-#![allow(non_camel_case_types)]
+// Retains translated thread-heap helper variants used by selected lifecycle
+// paths and upstream parity checks.
+#![allow(dead_code, non_camel_case_types)]
 
 use core::{ffi::c_void, mem::size_of, ptr};
 

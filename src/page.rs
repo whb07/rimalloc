@@ -1,6 +1,8 @@
 //! Page management
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains upstream page helpers and constants used by selected debug,
+// collection, and feature paths outside the routine Rust test target.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::c_void;
 use core::mem::size_of;

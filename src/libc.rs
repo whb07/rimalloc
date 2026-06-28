@@ -1,6 +1,8 @@
 //! Small libc-like string and environment helpers.
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains upstream libc helper constants and fallback bit routines for target
+// combinations that do not use the current optimized paths.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::cmp::min;
 use core::ffi::CStr;

@@ -1,5 +1,9 @@
 //! Mechanical translation of `include/mimalloc/track.h`.
 
+// Retains tracking mode constants and no-op hooks for builds without an active
+// tracking backend.
+#![allow(dead_code)]
+
 use core::ffi::c_void;
 
 use crate::core_types::TrackMode;

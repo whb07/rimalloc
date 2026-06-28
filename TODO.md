@@ -276,34 +276,43 @@ Scope: turn the allocator review findings into small, verifiable actions. Each i
 
 ### 5.1 Replace broad suppression with targeted allowances
 
-- [ ] Inventory dead-code warnings hidden by `#![allow(dead_code)]`.
+- [x] Inventory dead-code warnings hidden by `#![allow(dead_code)]`.
   - Place: `src/lib.rs` crate attribute and all modules.
   - Action: temporarily remove the crate-wide allow locally and collect warnings without changing behavior.
   - Validation: save or summarize the warning inventory in an issue note or TODO subsection before editing.
+  - Inventory from `cargo test --lib --features std` after removing the crate
+    attribute: `src/alloc_aligned.rs` 2, `src/alloc_override.rs` 36,
+    `src/arena.rs` 13, `src/arena_meta.rs` 1, `src/atomic.rs` 61,
+    `src/bitmap.rs` 7, `src/bits.rs` 11,
+    `src/core_types/freelist_wrappers.rs` 1, `src/init.rs` 6,
+    `src/internal.rs` 38, `src/libc.rs` 5, `src/options.rs` 1,
+    `src/page.rs` 9, `src/prim.rs` 12, `src/prim/unix.rs` 4,
+    `src/provenance.rs` 4, `src/static.rs` 19, `src/stats.rs` 4,
+    `src/theap.rs` 1, `src/track.rs` 6, `src/types.rs` 10.
 
-- [ ] Move dead-code allowances to mechanical translation modules that need them.
+- [x] Move dead-code allowances to mechanical translation modules that need them.
   - Places: likely `src/alloc.rs`, `src/page.rs`, `src/internal.rs`, `src/prim/*`, and other C-translation modules.
   - Action: replace crate-wide allowance with module-level `#[allow(dead_code)]` only where upstream parity requires retained unused code.
   - Validation: `cargo test --quiet --lib` emits no dead-code warnings.
 
-- [ ] Keep safe facade modules warning-clean without dead-code allowance.
+- [x] Keep safe facade modules warning-clean without dead-code allowance.
   - Places: `src/safe.rs`, `src/safe/*.rs`.
   - Action: remove unused safe APIs or add tests/docs for intended public items rather than allowing dead code.
   - Validation: `cargo test --quiet --features std` emits no dead-code warnings from `src/safe*`.
 
-- [ ] Keep core type modules warning-clean where practical.
+- [x] Keep core type modules warning-clean where practical.
   - Places: `src/core_types/*.rs`.
   - Action: remove unused transitional helpers or add targeted allow comments explaining retained invariants.
   - Validation: `cargo test --quiet --lib` emits no dead-code warnings from `src/core_types*` unless explicitly justified.
 
 ### 5.2 Add regression checks for warning cleanliness
 
-- [ ] Add a check that routine test builds stay warning-free.
+- [x] Add a check that routine test builds stay warning-free.
   - Place: existing scripts or a new warning check script.
   - Action: ensure warnings fail CI rather than being hidden by crate-wide allowances.
   - Validation: `scripts/check-lints.sh` or the new script exits nonzero on a synthetic warning.
 
-- [ ] Document why any remaining dead code is intentionally retained.
+- [x] Document why any remaining dead code is intentionally retained.
   - Places: source comments near allowances or `docs/upstream.md`.
   - Action: explain whether each retained unused item exists for ABI parity, platform parity, or future upstream translation.
   - Validation: source search for `allow(dead_code)` shows a nearby reason for each occurrence.

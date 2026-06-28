@@ -1,6 +1,8 @@
 //! Mechanical translation of `src/arena-meta.c`.
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains upstream arena metadata constants for C layout/parity even when the
+// current Rust target does not reference every translated macro.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::c_void;
 use core::mem::offset_of;

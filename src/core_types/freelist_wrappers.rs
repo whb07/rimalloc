@@ -117,6 +117,9 @@ impl EncodedPtr<crate::types::mi_block_t> {
     /// # Safety
     /// `null_context` and `keys` must belong to the page that owns this block
     /// link.
+    // Retained for secure encoded free-list builds; routine non-secure builds
+    // use the unencoded path.
+    #[allow(dead_code)]
     #[inline(always)]
     pub(crate) unsafe fn encode_block_raw(
         block: *const mi_block_t,

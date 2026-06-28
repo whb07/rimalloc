@@ -1,6 +1,8 @@
 //! Core internal layouts, structs, typedefs, metadata
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains upstream C layout aliases and marker constants for ABI/layout parity
+// even when Rust callers use narrower facade types.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::c_long;
 use core::ffi::{c_char, c_int, c_void};

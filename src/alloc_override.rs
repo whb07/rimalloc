@@ -1,6 +1,13 @@
 //! Mechanical translation of `src/alloc-override.c`.
 
-#![allow(non_camel_case_types, non_snake_case, non_upper_case_globals)]
+// Retains upstream override/interposition shims for platforms and C++ ABI
+// variants that are selected by target linker/runtime behavior.
+#![allow(
+    dead_code,
+    non_camel_case_types,
+    non_snake_case,
+    non_upper_case_globals
+)]
 
 use core::ffi::{c_char, c_int, c_void};
 

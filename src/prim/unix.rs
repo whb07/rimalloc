@@ -3,7 +3,9 @@
 //!
 //! This file is intentionally standalone for now.
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains Unix primitive constants and syscalls for supported Unix targets even
+// when the current build selects only a subset.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_long};

@@ -1,3 +1,7 @@
+// Retains provenance registry stubs used under Miri; non-Miri builds keep the
+// same call surface without active registry state.
+#![allow(dead_code)]
+
 use core::ffi::c_void;
 
 #[cfg(miri)]

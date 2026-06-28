@@ -70,7 +70,9 @@ pub const MI_ARENA_MIN_SIZE: usize = MI_ARENA_BCHUNK_BITS * MI_ARENA_SLICE_SIZE;
 const MI_ARENA_MAX_CHUNK_OBJ_SIZE: usize = MI_ARENA_BCHUNK_BITS * MI_ARENA_SLICE_SIZE;
 pub const MI_META_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
 pub const MI_PAGE_BLOCK_START_MAX_OFFSET: usize = 8 * MI_INTPTR_BITS;
-#[allow(non_upper_case_globals)]
+// Retains upstream diagnostic/color constants and traversal markers used by
+// compatibility paths outside the routine Rust test target.
+#[allow(dead_code, non_upper_case_globals)]
 pub const mi_forall_arenas_end: () = ();
 
 const MI_MAX_ARENAS: usize = 160;
@@ -109,7 +111,7 @@ const MI_LARGE_PAGE_SLICE_COUNT: crate::core_types::SliceCount = {
 };
 const ENOMEM: c_int = 12;
 
-#[allow(non_camel_case_types)]
+#[allow(dead_code, non_camel_case_types)]
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum mi_ansi_color_e {
@@ -131,24 +133,37 @@ pub enum mi_ansi_color_e {
     MI_WHITE = 97,
 }
 
-#[allow(non_camel_case_types)]
+#[allow(dead_code, non_camel_case_types)]
 pub type mi_ansi_color_t = mi_ansi_color_e;
 
+// Retains upstream color constants for arena diagnostics; only a subset is
+// used by the current translated output paths.
+#[allow(dead_code)]
 pub const MI_BLACK: mi_ansi_color_t = mi_ansi_color_e::MI_BLACK;
 pub const MI_MAROON: mi_ansi_color_t = mi_ansi_color_e::MI_MAROON;
 pub const MI_DARKGREEN: mi_ansi_color_t = mi_ansi_color_e::MI_DARKGREEN;
 pub const MI_ORANGE: mi_ansi_color_t = mi_ansi_color_e::MI_ORANGE;
+#[allow(dead_code)]
 pub const MI_NAVY: mi_ansi_color_t = mi_ansi_color_e::MI_NAVY;
+#[allow(dead_code)]
 pub const MI_PURPLE: mi_ansi_color_t = mi_ansi_color_e::MI_PURPLE;
 pub const MI_TEAL: mi_ansi_color_t = mi_ansi_color_e::MI_TEAL;
 pub const MI_GRAY: mi_ansi_color_t = mi_ansi_color_e::MI_GRAY;
+#[allow(dead_code)]
 pub const MI_DARKGRAY: mi_ansi_color_t = mi_ansi_color_e::MI_DARKGRAY;
+#[allow(dead_code)]
 pub const MI_RED: mi_ansi_color_t = mi_ansi_color_e::MI_RED;
+#[allow(dead_code)]
 pub const MI_GREEN: mi_ansi_color_t = mi_ansi_color_e::MI_GREEN;
+#[allow(dead_code)]
 pub const MI_YELLOW: mi_ansi_color_t = mi_ansi_color_e::MI_YELLOW;
+#[allow(dead_code)]
 pub const MI_BLUE: mi_ansi_color_t = mi_ansi_color_e::MI_BLUE;
+#[allow(dead_code)]
 pub const MI_MAGENTA: mi_ansi_color_t = mi_ansi_color_e::MI_MAGENTA;
+#[allow(dead_code)]
 pub const MI_CYAN: mi_ansi_color_t = mi_ansi_color_e::MI_CYAN;
+#[allow(dead_code)]
 pub const MI_WHITE: mi_ansi_color_t = mi_ansi_color_e::MI_WHITE;
 
 #[repr(C)]

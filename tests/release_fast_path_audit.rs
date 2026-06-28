@@ -2953,39 +2953,60 @@ fn phase6_dead_code_allowances_stay_intentional() {
     }
 
     let expected = BTreeMap::from([
-        ("src/lib.rs", 1),
+        ("src/alloc_aligned.rs", 1),
+        ("src/alloc_override.rs", 1),
+        ("src/arena.rs", 14),
+        ("src/arena_meta.rs", 1),
+        ("src/atomic.rs", 1),
+        ("src/bitmap.rs", 1),
+        ("src/bits.rs", 1),
+        ("src/core_types/freelist_wrappers.rs", 1),
+        ("src/init.rs", 1),
+        ("src/internal.rs", 1),
+        ("src/libc.rs", 1),
+        ("src/options.rs", 1),
+        ("src/page.rs", 1),
+        ("src/prim.rs", 1),
         ("src/prim/emscripten.rs", 1),
         ("src/prim/osx.rs", 1),
+        ("src/prim/unix.rs", 1),
         ("src/prim/wasi.rs", 1),
         ("src/prim/windows.rs", 3),
+        ("src/provenance.rs", 1),
+        ("src/static.rs", 1),
+        ("src/stats.rs", 1),
+        ("src/theap.rs", 1),
+        ("src/track.rs", 1),
+        ("src/types.rs", 1),
     ]);
 
     assert_eq!(
         actual, expected,
         "Phase 6 dead_code allowances should stay on the audited compatibility/scaffold allowlist"
     );
-    let core_types_mod =
-        fs::read_to_string(root.join("src/core_types/mod.rs")).expect("read core_types mod");
     assert!(
-        !core_types_mod.contains("#![allow(dead_code)]")
-            && !core_types_mod.contains("#[expect(dead_code"),
-        "core_types dead_code suppression should stay on item-level staged allowances"
+        !actual.contains_key("src/lib.rs"),
+        "crate-wide dead_code suppression should not return"
     );
+
+    let safe_allowances: Vec<_> = actual
+        .keys()
+        .filter(|path| path.starts_with("src/safe"))
+        .collect();
     assert!(
-        !actual.contains_key("src/arena.rs"),
-        "arena.rs should remain free of dead_code allowances after Phase 6 cleanup"
+        safe_allowances.is_empty(),
+        "safe facade modules should stay free of dead_code allowances: {safe_allowances:?}"
     );
-    assert!(
-        !actual.contains_key("src/init.rs"),
-        "init.rs should not regain dead_code allowances after wiring retained C-shaped helpers"
-    );
-    assert!(
-        !actual.contains_key("src/internal.rs"),
-        "internal.rs should not regain dead_code allowances after compatibility re-export cleanup"
-    );
-    assert!(
-        !actual.contains_key("src/free.rs") && !actual.contains_key("src/page.rs"),
-        "free/page hot-path modules should not regain dead_code allowances"
+
+    let core_type_allowances: Vec<_> = actual
+        .keys()
+        .filter(|path| path.starts_with("src/core_types/"))
+        .copied()
+        .collect();
+    assert_eq!(
+        core_type_allowances,
+        vec!["src/core_types/freelist_wrappers.rs"],
+        "core type dead_code allowances should remain item-level and explicitly justified"
     );
 }
 

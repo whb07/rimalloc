@@ -1,6 +1,7 @@
 //! Statistics
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains upstream stats aliases and header marker constants for C parity.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 use core::ffi::{CStr, c_char, c_void};
 use core::str;

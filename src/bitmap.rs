@@ -1,6 +1,13 @@
 //! Bitmap, page-map, page-queue, arena metadata
 
-#![allow(non_camel_case_types, non_snake_case, non_upper_case_globals)]
+// Retains upstream bitmap sizing constants and optional SIMD scaffolding used
+// by selected arena configurations.
+#![allow(
+    dead_code,
+    non_camel_case_types,
+    non_snake_case,
+    non_upper_case_globals
+)]
 
 use core::ffi::c_void;
 use core::hint::spin_loop;

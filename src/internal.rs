@@ -1,6 +1,9 @@
 //! Mechanical translation of `include/mimalloc/internal.h`.
 
+// Retains upstream internal macro aliases and inline helpers for ABI/layout
+// parity across platform and feature combinations.
 #![allow(
+    dead_code,
     non_camel_case_types,
     non_snake_case,
     non_upper_case_globals,

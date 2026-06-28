@@ -184,9 +184,6 @@
 //! use mechanical_mimalloc::core_types::ValidatedFree;
 //! ```
 
-// Mechanical translation retains C ABI/platform helpers that are exercised only
-// through selected targets, feature combinations, or external links.
-#![allow(dead_code)]
 #![cfg_attr(mi_sanitizer_runtime, feature(sanitize))]
 #![cfg_attr(
     all(

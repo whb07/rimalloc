@@ -1,6 +1,8 @@
 //! Bit operation helpers and platform-size definitions
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains upstream architecture and bit-operation macros for parity across
+// targets even when the current target resolves them to unused constants.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 macro_rules! MI_ZU {
     ($x:expr) => {

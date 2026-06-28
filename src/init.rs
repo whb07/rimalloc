@@ -1,6 +1,8 @@
 //! Global / thread initialization
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains translated TLS/stat initialization macros that are active only on
+// specific platform startup paths.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 #[cfg(any(
     miri,

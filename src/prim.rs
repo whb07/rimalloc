@@ -4,7 +4,9 @@
 //! - `include/mimalloc/prim.h`
 //! - `src/prim/osx/prim.c`
 
-#![allow(non_camel_case_types, non_upper_case_globals)]
+// Retains platform primitive declarations and compile-time knobs that are
+// active only on selected operating systems.
+#![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
 #[cfg(target_os = "emscripten")]
 pub mod emscripten;

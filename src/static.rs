@@ -3,6 +3,7 @@
 // `src/static.c` is an aggregate build unit for the original C static override
 // build. In the Rust crate the equivalent aggregation happens through `lib.rs`
 // module wiring instead of textual source inclusion.
+#![allow(dead_code)]
 
 pub const _DEFAULT_SOURCE: () = ();
 

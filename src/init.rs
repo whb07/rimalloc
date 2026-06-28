@@ -614,12 +614,7 @@ pub(crate) unsafe extern "C" fn _mi_subproc_to_id(subproc: *mut mi_subproc_t) ->
 }
 
 fn _mi_subproc_to_id_typed(subproc: Option<SubprocPtr>) -> mi_subproc_id_t {
-    mi_subproc_id_t {
-        _mi_subproc_id: subproc
-            .map(SubprocPtr::as_ptr)
-            .unwrap_or(ptr::null_mut())
-            .cast::<c_void>(),
-    }
+    mi_subproc_id_t::from_ptr(subproc.map(SubprocPtr::as_ptr).unwrap_or(ptr::null_mut()))
 }
 
 #[used]
@@ -1823,7 +1818,7 @@ pub(crate) unsafe extern "C" fn _mi_subproc_from_id(
 }
 
 unsafe fn _mi_subproc_from_id_typed(subproc_id: mi_subproc_id_t) -> Option<BorrowedSubproc> {
-    SubprocPtr::new(subproc_id._mi_subproc_id.cast::<mi_subproc_t>())
+    SubprocPtr::new(subproc_id.as_ptr::<mi_subproc_t>())
         .map(|subproc| unsafe { BorrowedSubproc::new(subproc) })
 }
 

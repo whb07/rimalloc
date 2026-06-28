@@ -119,6 +119,56 @@ scripts/check-raw-facade.sh
 Current raw users and raw module classifications are tracked in
 `docs/raw-facade-migration.md`.
 
+### Raw ABI Type Inventory
+
+`src/abi.rs` re-exports these raw type names through `raw`, `raw::abi`, and
+`raw::mimalloc`:
+
+| Type | Public shape | Opacity decision |
+| --- | --- | --- |
+| `mi_arena_id_t` | `*mut c_void` token | Opaque arena handle. C callers and raw Rust callers pass it back to arena APIs; no Rust layout is exposed. |
+| `mi_block_visit_fun` | C callback type alias | Signature is public ABI. The pointed-to heap and area data remain allocator-owned for the callback duration. |
+| `mi_commit_fun_t` | C callback type alias | Signature is public ABI for managed-memory hooks. User data is opaque. |
+| `mi_deferred_free_fun` | C callback type alias | Signature is public ABI for deferred-free registration. User data is opaque. |
+| `mi_error_fun` | C callback type alias | Signature is public ABI for error callback registration. User data is opaque. |
+| `mi_heap_area_t` | `repr(C)` public field layout | Public because visitor callbacks receive area metadata by pointer and C parity tests verify the layout. |
+| `mi_heap_t` | raw heap handle alias | Kept as the translated C layout alias for current raw-layout compatibility tests and C-shaped heap APIs. Safe Rust code uses `Heap`, `HeapRef`, and `MainHeap` instead. |
+| `mi_heap_visit_fun` | C callback type alias | Signature is public ABI. Heap pointer is allocator-owned and callback-scoped. |
+| `mi_output_fun` | C callback type alias | Signature is public ABI for printing and registered output callbacks. User data is opaque. |
+| `mi_subproc_id_t` | `repr(C)` opaque identifier | Public by-value C token with a private representation field. Callers can pass it back to subproc APIs but cannot inspect or construct it from fields. |
+| `mi_theap_t` | raw thread-heap handle alias | Kept as the translated C layout alias for current raw-layout compatibility tests and C-shaped thread-heap APIs. Safe Rust code does not expose thread-heap internals. |
+
+`mi_arena_t`, `mi_subproc_t`, `mi_page_t`, `mi_block_t`, and other translated
+implementation layouts are not re-exported by the default `src/abi.rs` public
+header mirror. They are reachable only through private implementation code or
+the `unstable-raw-internals` audit feature, except where an exposed callback
+or handle uses an opaque pointer token.
+
+### Raw `repr(C)` Field Inventory
+
+`src/types.rs` remains the translated layout substrate. Default raw ABI
+exposure is intentionally narrower than the full file:
+
+| Struct | Default raw ABI exposure | Field visibility decision |
+| --- | --- | --- |
+| `mi_process_info_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated layout for internal/stat paths. |
+| `mi_random_ctx_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated thread-heap layout parity. |
+| `mi_page_queue_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated page queue layout parity. |
+| `mi_block_s` / `mi_block_t` | Not re-exported by `src/abi.rs` today | Public field retains translated free-list word layout. |
+| `mi_padding_s` / `mi_padding_t` | Not re-exported by `src/abi.rs` today | Public fields retain debug/secure padding layout. |
+| `mi_heap_area_t` | Re-exported by `src/abi.rs` | Public fields are required for heap/block visitor metadata compatibility. |
+| `mi_arena_pages_s` | Not re-exported by `src/abi.rs` today | Public fields retain translated arena metadata layout. |
+| `mi_subproc_s` / `mi_subproc_t` | Not re-exported by `src/abi.rs` today | Public fields are implementation layout, available only through unstable raw internals. |
+| `mi_tld_s` / `mi_tld_t` | Not re-exported by `src/abi.rs` today | Public fields are implementation layout, available only through unstable raw internals. |
+| `mi_arena_s` / `mi_arena_t` | Not re-exported by `src/abi.rs` today | Public fields are implementation layout; the default API uses opaque `mi_arena_id_t`. |
+| `mi_heap_s` / `mi_heap_t` | `mi_heap_t` is re-exported by `src/abi.rs` | Layout alias is retained for raw heap handle compatibility; safe heap APIs stay opaque. |
+| `mi_page_s` / `mi_page_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated page layout for internal layout tests. |
+| `mi_theap_s` / `mi_theap_t` | `mi_theap_t` is re-exported by `src/abi.rs` | Layout alias is retained for raw thread-heap compatibility and offset tests. |
+| `mi_tls_slot_t` | Not re-exported by `src/abi.rs` today | Public fields retain TLS mirror layout. |
+| `mi_thread_locals_t` | Not re-exported by `src/abi.rs` today | Public fields retain TLS mirror layout. |
+| `mi_option_desc_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated option table layout. |
+| `mi_subproc_id_t` | Re-exported by `src/abi.rs` | `repr(C)` size is public, but the field is private so the identifier is opaque to downstream Rust. |
+
 ### Header Override Macros
 
 The exported macros in `src/headers.rs` are Tier R public compatibility

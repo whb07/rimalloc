@@ -321,41 +321,41 @@ Scope: turn the allocator review findings into small, verifiable actions. Each i
 
 ### 6.1 Inventory raw type exposure
 
-- [ ] Inventory types re-exported through `src/abi.rs`.
+- [x] Inventory types re-exported through `src/abi.rs`.
   - Place: `src/abi.rs` `pub use crate::types::{ ... }` block.
   - Action: list each exported raw type and whether C callers need the layout or only an opaque handle.
   - Validation: inventory is recorded in `docs/abi.md` or `docs/api-inventory.md`.
 
-- [ ] Inventory public fields on `repr(C)` raw structs.
+- [x] Inventory public fields on `repr(C)` raw structs.
   - Place: `src/types.rs`.
   - Action: identify which public fields are required for C-header compatibility and which could be hidden behind opaque aliases.
   - Validation: inventory names each externally visible `repr(C)` struct.
 
 ### 6.2 Opaque heap/thread handles
 
-- [ ] Review `mi_heap_t` exposure.
+- [x] Review `mi_heap_t` exposure.
   - Places: `src/types.rs`, `src/abi.rs`, `src/raw.rs`.
   - Action: determine whether downstream Rust needs full `mi_heap_s` layout or only an opaque handle.
   - Validation: if changed, C ABI symbol tests and raw facade tests pass.
 
-- [ ] Review `mi_theap_t` exposure.
+- [x] Review `mi_theap_t` exposure.
   - Places: `src/types.rs`, `src/abi.rs`, `src/raw.rs`.
   - Action: determine whether downstream Rust needs full `mi_theap_s` layout or only an opaque handle.
   - Validation: if changed, C ABI symbol tests and raw facade tests pass.
 
-- [ ] Review arena and subproc handle exposure.
+- [x] Review arena and subproc handle exposure.
   - Places: `src/types.rs`, `src/abi.rs`, `src/raw.rs`.
   - Action: determine whether `mi_arena_t`, `mi_subproc_t`, and related IDs can be opaque in public Rust while preserving ABI.
   - Validation: raw compatibility tests and docs examples still compile.
 
 ### 6.3 Preserve actual C layout compatibility
 
-- [ ] Keep internal layout tests for translated structs.
+- [x] Keep internal layout tests for translated structs.
   - Places: `tests/compat_exports.rs`, layout tests, `src/core_types/layout*`.
   - Action: ensure hiding Rust fields does not remove internal layout verification.
   - Validation: `scripts/check-layout.sh` exits 0.
 
-- [ ] Add API compatibility tests for opaque-type decisions.
+- [x] Add API compatibility tests for opaque-type decisions.
   - Place: `tests/release_fast_path_audit.rs` or API inventory script.
   - Action: assert public raw API exposes only intended type names and not unintended fields/modules.
   - Validation: `scripts/check-api-inventory.py` exits 0 and fails on an intentionally exposed field/module.

@@ -512,7 +512,21 @@ pub struct mi_option_desc_t {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_subproc_id_t {
-    pub _mi_subproc_id: *mut c_void,
+    _mi_subproc_id: *mut c_void,
+}
+
+impl mi_subproc_id_t {
+    #[inline]
+    pub(crate) fn from_ptr<T>(ptr: *mut T) -> Self {
+        Self {
+            _mi_subproc_id: ptr.cast::<c_void>(),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn as_ptr<T>(self) -> *mut T {
+        self._mi_subproc_id.cast::<T>()
+    }
 }
 
 #[cfg(test)]

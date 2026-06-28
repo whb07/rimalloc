@@ -1354,7 +1354,7 @@ pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) {
-    let subproc = subproc_id._mi_subproc_id.cast::<MiSubprocStatsPrefix>();
+    let subproc = subproc_id.as_ptr::<MiSubprocStatsPrefix>();
     if subproc.is_null() {
         return;
     }
@@ -1385,7 +1385,7 @@ pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
     if stats.is_null() {
         return false;
     }
-    let subproc = subproc_id._mi_subproc_id.cast::<MiSubprocStatsPrefix>();
+    let subproc = subproc_id.as_ptr::<MiSubprocStatsPrefix>();
     if subproc.is_null() {
         return false;
     }
@@ -1402,7 +1402,7 @@ pub unsafe extern "C" fn mi_subproc_stats_get(
     if stats.is_null() {
         return false;
     }
-    let subproc = subproc_id._mi_subproc_id.cast::<MiSubprocStatsPrefix>();
+    let subproc = subproc_id.as_ptr::<MiSubprocStatsPrefix>();
     if subproc.is_null() {
         return false;
     }
@@ -1460,7 +1460,7 @@ pub unsafe extern "C" fn mi_subproc_stats_print_out(
     out: Option<mi_output_fun>,
     arg: *mut c_void,
 ) {
-    let subproc = subproc_id._mi_subproc_id.cast::<MiSubprocStatsPrefix>();
+    let subproc = subproc_id.as_ptr::<MiSubprocStatsPrefix>();
     if subproc.is_null() {
         return;
     }

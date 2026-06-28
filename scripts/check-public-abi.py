@@ -211,7 +211,6 @@ int main(void) {{
   PRINT_ALIGN("mi_chunkbin_t", mi_chunkbin_t);
   PRINT_SIZE("mi_subproc_id_t", mi_subproc_id_t);
   PRINT_ALIGN("mi_subproc_id_t", mi_subproc_id_t);
-  PRINT_OFFSET(mi_subproc_id_t, _mi_subproc_id);
   PRINT_SIZE("mi_arena_id_t", mi_arena_id_t);
   PRINT_ALIGN("mi_arena_id_t", mi_arena_id_t);
   PRINT_SIZE("mi_heap_t_ptr", mi_heap_t*);
@@ -312,7 +311,6 @@ fn main() {{
     println!("align.mi_chunkbin_t={{}}", align_of::<mi_chunkbin_t>());
     println!("size.mi_subproc_id_t={{}}", size_of::<mi_subproc_id_t>());
     println!("align.mi_subproc_id_t={{}}", align_of::<mi_subproc_id_t>());
-    println!("offset.mi_subproc_id_t._mi_subproc_id={{}}", offset_of!(mi_subproc_id_t, _mi_subproc_id));
     println!("size.mi_arena_id_t={{}}", size_of::<mi_arena_id_t>());
     println!("align.mi_arena_id_t={{}}", align_of::<mi_arena_id_t>());
     println!("size.mi_heap_t_ptr={{}}", size_of::<*mut mi_heap_t>());

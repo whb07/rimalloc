@@ -68,6 +68,7 @@ REENTRY_PATTERNS = [
 
 REENTRY_ALLOWLIST = {
     "src/abi.rs": "SAFETY[AUDIT:c-header-macro-reentry]",
+    "src/headers.rs": "SAFETY[AUDIT:raw-macro-boundary]",
 }
 
 

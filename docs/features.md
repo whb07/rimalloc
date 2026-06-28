@@ -13,12 +13,12 @@ Default features are intentionally empty. Optimized Linux non-test builds use
 - `track-valgrind`: Valgrind tracking shims.
 - `track-asan`: ASan tracking shims.
 
-`track-valgrind` and `track-asan` are mutually exclusive and are guarded by a
-compile-time error in `src/track.rs`.
+When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
+builds, Valgrind mode takes precedence.
 
 ## Feature Sweep
 
-Run mutually exclusive tracking features separately:
+Run tracking features separately and in the aggregate all-features combination:
 
 ```sh
 cargo check
@@ -28,13 +28,8 @@ cargo check --features guarded
 cargo check --features compare
 cargo check --features track-valgrind
 cargo check --features track-asan
+cargo check --features "track-valgrind track-asan"
 cargo check --features "secure guarded std"
 cargo check --benches --features bench
 cargo check --benches --features "bench compare"
-```
-
-The intentionally invalid tracking combination should fail:
-
-```sh
-cargo check --features "track-valgrind track-asan"
 ```

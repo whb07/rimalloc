@@ -87,8 +87,9 @@ Feature behavior is compatibility-sensitive. Defaults are intentionally empty.
 `std`, `bench`, `compare`, `secure`, `guarded`, `track-valgrind`, and
 `track-asan` are documented in `docs/features.md`.
 
-`track-valgrind` and `track-asan` are mutually exclusive. New features should be
-additive unless a compile-time conflict is unavoidable and explicitly checked.
+When `track-valgrind` and `track-asan` are both enabled, Valgrind mode takes
+precedence. New features should be additive unless a compile-time conflict is
+unavoidable and explicitly checked.
 
 ### MSRV And Tooling
 

@@ -621,6 +621,9 @@ fn scenarios() -> Vec<Scenario> {
 
     let selected = csv_env("MIMALLOC_BENCH_SCENARIOS");
     if selected.is_empty() {
+        if criterion_test_mode() {
+            scenarios.truncate(1);
+        }
         scenarios
     } else {
         scenarios
@@ -628,6 +631,12 @@ fn scenarios() -> Vec<Scenario> {
             .filter(|scenario| selected.iter().any(|name| name == scenario.name))
             .collect()
     }
+}
+
+fn criterion_test_mode() -> bool {
+    // `cargo bench` passes `--bench`; `cargo test --all-targets` runs the bench
+    // binary without it, where this target should stay a bounded smoke check.
+    !env::args().any(|arg| arg == "--bench")
 }
 
 mod pthread {

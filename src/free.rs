@@ -1227,6 +1227,9 @@ pub unsafe extern "C" fn mi_usable_size(p: *const c_void) -> usize {
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator and not yet freed.
+// Retained as an exported C ABI free-size symbol; release cdylib builds may
+// reference it only from external dynamic callers or assembly aliases.
+#[allow(dead_code)]
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
     unsafe {
@@ -1241,6 +1244,9 @@ pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator with the given alignment.
+// Retained as an exported C ABI free-size-aligned symbol; release cdylib builds
+// may reference it only from external dynamic callers or assembly aliases.
+#[allow(dead_code)]
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size_aligned(p: *mut c_void, size: usize, alignment: usize) {
     unsafe {
@@ -1251,6 +1257,9 @@ pub unsafe extern "C" fn mi_free_size_aligned(p: *mut c_void, size: usize, align
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator with the given alignment.
+// Retained as an exported C ABI aligned-free symbol; release cdylib builds may
+// reference it only from external dynamic callers or assembly aliases.
+#[allow(dead_code)]
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_aligned(p: *mut c_void, alignment: usize) {
     unsafe {

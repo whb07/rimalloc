@@ -74,8 +74,8 @@ documenting known false positives. Maintainers can also run the manual GitHub
 Actions hardening workflow for ASan and TSan evidence.
 
 `track-asan` is allocator tracking instrumentation, not a substitute for running
-the sanitizer toolchain. `track-asan` and `track-valgrind` are mutually
-exclusive feature modes.
+the sanitizer toolchain. When `track-asan` and `track-valgrind` are enabled
+together by aggregate tooling, Valgrind mode takes precedence.
 
 ## Valgrind
 

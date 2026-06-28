@@ -379,26 +379,26 @@ Scope: turn the allocator review findings into small, verifiable actions. Each i
 
 ## 8. Final Validation Before Closing This Tightening Pass
 
-- [ ] Format the repository.
+- [x] Format the repository.
   - Action: run `cargo fmt --all`.
   - Validation: command exits 0 and leaves no uncommitted formatting changes beyond intentional edits.
 
-- [ ] Run Clippy over the full workspace, targets, and features.
+- [x] Run Clippy over the full workspace, targets, and features.
   - Action: run `cargo clippy --workspace --all-targets --all-features`.
   - Validation: command exits 0, or any unrelated failure is documented with a follow-up item.
 
-- [ ] Run the full test matrix required by project policy.
+- [x] Run the full test matrix required by project policy.
   - Action: run `cargo test --workspace --all-targets --all-features`.
   - Validation: command exits 0, or any unrelated failure is documented with a follow-up item.
 
-- [ ] Run API and boundary scripts after all tightening work.
+- [x] Run API and boundary scripts after all tightening work.
   - Action: run `scripts/check-api-inventory.py`, `scripts/check-safe-boundary.py`, `scripts/check-ffi-boundary.py`, and `scripts/check-raw-facade.sh`.
   - Validation: all commands exit 0.
 
-- [ ] Run layout, strict-type, feature, and ABI scripts after all tightening work.
+- [x] Run layout, strict-type, feature, and ABI scripts after all tightening work.
   - Action: run `scripts/check-layout.sh`, `scripts/check-strict-types.py`, `scripts/check-features.sh`, and `scripts/check-abi-symbols.sh`.
   - Validation: all commands exit 0.
 
-- [ ] Confirm documentation matches final API behavior.
+- [x] Confirm documentation matches final API behavior.
   - Action: run documentation tests and search for stale claims about callback safety, raw macros, and public raw types.
   - Validation: `cargo test --doc --features std` exits 0 and stale wording search finds no mismatches.

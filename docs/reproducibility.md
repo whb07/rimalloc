@@ -51,8 +51,7 @@ scripts/check-lints.sh
 ```
 
 Use the script when you need the repository's feature matrix checks, including
-mutually exclusive feature combinations that cannot be represented by one
-`--all-features` invocation.
+the separate tracking feature builds and their aggregate tooling combination.
 
 ## Benchmark Reproduction
 

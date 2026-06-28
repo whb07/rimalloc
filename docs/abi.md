@@ -344,7 +344,8 @@ script and release-fast-path source checks.
 
 Feature flags can affect layout or behavior. `secure`, `guarded`,
 `track-valgrind`, and `track-asan` must be checked independently where relevant.
-`track-valgrind` and `track-asan` are mutually exclusive.
+When `track-valgrind` and `track-asan` are both enabled, Valgrind mode takes
+precedence.
 
 Before claiming ABI compatibility for a feature set, run the relevant feature
 sweep and ABI/layout checks for that feature set or document why the feature

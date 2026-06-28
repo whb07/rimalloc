@@ -957,6 +957,9 @@ fn alloc_product_or_report(count: usize, size: usize) -> Option<crate::core_type
 
 /// # Safety
 /// Returned memory must be released through this allocator.
+// Retained as an exported C ABI allocation symbol; release cdylib builds may
+// reference it only from external dynamic callers.
+#[allow(dead_code)]
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_calloc(count: usize, size: usize) -> *mut c_void {
     unsafe {

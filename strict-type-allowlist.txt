@@ -65,6 +65,7 @@ pointer-usize-roundtrip|src/arena.rs|*|arena-range|Translated C arena boundary: 
 pointer-usize-roundtrip|src/core_types/arena.rs|*|slice-index|Typed arena constructors narrow raw slice index values.|permanent: compatibility boundary retained for C ABI parity or translated-C source shape.
 pointer-usize-roundtrip|src/core_types/freelist.rs|*|packed-thread-free|ThreadFreeWord owns packed xthread_free pointer/ownership-bit round trips.|permanent: compatibility boundary retained for C ABI parity or translated-C source shape.
 pointer-usize-roundtrip|src/core_types/freelist_wrappers.rs|*|encoded-pointer|Free-list wrappers own encoded pointer word packing.|permanent: compatibility boundary retained for C ABI parity or translated-C source shape.
+pointer-usize-roundtrip|src/core_types/ptr/tests.rs|*|provenance-test|Pointer wrapper tests compare typed exposed-address helpers against raw pointer arithmetic.|permanent: strict-type proof fixture boundary.
 pointer-usize-roundtrip|src/free.rs|*|validation|Translated C free boundary: pointer validation preserves upstream integer range checks before typed user pointers are accepted.|permanent: compatibility boundary retained for C ABI parity or translated-C source shape.
 pointer-usize-roundtrip|src/internal.rs|*|packed-pointer|Translated C internal boundary: packed free-list words preserve upstream pointer tagging semantics.|permanent: compatibility boundary retained for C ABI parity or translated-C source shape.
 pointer-usize-roundtrip|src/libc.rs|*|output-buffer|Compatibility boundary: raw output buffer bounds checks use integer addresses.|permanent: compatibility boundary retained for C ABI parity or translated-C source shape.
@@ -74,7 +75,9 @@ pointer-usize-roundtrip|src/prim/wasi.rs|*|platform|WASI primitive memory range 
 pointer-usize-roundtrip|src/theap.rs|*|area-visitor|Translated C thread-heap boundary: area visitor offsets preserve upstream callback address ranges.|permanent: compatibility boundary retained for C ABI parity or translated-C source shape.
 
 atomic-cast|src/atomic.rs|*|atomic-field|Compatibility boundary: raw mimalloc atomic primitive layer owns C-shaped atomic casts.|permanent: compatibility boundary retained for C ABI parity or translated-C source shape.
+atomic-cast|src/core_types/atomic_wrappers/tests.rs|*|atomic-field-test|Atomic wrapper tests build stack-backed raw atomic fields to verify the wrapper operations.|permanent: strict-type proof fixture boundary.
 
+heap-allocating-type|src/core_types/atomic_wrappers/concurrency_models.rs|*|loom-model|Loom concurrency models use Arc to share modeled atomics between spawned model threads outside allocator hot paths.|permanent: strict-type proof model boundary.
 heap-allocating-type|src/prim/windows.rs|*|String|Windows environment primitive uses platform string conversion outside allocator hot paths.|permanent: compatibility boundary retained for C ABI parity or translated-C source shape.
 
 bare-domain-usize|src/alloc.rs|*|usize|Translated C allocation ABI and local parser helpers still receive C-shaped size/count/alignment values before typed request construction.|remove: narrow to symbol-level entries as allocation helpers are migrated behind typed request constructors.
@@ -89,6 +92,7 @@ bare-domain-usize|src/core_types/guarded.rs|*|usize|Guarded configuration constr
 bare-domain-usize|src/core_types/layout.rs|*|usize|Layout request constructors are the checked ingress from raw allocation size/count/alignment values.|permanent: typed-domain constructor boundary.
 bare-domain-usize|src/core_types/memid.rs|*|usize|Memid byte-count constructors are typed-domain ingress from raw OS/meta allocation sizes.|permanent: typed-domain constructor boundary.
 bare-domain-usize|src/core_types/page_queues.rs|*|usize|Page queue unit-test helpers use raw block sizes to build synthetic queue fixtures.|permanent: test fixture helper boundary inside checked module.
+bare-domain-usize|src/core_types/page_queues/tests.rs|*|usize|Page queue tests use raw block-size fixtures before constructing typed queue/page witnesses.|permanent: strict-type proof fixture boundary.
 bare-domain-usize|src/core_types/ptr.rs|*|usize|Pointer wrapper offset helpers accept byte offsets by design and perform checked pointer arithmetic.|permanent: typed pointer arithmetic boundary.
 bare-domain-usize|src/core_types/scalar.rs|*|usize|Scalar wrapper constructors are the checked ingress from raw integer domains.|permanent: typed-domain constructor boundary.
 bare-domain-usize|src/free.rs|*|usize|Free-path test fixtures and translated C free-size ABI helpers still use raw indexes and byte sizes before validation.|remove: narrow to symbol-level entries after fixture helpers and free-size shims are separated.
@@ -101,6 +105,8 @@ bare-domain-usize|src/prim/unix.rs|*|usize|Unix syscall and mmap/madvise helpers
 bare-domain-usize|src/prim/wasi.rs|*|usize|WASI memory primitive helpers preserve platform byte-count and alignment signatures.|permanent: platform ABI boundary.
 bare-domain-usize|src/prim/windows.rs|*|usize|Windows virtual-memory primitive helpers preserve platform byte-count and alignment signatures.|permanent: platform ABI boundary.
 bare-domain-usize|src/safe.rs|*|usize|Public safe convenience constructors accept Rust `size, align` pairs before building `Layout` and are outside allocator internals.|permanent: public safe API constructor boundary.
+bare-domain-usize|src/safe/allocations.rs|*|usize|Public safe allocation convenience methods accept Rust `size, align` pairs before building `Layout`.|permanent: public safe API constructor boundary.
+bare-domain-usize|src/safe/heaps.rs|*|usize|Public safe heap allocation convenience methods accept Rust `size, align` pairs before building `Layout`.|permanent: public safe API constructor boundary.
 bare-domain-usize|src/stats.rs|*|usize|Stats raw-bin helper parses public C `usize` bin values into `StatsBin` before lookup.|permanent: C ABI parser boundary.
 bare-domain-usize|src/threadlocal.rs|*|usize|Thread-local table helpers use raw sizes/indexes for fixed translated C table growth and key packing.|remove: introduce typed thread-local table index/size wrappers if this module becomes part of the strict internal surface.
 bare-domain-usize|src/track.rs|*|usize|Tracking hooks mirror Valgrind/ASan-style raw byte-size callback contracts.|permanent: external tracking callback boundary.

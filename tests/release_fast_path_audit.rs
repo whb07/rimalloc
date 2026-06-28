@@ -3057,6 +3057,7 @@ fn phase6_dead_code_allowances_stay_intentional() {
     }
 
     let expected = BTreeMap::from([
+        ("src/alloc.rs", 1),
         ("src/alloc_aligned.rs", 1),
         ("src/alloc_override.rs", 1),
         ("src/arena.rs", 14),
@@ -3065,6 +3066,7 @@ fn phase6_dead_code_allowances_stay_intentional() {
         ("src/bitmap.rs", 1),
         ("src/bits.rs", 1),
         ("src/core_types/freelist_wrappers.rs", 1),
+        ("src/free.rs", 3),
         ("src/init.rs", 1),
         ("src/internal.rs", 1),
         ("src/libc.rs", 1),

@@ -1,405 +1,395 @@
-# TODO: Exemplary Rust Library Readiness
-
-Scope: finish the product, validation, release, portability, safety, performance, and build-system gaps that keep this crate from being an exemplary Rust library.
-
-Do not mark an item done until its acceptance check passes.
-
-## 1. Make The Existing Validation Gates Green
-
-- [x] Fix the `release_fast_path_audit` failure in `scripts/check-features.sh`.
-  - Acceptance: `scripts/check-features.sh` exits 0.
-  - Check: `cargo test --quiet --features std\ unstable-raw-internals --test release_fast_path_audit free_path_internals_are_not_dynamic_exports` passes.
-
-- [x] Classify or remove the benchmark-diagnostics export boundary violation.
-  - Acceptance: `src/bench_diagnostics.rs` no longer appears as an unclassified export file.
-  - Check: `scripts/check-ffi-boundary.py` exits 0.
-
-- [x] Verify the raw facade inventory remains stable after the fixes above.
-  - Acceptance: default raw facade and unstable raw-internals inventory match the intended public boundary.
-  - Check: `scripts/check-api-inventory.py` exits 0.
-
-- [x] Verify safe facade boundary rules after the fixes above.
-  - Acceptance: safe public APIs expose no unintended unsafe boundary.
-  - Check: `scripts/check-safe-boundary.py` exits 0.
-
-- [x] Verify C ABI boundary rules after the fixes above.
-  - Acceptance: exported ABI attributes are limited to classified boundary files.
-  - Check: `scripts/check-ffi-boundary.py --list` shows only intended export sites.
-
-- [x] Verify raw facade checks after the fixes above.
-  - Acceptance: public raw facade shape remains compatible with the intended C-shaped surface.
-  - Check: `scripts/check-raw-facade.sh` exits 0.
-
-- [x] Verify layout compatibility after the fixes above.
-  - Acceptance: wrapper and raw-layout compatibility tests pass across the scripted matrix.
-  - Check: `scripts/check-layout.sh` exits 0.
-
-- [x] Verify ABI symbol compatibility after the fixes above.
-  - Acceptance: expected public ABI symbols are present and extra exports remain classified.
-  - Check: `scripts/check-abi-symbols.sh` exits 0.
-
-- [x] Verify strict-type enforcement after the fixes above.
-  - Acceptance: remaining raw pointer and bare-domain sites are true boundaries or allowlisted.
-  - Check: `scripts/check-strict-types.py` exits 0.
-
-- [x] Verify lint cleanliness after the fixes above.
-  - Acceptance: clippy passes all configured target and feature combinations.
-  - Check: `scripts/check-lints.sh` exits 0.
-
-## 2. Make Routine Commands Warning-Free And Quiet
-
-- [x] Eliminate warnings from the library-only test build.
-  - Acceptance: `cargo test --quiet --lib` prints no Rust compiler warnings.
-  - Check: `cargo test --quiet --lib 2>&1 | tee /tmp/mechanical_mimalloc-lib-test.log` contains no line starting with `warning:`.
-
-- [x] Eliminate warnings from the `std` test build.
-  - Acceptance: `cargo test --quiet --features std` prints no Rust compiler warnings.
-  - Check: `cargo test --quiet --features std 2>&1 | tee /tmp/mechanical_mimalloc-std-test.log` contains no line starting with `warning:`.
-
-- [x] Eliminate warnings from feature-matrix checks.
-  - Acceptance: `scripts/check-features.sh` prints no Rust compiler warnings.
-  - Check: `scripts/check-features.sh 2>&1 | tee /tmp/mechanical_mimalloc-features.log` contains no line starting with `warning:`.
-
-- [x] Silence expected allocator error output in tests that intentionally trigger invalid frees or huge allocation failures.
-  - Acceptance: intentional allocator-error tests still assert behavior without noisy stderr during normal test runs.
-  - Check: `cargo test --quiet --features std 2>&1 | tee /tmp/mechanical_mimalloc-std-test.log` contains no unexpected `mimalloc: error:` lines.
-
-- [x] Silence expected stats dumps in tests that intentionally exercise statistics printing.
-  - Acceptance: stats-output tests capture or gate their output instead of printing during normal test runs.
-  - Check: `cargo test --quiet --features std 2>&1 | tee /tmp/mechanical_mimalloc-std-test.log` contains no unsolicited `subproc`, `blocks`, `pages`, or `arenas` stats tables.
-
-## 3. Finish The Safe Rust Allocation Surface
-
-- [x] Add `ResizeErrorKind`.
-  - Acceptance: the error distinguishes invalid layouts from allocator failure.
-  - Check: unit tests cover both `ResizeErrorKind::Layout` and `ResizeErrorKind::Alloc`.
-
-- [x] Add `ResizeError<A>` that preserves ownership on resize failure.
-  - Acceptance: callers can borrow, mutate, recover, or split the original allocation from the error.
-  - Check: tests cover `allocation`, `allocation_mut`, `into_allocation`, and `into_parts`.
-
-- [x] Add `Allocation::resize`.
-  - Acceptance: successful resize preserves bytes up to `min(old_len, new_len)` and updates the stored layout.
-  - Check: tests cover grow, shrink, same-size, zero-to-nonzero, and nonzero-to-zero resize.
-
-- [x] Add `Allocation::resize_with_size_align`.
-  - Acceptance: invalid size/alignment returns a layout error and preserves ownership.
-  - Check: tests cover invalid alignment and oversize layout without losing the original allocation.
-
-- [x] Add safe initialized byte-slice access for zeroed allocations.
-  - Acceptance: safe slice reads are available only for memory known to be initialized.
-  - Check: compile-fail coverage rejects reading an uninitialized `Allocation` as a byte slice.
-
-- [x] Add a type for initialized owned byte allocations.
-  - Acceptance: the type can expose `&[u8]` and `&mut [u8]` without exposing uninitialized bytes.
-  - Check: tests verify zero initialization and mutable writes through the safe slice API.
-
-- [x] Add conversion from zeroed `Allocation` to initialized allocation.
-  - Acceptance: conversion is safe only when initialization is guaranteed.
-  - Check: tests verify `Allocation::zeroed(layout)` can become the initialized type.
-
-- [x] Add an unsafe initialization escape hatch for callers that initialize through raw pointers.
-  - Acceptance: the API requires an explicit unsafe call and preserves layout metadata.
-  - Check: compile-fail coverage rejects the conversion outside an unsafe block.
-
-- [x] Add `Allocation::try_clone_zeroed_contents` or equivalent copy constructor for initialized allocations.
-  - Acceptance: cloning initialized bytes either succeeds with identical contents or returns a typed allocation error.
-  - Check: tests cover successful copy and ownership preservation on forced failure where practical.
-
-## 4. Add Safe Heap Ownership APIs
-
-- [x] Add `HeapError`.
-  - Acceptance: heap creation failure, main-heap unavailability, and unsupported operations are represented distinctly.
-  - Check: tests match every `HeapError` variant.
-
-- [x] Add owned `Heap`.
-  - Acceptance: `Heap::new` creates a heap or returns `HeapError::Create` without exposing raw heap pointers in safe APIs.
-  - Check: tests create and drop a heap without leaking or double-deleting.
-
-- [x] Add borrowed `HeapRef<'a>`.
-  - Acceptance: heap-backed allocations can be tied to a heap borrow.
-  - Check: compile-fail coverage rejects an allocation outliving the heap reference it is tied to.
-
-- [x] Add `MainHeap` access.
-  - Acceptance: callers can allocate through the main heap without owning or deleting it.
-  - Check: tests allocate and free through `MainHeap`.
-
-- [x] Add `HeapAllocation<'heap>`.
-  - Acceptance: heap allocations cannot outlive their heap and free through the same heap family.
-  - Check: compile-fail coverage rejects moving `HeapAllocation<'heap>` beyond the heap lifetime.
-
-- [x] Add `Heap::allocate`.
-  - Acceptance: valid layouts return heap-tied allocations or typed allocation errors.
-  - Check: tests cover normal, zero-size, and over-aligned layouts.
-
-- [x] Add `Heap::allocate_zeroed`.
-  - Acceptance: returned initialized bytes are all zero.
-  - Check: tests read the safe initialized byte slice and verify zeroes.
-
-- [x] Add `HeapAllocation::resize`.
-  - Acceptance: failed resize preserves the original heap allocation.
-  - Check: tests cover grow, shrink, and failure ownership recovery.
-
-- [x] Add heap deletion safeguards.
-  - Acceptance: safe code cannot delete a heap while heap-tied allocations are live.
-  - Check: compile-fail coverage rejects dropping or deleting through an invalid lifetime pattern.
-
-## 5. Add Safe Options APIs
-
-- [x] Add `OptionError`.
-  - Acceptance: invalid keys and unsupported options are represented distinctly.
-  - Check: tests match every `OptionError` variant.
-
-- [x] Add `OptionKey`.
-  - Acceptance: public safe option keys cannot be constructed from invalid raw values.
-  - Check: tests cover every supported key and reject at least one invalid raw value.
-
-- [x] Add `Options::get`.
-  - Acceptance: supported options return current values without unsafe calls by the caller.
-  - Check: tests compare safe getter output with the raw C-shaped getter for selected options.
-
-- [x] Add `Options::set`.
-  - Acceptance: setting supported mutable options succeeds or returns a typed error.
-  - Check: tests set a reversible option, read it back, then restore the original value.
-
-- [x] Add `Options::reset` for supported mutable options.
-  - Acceptance: reset returns the option to its default or previous supported baseline.
-  - Check: tests mutate, reset, and verify the value changed back.
-
-- [x] Enforce immutable option behavior in the safe API.
-  - Acceptance: safe mutation of immutable options returns `OptionError::Unsupported`.
-  - Check: tests attempt to set a known immutable option and assert the error.
-
-## 6. Add Safe Statistics APIs
-
-- [x] Add `StatsError`.
-  - Acceptance: unavailable stats, unavailable heap stats, and buffer-too-small cases are represented distinctly.
-  - Check: tests match every `StatsError` variant.
-
-- [x] Add `StatCount`.
-  - Acceptance: count values use a typed wrapper instead of bare integers in the safe API.
-  - Check: tests construct, compare, and read raw values from `StatCount`.
-
-- [x] Add `StatTotal`.
-  - Acceptance: byte totals use a typed wrapper instead of bare integers in the safe API.
-  - Check: tests construct, compare, and read raw values from `StatTotal`.
-
-- [x] Add `StatsSnapshot` for process-wide statistics.
-  - Acceptance: a snapshot can be captured without exposing raw stats pointers.
-  - Check: tests allocate, capture before/after snapshots, and observe nondecreasing total allocation activity where deterministic.
-
-- [x] Add `StatsSnapshot` for heap-specific statistics where supported.
-  - Acceptance: safe heap stats return a snapshot or `StatsError::HeapUnavailable`/`Unsupported` equivalent.
-  - Check: tests capture stats for a freshly created heap or assert the typed unsupported error.
-
-- [x] Add a non-printing stats capture path for tests.
-  - Acceptance: tests can verify stats without writing allocator tables to stderr/stdout.
-  - Check: normal `cargo test --quiet --features std` emits no stats table output.
-
-## 7. Add Safe Process Information APIs
-
-- [x] Add `ProcessInfo`.
-  - Acceptance: process allocator information is returned as a typed struct without raw out-pointers in safe code.
-  - Check: tests call the safe API and verify basic invariants such as nonzero page size where available.
-
-- [x] Represent unavailable process fields explicitly.
-  - Acceptance: platform-unavailable fields use `Option` or a typed error instead of sentinel integer values.
-  - Check: tests assert unavailable fields are represented without panics.
-
-- [x] Add process-info parity tests.
-  - Acceptance: selected safe fields match raw C-shaped process-info outputs on the current platform.
-  - Check: integration test compares safe and raw values for stable fields.
-
-## 8. Add Safe Callback Guards
-
-- [x] Add `CallbackError`.
-  - Acceptance: callback registration failures and unsupported callbacks are represented distinctly.
-  - Check: tests match every `CallbackError` variant.
-
-- [x] Add `ErrorCallbackGuard`.
-  - Acceptance: installing the guard registers an error callback and dropping it restores the previous callback state.
-  - Check: tests install, trigger a controlled allocator error where practical, drop, and verify restoration.
-
-- [x] Add `DeferredFreeCallbackGuard`.
-  - Acceptance: installing the guard registers a deferred-free callback and dropping it restores the previous callback state.
-  - Check: tests register and unregister without leaking callback state between tests.
-
-- [x] Prevent Rust panics from crossing callback ABI boundaries.
-  - Acceptance: panicking callbacks are caught or converted into abort/error behavior before crossing the boundary.
-  - Check: child-process test verifies a panicking callback does not unwind across `extern "C"`.
-
-- [x] Enforce callback lifetime safety.
-  - Acceptance: safe guards cannot outlive captured callback state.
-  - Check: compile-fail coverage rejects registering a callback that borrows data for too short a lifetime.
-
-## 9. Finalize The Public Rust API Boundary
-
-- [x] Decide the stable crate-root export set.
-  - Acceptance: crate root exports only intended safe types plus `MiMalloc` and `raw`.
-  - Check: `scripts/check-api-inventory.py` contains and verifies the final expected list.
-
-- [x] Remove accidental public implementation exposure.
-  - Acceptance: implementation modules remain private outside the explicitly unstable raw-internals feature.
-  - Check: compile-fail coverage rejects importing implementation modules from crate root.
-
-- [x] Add SemVer guard tests for public item names.
-  - Acceptance: removing or renaming a stable public item fails a source-shape inventory test.
-  - Check: `scripts/check-api-inventory.py` fails when a listed public item is temporarily removed.
-
-- [x] Replace experimental wording in public API status once the safe surface is complete.
-  - Acceptance: public crate status no longer describes the safe API as incomplete or experimental.
-  - Check: source search finds no `experimental safe Rust allocation facade` phrase in public crate-level text.
-
-- [x] Enable publishing in the manifest when release criteria are met.
-  - Acceptance: `Cargo.toml` no longer disables publishing.
-  - Check: `cargo package --allow-dirty` succeeds and reports the expected package contents.
-
-- [x] Set the first release-ready version.
-  - Acceptance: `Cargo.toml` version reflects the intended release level.
-  - Check: `cargo metadata --no-deps --format-version 1` reports the selected version.
-
-## 10. Expand Platform Confidence
-
-- [x] Add a Linux x86_64 validation lane.
-  - Acceptance: the full validation set passes on Linux x86_64.
-  - Check: recorded CI job runs `cargo test --quiet --features std`, `scripts/check-lints.sh`, `scripts/check-features.sh`, and ABI/layout checks.
-
-- [x] Add a Linux aarch64 validation lane.
-  - Acceptance: the core test and layout matrix passes on Linux aarch64.
-  - Check: recorded CI job runs `cargo test --quiet --features std` and `scripts/check-layout.sh`.
-
-- [x] Add a macOS validation lane.
-  - Acceptance: allocator override and TLS behavior pass on macOS.
-  - Check: recorded CI job runs `cargo test --quiet --features std` plus macOS-specific override tests.
-
-- [x] Add a Windows validation lane.
-  - Acceptance: Windows allocator and TLS behavior pass on Windows.
-  - Check: recorded CI job runs `cargo test --quiet --features std` plus Windows-specific allocation tests.
-
-- [x] Add a no-default-features release build lane.
-  - Acceptance: optimized Linux build without `std` compiles and links.
-  - Check: `cargo build --release --no-default-features` exits 0 on Linux.
-
-- [x] Add a feature-powerset validation lane for supported feature combinations.
-  - Acceptance: all supported non-mutually-exclusive combinations compile or test according to scope.
-  - Check: `scripts/check-features.sh` exits 0 and explicitly rejects `track-valgrind` with `track-asan`.
-
-## 11. Add Memory-Safety And Stress Verification
-
-- [x] Add an AddressSanitizer validation lane.
-  - Acceptance: sanitizer build completes representative allocation tests without sanitizer findings.
-  - Check: ASan job runs allocation, aligned, realloc, heap, and callback tests.
-
-- [x] Add a ThreadSanitizer validation lane where supported.
-  - Acceptance: multithreaded allocation tests complete without sanitizer findings or have tracked suppressions.
-  - Check: TSan job runs stress and cross-thread free tests.
-
-- [x] Add a Valgrind validation lane where supported.
-  - Acceptance: representative tests complete without unexpected invalid reads/writes or leaks.
-  - Check: Valgrind job runs selected integration tests with a checked suppression file.
-
-- [x] Add long-running allocation sequence fuzzing.
-  - Acceptance: randomized allocate/free/realloc/alignment sequences run for a configured duration without crashes or invariant failures.
-  - Check: fuzz job runs for the configured time budget and stores the failing seed on failure.
-
-- [x] Add concurrency stress fuzzing.
-  - Acceptance: cross-thread allocation/free/realloc sequences run for a configured duration without crashes or invariant failures.
-  - Check: stress job runs with at least one high-contention seed and one many-thread seed.
-
-- [x] Add oversized-allocation stress coverage.
-  - Acceptance: oversize requests consistently return null or typed allocation errors without corrupting allocator state.
-  - Check: tests run oversize allocation attempts before and after normal allocations.
-
-- [x] Add over-alignment stress coverage.
-  - Acceptance: over-aligned allocations satisfy requested alignment and free correctly.
-  - Check: property test covers a range of power-of-two alignments above the default alignment.
-
-- [x] Add zero-size behavior stress coverage.
-  - Acceptance: C-shaped zero-size APIs and safe zero-size wrappers behave consistently with their contracts.
-  - Check: tests cover allocate, free, realloc, and resize involving zero-size layouts.
-
-## 12. Add Performance Regression Gates
-
-- [x] Define benchmark pass/fail thresholds for hot-path allocation.
-  - Acceptance: hot-path benchmarks have explicit regression thresholds against a saved baseline.
-  - Check: benchmark comparison script exits nonzero when a synthetic regression exceeds the threshold.
-
-- [x] Define benchmark pass/fail thresholds for aligned allocation.
-  - Acceptance: aligned allocation benchmarks have explicit regression thresholds against a saved baseline.
-  - Check: benchmark comparison script validates current results against the aligned baseline.
-
-- [x] Define benchmark pass/fail thresholds for realloc workloads.
-  - Acceptance: realloc benchmarks have explicit regression thresholds against a saved baseline.
-  - Check: benchmark comparison script validates current realloc results against the baseline.
-
-- [x] Define benchmark pass/fail thresholds for multithreaded workloads.
-  - Acceptance: multithreaded benchmarks have explicit regression thresholds against a saved baseline.
-  - Check: benchmark comparison script validates current multithreaded results against the baseline.
-
-- [x] Add upstream mimalloc comparison gates.
-  - Acceptance: selected benchmarks compare this crate against upstream mimalloc under the same workload parameters.
-  - Check: comparison run reports this crate within the chosen tolerance for each gated workload.
-
-- [x] Add system allocator comparison gates.
-  - Acceptance: selected benchmarks compare this crate against the system allocator under the same workload parameters.
-  - Check: comparison run reports results and fails only on configured regressions.
-
-- [x] Gate performance checks to release builds only.
-  - Acceptance: benchmark gates never run against debug builds by accident.
-  - Check: benchmark scripts assert `--release` or equivalent optimized settings before measuring.
-
-- [x] Store machine-readable benchmark outputs.
-  - Acceptance: benchmark results can be parsed by regression scripts without scraping human output.
-  - Check: benchmark run emits JSON or CSV and the parser validates required fields.
-
-## 13. Harden Build And Packaging
-
-- [x] Replace fragile compiler invocations in `build.rs` with explicit failure reporting.
-  - Acceptance: missing C/C++ compiler, archiver, or linker support produces actionable errors.
-  - Check: tests or dry-run script exercise the failure path with a bogus compiler environment variable.
-
-- [x] Gate C++ new/delete shim builds by target support.
-  - Acceptance: unsupported targets skip or error clearly instead of failing later in linking.
-  - Check: cross-check job verifies the selected targets either build the shim or report the typed unsupported path.
-
-- [x] Gate TLS shim builds by target support.
-  - Acceptance: unsupported TLS targets skip or error clearly instead of failing later in linking.
-  - Check: cross-check job verifies supported and unsupported TLS configurations.
-
-- [x] Verify cdylib export control on Linux release builds.
-  - Acceptance: the Linux version script exports only intended public patterns.
-  - Check: `scripts/check-abi-symbols.sh` exits 0 on a fresh release build.
-
-- [x] Verify non-Linux export behavior.
-  - Acceptance: macOS and Windows builds expose intended symbols without extra allocator internals.
-  - Check: platform-specific symbol inventory scripts pass on macOS and Windows.
-
-- [x] Verify package contents.
-  - Acceptance: package includes only required source, tests, examples, benchmarks, scripts, and metadata.
-  - Check: `cargo package --allow-dirty --list` matches the intended include set.
-
-- [x] Verify consumer build from packaged crate.
-  - Acceptance: a fresh external crate can depend on the packaged artifact and use `MiMalloc` as global allocator.
-  - Check: package smoke test builds a temporary consumer crate against the `.crate` file.
-
-## 14. Final Release Signoff
-
-- [x] Run the full local validation set.
-  - Acceptance: all required local validation commands exit 0.
-  - Check: run `cargo fmt --check`, `cargo test --quiet --lib`, `cargo test --quiet --features std`, `scripts/check-api-inventory.py`, `scripts/check-safe-boundary.py`, `scripts/check-ffi-boundary.py`, `scripts/check-raw-facade.sh`, `scripts/check-layout.sh`, `scripts/check-lints.sh`, `scripts/check-features.sh`, `scripts/check-strict-types.py`, and `scripts/check-abi-symbols.sh`.
-
-- [x] Run the full release-mode validation set.
-  - Acceptance: release build and release-focused tests pass with intended feature combinations.
-  - Check: `cargo build --release --no-default-features` and release-mode ABI/symbol checks exit 0.
-
-- [x] Run the full safety validation set.
-  - Acceptance: sanitizer, Valgrind, fuzz, and stress lanes complete without untriaged failures.
-  - Check: each safety lane reports pass or has a linked tracked suppression/issue.
-
-- [x] Run the full performance validation set.
-  - Acceptance: gated benchmarks are within configured thresholds.
-  - Check: benchmark regression script exits 0 for all gated workloads.
-
-- [x] Run package smoke tests.
-  - Acceptance: packaged crate builds and works from a clean consumer project.
-  - Check: temporary consumer crate builds, runs a basic allocation, and exits 0.
+# TODO: Rust Allocator Tightening Plan
+
+Scope: turn the allocator review findings into small, verifiable actions. Each item names the location to change and includes a validation step. Do not mark an item complete until its validation passes or the confirmation note is recorded.
+
+## 1. Re-audit Safe Callback Guards For Soundness
+
+### 1.1 Document the actual callback threading contract
+
+- [x] Inspect upstream mimalloc callback behavior for error callbacks.
+  - Places: `mimalloc-3.3.2/include/mimalloc.h`, `mimalloc-3.3.2/src/options.c`, translated `src/options.rs`.
+  - Action: determine whether an error callback may run on any thread, while another callback invocation is active, or during allocator reentry.
+  - Validation: add a short conclusion to `docs/unsafe-audit.md` with the upstream source locations used.
+
+- [x] Inspect upstream mimalloc callback behavior for deferred-free callbacks.
+  - Places: `mimalloc-3.3.2/include/mimalloc.h`, `mimalloc-3.3.2/src/page.c`, translated `src/page.rs`.
+  - Action: determine whether deferred-free callbacks may run cross-thread, concurrently, or reentrantly.
+  - Validation: add a short conclusion to `docs/unsafe-audit.md` with the upstream source locations used.
+
+- [x] Decide whether borrowed `FnMut` callback guards can remain safe.
+  - Places: `src/safe/callbacks.rs`, `docs/safe-api.md`, `docs/unsafe-audit.md`.
+  - Action: record one decision: keep safe with proven single-thread/non-reentrant behavior, add synchronization and bounds, or make constructors unsafe.
+  - Validation: decision is stated in docs and referenced by tests or safety comments.
+
+### 1.2 Tighten `ErrorCallbackGuard`
+
+- [x] Fix the `ErrorCallbackGuard<'a, F: FnMut(i32)>` safety model.
+  - Place: `src/safe/callbacks.rs` around `ErrorCallbackGuard` and `error_callback_trampoline`.
+  - Action: either require safe concurrency bounds and synchronization, or make construction unsafe with explicit caller obligations.
+  - Validation: `cargo test --quiet --features std safe::callbacks` passes, or equivalent callback tests pass.
+
+- [x] Prevent unsynchronized concurrent mutation of error callbacks.
+  - Place: `src/safe/callbacks.rs`.
+  - Action: if the API remains safe, ensure the trampoline cannot obtain simultaneous mutable access to the same closure.
+  - Validation: add a test or documented proof that concurrent callback entry cannot create two active `&mut F` borrows.
+
+- [x] Preserve panic containment for error callbacks after the safety-model change.
+  - Place: `src/safe/callbacks.rs`.
+  - Action: keep `catch_unwind` behavior for `std`/test builds or document abort behavior for `no_std`.
+  - Validation: existing child-process panic test still passes, or add/update one if needed.
+
+- [x] Update `ErrorCallbackGuard` docs to match the final contract.
+  - Places: `src/safe/callbacks.rs`, `docs/safe-api.md`.
+  - Action: document thread, reentry, lifetime, restoration, and panic behavior.
+  - Validation: `cargo test --doc --features std` passes.
+
+### 1.3 Tighten `DeferredFreeCallbackGuard`
+
+- [x] Fix the `DeferredFreeCallbackGuard<'a, F: FnMut(bool, u64)>` safety model.
+  - Place: `src/safe/callbacks.rs` around `DeferredFreeCallbackGuard` and `deferred_free_callback_trampoline`.
+  - Action: either require safe concurrency bounds and synchronization, or make construction unsafe with explicit caller obligations.
+  - Validation: callback registration/unregistration tests pass under `cargo test --quiet --features std`.
+
+- [x] Prevent unsynchronized concurrent mutation of deferred-free callbacks.
+  - Place: `src/safe/callbacks.rs`.
+  - Action: if the API remains safe, ensure concurrent allocator activity cannot call the same `FnMut` without synchronization.
+  - Validation: add a test, stress test, or documented proof covering concurrent callback entry.
+
+- [x] Preserve restoration of previous deferred-free callback state.
+  - Places: `src/safe/callbacks.rs`, `src/page.rs` callback registration helpers.
+  - Action: ensure `Drop` restores the exact previous function and argument after any API change.
+  - Validation: add/keep a test that installs two guards in sequence and confirms restoration order.
+
+- [x] Update `DeferredFreeCallbackGuard` docs to match the final contract.
+  - Places: `src/safe/callbacks.rs`, `docs/safe-api.md`.
+  - Action: document thread, reentry, lifetime, restoration, and panic behavior.
+  - Validation: `cargo test --doc --features std` passes.
+
+## 2. Restore Explicit Unsafe Boundaries In Exported Raw Macros
+
+### 2.1 Typed allocation macros in `src/abi.rs`
+
+- [ ] Remove internal `unsafe` from `mi_malloc_tp!`.
+  - Place: `src/abi.rs` macro `mi_malloc_tp!`.
+  - Action: expand to the unsafe raw call without wrapping it in an internal unsafe block.
+  - Validation: add or update compile-fail coverage proving caller code must use an explicit unsafe block.
+
+- [ ] Remove internal `unsafe` from `mi_zalloc_tp!`.
+  - Place: `src/abi.rs` macro `mi_zalloc_tp!`.
+  - Action: require caller-side unsafe at the macro invocation site.
+  - Validation: compile-fail coverage rejects safe invocation.
+
+- [ ] Remove internal `unsafe` from `mi_calloc_tp!`.
+  - Place: `src/abi.rs` macro `mi_calloc_tp!`.
+  - Action: require caller-side unsafe at the macro invocation site.
+  - Validation: compile-fail coverage rejects safe invocation.
+
+- [ ] Remove internal `unsafe` from `mi_mallocn_tp!`.
+  - Place: `src/abi.rs` macro `mi_mallocn_tp!`.
+  - Action: require caller-side unsafe at the macro invocation site.
+  - Validation: compile-fail coverage rejects safe invocation.
+
+- [ ] Remove internal `unsafe` from both `mi_reallocn_tp!` arms.
+  - Place: `src/abi.rs` macro `mi_reallocn_tp!`.
+  - Action: require caller-side unsafe for both supported argument orders.
+  - Validation: compile-fail coverage rejects both safe invocation forms.
+
+- [ ] Remove internal `unsafe` from `mi_heap_malloc_tp!`.
+  - Place: `src/abi.rs` macro `mi_heap_malloc_tp!`.
+  - Action: require caller-side unsafe at the macro invocation site.
+  - Validation: compile-fail coverage rejects safe invocation.
+
+- [ ] Remove internal `unsafe` from `mi_heap_zalloc_tp!`.
+  - Place: `src/abi.rs` macro `mi_heap_zalloc_tp!`.
+  - Action: require caller-side unsafe at the macro invocation site.
+  - Validation: compile-fail coverage rejects safe invocation.
+
+- [ ] Remove internal `unsafe` from `mi_heap_calloc_tp!`.
+  - Place: `src/abi.rs` macro `mi_heap_calloc_tp!`.
+  - Action: require caller-side unsafe at the macro invocation site.
+  - Validation: compile-fail coverage rejects safe invocation.
+
+- [ ] Remove internal `unsafe` from `mi_heap_mallocn_tp!`.
+  - Place: `src/abi.rs` macro `mi_heap_mallocn_tp!`.
+  - Action: require caller-side unsafe at the macro invocation site.
+  - Validation: compile-fail coverage rejects safe invocation.
+
+- [ ] Remove internal `unsafe` from `mi_heap_reallocn_tp!`.
+  - Place: `src/abi.rs` macro `mi_heap_reallocn_tp!`.
+  - Action: require caller-side unsafe at the macro invocation site.
+  - Validation: compile-fail coverage rejects safe invocation.
+
+- [ ] Remove internal `unsafe` from `mi_heap_recalloc_tp!`.
+  - Place: `src/abi.rs` macro `mi_heap_recalloc_tp!`.
+  - Action: require caller-side unsafe at the macro invocation site.
+  - Validation: compile-fail coverage rejects safe invocation.
+
+### 2.2 Documentation and tests for macro unsafe policy
+
+- [ ] Add a positive example for caller-side unsafe macro use.
+  - Places: `src/abi.rs` docs or `examples/ffi.rs`.
+  - Action: show typed macro invocation inside an explicit unsafe block.
+  - Validation: doctest or example build passes.
+
+- [ ] Add a negative example for safe macro invocation.
+  - Place: crate-level docs or raw facade docs.
+  - Action: add `compile_fail` coverage showing raw typed macros cannot be invoked from safe code.
+  - Validation: `cargo test --doc --features std` passes and the compile-fail test fails for the intended reason.
+
+- [ ] Run raw facade inventory after macro changes.
+  - Place: repository scripts.
+  - Action: confirm macro changes do not alter the intended raw item inventory.
+  - Validation: `scripts/check-raw-facade.sh` exits 0.
+
+## 3. Fix Exported Header Override Macros That Reference Private Internals
+
+### 3.1 Inventory every exported header macro
+
+- [ ] List all `#[macro_export]` macros in `src/headers.rs`.
+  - Place: `src/headers.rs`.
+  - Action: create an inventory grouped by target API: allocation, aligned allocation, POSIX, C++ operator shim, or unsupported/internal-only.
+  - Validation: add the inventory to `docs/api-inventory.md` or a nearby source comment.
+
+- [ ] For each `src/headers.rs` macro, classify whether it is intended public Rust API.
+  - Places: `src/headers.rs`, `docs/api-inventory.md`.
+  - Action: mark each macro as public compatibility surface, internal parity-only, or candidate for removal/feature gating.
+  - Validation: inventory names every exported macro exactly once.
+
+### 3.2 Route public macros through public raw paths
+
+- [ ] Change `malloc!` to use a public raw path.
+  - Place: `src/headers.rs` macro `malloc!`.
+  - Action: replace `$crate::alloc::mi_malloc` with `$crate::raw::mi_malloc` if the macro remains public.
+  - Validation: downstream smoke crate can invoke the macro from an explicit unsafe block.
+
+- [ ] Change `realloc!` to use a public raw path.
+  - Place: `src/headers.rs` macro `realloc!`.
+  - Action: route through `$crate::raw::mi_realloc`.
+  - Validation: downstream smoke crate builds.
+
+- [ ] Change string/allocation macros to use public raw paths or gate them.
+  - Places: `strdup!`, `_strdup!`, `realpath!`, `_wcsdup!`, `_dupenv_s!` in `src/headers.rs`.
+  - Action: route through `raw` when a stable public raw function exists; otherwise hide behind an internal/unstable feature.
+  - Validation: compile-fail coverage rejects private-module expansion from a downstream crate.
+
+- [ ] Change POSIX allocation macros to use public raw paths or gate them.
+  - Places: `reallocarray!`, `posix_memalign!`, `cfree!`, `valloc!`, `memalign!` in `src/headers.rs`.
+  - Action: route through `raw` when intended public; otherwise hide behind an internal/unstable feature.
+  - Validation: downstream smoke crate builds for supported public macros.
+
+- [ ] Change aligned allocation macros to use public raw paths or gate them.
+  - Places: `_expand!`, `_recalloc!`, `_aligned_recalloc!`, `_aligned_malloc!`, `_aligned_free!`, `_aligned_offset_realloc!` in `src/headers.rs`.
+  - Action: route through `raw` when intended public; otherwise hide behind an internal/unstable feature.
+  - Validation: downstream smoke crate builds for supported public macros.
+
+- [ ] Change C++ operator macros to use public raw paths or gate them.
+  - Places: `operatornew!`, `operatornew_array!`, `operatornew_nothrow!`, `operatornew_array_nothrow!`, and `operatordelete*` macros in `src/headers.rs`.
+  - Action: route through `raw` when intended public; otherwise hide behind an internal/unstable feature.
+  - Validation: downstream smoke crate builds for supported public macros.
+
+### 3.3 Confirm macro export behavior
+
+- [ ] Add downstream macro expansion tests.
+  - Place: `tests/` or a package smoke-test script.
+  - Action: create a temporary external crate that imports and expands representative public macros.
+  - Validation: smoke test passes without referencing private modules.
+
+- [ ] Add negative coverage for gated/private macros.
+  - Place: docs compile-fail or package smoke test.
+  - Action: prove macros not intended as public API are not available by default.
+  - Validation: compile-fail test rejects default use.
+
+- [ ] Re-run API inventory after header macro changes.
+  - Place: repository scripts.
+  - Action: confirm public macro boundary matches the documented inventory.
+  - Validation: `scripts/check-api-inventory.py` exits 0.
+
+## 4. Narrow Or Justify `Send` And `Sync` On Raw Allocator Types
+
+### 4.1 Inventory existing unsafe impls
+
+- [ ] Inventory every `unsafe impl Send` in `src/types.rs`.
+  - Place: `src/types.rs`.
+  - Action: list each type, why it needs `Send`, and which safe wrapper or internal path depends on it.
+  - Validation: inventory appears in `docs/unsafe-audit.md` or source comments.
+
+- [ ] Inventory every `unsafe impl Sync` in `src/types.rs`.
+  - Place: `src/types.rs`.
+  - Action: list each type, why it needs `Sync`, and which safe wrapper or internal path depends on it.
+  - Validation: inventory appears in `docs/unsafe-audit.md` or source comments.
+
+### 4.2 Review raw allocator state types individually
+
+- [ ] Review `mi_tld_s` `Send`/`Sync`.
+  - Place: `src/types.rs` around `mi_tld_s`.
+  - Action: prove thread-local data is safe to move/share, or remove the impls.
+  - Validation: if retained, add safety comments explaining aliasing and thread-affinity invariants; if removed, tests still compile.
+
+- [ ] Review `mi_page_s` `Send`/`Sync`.
+  - Place: `src/types.rs` around `mi_page_s`.
+  - Action: prove page state is safe to move/share, or remove the impls.
+  - Validation: if retained, add safety comments covering locks/atomics and raw pointer ownership; if removed, tests still compile.
+
+- [ ] Review `mi_theap_s` `Send`/`Sync`.
+  - Place: `src/types.rs` around `mi_theap_s`.
+  - Action: prove thread heap state is safe to move/share, or remove the impls.
+  - Validation: if retained, add safety comments covering thread ownership and synchronization; if removed, tests still compile.
+
+- [ ] Review `mi_heap_s` `Send`/`Sync`.
+  - Place: `src/types.rs` around `mi_heap_s`.
+  - Action: prove heap state is safe to move/share, or remove the impls.
+  - Validation: if retained, add safety comments covering cross-thread frees and internal locking; if removed, tests still compile.
+
+- [ ] Review `mi_arena_s`, `mi_arena_pages_s`, and `mi_subproc_s` `Send`/`Sync`.
+  - Place: `src/types.rs` around arena/subproc impls.
+  - Action: prove synchronization is sufficient, or remove the impls.
+  - Validation: if retained, add safety comments covering global locks and atomics; if removed, tests still compile.
+
+- [ ] Review `mi_tls_slot_t` and `mi_thread_locals_t` `Send`/`Sync`.
+  - Place: `src/types.rs` around TLS structs.
+  - Action: prove these raw TLS mirror types are safe to move/share, or remove the impls.
+  - Validation: if retained, add safety comments; if removed, tests still compile.
+
+- [ ] Review `mi_option_desc_t` `Send`/`Sync`.
+  - Place: `src/types.rs` around option descriptor impls.
+  - Action: prove shared option descriptors are immutable or synchronized, or remove the impls.
+  - Validation: if retained, add safety comments; if removed, tests still compile.
+
+### 4.3 Prefer typed wrappers over raw type auto-traits
+
+- [ ] Move concurrency guarantees to wrapper types where possible.
+  - Places: `src/core_types/*.rs`, `src/safe/*.rs`, `src/types.rs`.
+  - Action: remove raw C-layout auto-trait impls that are only needed by safe wrappers, and implement `Send`/`Sync` on the wrapper with narrower invariants.
+  - Validation: `cargo test --quiet --features std` passes.
+
+- [ ] Add a compile-time check for intentional raw auto-traits.
+  - Place: `tests/` or `src/core_types/*/tests.rs`.
+  - Action: add assertions for the types intentionally `Send`/`Sync`, and avoid assertions for types intentionally not shareable.
+  - Validation: test fails if an intentional auto-trait decision changes accidentally.
+
+- [ ] Re-run thread/concurrency tests after auto-trait changes.
+  - Places: `tests/thread_stats_regression.rs`, `tests/original_test_stress.rs`, concurrency stress tests.
+  - Action: verify allocator still supports intended cross-thread allocation/free patterns.
+  - Validation: `cargo test --quiet --features std thread` and stress tests pass.
+
+## 5. Reduce Crate-Wide Dead Code Suppression
+
+### 5.1 Replace broad suppression with targeted allowances
+
+- [ ] Inventory dead-code warnings hidden by `#![allow(dead_code)]`.
+  - Place: `src/lib.rs` crate attribute and all modules.
+  - Action: temporarily remove the crate-wide allow locally and collect warnings without changing behavior.
+  - Validation: save or summarize the warning inventory in an issue note or TODO subsection before editing.
+
+- [ ] Move dead-code allowances to mechanical translation modules that need them.
+  - Places: likely `src/alloc.rs`, `src/page.rs`, `src/internal.rs`, `src/prim/*`, and other C-translation modules.
+  - Action: replace crate-wide allowance with module-level `#[allow(dead_code)]` only where upstream parity requires retained unused code.
+  - Validation: `cargo test --quiet --lib` emits no dead-code warnings.
+
+- [ ] Keep safe facade modules warning-clean without dead-code allowance.
+  - Places: `src/safe.rs`, `src/safe/*.rs`.
+  - Action: remove unused safe APIs or add tests/docs for intended public items rather than allowing dead code.
+  - Validation: `cargo test --quiet --features std` emits no dead-code warnings from `src/safe*`.
+
+- [ ] Keep core type modules warning-clean where practical.
+  - Places: `src/core_types/*.rs`.
+  - Action: remove unused transitional helpers or add targeted allow comments explaining retained invariants.
+  - Validation: `cargo test --quiet --lib` emits no dead-code warnings from `src/core_types*` unless explicitly justified.
+
+### 5.2 Add regression checks for warning cleanliness
+
+- [ ] Add a check that routine test builds stay warning-free.
+  - Place: existing scripts or a new warning check script.
+  - Action: ensure warnings fail CI rather than being hidden by crate-wide allowances.
+  - Validation: `scripts/check-lints.sh` or the new script exits nonzero on a synthetic warning.
+
+- [ ] Document why any remaining dead code is intentionally retained.
+  - Places: source comments near allowances or `docs/upstream.md`.
+  - Action: explain whether each retained unused item exists for ABI parity, platform parity, or future upstream translation.
+  - Validation: source search for `allow(dead_code)` shows a nearby reason for each occurrence.
+
+## 6. Make Raw Public Types More Opaque Where Possible
+
+### 6.1 Inventory raw type exposure
+
+- [ ] Inventory types re-exported through `src/abi.rs`.
+  - Place: `src/abi.rs` `pub use crate::types::{ ... }` block.
+  - Action: list each exported raw type and whether C callers need the layout or only an opaque handle.
+  - Validation: inventory is recorded in `docs/abi.md` or `docs/api-inventory.md`.
+
+- [ ] Inventory public fields on `repr(C)` raw structs.
+  - Place: `src/types.rs`.
+  - Action: identify which public fields are required for C-header compatibility and which could be hidden behind opaque aliases.
+  - Validation: inventory names each externally visible `repr(C)` struct.
+
+### 6.2 Opaque heap/thread handles
+
+- [ ] Review `mi_heap_t` exposure.
+  - Places: `src/types.rs`, `src/abi.rs`, `src/raw.rs`.
+  - Action: determine whether downstream Rust needs full `mi_heap_s` layout or only an opaque handle.
+  - Validation: if changed, C ABI symbol tests and raw facade tests pass.
+
+- [ ] Review `mi_theap_t` exposure.
+  - Places: `src/types.rs`, `src/abi.rs`, `src/raw.rs`.
+  - Action: determine whether downstream Rust needs full `mi_theap_s` layout or only an opaque handle.
+  - Validation: if changed, C ABI symbol tests and raw facade tests pass.
+
+- [ ] Review arena and subproc handle exposure.
+  - Places: `src/types.rs`, `src/abi.rs`, `src/raw.rs`.
+  - Action: determine whether `mi_arena_t`, `mi_subproc_t`, and related IDs can be opaque in public Rust while preserving ABI.
+  - Validation: raw compatibility tests and docs examples still compile.
+
+### 6.3 Preserve actual C layout compatibility
+
+- [ ] Keep internal layout tests for translated structs.
+  - Places: `tests/compat_exports.rs`, layout tests, `src/core_types/layout*`.
+  - Action: ensure hiding Rust fields does not remove internal layout verification.
+  - Validation: `scripts/check-layout.sh` exits 0.
+
+- [ ] Add API compatibility tests for opaque-type decisions.
+  - Place: `tests/release_fast_path_audit.rs` or API inventory script.
+  - Action: assert public raw API exposes only intended type names and not unintended fields/modules.
+  - Validation: `scripts/check-api-inventory.py` exits 0 and fails on an intentionally exposed field/module.
+
+## 7. Add Targeted Unsafe-Audit Coverage
+
+- [ ] Add an audit entry for every unsafe callback trampoline.
+  - Places: `src/safe/callbacks.rs`, `docs/unsafe-audit.md`.
+  - Action: document argument validity, lifetime, unwind, thread, and reentry invariants.
+  - Validation: source search finds `SAFETY[AUDIT:safe-callback]` entries mirrored in `docs/unsafe-audit.md`.
+
+- [ ] Add an audit entry for raw macro unsafe-boundary policy.
+  - Places: `src/abi.rs`, `src/headers.rs`, `docs/abi.md`.
+  - Action: document which macros require caller unsafe and which are intentionally safe wrappers, if any.
+  - Validation: compile-fail tests align with the documented policy.
+
+- [ ] Add an audit entry for retained raw auto-trait impls.
+  - Places: `src/types.rs`, `docs/unsafe-audit.md`.
+  - Action: document why each retained raw `Send`/`Sync` impl is sound.
+  - Validation: every retained `unsafe impl Send` or `unsafe impl Sync` in `src/types.rs` has a nearby safety comment and audit reference.
+
+## 8. Final Validation Before Closing This Tightening Pass
+
+- [ ] Format the repository.
+  - Action: run `cargo fmt --all`.
+  - Validation: command exits 0 and leaves no uncommitted formatting changes beyond intentional edits.
+
+- [ ] Run Clippy over the full workspace, targets, and features.
+  - Action: run `cargo clippy --workspace --all-targets --all-features`.
+  - Validation: command exits 0, or any unrelated failure is documented with a follow-up item.
+
+- [ ] Run the full test matrix required by project policy.
+  - Action: run `cargo test --workspace --all-targets --all-features`.
+  - Validation: command exits 0, or any unrelated failure is documented with a follow-up item.
+
+- [ ] Run API and boundary scripts after all tightening work.
+  - Action: run `scripts/check-api-inventory.py`, `scripts/check-safe-boundary.py`, `scripts/check-ffi-boundary.py`, and `scripts/check-raw-facade.sh`.
+  - Validation: all commands exit 0.
+
+- [ ] Run layout, strict-type, feature, and ABI scripts after all tightening work.
+  - Action: run `scripts/check-layout.sh`, `scripts/check-strict-types.py`, `scripts/check-features.sh`, and `scripts/check-abi-symbols.sh`.
+  - Validation: all commands exit 0.
+
+- [ ] Confirm documentation matches final API behavior.
+  - Action: run documentation tests and search for stale claims about callback safety, raw macros, and public raw types.
+  - Validation: `cargo test --doc --features std` exits 0 and stale wording search finds no mismatches.

@@ -350,8 +350,6 @@ pub struct mi_tld_s {
 }
 
 pub type mi_tld_t = mi_tld_s;
-unsafe impl Send for mi_tld_s {}
-unsafe impl Sync for mi_tld_s {}
 
 #[repr(C)]
 pub struct mi_arena_s {
@@ -427,7 +425,11 @@ pub struct mi_page_s {
     pub slice_committed: usize,
     pub memid: crate::internal::mi_memid_t,
 }
-unsafe impl Send for mi_page_s {}
+
+// SAFETY[AUDIT:raw-auto-trait]: required only for immutable sentinel page
+// statics such as `_mi_page_empty`. Live allocator pages remain raw-pointer
+// state and must be accessed through allocator synchronization and typestate
+// wrappers, not shared safe references.
 unsafe impl Sync for mi_page_s {}
 
 #[repr(C)]
@@ -464,16 +466,11 @@ pub struct mi_theap_s {
     pub memid: crate::internal::mi_memid_t,
     pub stats: mi_stats_t,
 }
-unsafe impl Send for mi_theap_s {}
+
+// SAFETY[AUDIT:raw-auto-trait]: required only for immutable empty thread-heap
+// sentinel statics. Live thread heaps remain thread-owned allocator state and
+// must be accessed through raw allocator paths or narrower typestate wrappers.
 unsafe impl Sync for mi_theap_s {}
-unsafe impl Send for mi_arena_pages_s {}
-unsafe impl Sync for mi_arena_pages_s {}
-unsafe impl Send for mi_subproc_s {}
-unsafe impl Sync for mi_subproc_s {}
-unsafe impl Send for mi_arena_s {}
-unsafe impl Sync for mi_arena_s {}
-unsafe impl Send for mi_heap_s {}
-unsafe impl Sync for mi_heap_s {}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -482,18 +479,12 @@ pub struct mi_tls_slot_t {
     pub value: *mut c_void,
 }
 
-unsafe impl Send for mi_tls_slot_t {}
-unsafe impl Sync for mi_tls_slot_t {}
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_thread_locals_t {
     pub count: usize,
     pub slots: [mi_tls_slot_t; 1],
 }
-
-unsafe impl Send for mi_thread_locals_t {}
-unsafe impl Sync for mi_thread_locals_t {}
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -516,11 +507,23 @@ pub struct mi_option_desc_t {
     pub legacy_name: *const c_char,
 }
 
-unsafe impl Send for mi_option_desc_t {}
-unsafe impl Sync for mi_option_desc_t {}
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct mi_subproc_id_t {
     pub _mi_subproc_id: *mut c_void,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{mi_page_s, mi_theap_s};
+
+    fn assert_sync<T: Sync>() -> usize {
+        core::mem::size_of::<T>()
+    }
+
+    #[test]
+    fn intentional_raw_sync_impls_are_limited_to_sentinel_static_types() {
+        assert!(assert_sync::<mi_page_s>() > 0);
+        assert!(assert_sync::<mi_theap_s>() > 0);
+    }
 }

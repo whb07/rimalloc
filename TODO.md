@@ -208,66 +208,66 @@ Scope: turn the allocator review findings into small, verifiable actions. Each i
 
 ### 4.1 Inventory existing unsafe impls
 
-- [ ] Inventory every `unsafe impl Send` in `src/types.rs`.
+- [x] Inventory every `unsafe impl Send` in `src/types.rs`.
   - Place: `src/types.rs`.
   - Action: list each type, why it needs `Send`, and which safe wrapper or internal path depends on it.
   - Validation: inventory appears in `docs/unsafe-audit.md` or source comments.
 
-- [ ] Inventory every `unsafe impl Sync` in `src/types.rs`.
+- [x] Inventory every `unsafe impl Sync` in `src/types.rs`.
   - Place: `src/types.rs`.
   - Action: list each type, why it needs `Sync`, and which safe wrapper or internal path depends on it.
   - Validation: inventory appears in `docs/unsafe-audit.md` or source comments.
 
 ### 4.2 Review raw allocator state types individually
 
-- [ ] Review `mi_tld_s` `Send`/`Sync`.
+- [x] Review `mi_tld_s` `Send`/`Sync`.
   - Place: `src/types.rs` around `mi_tld_s`.
   - Action: prove thread-local data is safe to move/share, or remove the impls.
   - Validation: if retained, add safety comments explaining aliasing and thread-affinity invariants; if removed, tests still compile.
 
-- [ ] Review `mi_page_s` `Send`/`Sync`.
+- [x] Review `mi_page_s` `Send`/`Sync`.
   - Place: `src/types.rs` around `mi_page_s`.
   - Action: prove page state is safe to move/share, or remove the impls.
   - Validation: if retained, add safety comments covering locks/atomics and raw pointer ownership; if removed, tests still compile.
 
-- [ ] Review `mi_theap_s` `Send`/`Sync`.
+- [x] Review `mi_theap_s` `Send`/`Sync`.
   - Place: `src/types.rs` around `mi_theap_s`.
   - Action: prove thread heap state is safe to move/share, or remove the impls.
   - Validation: if retained, add safety comments covering thread ownership and synchronization; if removed, tests still compile.
 
-- [ ] Review `mi_heap_s` `Send`/`Sync`.
+- [x] Review `mi_heap_s` `Send`/`Sync`.
   - Place: `src/types.rs` around `mi_heap_s`.
   - Action: prove heap state is safe to move/share, or remove the impls.
   - Validation: if retained, add safety comments covering cross-thread frees and internal locking; if removed, tests still compile.
 
-- [ ] Review `mi_arena_s`, `mi_arena_pages_s`, and `mi_subproc_s` `Send`/`Sync`.
+- [x] Review `mi_arena_s`, `mi_arena_pages_s`, and `mi_subproc_s` `Send`/`Sync`.
   - Place: `src/types.rs` around arena/subproc impls.
   - Action: prove synchronization is sufficient, or remove the impls.
   - Validation: if retained, add safety comments covering global locks and atomics; if removed, tests still compile.
 
-- [ ] Review `mi_tls_slot_t` and `mi_thread_locals_t` `Send`/`Sync`.
+- [x] Review `mi_tls_slot_t` and `mi_thread_locals_t` `Send`/`Sync`.
   - Place: `src/types.rs` around TLS structs.
   - Action: prove these raw TLS mirror types are safe to move/share, or remove the impls.
   - Validation: if retained, add safety comments; if removed, tests still compile.
 
-- [ ] Review `mi_option_desc_t` `Send`/`Sync`.
+- [x] Review `mi_option_desc_t` `Send`/`Sync`.
   - Place: `src/types.rs` around option descriptor impls.
   - Action: prove shared option descriptors are immutable or synchronized, or remove the impls.
   - Validation: if retained, add safety comments; if removed, tests still compile.
 
 ### 4.3 Prefer typed wrappers over raw type auto-traits
 
-- [ ] Move concurrency guarantees to wrapper types where possible.
+- [x] Move concurrency guarantees to wrapper types where possible.
   - Places: `src/core_types/*.rs`, `src/safe/*.rs`, `src/types.rs`.
   - Action: remove raw C-layout auto-trait impls that are only needed by safe wrappers, and implement `Send`/`Sync` on the wrapper with narrower invariants.
   - Validation: `cargo test --quiet --features std` passes.
 
-- [ ] Add a compile-time check for intentional raw auto-traits.
+- [x] Add a compile-time check for intentional raw auto-traits.
   - Place: `tests/` or `src/core_types/*/tests.rs`.
   - Action: add assertions for the types intentionally `Send`/`Sync`, and avoid assertions for types intentionally not shareable.
   - Validation: test fails if an intentional auto-trait decision changes accidentally.
 
-- [ ] Re-run thread/concurrency tests after auto-trait changes.
+- [x] Re-run thread/concurrency tests after auto-trait changes.
   - Places: `tests/thread_stats_regression.rs`, `tests/original_test_stress.rs`, concurrency stress tests.
   - Action: verify allocator still supports intended cross-thread allocation/free patterns.
   - Validation: `cargo test --quiet --features std thread` and stress tests pass.

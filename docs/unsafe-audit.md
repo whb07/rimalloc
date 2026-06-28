@@ -56,6 +56,11 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   once on drop, main-heap handles never delete the main heap, and heap-tied
   allocations carry the heap borrow lifetime so safe code cannot delete a heap
   while its safe allocations are live.
+- `SAFETY[AUDIT:raw-auto-trait]`: retained raw C-layout auto-trait impls.
+  These are limited to `Sync` for immutable sentinel static types required by
+  translated C parity. Live allocator state remains raw-pointer state and must
+  be accessed through allocator synchronization, raw API contracts, or narrower
+  typestate wrappers.
 
 ## Safe API And FFI Boundary
 
@@ -113,6 +118,29 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
 - Raw pointer escape hatches from safe types must document invalidation, null or
   sentinel behavior, caller free restrictions, use-after-move/drop behavior,
   aliasing, and thread restrictions.
+
+## Raw Allocator Auto-Trait Audit
+
+- Removed raw `Send` impls from `mi_tld_s`, `mi_page_s`, `mi_theap_s`,
+  `mi_arena_pages_s`, `mi_subproc_s`, `mi_arena_s`, `mi_heap_s`,
+  `mi_tls_slot_t`, `mi_thread_locals_t`, and `mi_option_desc_t`. Safe
+  allocation wrappers keep their own narrower `Send`/`Sync` proofs.
+- Removed raw `Sync` impls from `mi_tld_s`, `mi_arena_pages_s`,
+  `mi_subproc_s`, `mi_arena_s`, `mi_heap_s`, `mi_tls_slot_t`,
+  `mi_thread_locals_t`, and `mi_option_desc_t`; no current safe wrapper or
+  translated static requires those raw layout types to be shareable through
+  safe references.
+- Retained `Sync` for `mi_page_s` because `src/init.rs` exposes the immutable
+  `_mi_page_empty` sentinel static as a translated C compatibility object. Live
+  pages are still allocator-owned mutable metadata and are not made safe to
+  share by this impl.
+- Retained `Sync` for `mi_theap_s` because `src/init.rs` exposes immutable
+  empty thread-heap sentinel statics. Live thread heaps remain thread-owned
+  allocator state and are accessed through raw allocator paths or typestate
+  wrappers.
+- Unit tests in `src/types.rs` assert the intentionally retained raw `Sync`
+  impls so accidental removals are visible during routine builds. Source search
+  for `unsafe impl Send` in `src/types.rs` should remain empty.
 
 ## Policy
 

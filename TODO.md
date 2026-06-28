@@ -69,74 +69,74 @@ Scope: turn the allocator review findings into small, verifiable actions. Each i
 
 ### 2.1 Typed allocation macros in `src/abi.rs`
 
-- [ ] Remove internal `unsafe` from `mi_malloc_tp!`.
+- [x] Remove internal `unsafe` from `mi_malloc_tp!`.
   - Place: `src/abi.rs` macro `mi_malloc_tp!`.
   - Action: expand to the unsafe raw call without wrapping it in an internal unsafe block.
   - Validation: add or update compile-fail coverage proving caller code must use an explicit unsafe block.
 
-- [ ] Remove internal `unsafe` from `mi_zalloc_tp!`.
+- [x] Remove internal `unsafe` from `mi_zalloc_tp!`.
   - Place: `src/abi.rs` macro `mi_zalloc_tp!`.
   - Action: require caller-side unsafe at the macro invocation site.
   - Validation: compile-fail coverage rejects safe invocation.
 
-- [ ] Remove internal `unsafe` from `mi_calloc_tp!`.
+- [x] Remove internal `unsafe` from `mi_calloc_tp!`.
   - Place: `src/abi.rs` macro `mi_calloc_tp!`.
   - Action: require caller-side unsafe at the macro invocation site.
   - Validation: compile-fail coverage rejects safe invocation.
 
-- [ ] Remove internal `unsafe` from `mi_mallocn_tp!`.
+- [x] Remove internal `unsafe` from `mi_mallocn_tp!`.
   - Place: `src/abi.rs` macro `mi_mallocn_tp!`.
   - Action: require caller-side unsafe at the macro invocation site.
   - Validation: compile-fail coverage rejects safe invocation.
 
-- [ ] Remove internal `unsafe` from both `mi_reallocn_tp!` arms.
+- [x] Remove internal `unsafe` from both `mi_reallocn_tp!` arms.
   - Place: `src/abi.rs` macro `mi_reallocn_tp!`.
   - Action: require caller-side unsafe for both supported argument orders.
   - Validation: compile-fail coverage rejects both safe invocation forms.
 
-- [ ] Remove internal `unsafe` from `mi_heap_malloc_tp!`.
+- [x] Remove internal `unsafe` from `mi_heap_malloc_tp!`.
   - Place: `src/abi.rs` macro `mi_heap_malloc_tp!`.
   - Action: require caller-side unsafe at the macro invocation site.
   - Validation: compile-fail coverage rejects safe invocation.
 
-- [ ] Remove internal `unsafe` from `mi_heap_zalloc_tp!`.
+- [x] Remove internal `unsafe` from `mi_heap_zalloc_tp!`.
   - Place: `src/abi.rs` macro `mi_heap_zalloc_tp!`.
   - Action: require caller-side unsafe at the macro invocation site.
   - Validation: compile-fail coverage rejects safe invocation.
 
-- [ ] Remove internal `unsafe` from `mi_heap_calloc_tp!`.
+- [x] Remove internal `unsafe` from `mi_heap_calloc_tp!`.
   - Place: `src/abi.rs` macro `mi_heap_calloc_tp!`.
   - Action: require caller-side unsafe at the macro invocation site.
   - Validation: compile-fail coverage rejects safe invocation.
 
-- [ ] Remove internal `unsafe` from `mi_heap_mallocn_tp!`.
+- [x] Remove internal `unsafe` from `mi_heap_mallocn_tp!`.
   - Place: `src/abi.rs` macro `mi_heap_mallocn_tp!`.
   - Action: require caller-side unsafe at the macro invocation site.
   - Validation: compile-fail coverage rejects safe invocation.
 
-- [ ] Remove internal `unsafe` from `mi_heap_reallocn_tp!`.
+- [x] Remove internal `unsafe` from `mi_heap_reallocn_tp!`.
   - Place: `src/abi.rs` macro `mi_heap_reallocn_tp!`.
   - Action: require caller-side unsafe at the macro invocation site.
   - Validation: compile-fail coverage rejects safe invocation.
 
-- [ ] Remove internal `unsafe` from `mi_heap_recalloc_tp!`.
+- [x] Remove internal `unsafe` from `mi_heap_recalloc_tp!`.
   - Place: `src/abi.rs` macro `mi_heap_recalloc_tp!`.
   - Action: require caller-side unsafe at the macro invocation site.
   - Validation: compile-fail coverage rejects safe invocation.
 
 ### 2.2 Documentation and tests for macro unsafe policy
 
-- [ ] Add a positive example for caller-side unsafe macro use.
+- [x] Add a positive example for caller-side unsafe macro use.
   - Places: `src/abi.rs` docs or `examples/ffi.rs`.
   - Action: show typed macro invocation inside an explicit unsafe block.
   - Validation: doctest or example build passes.
 
-- [ ] Add a negative example for safe macro invocation.
+- [x] Add a negative example for safe macro invocation.
   - Place: crate-level docs or raw facade docs.
   - Action: add `compile_fail` coverage showing raw typed macros cannot be invoked from safe code.
   - Validation: `cargo test --doc --features std` passes and the compile-fail test fails for the intended reason.
 
-- [ ] Run raw facade inventory after macro changes.
+- [x] Run raw facade inventory after macro changes.
   - Place: repository scripts.
   - Action: confirm macro changes do not alter the intended raw item inventory.
   - Validation: `scripts/check-raw-facade.sh` exits 0.

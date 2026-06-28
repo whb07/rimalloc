@@ -83,6 +83,85 @@
 //! mechanical_mimalloc::raw::mi_free(p);
 //! ```
 //!
+//! Typed raw allocation macros also require caller-side unsafe blocks:
+//!
+//! ```rust,no_run
+//! unsafe {
+//!     let p = mechanical_mimalloc::mi_malloc_tp!(u64);
+//!     mechanical_mimalloc::raw::mi_free(p.cast());
+//! }
+//! ```
+//!
+//! ```rust,compile_fail
+//! let p = mechanical_mimalloc::mi_malloc_tp!(u64);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let p = mechanical_mimalloc::mi_zalloc_tp!(u64);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let p = mechanical_mimalloc::mi_calloc_tp!(u64, 2);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let p = mechanical_mimalloc::mi_mallocn_tp!(u64, 2);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let p = core::ptr::null_mut::<u64>();
+//! let p = mechanical_mimalloc::mi_reallocn_tp!(u64, p, 2);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let p = core::ptr::null_mut::<u64>();
+//! let p = mechanical_mimalloc::mi_reallocn_tp!(p, u64, 2);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = mechanical_mimalloc::mi_heap_malloc_tp!(u64, heap);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = mechanical_mimalloc::mi_heap_zalloc_tp!(u64, heap);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = mechanical_mimalloc::mi_heap_calloc_tp!(u64, heap, 2);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = mechanical_mimalloc::mi_heap_mallocn_tp!(u64, heap, 2);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = core::ptr::null_mut::<u64>();
+//! let p = mechanical_mimalloc::mi_heap_reallocn_tp!(u64, heap, p, 2);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
+//! ```rust,compile_fail
+//! let heap = core::ptr::null_mut();
+//! let p = core::ptr::null_mut::<u64>();
+//! let p = mechanical_mimalloc::mi_heap_recalloc_tp!(u64, heap, p, 2);
+//! mechanical_mimalloc::raw::mi_free(p.cast());
+//! ```
+//!
 //! Implementation modules are not part of the crate-root public API:
 //!
 //! ```rust,compile_fail

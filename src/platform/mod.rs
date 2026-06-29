@@ -8,10 +8,14 @@
 // active only on selected operating systems.
 #![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
+pub(crate) mod os;
+
 #[cfg(target_os = "emscripten")]
 pub mod emscripten;
 #[cfg(target_os = "macos")]
-pub mod osx;
+pub mod macos;
+#[cfg(target_os = "macos")]
+pub use macos as osx;
 #[cfg(all(not(windows), not(target_os = "emscripten"), not(target_os = "wasi")))]
 pub mod unix;
 #[cfg(target_os = "wasi")]

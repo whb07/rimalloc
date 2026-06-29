@@ -11,25 +11,25 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 EXPORT_FILE_CLASSIFICATION = {
-    "src/alloc.rs": "c-abi",
-    "src/alloc_aligned.rs": "c-abi",
-    "src/alloc_override.rs": "malloc-cxx-override",
-    "src/alloc_posix.rs": "c-abi",
-    "src/arena.rs": "c-abi-internal-classified",
+    "src/allocator/alloc.rs": "c-abi",
+    "src/allocator/aligned.rs": "c-abi",
+    "src/raw/macros.rs": "malloc-cxx-override",
+    "src/raw/posix.rs": "c-abi",
+    "src/allocator/arena.rs": "c-abi-internal-classified",
     "src/bench_diagnostics.rs": "benchmark-diagnostics",
-    "src/free.rs": "c-abi",
-    "src/heap.rs": "c-abi",
-    "src/init.rs": "runtime-boundary",
+    "src/allocator/free.rs": "c-abi",
+    "src/allocator/heap.rs": "c-abi",
+    "src/allocator/init.rs": "runtime-boundary",
     "src/lib.rs": "panic-runtime-boundary",
-    "src/options.rs": "c-abi",
-    "src/os.rs": "c-abi-internal-classified",
-    "src/page.rs": "c-abi-internal-classified",
-    "src/page_map.rs": "c-abi-internal-classified",
-    "src/prim.rs": "runtime-boundary",
-    "src/prim/osx.rs": "malloc-cxx-override",
-    "src/prim/unix.rs": "runtime-boundary",
-    "src/stats.rs": "c-abi",
-    "src/theap.rs": "c-abi-internal-classified",
+    "src/allocator/options.rs": "c-abi",
+    "src/platform/os.rs": "c-abi-internal-classified",
+    "src/allocator/page.rs": "c-abi-internal-classified",
+    "src/allocator/page_map.rs": "c-abi-internal-classified",
+    "src/platform/mod.rs": "runtime-boundary",
+    "src/platform/macos.rs": "malloc-cxx-override",
+    "src/platform/unix.rs": "runtime-boundary",
+    "src/allocator/stats.rs": "c-abi",
+    "src/allocator/thread_heap.rs": "c-abi-internal-classified",
 }
 
 EXPORT_PATTERNS = [
@@ -67,8 +67,8 @@ REENTRY_PATTERNS = [
 ]
 
 REENTRY_ALLOWLIST = {
-    "src/abi.rs": "SAFETY[AUDIT:c-header-macro-reentry]",
-    "src/headers.rs": "SAFETY[AUDIT:raw-macro-boundary]",
+    "src/ffi/abi.rs": "SAFETY[AUDIT:c-header-macro-reentry]",
+    "src/ffi/headers.rs": "SAFETY[AUDIT:raw-macro-boundary]",
 }
 
 

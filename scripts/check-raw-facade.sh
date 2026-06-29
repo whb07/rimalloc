@@ -12,7 +12,7 @@ import pathlib
 import re
 
 root = pathlib.Path.cwd()
-raw = (root / "src/raw.rs").read_text()
+raw = (root / "src/raw/mod.rs").read_text()
 
 default_allowed = {"abi", "headers", "mimalloc"}
 impl_only = {
@@ -83,7 +83,7 @@ for line_number, line in enumerate(raw.splitlines(), start=1):
     if pub_use and not pending_unstable:
         name = pub_use.group(1)
         if name in impl_only:
-            bad_pub_uses.append(f"src/raw.rs:{line_number}: default pub use crate::{name}::*")
+            bad_pub_uses.append(f"src/raw/mod.rs:{line_number}: default pub use crate::{name}::*")
     if stripped:
         pending_unstable = False
 

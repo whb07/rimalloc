@@ -228,7 +228,7 @@ impl GuardedDecision {
     }
 }
 
-pub(super) fn __lint_touch() {
+pub(crate) fn __lint_touch() {
     let config = GuardedConfig::new(
         GuardedSizeMin::new(1),
         GuardedSizeMax::new(1),

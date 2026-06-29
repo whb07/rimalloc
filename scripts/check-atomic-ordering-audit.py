@@ -72,7 +72,7 @@ def main() -> int:
     for path in sorted(found):
         require(path in audit_text, f"{path} is not mentioned in {AUDIT.name}")
 
-    atomic_rs = (ROOT / "src/atomic.rs").read_text()
+    atomic_rs = (ROOT / "src/internal/atomic.rs").read_text()
     for snippet in ATOMIC_RS_REQUIRED_SNIPPETS:
         require(snippet in atomic_rs, f"missing audited Rust atomic snippet: {snippet}")
 

@@ -143,9 +143,9 @@ fn production_nothing_comments_are_known_platform_hooks() {
                 continue;
             }
             let prior = previous_signature_names(&lines, line_index);
-            let allowed = if relative(&path) == "src/prim/wasi.rs" {
+            let allowed = if relative(&path) == "src/platform/wasi.rs" {
                 prior.contains("_mi_prim_thread_init_auto_done")
-            } else if relative(&path) == "src/prim/osx.rs" {
+            } else if relative(&path) == "src/platform/macos.rs" {
                 ALLOWED_NOTHING_FUNCTIONS
                     .iter()
                     .any(|name| prior.contains(name))

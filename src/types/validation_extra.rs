@@ -28,7 +28,7 @@ impl FreeBlock {
     /// `block` must be a valid block that has completed pointer validation and
     /// is ready to be linked onto a free list.
     #[inline(always)]
-    pub(in crate::core_types) unsafe fn new_unchecked(block: BlockPtr) -> Self {
+    pub(in crate::types) unsafe fn new_unchecked(block: BlockPtr) -> Self {
         Self(block)
     }
 

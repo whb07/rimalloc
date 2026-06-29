@@ -1,14 +1,14 @@
 #![deny(clippy::must_use_candidate)]
 
-mod allocations;
-mod errors;
-mod heaps;
+mod allocation;
+mod error;
+mod heap;
 mod options;
 mod stats;
 
-pub use allocations::{Allocation, InitializedAllocation};
-pub use errors::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError};
-pub use heaps::{Heap, HeapAllocation, HeapError, HeapRef, InitializedHeapAllocation, MainHeap};
+pub use allocation::{Allocation, InitializedAllocation};
+pub use error::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError};
+pub use heap::{Heap, HeapAllocation, HeapError, HeapRef, InitializedHeapAllocation, MainHeap};
 pub use options::{OptionError, OptionKey, Options};
 pub use stats::{ProcessInfo, StatCount, StatTotal, StatsError, StatsSnapshot};
 

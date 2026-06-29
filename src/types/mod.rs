@@ -1,23 +1,24 @@
 //! Core types for mechanical_mimalloc.
 //! Includes DT-1 scalar domain types and DT-2 pointer domain types.
 //
-mod arena;
-mod callbacks;
-mod free_actions;
-mod freelist;
-mod freelist_wrappers;
-#[cfg(feature = "guarded")]
-mod guarded;
-mod layout;
-mod memid;
-mod page;
-mod page_queues;
-mod page_states;
-mod ptr;
-mod scalar;
-mod track;
-mod validation;
-mod validation_extra;
+pub(crate) mod arena;
+pub(crate) mod callbacks;
+pub mod constants;
+pub(crate) mod free_actions;
+pub(crate) mod freelist;
+pub(crate) mod freelist_wrappers;
+pub(crate) mod layout;
+pub(crate) mod memid;
+pub(crate) mod page;
+pub(crate) mod page_queues;
+pub(crate) mod page_states;
+pub(crate) mod ptr;
+pub(crate) mod scalar;
+pub(crate) mod track;
+pub(crate) mod validation;
+pub(crate) mod validation_extra;
+
+pub use constants::*;
 
 pub(crate) use ptr::{
     ArenaPtr, BlockPtr, HeapPtr, InteriorUserPtr, OsMemPtr, PageConstPtr, PagePtr, PageQueuePtr,
@@ -103,7 +104,7 @@ pub(crate) use free_actions::LocalFreeMode;
 pub(crate) use track::TrackMode;
 
 #[cfg(feature = "guarded")]
-pub(crate) use guarded::{
+pub(crate) use crate::internal::guarded::{
     GuardedConfig, GuardedDecision, GuardedSampleCount, GuardedSampleRate, GuardedSizeMax,
     GuardedSizeMin,
 };
@@ -125,10 +126,10 @@ pub(crate) use callbacks::{
     HeapVisitCallbackArg, OutputCallback, OutputCallbackArg, ThreadLocalClaimCallback,
     ThreadLocalClaimCallbackArg,
 };
-mod atomic_wrappers;
+pub(crate) mod atomic;
 mod heap;
 
-pub(crate) use atomic_wrappers::{
+pub(crate) use atomic::{
     AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicI64Field, AtomicPageThreadId,
     AtomicPtrField, AtomicThreadFree, AtomicThreadHeapRefcount, AtomicUsizeField, MemoryOrder,
     MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr, RemoteFreeList,
@@ -139,11 +140,11 @@ pub(crate) use padding::{Padding, PaddingCanary, PaddingDelta, PaddingPtr};
 
 fn __lint_touch() {
     arena::__lint_touch();
-    atomic_wrappers::__lint_touch();
+    atomic::__lint_touch();
     callbacks::__lint_touch();
     freelist_wrappers::__lint_touch();
     #[cfg(feature = "guarded")]
-    guarded::__lint_touch();
+    crate::internal::guarded::__lint_touch();
     heap::__lint_touch();
     layout::__lint_touch();
     memid::__lint_touch();

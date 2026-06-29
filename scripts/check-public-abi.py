@@ -136,7 +136,7 @@ def public_header_symbols() -> list[str]:
 
 
 def facade_symbols() -> list[str]:
-    text = (ROOT / "src/abi.rs").read_text()
+    text = (ROOT / "src/ffi/abi.rs").read_text()
     symbols: list[str] = []
     for match in re.finditer(r"pub fn\s+(mi_[A-Za-z0-9_]+)\s*\(", text):
         symbol = match.group(1)

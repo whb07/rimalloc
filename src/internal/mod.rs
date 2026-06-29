@@ -11,6 +11,14 @@
     unused_imports
 )]
 
+pub(crate) mod atomic;
+pub(crate) mod bitmap;
+pub(crate) mod bits;
+#[cfg(feature = "guarded")]
+pub(crate) mod guarded;
+pub(crate) mod provenance;
+pub(crate) mod random;
+
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;

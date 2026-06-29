@@ -210,8 +210,8 @@ fn rust_allowance_counts<'a>(
 
 #[test]
 fn debug_assert_macros_are_release_gated_like_c_mimalloc() {
-    let internal_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/internal.rs");
-    let source = fs::read_to_string(internal_rs).expect("read src/internal.rs");
+    let internal_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/internal/mod.rs");
+    let source = fs::read_to_string(internal_rs).expect("read src/internal/mod.rs");
 
     assert!(
         source.contains("if $crate::internal::MI_DEBUG > 0 && !$expr"),
@@ -225,8 +225,8 @@ fn debug_assert_macros_are_release_gated_like_c_mimalloc() {
 
 #[test]
 fn huge_allocation_stats_are_release_gated_like_c_mimalloc() {
-    let page_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/page.rs");
-    let source = fs::read_to_string(page_rs).expect("read src/page.rs");
+    let page_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/allocator/page.rs");
+    let source = fs::read_to_string(page_rs).expect("read src/allocator/page.rs");
     let start = source
         .find("unsafe fn mi_huge_page_alloc")
         .expect("find mi_huge_page_alloc");
@@ -248,8 +248,8 @@ fn huge_allocation_stats_are_release_gated_like_c_mimalloc() {
 
 #[test]
 fn preloading_state_matches_c_mimalloc_lifecycle() {
-    let init_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/init.rs");
-    let source = fs::read_to_string(init_rs).expect("read src/init.rs");
+    let init_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/allocator/init.rs");
+    let source = fs::read_to_string(init_rs).expect("read src/allocator/init.rs");
     let preload_fn = source
         .find("pub(crate) extern \"C\" fn _mi_preloading() -> bool")
         .expect("find _mi_preloading");
@@ -312,9 +312,12 @@ fn preloading_state_matches_c_mimalloc_lifecycle() {
 #[test]
 fn stderr_output_routes_through_platform_primitive() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
-    let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
-    let unix_rs = fs::read_to_string(root.join("src/prim/unix.rs")).expect("read src/prim/unix.rs");
+    let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
+        .expect("read src/allocator/options.rs");
+    let os_rs =
+        fs::read_to_string(root.join("src/platform/os.rs")).expect("read src/platform/os.rs");
+    let unix_rs =
+        fs::read_to_string(root.join("src/platform/unix.rs")).expect("read src/platform/unix.rs");
 
     assert!(
         options_rs.contains("use crate::prim::_mi_prim_out_stderr;")
@@ -341,15 +344,23 @@ fn stderr_output_routes_through_platform_primitive() {
 #[test]
 fn options_state_uses_internal_locks_like_c() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
-    let atomic_rs = fs::read_to_string(root.join("src/atomic.rs")).expect("read src/atomic.rs");
-    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
-    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
-    let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
-    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
-    let prim_rs = fs::read_to_string(root.join("src/prim.rs")).expect("read src/prim.rs");
-    let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
-    let stats_rs = fs::read_to_string(root.join("src/stats.rs")).expect("read src/stats.rs");
+    let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
+        .expect("read src/allocator/alloc.rs");
+    let atomic_rs = fs::read_to_string(root.join("src/internal/atomic.rs"))
+        .expect("read src/internal/atomic.rs");
+    let free_rs =
+        fs::read_to_string(root.join("src/allocator/free.rs")).expect("read src/allocator/free.rs");
+    let init_rs =
+        fs::read_to_string(root.join("src/allocator/init.rs")).expect("read src/allocator/init.rs");
+    let libc_rs = fs::read_to_string(root.join("src/ffi/libc.rs")).expect("read src/ffi/libc.rs");
+    let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
+        .expect("read src/allocator/options.rs");
+    let prim_rs =
+        fs::read_to_string(root.join("src/platform/mod.rs")).expect("read src/platform/mod.rs");
+    let random_rs = fs::read_to_string(root.join("src/internal/random.rs"))
+        .expect("read src/internal/random.rs");
+    let stats_rs = fs::read_to_string(root.join("src/allocator/stats.rs"))
+        .expect("read src/allocator/stats.rs");
 
     assert!(
         !options_rs.contains("std::sync::{Mutex")
@@ -512,11 +523,11 @@ fn options_state_uses_internal_locks_like_c() {
 fn crate_root_exposes_only_curated_rust_facade() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
-    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read src/raw/mod.rs");
 
     assert!(
         lib_rs.contains("pub mod raw;")
-            && lib_rs.contains("pub mod unsafe_callbacks;")
+            && lib_rs.contains("pub use ffi::callbacks as unsafe_callbacks;")
             && lib_rs.contains("pub struct MiMalloc;")
             && !lib_rs.contains("CallbackError")
             && !lib_rs.contains("DeferredFreeCallbackGuard, ErrorCallbackGuard")
@@ -572,10 +583,10 @@ fn crate_root_exposes_only_curated_rust_facade() {
 fn core_types_remains_crate_private_not_public_raw_api() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
-    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read src/raw/mod.rs");
 
     assert!(
-        lib_rs.contains("pub(crate) mod core_types;")
+        lib_rs.contains("pub(crate) use types as core_types;")
             && !lib_rs.contains("pub mod core_types;")
             && !lib_rs.contains("pub use core_types")
             && !lib_rs.contains("pub use crate::core_types"),
@@ -595,22 +606,22 @@ fn core_types_remains_crate_private_not_public_raw_api() {
 #[test]
 fn abi_module_owns_c_header_declarations() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
     let mimalloc_rs =
-        fs::read_to_string(root.join("src/mimalloc.rs")).expect("read src/mimalloc.rs");
-    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+        fs::read_to_string(root.join("src/ffi/mimalloc.rs")).expect("read src/ffi/mimalloc.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read src/raw/mod.rs");
 
     assert!(
         abi_rs.contains("Mechanical translation of `include/mimalloc.h`")
             && abi_rs.contains("unsafe extern \"C\"")
             && abi_rs.contains("pub fn mi_malloc(size: usize) -> *mut c_void;")
             && abi_rs.contains("pub fn mi_heap_new() -> *mut mi_heap_t;"),
-        "src/abi.rs should own the raw mimalloc C header declarations"
+        "src/ffi/abi.rs should own the raw mimalloc C header declarations"
     );
     assert!(
         mimalloc_rs.contains("pub(crate) use crate::abi::*;")
             && !mimalloc_rs.contains("unsafe extern \"C\""),
-        "src/mimalloc.rs should stay an internal compatibility alias, not the public header mirror"
+        "src/ffi/mimalloc.rs should stay an internal compatibility alias, not the public header mirror"
     );
     assert!(
         raw_rs.contains("pub mod abi") && raw_rs.contains("pub use crate::abi::*;"),
@@ -621,8 +632,8 @@ fn abi_module_owns_c_header_declarations() {
 #[test]
 fn abi_c_declarations_remain_raw_not_strict_typed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
-    let declarations = source_item("src/abi.rs", &abi_rs, "unsafe extern \"C\"");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
+    let declarations = source_item("src/ffi/abi.rs", &abi_rs, "unsafe extern \"C\"");
 
     for forbidden in [
         "crate::core_types",
@@ -655,7 +666,7 @@ fn abi_c_declarations_remain_raw_not_strict_typed() {
     ] {
         assert!(
             !declarations.contains(forbidden),
-            "src/abi.rs C declarations should not expose strict type `{forbidden}`"
+            "src/ffi/abi.rs C declarations should not expose strict type `{forbidden}`"
         );
     }
 
@@ -666,16 +677,17 @@ fn abi_c_declarations_remain_raw_not_strict_typed() {
             && declarations.contains("pub fn mi_heap_new() -> *mut mi_heap_t;")
             && declarations.contains("pub fn mi_heap_visit_blocks(\n        heap: *mut mi_heap_t,\n        visit_blocks: bool,\n        visitor: Option<mi_block_visit_fun>,\n        arg: *mut c_void,\n    ) -> bool;")
             && declarations.contains("pub fn mi_process_info(\n        elapsed_msecs: *mut usize,"),
-        "src/abi.rs declarations should keep the C header raw pointer shape"
+        "src/ffi/abi.rs declarations should keep the C header raw pointer shape"
     );
 }
 
 #[test]
 fn translated_raw_layouts_stay_in_types_substrate() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
-    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+    let types_rs = fs::read_to_string(root.join("src/types/constants.rs"))
+        .expect("read src/types/constants.rs");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read src/raw/mod.rs");
 
     for layout in [
         "pub struct mi_page_queue_t",
@@ -691,7 +703,7 @@ fn translated_raw_layouts_stay_in_types_substrate() {
     ] {
         assert!(
             types_rs.contains("#[repr(C)]") && types_rs.contains(layout),
-            "src/types.rs should remain the private raw repr(C) layout substrate for {layout}"
+            "src/types/constants.rs should remain the private raw repr(C) layout substrate for {layout}"
         );
         assert!(
             !abi_rs.contains(layout) && !raw_rs.contains(layout),
@@ -707,15 +719,15 @@ fn translated_raw_layouts_stay_in_types_substrate() {
             && !types_rs.contains("use crate::core_types")
             && !abi_rs.contains("core_types")
             && !raw_rs.contains("core_types"),
-        "raw layout exposure should flow from src/types.rs through raw::abi without leaking strict wrappers"
+        "raw layout exposure should flow from src/types/constants.rs through raw::abi without leaking strict wrappers"
     );
 }
 
 #[test]
 fn public_c_layout_exposure_uses_raw_abi_facade() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
-    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read src/raw/mod.rs");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let api_doc =
         fs::read_to_string(root.join("docs/api-inventory.md")).expect("read api inventory");
@@ -744,7 +756,7 @@ fn public_c_layout_exposure_uses_raw_abi_facade() {
 #[test]
 fn raw_facade_remains_c_shaped_without_strict_type_exports() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read src/raw/mod.rs");
 
     assert!(
         raw_rs.contains("Explicit C-shaped compatibility facade")
@@ -752,7 +764,7 @@ fn raw_facade_remains_c_shaped_without_strict_type_exports() {
             && raw_rs.contains("pub mod mimalloc {\n    pub use crate::abi::*;\n}")
             && raw_rs.contains("pub mod headers {\n    pub use crate::headers::*;\n}")
             && raw_rs.contains("pub use mimalloc::*;"),
-        "src/raw.rs should keep the default facade as the C-header mirror"
+        "src/raw/mod.rs should keep the default facade as the C-header mirror"
     );
 
     for module in [
@@ -824,7 +836,7 @@ fn raw_facade_remains_c_shaped_without_strict_type_exports() {
     ] {
         assert!(
             !raw_rs.contains(forbidden),
-            "src/raw.rs should not expose strict type `{forbidden}`"
+            "src/raw/mod.rs should not expose strict type `{forbidden}`"
         );
     }
 }
@@ -832,9 +844,9 @@ fn raw_facade_remains_c_shaped_without_strict_type_exports() {
 #[test]
 fn raw_macro_unsafe_boundary_policy_stays_documented() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
     let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
-    let headers_rs = fs::read_to_string(root.join("src/headers.rs")).expect("read headers.rs");
+    let headers_rs = fs::read_to_string(root.join("src/ffi/headers.rs")).expect("read headers.rs");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let unsafe_doc =
         fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read unsafe audit");
@@ -847,8 +859,8 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
         "raw macro unsafe-boundary audit tag should be mirrored in source and docs"
     );
     assert!(
-        abi_doc.contains("Typed allocation macros in `src/abi.rs`")
-            && abi_doc.contains("Header override macros in `src/headers.rs`")
+        abi_doc.contains("Typed allocation macros in `src/ffi/abi.rs`")
+            && abi_doc.contains("Header override macros in `src/ffi/headers.rs`")
             && abi_doc.contains("There are no intentionally safe public allocation macros today")
             && lib_rs.contains("Header override macros follow the same raw unsafe-boundary policy")
             && lib_rs.contains("mechanical_mimalloc::malloc!(64)"),
@@ -922,15 +934,14 @@ fn translated_raw_internal_test_access_requires_unstable_feature() {
 fn raw_pointer_nullability_policy_stays_documented() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
-    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
-    let ptr_rs =
-        fs::read_to_string(root.join("src/core_types/ptr.rs")).expect("read src/core_types/ptr.rs");
-    let safe_rs = fs::read_to_string(root.join("src/safe.rs")).expect("read src/safe.rs");
-    let safe_allocations_rs = fs::read_to_string(root.join("src/safe/allocations.rs"))
-        .expect("read src/safe/allocations.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read src/raw/mod.rs");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
+    let ptr_rs = fs::read_to_string(root.join("src/types/ptr.rs")).expect("read src/types/ptr.rs");
+    let safe_rs = fs::read_to_string(root.join("src/safe/mod.rs")).expect("read src/safe/mod.rs");
+    let safe_allocations_rs = fs::read_to_string(root.join("src/safe/allocation.rs"))
+        .expect("read src/safe/allocation.rs");
     let safe_errors_rs =
-        fs::read_to_string(root.join("src/safe/errors.rs")).expect("read src/safe/errors.rs");
+        fs::read_to_string(root.join("src/safe/error.rs")).expect("read src/safe/error.rs");
     let aligned_exports =
         fs::read_to_string(root.join("tests/aligned_exports.rs")).expect("read aligned_exports");
     let compat_exports =
@@ -958,13 +969,13 @@ fn raw_pointer_nullability_policy_stays_documented() {
             && raw_rs.contains("`mi_free` accepts null as a no-op")
             && raw_rs.contains("`mi_realloc` with a null input pointer behaves like allocation")
             && raw_rs.contains("Metadata\n//! pointers, out-pointers, and callback context pointers are valid, non-null"),
-        "src/raw.rs rustdoc should state raw C nullability examples and non-null caller obligations"
+        "src/raw/mod.rs rustdoc should state raw C nullability examples and non-null caller obligations"
     );
     assert!(
         abi_rs.contains("Public declarations in this module keep the C header pointer shape.")
             && abi_rs.contains("This module does not use\n//! `NonNull` in raw C signatures.")
             && !abi_rs.contains("NonNull<"),
-        "src/abi.rs should keep public C-header declarations raw-pointer based"
+        "src/ffi/abi.rs should keep public C-header declarations raw-pointer based"
     );
 
     assert!(
@@ -1010,11 +1021,15 @@ fn raw_pointer_nullability_policy_stays_documented() {
 fn public_callback_abi_inventory_stays_documented() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
-    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
-    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
-    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
-    let arena_rs = fs::read_to_string(root.join("src/arena.rs")).expect("read src/arena.rs");
+    let types_rs = fs::read_to_string(root.join("src/types/constants.rs"))
+        .expect("read src/types/constants.rs");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
+    let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
+        .expect("read src/allocator/options.rs");
+    let page_rs =
+        fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
+        .expect("read src/allocator/arena.rs");
 
     for callback in [
         "mi_output_fun",
@@ -1026,7 +1041,7 @@ fn public_callback_abi_inventory_stays_documented() {
     ] {
         assert!(
             abi_doc.contains(callback) && types_rs.contains(&format!("pub type {callback}")),
-            "{callback} should be listed in docs/abi.md and declared in src/types.rs"
+            "{callback} should be listed in docs/abi.md and declared in src/types/constants.rs"
         );
     }
 
@@ -1072,7 +1087,7 @@ fn public_callback_abi_inventory_stays_documented() {
             && abi_rs.contains("visitor: Option<mi_block_visit_fun>")
             && abi_rs.contains("visitor: Option<mi_heap_visit_fun>")
             && abi_rs.contains("commit_fun: Option<mi_commit_fun_t>"),
-        "src/abi.rs should expose callback-accepting C declarations with nullable Option callbacks"
+        "src/ffi/abi.rs should expose callback-accepting C declarations with nullable Option callbacks"
     );
 
     for forbidden in [
@@ -1107,84 +1122,90 @@ fn public_callback_abi_inventory_stays_documented() {
 #[test]
 fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
-    let callbacks_rs = fs::read_to_string(root.join("src/core_types/callbacks.rs"))
+    let types_rs = fs::read_to_string(root.join("src/types/constants.rs"))
+        .expect("read src/types/constants.rs");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
+    let callbacks_rs = fs::read_to_string(root.join("src/types/callbacks.rs"))
         .expect("read core_types/callbacks.rs");
-    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
-    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
-    let arena_rs = fs::read_to_string(root.join("src/arena.rs")).expect("read src/arena.rs");
-    let theap_rs = fs::read_to_string(root.join("src/theap.rs")).expect("read src/theap.rs");
-    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
+    let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
+        .expect("read src/allocator/options.rs");
+    let page_rs =
+        fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
+        .expect("read src/allocator/arena.rs");
+    let theap_rs = fs::read_to_string(root.join("src/allocator/thread_heap.rs"))
+        .expect("read src/allocator/thread_heap.rs");
+    let init_rs =
+        fs::read_to_string(root.join("src/allocator/init.rs")).expect("read src/allocator/init.rs");
 
     for (source_name, source, marker) in [
         (
-            "src/core_types/callbacks.rs",
+            "src/types/callbacks.rs",
             callbacks_rs.as_str(),
             "pub(crate) unsafe fn invoke(\n        self,\n        force: bool,",
         ),
         (
-            "src/core_types/callbacks.rs",
+            "src/types/callbacks.rs",
             callbacks_rs.as_str(),
             "pub(crate) unsafe fn invoke(self, message: *const c_char,",
         ),
         (
-            "src/core_types/callbacks.rs",
+            "src/types/callbacks.rs",
             callbacks_rs.as_str(),
             "pub(crate) unsafe fn invoke(self, err: i32,",
         ),
         (
-            "src/core_types/callbacks.rs",
+            "src/types/callbacks.rs",
             callbacks_rs.as_str(),
             "pub(crate) unsafe fn invoke(self, heap: HeapPtr,",
         ),
         (
-            "src/core_types/callbacks.rs",
+            "src/types/callbacks.rs",
             callbacks_rs.as_str(),
             "pub(crate) unsafe fn invoke(\n        self,\n        heap: HeapPtr,",
         ),
         (
-            "src/core_types/callbacks.rs",
+            "src/types/callbacks.rs",
             callbacks_rs.as_str(),
             "pub(crate) unsafe fn invoke(\n        self,\n        slice_index: usize,",
         ),
         (
-            "src/options.rs",
+            "src/allocator/options.rs",
             options_rs.as_str(),
             "pub extern \"C\" fn mi_register_output",
         ),
         (
-            "src/options.rs",
+            "src/allocator/options.rs",
             options_rs.as_str(),
             "pub extern \"C\" fn mi_register_error",
         ),
         (
-            "src/page.rs",
+            "src/allocator/page.rs",
             page_rs.as_str(),
             "pub(crate) unsafe extern \"C\" fn _mi_deferred_free",
         ),
         (
-            "src/page.rs",
+            "src/allocator/page.rs",
             page_rs.as_str(),
             "pub unsafe extern \"C\" fn mi_register_deferred_free",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             arena_rs.as_str(),
             "pub unsafe extern \"C\" fn mi_heap_visit_blocks",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             arena_rs.as_str(),
             "pub unsafe extern \"C\" fn mi_heap_visit_abandoned_blocks",
         ),
         (
-            "src/theap.rs",
+            "src/allocator/thread_heap.rs",
             theap_rs.as_str(),
             "pub unsafe extern \"C\" fn mi_theap_visit_blocks",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             init_rs.as_str(),
             "pub unsafe extern \"C\" fn mi_subproc_visit_heaps",
         ),
@@ -1201,7 +1222,7 @@ fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
             && types_rs.contains("pub type mi_block_visit_fun = unsafe extern \"C\" fn")
             && types_rs.contains("pub type mi_commit_fun_t = unsafe extern \"C\" fn")
             && types_rs.contains("pub type mi_claim_fun_t =\n    unsafe extern \"C\" fn"),
-        "src/types.rs should keep public and unstable callback typedefs raw C ABI function pointers"
+        "src/types/constants.rs should keep public and unstable callback typedefs raw C ABI function pointers"
     );
     assert!(
         abi_rs.contains("out: Option<mi_output_fun>")
@@ -1212,7 +1233,7 @@ fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
             && abi_rs.contains("commit_fun: Option<mi_commit_fun_t>")
             && !types_rs.contains("CallbackArg")
             && !abi_rs.contains("CallbackArg"),
-        "src/abi.rs should keep nullable raw callback typedefs at the C ABI boundary"
+        "src/ffi/abi.rs should keep nullable raw callback typedefs at the C ABI boundary"
     );
 }
 
@@ -1226,7 +1247,7 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
         fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read docs/unsafe-audit.md");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let unsafe_callbacks_rs =
-        fs::read_to_string(root.join("src/unsafe_callbacks.rs")).expect("read unsafe callbacks");
+        fs::read_to_string(root.join("src/ffi/callbacks.rs")).expect("read unsafe callbacks");
 
     assert!(
         abi_doc.contains("Raw callback registration remains unsafe.")
@@ -1254,7 +1275,7 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
     );
 
     assert!(
-        lib_rs.contains("pub mod unsafe_callbacks;")
+        lib_rs.contains("pub use ffi::callbacks as unsafe_callbacks;")
             && unsafe_callbacks_rs.contains("std::panic::catch_unwind")
             && unsafe_callbacks_rs.contains("mi_register_error")
             && unsafe_callbacks_rs.contains("mi_register_deferred_free")
@@ -1272,16 +1293,20 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
     let tls_recurse_shim = fs::read_to_string(root.join("src/tls_recurse_shim.c"))
         .expect("read src/tls_recurse_shim.c");
     let build_rs = fs::read_to_string(root.join("build.rs")).expect("read build.rs");
-    let aligned_rs =
-        fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read src/alloc_aligned.rs");
-    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
-    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
+    let aligned_rs = fs::read_to_string(root.join("src/allocator/aligned.rs"))
+        .expect("read src/allocator/aligned.rs");
+    let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
+        .expect("read src/allocator/alloc.rs");
+    let free_rs =
+        fs::read_to_string(root.join("src/allocator/free.rs")).expect("read src/allocator/free.rs");
     let override_rs =
-        fs::read_to_string(root.join("src/alloc_override.rs")).expect("read src/alloc_override.rs");
-    let prim_rs = fs::read_to_string(root.join("src/prim.rs")).expect("read src/prim.rs");
-    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
-    let threadlocal_rs =
-        fs::read_to_string(root.join("src/threadlocal.rs")).expect("read src/threadlocal.rs");
+        fs::read_to_string(root.join("src/raw/macros.rs")).expect("read src/raw/macros.rs");
+    let prim_rs =
+        fs::read_to_string(root.join("src/platform/mod.rs")).expect("read src/platform/mod.rs");
+    let init_rs =
+        fs::read_to_string(root.join("src/allocator/init.rs")).expect("read src/allocator/init.rs");
+    let threadlocal_rs = fs::read_to_string(root.join("src/allocator/threadlocal.rs"))
+        .expect("read src/allocator/threadlocal.rs");
 
     assert!(
         cargo_toml.contains("crate-type = [\"rlib\", \"cdylib\"]")
@@ -1533,10 +1558,13 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
 #[test]
 fn raw_type_opacity_decisions_stay_documented_and_checked() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
-    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
-    let stats_rs = fs::read_to_string(root.join("src/stats.rs")).expect("read src/stats.rs");
-    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
+    let init_rs =
+        fs::read_to_string(root.join("src/allocator/init.rs")).expect("read src/allocator/init.rs");
+    let stats_rs = fs::read_to_string(root.join("src/allocator/stats.rs"))
+        .expect("read src/allocator/stats.rs");
+    let types_rs = fs::read_to_string(root.join("src/types/constants.rs"))
+        .expect("read src/types/constants.rs");
     let api_doc =
         fs::read_to_string(root.join("docs/api-inventory.md")).expect("read api inventory");
 
@@ -1591,8 +1619,8 @@ fn raw_type_opacity_decisions_stay_documented_and_checked() {
         api_doc.contains("### Raw ABI Type Inventory")
             && api_doc.contains("| `mi_subproc_id_t` | `repr(C)` opaque identifier |")
             && api_doc.contains("Callers can pass it back to subproc APIs but cannot inspect or construct it from fields.")
-            && api_doc.contains("| `mi_heap_s` / `mi_heap_t` | `mi_heap_t` is re-exported by `src/abi.rs` |")
-            && api_doc.contains("| `mi_arena_s` / `mi_arena_t` | Not re-exported by `src/abi.rs` today |"),
+            && api_doc.contains("| `mi_heap_s` / `mi_heap_t` | `mi_heap_t` is re-exported by `src/ffi/abi.rs` |")
+            && api_doc.contains("| `mi_arena_s` / `mi_arena_t` | Not re-exported by `src/ffi/abi.rs` today |"),
         "raw type opacity decisions should stay documented in the public API inventory"
     );
 }
@@ -1601,12 +1629,11 @@ fn raw_type_opacity_decisions_stay_documented_and_checked() {
 fn allocation_product_paths_use_typed_requests() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let aligned_rs =
-        fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read alloc_aligned.rs");
-    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
-    let posix_rs =
-        fs::read_to_string(root.join("src/alloc_posix.rs")).expect("read alloc_posix.rs");
-    let layout_rs =
-        fs::read_to_string(root.join("src/core_types/layout.rs")).expect("read layout.rs");
+        fs::read_to_string(root.join("src/allocator/aligned.rs")).expect("read alloc_aligned.rs");
+    let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
+        .expect("read src/allocator/alloc.rs");
+    let posix_rs = fs::read_to_string(root.join("src/raw/posix.rs")).expect("read alloc_posix.rs");
+    let layout_rs = fs::read_to_string(root.join("src/types/layout.rs")).expect("read layout.rs");
 
     let product_overflow_checks = alloc_rs.matches("mi_count_size_overflow").count()
         + aligned_rs.matches("mi_count_size_overflow").count()
@@ -1667,10 +1694,10 @@ fn allocation_product_paths_use_typed_requests() {
 fn realloc_validation_uses_pointer_lookup_boundary() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let aligned_rs =
-        fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read alloc_aligned.rs");
-    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
-    let layout_rs =
-        fs::read_to_string(root.join("src/core_types/layout.rs")).expect("read layout.rs");
+        fs::read_to_string(root.join("src/allocator/aligned.rs")).expect("read alloc_aligned.rs");
+    let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
+        .expect("read src/allocator/alloc.rs");
+    let layout_rs = fs::read_to_string(root.join("src/types/layout.rs")).expect("read layout.rs");
 
     assert!(
         alloc_rs.contains(
@@ -1730,10 +1757,11 @@ fn realloc_validation_uses_pointer_lookup_boundary() {
 #[test]
 fn generic_allocation_flags_use_typed_boundary() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
-    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
-    let layout_rs =
-        fs::read_to_string(root.join("src/core_types/layout.rs")).expect("read layout.rs");
+    let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
+        .expect("read src/allocator/alloc.rs");
+    let page_rs =
+        fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let layout_rs = fs::read_to_string(root.join("src/types/layout.rs")).expect("read layout.rs");
 
     assert!(
         !alloc_rs.contains("usize::from(zero) | huge_alignment")
@@ -1785,7 +1813,7 @@ fn c_memory_order_enum_stays_in_atomic_facade() {
     collect_rs_sources(root, &src, &mut sources);
 
     for (rel, source) in sources {
-        if rel == "src/atomic.rs" {
+        if rel == "src/internal/atomic.rs" {
             continue;
         }
         assert!(
@@ -1800,14 +1828,15 @@ fn c_memory_order_enum_stays_in_atomic_facade() {
 #[test]
 fn strict_type_modules_remain_no_std_no_heap_alloc_no_std_sync() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let core_types = root.join("src/core_types");
+    let core_types = root.join("src/types");
     let mut sources = Vec::new();
     collect_rs_sources(root, &core_types, &mut sources);
 
     let allowed_core_atomic_modules = BTreeSet::from([
-        "src/core_types/arena.rs",
-        "src/core_types/atomic_wrappers.rs",
-        "src/core_types/ptr.rs",
+        "src/types/arena.rs",
+        "src/types/atomic.rs",
+        "src/types/constants.rs",
+        "src/types/ptr.rs",
     ]);
 
     for (rel, source) in sources {
@@ -1861,10 +1890,13 @@ fn strict_type_modules_remain_no_std_no_heap_alloc_no_std_sync() {
 #[test]
 fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
-    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
-    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
-    let core_types = root.join("src/core_types");
+    let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
+        .expect("read src/allocator/alloc.rs");
+    let page_rs =
+        fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let free_rs =
+        fs::read_to_string(root.join("src/allocator/free.rs")).expect("read src/allocator/free.rs");
+    let core_types = root.join("src/types");
     let mut strict_type_sources = Vec::new();
     collect_rs_sources(root, &core_types, &mut strict_type_sources);
 
@@ -1874,47 +1906,47 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
 
     for (source_name, source, marker) in [
         (
-            "src/alloc.rs",
+            "src/allocator/alloc.rs",
             alloc_rs.as_str(),
             "pub(crate) unsafe fn _mi_page_malloc_zero_typed(",
         ),
         (
-            "src/alloc.rs",
+            "src/allocator/alloc.rs",
             alloc_rs.as_str(),
             "unsafe fn mi_theap_malloc_generic(",
         ),
         (
-            "src/alloc.rs",
+            "src/allocator/alloc.rs",
             alloc_rs.as_str(),
             "unsafe fn mi_theap_malloc_zero_req(",
         ),
         (
-            "src/page.rs",
+            "src/allocator/page.rs",
             page_rs.as_str(),
             "pub(crate) unsafe fn _mi_malloc_generic_typed(",
         ),
         (
-            "src/free.rs",
+            "src/allocator/free.rs",
             free_rs.as_str(),
             "pub(crate) unsafe extern \"C\" fn mi_free_generic_local(",
         ),
         (
-            "src/free.rs",
+            "src/allocator/free.rs",
             free_rs.as_str(),
             "pub(crate) unsafe extern \"C\" fn mi_free_generic_mt(",
         ),
         (
-            "src/free.rs",
+            "src/allocator/free.rs",
             free_rs.as_str(),
             "unsafe fn mi_prepare_validated_free(",
         ),
         (
-            "src/free.rs",
+            "src/allocator/free.rs",
             free_rs.as_str(),
             "unsafe fn mi_free_validated(",
         ),
         (
-            "src/free.rs",
+            "src/allocator/free.rs",
             free_rs.as_str(),
             "pub(crate) unsafe fn mi_route_free(",
         ),
@@ -1930,7 +1962,7 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
         "unsafe fn mi_free_validated(",
         "pub(crate) unsafe fn mi_route_free(",
     ] {
-        let item = source_item("src/free.rs", &free_rs, marker);
+        let item = source_item("src/allocator/free.rs", &free_rs, marker);
         for forbidden in [
             "mi_malloc(",
             "mi_zalloc(",
@@ -1943,7 +1975,7 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
         ] {
             assert!(
                 !item.contains(forbidden),
-                "{marker} in src/free.rs should not allocate on the free hot path through {forbidden}"
+                "{marker} in src/allocator/free.rs should not allocate on the free hot path through {forbidden}"
             );
         }
     }
@@ -1982,24 +2014,23 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     collect_rs_sources(root, &src, &mut sources);
 
     let core_mod =
-        fs::read_to_string(root.join("src/core_types/mod.rs")).expect("read core_types/mod.rs");
-    let core_layout_tests = fs::read_to_string(root.join("src/core_types/layout_tests.rs"))
+        fs::read_to_string(root.join("src/types/mod.rs")).expect("read core_types/mod.rs");
+    let core_layout_tests = fs::read_to_string(root.join("src/types/layout_tests.rs"))
         .expect("read core_types layout tests");
-    let atomic_rs = fs::read_to_string(root.join("src/atomic.rs")).expect("read src/atomic.rs");
     let heap_rs =
-        fs::read_to_string(root.join("src/core_types/heap.rs")).expect("read core_types/heap.rs");
-    let heap_api_rs = fs::read_to_string(root.join("src/heap.rs")).expect("read src/heap.rs");
-    let ptr_rs =
-        fs::read_to_string(root.join("src/core_types/ptr.rs")).expect("read core_types/ptr.rs");
-    let scalar_rs = fs::read_to_string(root.join("src/core_types/scalar.rs"))
-        .expect("read core_types/scalar.rs");
-    let page_states_rs = fs::read_to_string(root.join("src/core_types/page_states.rs"))
+        fs::read_to_string(root.join("src/types/heap.rs")).expect("read core_types/heap.rs");
+    let heap_api_rs =
+        fs::read_to_string(root.join("src/allocator/heap.rs")).expect("read src/allocator/heap.rs");
+    let ptr_rs = fs::read_to_string(root.join("src/types/ptr.rs")).expect("read core_types/ptr.rs");
+    let scalar_rs =
+        fs::read_to_string(root.join("src/types/scalar.rs")).expect("read core_types/scalar.rs");
+    let page_states_rs = fs::read_to_string(root.join("src/types/page_states.rs"))
         .expect("read core_types/page_states.rs");
-    let validation_extra_rs = fs::read_to_string(root.join("src/core_types/validation_extra.rs"))
+    let validation_extra_rs = fs::read_to_string(root.join("src/types/validation_extra.rs"))
         .expect("read core_types/validation_extra.rs");
     for module in [
         "arena",
-        "atomic_wrappers",
+        "atomic",
         "free_actions",
         "freelist",
         "freelist_wrappers",
@@ -2205,7 +2236,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             ),
         "subproc sequence and count fields should have scalar wrappers plus typed SubprocPtr accessors"
     );
-    let heap_delete_rs = fs::read_to_string(root.join("src/heap.rs")).expect("read heap.rs");
+    let heap_delete_rs =
+        fs::read_to_string(root.join("src/allocator/heap.rs")).expect("read heap.rs");
     let heap_delete_body = heap_delete_rs
         .split("pub unsafe extern \"C\" fn mi_heap_delete(heap: *mut mi_heap_t)")
         .nth(1)
@@ -2279,8 +2311,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             ),
         "mi_heap_check_owned should parse heap arguments through BorrowedHeap and route non-main checks through OwnedHeap"
     );
-    let page_queues_rs = fs::read_to_string(root.join("src/core_types/page_queues.rs"))
-        .expect("read page_queues.rs");
+    let page_queues_rs =
+        fs::read_to_string(root.join("src/types/page_queues.rs")).expect("read page_queues.rs");
     for witness in ["NormalPageQueue", "HugePageQueue", "FullPageQueue"] {
         assert!(
             page_queues_rs.contains(&format!("pub(crate) struct {witness}(PageQueuePtr);")),
@@ -2337,9 +2369,9 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && page_queues_rs.contains("pub(crate) fn full(queue: FullPageQueue) -> Self"),
         "generic PageQueue should keep its raw field private and expose only kind-specific constructors"
     );
-    let memid_rs = fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read memid.rs");
+    let memid_rs = fs::read_to_string(root.join("src/types/memid.rs")).expect("read memid.rs");
     let memid_tests_rs =
-        fs::read_to_string(root.join("src/core_types/memid/tests.rs")).expect("read memid tests");
+        fs::read_to_string(root.join("src/types/memid/tests.rs")).expect("read memid tests");
     assert!(
         memid_rs.contains("raw: crate::internal::mi_memid_t,")
             && !memid_rs.contains("pub(crate) raw: crate::internal::mi_memid_t,")
@@ -2366,9 +2398,10 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         "MemId::view should own union-arm reads and map unknown or corrupt discriminants to Unknown"
     );
     let page_core_rs =
-        fs::read_to_string(root.join("src/core_types/page.rs")).expect("read core_types/page.rs");
-    let atomic_wrappers_rs = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
-        .expect("read atomic_wrappers.rs");
+        fs::read_to_string(root.join("src/types/page.rs")).expect("read core_types/page.rs");
+    let atomic_rs = fs::read_to_string(root.join("src/types/atomic.rs")).expect("read atomic.rs");
+    let internal_atomic_rs = fs::read_to_string(root.join("src/internal/atomic.rs"))
+        .expect("read src/internal/atomic.rs");
     let strict_check_rs =
         fs::read_to_string(root.join("scripts/check-strict-types.py")).expect("read checker");
     assert!(
@@ -2382,21 +2415,21 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && page_core_rs.contains("pub(crate) fn owner_bits(self) -> usize")
             && page_core_rs.contains("self.0 & !MI_PAGE_FLAG_MASK")
             && page_core_rs.contains("pub(crate) fn classify_free_path(self, current: ThreadId) -> FreePathKind")
-            && atomic_wrappers_rs.contains("pub(crate) struct AtomicPageThreadId(pub(crate) AtomicUsizeField);")
-            && atomic_wrappers_rs.contains("pub(crate) unsafe fn load(self) -> PageThreadId")
-            && atomic_wrappers_rs.contains("pub(crate) unsafe fn set_flags(self, flags: PageFlags, set: bool) -> PageThreadId")
-            && atomic_wrappers_rs.contains("unsafe { self.0.fetch_or(flags.bits(), Ordering::Relaxed) }")
-            && atomic_wrappers_rs.contains("unsafe { self.0.fetch_and(!flags.bits(), Ordering::Relaxed) }")
-            && atomic_wrappers_rs.contains("pub(crate) unsafe fn store_owner(self, owner: PageOwnerId)")
-            && atomic_wrappers_rs.contains("pub(crate) unsafe fn compare_exchange_owner(\n        self,\n        expected: &mut PageThreadId,")
+            && atomic_rs.contains("pub(crate) struct AtomicPageThreadId(pub(crate) AtomicUsizeField);")
+            && atomic_rs.contains("pub(crate) unsafe fn load(self) -> PageThreadId")
+            && atomic_rs.contains("pub(crate) unsafe fn set_flags(self, flags: PageFlags, set: bool) -> PageThreadId")
+            && atomic_rs.contains("unsafe { self.0.fetch_or(flags.bits(), Ordering::Relaxed) }")
+            && atomic_rs.contains("unsafe { self.0.fetch_and(!flags.bits(), Ordering::Relaxed) }")
+            && atomic_rs.contains("pub(crate) unsafe fn store_owner(self, owner: PageOwnerId)")
+            && atomic_rs.contains("pub(crate) unsafe fn compare_exchange_owner(\n        self,\n        expected: &mut PageThreadId,")
             && strict_check_rs.contains("ALLOWED_XTHREAD_ID = {")
-            && strict_check_rs.contains("\"src/core_types/page.rs\"")
-            && strict_check_rs.contains("\"src/core_types/atomic_wrappers.rs\"")
+            && strict_check_rs.contains("\"src/types/page.rs\"")
+            && strict_check_rs.contains("\"src/types/atomic.rs\"")
             && strict_check_rs.contains("kind=\"xthread-id-bitop\"")
             && strict_check_rs.contains("message=\"direct xthread_id bit operation outside typed helpers\""),
         "xthread_id bit operations should be isolated to PageThreadId/PageFlags/AtomicPageThreadId and enforced by the strict checker"
     );
-    let freelist_rs = fs::read_to_string(root.join("src/core_types/freelist.rs"))
+    let freelist_rs = fs::read_to_string(root.join("src/types/freelist.rs"))
         .expect("read core_types/freelist.rs");
     assert!(
         freelist_rs.contains("pub(crate) struct ThreadFreeWord(pub(crate) usize);")
@@ -2411,33 +2444,31 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             )
             && freelist_rs.contains("crate::mi_assert_internal!((val & Self::OWNED_BIT) == 0);")
             && freelist_rs.contains("Self(ptr_val | bit)")
-            && atomic_wrappers_rs
+            && atomic_rs
                 .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
-            && atomic_wrappers_rs.contains("pub(crate) fn load_relaxed(self) -> ThreadFreeWord")
-            && atomic_wrappers_rs.contains("pub(crate) fn push_remote_acq_rel(")
-            && atomic_wrappers_rs.contains(
+            && atomic_rs.contains("pub(crate) fn load_relaxed(self) -> ThreadFreeWord")
+            && atomic_rs.contains("pub(crate) fn push_remote_acq_rel(")
+            && atomic_rs.contains(
                 "pub(crate) unsafe fn release_acq_rel(self, expected: &mut ThreadFreeWord) -> bool"
             )
-            && atomic_wrappers_rs
-                .contains("pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList")
-            && atomic_wrappers_rs.contains("pub(crate) unsafe fn claim_acq_rel(self) -> bool")
+            && atomic_rs.contains("pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList")
+            && atomic_rs.contains("pub(crate) unsafe fn claim_acq_rel(self) -> bool")
             && strict_check_rs.contains("ALLOWED_XTHREAD_FREE = {")
-            && strict_check_rs.contains("\"src/core_types/freelist.rs\"")
-            && strict_check_rs.contains("\"src/core_types/atomic_wrappers.rs\"")
+            && strict_check_rs.contains("\"src/types/freelist.rs\"")
+            && strict_check_rs.contains("\"src/types/atomic.rs\"")
             && strict_check_rs.contains("kind=\"xthread-free-bitop\"")
             && strict_check_rs
                 .contains("message=\"direct xthread_free bit operation outside typed helpers\""),
         "xthread_free bit operations should be isolated to ThreadFreeWord/AtomicThreadFree and enforced by the strict checker"
     );
     let ptr_core_rs =
-        fs::read_to_string(root.join("src/core_types/ptr.rs")).expect("read core_types/ptr.rs");
-    let core_types_layout_tests_rs =
-        fs::read_to_string(root.join("src/core_types/layout_tests.rs"))
-            .expect("read core_types layout tests");
-    let freelist_wrappers_rs = fs::read_to_string(root.join("src/core_types/freelist_wrappers.rs"))
+        fs::read_to_string(root.join("src/types/ptr.rs")).expect("read core_types/ptr.rs");
+    let core_types_layout_tests_rs = fs::read_to_string(root.join("src/types/layout_tests.rs"))
+        .expect("read core_types layout tests");
+    let freelist_wrappers_rs = fs::read_to_string(root.join("src/types/freelist_wrappers.rs"))
         .expect("read core_types/freelist_wrappers.rs");
     let internal_rs =
-        fs::read_to_string(root.join("src/internal.rs")).expect("read src/internal.rs");
+        fs::read_to_string(root.join("src/internal/mod.rs")).expect("read src/internal/mod.rs");
     let allowlist_rs =
         fs::read_to_string(root.join("strict-type-allowlist.txt")).expect("read allowlist");
     assert!(
@@ -2456,7 +2487,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && core_types_layout_tests_rs.contains("fn pointer_wrappers_match_nonnull_layout()")
             && core_types_layout_tests_rs.contains("fn optional_pointer_wrappers_are_pointer_sized()")
             && core_types_layout_tests_rs.contains("fn witness_wrappers_match_pointer_layout()")
-            && core_types_layout_tests_rs.contains("fn packed_and_atomic_wrappers_match_raw_layout()"),
+            && core_types_layout_tests_rs
+                .contains("fn packed_and_atomic_wrappers_match_raw_layout()"),
         "hot strict-type wrappers should stay transparent, copyable where they carry copyable fast-path witnesses, inlineable, and covered by layout/niche tests"
     );
     assert!(
@@ -2509,56 +2541,49 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             )
             && ptr_core_rs.contains("unsafe { self.write_link(BlockLink::FreeList(link)) };")
             && strict_check_rs.contains("ALLOWED_BLOCK_NEXT = {")
-            && strict_check_rs.contains("\"src/core_types/freelist_wrappers.rs\"")
+            && strict_check_rs.contains("\"src/types/freelist_wrappers.rs\"")
             && strict_check_rs.contains("kind=\"block-next-access\"")
             && strict_check_rs
                 .contains("message=\"direct mi_block_s.next access outside free-list wrappers\""),
         "mi_block_s.next reads/writes should stay behind EncodedPtr, BlockLink, BlockPtr, or free-list wrappers and strict checker coverage"
     );
     assert!(
-        atomic_wrappers_rs.contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")
-            && atomic_wrappers_rs
-                .contains("pub(crate) struct AtomicI64Field(pub(crate) *mut i64);")
-            && atomic_wrappers_rs
-                .contains("pub(crate) struct AtomicPtrField<T>(pub(crate) *mut *mut T);")
-            && atomic_wrappers_rs
-                .contains("let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };")
-            && atomic_wrappers_rs.contains("let atomic = unsafe { &*self.0.cast::<AtomicI64>() };")
-            && atomic_wrappers_rs
-                .contains("let atomic = unsafe { &*self.0.cast::<AtomicPtr<T>>() };")
-            && atomic_wrappers_rs
-                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize")
-            && atomic_wrappers_rs
+        atomic_rs.contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")
+            && atomic_rs.contains("pub(crate) struct AtomicI64Field(pub(crate) *mut i64);")
+            && atomic_rs.contains("pub(crate) struct AtomicPtrField<T>(pub(crate) *mut *mut T);")
+            && atomic_rs.contains("let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };")
+            && atomic_rs.contains("let atomic = unsafe { &*self.0.cast::<AtomicI64>() };")
+            && atomic_rs.contains("let atomic = unsafe { &*self.0.cast::<AtomicPtr<T>>() };")
+            && atomic_rs.contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize")
+            && atomic_rs
                 .contains("pub(crate) unsafe fn store(self, value: usize, order: MemoryOrder)")
-            && atomic_wrappers_rs
-                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> i64")
-            && atomic_wrappers_rs
+            && atomic_rs.contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> i64")
+            && atomic_rs
                 .contains("pub(crate) unsafe fn store(self, value: i64, order: MemoryOrder)")
-            && atomic_wrappers_rs
-                .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T")
-            && atomic_wrappers_rs
+            && atomic_rs.contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T")
+            && atomic_rs
                 .contains("pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder)")
             && strict_check_rs.contains("ALLOWED_ATOMIC_CAST = {")
-            && strict_check_rs.contains("\"src/core_types/atomic_wrappers.rs\"")
+            && strict_check_rs.contains("\"src/types/atomic.rs\"")
             && strict_check_rs.contains("kind=\"atomic-cast\"")
             && strict_check_rs
                 .contains("message=\"pointer-to-atomic cast outside atomic field wrappers\"")
             && strict_check_rs.contains("ATOMIC_CAST_RE = re.compile")
-            && !strict_check_rs.contains("\"src/atomic.rs\",\n}")
+            && !strict_check_rs.contains("\"src/internal/atomic.rs\",\n}")
             && strict_check_rs.contains("ALLOWLIST = ROOT / \"strict-type-allowlist.txt\""),
         "pointer-to-atomic casts for allocator metadata should be centralized in typed atomic field wrappers and guarded by the strict checker"
     );
     assert!(
-        atomic_rs.contains("pub enum mi_memory_order_e {")
-            && atomic_rs.contains("pub type mi_memory_order = mi_memory_order_e;")
-            && atomic_rs.contains("fn load_order(order: mi_memory_order_e) -> Ordering")
-            && atomic_rs.contains("fn store_order(order: mi_memory_order_e) -> Ordering")
-            && atomic_rs.contains("fn rmw_order(order: mi_memory_order_e) -> Ordering")
-            && atomic_rs.contains("fn cas_failure_order(order: mi_memory_order_e) -> Ordering")
-            && atomic_rs.contains("pub unsafe extern \"C\" fn mi_atomic_load_explicit(p: *const usize, mo: mi_memory_order_e) -> usize")
-            && atomic_rs.contains("pub unsafe extern \"C\" fn mi_atomic_store_explicit(p: *mut usize, x: usize, mo: mi_memory_order_e)")
-            && atomic_wrappers_rs.contains("pub(crate) type MemoryOrder = Ordering;")
-            && atomic_wrappers_rs
+        internal_atomic_rs.contains("pub enum mi_memory_order_e {")
+            && internal_atomic_rs.contains("pub type mi_memory_order = mi_memory_order_e;")
+            && internal_atomic_rs.contains("fn load_order(order: mi_memory_order_e) -> Ordering")
+            && internal_atomic_rs.contains("fn store_order(order: mi_memory_order_e) -> Ordering")
+            && internal_atomic_rs.contains("fn rmw_order(order: mi_memory_order_e) -> Ordering")
+            && internal_atomic_rs.contains("fn cas_failure_order(order: mi_memory_order_e) -> Ordering")
+            && internal_atomic_rs.contains("pub unsafe extern \"C\" fn mi_atomic_load_explicit(p: *const usize, mo: mi_memory_order_e) -> usize")
+            && internal_atomic_rs.contains("pub unsafe extern \"C\" fn mi_atomic_store_explicit(p: *mut usize, x: usize, mo: mi_memory_order_e)")
+            && atomic_rs.contains("pub(crate) type MemoryOrder = Ordering;")
+            && atomic_rs
                 .contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize")
             && ptr_core_rs
                 .contains("pub(crate) unsafe fn arena_count(self, order: MemoryOrder) -> ArenaCount")
@@ -2613,24 +2638,26 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
                 .contains("crate::provenance::remember_encoded(word.get(), null, keys, p);")
             && strict_check_rs.contains("PTR_USIZE_RE = re.compile")
             && strict_check_rs.contains("ALLOWED_PTR_USIZE = {")
-            && strict_check_rs.contains("\"src/core_types/ptr.rs\"")
+            && strict_check_rs.contains("\"src/types/ptr.rs\"")
             && strict_check_rs.contains("kind=\"pointer-usize-roundtrip\"")
             && strict_check_rs.contains("domain=\"provenance\"")
             && strict_check_rs.contains(
                 "message=\"pointer/integer round trip outside typed provenance helpers\""
             )
             && allowlist_rs.contains(
-                "pointer-usize-roundtrip|src/core_types/freelist_wrappers.rs|*|encoded-pointer|"
+                "pointer-usize-roundtrip|src/types/freelist_wrappers.rs|*|encoded-pointer|"
             )
-            && allowlist_rs.contains("pointer-usize-roundtrip|src/internal.rs|*|packed-pointer|")
             && allowlist_rs
-                .contains("pointer-usize-roundtrip|src/alloc_aligned.rs|*|alignment/provenance|")
-            && allowlist_rs.contains("pointer-usize-roundtrip|src/alloc.rs|*|padding/provenance|")
+                .contains("pointer-usize-roundtrip|src/internal/mod.rs|*|packed-pointer|")
             && allowlist_rs.contains(
-                "pointer-usize-roundtrip|src/core_types/freelist.rs|*|packed-thread-free|"
+                "pointer-usize-roundtrip|src/allocator/aligned.rs|*|alignment/provenance|"
             )
-            && allowlist_rs.contains("pointer-usize-roundtrip|src/free.rs|*|validation|")
-            && allowlist_rs.contains("pointer-usize-roundtrip|src/os.rs|*|os-memory|"),
+            && allowlist_rs
+                .contains("pointer-usize-roundtrip|src/allocator/alloc.rs|*|padding/provenance|")
+            && allowlist_rs
+                .contains("pointer-usize-roundtrip|src/types/freelist.rs|*|packed-thread-free|")
+            && allowlist_rs.contains("pointer-usize-roundtrip|src/allocator/free.rs|*|validation|")
+            && allowlist_rs.contains("pointer-usize-roundtrip|src/platform/os.rs|*|os-memory|"),
         "pointer-to-integer round trips should stay behind typed packed-pointer/provenance helpers or explicit strict-type allowlist boundaries"
     );
     assert!(
@@ -2639,10 +2666,9 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && strict_check_rs.contains("domain=\"metadata\"")
             && strict_check_rs
                 .contains("message=\"broad raw metadata reference outside typed field helpers\"")
-            && allowlist_rs.contains("metadata-reference|src/free.rs|*|mi_page_t|")
-            && allowlist_rs.contains("metadata-reference|src/stats.rs|*|mi_heap_t|")
-            && allowlist_rs
-                .contains("metadata-reference|src/core_types/atomic_wrappers.rs|*|atomic-field|")
+            && allowlist_rs.contains("metadata-reference|src/allocator/free.rs|*|mi_page_t|")
+            && allowlist_rs.contains("metadata-reference|src/allocator/stats.rs|*|mi_heap_t|")
+            && allowlist_rs.contains("metadata-reference|src/types/atomic.rs|*|atomic-field|")
             && ptr_core_rs.contains("let raw = self.as_ptr();")
             && ptr_core_rs.contains("ptr::read(ptr::addr_of!((*raw).block_size))")
             && ptr_core_rs
@@ -2665,16 +2691,21 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
                 .contains("pub(crate) unsafe fn heap_count_cell(self) -> AtomicUsizeField"),
         "aliasable allocator metadata should be accessed through pointer wrapper field helpers and guarded against broad Rust references"
     );
-    let callbacks_rs = fs::read_to_string(root.join("src/core_types/callbacks.rs"))
+    let callbacks_rs = fs::read_to_string(root.join("src/types/callbacks.rs"))
         .expect("read core_types/callbacks.rs");
-    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
-    let abi_rs = fs::read_to_string(root.join("src/abi.rs")).expect("read src/abi.rs");
-    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
-    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
-    let arena_rs = fs::read_to_string(root.join("src/arena.rs")).expect("read src/arena.rs");
-    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
-    let threadlocal_rs =
-        fs::read_to_string(root.join("src/threadlocal.rs")).expect("read src/threadlocal.rs");
+    let types_rs = fs::read_to_string(root.join("src/types/constants.rs"))
+        .expect("read src/types/constants.rs");
+    let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
+    let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
+        .expect("read src/allocator/options.rs");
+    let page_rs =
+        fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
+        .expect("read src/allocator/arena.rs");
+    let init_rs =
+        fs::read_to_string(root.join("src/allocator/init.rs")).expect("read src/allocator/init.rs");
+    let threadlocal_rs = fs::read_to_string(root.join("src/allocator/threadlocal.rs"))
+        .expect("read src/allocator/threadlocal.rs");
     assert!(
         callbacks_rs.contains("pub(crate) struct CallbackArg(*mut c_void);")
             && callbacks_rs.contains("callback_arg_wrapper!(DeferredFreeCallbackArg);")
@@ -2741,7 +2772,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         "callback function and context pointers should be typed inside allocator internals while raw callback typedefs stay at C ABI boundaries"
     );
     let padding_rs =
-        fs::read_to_string(root.join("src/core_types/padding.rs")).expect("read padding.rs");
+        fs::read_to_string(root.join("src/types/padding.rs")).expect("read padding.rs");
     assert!(
         padding_rs.contains("pub(crate) struct PaddingCanary(u32);")
             && padding_rs.contains("pub(crate) struct PaddingDelta(u32);")
@@ -2767,9 +2798,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     }
     assert!(
         validation_extra_rs.contains("pub(crate) unsafe fn new_unchecked(block: BlockPtr) -> Self")
-            && validation_extra_rs.contains(
-                "pub(in crate::core_types) unsafe fn new_unchecked(block: BlockPtr) -> Self"
-            )
+            && validation_extra_rs
+                .contains("pub(in crate::types) unsafe fn new_unchecked(block: BlockPtr) -> Self")
             && validation_extra_rs.contains("pub(crate) fn block(self) -> BlockPtr"),
         "allocated/free block witnesses should expose constructors only at the needed boundary"
     );
@@ -2784,13 +2814,13 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
 
     for (rel, source) in &sources {
         if rel.ends_with("/tests.rs")
-            || rel == "src/core_types/atomic_wrappers/concurrency_models.rs"
-            || rel == "src/core_types/layout_tests.rs"
+            || rel == "src/types/atomic/concurrency_models.rs"
+            || rel == "src/types/layout_tests.rs"
         {
             continue;
         }
 
-        if rel != "src/core_types/memid.rs" && rel != "src/types.rs" {
+        if rel != "src/types/memid.rs" && rel != "src/types/constants.rs" {
             for raw_union_arm in ["mem.os", "mem.arena", "mem.meta"] {
                 assert!(
                     !source.contains(raw_union_arm),
@@ -2799,7 +2829,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             }
         }
 
-        if rel != "src/core_types/atomic_wrappers.rs" {
+        if rel != "src/types/atomic.rs" {
             for atomic_cast in [
                 "AtomicUsize::from_ptr",
                 "cast::<AtomicUsize>",
@@ -2812,7 +2842,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             }
         }
 
-        if rel.starts_with("src/core_types/") {
+        if rel.starts_with("src/types/") {
             for deref_impl in ["impl core::ops::Deref", "impl Deref", "Deref for"] {
                 assert!(
                     !source.contains(deref_impl),
@@ -2821,7 +2851,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             }
         }
 
-        if rel != "src/core_types/freelist_wrappers.rs" {
+        if rel != "src/types/freelist_wrappers.rs" {
             for block_next_access in [
                 "(*block).next",
                 "(*block.cast_mut()).next",
@@ -2834,7 +2864,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             }
         }
 
-        if rel != "src/core_types/padding.rs" && rel != "src/types.rs" {
+        if rel != "src/types/padding.rs" && rel != "src/types/constants.rs" {
             for raw_padding_access in [
                 "mi_padding_t",
                 "(*padding).canary",
@@ -2850,14 +2880,14 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     }
 
     let types_spec = fs::read_to_string(root.join("TYPES_SPEC.md")).expect("read TYPES_SPEC.md");
-    let atomic_wrappers = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
-        .expect("read atomic wrappers");
+    let atomic =
+        fs::read_to_string(root.join("src/types/atomic.rs")).expect("read atomic wrappers");
     let padding_rs =
-        fs::read_to_string(root.join("src/core_types/padding.rs")).expect("read padding wrappers");
-    let validation_types = fs::read_to_string(root.join("src/core_types/validation.rs"))
+        fs::read_to_string(root.join("src/types/padding.rs")).expect("read padding wrappers");
+    let validation_types = fs::read_to_string(root.join("src/types/validation.rs"))
         .expect("read core_types/validation.rs");
-    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read alloc.rs");
-    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read free.rs");
+    let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs")).expect("read alloc.rs");
+    let free_rs = fs::read_to_string(root.join("src/allocator/free.rs")).expect("read free.rs");
     assert!(
         padding_rs.contains(
             "pub(crate) fn from_page_block_keys(page: PagePtr, block: BlockPtr, keys: PageKeys) -> Self"
@@ -2881,10 +2911,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         "padding metadata should construct canaries from typed PagePtr/BlockPtr plus PageKeys and deltas with the usable-size bound"
     );
     assert!(
-        atomic_wrappers
-            .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
-            && !atomic_wrappers
-                .contains("pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);"),
+        atomic.contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
+            && !atomic.contains("pub(crate) struct AtomicThreadFree(pub(crate) *mut usize);"),
         "AtomicThreadFree should be backed by AtomicUsizeField, matching TYPES_SPEC.md"
     );
     assert!(
@@ -2909,7 +2937,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         "TYPES_SPEC.md should reconcile staged arena page-table cell names with live atomic wrappers"
     );
 
-    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read page.rs");
+    let page_rs = fs::read_to_string(root.join("src/allocator/page.rs")).expect("read page.rs");
     assert!(
         free_rs.contains(
             "pub(crate) unsafe fn mi_free_block_local(\n    page_wrapper: crate::core_types::LocalPage,\n    block_wrapper: crate::core_types::BlockForFree,"
@@ -3057,33 +3085,33 @@ fn phase6_dead_code_allowances_stay_intentional() {
     }
 
     let expected = BTreeMap::from([
-        ("src/alloc.rs", 1),
-        ("src/alloc_aligned.rs", 1),
-        ("src/alloc_override.rs", 1),
-        ("src/arena.rs", 14),
-        ("src/arena_meta.rs", 1),
-        ("src/atomic.rs", 1),
-        ("src/bitmap.rs", 1),
-        ("src/bits.rs", 1),
-        ("src/core_types/freelist_wrappers.rs", 1),
-        ("src/free.rs", 3),
-        ("src/init.rs", 1),
-        ("src/internal.rs", 1),
-        ("src/libc.rs", 1),
-        ("src/options.rs", 1),
-        ("src/page.rs", 1),
-        ("src/prim.rs", 1),
-        ("src/prim/emscripten.rs", 1),
-        ("src/prim/osx.rs", 1),
-        ("src/prim/unix.rs", 1),
-        ("src/prim/wasi.rs", 1),
-        ("src/prim/windows.rs", 3),
-        ("src/provenance.rs", 1),
-        ("src/static.rs", 1),
-        ("src/stats.rs", 1),
-        ("src/theap.rs", 1),
-        ("src/track.rs", 1),
-        ("src/types.rs", 1),
+        ("src/allocator/alloc.rs", 1),
+        ("src/allocator/aligned.rs", 1),
+        ("src/raw/macros.rs", 1),
+        ("src/allocator/arena.rs", 14),
+        ("src/allocator/arena_meta.rs", 1),
+        ("src/internal/atomic.rs", 1),
+        ("src/internal/bitmap.rs", 1),
+        ("src/internal/bits.rs", 1),
+        ("src/types/freelist_wrappers.rs", 1),
+        ("src/allocator/free.rs", 3),
+        ("src/allocator/init.rs", 1),
+        ("src/internal/mod.rs", 1),
+        ("src/ffi/libc.rs", 1),
+        ("src/allocator/options.rs", 1),
+        ("src/allocator/page.rs", 1),
+        ("src/platform/mod.rs", 1),
+        ("src/platform/emscripten.rs", 1),
+        ("src/platform/macos.rs", 1),
+        ("src/platform/unix.rs", 1),
+        ("src/platform/wasi.rs", 1),
+        ("src/platform/windows.rs", 3),
+        ("src/internal/provenance.rs", 1),
+        ("src/allocator/static_alloc.rs", 1),
+        ("src/allocator/stats.rs", 1),
+        ("src/allocator/thread_heap.rs", 1),
+        ("src/allocator/tracking.rs", 1),
+        ("src/types/constants.rs", 1),
     ]);
 
     assert_eq!(
@@ -3106,12 +3134,12 @@ fn phase6_dead_code_allowances_stay_intentional() {
 
     let core_type_allowances: Vec<_> = actual
         .keys()
-        .filter(|path| path.starts_with("src/core_types/"))
+        .filter(|path| path.starts_with("src/types/"))
         .copied()
         .collect();
     assert_eq!(
         core_type_allowances,
-        vec!["src/core_types/freelist_wrappers.rs"],
+        vec!["src/types/constants.rs", "src/types/freelist_wrappers.rs"],
         "core type dead_code allowances should remain item-level and explicitly justified"
     );
 }
@@ -3124,14 +3152,14 @@ fn phase6_clippy_allowances_stay_intentional() {
     collect_rs_sources(root, &src, &mut sources);
 
     let expected = BTreeMap::from([
-        (("src/arena.rs", "too_many_arguments"), 5),
-        (("src/bitmap.rs", "many_single_char_names"), 1),
-        (("src/free.rs", "absurd_extreme_comparisons"), 1),
-        (("src/libc.rs", "many_single_char_names"), 2),
-        (("src/os.rs", "absurd_extreme_comparisons"), 3),
-        (("src/os.rs", "too_many_arguments"), 1),
-        (("src/page.rs", "absurd_extreme_comparisons"), 1),
-        (("src/random.rs", "many_single_char_names"), 1),
+        (("src/allocator/arena.rs", "too_many_arguments"), 5),
+        (("src/internal/bitmap.rs", "many_single_char_names"), 1),
+        (("src/allocator/free.rs", "absurd_extreme_comparisons"), 1),
+        (("src/ffi/libc.rs", "many_single_char_names"), 2),
+        (("src/platform/os.rs", "absurd_extreme_comparisons"), 3),
+        (("src/platform/os.rs", "too_many_arguments"), 1),
+        (("src/allocator/page.rs", "absurd_extreme_comparisons"), 1),
+        (("src/internal/random.rs", "many_single_char_names"), 1),
     ]);
 
     assert_eq!(
@@ -3140,7 +3168,7 @@ fn phase6_clippy_allowances_stay_intentional() {
         "localized Clippy allowances should remain limited to audited C-shaped arity and secure/debug constant comparisons"
     );
 
-    let safe_rs = fs::read_to_string(root.join("src/safe.rs")).expect("read safe facade");
+    let safe_rs = fs::read_to_string(root.join("src/safe/mod.rs")).expect("read safe facade");
     assert!(
         safe_rs.starts_with("#![deny(clippy::must_use_candidate)]"),
         "safe Rust facade should locally deny missing must-use markers even while translated internals keep the package allowance"
@@ -3252,27 +3280,27 @@ fn phase6_unsafe_op_allowances_stay_intentional() {
         "broad unsafe_op_in_unsafe_fn allowances should not be reintroduced"
     );
     assert!(
-        !actual.contains("src/alloc_aligned.rs")
-            && !actual.contains("src/alloc.rs")
-            && !actual.contains("src/alloc_posix.rs")
-            && !actual.contains("src/alloc_override.rs")
-            && !actual.contains("src/arena_meta.rs")
-            && !actual.contains("src/atomic.rs")
-            && !actual.contains("src/bitmap.rs")
-            && !actual.contains("src/core_types/mod.rs")
-            && !actual.contains("src/free.rs")
-            && !actual.contains("src/heap.rs")
-            && !actual.contains("src/internal.rs")
-            && !actual.contains("src/libc.rs")
-            && !actual.contains("src/options.rs")
-            && !actual.contains("src/os.rs")
-            && !actual.contains("src/page.rs")
-            && !actual.contains("src/prim.rs")
-            && !actual.contains("src/prim/unix.rs")
-            && !actual.contains("src/random.rs")
-            && !actual.contains("src/theap.rs")
-            && !actual.contains("src/threadlocal.rs")
-            && !actual.contains("src/track.rs"),
+        !actual.contains("src/allocator/aligned.rs")
+            && !actual.contains("src/allocator/alloc.rs")
+            && !actual.contains("src/raw/posix.rs")
+            && !actual.contains("src/raw/macros.rs")
+            && !actual.contains("src/allocator/arena_meta.rs")
+            && !actual.contains("src/internal/atomic.rs")
+            && !actual.contains("src/internal/bitmap.rs")
+            && !actual.contains("src/types/mod.rs")
+            && !actual.contains("src/allocator/free.rs")
+            && !actual.contains("src/allocator/heap.rs")
+            && !actual.contains("src/internal/mod.rs")
+            && !actual.contains("src/ffi/libc.rs")
+            && !actual.contains("src/allocator/options.rs")
+            && !actual.contains("src/platform/os.rs")
+            && !actual.contains("src/allocator/page.rs")
+            && !actual.contains("src/platform/mod.rs")
+            && !actual.contains("src/platform/unix.rs")
+            && !actual.contains("src/internal/random.rs")
+            && !actual.contains("src/allocator/thread_heap.rs")
+            && !actual.contains("src/allocator/threadlocal.rs")
+            && !actual.contains("src/allocator/tracking.rs"),
         "allocation helpers, aligned allocation helpers, allocation override shims, POSIX allocation shims, arena metadata, atomic/lock helpers, bitmap helpers, core types, free-path helpers, heap helpers, internal helpers, libc helpers, options helpers, OS boundary helpers, page helpers, Unix/Emscripten/WASI/macOS primitive helpers, primitive TLS helpers, random helpers, thread-heap helpers, thread-local helpers, and tracking shims should not regain unsafe_op_in_unsafe_fn after explicit unsafe cleanup"
     );
 }
@@ -3293,71 +3321,75 @@ fn phase6_c_compat_allowances_stay_intentional() {
         "improper_ctypes_definitions",
     ];
     let expected = BTreeMap::from([
-        (("src/abi.rs", "non_camel_case_types"), 1),
-        (("src/abi.rs", "non_upper_case_globals"), 1),
-        (("src/alloc.rs", "non_snake_case"), 1),
-        (("src/alloc_aligned.rs", "non_camel_case_types"), 1),
-        (("src/alloc_aligned.rs", "non_upper_case_globals"), 1),
-        (("src/alloc_override.rs", "improper_ctypes_definitions"), 1),
-        (("src/alloc_override.rs", "non_camel_case_types"), 1),
-        (("src/alloc_override.rs", "non_snake_case"), 1),
-        (("src/alloc_override.rs", "non_upper_case_globals"), 1),
-        (("src/arena.rs", "non_camel_case_types"), 6),
-        (("src/arena.rs", "non_upper_case_globals"), 1),
-        (("src/arena_meta.rs", "non_camel_case_types"), 1),
-        (("src/arena_meta.rs", "non_upper_case_globals"), 1),
-        (("src/atomic.rs", "non_camel_case_types"), 1),
-        (("src/atomic.rs", "non_upper_case_globals"), 1),
-        (("src/bitmap.rs", "non_camel_case_types"), 1),
-        (("src/bitmap.rs", "non_snake_case"), 1),
-        (("src/bitmap.rs", "non_upper_case_globals"), 1),
-        (("src/bits.rs", "non_camel_case_types"), 1),
-        (("src/bits.rs", "non_upper_case_globals"), 1),
-        (("src/headers.rs", "non_upper_case_globals"), 14),
-        (("src/init.rs", "non_camel_case_types"), 1),
-        (("src/init.rs", "non_snake_case"), 7),
-        (("src/init.rs", "non_upper_case_globals"), 1),
-        (("src/internal.rs", "non_camel_case_types"), 1),
-        (("src/internal.rs", "non_snake_case"), 1),
-        (("src/internal.rs", "non_upper_case_globals"), 1),
-        (("src/internal.rs", "unused_imports"), 1),
-        (("src/libc.rs", "non_camel_case_types"), 1),
-        (("src/libc.rs", "non_upper_case_globals"), 1),
-        (("src/options.rs", "non_camel_case_types"), 1),
-        (("src/options.rs", "non_upper_case_globals"), 1),
-        (("src/os.rs", "non_camel_case_types"), 1),
-        (("src/os.rs", "non_upper_case_globals"), 1),
-        (("src/page.rs", "non_camel_case_types"), 1),
-        (("src/page.rs", "non_upper_case_globals"), 1),
-        (("src/page_map.rs", "non_camel_case_types"), 1),
-        (("src/page_map.rs", "non_upper_case_globals"), 1),
-        (("src/prim.rs", "non_camel_case_types"), 1),
-        (("src/prim.rs", "non_upper_case_globals"), 1),
-        (("src/prim/emscripten.rs", "non_camel_case_types"), 1),
-        (("src/prim/emscripten.rs", "non_upper_case_globals"), 1),
-        (("src/prim/osx.rs", "non_camel_case_types"), 1),
-        (("src/prim/osx.rs", "non_snake_case"), 1),
-        (("src/prim/osx.rs", "non_upper_case_globals"), 1),
-        (("src/prim/osx.rs", "unused_imports"), 1),
-        (("src/prim/osx.rs", "unused_macros"), 1),
-        (("src/prim/unix.rs", "non_camel_case_types"), 1),
-        (("src/prim/unix.rs", "non_upper_case_globals"), 1),
-        (("src/prim/wasi.rs", "non_camel_case_types"), 1),
-        (("src/prim/wasi.rs", "non_upper_case_globals"), 1),
-        (("src/prim/windows.rs", "non_camel_case_types"), 1),
-        (("src/prim/windows.rs", "non_snake_case"), 1),
-        (("src/prim/windows.rs", "non_upper_case_globals"), 1),
-        (("src/prim/windows.rs", "unused_macros"), 1),
-        (("src/random.rs", "non_camel_case_types"), 1),
-        (("src/random.rs", "non_upper_case_globals"), 1),
-        (("src/raw.rs", "unused_imports"), 1),
-        (("src/stats.rs", "non_camel_case_types"), 1),
-        (("src/stats.rs", "non_upper_case_globals"), 1),
-        (("src/theap.rs", "non_camel_case_types"), 1),
-        (("src/threadlocal.rs", "non_camel_case_types"), 1),
-        (("src/threadlocal.rs", "non_upper_case_globals"), 1),
-        (("src/types.rs", "non_camel_case_types"), 1),
-        (("src/types.rs", "non_upper_case_globals"), 1),
+        (("src/ffi/abi.rs", "non_camel_case_types"), 1),
+        (("src/ffi/abi.rs", "non_upper_case_globals"), 1),
+        (("src/allocator/alloc.rs", "non_snake_case"), 1),
+        (("src/allocator/aligned.rs", "non_camel_case_types"), 1),
+        (("src/allocator/aligned.rs", "non_upper_case_globals"), 1),
+        (("src/raw/macros.rs", "improper_ctypes_definitions"), 1),
+        (("src/raw/macros.rs", "non_camel_case_types"), 1),
+        (("src/raw/macros.rs", "non_snake_case"), 1),
+        (("src/raw/macros.rs", "non_upper_case_globals"), 1),
+        (("src/allocator/arena.rs", "non_camel_case_types"), 6),
+        (("src/allocator/arena.rs", "non_upper_case_globals"), 1),
+        (("src/allocator/arena_meta.rs", "non_camel_case_types"), 1),
+        (("src/allocator/arena_meta.rs", "non_upper_case_globals"), 1),
+        (("src/internal/atomic.rs", "non_camel_case_types"), 1),
+        (("src/internal/atomic.rs", "non_upper_case_globals"), 1),
+        (("src/internal/bitmap.rs", "non_camel_case_types"), 1),
+        (("src/internal/bitmap.rs", "non_snake_case"), 1),
+        (("src/internal/bitmap.rs", "non_upper_case_globals"), 1),
+        (("src/internal/bits.rs", "non_camel_case_types"), 1),
+        (("src/internal/bits.rs", "non_upper_case_globals"), 1),
+        (("src/ffi/headers.rs", "non_upper_case_globals"), 14),
+        (("src/allocator/init.rs", "non_camel_case_types"), 1),
+        (("src/allocator/init.rs", "non_snake_case"), 7),
+        (("src/allocator/init.rs", "non_upper_case_globals"), 1),
+        (("src/internal/mod.rs", "non_camel_case_types"), 1),
+        (("src/internal/mod.rs", "non_snake_case"), 1),
+        (("src/internal/mod.rs", "non_upper_case_globals"), 1),
+        (("src/internal/mod.rs", "unused_imports"), 1),
+        (("src/lib.rs", "unused_imports"), 2),
+        (("src/ffi/libc.rs", "non_camel_case_types"), 1),
+        (("src/ffi/libc.rs", "non_upper_case_globals"), 1),
+        (("src/allocator/options.rs", "non_camel_case_types"), 1),
+        (("src/allocator/options.rs", "non_upper_case_globals"), 1),
+        (("src/platform/os.rs", "non_camel_case_types"), 1),
+        (("src/platform/os.rs", "non_upper_case_globals"), 1),
+        (("src/allocator/page.rs", "non_camel_case_types"), 1),
+        (("src/allocator/page.rs", "non_upper_case_globals"), 1),
+        (("src/allocator/page_map.rs", "non_camel_case_types"), 1),
+        (("src/allocator/page_map.rs", "non_upper_case_globals"), 1),
+        (("src/platform/mod.rs", "non_camel_case_types"), 1),
+        (("src/platform/mod.rs", "non_upper_case_globals"), 1),
+        (("src/platform/emscripten.rs", "non_camel_case_types"), 1),
+        (("src/platform/emscripten.rs", "non_upper_case_globals"), 1),
+        (("src/platform/macos.rs", "non_camel_case_types"), 1),
+        (("src/platform/macos.rs", "non_snake_case"), 1),
+        (("src/platform/macos.rs", "non_upper_case_globals"), 1),
+        (("src/platform/macos.rs", "unused_imports"), 1),
+        (("src/platform/macos.rs", "unused_macros"), 1),
+        (("src/platform/unix.rs", "non_camel_case_types"), 1),
+        (("src/platform/unix.rs", "non_upper_case_globals"), 1),
+        (("src/platform/wasi.rs", "non_camel_case_types"), 1),
+        (("src/platform/wasi.rs", "non_upper_case_globals"), 1),
+        (("src/platform/windows.rs", "non_camel_case_types"), 1),
+        (("src/platform/windows.rs", "non_snake_case"), 1),
+        (("src/platform/windows.rs", "non_upper_case_globals"), 1),
+        (("src/platform/windows.rs", "unused_macros"), 1),
+        (("src/internal/random.rs", "non_camel_case_types"), 1),
+        (("src/internal/random.rs", "non_upper_case_globals"), 1),
+        (("src/raw/mod.rs", "unused_imports"), 1),
+        (("src/allocator/stats.rs", "non_camel_case_types"), 1),
+        (("src/allocator/stats.rs", "non_upper_case_globals"), 1),
+        (("src/allocator/thread_heap.rs", "non_camel_case_types"), 1),
+        (("src/allocator/threadlocal.rs", "non_camel_case_types"), 1),
+        (
+            ("src/allocator/threadlocal.rs", "non_upper_case_globals"),
+            1,
+        ),
+        (("src/types/constants.rs", "non_camel_case_types"), 1),
+        (("src/types/constants.rs", "non_upper_case_globals"), 1),
     ]);
 
     assert_eq!(
@@ -3365,7 +3397,7 @@ fn phase6_c_compat_allowances_stay_intentional() {
         expected,
         "C compatibility allowances should stay limited to audited ABI, re-export, and mechanical-translation surfaces"
     );
-    for cleaned in ["src/static.rs", "src/track.rs"] {
+    for cleaned in ["src/allocator/static_alloc.rs", "src/allocator/tracking.rs"] {
         assert!(
             !rust_allowance_counts(&sources, LINTS)
                 .keys()
@@ -3378,8 +3410,10 @@ fn phase6_c_compat_allowances_stay_intentional() {
 #[test]
 fn aligned_os_hints_are_randomized_like_c_release_builds() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
-    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
+    let os_rs =
+        fs::read_to_string(root.join("src/platform/os.rs")).expect("read src/platform/os.rs");
+    let init_rs =
+        fs::read_to_string(root.join("src/allocator/init.rs")).expect("read src/allocator/init.rs");
 
     assert!(
         os_rs.contains("let mut init = MI_HINT_BASE;")
@@ -3404,7 +3438,7 @@ fn aligned_os_hints_are_randomized_like_c_release_builds() {
 fn cxx_new_wrappers_export_itanium_abi_symbols() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let override_rs =
-        fs::read_to_string(root.join("src/alloc_override.rs")).expect("read src/alloc_override.rs");
+        fs::read_to_string(root.join("src/raw/macros.rs")).expect("read src/raw/macros.rs");
 
     assert!(
         override_rs.contains("export_name = \"_Znwm\"")
@@ -3452,53 +3486,68 @@ fn linux_cdylib_export_script_declares_allocator_symbols() {
 #[test]
 fn free_path_internals_are_not_dynamic_exports() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let page_map = fs::read_to_string(root.join("src/page_map.rs")).expect("read src/page_map.rs");
-    let internal = fs::read_to_string(root.join("src/internal.rs")).expect("read src/internal.rs");
-    let alloc_rs = fs::read_to_string(root.join("src/alloc.rs")).expect("read src/alloc.rs");
-    let arena_rs = fs::read_to_string(root.join("src/arena.rs")).expect("read src/arena.rs");
-    let arena_meta_rs =
-        fs::read_to_string(root.join("src/arena_meta.rs")).expect("read src/arena_meta.rs");
-    let atomic_rs = fs::read_to_string(root.join("src/atomic.rs")).expect("read src/atomic.rs");
-    let bitmap_rs = fs::read_to_string(root.join("src/bitmap.rs")).expect("read src/bitmap.rs");
-    let free_rs = fs::read_to_string(root.join("src/free.rs")).expect("read src/free.rs");
-    let libc_rs = fs::read_to_string(root.join("src/libc.rs")).expect("read src/libc.rs");
+    let page_map = fs::read_to_string(root.join("src/allocator/page_map.rs"))
+        .expect("read src/allocator/page_map.rs");
+    let internal =
+        fs::read_to_string(root.join("src/internal/mod.rs")).expect("read src/internal/mod.rs");
+    let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
+        .expect("read src/allocator/alloc.rs");
+    let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
+        .expect("read src/allocator/arena.rs");
+    let arena_meta_rs = fs::read_to_string(root.join("src/allocator/arena_meta.rs"))
+        .expect("read src/allocator/arena_meta.rs");
+    let atomic_rs = fs::read_to_string(root.join("src/internal/atomic.rs"))
+        .expect("read src/internal/atomic.rs");
+    let bitmap_rs = fs::read_to_string(root.join("src/internal/bitmap.rs"))
+        .expect("read src/internal/bitmap.rs");
+    let free_rs =
+        fs::read_to_string(root.join("src/allocator/free.rs")).expect("read src/allocator/free.rs");
+    let libc_rs = fs::read_to_string(root.join("src/ffi/libc.rs")).expect("read src/ffi/libc.rs");
     let memid_rs =
-        fs::read_to_string(root.join("src/core_types/memid.rs")).expect("read core_types/memid.rs");
-    let callbacks_rs = fs::read_to_string(root.join("src/core_types/callbacks.rs"))
+        fs::read_to_string(root.join("src/types/memid.rs")).expect("read core_types/memid.rs");
+    let callbacks_rs = fs::read_to_string(root.join("src/types/callbacks.rs"))
         .expect("read core_types/callbacks.rs");
-    let freelist_types = fs::read_to_string(root.join("src/core_types/freelist_wrappers.rs"))
+    let freelist_types = fs::read_to_string(root.join("src/types/freelist_wrappers.rs"))
         .expect("read core_types/freelist_wrappers.rs");
     let arena_types =
-        fs::read_to_string(root.join("src/core_types/arena.rs")).expect("read core_types/arena.rs");
+        fs::read_to_string(root.join("src/types/arena.rs")).expect("read core_types/arena.rs");
     let page_types =
-        fs::read_to_string(root.join("src/core_types/page.rs")).expect("read core_types/page.rs");
-    let scalar_types = fs::read_to_string(root.join("src/core_types/scalar.rs"))
-        .expect("read core_types/scalar.rs");
-    let atomic_types = fs::read_to_string(root.join("src/core_types/atomic_wrappers.rs"))
-        .expect("read core_types/atomic_wrappers.rs");
-    let ptr_rs =
-        fs::read_to_string(root.join("src/core_types/ptr.rs")).expect("read core_types/ptr.rs");
-    let validation_types = fs::read_to_string(root.join("src/core_types/validation.rs"))
+        fs::read_to_string(root.join("src/types/page.rs")).expect("read core_types/page.rs");
+    let scalar_types =
+        fs::read_to_string(root.join("src/types/scalar.rs")).expect("read core_types/scalar.rs");
+    let atomic_types =
+        fs::read_to_string(root.join("src/types/atomic.rs")).expect("read core_types/atomic.rs");
+    let ptr_rs = fs::read_to_string(root.join("src/types/ptr.rs")).expect("read core_types/ptr.rs");
+    let validation_types = fs::read_to_string(root.join("src/types/validation.rs"))
         .expect("read core_types/validation.rs");
-    let page_states_rs = fs::read_to_string(root.join("src/core_types/page_states.rs"))
+    let page_states_rs = fs::read_to_string(root.join("src/types/page_states.rs"))
         .expect("read core_types/page_states.rs");
-    let page_queues_rs = fs::read_to_string(root.join("src/core_types/page_queues.rs"))
+    let page_queues_rs = fs::read_to_string(root.join("src/types/page_queues.rs"))
         .expect("read core_types/page_queues.rs");
-    let os_rs = fs::read_to_string(root.join("src/os.rs")).expect("read src/os.rs");
-    let options_rs = fs::read_to_string(root.join("src/options.rs")).expect("read src/options.rs");
-    let page_rs = fs::read_to_string(root.join("src/page.rs")).expect("read src/page.rs");
-    let random_rs = fs::read_to_string(root.join("src/random.rs")).expect("read src/random.rs");
-    let stats_rs = fs::read_to_string(root.join("src/stats.rs")).expect("read src/stats.rs");
-    let theap_rs = fs::read_to_string(root.join("src/theap.rs")).expect("read src/theap.rs");
-    let init_rs = fs::read_to_string(root.join("src/init.rs")).expect("read src/init.rs");
-    let threadlocal_rs =
-        fs::read_to_string(root.join("src/threadlocal.rs")).expect("read src/threadlocal.rs");
-    let alloc_aligned_rs =
-        fs::read_to_string(root.join("src/alloc_aligned.rs")).expect("read src/alloc_aligned.rs");
-    let heap_rs = fs::read_to_string(root.join("src/heap.rs")).expect("read src/heap.rs");
-    let prim_rs = fs::read_to_string(root.join("src/prim.rs")).expect("read src/prim.rs");
+    let os_rs =
+        fs::read_to_string(root.join("src/platform/os.rs")).expect("read src/platform/os.rs");
+    let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
+        .expect("read src/allocator/options.rs");
+    let page_rs =
+        fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let random_rs = fs::read_to_string(root.join("src/internal/random.rs"))
+        .expect("read src/internal/random.rs");
+    let stats_rs = fs::read_to_string(root.join("src/allocator/stats.rs"))
+        .expect("read src/allocator/stats.rs");
+    let theap_rs = fs::read_to_string(root.join("src/allocator/thread_heap.rs"))
+        .expect("read src/allocator/thread_heap.rs");
+    let init_rs =
+        fs::read_to_string(root.join("src/allocator/init.rs")).expect("read src/allocator/init.rs");
+    let threadlocal_rs = fs::read_to_string(root.join("src/allocator/threadlocal.rs"))
+        .expect("read src/allocator/threadlocal.rs");
+    let alloc_aligned_rs = fs::read_to_string(root.join("src/allocator/aligned.rs"))
+        .expect("read src/allocator/aligned.rs");
+    let heap_rs =
+        fs::read_to_string(root.join("src/allocator/heap.rs")).expect("read src/allocator/heap.rs");
+    let prim_rs =
+        fs::read_to_string(root.join("src/platform/mod.rs")).expect("read src/platform/mod.rs");
     let prim_unix_rs =
-        fs::read_to_string(root.join("src/prim/unix.rs")).expect("read src/prim/unix.rs");
+        fs::read_to_string(root.join("src/platform/unix.rs")).expect("read src/platform/unix.rs");
 
     assert!(
         !free_rs.contains("clippy::if_same_then_else")
@@ -3636,633 +3685,673 @@ fn free_path_internals_are_not_dynamic_exports() {
 
     for (source_name, source, internal_name) in [
         (
-            "src/alloc.rs",
+            "src/allocator/alloc.rs",
             &alloc_rs,
             "pub unsafe extern \"C\" fn _mi_page_malloc_zero",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_alloc",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_alloc_aligned",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_collect",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_contain",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_free",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_page_abandon",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_page_alloc",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_page_free",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_page_try_reabandon_to_mapped",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_page_unabandon",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_unsafe_destroy_all",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_heap_visit_blocks",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_heap_move_pages",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_heap_destroy_pages",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arena_id_none",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arena_from_id",
         ),
         (
-            "src/arena.rs",
+            "src/allocator/arena.rs",
             &arena_rs,
             "pub unsafe extern \"C\" fn _mi_arena_memid_is_suitable",
         ),
         (
-            "src/arena_meta.rs",
+            "src/allocator/arena_meta.rs",
             &arena_meta_rs,
             "pub unsafe extern \"C\" fn _mi_meta_free",
         ),
         (
-            "src/arena_meta.rs",
+            "src/allocator/arena_meta.rs",
             &arena_meta_rs,
             "pub unsafe extern \"C\" fn _mi_meta_is_meta_page",
         ),
         (
-            "src/arena_meta.rs",
+            "src/allocator/arena_meta.rs",
             &arena_meta_rs,
             "pub unsafe extern \"C\" fn _mi_meta_zalloc",
         ),
         (
-            "src/free.rs",
+            "src/allocator/free.rs",
             &free_rs,
             "pub unsafe extern \"C\" fn _mi_page_ptr_unalign",
         ),
         (
-            "src/free.rs",
+            "src/allocator/free.rs",
             &free_rs,
             "pub unsafe extern \"C\" fn _mi_padding_shrink",
         ),
         (
-            "src/page.rs",
+            "src/allocator/page.rs",
             &page_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_page_abandon",
         ),
         (
-            "src/page.rs",
+            "src/allocator/page.rs",
             &page_rs,
             "pub unsafe extern \"C\" fn _mi_page_free",
         ),
         (
-            "src/page.rs",
+            "src/allocator/page.rs",
             &page_rs,
             "pub unsafe extern \"C\" fn _mi_page_init",
         ),
         (
-            "src/page.rs",
+            "src/allocator/page.rs",
             &page_rs,
             "pub unsafe extern \"C\" fn _mi_deferred_free",
         ),
-        ("src/libc.rs", &libc_rs, "pub(crate) fn _mi_snprintf"),
+        ("src/ffi/libc.rs", &libc_rs, "pub(crate) fn _mi_snprintf"),
         (
-            "src/libc.rs",
+            "src/ffi/libc.rs",
             &libc_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_vsnprintf",
         ),
-        ("src/libc.rs", &libc_rs, "pub extern \"C\" fn _mi_toupper"),
         (
-            "src/libc.rs",
+            "src/ffi/libc.rs",
+            &libc_rs,
+            "pub extern \"C\" fn _mi_toupper",
+        ),
+        (
+            "src/ffi/libc.rs",
             &libc_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_strnicmp",
         ),
         (
-            "src/libc.rs",
+            "src/ffi/libc.rs",
             &libc_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_streq",
         ),
         (
-            "src/libc.rs",
+            "src/ffi/libc.rs",
             &libc_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_strlcpy",
         ),
         (
-            "src/libc.rs",
+            "src/ffi/libc.rs",
             &libc_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_strlcat",
         ),
         (
-            "src/libc.rs",
+            "src/ffi/libc.rs",
             &libc_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_strlen",
         ),
         (
-            "src/libc.rs",
+            "src/ffi/libc.rs",
             &libc_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_strnlen",
         ),
         (
-            "src/libc.rs",
+            "src/ffi/libc.rs",
             &libc_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_strnstr",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub unsafe extern \"C\" fn _mi_prim_free",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_mem_init",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_alloc",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_commit",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_reuse",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub unsafe extern \"C\" fn _mi_prim_decommit",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_reset",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_protect",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_alloc_huge_os_pages",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub unsafe extern \"C\" fn _mi_prim_numa_node",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_numa_node_count",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_clock_now",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_process_info",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_out_stderr",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_random_buf",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_getenv",
         ),
         (
-            "src/libc.rs",
+            "src/ffi/libc.rs",
             &libc_rs,
             "pub(crate) extern \"C\" fn _mi_popcount_generic",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_init_auto_done",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_done_auto_done",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_associate_default_theap",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_is_in_threadpool",
         ),
         (
-            "src/prim/unix.rs",
+            "src/platform/unix.rs",
             &prim_unix_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_prim_thread_yield",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_alloc",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_zalloc",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_free",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_free_ex",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_page_size",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_good_alloc_size",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_has_overcommit",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_has_virtual_reserve",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_virtual_address_bits",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_reuse",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_commit",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_commit_ex",
         ),
         (
-            "src/os.rs",
+            "src/platform/os.rs",
             &os_rs,
             "pub unsafe extern \"C\" fn _mi_os_purge_ex",
         ),
         (
-            "src/random.rs",
+            "src/internal/random.rs",
             &random_rs,
             "pub(crate) extern \"C\" fn _mi_os_random_weak",
         ),
         (
-            "src/random.rs",
+            "src/internal/random.rs",
             &random_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_random_split",
         ),
         (
-            "src/random.rs",
+            "src/internal/random.rs",
             &random_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_random_next",
         ),
         (
-            "src/random.rs",
+            "src/internal/random.rs",
             &random_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_random_init",
         ),
         (
-            "src/random.rs",
+            "src/internal/random.rs",
             &random_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_random_init_weak",
         ),
         (
-            "src/random.rs",
+            "src/internal/random.rs",
             &random_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_random_reinit_if_weak",
         ),
         (
-            "src/alloc.rs",
+            "src/allocator/alloc.rs",
             &alloc_rs,
             "pub unsafe extern \"C\" fn _mi_theap_malloc_zero_ex",
         ),
         (
-            "src/alloc.rs",
+            "src/allocator/alloc.rs",
             &alloc_rs,
             "pub unsafe extern \"C\" fn _mi_theap_malloc_zero",
         ),
         (
-            "src/alloc.rs",
+            "src/allocator/alloc.rs",
             &alloc_rs,
             "pub unsafe extern \"C\" fn _mi_theap_realloc_zero",
         ),
         (
-            "src/alloc.rs",
+            "src/allocator/alloc.rs",
             &alloc_rs,
             "pub unsafe extern \"C\" fn _mi_theap_malloc_guarded",
         ),
-        ("src/init.rs", &init_rs, "pub extern \"C\" fn _mi_thread_id"),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
+            &init_rs,
+            "pub extern \"C\" fn _mi_thread_id",
+        ),
+        (
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_thread_done",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_theap_guarded_init",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_theap_options_init",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_theap_default_set",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_theap_cached_set",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_theap_default_safe",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_theap_main_safe",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_theap_empty_get",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_is_heap_main",
         ),
         (
-            "src/init.rs",
+            "src/allocator/init.rs",
             &init_rs,
             "pub unsafe extern \"C\" fn _mi_is_theap_main",
         ),
-        ("src/init.rs", &init_rs, "fn _mi_subproc_to_id"),
-        ("src/init.rs", &init_rs, "fn _mi_preloading"),
-        ("src/init.rs", &init_rs, "fn _mi_subproc_main"),
-        ("src/init.rs", &init_rs, "fn _mi_subproc"),
-        ("src/init.rs", &init_rs, "fn _mi_subproc_from_id"),
-        ("src/init.rs", &init_rs, "fn _mi_subproc_heap_main"),
-        ("src/init.rs", &init_rs, "fn _mi_auto_process_init"),
-        ("src/init.rs", &init_rs, "fn _mi_auto_process_done"),
+        ("src/allocator/init.rs", &init_rs, "fn _mi_subproc_to_id"),
+        ("src/allocator/init.rs", &init_rs, "fn _mi_preloading"),
+        ("src/allocator/init.rs", &init_rs, "fn _mi_subproc_main"),
+        ("src/allocator/init.rs", &init_rs, "fn _mi_subproc"),
+        ("src/allocator/init.rs", &init_rs, "fn _mi_subproc_from_id"),
         (
-            "src/threadlocal.rs",
+            "src/allocator/init.rs",
+            &init_rs,
+            "fn _mi_subproc_heap_main",
+        ),
+        (
+            "src/allocator/init.rs",
+            &init_rs,
+            "fn _mi_auto_process_init",
+        ),
+        (
+            "src/allocator/init.rs",
+            &init_rs,
+            "fn _mi_auto_process_done",
+        ),
+        (
+            "src/allocator/threadlocal.rs",
             &threadlocal_rs,
             "pub extern \"C\" fn _mi_thread_locals_init",
         ),
         (
-            "src/threadlocal.rs",
+            "src/allocator/threadlocal.rs",
             &threadlocal_rs,
             "pub extern \"C\" fn _mi_thread_locals_done",
         ),
         (
-            "src/threadlocal.rs",
+            "src/allocator/threadlocal.rs",
             &threadlocal_rs,
             "pub extern \"C\" fn _mi_thread_local_set",
         ),
         (
-            "src/threadlocal.rs",
+            "src/allocator/threadlocal.rs",
             &threadlocal_rs,
             "pub extern \"C\" fn _mi_thread_local_get",
         ),
         (
-            "src/threadlocal.rs",
+            "src/allocator/threadlocal.rs",
             &threadlocal_rs,
             "pub extern \"C\" fn _mi_thread_locals_thread_done",
         ),
         (
-            "src/threadlocal.rs",
+            "src/allocator/threadlocal.rs",
             &threadlocal_rs,
             "pub extern \"C\" fn _mi_thread_local_free",
         ),
         (
-            "src/heap.rs",
+            "src/allocator/heap.rs",
             &heap_rs,
             "pub unsafe extern \"C\" fn _mi_heap_force_destroy",
         ),
         (
-            "src/heap.rs",
+            "src/allocator/heap.rs",
             &heap_rs,
             "pub unsafe extern \"C\" fn _mi_heap_theap_get_peek",
         ),
         (
-            "src/heap.rs",
+            "src/allocator/heap.rs",
             &heap_rs,
             "pub unsafe extern \"C\" fn _mi_heap_theap_get_or_init",
         ),
         (
-            "src/page.rs",
+            "src/allocator/page.rs",
             &page_rs,
             "pub unsafe extern \"C\" fn _mi_theap_collect_retired",
         ),
         (
-            "src/alloc.rs",
+            "src/allocator/alloc.rs",
             &alloc_rs,
             "pub(crate) unsafe extern \"C\" fn mi_theap_alloc_new",
         ),
         (
-            "src/theap.rs",
+            "src/allocator/thread_heap.rs",
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_collect_abandon",
         ),
         (
-            "src/theap.rs",
+            "src/allocator/thread_heap.rs",
             &theap_rs,
             "pub(crate) unsafe extern \"C\" fn _mi_theap_init",
         ),
         (
-            "src/theap.rs",
+            "src/allocator/thread_heap.rs",
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_create",
         ),
         (
-            "src/theap.rs",
+            "src/allocator/thread_heap.rs",
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_incref",
         ),
         (
-            "src/theap.rs",
+            "src/allocator/thread_heap.rs",
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_decref",
         ),
         (
-            "src/theap.rs",
+            "src/allocator/thread_heap.rs",
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_free",
         ),
         (
-            "src/theap.rs",
+            "src/allocator/thread_heap.rs",
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_delete",
         ),
         (
-            "src/theap.rs",
+            "src/allocator/thread_heap.rs",
             &theap_rs,
             "pub unsafe extern \"C\" fn _mi_theap_random_next",
         ),
-        ("src/prim.rs", &prim_rs, "fn _mi_allocator_init"),
-        ("src/prim.rs", &prim_rs, "fn _mi_allocator_done"),
-        ("src/options.rs", &options_rs, "fn _mi_warning_message"),
-        ("src/options.rs", &options_rs, "fn _mi_error_message"),
-        ("src/options.rs", &options_rs, "fn _mi_option_get_fast"),
-        ("src/options.rs", &options_rs, "fn _mi_assert_fail"),
+        ("src/platform/mod.rs", &prim_rs, "fn _mi_allocator_init"),
+        ("src/platform/mod.rs", &prim_rs, "fn _mi_allocator_done"),
         (
-            "src/stats.rs",
+            "src/allocator/options.rs",
+            &options_rs,
+            "fn _mi_warning_message",
+        ),
+        (
+            "src/allocator/options.rs",
+            &options_rs,
+            "fn _mi_error_message",
+        ),
+        (
+            "src/allocator/options.rs",
+            &options_rs,
+            "fn _mi_option_get_fast",
+        ),
+        (
+            "src/allocator/options.rs",
+            &options_rs,
+            "fn _mi_assert_fail",
+        ),
+        (
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub unsafe extern \"C\" fn _mi_stats_merge_into",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_increase_mt",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_decrease_mt",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub extern \"C\" fn _mi_stats_init",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_counter_increase_mt",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_adjust_increase_mt",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_adjust_decrease_mt",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_increase",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_decrease",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_counter_increase",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_adjust_increase",
         ),
         (
-            "src/stats.rs",
+            "src/allocator/stats.rs",
             &stats_rs,
             "pub(crate) unsafe extern \"C\" fn __mi_stat_adjust_decrease",
         ),
         (
-            "src/options.rs",
+            "src/allocator/options.rs",
             &options_rs,
             "pub(crate) fn _mi_raw_message",
         ),
-        ("src/options.rs", &options_rs, "pub(crate) fn _mi_message"),
+        (
+            "src/allocator/options.rs",
+            &options_rs,
+            "pub(crate) fn _mi_message",
+        ),
     ] {
         let no_mangle_export = format!("#[unsafe(no_mangle)]\n{internal_name}");
         assert!(
@@ -5974,13 +6063,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("mi_free_block_mt(abandoned_page.remote_free_page(), validated.block());")
             && !free_rs.contains("let delta = page_tid.xor_current(current_tid);")
             && !source_item(
-                "src/free.rs",
+                "src/allocator/free.rs",
                 &free_rs,
                 "pub(crate) unsafe fn mi_free_ex_slow("
             )
             .contains("LocalPage::new_unchecked")
             && !source_item(
-                "src/free.rs",
+                "src/allocator/free.rs",
                 &free_rs,
                 "pub(crate) unsafe fn mi_free_ex_slow("
             )
@@ -6082,7 +6171,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         "arena allocation ABI wrappers should parse raw size/alignment into typed layout domains before using arena internals"
     );
     let reabandon_arena = source_item(
-        "src/arena.rs",
+        "src/allocator/arena.rs",
         &arena_rs,
         "pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena",
     );
@@ -6947,8 +7036,9 @@ fn free_path_internals_are_not_dynamic_exports() {
 
 #[test]
 fn generic_malloc_refill_helper_is_force_inlined() {
-    let page_rs = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/page.rs"))
-        .expect("read src/page.rs");
+    let page_rs =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/allocator/page.rs"))
+            .expect("read src/allocator/page.rs");
 
     assert!(
         page_rs.contains("#[inline(always)]\nunsafe fn mi_find_page("),
@@ -6958,8 +7048,9 @@ fn generic_malloc_refill_helper_is_force_inlined() {
 
 #[test]
 fn release_page_stat_writes_follow_c_mimalloc_gates() {
-    let page_rs = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/page.rs"))
-        .expect("read src/page.rs");
+    let page_rs =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/allocator/page.rs"))
+            .expect("read src/allocator/page.rs");
 
     for (stat, needle) in [
         (
@@ -6985,8 +7076,8 @@ fn release_page_stat_writes_follow_c_mimalloc_gates() {
 #[test]
 fn public_option_domain_is_transparent_not_rust_enum() {
     let options_rs =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/options.rs"))
-            .expect("read src/options.rs");
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/allocator/options.rs"))
+            .expect("read src/allocator/options.rs");
 
     assert!(
         options_rs.contains("#[repr(transparent)]\n#[derive(Clone, Copy, Debug, PartialEq, Eq)]\npub struct mi_option_t(i32);")

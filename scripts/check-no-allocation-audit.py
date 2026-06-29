@@ -12,20 +12,20 @@ AUDIT = ROOT / "NO_ALLOCATION_AUDIT.md"
 GUARD_TEST = ROOT / "tests/no_allocation_critical_paths.rs"
 
 CRITICAL_FILES = {
-    "src/alloc.rs",
-    "src/alloc_aligned.rs",
-    "src/arena.rs",
-    "src/arena_meta.rs",
+    "src/allocator/alloc.rs",
+    "src/allocator/aligned.rs",
+    "src/allocator/arena.rs",
+    "src/allocator/arena_meta.rs",
     "src/bitmap.rs",
-    "src/free.rs",
-    "src/heap.rs",
-    "src/init.rs",
-    "src/internal.rs",
-    "src/os.rs",
-    "src/page.rs",
-    "src/page_map.rs",
-    "src/theap.rs",
-    "src/threadlocal.rs",
+    "src/allocator/free.rs",
+    "src/allocator/heap.rs",
+    "src/allocator/init.rs",
+    "src/internal/mod.rs",
+    "src/platform/os.rs",
+    "src/allocator/page.rs",
+    "src/allocator/page_map.rs",
+    "src/allocator/thread_heap.rs",
+    "src/allocator/threadlocal.rs",
 }
 
 FORBIDDEN_PATTERNS = {
@@ -40,8 +40,8 @@ FORBIDDEN_PATTERNS = {
 
 REQUIRED_AUDIT_SNIPPETS = [
     "dynamic TLS storage follows the C baseline",
-    "`src/init.rs`",
-    "`src/threadlocal.rs`",
+    "`src/allocator/init.rs`",
+    "`src/allocator/threadlocal.rs`",
     "`mi_rezalloc`",
     "`mi_zalloc_aligned`",
     "`tests/no_allocation_critical_paths.rs`",
@@ -93,8 +93,8 @@ def main() -> int:
     require(not hits, "forbidden Rust allocation constructs in critical files:\n" + "\n".join(hits))
 
     require(
-        "std::alloc" not in (ROOT / "src/threadlocal.rs").read_text(),
-        "src/threadlocal.rs must not use std::alloc for dynamic TLS storage",
+        "std::alloc" not in (ROOT / "src/allocator/threadlocal.rs").read_text(),
+        "src/allocator/threadlocal.rs must not use std::alloc for dynamic TLS storage",
     )
 
     print(

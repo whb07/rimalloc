@@ -128,9 +128,9 @@ def raw_modules_by_gate(raw_rs: str) -> tuple[set[str], set[str]]:
 
 def main() -> int:
     lib_rs = (ROOT / "src/lib.rs").read_text()
-    raw_rs = (ROOT / "src/raw.rs").read_text()
-    abi_rs = (ROOT / "src/abi.rs").read_text()
-    mimalloc_rs = (ROOT / "src/mimalloc.rs").read_text()
+    raw_rs = (ROOT / "src/raw/mod.rs").read_text()
+    abi_rs = (ROOT / "src/ffi/abi.rs").read_text()
+    mimalloc_rs = (ROOT / "src/ffi/mimalloc.rs").read_text()
     api_doc = (ROOT / "docs/api-inventory.md").read_text()
     abi_doc = (ROOT / "docs/abi.md").read_text()
 
@@ -188,11 +188,11 @@ def main() -> int:
     )
     require(
         'unsafe extern "C"' in abi_rs and "pub fn mi_malloc" in abi_rs,
-        "src/abi.rs must own the public C header declarations",
+        "src/ffi/abi.rs must own the public C header declarations",
     )
     require(
         'unsafe extern "C"' not in mimalloc_rs,
-        "src/mimalloc.rs must remain an internal alias, not a C header mirror",
+        "src/ffi/mimalloc.rs must remain an internal alias, not a C header mirror",
     )
     for phrase in [
         "## Module Taxonomy",
@@ -206,7 +206,7 @@ def main() -> int:
         "raw::mimalloc",
         "raw::headers",
         "unstable-raw-internals",
-        "src/abi.rs",
+        "src/ffi/abi.rs",
         "New public C ABI declarations",
         "New exported C ABI implementations",
         "scripts/check-ffi-boundary.py",

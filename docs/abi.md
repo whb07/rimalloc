@@ -136,31 +136,31 @@ Current ownership is the final layout for this migration phase:
 
 | Layer | Current owner | Responsibility |
 | --- | --- | --- |
-| Safe Rust facade | `src/lib.rs`, `src/safe.rs` | `MiMalloc`, `Allocation`, and Rust error/status types. |
-| C header declarations and layouts | `src/abi.rs` exposed through `raw::abi` and `raw::mimalloc` | Public `mi_*` declarations, `repr(C)` layouts, C-compatible aliases, constants, and callback type aliases mirrored from public headers. |
-| Raw C-shaped Rust facade | `src/raw.rs` | Default root `mi_*` re-exports plus `raw::abi`, `raw::mimalloc`, and `raw::headers`; translated internals are gated by `unstable-raw-internals`. |
+| Safe Rust facade | `src/lib.rs`, `src/safe/mod.rs` | `MiMalloc`, `Allocation`, and Rust error/status types. |
+| C header declarations and layouts | `src/ffi/abi.rs` exposed through `raw::abi` and `raw::mimalloc` | Public `mi_*` declarations, `repr(C)` layouts, C-compatible aliases, constants, and callback type aliases mirrored from public headers. |
+| Raw C-shaped Rust facade | `src/raw/mod.rs` | Default root `mi_*` re-exports plus `raw::abi`, `raw::mimalloc`, and `raw::headers`; translated internals are gated by `unstable-raw-internals`. |
 | Exported C ABI implementations | existing implementation files approved by `scripts/check-ffi-boundary.py` | `#[unsafe(no_mangle)]`, `#[unsafe(export_name = ...)]`, naked ABI shims, and public assembly aliases. |
-| Strict internal types | `src/core_types.rs` and `src/core_types/` | Private invariant-carrying wrappers and witness types used inside allocator internals; never part of the raw C facade or C ABI declaration owner. |
-| Internal compatibility aliases | `src/mimalloc.rs` and selected translated helpers | C-shaped helper paths used by the mechanical translation but not a public Rust API. |
+| Strict internal types | `src/types.rs` and `src/types/` | Private invariant-carrying wrappers and witness types used inside allocator internals; never part of the raw C facade or C ABI declaration owner. |
+| Internal compatibility aliases | `src/ffi/mimalloc.rs` and selected translated helpers | C-shaped helper paths used by the mechanical translation but not a public Rust API. |
 | Allocator internals | private modules such as `alloc`, `free`, `heap`, `page`, `arena`, `os`, and `threadlocal` | Implementation logic and typed invariant witnesses. |
 
 Module flow:
 
 ```text
 safe crate root
-  -> src/safe.rs
+  -> src/safe/mod.rs
   -> raw C-shaped calls
 
 mechanical_mimalloc::raw
-  -> src/raw.rs
-  -> src/abi.rs / src/headers.rs
+  -> src/raw/mod.rs
+  -> src/ffi/abi.rs / src/ffi/headers.rs
 
 C ABI exports
   -> classified src/*.rs files checked by scripts/check-ffi-boundary.py
   -> private allocator internals
 
 unstable raw internals
-  -> feature-gated src/raw.rs modules
+  -> feature-gated src/raw/mod.rs modules
   -> private translated modules
 ```
 
@@ -176,16 +176,16 @@ the same parity evidence and inventory checks.
 
 | New work | File owner |
 | --- | --- |
-| New public C ABI declarations, `repr(C)` layouts, C-compatible aliases, public constants, or callback type aliases | `src/abi.rs`, exposed through `raw::abi` and `raw::mimalloc` |
-| New public-header macro translations or header-level compatibility helpers | `src/headers.rs`, exposed through `raw::headers` when they are part of the raw header mirror |
+| New public C ABI declarations, `repr(C)` layouts, C-compatible aliases, public constants, or callback type aliases | `src/ffi/abi.rs`, exposed through `raw::abi` and `raw::mimalloc` |
+| New public-header macro translations or header-level compatibility helpers | `src/ffi/headers.rs`, exposed through `raw::headers` when they are part of the raw header mirror |
 | New exported C ABI implementations or symbol aliases | the matching classified implementation file checked by `scripts/check-ffi-boundary.py`; update that script if a new export file is introduced |
 | New malloc-family or C++ override symbols | `src/alloc_override.rs` or a classified platform override file |
 | New runtime, init, assembly, or platform ABI shims | `src/init.rs`, `src/prim.rs`, `src/prim/unix.rs`, or another file classified by `scripts/check-ffi-boundary.py` |
-| New internal C-shaped compatibility alias needed by translated code | `src/mimalloc.rs` or a private translated module, not the default `raw` facade |
+| New internal C-shaped compatibility alias needed by translated code | `src/ffi/mimalloc.rs` or a private translated module, not the default `raw` facade |
 | New allocator implementation logic | private allocator modules such as `alloc`, `free`, `heap`, `page`, `arena`, `os`, or `threadlocal`; do not re-export it from default `raw` |
 
 There should be no ambiguity about where to add a new C ABI declaration or an
-exported function: declarations live in `src/abi.rs`, and exported
+exported function: declarations live in `src/ffi/abi.rs`, and exported
 implementations live only in files classified by `scripts/check-ffi-boundary.py`.
 
 ## Export Boundary Classification
@@ -220,7 +220,7 @@ Internal allocator code must not call `raw::mi_*` or `abi::mi_*` public entry
 points to reach implementation logic. It should call crate-private helpers so
 Rust-side invariants, typed wrappers, and non-ABI call paths remain visible.
 The only current allowlisted source re-entry is the public C header macro group
-in `src/abi.rs`; those macros intentionally expand through root `raw::mi_*` so
+in `src/ffi/abi.rs`; those macros intentionally expand through root `raw::mi_*` so
 downstream macro users see C-header behavior. `scripts/check-ffi-boundary.py`
 fails if any other source file re-enters the public raw/ABI `mi_*` facade.
 
@@ -229,13 +229,13 @@ fails if any other source file re-enters the public raw/ABI `mi_*` facade.
 Public raw macros are compatibility conveniences over the raw C-shaped facade,
 not safe Rust wrappers.
 
-- Typed allocation macros in `src/abi.rs` (`mi_malloc_tp!`, `mi_zalloc_tp!`,
+- Typed allocation macros in `src/ffi/abi.rs` (`mi_malloc_tp!`, `mi_zalloc_tp!`,
   `mi_calloc_tp!`, `mi_mallocn_tp!`, `mi_reallocn_tp!`, and the heap typed
   variants) expand directly to `raw::mi_*` calls and pointer casts. They do not
   contain internal `unsafe` blocks, so callers must use them inside an unsafe
   boundary. The compile-fail doctests in `src/lib.rs` cover each typed macro
   form outside unsafe.
-- Header override macros in `src/headers.rs` (`malloc!`, `realloc!`, C++
+- Header override macros in `src/ffi/headers.rs` (`malloc!`, `realloc!`, C++
   operator shims, aligned allocation shims, and related header spellings)
   likewise expand through public `raw::mi_*` calls without internal `unsafe`
   blocks. They require caller-side unsafe for the same pointer ownership,

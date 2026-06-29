@@ -180,18 +180,18 @@ fn packed_and_atomic_wrappers_match_raw_layout() {
     assert_layout!(EncodedPtr<mi_block_t>, usize);
     assert_layout!(AvailableFreeList, Option<BlockPtr>);
     assert_layout!(LocalFreeList, Option<BlockPtr>);
-    assert_layout!(atomic_wrappers::RemoteFreeList, Option<BlockPtr>);
+    assert_layout!(atomic::RemoteFreeList, Option<BlockPtr>);
     assert_layout!(freelist_wrappers::EncodedFreeList, Option<BlockPtr>);
     assert_layout!(PaddingCanary, u32);
     assert_layout!(PaddingDelta, u32);
-    assert_layout!(atomic_wrappers::AtomicUsizeField, *mut usize);
-    assert_layout!(atomic_wrappers::AtomicI64Field, *mut i64);
-    assert_layout!(atomic_wrappers::AtomicPtrField<u8>, *mut *mut u8);
+    assert_layout!(atomic::AtomicUsizeField, *mut usize);
+    assert_layout!(atomic::AtomicI64Field, *mut i64);
+    assert_layout!(atomic::AtomicPtrField<u8>, *mut *mut u8);
     assert_layout!(AtomicPageThreadId, *mut usize);
     assert_layout!(AtomicThreadFree, *mut usize);
     assert_layout!(AtomicThreadHeapRefcount, *mut usize);
-    assert_layout!(atomic_wrappers::AtomicAbandonedCount, *mut usize);
-    assert_layout!(atomic_wrappers::AtomicArenaPage, *mut usize);
+    assert_layout!(atomic::AtomicAbandonedCount, *mut usize);
+    assert_layout!(atomic::AtomicArenaPage, *mut usize);
 }
 
 #[test]

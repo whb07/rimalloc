@@ -13,9 +13,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 ALLOWLIST = ROOT / "strict-type-allowlist.txt"
 
 RAW_BOUNDARY_FILES = {
-    "src/abi.rs",
-    "src/raw.rs",
-    "src/types.rs",
+    "src/ffi/abi.rs",
+    "src/raw/mod.rs",
+    "src/types/constants.rs",
 }
 
 RAW_POINTER_TYPES = (
@@ -62,33 +62,33 @@ SKIP_DIRS = {
 }
 
 ALLOWED_DIRECT_MEMID = {
-    "src/core_types/memid.rs",
-    "src/types.rs",
+    "src/types/memid.rs",
+    "src/types/constants.rs",
 }
 
 ALLOWED_BLOCK_NEXT = {
-    "src/core_types/freelist_wrappers.rs",
-    "src/types.rs",
+    "src/types/freelist_wrappers.rs",
+    "src/types/constants.rs",
 }
 
 ALLOWED_XTHREAD_ID = {
-    "src/core_types/page.rs",
-    "src/core_types/atomic_wrappers.rs",
-    "src/types.rs",
+    "src/types/page.rs",
+    "src/types/atomic.rs",
+    "src/types/constants.rs",
 }
 
 ALLOWED_XTHREAD_FREE = {
-    "src/core_types/freelist.rs",
-    "src/core_types/atomic_wrappers.rs",
-    "src/types.rs",
+    "src/types/freelist.rs",
+    "src/types/atomic.rs",
+    "src/types/constants.rs",
 }
 
 ALLOWED_ATOMIC_CAST = {
-    "src/core_types/atomic_wrappers.rs",
+    "src/types/atomic.rs",
 }
 
 ALLOWED_PTR_USIZE = {
-    "src/core_types/ptr.rs",
+    "src/types/ptr.rs",
 }
 
 
@@ -265,7 +265,7 @@ def main() -> int:
         rel = path.relative_to(ROOT).as_posix()
         text = production_source_text(path.read_text())
 
-        if rel.startswith("src/core_types/") and CORE_TYPES_DEAD_CODE_RE.search(text):
+        if rel.startswith("src/types/") and CORE_TYPES_DEAD_CODE_RE.search(text):
             offenders.append(f"{rel}: crate-level dead_code allowance in core_types module")
 
         if rel not in RAW_BOUNDARY_FILES:
@@ -363,7 +363,7 @@ def main() -> int:
             kind="metadata-reference",
             rel=rel,
             text=text,
-            allowed_files={"src/types.rs"},
+            allowed_files={"src/types/constants.rs"},
             pattern=METADATA_REF_RE,
             entries=entries,
             domain="metadata",
@@ -385,7 +385,7 @@ def main() -> int:
             kind="heap-allocating-type",
             rel=rel,
             text=text,
-            allowed_files={"src/safe.rs"},
+            allowed_files={"src/safe/mod.rs"},
             pattern=HEAP_TYPES_RE,
             entries=entries,
             domain="heap-type",

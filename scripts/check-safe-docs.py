@@ -9,7 +9,7 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SAFE_FILES = [
-    ROOT / "src/safe.rs",
+    ROOT / "src/safe/mod.rs",
     *sorted((ROOT / "src/safe").glob("*.rs")),
 ]
 

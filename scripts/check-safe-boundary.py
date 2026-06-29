@@ -10,12 +10,12 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SAFE_BOUNDARY_FILES = [
     "src/lib.rs",
-    "src/safe.rs",
+    "src/safe/mod.rs",
     *sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / "src/safe").glob("*.rs")),
 ]
 AUDIT_TAG = "SAFETY[AUDIT:"
 ALLOWED_PUBLIC_UNSAFE = {
-    "src/safe/allocations.rs": {"assume_initialized"},
+    "src/safe/allocation.rs": {"assume_initialized"},
 }
 
 

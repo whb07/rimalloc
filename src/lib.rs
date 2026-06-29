@@ -198,44 +198,30 @@
 #![warn(rustdoc::bare_urls)]
 
 pub mod raw;
-pub mod unsafe_callbacks;
+pub use ffi::callbacks as unsafe_callbacks;
 
-mod abi;
-mod alloc;
-mod alloc_aligned;
-mod alloc_override;
-mod alloc_posix;
-mod arena;
-mod arena_meta;
-mod atomic;
-#[cfg(feature = "bench-diagnostics")]
-mod bench_diagnostics;
-mod bitmap;
-mod bits;
-pub(crate) mod core_types;
-mod free;
-mod headers;
-mod heap;
-mod init;
+mod allocator;
+mod ffi;
 mod internal;
-mod libc;
-mod memory;
-mod mimalloc;
-mod options;
-mod os;
-mod page;
-mod page_map;
-mod prim;
-mod provenance;
-mod random;
+mod platform;
 mod safe;
-#[path = "static.rs"]
-mod static_c;
-mod stats;
-mod theap;
-mod threadlocal;
-mod track;
-mod types;
+pub(crate) mod types;
+
+#[cfg(feature = "bench-diagnostics")]
+pub(crate) use allocator::bench_diagnostics;
+#[allow(unused_imports)]
+pub(crate) use allocator::{
+    aligned as alloc_aligned, alloc, arena, arena_meta, free, heap, init, memory, options, page,
+    page_map, static_alloc as static_c, stats, thread_heap as theap, threadlocal,
+    tracking as track,
+};
+pub(crate) use ffi::{abi, headers, libc, mimalloc};
+pub(crate) use internal::{atomic, bitmap, bits, provenance, random};
+pub(crate) use platform as prim;
+pub(crate) use platform::os;
+#[allow(unused_imports)]
+pub(crate) use raw::{macros as alloc_override, posix as alloc_posix};
+pub(crate) use types as core_types;
 
 pub use safe::{
     AllocError, Allocation, Heap, HeapAllocation, HeapError, HeapRef, InitializedAllocation,

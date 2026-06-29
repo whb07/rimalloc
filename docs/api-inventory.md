@@ -133,7 +133,7 @@ Current raw users and raw module classifications are tracked in
 
 ### Raw ABI Type Inventory
 
-`src/abi.rs` re-exports these raw type names through `raw`, `raw::abi`, and
+`src/ffi/abi.rs` re-exports these raw type names through `raw`, `raw::abi`, and
 `raw::mimalloc`:
 
 | Type | Public shape | Opacity decision |
@@ -151,39 +151,39 @@ Current raw users and raw module classifications are tracked in
 | `mi_theap_t` | raw thread-heap handle alias | Kept as the translated C layout alias for current raw-layout compatibility tests and C-shaped thread-heap APIs. Safe Rust code does not expose thread-heap internals. |
 
 `mi_arena_t`, `mi_subproc_t`, `mi_page_t`, `mi_block_t`, and other translated
-implementation layouts are not re-exported by the default `src/abi.rs` public
+implementation layouts are not re-exported by the default `src/ffi/abi.rs` public
 header mirror. They are reachable only through private implementation code or
 the `unstable-raw-internals` audit feature, except where an exposed callback
 or handle uses an opaque pointer token.
 
 ### Raw `repr(C)` Field Inventory
 
-`src/types.rs` remains the translated layout substrate. Default raw ABI
+`src/types/constants.rs` remains the translated layout substrate. Default raw ABI
 exposure is intentionally narrower than the full file:
 
 | Struct | Default raw ABI exposure | Field visibility decision |
 | --- | --- | --- |
-| `mi_process_info_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated layout for internal/stat paths. |
-| `mi_random_ctx_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated thread-heap layout parity. |
-| `mi_page_queue_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated page queue layout parity. |
-| `mi_block_s` / `mi_block_t` | Not re-exported by `src/abi.rs` today | Public field retains translated free-list word layout. |
-| `mi_padding_s` / `mi_padding_t` | Not re-exported by `src/abi.rs` today | Public fields retain debug/secure padding layout. |
-| `mi_heap_area_t` | Re-exported by `src/abi.rs` | Public fields are required for heap/block visitor metadata compatibility. |
-| `mi_arena_pages_s` | Not re-exported by `src/abi.rs` today | Public fields retain translated arena metadata layout. |
-| `mi_subproc_s` / `mi_subproc_t` | Not re-exported by `src/abi.rs` today | Public fields are implementation layout, available only through unstable raw internals. |
-| `mi_tld_s` / `mi_tld_t` | Not re-exported by `src/abi.rs` today | Public fields are implementation layout, available only through unstable raw internals. |
-| `mi_arena_s` / `mi_arena_t` | Not re-exported by `src/abi.rs` today | Public fields are implementation layout; the default API uses opaque `mi_arena_id_t`. |
-| `mi_heap_s` / `mi_heap_t` | `mi_heap_t` is re-exported by `src/abi.rs` | Layout alias is retained for raw heap handle compatibility; safe heap APIs stay opaque. |
-| `mi_page_s` / `mi_page_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated page layout for internal layout tests. |
-| `mi_theap_s` / `mi_theap_t` | `mi_theap_t` is re-exported by `src/abi.rs` | Layout alias is retained for raw thread-heap compatibility and offset tests. |
-| `mi_tls_slot_t` | Not re-exported by `src/abi.rs` today | Public fields retain TLS mirror layout. |
-| `mi_thread_locals_t` | Not re-exported by `src/abi.rs` today | Public fields retain TLS mirror layout. |
-| `mi_option_desc_t` | Not re-exported by `src/abi.rs` today | Public fields retain translated option table layout. |
-| `mi_subproc_id_t` | Re-exported by `src/abi.rs` | `repr(C)` size is public, but the field is private so the identifier is opaque to downstream Rust. |
+| `mi_process_info_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated layout for internal/stat paths. |
+| `mi_random_ctx_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated thread-heap layout parity. |
+| `mi_page_queue_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated page queue layout parity. |
+| `mi_block_s` / `mi_block_t` | Not re-exported by `src/ffi/abi.rs` today | Public field retains translated free-list word layout. |
+| `mi_padding_s` / `mi_padding_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain debug/secure padding layout. |
+| `mi_heap_area_t` | Re-exported by `src/ffi/abi.rs` | Public fields are required for heap/block visitor metadata compatibility. |
+| `mi_arena_pages_s` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated arena metadata layout. |
+| `mi_subproc_s` / `mi_subproc_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields are implementation layout, available only through unstable raw internals. |
+| `mi_tld_s` / `mi_tld_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields are implementation layout, available only through unstable raw internals. |
+| `mi_arena_s` / `mi_arena_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields are implementation layout; the default API uses opaque `mi_arena_id_t`. |
+| `mi_heap_s` / `mi_heap_t` | `mi_heap_t` is re-exported by `src/ffi/abi.rs` | Layout alias is retained for raw heap handle compatibility; safe heap APIs stay opaque. |
+| `mi_page_s` / `mi_page_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated page layout for internal layout tests. |
+| `mi_theap_s` / `mi_theap_t` | `mi_theap_t` is re-exported by `src/ffi/abi.rs` | Layout alias is retained for raw thread-heap compatibility and offset tests. |
+| `mi_tls_slot_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain TLS mirror layout. |
+| `mi_thread_locals_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain TLS mirror layout. |
+| `mi_option_desc_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated option table layout. |
+| `mi_subproc_id_t` | Re-exported by `src/ffi/abi.rs` | `repr(C)` size is public, but the field is private so the identifier is opaque to downstream Rust. |
 
 ### Header Override Macros
 
-The exported macros in `src/headers.rs` are Tier R public compatibility
+The exported macros in `src/ffi/headers.rs` are Tier R public compatibility
 surface. They model C header override and C++ operator shim spellings while
 expanding through public `raw::mi_*` paths so downstream crates do not observe
 implementation modules. There are no internal-only or gated header macros in

@@ -8,7 +8,7 @@ use core::ptr::NonNull;
 
 use super::{
     AllocError, LayoutError, ResizeError, ResizeErrorKind, StatsError, StatsSnapshot,
-    allocations::dangling_for,
+    allocation::dangling_for,
 };
 
 /// Error returned by safe heap ownership APIs.

@@ -143,11 +143,12 @@ fn production_profiles_abort_on_panic() {
 #[test]
 fn callback_unwind_policy_is_documented_and_safe_guards_catch_panics() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let raw_rs = fs::read_to_string(root.join("src/raw.rs")).expect("read src/raw.rs");
-    let types_rs = fs::read_to_string(root.join("src/types.rs")).expect("read src/types.rs");
+    let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read src/raw/mod.rs");
+    let types_rs = fs::read_to_string(root.join("src/types/constants.rs"))
+        .expect("read src/types/constants.rs");
     let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
     let unsafe_callbacks_rs =
-        fs::read_to_string(root.join("src/unsafe_callbacks.rs")).expect("read unsafe callbacks");
+        fs::read_to_string(root.join("src/ffi/callbacks.rs")).expect("read unsafe callbacks");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
 
     assert!(
@@ -166,7 +167,7 @@ fn callback_unwind_policy_is_documented_and_safe_guards_catch_panics() {
     );
 
     assert!(
-        lib_rs.contains("pub mod unsafe_callbacks;")
+        lib_rs.contains("pub use ffi::callbacks as unsafe_callbacks;")
             && !lib_rs.contains("CallbackError")
             && !lib_rs.contains("DeferredFreeCallbackGuard, ErrorCallbackGuard")
             && unsafe_callbacks_rs.contains("pub struct ErrorCallbackGuard")

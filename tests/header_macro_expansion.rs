@@ -48,7 +48,7 @@ const HEADER_MACROS: &[&str] = &[
 #[test]
 fn header_macro_inventory_is_public_compatibility_surface() {
     let root = env!("CARGO_MANIFEST_DIR");
-    let source = fs::read_to_string(format!("{root}/src/headers.rs")).expect("read headers.rs");
+    let source = fs::read_to_string(format!("{root}/src/ffi/headers.rs")).expect("read headers.rs");
 
     let actual = source
         .lines()

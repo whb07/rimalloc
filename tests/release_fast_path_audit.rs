@@ -6445,7 +6445,16 @@ fn free_path_internals_are_not_dynamic_exports() {
                 "let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));"
             )
             && init_rs.contains("let _lock = MiLockGuard::acquire(lock);")
-            && options_rs.contains("let _lock = MiLockGuard::acquire(lock);"),
+            && init_rs.contains(
+                "let heaps_lock = unsafe { MiLockGuard::acquire(subproc.heaps_lock()) };"
+            )
+            && init_rs.contains("drop(heaps_lock);")
+            && options_rs.contains("let _lock = MiLockGuard::acquire(lock);")
+            && options_rs.contains(
+                "Manual lock handling keeps this translated callback buffer path close to"
+            )
+            && options_rs
+                .contains("Intentionally holds the output buffer lock while invoking `out`"),
         "subproc and options locks should acquire and release through typed MiLockGuard Drop"
     );
     assert!(

@@ -708,11 +708,16 @@ Problem:
 
 Tasks:
 
-- [ ] Do not change lock structure in allocator hot paths unless there is a clear safety/readability win.
-- [ ] Convert short, non-hot manual acquire/release pairs to `MiLockGuard` when it does not alter lifetime or codegen-sensitive behavior.
-- [ ] Be especially cautious around code paths that intentionally release before later operations.
-- [ ] Do not hold locks across callbacks, OS allocation/free calls, or code that can reenter the allocator unless the existing code already does so intentionally.
-- [ ] Add comments where manual lock handling remains intentional.
+- [x] Do not change lock structure in allocator hot paths unless there is a clear safety/readability win.
+  - Evidence: hot arena/page-map lock structures remain unchanged; only a short subproc heap-list snapshot uses RAII.
+- [x] Convert short, non-hot manual acquire/release pairs to `MiLockGuard` when it does not alter lifetime or codegen-sensitive behavior.
+  - Evidence: `mi_subproc_unsafe_destroy_typed` now uses `MiLockGuard::acquire(subproc.heaps_lock())` and explicitly drops it at the original release point.
+- [x] Be especially cautious around code paths that intentionally release before later operations.
+  - Evidence: the subproc heap-list guard is explicitly dropped before heap destruction, preserving the original lock lifetime.
+- [x] Do not hold locks across callbacks, OS allocation/free calls, or code that can reenter the allocator unless the existing code already does so intentionally.
+  - Evidence: delayed output-buffer flushing still holds the lock across `out.invoke` exactly as before and now documents that intentional behavior.
+- [x] Add comments where manual lock handling remains intentional.
+  - Evidence: `mi_out_buf` and `mi_out_buf_flush` now document why they keep manual lock handling.
 
 ## 29. Final validation
 

@@ -726,6 +726,8 @@ unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
         return;
     }
 
+    // Manual lock handling keeps this translated callback buffer path close to
+    // upstream and makes the callback-holding lifetime explicit.
     unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
     let start = out_len.fetch_add(n, Ordering::AcqRel);
     if start < MI_MAX_DELAY_OUTPUT {
@@ -739,6 +741,8 @@ unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
 }
 
 fn mi_out_buf_flush(out: OutputCallback, no_more_buf: bool, arg: OutputCallbackArg) {
+    // Intentionally holds the output buffer lock while invoking `out`, matching
+    // the existing delayed-output flush semantics.
     unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
     let mut count = out_len.fetch_add(
         if no_more_buf { MI_MAX_DELAY_OUTPUT } else { 1 },

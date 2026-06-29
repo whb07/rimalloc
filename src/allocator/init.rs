@@ -735,9 +735,9 @@ unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_
     }
 
     loop {
-        unsafe { mi_lock_acquire(ptr::addr_of_mut!((*subproc_prefix).heaps_lock)) };
+        let heaps_lock = unsafe { MiLockGuard::acquire(subproc.heaps_lock()) };
         let heap = unsafe { (*subproc_prefix).heaps };
-        unsafe { mi_lock_release(ptr::addr_of_mut!((*subproc_prefix).heaps_lock)) };
+        drop(heaps_lock);
         if heap.is_null() {
             break;
         }

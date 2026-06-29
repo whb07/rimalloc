@@ -116,6 +116,18 @@ impl Allocation {
         InitializedAllocation::zeroed(layout)
     }
 
+    /// Allocates an uninitialized byte block with alignment 1.
+    #[inline]
+    pub fn new_bytes(len: usize) -> Result<Self, TryAllocError> {
+        Self::with_size_align(len, 1)
+    }
+
+    /// Allocates a zero-initialized byte block with alignment 1.
+    #[inline]
+    pub fn zeroed_bytes(len: usize) -> Result<InitializedAllocation, TryAllocError> {
+        Self::zeroed_with_size_align(len, 1)
+    }
+
     /// Builds a layout from `size` and `align`, then allocates an uninitialized
     /// byte block.
     #[inline]
@@ -461,6 +473,12 @@ impl InitializedAllocation {
     #[inline]
     pub fn zeroed(layout: Layout) -> Result<Self, AllocError> {
         RawAllocation::allocate(layout, true).map(|raw| Self { raw })
+    }
+
+    /// Allocates a zero-initialized byte block with alignment 1.
+    #[inline]
+    pub fn zeroed_bytes(len: usize) -> Result<Self, TryAllocError> {
+        Self::zeroed_with_size_align(len, 1)
     }
 
     /// Builds a layout from `size` and `align`, then allocates a zeroed block.

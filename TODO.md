@@ -546,11 +546,16 @@ Problem:
 
 Tasks:
 
-- [ ] Consider `Allocation::new_bytes(len: usize)` using alignment 1 or a documented default.
-- [ ] Consider `Allocation::zeroed_bytes(len: usize)`.
-- [ ] Consider `InitializedAllocation::zeroed_bytes(len: usize)`.
-- [ ] Keep layout-taking constructors as the precise low-level safe API.
-- [ ] Add tests for zero length and non-zero length.
+- [x] Consider `Allocation::new_bytes(len: usize)` using alignment 1 or a documented default.
+  - Evidence: `Allocation::new_bytes` now delegates to `with_size_align(len, 1)` and documents alignment 1.
+- [x] Consider `Allocation::zeroed_bytes(len: usize)`.
+  - Evidence: `Allocation::zeroed_bytes` returns an initialized zeroed byte allocation with alignment 1.
+- [x] Consider `InitializedAllocation::zeroed_bytes(len: usize)`.
+  - Evidence: `InitializedAllocation::zeroed_bytes` mirrors the allocation-level zeroed byte constructor.
+- [x] Keep layout-taking constructors as the precise low-level safe API.
+  - Evidence: existing `new`, `zeroed`, `with_size_align`, and `zeroed_with_size_align` APIs are unchanged; byte constructors are convenience wrappers.
+- [x] Add tests for zero length and non-zero length.
+  - Evidence: `safe::tests::byte_allocation_constructors_use_alignment_one` covers zero-length and non-zero byte allocations for all new constructors.
 
 ## 22. P3 safe facade convenience: heap byte allocation APIs
 

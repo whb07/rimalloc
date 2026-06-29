@@ -132,6 +132,29 @@ mod tests {
     }
 
     #[test]
+    fn byte_allocation_constructors_use_alignment_one() {
+        let zero = Allocation::new_bytes(0).expect("zero byte allocation");
+        assert_eq!(zero.len(), 0);
+        assert_eq!(zero.layout().align(), 1);
+        assert!(zero.is_empty());
+
+        let allocation = Allocation::new_bytes(17).expect("byte allocation");
+        assert_eq!(allocation.len(), 17);
+        assert_eq!(allocation.layout().align(), 1);
+
+        let zeroed = Allocation::zeroed_bytes(19).expect("zeroed byte allocation");
+        assert_eq!(zeroed.len(), 19);
+        assert_eq!(zeroed.layout().align(), 1);
+        assert!(zeroed.as_bytes().iter().all(|byte| *byte == 0));
+
+        let initialized =
+            InitializedAllocation::zeroed_bytes(23).expect("initialized byte allocation");
+        assert_eq!(initialized.len(), 23);
+        assert_eq!(initialized.layout().align(), 1);
+        assert!(initialized.as_bytes().iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
     fn allocation_is_move_only_and_drops_once() {
         let mut allocation = Allocation::with_size_align(64, 16).expect("allocation");
         let ptr = allocation.as_mut_ptr();

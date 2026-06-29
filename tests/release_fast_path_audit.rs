@@ -626,6 +626,31 @@ fn safe_byte_allocations_keep_object_ownership_separate() {
 }
 
 #[test]
+fn architecture_map_covers_public_layers_and_policy_gates() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let architecture =
+        fs::read_to_string(root.join("ARCHITECTURE.md")).expect("read ARCHITECTURE.md");
+
+    for required in [
+        "# Architecture",
+        "Tier S, safe Rust facade: `src/safe/`",
+        "Tier U, unsafe Rust conveniences: `src/ffi/callbacks.rs`",
+        "Tier R, raw Rust facade: `src/raw/`",
+        "Tier C, exported C ABI: exported symbols implemented through `src/ffi/`",
+        "Tier I, internal implementation: `src/allocator/`, `src/types/`,",
+        "`src/internal/`, and `src/platform/`",
+        "Build glue: `build.rs` owns C ABI and interposition build setup",
+        "Policy gates: `scripts/` and source-shape tests enforce API inventory",
+        "`scripts/check-layer-boundaries.py`",
+    ] {
+        assert!(
+            architecture.contains(required),
+            "ARCHITECTURE.md should cover {required}"
+        );
+    }
+}
+
+#[test]
 fn core_types_remains_crate_private_not_public_raw_api() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");

@@ -629,13 +629,20 @@ Problem:
 
 Tasks:
 
-- [ ] Add `ARCHITECTURE.md` or equivalent concise architecture documentation.
-- [ ] Cover `src/safe/` as Tier S.
-- [ ] Cover `unsafe_callbacks` / `src/ffi/callbacks.rs` as Tier U if Tier U is adopted.
-- [ ] Cover `src/raw/` and `src/ffi/` as Tier R/C facade and C ABI implementation.
-- [ ] Cover `src/allocator/`, `src/types/`, `src/internal/`, and `src/platform/` as Tier I backend machinery.
-- [ ] Cover `build.rs` as C ABI/interposition build glue.
-- [ ] Cover `scripts/` as policy gates.
+- [x] Add `ARCHITECTURE.md` or equivalent concise architecture documentation.
+  - Evidence: `ARCHITECTURE.md` documents the repository layer map and boundary rules.
+- [x] Cover `src/safe/` as Tier S.
+  - Evidence: `ARCHITECTURE.md` covers `src/safe/` plus curated crate-root re-exports as Tier S.
+- [x] Cover `unsafe_callbacks` / `src/ffi/callbacks.rs` as Tier U if Tier U is adopted.
+  - Evidence: `ARCHITECTURE.md` covers `src/ffi/callbacks.rs`, re-exported as `unsafe_callbacks`, as Tier U.
+- [x] Cover `src/raw/` and `src/ffi/` as Tier R/C facade and C ABI implementation.
+  - Evidence: `ARCHITECTURE.md` covers `src/raw/`, `src/ffi/abi.rs`, and `src/ffi/headers.rs` as Tier R and exported `src/ffi/` symbols as Tier C.
+- [x] Cover `src/allocator/`, `src/types/`, `src/internal/`, and `src/platform/` as Tier I backend machinery.
+  - Evidence: `ARCHITECTURE.md` covers these modules as Tier I internal implementation.
+- [x] Cover `build.rs` as C ABI/interposition build glue.
+  - Evidence: `ARCHITECTURE.md` covers `build.rs` as optional C/C++ shim, TLS shim, export-script, and linker-flag build glue.
+- [x] Cover `scripts/` as policy gates.
+  - Evidence: `architecture_map_covers_public_layers_and_policy_gates` verifies the architecture map mentions layer docs, `build.rs`, `scripts/`, and `scripts/check-layer-boundaries.py`.
 
 ## 26. P2 idiomatic polish: shrink unsafe scopes
 

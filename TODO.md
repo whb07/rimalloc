@@ -126,7 +126,8 @@ Tasks:
 
 - [x] Add or identify a benchmark that isolates `mi_free` throughput for local same-thread frees.
   - Evidence: `benches/hotpath.rs` has `hotpath/free_only`, which fills a pool outside the timed free routine and measures `mi_free` throughput.
-- [ ] Add or identify a benchmark that isolates remote/free-from-other-thread behavior.
+- [x] Add or identify a benchmark that isolates remote/free-from-other-thread behavior.
+  - Evidence: `benches/hotpath.rs` has `hotpath/remote_free`, which allocates on a live owner thread and measures only the freeing thread's `mi_free` loop.
 - [x] Implement a release-only fast route for the no-debug/no-secure/no-guarded case:
   - [x] Null pointer returns immediately.
   - [x] Page lookup uses the existing page-map / `_mi_ptr_page` mechanism.
@@ -139,7 +140,8 @@ Tasks:
   - Evidence: `mi_ufree` continues to call `mi_route_free(p, c"mi_ufree".as_ptr(), usable)`, and the fast path is disabled when `usable` is non-null.
 - [x] Ensure `mi_free_small` still follows its special page lookup rules when enabled.
   - Evidence: `mi_free_small` remains unchanged and still handles `MI_PAGE_META_ALIGNED_FREE_SMALL` before routing.
-- [ ] Compare benchmark results before/after and record any regression or improvement.
+- [x] Compare benchmark results before/after and record any regression or improvement.
+  - Evidence: quick local-free run for `hotpath/free_only/mechanical_mimalloc/64` with `MIMALLOC_HOTPATH_SAMPLE_SIZE=10`, one-second warmup/measurement, and `MIMALLOC_HOTPATH_NRESAMPLES=1000` was effectively flat/noisy: before `c2505a4` median `301.74 Melem/s`, after fast route median `296.38 Melem/s`, with overlapping intervals.
 
 ## 5. P1 architecture: split or feature-gate C ABI/interposition build modes
 

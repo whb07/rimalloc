@@ -418,7 +418,7 @@ impl AtomicThreadFree {
                 &mut expected,
                 new_tf.raw(),
                 Ordering::AcqRel,
-                Ordering::Relaxed,
+                Ordering::Acquire,
             )
         } {
             Ok(new_tf)
@@ -455,7 +455,7 @@ impl AtomicThreadFree {
                 &mut raw_expected,
                 new.raw(),
                 Ordering::AcqRel,
-                Ordering::Relaxed,
+                Ordering::Acquire,
             )
         } {
             true
@@ -496,7 +496,7 @@ impl AtomicThreadFree {
                     &mut raw_old,
                     new.raw(),
                     Ordering::AcqRel,
-                    Ordering::Relaxed,
+                    Ordering::Acquire,
                 )
             } {
                 return RemoteFreeList::from_detached_thread_free_head(head);
@@ -553,7 +553,7 @@ impl AtomicThreadFree {
                     &mut expected,
                     new,
                     Ordering::AcqRel,
-                    Ordering::Relaxed,
+                    Ordering::Acquire,
                 )
             } {
                 return current_word.is_owned();

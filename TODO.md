@@ -99,11 +99,14 @@ Problem:
 
 Tasks:
 
-- [ ] Change `xthread_free` AcqRel CAS wrappers to use `Ordering::Acquire` on failure where they mirror upstream `mi_atomic_cas_weak_acq_rel`.
-- [ ] Do not blindly change `xthread_id` release-CAS wrappers; upstream release-CAS failure ordering is relaxed there.
-- [ ] Add or update loom/concurrency tests under `src/types/atomic/concurrency_models.rs` or the current atomic model-test location for remote push/collect/release ownership races.
-- [ ] Run targeted atomic wrapper tests.
-- [ ] Run full `cargo test --workspace --all-targets --all-features` after the ordering change.
+- [x] Change `xthread_free` AcqRel CAS wrappers to use `Ordering::Acquire` on failure where they mirror upstream `mi_atomic_cas_weak_acq_rel`.
+- [x] Do not blindly change `xthread_id` release-CAS wrappers; upstream release-CAS failure ordering is relaxed there.
+  - Evidence: `AtomicPageThreadId::compare_exchange_owner` still uses `Ordering::Release, Ordering::Relaxed`.
+- [x] Add or update loom/concurrency tests under `src/types/atomic/concurrency_models.rs` or the current atomic model-test location for remote push/collect/release ownership races.
+  - Evidence: loom model helpers for remote push, collect, and release ownership now mirror the Acquire failure ordering.
+- [x] Run targeted atomic wrapper tests.
+  - Evidence: `cargo test --features std types::atomic -- --nocapture`.
+- [x] Run full `cargo test --workspace --all-targets --all-features` after the ordering change.
 
 ## 4. P1 performance: restore a thin `mi_free` fast path
 

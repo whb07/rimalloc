@@ -19,7 +19,7 @@ fn push_remote_word(cell: &LoomAtomicUsize, next: &LoomAtomicUsize, head: usize)
             old.raw(),
             new.raw(),
             LoomOrdering::AcqRel,
-            LoomOrdering::Relaxed,
+            LoomOrdering::Acquire,
         ) {
             Ok(_) => return,
             Err(actual) => old = ThreadFreeWord(actual),
@@ -39,7 +39,7 @@ fn collect_word(cell: &LoomAtomicUsize) -> usize {
             old.raw(),
             new.raw(),
             LoomOrdering::AcqRel,
-            LoomOrdering::Relaxed,
+            LoomOrdering::Acquire,
         ) {
             Ok(_) => return head,
             Err(actual) => old = ThreadFreeWord(actual),
@@ -58,7 +58,7 @@ fn release_ownership_word(cell: &LoomAtomicUsize) -> bool {
         let current_word = ThreadFreeWord(current);
         let new = current_word.with_owner(ThreadFreeOwner::Unowned).raw();
         if cell
-            .compare_exchange_weak(current, new, LoomOrdering::AcqRel, LoomOrdering::Relaxed)
+            .compare_exchange_weak(current, new, LoomOrdering::AcqRel, LoomOrdering::Acquire)
             .is_ok()
         {
             return current_word.is_owned();

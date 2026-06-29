@@ -16,3 +16,11 @@ run cargo check --benches --features bench
 run cargo check --benches --features "bench compare"
 run cargo test --quiet --features "std unstable-raw-internals"
 run cargo check --features "track-valgrind track-asan"
+
+if ! command -v cargo-hack >/dev/null 2>&1; then
+  echo "cargo-hack is required for feature powerset validation" >&2
+  echo "install it with: cargo install cargo-hack --locked" >&2
+  exit 1
+fi
+
+run cargo hack check --feature-powerset --exclude-features bench,compare,default --no-dev-deps

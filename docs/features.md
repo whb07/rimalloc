@@ -32,4 +32,9 @@ cargo check --features "track-valgrind track-asan"
 cargo check --features "secure guarded std"
 cargo check --benches --features bench
 cargo check --benches --features "bench compare"
+cargo hack check --feature-powerset --exclude-features bench,compare,default --no-dev-deps
 ```
+
+The powerset check covers the library/runtime feature combinations. `bench` and
+`compare` stay in explicit benchmark-target checks because they exercise
+benchmark-only code paths, and `default` is intentionally empty.

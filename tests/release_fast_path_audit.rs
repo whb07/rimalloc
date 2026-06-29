@@ -580,6 +580,52 @@ fn crate_root_exposes_only_curated_rust_facade() {
 }
 
 #[test]
+fn safe_byte_allocations_keep_object_ownership_separate() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let safe_api_md =
+        fs::read_to_string(root.join("docs/safe-api.md")).expect("read docs/safe-api.md");
+    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
+    let allocation_rs =
+        fs::read_to_string(root.join("src/safe/allocation.rs")).expect("read allocation.rs");
+    let heap_rs = fs::read_to_string(root.join("src/safe/heap.rs")).expect("read heap.rs");
+
+    for required in [
+        "## Future Object Ownership APIs",
+        "The current allocation wrappers own bytes, not Rust objects.",
+        "MiBox<T>",
+        "HeapBox<'heap, T>",
+        "constructor panic cleanup",
+        "deallocation through the owning allocator or heap",
+    ] {
+        assert!(
+            safe_api_md.contains(required),
+            "safe object ownership policy should document {required}"
+        );
+    }
+
+    for (rel, source) in [
+        ("src/lib.rs", lib_rs.as_str()),
+        ("src/safe/allocation.rs", allocation_rs.as_str()),
+        ("src/safe/heap.rs", heap_rs.as_str()),
+    ] {
+        for forbidden in [
+            "struct MiBox",
+            "struct HeapBox",
+            "pub type MiBox",
+            "pub type HeapBox",
+            "impl<T> Allocation",
+            "fn new_object",
+            "fn allocate_object",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{rel} should keep object ownership APIs separate from current byte allocation wrappers"
+            );
+        }
+    }
+}
+
+#[test]
 fn core_types_remains_crate_private_not_public_raw_api() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");

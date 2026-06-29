@@ -83,6 +83,21 @@ through raw pointers must keep that transition explicit with unsafe
 `Allocation::assume_initialized` or `HeapAllocation::assume_initialized` after
 every byte has been initialized.
 
+## Future Object Ownership APIs
+
+The current allocation wrappers own bytes, not Rust objects. They must not grow
+constructors that initialize `T`, run `Drop`, or otherwise act like `Box<T>`.
+Object-level ownership needs separate types, such as `MiBox<T>` for the main
+allocator and `HeapBox<'heap, T>` for heap-tied ownership, so byte allocation
+layout, initialization, and resize APIs stay distinct from object lifetime
+semantics.
+
+Before adding object ownership APIs, the design must specify construction
+failure behavior, destructor and panic behavior, allocator/heap ownership, and
+threading traits. It must also add tests for successful construction and drop,
+constructor panic cleanup, destructor panic behavior, heap-tied lifetime
+enforcement, and deallocation through the owning allocator or heap.
+
 ## Naming Conventions
 
 - Rust-facing names use idiomatic Rust names: `MiMalloc`, `Allocation`, `Heap`,

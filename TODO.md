@@ -614,9 +614,12 @@ Problem:
 
 Tasks:
 
-- [ ] If object APIs are added later, design separate types such as `MiBox<T>` and `HeapBox<'heap, T>`.
-- [ ] Keep this future API separate from byte allocation wrappers.
-- [ ] Require drop semantics, panic behavior, and allocator ownership tests before exposing such APIs.
+- [x] If object APIs are added later, design separate types such as `MiBox<T>` and `HeapBox<'heap, T>`.
+  - Evidence: `docs/safe-api.md` now records a separate future object-ownership policy for `MiBox<T>` and `HeapBox<'heap, T>` rather than extending byte allocation wrappers.
+- [x] Keep this future API separate from byte allocation wrappers.
+  - Evidence: `safe_byte_allocations_keep_object_ownership_separate` checks that crate-root and safe byte allocation wrappers do not expose current `MiBox`/`HeapBox`-style APIs.
+- [x] Require drop semantics, panic behavior, and allocator ownership tests before exposing such APIs.
+  - Evidence: the future API policy requires construction failure, destructor and panic behavior, allocator/heap ownership, threading trait design, and matching tests before object ownership APIs are added.
 
 ## 25. P3 project architecture map
 

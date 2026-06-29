@@ -25,6 +25,7 @@ jobs:
         run: |
           scripts/check-api-inventory.py
           scripts/check-safe-boundary.py
+          scripts/check-layer-boundaries.py
           scripts/check-ffi-boundary.py
           scripts/check-raw-facade.sh
           scripts/check-layout.sh

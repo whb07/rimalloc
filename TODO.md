@@ -235,14 +235,18 @@ Problem:
 
 Tasks:
 
-- [ ] Write down the intended layer map in code comments or an architecture document:
-  - [ ] Tier S: `src/safe/`.
-  - [ ] Tier U: `src/ffi/callbacks.rs` re-exported as `unsafe_callbacks`.
-  - [ ] Tier R/C: `src/raw/` and `src/ffi/`.
-  - [ ] Tier I backend: `src/allocator/`, `src/types/`, `src/internal/`, `src/platform/`.
-- [ ] Audit imports from `src/safe/*.rs` and route backend calls through a small adapter layer where that reduces coupling.
-- [ ] Add a script or test that prevents new Tier S files from importing arbitrary backend modules without an explicit allowlist.
-- [ ] Keep existing compatibility aliases only where they avoid churn or are required by translated code; mark them as transitional if they should disappear.
+- [x] Write down the intended layer map in code comments or an architecture document:
+  - [x] Tier S: `src/safe/`.
+  - [x] Tier U: `src/ffi/callbacks.rs` re-exported as `unsafe_callbacks`.
+  - [x] Tier R/C: `src/raw/` and `src/ffi/`.
+  - [x] Tier I backend: `src/allocator/`, `src/types/`, `src/internal/`, `src/platform/`.
+  - Evidence: `ARCHITECTURE.md` documents the layer map and boundary rules.
+- [x] Audit imports from `src/safe/*.rs` and route backend calls through a small adapter layer where that reduces coupling.
+  - Evidence: current Tier S backend contacts are limited to heap allocation/free, options, stats/process info, and heap pointer types. A new adapter layer would add churn without reducing call count today, so the contacts are now file-specific and allowlisted instead.
+- [x] Add a script or test that prevents new Tier S files from importing arbitrary backend modules without an explicit allowlist.
+  - Evidence: `scripts/check-layer-boundaries.py` fails if a safe facade file imports unallowlisted backend modules or if a new `src/safe/*.rs` file appears without review.
+- [x] Keep existing compatibility aliases only where they avoid churn or are required by translated code; mark them as transitional if they should disappear.
+  - Evidence: `src/lib.rs` marks crate-private compatibility aliases as retained for translated mimalloc code and discourages extending them for new Rust-facing code.
 
 ## 9. P2 performance: avoid duplicate product/overflow work
 

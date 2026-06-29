@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""Verify high-level source layer boundaries stay deliberate."""
+
+from __future__ import annotations
+
+import pathlib
+import re
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+SAFE_BACKEND_IMPORT_ALLOWLIST = {
+    "src/safe/allocation.rs": set(),
+    "src/safe/error.rs": set(),
+    "src/safe/heap.rs": {
+        "alloc",
+        "alloc_aligned",
+        "heap",
+        "init",
+        "mimalloc",
+        "types",
+    },
+    "src/safe/mod.rs": set(),
+    "src/safe/options.rs": {"options"},
+    "src/safe/stats.rs": {"init", "os", "stats"},
+}
+
+BACKEND_MODULES = {
+    "alloc",
+    "alloc_aligned",
+    "alloc_override",
+    "alloc_posix",
+    "arena",
+    "arena_meta",
+    "atomic",
+    "bitmap",
+    "core_types",
+    "free",
+    "heap",
+    "init",
+    "internal",
+    "memory",
+    "mimalloc",
+    "options",
+    "os",
+    "page",
+    "page_map",
+    "platform",
+    "prim",
+    "raw",
+    "static_c",
+    "stats",
+    "theap",
+    "threadlocal",
+    "types",
+}
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def production_source(text: str) -> str:
+    return text.split("#[cfg(test)]", maxsplit=1)[0]
+
+
+def backend_modules_used(text: str) -> set[str]:
+    modules = set()
+    for match in re.finditer(r"\bcrate::([A-Za-z_][A-Za-z0-9_]*)::", text):
+        module = match.group(1)
+        if module in BACKEND_MODULES:
+            modules.add(module)
+    return modules
+
+
+def main() -> int:
+    safe_files = sorted(
+        path.relative_to(ROOT).as_posix() for path in (ROOT / "src/safe").glob("*.rs")
+    )
+    expected_files = sorted(SAFE_BACKEND_IMPORT_ALLOWLIST)
+    require(
+        safe_files == expected_files,
+        "safe facade file inventory drift: "
+        f"missing={sorted(set(expected_files) - set(safe_files))} "
+        f"extra={sorted(set(safe_files) - set(expected_files))}",
+    )
+
+    offenders = []
+    for rel in safe_files:
+        text = production_source((ROOT / rel).read_text())
+        actual = backend_modules_used(text)
+        allowed = SAFE_BACKEND_IMPORT_ALLOWLIST[rel]
+        if actual != allowed:
+            offenders.append(
+                f"{rel}: missing={sorted(allowed - actual)} extra={sorted(actual - allowed)}"
+            )
+
+    synthetic = "fn bad() { let _ = crate::internal::MI_DEBUG; }"
+    require(
+        backend_modules_used(synthetic) == {"internal"},
+        "layer-boundary regression failed to detect synthetic backend import",
+    )
+    require(
+        not offenders,
+        "safe facade backend import allowlist drift: " + "; ".join(offenders),
+    )
+
+    print(
+        "ok: safe facade backend imports match the layer-boundary allowlist "
+        f"for {len(safe_files)} files"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

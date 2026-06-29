@@ -207,6 +207,9 @@ mod platform;
 mod safe;
 pub(crate) mod types;
 
+// Crate-private compatibility aliases retained for translated mimalloc code.
+// New Rust-facing code should prefer owning-module paths or narrow adapters
+// instead of adding more crate-root aliases.
 #[cfg(feature = "bench-diagnostics")]
 pub(crate) use allocator::bench_diagnostics;
 #[allow(unused_imports)]

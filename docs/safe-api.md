@@ -32,6 +32,8 @@ blocks or unsafe trait impls.
 Safe wrappers must not be added under `raw`. The `raw` facade remains the
 C-shaped unsafe compatibility surface, and implementation modules remain
 private unless explicitly exposed through an audited unstable-internals gate.
+Safe facade contact with allocator internals is file-specific and checked by
+`scripts/check-layer-boundaries.py`.
 
 ## Current Safe Surface
 

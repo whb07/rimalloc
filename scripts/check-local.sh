@@ -9,6 +9,7 @@ run cargo check --examples --features std
 run scripts/check-api-inventory.py
 run scripts/check-raw-facade.sh
 run scripts/check-safe-boundary.py
+run scripts/check-layer-boundaries.py
 run scripts/check-ffi-boundary.py
 run scripts/check-features.sh
 run scripts/check-lints.sh

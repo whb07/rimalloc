@@ -1948,6 +1948,11 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
         (
             "src/allocator/free.rs",
             free_rs.as_str(),
+            "unsafe fn mi_free_fast_try(",
+        ),
+        (
+            "src/allocator/free.rs",
+            free_rs.as_str(),
             "pub(crate) unsafe fn mi_route_free(",
         ),
     ] {
@@ -1960,6 +1965,7 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
         "pub(crate) unsafe extern \"C\" fn mi_free_generic_mt(",
         "unsafe fn mi_prepare_validated_free(",
         "unsafe fn mi_free_validated(",
+        "unsafe fn mi_free_fast_try(",
         "pub(crate) unsafe fn mi_route_free(",
     ] {
         let item = source_item("src/allocator/free.rs", &free_rs, marker);
@@ -2003,6 +2009,26 @@ fn strict_type_wrappers_do_not_allocate_on_alloc_free_hot_paths() {
             && free_rs.contains("let owner = validated.page().classify_for_free(current_tid);")
             && free_rs.contains("owner: crate::core_types::PageFreeOwner,"),
         "allocation/free hot paths should continue to consume strict-type wrappers under the no-allocation source guard"
+    );
+
+    assert!(
+        free_rs.contains("fn mi_free_fast_path_enabled(usable: *mut usize) -> bool")
+            && free_rs.contains("&& !cfg!(debug_assertions)")
+            && free_rs.contains("&& MI_DEBUG == 0")
+            && free_rs.contains("&& MI_SECURE == 0")
+            && free_rs.contains("&& MI_GUARDED == 0")
+            && free_rs.contains("&& MI_PADDING == 0")
+            && free_rs.contains("if mi_free_fast_try(p, usable) {\n            return;\n        }")
+            && free_rs.contains("crate::core_types::FreePathKind::LocalFast =>")
+            && free_rs.contains("crate::core_types::FreePathKind::RemotePlain")
+            && free_rs.contains("if !page_tid.is_abandoned() && !page_tid.is_abandoned_mapped()")
+            && source_item(
+                "src/allocator/free.rs",
+                &free_rs,
+                "pub unsafe extern \"C\" fn mi_ufree("
+            )
+            .contains("mi_route_free(p, c\"mi_ufree\".as_ptr(), usable);"),
+        "mi_free should keep the release-only no-usable fast route while mi_ufree keeps the usable-size route"
     );
 }
 

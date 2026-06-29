@@ -124,17 +124,21 @@ Problem:
 
 Tasks:
 
-- [ ] Add or identify a benchmark that isolates `mi_free` throughput for local same-thread frees.
+- [x] Add or identify a benchmark that isolates `mi_free` throughput for local same-thread frees.
+  - Evidence: `benches/hotpath.rs` has `hotpath/free_only`, which fills a pool outside the timed free routine and measures `mi_free` throughput.
 - [ ] Add or identify a benchmark that isolates remote/free-from-other-thread behavior.
-- [ ] Implement a release-only fast route for the no-debug/no-secure/no-guarded case:
-  - [ ] Null pointer returns immediately.
-  - [ ] Page lookup uses the existing page-map / `_mi_ptr_page` mechanism.
-  - [ ] Unflagged local pages use the pointer directly as the block start.
-  - [ ] Unflagged remote pages use the pointer directly as the block start.
-  - [ ] Flagged, interior-pointer, guarded, debug, secure, and invalid-pointer cases fall back to the existing validation path.
-- [ ] Preserve current typed validation behavior for debug, secure, guarded, and Miri-sensitive builds.
-- [ ] Ensure `mi_ufree` still writes usable size with the correct semantics.
-- [ ] Ensure `mi_free_small` still follows its special page lookup rules when enabled.
+- [x] Implement a release-only fast route for the no-debug/no-secure/no-guarded case:
+  - [x] Null pointer returns immediately.
+  - [x] Page lookup uses the existing page-map / `_mi_ptr_page` mechanism.
+  - [x] Unflagged local pages use the pointer directly as the block start.
+  - [x] Unflagged remote pages use the pointer directly as the block start.
+  - [x] Flagged, interior-pointer, guarded, debug, secure, and invalid-pointer cases fall back to the existing validation path.
+- [x] Preserve current typed validation behavior for debug, secure, guarded, and Miri-sensitive builds.
+  - Evidence: fast path is gated off for `debug_assertions`, `MI_DEBUG`, `MI_SECURE`, `MI_GUARDED`, and `MI_PADDING`.
+- [x] Ensure `mi_ufree` still writes usable size with the correct semantics.
+  - Evidence: `mi_ufree` continues to call `mi_route_free(p, c"mi_ufree".as_ptr(), usable)`, and the fast path is disabled when `usable` is non-null.
+- [x] Ensure `mi_free_small` still follows its special page lookup rules when enabled.
+  - Evidence: `mi_free_small` remains unchanged and still handles `MI_PAGE_META_ALIGNED_FREE_SMALL` before routing.
 - [ ] Compare benchmark results before/after and record any regression or improvement.
 
 ## 5. P1 architecture: split or feature-gate C ABI/interposition build modes

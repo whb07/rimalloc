@@ -183,6 +183,18 @@ impl BlockForFree {
         Self { block, was_guarded }
     }
 
+    /// # Safety
+    /// `block` must be the exact start of a live, non-guarded block that is
+    /// ready to be freed. This is only for release fast paths that have already
+    /// ruled out interior-pointer and guarded-page modes.
+    #[inline(always)]
+    pub(crate) unsafe fn from_block_start_unchecked(block: BlockPtr) -> Self {
+        Self {
+            block,
+            was_guarded: WasGuarded::No,
+        }
+    }
+
     pub(crate) fn block(self) -> BlockPtr {
         self.block
     }

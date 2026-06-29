@@ -781,6 +781,59 @@ unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable:
     }
 }
 
+#[inline(always)]
+fn mi_free_fast_path_enabled(usable: *mut usize) -> bool {
+    usable.is_null()
+        && !cfg!(debug_assertions)
+        && MI_DEBUG == 0
+        && MI_SECURE == 0
+        && MI_GUARDED == 0
+        && MI_PADDING == 0
+}
+
+#[inline(always)]
+unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
+    unsafe {
+        if !mi_free_fast_path_enabled(usable) {
+            return false;
+        }
+
+        let page = _mi_ptr_page(p);
+        let Some(page_ptr) = crate::core_types::PagePtr::new(page) else {
+            return false;
+        };
+        let current = crate::core_types::ThreadId::new_unchecked(_mi_prim_thread_id());
+        let page_tid = page_ptr.thread_id_cell().load_relaxed();
+        let block = crate::core_types::BlockForFree::from_block_start_unchecked(
+            crate::core_types::BlockPtr::new_unchecked(p.cast()),
+        );
+
+        match page_tid.classify_free_path(current) {
+            crate::core_types::FreePathKind::LocalFast => {
+                mi_free_block_local(
+                    crate::core_types::LocalPage::new_unchecked(page_ptr),
+                    block,
+                    crate::core_types::LocalFreeMode {
+                        track_stats: true,
+                        check_full: false,
+                    },
+                );
+                true
+            }
+            crate::core_types::FreePathKind::RemotePlain
+                if !page_tid.is_abandoned() && !page_tid.is_abandoned_mapped() =>
+            {
+                mi_free_block_mt(
+                    crate::core_types::ForeignPage::new_unchecked(page_ptr),
+                    block,
+                );
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 #[cold]
 #[inline(never)]
 pub(crate) unsafe fn mi_free_ex_slow(
@@ -825,6 +878,9 @@ pub(crate) unsafe fn mi_free_ex_slow(
 pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *mut usize) {
     unsafe {
         if p.is_null() {
+            return;
+        }
+        if mi_free_fast_try(p, usable) {
             return;
         }
         if let Some(validated) = mi_prepare_validated_free(mi_validate_pointer(p, msg)) {

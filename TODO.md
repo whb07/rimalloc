@@ -400,14 +400,17 @@ Problem:
 
 Tasks:
 
-- [ ] Add compile-time trait assertions for intended contracts:
-  - [ ] `Heap`.
-  - [ ] `HeapRef<'_>`.
-  - [ ] `MainHeap`.
-  - [ ] `HeapAllocation<'_>`.
-  - [ ] `InitializedHeapAllocation<'_>`.
-- [ ] If any type should be `!Send` or `!Sync`, make that intentional with marker fields and docs.
-- [ ] If any type should be `Send`/`Sync`, add explicit unsafe impls with safety comments if the derived auto-traits are not obvious enough.
+- [x] Add compile-time trait assertions for intended contracts:
+  - [x] `Heap`.
+  - [x] `HeapRef<'_>`.
+  - [x] `MainHeap`.
+  - [x] `HeapAllocation<'_>`.
+  - [x] `InitializedHeapAllocation<'_>`.
+  - Evidence: `src/safe/heap.rs` has rustdoc compile-fail assertions for all five heap wrapper types; `cargo test --doc --all-features` passes.
+- [x] If any type should be `!Send` or `!Sync`, make that intentional with marker fields and docs.
+  - Evidence: heap wrappers carry zero-sized `PhantomData<*mut ()>` marker fields and docs explain that safe heap operations use heap/thread-heap metadata that is not modeled as a thread-safe Rust handle.
+- [x] If any type should be `Send`/`Sync`, add explicit unsafe impls with safety comments if the derived auto-traits are not obvious enough.
+  - Evidence: no heap wrapper is intended to be `Send` or `Sync`; no unsafe impls were added.
 
 ## 16. P2 internal refactorability: reduce the `types` barrel and `__lint_touch`
 

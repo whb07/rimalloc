@@ -11,6 +11,8 @@ use super::{
     allocation::dangling_for,
 };
 
+type NotSendSync = PhantomData<*mut ()>;
+
 /// Error returned by safe heap ownership APIs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -53,9 +55,49 @@ impl std::error::Error for HeapError {}
 /// }
 /// drop(leaked);
 /// ```
+///
+/// Heap handles and heap-tied allocations are intentionally not `Send` or
+/// `Sync`. Safe heap allocation, resize, and stats operations use mimalloc
+/// heap/thread-heap metadata that is not exposed as a thread-safe Rust handle.
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::Heap;
+///
+/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSendSync::<Heap>(core::marker::PhantomData);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::HeapRef;
+///
+/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSendSync::<HeapRef<'static>>(core::marker::PhantomData);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::MainHeap;
+///
+/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSendSync::<MainHeap>(core::marker::PhantomData);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::HeapAllocation;
+///
+/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSendSync::<HeapAllocation<'static>>(core::marker::PhantomData);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::InitializedHeapAllocation;
+///
+/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSendSync::<InitializedHeapAllocation<'static>>(core::marker::PhantomData);
+/// ```
 #[must_use]
 pub struct Heap {
     ptr: NonNull<crate::types::mi_heap_t>,
+    _not_send_sync: NotSendSync,
 }
 
 impl Heap {
@@ -66,7 +108,10 @@ impl Heap {
         // as needed and returns either null or an owned heap pointer.
         let ptr = unsafe { crate::heap::mi_heap_new() };
         let ptr = NonNull::new(ptr).ok_or(HeapError::Create)?;
-        Ok(Self { ptr })
+        Ok(Self {
+            ptr,
+            _not_send_sync: PhantomData,
+        })
     }
 
     /// Borrows this heap as a copyable [`HeapRef`].
@@ -75,6 +120,7 @@ impl Heap {
         HeapRef {
             ptr: self.ptr,
             _marker: PhantomData,
+            _not_send_sync: PhantomData,
         }
     }
 
@@ -110,7 +156,9 @@ impl Drop for Heap {
 
 impl fmt::Debug for Heap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Heap").field("ptr", &self.ptr).finish()
+        f.debug_struct("Heap")
+            .field("ptr", &self.ptr)
+            .finish_non_exhaustive()
     }
 }
 
@@ -120,6 +168,7 @@ impl fmt::Debug for Heap {
 pub struct HeapRef<'heap> {
     pub(super) ptr: NonNull<crate::types::mi_heap_t>,
     _marker: PhantomData<&'heap Heap>,
+    _not_send_sync: NotSendSync,
 }
 
 impl<'heap> HeapRef<'heap> {
@@ -147,7 +196,9 @@ impl<'heap> HeapRef<'heap> {
 
 impl fmt::Debug for HeapRef<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("HeapRef").field("ptr", &self.ptr).finish()
+        f.debug_struct("HeapRef")
+            .field("ptr", &self.ptr)
+            .finish_non_exhaustive()
     }
 }
 
@@ -157,10 +208,19 @@ impl fmt::Debug for HeapRef<'_> {
 /// through it use the same heap-tied allocation wrappers as owned heaps, but
 /// are tied to the process-global main heap lifetime instead of to a temporary
 /// `MainHeap` value.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 #[must_use]
 pub struct MainHeap {
     ptr: NonNull<crate::types::mi_heap_t>,
+    _not_send_sync: NotSendSync,
+}
+
+impl fmt::Debug for MainHeap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MainHeap")
+            .field("ptr", &self.ptr)
+            .finish_non_exhaustive()
+    }
 }
 
 impl MainHeap {
@@ -171,7 +231,10 @@ impl MainHeap {
         // runtime initialization is unavailable.
         let ptr = unsafe { crate::init::mi_heap_main() };
         let ptr = NonNull::new(ptr).ok_or(HeapError::MainUnavailable)?;
-        Ok(Self { ptr })
+        Ok(Self {
+            ptr,
+            _not_send_sync: PhantomData,
+        })
     }
 
     /// Borrows the process-global main heap as a copyable [`HeapRef`].
@@ -185,6 +248,7 @@ impl MainHeap {
         HeapRef {
             ptr: self.ptr,
             _marker: PhantomData,
+            _not_send_sync: PhantomData,
         }
     }
 
@@ -237,6 +301,7 @@ struct RawHeapAllocation<'heap> {
     layout: Layout,
     heap: NonNull<crate::types::mi_heap_t>,
     _marker: PhantomData<&'heap Heap>,
+    _not_send_sync: NotSendSync,
 }
 
 impl<'heap> HeapAllocation<'heap> {
@@ -371,6 +436,7 @@ impl<'heap> RawHeapAllocation<'heap> {
                 layout,
                 heap,
                 _marker: PhantomData,
+                _not_send_sync: PhantomData,
             });
         }
 
@@ -404,6 +470,7 @@ impl<'heap> RawHeapAllocation<'heap> {
             layout,
             heap,
             _marker: PhantomData,
+            _not_send_sync: PhantomData,
         })
     }
 
@@ -443,6 +510,7 @@ impl<'heap> RawHeapAllocation<'heap> {
                 layout: new_layout,
                 heap: old.heap,
                 _marker: PhantomData,
+                _not_send_sync: PhantomData,
             });
         }
 
@@ -477,6 +545,7 @@ impl<'heap> RawHeapAllocation<'heap> {
                 layout: new_layout,
                 heap: old.heap,
                 _marker: PhantomData,
+                _not_send_sync: PhantomData,
             };
             if zero_grown_tail && new_size > old_size {
                 allocation.zero_tail(old_size);
@@ -542,7 +611,7 @@ impl fmt::Debug for RawHeapAllocation<'_> {
             .field("ptr", &self.ptr)
             .field("layout", &self.layout)
             .field("heap", &self.heap)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

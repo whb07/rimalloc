@@ -74,14 +74,17 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
   `Copy` or `Clone`.
 - `InitializedAllocation`: implements `Drop` through `Allocation` ownership and
   `Debug`; intentionally does not expose uninitialized bytes.
-- `Heap`: implements `Drop` and `Debug`; owns and deletes a mimalloc heap.
+- `Heap`: implements `Drop` and `Debug`; owns and deletes a mimalloc heap;
+  intentionally not `Send` or `Sync`.
 - `HeapRef`: `Copy` borrowed heap handle used to tie heap allocations to a
-  heap lifetime.
+  heap lifetime; intentionally not `Send` or `Sync`.
 - `MainHeap`: `Copy` handle for the process main heap; it never deletes the
-  main heap.
+  main heap; intentionally not `Send` or `Sync`.
 - `HeapAllocation`: implements `Drop` and `Debug`; frees through the heap
-  allocation family and carries the heap lifetime.
-- `InitializedHeapAllocation`: initialized heap-tied byte allocation wrapper.
+  allocation family and carries the heap lifetime; intentionally not `Send` or
+  `Sync`.
+- `InitializedHeapAllocation`: initialized heap-tied byte allocation wrapper;
+  intentionally not `Send` or `Sync`.
 - `GlobalOptions`: namespace type for supported process-global safe allocator
   options.
 - `Options`: compatibility alias for `GlobalOptions`; new code should prefer

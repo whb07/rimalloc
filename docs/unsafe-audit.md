@@ -83,7 +83,9 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   zeroed construction path or explicit unsafe initialization assertion.
 - `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
   `InitializedHeapAllocation` encode heap ownership and heap-allocation
-  lifetimes without exposing raw deletion rights.
+  lifetimes without exposing raw deletion rights. They are intentionally not
+  `Send` or `Sync` because safe heap operations use heap/thread-heap metadata
+  that is not modeled as a thread-safe Rust handle.
 - `GlobalOptions`, `Options`, `StatsSnapshot`, and `ProcessInfo` wrap
   supported allocator controls and observations without raw out-pointers in
   safe caller code.

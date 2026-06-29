@@ -105,6 +105,10 @@ only where the semantics are correct for the safe abstraction.
 - `Allocation` owns memory and releases it on drop. It implements `Debug`, has
   manual `Send`/`Sync` impls because safe shared access exposes no references
   into allocation contents, and does not implement `Copy` or `Clone`.
+- `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
+  `InitializedHeapAllocation` are intentionally not `Send` or `Sync`. They
+  carry zero-sized marker fields because safe heap operations use mimalloc
+  heap/thread-heap metadata that is not modeled as a thread-safe Rust handle.
 - Error/status types are plain value types and may implement `Copy`, `Clone`,
   `Debug`, `Eq`, and `PartialEq`.
 - Manual unsafe `Send` or `Sync` impls require a `SAFETY:` comment at the impl

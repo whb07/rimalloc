@@ -126,6 +126,14 @@ pub const MI_CBIN_NONE: mi_chunkbin_t = mi_chunkbin_e::MI_CBIN_NONE;
 pub const MI_CBIN_COUNT: mi_chunkbin_t = mi_chunkbin_e::MI_CBIN_COUNT;
 
 const MI_CHUNKBIN_COUNT: usize = mi_chunkbin_e::MI_CBIN_COUNT as usize;
+const MI_CHUNKBINS: [mi_chunkbin_t; MI_CHUNKBIN_COUNT] = [
+    mi_chunkbin_e::MI_CBIN_SMALL,
+    mi_chunkbin_e::MI_CBIN_OTHER,
+    mi_chunkbin_e::MI_CBIN_MEDIUM,
+    mi_chunkbin_e::MI_CBIN_LARGE,
+    mi_chunkbin_e::MI_CBIN_HUGE,
+    mi_chunkbin_e::MI_CBIN_NONE,
+];
 static CLOCK_DIFF: AtomicI64 = AtomicI64::new(0);
 static PROCESS_START: AtomicI64 = AtomicI64::new(0);
 
@@ -1978,12 +1986,12 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
     }
     mi_json_buf_print(&mut hbuf, "  ],\n");
     mi_json_buf_print(&mut hbuf, "  \"chunk_bins\": [\n");
-    for i in 0..MI_CHUNKBIN_COUNT {
+    for (i, bin) in MI_CHUNKBINS.iter().copied().enumerate() {
         mi_json_buf_print_count_cbin(
             &mut hbuf,
             "    ",
             &stats.chunk_bins[i],
-            unsafe { core::mem::transmute::<i32, mi_chunkbin_t>(i as i32) },
+            bin,
             i + 1 != MI_CHUNKBIN_COUNT,
         );
     }

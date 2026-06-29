@@ -115,10 +115,12 @@ pub(crate) unsafe extern "C" fn _mi_strlcpy(
     }
     let src_bytes = unsafe { CStr::from_ptr(src) }.to_bytes();
     let n = min(src_bytes.len(), dest_size - 1);
-    unsafe {
-        ptr::copy_nonoverlapping(src_bytes.as_ptr(), as_bytes_mut_ptr(dest), n);
-        *as_bytes_mut_ptr(dest).add(n) = 0;
-    }
+    // SAFETY: `dest` is writable for `dest_size` bytes by contract, `n` is at
+    // most `dest_size - 1`, and `src_bytes` came from the non-null source C
+    // string.
+    unsafe { ptr::copy_nonoverlapping(src_bytes.as_ptr(), as_bytes_mut_ptr(dest), n) };
+    // SAFETY: `n < dest_size`, so the terminator write stays in-bounds.
+    unsafe { *as_bytes_mut_ptr(dest).add(n) = 0 };
 }
 
 /// # Safety

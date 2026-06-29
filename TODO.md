@@ -657,11 +657,16 @@ Problem:
 
 Tasks:
 
-- [ ] Do this opportunistically after correctness fixes, not as a broad refactor first.
-- [ ] For each touched function, move `unsafe` to the smallest practical raw pointer deref, FFI call, or unchecked constructor.
-- [ ] Keep existing safety comments or add targeted comments where the narrowed unsafe block needs one.
-- [ ] Avoid formatting-only churn in unrelated functions.
-- [ ] Confirm `unsafe_op_in_unsafe_fn = deny` remains satisfied.
+- [x] Do this opportunistically after correctness fixes, not as a broad refactor first.
+  - Evidence: narrowed unsafe scopes only in `mi_reallocarr` and `_mi_strlcpy`, plus a focused `mi_reallocarr` compatibility test.
+- [x] For each touched function, move `unsafe` to the smallest practical raw pointer deref, FFI call, or unchecked constructor.
+  - Evidence: `mi_reallocarr` now separates pointer-slot reads/writes from allocation calls; `_mi_strlcpy` now separates the copy from the terminator write.
+- [x] Keep existing safety comments or add targeted comments where the narrowed unsafe block needs one.
+  - Evidence: each new narrowed unsafe operation has a local `SAFETY:` comment.
+- [x] Avoid formatting-only churn in unrelated functions.
+  - Evidence: changes are limited to `src/raw/posix.rs::mi_reallocarr`, `src/ffi/libc.rs::_mi_strlcpy`, and `tests/compat_exports.rs`.
+- [x] Confirm `unsafe_op_in_unsafe_fn = deny` remains satisfied.
+  - Evidence: `cargo clippy --workspace --all-targets --all-features`.
 
 ## 27. P2 idiomatic polish: replace ambiguous bool parameters with typed modes
 

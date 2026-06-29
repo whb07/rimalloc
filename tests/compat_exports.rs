@@ -99,6 +99,23 @@ fn new_and_heap_alloc_new_n_exports_allocate_from_expected_heap() {
     }
 }
 
+#[test]
+fn reallocarr_export_updates_pointer_slot_contract() {
+    unsafe {
+        let mut p = mi_malloc(16);
+        assert!(!p.is_null());
+        p.cast::<u8>().write(0xA5);
+
+        assert_eq!(mi_reallocarr(&mut p, 2, 16), 0);
+        assert!(!p.is_null());
+        assert!(mi_usable_size(p) >= 32);
+        assert_eq!(p.cast::<u8>().read(), 0xA5);
+
+        assert_eq!(mi_reallocarr(&mut p, 0, 16), 0);
+        assert!(p.is_null());
+    }
+}
+
 #[cfg(all(unix, not(target_os = "wasi")))]
 #[test]
 fn realpath_export_matches_resolved_buffer_and_allocated_result_contracts() {

@@ -176,14 +176,21 @@ pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, siz
     let total = req.total().get();
 
     if total == 0 {
-        unsafe {
-            mi_free(*ptrp);
-            *ptrp = ptr::null_mut();
-        }
+        // SAFETY: `ptrp` was checked non-null and is valid for one pointer.
+        let oldp = unsafe { *ptrp };
+        // SAFETY: `oldp` is null or a mimalloc-compatible allocation pointer
+        // by the function contract.
+        unsafe { mi_free(oldp) };
+        // SAFETY: `ptrp` was checked non-null and is valid for one pointer.
+        unsafe { *ptrp = ptr::null_mut() };
         return 0;
     }
 
-    let newp = unsafe { mi_realloc(*ptrp, total) };
+    // SAFETY: `ptrp` was checked non-null and is valid for one pointer.
+    let oldp = unsafe { *ptrp };
+    // SAFETY: `oldp` is null or a mimalloc-compatible allocation pointer by
+    // the function contract.
+    let newp = unsafe { mi_realloc(oldp, total) };
     if newp.is_null() {
         unsafe { mi_set_errno(ENOMEM) };
         return ENOMEM;

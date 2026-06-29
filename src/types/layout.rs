@@ -1,8 +1,9 @@
 //! DT-3 allocation layout types.
 
-use crate::core_types::{
-    Alignment, AlignmentOffset, BlockPtr, EffectiveSize, MaybeAlignment, PaddedSize, PagePtr,
-    RequestedSize, UsableSize, UserPtr,
+use super::ptr::{BlockPtr, PagePtr, UserPtr};
+use super::scalar::{
+    Alignment, AlignmentOffset, EffectiveSize, MaybeAlignment, PaddedSize, RequestedSize,
+    UsableSize,
 };
 
 /// Represents an explicit zeroing request.

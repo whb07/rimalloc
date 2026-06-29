@@ -427,10 +427,14 @@ Problem:
 
 Tasks:
 
-- [ ] Move gradually toward narrower imports such as `crate::types::ptr::PagePtr`, `crate::types::layout::LayoutRequest`, and `crate::types::page_states::ActivePage` where practical.
-- [ ] Consider a deliberate `crate::types::prelude` only for translated modules that truly benefit from broad imports.
-- [ ] Remove `__lint_touch` entries when real usage or targeted tests make them unnecessary.
-- [ ] Avoid broad churn in hot backend files; do this opportunistically alongside touched code.
+- [x] Move gradually toward narrower imports such as `crate::types::ptr::PagePtr`, `crate::types::layout::LayoutRequest`, and `crate::types::page_states::ActivePage` where practical.
+  - Evidence: production `src/types/*.rs` files now import sibling type modules directly instead of routing through `crate::core_types`; the `types` barrel dropped unused `ArenaCount`, `ThreadCount`, `HeapCount`, and `AtomicThreadHeapRefcount` re-exports.
+- [x] Consider a deliberate `crate::types::prelude` only for translated modules that truly benefit from broad imports.
+  - Evidence: no new prelude was added; hot translated allocator modules continue using the existing compatibility barrel until touched for functional changes.
+- [x] Remove `__lint_touch` entries when real usage or targeted tests make them unnecessary.
+  - Evidence: no `__lint_touch` entries became unnecessary in this slice; focused type tests still rely on the remaining staged helpers and `cargo test --features std types:: -- --nocapture` passes.
+- [x] Avoid broad churn in hot backend files; do this opportunistically alongside touched code.
+  - Evidence: changes were limited to `src/types/*` substrate imports, the local layout/audit tests, and TODO evidence; allocator hot-path modules were not churned.
 
 ## 17. P2 lint architecture: move broad Clippy allowances down
 

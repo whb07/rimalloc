@@ -1,6 +1,7 @@
 //! DT-5: ThreadFreeWord domain types.
 
-use crate::core_types::BlockPtr;
+use super::constants::mi_block_t;
+use super::ptr::{BlockPtr, ptr_exposed_addr};
 
 /// Represents ownership state of a thread-free word.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -28,7 +29,7 @@ impl ThreadFreeWord {
     /// Use `head()` when a non-null value needs a typed `BlockPtr`; this is only
     /// for storage and C-compatibility boundaries that already expect null.
     #[inline(always)]
-    pub(crate) fn head_raw(self) -> *mut crate::types::mi_block_t {
+    pub(crate) fn head_raw(self) -> *mut mi_block_t {
         let ptr_val = self.0 & !Self::OWNED_BIT;
         if ptr_val == 0 {
             return core::ptr::null_mut();
@@ -42,7 +43,7 @@ impl ThreadFreeWord {
 
         #[cfg(not(miri))]
         {
-            ptr_val as *mut crate::types::mi_block_t
+            ptr_val as *mut mi_block_t
         }
     }
 
@@ -80,7 +81,7 @@ impl ThreadFreeWord {
     pub(crate) fn from_parts(head: Option<BlockPtr>, owned: ThreadFreeOwner) -> Self {
         let ptr_val = match head {
             Some(ptr) => {
-                let val = crate::core_types::ptr_exposed_addr(ptr.as_ptr());
+                let val = ptr_exposed_addr(ptr.as_ptr());
                 crate::mi_assert_internal!((val & Self::OWNED_BIT) == 0);
                 crate::provenance::remember_address(val, ptr.as_ptr());
                 val

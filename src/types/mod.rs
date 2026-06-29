@@ -27,12 +27,11 @@ pub(crate) use ptr::{
 };
 
 pub(crate) use scalar::{
-    Alignment, AlignmentOffset, ArenaCount, ArenaIndex, Bin, BlockSize, DirectBin, EffectiveSize,
-    Errno, FullBlockSize, GoodSize, HeapCount, HeapSeq, Heartbeat, MaybeAlignment, NumaNode,
-    OsPageSize, PaddedSize, PageCapacity, PageMapIndex, PageMapSubIndex, PageQueueCount,
-    PageReclaimLimit, PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire,
-    SliceCount, SliceIndex, StatsBin, SubprocSeq, ThreadCount, ThreadSeq, UsableOut, UsableSize,
-    UsedBlockCount, WordCount,
+    Alignment, AlignmentOffset, ArenaIndex, Bin, BlockSize, DirectBin, EffectiveSize, Errno,
+    FullBlockSize, GoodSize, HeapSeq, Heartbeat, MaybeAlignment, NumaNode, OsPageSize, PaddedSize,
+    PageCapacity, PageMapIndex, PageMapSubIndex, PageQueueCount, PageReclaimLimit,
+    PageReclaimOnFree, RequestedSize, ReservedBlockCount, RetireExpire, SliceCount, SliceIndex,
+    StatsBin, SubprocSeq, ThreadSeq, UsableOut, UsableSize, UsedBlockCount, WordCount,
 };
 
 // Keep staged Phase 1 re-exports exercised in non-test builds without lint allowances.
@@ -131,8 +130,8 @@ mod heap;
 
 pub(crate) use atomic::{
     AtomicAbandonedCount, AtomicArenaPage, AtomicGuard, AtomicI64Field, AtomicPageThreadId,
-    AtomicPtrField, AtomicThreadFree, AtomicThreadHeapRefcount, AtomicUsizeField, MemoryOrder,
-    MiLockGuard, MiLockPtr, OnceGuard, OnceStatePtr, RemoteFreeList,
+    AtomicPtrField, AtomicThreadFree, AtomicUsizeField, MemoryOrder, MiLockGuard, MiLockPtr,
+    OnceGuard, OnceStatePtr, RemoteFreeList,
 };
 mod padding;
 

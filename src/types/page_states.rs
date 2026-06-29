@@ -1,6 +1,6 @@
 //! Required types for page typestate signatures referenced in freelist_wrappers.
 
-use crate::core_types::{PagePtr, ThreadHeapPtr};
+use super::ptr::{PagePtr, ThreadHeapPtr};
 use core::marker::PhantomData;
 
 pub(crate) struct Page<S> {

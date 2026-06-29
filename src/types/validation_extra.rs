@@ -1,5 +1,5 @@
 //! Extra validation types needed by freelist wrapper signatures.
-use crate::core_types::BlockPtr;
+use super::ptr::BlockPtr;
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]

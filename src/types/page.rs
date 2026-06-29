@@ -2,12 +2,12 @@
 
 use core::num::NonZeroUsize;
 
-use super::ptr::PagePtr;
-use super::scalar::{PageMapIndex, PageMapSubIndex, SliceCount};
-use crate::types::{
+use super::constants::{
     MI_PAGE_FLAG_MASK, MI_PAGE_HAS_INTERIOR_POINTERS, MI_PAGE_IN_FULL_QUEUE,
     MI_THREADID_ABANDONED_MAPPED,
 };
+use super::ptr::PagePtr;
+use super::scalar::{PageMapIndex, PageMapSubIndex, SliceCount};
 
 /// Represents the low bits in `xthread_id` specifying page status flags.
 #[repr(transparent)]

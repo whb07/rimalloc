@@ -3,7 +3,8 @@
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
-use crate::core_types::{ArenaPtr, OsMemPtr, SliceRange};
+use super::arena::SliceRange;
+use super::ptr::{ArenaPtr, OsMemPtr};
 
 /// The internal C-compatible memkind code.
 #[repr(transparent)]

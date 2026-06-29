@@ -2257,9 +2257,6 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && scalar_rs.contains("pub(crate) struct ArenaCount(pub(crate) usize);")
             && scalar_rs.contains("pub(crate) struct ThreadCount(pub(crate) usize);")
             && scalar_rs.contains("pub(crate) struct HeapCount(pub(crate) usize);")
-            && core_mod.contains("ArenaCount")
-            && core_mod.contains("ThreadCount")
-            && core_mod.contains("HeapCount")
             && ptr_rs.contains(
                 "pub(crate) unsafe fn arena_count(self, order: MemoryOrder) -> ArenaCount"
             )
@@ -2478,8 +2475,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         freelist_rs.contains("pub(crate) struct ThreadFreeWord(pub(crate) usize);")
             && freelist_rs.contains("pub(crate) const OWNED_BIT: usize = 1;")
             && freelist_rs.contains("let ptr_val = self.0 & !Self::OWNED_BIT;")
-            && freelist_rs
-                .contains("pub(crate) fn head_raw(self) -> *mut crate::types::mi_block_t")
+            && freelist_rs.contains("use super::constants::mi_block_t;")
+            && freelist_rs.contains("pub(crate) fn head_raw(self) -> *mut mi_block_t")
             && freelist_rs.contains("pub(crate) const fn is_owned(self) -> bool")
             && freelist_rs.contains("(self.0 & Self::OWNED_BIT) != 0")
             && freelist_rs.contains(
@@ -2656,16 +2653,17 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
                 "crate::internal::_mi_align_down(ptr_exposed_addr(ptr), alignment) as *mut c_void"
             )
             && freelist_rs.contains("pub(crate) struct ThreadFreeWord(pub(crate) usize);")
-            && freelist_rs
-                .contains("pub(crate) fn head_raw(self) -> *mut crate::types::mi_block_t")
+            && freelist_rs.contains("use super::constants::mi_block_t;")
+            && freelist_rs.contains("use super::ptr::{BlockPtr, ptr_exposed_addr};")
+            && freelist_rs.contains("pub(crate) fn head_raw(self) -> *mut mi_block_t")
             && freelist_rs.contains("crate::provenance::resolve_address(ptr_val)")
-            && freelist_rs.contains("ptr_val as *mut crate::types::mi_block_t")
+            && freelist_rs.contains("ptr_val as *mut mi_block_t")
             && freelist_rs.contains("Some(unsafe { BlockPtr::new_unchecked(ptr) })")
-            && freelist_rs.contains("let val = crate::core_types::ptr_exposed_addr(ptr.as_ptr());")
+            && freelist_rs.contains("let val = ptr_exposed_addr(ptr.as_ptr());")
             && freelist_rs.contains("crate::provenance::remember_address(val, ptr.as_ptr());")
+            && freelist_wrappers_rs.contains("use super::ptr::{BlockPtr, ptr_exposed_addr};")
             && freelist_wrappers_rs.contains("pub(crate) struct EncodedWord(usize);")
-            && freelist_wrappers_rs
-                .contains("let word = crate::core_types::ptr_exposed_addr(block);")
+            && freelist_wrappers_rs.contains("let word = ptr_exposed_addr(block);")
             && freelist_wrappers_rs.contains("crate::provenance::remember_address(word, block);")
             && freelist_wrappers_rs.contains("word as *mut mi_block_t")
             && internal_rs.contains("pub(crate) fn mi_ptr_decode(")

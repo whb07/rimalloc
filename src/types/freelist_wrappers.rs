@@ -2,11 +2,11 @@
 
 use core::{ffi::c_void, marker::PhantomData, ptr};
 
-use crate::core_types::BlockPtr;
-use crate::core_types::page_states::{AvailablePage, LocalPage};
-use crate::core_types::validation_extra::{AllocatedBlock, FreeBlock};
+use super::constants::mi_block_t;
+use super::page_states::{AvailablePage, LocalPage};
+use super::ptr::{BlockPtr, ptr_exposed_addr};
+use super::validation_extra::{AllocatedBlock, FreeBlock};
 use crate::internal::{mi_block_next, mi_block_set_next};
-use crate::types::mi_block_t;
 
 /// Keys used to encode and decode free-list pointers.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -43,7 +43,7 @@ pub(crate) struct EncodedPtr<T> {
     _ty: PhantomData<*mut T>,
 }
 
-impl EncodedPtr<crate::types::mi_block_t> {
+impl EncodedPtr<mi_block_t> {
     /// Read the raw encoded free-list word stored in a block link.
     ///
     /// # Safety
@@ -70,7 +70,7 @@ impl EncodedPtr<crate::types::mi_block_t> {
     /// Wrap an unencoded raw block pointer as a free-list word.
     #[inline(always)]
     pub(crate) fn from_unencoded_raw(block: *const mi_block_t) -> Self {
-        let word = crate::core_types::ptr_exposed_addr(block);
+        let word = ptr_exposed_addr(block);
         crate::provenance::remember_address(word, block);
         Self {
             word: EncodedWord::new(word),

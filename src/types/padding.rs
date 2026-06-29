@@ -2,9 +2,11 @@
 
 use core::ptr::NonNull;
 
-use crate::core_types::{BlockPtr, PageKeys, PagePtr, UsableSize};
+use super::constants::mi_padding_t;
+use super::freelist_wrappers::PageKeys;
+use super::ptr::{BlockPtr, PagePtr};
+use super::scalar::UsableSize;
 use crate::internal::mi_ptr_encode_canary;
-use crate::types::mi_padding_t;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

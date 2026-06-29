@@ -2,7 +2,8 @@
 
 use core::num::NonZeroU32;
 
-use crate::core_types::{ArenaPtr, SliceCount, SliceIndex};
+use super::ptr::ArenaPtr;
+use super::scalar::{SliceCount, SliceIndex};
 
 #[derive(Clone, Copy)]
 pub(crate) struct ArenaAllocation {

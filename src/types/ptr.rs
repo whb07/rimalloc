@@ -6,22 +6,26 @@ use core::ffi::c_void;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::AtomicPtr;
 
-use crate::core_types::{
-    ArenaCount, ArenaIndex, AtomicI64Field, AtomicPageThreadId, AtomicPtrField, AtomicThreadFree,
-    AtomicThreadHeapRefcount, AtomicUsizeField, AvailableFreeList, Bin, BlockLink, BlockSize,
-    DirectBin, EncodedPtr, HeapCount, Heartbeat, LocalFreeList, MemoryOrder, MiLockPtr, NumaNode,
-    PageCapacity, PageKeys, PageQueueCount, ReservedBlockCount, SliceCount, SubprocSeq,
-    ThreadCount, ThreadId, ThreadSeq, UsedBlockCount,
+use super::atomic::{
+    AtomicI64Field, AtomicPageThreadId, AtomicPtrField, AtomicThreadFree, AtomicThreadHeapRefcount,
+    AtomicUsizeField, MemoryOrder, MiLockPtr,
+};
+use super::constants::{
+    mi_arena_pages_t, mi_arena_t, mi_block_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_subproc_t,
+    mi_theap_t, mi_thread_local_t, mi_tld_t,
+};
+use super::freelist_wrappers::{AvailableFreeList, BlockLink, EncodedPtr, LocalFreeList, PageKeys};
+use super::page::ThreadId;
+use super::scalar::{
+    ArenaCount, ArenaIndex, Bin, BlockSize, DirectBin, HeapCount, Heartbeat, NumaNode,
+    PageCapacity, PageQueueCount, ReservedBlockCount, SliceCount, SubprocSeq, ThreadCount,
+    ThreadSeq, UsedBlockCount,
 };
 
 use crate::atomic::mi_lock_t;
 use crate::bitmap::{mi_bbitmap_t, mi_bitmap_t};
 use crate::internal::mi_memid_t;
 use crate::stats::mi_stats_t;
-use crate::types::{
-    mi_arena_pages_t, mi_arena_t, mi_block_t, mi_heap_t, mi_page_queue_t, mi_page_t, mi_subproc_t,
-    mi_theap_t, mi_thread_local_t, mi_tld_t,
-};
 
 macro_rules! define_ptr_wrapper {
     ($name:ident, $raw_type:ty, $doc:expr) => {

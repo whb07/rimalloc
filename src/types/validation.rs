@@ -6,7 +6,7 @@
 //! and `BlockForFree` stay here because they are produced only by pointer
 //! classification and validation.
 
-use crate::core_types::{BlockPtr, PagePtr, UserPtr};
+use super::ptr::{BlockPtr, PagePtr, UserPtr};
 
 /// Offset from the start of a block.
 #[repr(transparent)]

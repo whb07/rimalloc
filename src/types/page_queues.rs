@@ -1,7 +1,7 @@
 //! DT-10: Page queue types.
 
-use crate::core_types::page_states::Page;
-use crate::core_types::{PagePtr, PageQueuePtr};
+use super::page_states::Page;
+use super::ptr::{PagePtr, PageQueuePtr};
 use core::marker::PhantomData;
 use core::mem::size_of;
 

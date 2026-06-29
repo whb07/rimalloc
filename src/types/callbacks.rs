@@ -3,7 +3,7 @@ use core::ffi::{c_char, c_void};
 use super::ptr::{ArenaPtr, HeapPtr};
 use super::scalar::Heartbeat;
 
-use crate::types::{
+use super::constants::{
     mi_block_visit_fun, mi_claim_fun_t, mi_deferred_free_fun, mi_error_fun, mi_heap_area_t,
     mi_heap_visit_fun, mi_output_fun,
 };

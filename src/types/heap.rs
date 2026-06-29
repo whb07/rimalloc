@@ -1,7 +1,8 @@
 //! DT-10.1: Heap and Thread-Heap wrappers.
 
-use crate::core_types::{HeapPtr, SubprocPtr, ThreadHeapLocal, ThreadHeapPtr, TldPtr};
-use crate::types::mi_heap_t;
+use super::constants::mi_heap_t;
+use super::page_states::ThreadHeapLocal;
+use super::ptr::{HeapPtr, SubprocPtr, ThreadHeapPtr, TldPtr};
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]

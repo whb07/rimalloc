@@ -5,10 +5,11 @@ use core::marker::PhantomData;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize, Ordering};
 
-use crate::core_types::{
-    BlockPtr, LocalFreeList, OwnedAbandonedPage, PageFlags, PageOwnerId, PageThreadId,
-    ThreadFreeOwner, ThreadFreeWord,
-};
+use super::freelist::{ThreadFreeOwner, ThreadFreeWord};
+use super::freelist_wrappers::LocalFreeList;
+use super::page::{PageFlags, PageOwnerId, PageThreadId};
+use super::page_states::OwnedAbandonedPage;
+use super::ptr::BlockPtr;
 
 pub(crate) type MemoryOrder = Ordering;
 

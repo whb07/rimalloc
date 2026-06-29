@@ -137,10 +137,52 @@ impl StatsSnapshot {
         StatTotal::from_i64(self.raw.reserved.current)
     }
 
+    /// Returns peak reserved bytes from the snapshot.
+    #[inline]
+    pub fn reserved_peak(&self) -> StatTotal {
+        StatTotal::from_i64(self.raw.reserved.peak)
+    }
+
+    /// Returns current committed bytes from the snapshot.
+    #[inline]
+    pub fn committed_current(&self) -> StatTotal {
+        StatTotal::from_i64(self.raw.committed.current)
+    }
+
+    /// Returns peak committed bytes from the snapshot.
+    #[inline]
+    pub fn committed_peak(&self) -> StatTotal {
+        StatTotal::from_i64(self.raw.committed.peak)
+    }
+
+    /// Returns total normal malloc bytes from the snapshot.
+    #[inline]
+    pub fn malloc_normal_total(&self) -> StatTotal {
+        StatTotal::from_i64(self.raw.malloc_normal.total)
+    }
+
+    /// Returns total huge malloc bytes from the snapshot.
+    #[inline]
+    pub fn malloc_huge_total(&self) -> StatTotal {
+        StatTotal::from_i64(self.raw.malloc_huge.total)
+    }
+
     /// Returns the current page count from the snapshot.
     #[inline]
     pub fn pages_current(&self) -> StatCount {
         StatCount::new(self.raw.pages.current)
+    }
+
+    /// Returns the current abandoned page count from the snapshot.
+    #[inline]
+    pub fn pages_abandoned_current(&self) -> StatCount {
+        StatCount::new(self.raw.pages_abandoned.current)
+    }
+
+    /// Returns the current committed page count from the snapshot.
+    #[inline]
+    pub fn pages_committed_current(&self) -> StatCount {
+        StatCount::new(self.raw.page_committed.current)
     }
 
     /// Writes this snapshot as JSON into `output`.
@@ -327,7 +369,7 @@ const fn nonzero_total(value: usize) -> Option<StatTotal> {
 
 #[cfg(test)]
 mod tests {
-    use super::StatTotal;
+    use super::{StatTotal, StatsSnapshot};
 
     #[test]
     fn stat_total_from_i64_saturates_to_usize_domain() {
@@ -341,5 +383,54 @@ mod tests {
             i64::MAX as usize
         };
         assert_eq!(StatTotal::from_i64(i64::MAX).get(), expected);
+    }
+
+    #[test]
+    fn stats_snapshot_accessors_match_internal_raw_fields() {
+        let mut raw = crate::stats::mi_stats_t::default();
+        raw.malloc_requested.total = 111;
+        raw.reserved.current = 222;
+        raw.reserved.peak = 333;
+        raw.committed.current = 444;
+        raw.committed.peak = 555;
+        raw.malloc_normal.total = 666;
+        raw.malloc_huge.total = 777;
+        raw.pages.current = 8;
+        raw.pages_abandoned.current = 9;
+        raw.page_committed.current = 10;
+
+        let snapshot = StatsSnapshot { raw };
+
+        assert_eq!(
+            snapshot.malloc_requested_total().get(),
+            raw.malloc_requested.total as usize
+        );
+        assert_eq!(
+            snapshot.reserved_current().get(),
+            raw.reserved.current as usize
+        );
+        assert_eq!(snapshot.reserved_peak().get(), raw.reserved.peak as usize);
+        assert_eq!(
+            snapshot.committed_current().get(),
+            raw.committed.current as usize
+        );
+        assert_eq!(snapshot.committed_peak().get(), raw.committed.peak as usize);
+        assert_eq!(
+            snapshot.malloc_normal_total().get(),
+            raw.malloc_normal.total as usize
+        );
+        assert_eq!(
+            snapshot.malloc_huge_total().get(),
+            raw.malloc_huge.total as usize
+        );
+        assert_eq!(snapshot.pages_current().get(), raw.pages.current);
+        assert_eq!(
+            snapshot.pages_abandoned_current().get(),
+            raw.pages_abandoned.current
+        );
+        assert_eq!(
+            snapshot.pages_committed_current().get(),
+            raw.page_committed.current
+        );
     }
 }

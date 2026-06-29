@@ -589,17 +589,21 @@ Problem:
 
 Tasks:
 
-- [ ] Add memory-total accessors as a deliberate group, if useful:
-  - [ ] `committed_current`.
-  - [ ] `committed_peak`.
-  - [ ] `reserved_peak`.
-- [ ] Add allocation-count accessors as a deliberate group, if useful:
-  - [ ] `malloc_normal_total`.
-  - [ ] `malloc_huge_total`.
-- [ ] Add page-state accessors as a deliberate group, if useful:
-  - [ ] `pages_abandoned_current`.
-  - [ ] `pages_committed_current`.
-- [ ] Add tests that compare accessors to the raw snapshot fields used internally.
+- [x] Add memory-total accessors as a deliberate group, if useful:
+  - [x] `committed_current`.
+  - [x] `committed_peak`.
+  - [x] `reserved_peak`.
+  - Evidence: `StatsSnapshot` now exposes typed `StatTotal` wrappers for these raw memory-total fields.
+- [x] Add allocation-count accessors as a deliberate group, if useful:
+  - [x] `malloc_normal_total`.
+  - [x] `malloc_huge_total`.
+  - Evidence: `StatsSnapshot` now exposes typed `StatTotal` wrappers for normal and huge malloc totals without exposing `mi_stats_t`.
+- [x] Add page-state accessors as a deliberate group, if useful:
+  - [x] `pages_abandoned_current`.
+  - [x] `pages_committed_current`.
+  - Evidence: `StatsSnapshot` now exposes typed `StatCount` wrappers for the current abandoned and committed page counts.
+- [x] Add tests that compare accessors to the raw snapshot fields used internally.
+  - Evidence: `cargo test --features std safe::stats::tests -- --nocapture`.
 
 ## 24. P3 future API: keep typed object ownership separate from byte allocation
 

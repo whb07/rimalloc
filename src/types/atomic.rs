@@ -28,7 +28,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize {
-        let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };
+        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.load(order)
     }
 
@@ -36,7 +36,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn store(self, value: usize, order: MemoryOrder) {
-        let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };
+        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.store(value, order);
     }
 
@@ -44,7 +44,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn fetch_add(self, value: usize, order: MemoryOrder) -> usize {
-        let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };
+        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.fetch_add(value, order)
     }
 
@@ -52,7 +52,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn fetch_sub(self, value: usize, order: MemoryOrder) -> usize {
-        let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };
+        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.fetch_sub(value, order)
     }
 
@@ -60,7 +60,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn fetch_or(self, bits: usize, order: MemoryOrder) -> usize {
-        let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };
+        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.fetch_or(bits, order)
     }
 
@@ -68,7 +68,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn fetch_and(self, bits: usize, order: MemoryOrder) -> usize {
-        let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };
+        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.fetch_and(bits, order)
     }
 
@@ -80,7 +80,7 @@ impl AtomicUsizeField {
         expected: &mut usize,
         desired: usize,
     ) -> bool {
-        let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };
+        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         match atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire) {
             Ok(_) => true,
             Err(actual) => {
@@ -100,7 +100,7 @@ impl AtomicUsizeField {
         success: MemoryOrder,
         failure: MemoryOrder,
     ) -> bool {
-        let atomic = unsafe { &*self.0.cast::<AtomicUsize>() };
+        let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         match atomic.compare_exchange_weak(*expected, desired, success, failure) {
             Ok(_) => true,
             Err(actual) => {
@@ -127,7 +127,7 @@ impl AtomicI64Field {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn load(self, order: MemoryOrder) -> i64 {
-        let atomic = unsafe { &*self.0.cast::<AtomicI64>() };
+        let atomic = unsafe { AtomicI64::from_ptr(self.0) };
         atomic.load(order)
     }
 
@@ -135,7 +135,7 @@ impl AtomicI64Field {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn store(self, value: i64, order: MemoryOrder) {
-        let atomic = unsafe { &*self.0.cast::<AtomicI64>() };
+        let atomic = unsafe { AtomicI64::from_ptr(self.0) };
         atomic.store(value, order);
     }
 
@@ -143,7 +143,7 @@ impl AtomicI64Field {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn compare_exchange_acq_rel(self, expected: &mut i64, desired: i64) -> bool {
-        let atomic = unsafe { &*self.0.cast::<AtomicI64>() };
+        let atomic = unsafe { AtomicI64::from_ptr(self.0) };
         match atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire) {
             Ok(_) => true,
             Err(actual) => {
@@ -170,7 +170,7 @@ impl<T> AtomicPtrField<T> {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T {
-        let atomic = unsafe { &*self.0.cast::<AtomicPtr<T>>() };
+        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         atomic.load(order)
     }
 
@@ -178,7 +178,7 @@ impl<T> AtomicPtrField<T> {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder) {
-        let atomic = unsafe { &*self.0.cast::<AtomicPtr<T>>() };
+        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         atomic.store(value, order);
     }
 
@@ -186,7 +186,7 @@ impl<T> AtomicPtrField<T> {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn exchange_acq_rel(self, value: *mut T) -> *mut T {
-        let atomic = unsafe { &*self.0.cast::<AtomicPtr<T>>() };
+        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         atomic.swap(value, Ordering::AcqRel)
     }
 
@@ -198,7 +198,7 @@ impl<T> AtomicPtrField<T> {
         expected: &mut *mut T,
         desired: *mut T,
     ) -> bool {
-        let atomic = unsafe { &*self.0.cast::<AtomicPtr<T>>() };
+        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         match atomic.compare_exchange(*expected, desired, Ordering::Release, Ordering::Relaxed) {
             Ok(_) => true,
             Err(actual) => {
@@ -216,7 +216,7 @@ impl<T> AtomicPtrField<T> {
         expected: &mut *mut T,
         desired: *mut T,
     ) -> bool {
-        let atomic = unsafe { &*self.0.cast::<AtomicPtr<T>>() };
+        let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         match atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire) {
             Ok(_) => true,
             Err(actual) => {

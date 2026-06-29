@@ -288,10 +288,14 @@ Problem:
 
 Tasks:
 
-- [ ] Evaluate using `AtomicUsize::from_ptr`, `AtomicI64::from_ptr`, and `AtomicPtr::from_ptr` in the field wrappers.
-- [ ] Keep wrapper methods inline and zero-cost.
-- [ ] Keep the safety comments explicit: pointer must be non-null, aligned, valid, and all concurrent access must be atomic-compatible.
-- [ ] Inspect generated code or benchmarks if there is any concern about codegen changes.
+- [x] Evaluate using `AtomicUsize::from_ptr`, `AtomicI64::from_ptr`, and `AtomicPtr::from_ptr` in the field wrappers.
+  - Evidence: `src/types/atomic.rs` now uses the standard `Atomic*::from_ptr` APIs for field access.
+- [x] Keep wrapper methods inline and zero-cost.
+  - Evidence: wrapper operations remain `#[inline(always)]` thin calls over the atomic operation.
+- [x] Keep the safety comments explicit: pointer must be non-null, aligned, valid, and all concurrent access must be atomic-compatible.
+  - Evidence: the type-level safety contracts still state non-null, alignment, validity, and atomic-compatible concurrent access requirements.
+- [x] Inspect generated code or benchmarks if there is any concern about codegen changes.
+  - Evidence: no additional codegen concern after the direct `from_ptr` swap; focused atomic and concurrency-model tests passed with `cargo test --features std types::atomic -- --nocapture`.
 
 ## 11. P2 safe facade: add `MaybeUninit` views for uninitialized allocations
 

@@ -500,9 +500,12 @@ Problem:
 
 Tasks:
 
-- [ ] Extend `scripts/check-safe-docs.py` to detect public enum variants and require preceding `///` docs.
-- [ ] Add a regression fixture or synthetic check proving an undocumented public safe enum variant fails.
-- [ ] Run the script and update any missing variant docs.
+- [x] Extend `scripts/check-safe-docs.py` to detect public enum variants and require preceding `///` docs.
+  - Evidence: the checker now parses public enum bodies and reports undocumented variants separately from top-level public items.
+- [x] Add a regression fixture or synthetic check proving an undocumented public safe enum variant fails.
+  - Evidence: `scripts/check-safe-docs.py` includes a synthetic `Synthetic::Undocumented` case that must be flagged before scanning real safe facade files.
+- [x] Run the script and update any missing variant docs.
+  - Evidence: `scripts/check-safe-docs.py` passes; existing safe facade enum variants were already documented, so no facade doc edits were needed.
 
 ## 20. P2 no-allocation tooling: reduce regex-only blind spots
 

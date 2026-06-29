@@ -170,6 +170,12 @@ impl StatsSnapshot {
 }
 
 /// Safe process allocator information.
+///
+/// Mimalloc's process-info C API reports unavailable numeric fields as zero on
+/// some platforms. Size totals use `None` when the raw value is zero, so a
+/// reported zero total is indistinguishable from an unavailable total through
+/// this safe facade. Page faults are always returned because zero is a valid
+/// observed count for that field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[must_use]
 pub struct ProcessInfo {

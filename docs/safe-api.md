@@ -47,8 +47,8 @@ private unless explicitly exposed through an audited unstable-internals gate.
   for invalid or immutable keys.
 - `StatsSnapshot`, `StatCount`, and `StatTotal`: owned non-printing statistics
   snapshots and typed statistic values.
-- `ProcessInfo`: typed process allocator information; unavailable fields are
-  represented with `Option`.
+- `ProcessInfo`: typed process allocator information. Size totals are `None`
+  when the raw process-info API reports zero; page faults always return a count.
 - `AllocError`, `LayoutError`, `TryAllocError`, `ResizeError`,
   `ResizeErrorKind`, `HeapError`, `OptionError`, and `StatsError`: typed
   failure states for the safe API.

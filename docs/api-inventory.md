@@ -78,12 +78,13 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
   allocation family and carries the heap lifetime.
 - `InitializedHeapAllocation`: initialized heap-tied byte allocation wrapper.
 - `Options`: namespace type for supported safe allocator options.
-- `OptionKey`: closed supported-option key set; invalid raw keys are rejected.
+- `OptionKey`: non-exhaustive supported-option key set; invalid raw keys are
+  rejected.
 - `StatsSnapshot`: non-printing copy of allocator statistics.
 - `StatCount`, `StatTotal`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`,
   `PartialOrd`, and `Ord` typed integer wrappers.
-- `ProcessInfo`: typed process allocator information with unavailable fields
-  represented as `Option`.
+- `ProcessInfo`: typed process allocator information. Size totals are `None`
+  when the raw process-info API reports zero; page faults always return a count.
 - `AllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
 - `LayoutError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and

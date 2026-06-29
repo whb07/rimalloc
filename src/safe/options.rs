@@ -25,6 +25,7 @@ impl std::error::Error for OptionError {}
 
 /// Safe mimalloc option key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum OptionKey {
     /// Controls whether mimalloc prints error diagnostics.
     ShowErrors,

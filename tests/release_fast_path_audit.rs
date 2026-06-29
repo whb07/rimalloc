@@ -1661,8 +1661,14 @@ fn allocation_product_paths_use_typed_requests() {
             && alloc_rs.contains("fn alloc_product_or_report(")
             && alloc_rs
                 .contains("crate::internal::mi_count_size_overflow(count, size, &mut total)")
-            && alloc_rs.contains("crate::core_types::CallocRequest::new(count, size).ok()")
-            && alloc_rs.contains("crate::core_types::AllocProduct::new(count, size).ok()")
+            && alloc_rs.contains(
+                "crate::core_types::CallocRequest::from_checked_total(count, size, total).ok()"
+            )
+            && alloc_rs.contains(
+                "crate::core_types::AllocProduct::from_checked_total(count, size, total).ok()"
+            )
+            && !alloc_rs.contains("CallocRequest::new(count, size).ok()")
+            && !alloc_rs.contains("AllocProduct::new(count, size).ok()")
             && alloc_rs.contains("unsafe fn mi_theap_calloc_req(")
             && alloc_rs.contains("unsafe fn mi_theap_mallocn_req(")
             && alloc_rs.contains("unsafe fn mi_theap_realloc_req(")
@@ -1670,7 +1676,6 @@ fn allocation_product_paths_use_typed_requests() {
             && alloc_rs.contains("unsafe fn mi_theap_reallocf_req(")
             && alloc_rs.contains("unsafe fn mi_theap_reallocn_req(")
             && alloc_rs.contains("unsafe fn mi_theap_recalloc_req(")
-            && alloc_rs.contains("crate::core_types::CallocRequest::new(count, size)")
             && alloc_rs.contains("alloc_product_or_report(newcount, size)")
             && alloc_rs.contains(
                 "unsafe fn mi_theap_alloc_new_n(\n    theap: *mut mi_theap_t,\n    req: crate::core_types::AllocProduct,"
@@ -1686,6 +1691,7 @@ fn allocation_product_paths_use_typed_requests() {
             && layout_rs.contains("pub(crate) struct ReallocRequest")
             && layout_rs.contains("enum ReallocSource")
             && layout_rs.contains("pub(crate) fn zero_new_tail(&self) -> Zeroed")
+            && layout_rs.contains("pub(crate) unsafe fn from_checked_total(")
             && aligned_rs.contains("unsafe fn mi_theap_realloc_zero_aligned_at_req(")
             && aligned_rs.contains("let offset = crate::core_types::AlignmentOffset::new(offset);")
             && aligned_rs.contains(

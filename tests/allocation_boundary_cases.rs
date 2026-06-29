@@ -109,6 +109,33 @@ fn calloc_overflow_returns_null() {
 }
 
 #[test]
+fn product_allocation_paths_preserve_overflow_and_zero_product_behavior() {
+    let _quiet_expected_error = unsafe { ShowErrorsGuard::disabled() };
+    unsafe {
+        assert!(mi_calloc(usize::MAX, 2).is_null());
+        assert!(mi_mallocn(usize::MAX, 2).is_null());
+
+        assert_freeable(mi_calloc(0, usize::MAX));
+        assert_freeable(mi_calloc(usize::MAX, 0));
+        assert_freeable(mi_mallocn(0, usize::MAX));
+        assert_freeable(mi_mallocn(usize::MAX, 0));
+
+        let heap = mi_heap_new();
+        assert!(!heap.is_null());
+
+        assert!(mi_heap_calloc(heap, usize::MAX, 2).is_null());
+        assert!(mi_heap_mallocn(heap, usize::MAX, 2).is_null());
+
+        assert_freeable(mi_heap_calloc(heap, 0, usize::MAX));
+        assert_freeable(mi_heap_calloc(heap, usize::MAX, 0));
+        assert_freeable(mi_heap_mallocn(heap, 0, usize::MAX));
+        assert_freeable(mi_heap_mallocn(heap, usize::MAX, 0));
+
+        mi_heap_destroy(heap);
+    }
+}
+
+#[test]
 fn realloc_null_allocates_and_existing_realloc_preserves_prefix() {
     unsafe {
         let p = mi_realloc(ptr::null_mut(), 16).cast::<u8>();

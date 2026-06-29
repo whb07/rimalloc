@@ -947,13 +947,17 @@ pub(crate) fn calloc_request_or_report(
     count: usize,
     size: usize,
 ) -> Option<crate::core_types::CallocRequest> {
-    let _ = product_size_or_report(count, size)?;
-    crate::core_types::CallocRequest::new(count, size).ok()
+    let total = product_size_or_report(count, size)?;
+    // SAFETY: `product_size_or_report` returns only a non-overflowing
+    // `count * size` total and reports the C-compatible overflow error.
+    unsafe { crate::core_types::CallocRequest::from_checked_total(count, size, total).ok() }
 }
 
 fn alloc_product_or_report(count: usize, size: usize) -> Option<crate::core_types::AllocProduct> {
-    let _ = product_size_or_report(count, size)?;
-    crate::core_types::AllocProduct::new(count, size).ok()
+    let total = product_size_or_report(count, size)?;
+    // SAFETY: `product_size_or_report` returns only a non-overflowing
+    // `count * size` total and reports the C-compatible overflow error.
+    unsafe { crate::core_types::AllocProduct::from_checked_total(count, size, total).ok() }
 }
 
 /// # Safety

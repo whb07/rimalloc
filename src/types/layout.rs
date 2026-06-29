@@ -205,6 +205,22 @@ pub(crate) struct CallocRequest {
 impl CallocRequest {
     pub(crate) fn new(count: usize, size: usize) -> Result<Self, LayoutError> {
         let total_size = count.checked_mul(size).ok_or(LayoutError::SizeOverflow)?;
+        // SAFETY: `total_size` was produced by `count.checked_mul(size)`.
+        unsafe { Self::from_checked_total(count, size, total_size) }
+    }
+
+    /// Builds a request from a multiplication result already checked by the
+    /// caller.
+    ///
+    /// # Safety
+    /// `total_size` must be exactly `count * size` and that multiplication
+    /// must not have overflowed.
+    #[inline]
+    pub(crate) unsafe fn from_checked_total(
+        count: usize,
+        size: usize,
+        total_size: usize,
+    ) -> Result<Self, LayoutError> {
         let layout = LayoutRequest::zalloc(total_size)?;
         Ok(Self {
             count: ItemCount::new(count),
@@ -226,6 +242,22 @@ pub(crate) struct AllocProduct {
 impl AllocProduct {
     pub(crate) fn new(count: usize, size: usize) -> Result<Self, LayoutError> {
         let total_size = count.checked_mul(size).ok_or(LayoutError::SizeOverflow)?;
+        // SAFETY: `total_size` was produced by `count.checked_mul(size)`.
+        unsafe { Self::from_checked_total(count, size, total_size) }
+    }
+
+    /// Builds a request from a multiplication result already checked by the
+    /// caller.
+    ///
+    /// # Safety
+    /// `total_size` must be exactly `count * size` and that multiplication
+    /// must not have overflowed.
+    #[inline]
+    pub(crate) unsafe fn from_checked_total(
+        count: usize,
+        size: usize,
+        total_size: usize,
+    ) -> Result<Self, LayoutError> {
         let layout = LayoutRequest::malloc(total_size)?;
         Ok(Self {
             count: ItemCount::new(count),

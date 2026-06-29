@@ -264,10 +264,14 @@ Problem:
 
 Tasks:
 
-- [ ] Add internal constructors that accept an already-checked total size, or return the checked total from the reporting helper and pass it through.
-- [ ] Keep overflow error reporting behavior unchanged.
-- [ ] Preserve zero-size product behavior after the P0 zero-size fix.
-- [ ] Add tests for overflow and zero-product cases.
+- [x] Add internal constructors that accept an already-checked total size, or return the checked total from the reporting helper and pass it through.
+  - Evidence: `CallocRequest::from_checked_total` and `AllocProduct::from_checked_total` consume the total returned by `product_size_or_report`.
+- [x] Keep overflow error reporting behavior unchanged.
+  - Evidence: `product_size_or_report` remains the single `mi_count_size_overflow` caller for allocation product paths, and focused overflow tests pass.
+- [x] Preserve zero-size product behavior after the P0 zero-size fix.
+  - Evidence: zero-product `mi_calloc`, `mi_mallocn`, `mi_heap_calloc`, and `mi_heap_mallocn` cases return freeable non-null pointers.
+- [x] Add tests for overflow and zero-product cases.
+  - Evidence: `cargo test --features std --test allocation_boundary_cases product -- --nocapture` and `cargo test --features std --test allocation_boundary_cases calloc_overflow -- --nocapture`.
 
 ## 10. P2 idiomatic/performance polish: atomic field wrappers
 

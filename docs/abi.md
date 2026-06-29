@@ -244,6 +244,9 @@ not safe Rust wrappers.
   safe macro must expand only to safe APIs such as `Allocation` or `Heap`
   wrappers and must be documented separately from the raw macro boundary.
 
+`scripts/check-api-inventory.py` discovers every `#[macro_export] macro_rules!`
+item and fails if it is not classified in `docs/api-inventory.md`.
+
 ## Naming Rules
 
 The dynamic C ABI preserves upstream mimalloc symbol spelling. Public C symbols,

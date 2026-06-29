@@ -212,13 +212,17 @@ Problem:
 
 Tasks:
 
-- [ ] Add macro discovery to `scripts/check-api-inventory.py` for `#[macro_export] macro_rules!` items.
-- [ ] Classify exported macros by tier and purpose:
-  - [ ] Tier R typed allocation macros: `mi_malloc_tp!`, `mi_zalloc_tp!`, `mi_calloc_tp!`, `mi_mallocn_tp!`, `mi_reallocn_tp!`, `mi_heap_*_tp!`.
-  - [ ] Tier R C-header override macros from `src/ffi/headers.rs`.
-  - [ ] Internal/compatibility macro exports that should remain public only if required by downstream expansion or translated C-header parity.
-- [ ] Fail inventory checks if a new macro is exported without tier classification.
-- [ ] Keep tests that verify downstream macro expansion goes through public raw paths, not private implementation paths.
+- [x] Add macro discovery to `scripts/check-api-inventory.py` for `#[macro_export] macro_rules!` items.
+  - Evidence: `scripts/check-api-inventory.py` now discovers source macro exports and reports 92 exported macros.
+- [x] Classify exported macros by tier and purpose:
+  - [x] Tier R typed allocation macros: `mi_malloc_tp!`, `mi_zalloc_tp!`, `mi_calloc_tp!`, `mi_mallocn_tp!`, `mi_reallocn_tp!`, `mi_heap_*_tp!`.
+  - [x] Tier R C-header override macros from `src/ffi/headers.rs`.
+  - [x] Internal/compatibility macro exports that should remain public only if required by downstream expansion or translated C-header parity.
+  - Evidence: `docs/api-inventory.md` lists `tier-r-typed-allocation`, `tier-r-header-override`, and `internal-compatibility` macro buckets.
+- [x] Fail inventory checks if a new macro is exported without tier classification.
+  - Evidence: `scripts/check-api-inventory.py` compares discovered `#[macro_export]` names against the documented tier buckets.
+- [x] Keep tests that verify downstream macro expansion goes through public raw paths, not private implementation paths.
+  - Evidence: `cargo test --features std --test header_macro_expansion -- --nocapture`.
 
 ## 8. P1 architecture: finish and enforce layer boundaries
 

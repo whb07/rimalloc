@@ -188,7 +188,29 @@ exposure is intentionally narrower than the full file:
 | `mi_option_desc_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated option table layout. |
 | `mi_subproc_id_t` | Re-exported by `src/ffi/abi.rs` | `repr(C)` size is public, but the field is private so the identifier is opaque to downstream Rust. |
 
+### Typed Allocation Macros
+
+Macro tier: `tier-r-typed-allocation`
+
+The typed allocation macros in `src/ffi/abi.rs` are Tier R public compatibility
+surface. They mirror mimalloc C-header convenience spellings and expand through
+public `raw::mi_*` paths without internal `unsafe` blocks.
+
+- `mi_malloc_tp!`
+- `mi_zalloc_tp!`
+- `mi_calloc_tp!`
+- `mi_mallocn_tp!`
+- `mi_reallocn_tp!`
+- `mi_heap_malloc_tp!`
+- `mi_heap_zalloc_tp!`
+- `mi_heap_calloc_tp!`
+- `mi_heap_mallocn_tp!`
+- `mi_heap_reallocn_tp!`
+- `mi_heap_recalloc_tp!`
+
 ### Header Override Macros
+
+Macro tier: `tier-r-header-override`
 
 The exported macros in `src/ffi/headers.rs` are Tier R public compatibility
 surface. They model C header override and C++ operator shim spellings while
@@ -198,55 +220,115 @@ the default build today.
 
 Allocation and string macros:
 
-- `malloc`
-- `realloc`
-- `strdup`
-- `_strdup`
-- `realpath`
-- `reallocf`
-- `malloc_usable_size`
+- `malloc!`
+- `realloc!`
+- `strdup!`
+- `_strdup!`
+- `realpath!`
+- `reallocf!`
+- `malloc_usable_size!`
 
 POSIX and platform allocation macros:
 
-- `reallocarray`
-- `posix_memalign`
-- `cfree`
-- `valloc`
-- `memalign`
-- `_wcsdup`
-- `_dupenv_s`
+- `reallocarray!`
+- `posix_memalign!`
+- `cfree!`
+- `valloc!`
+- `memalign!`
+- `_wcsdup!`
+- `_dupenv_s!`
 
 Aligned and Windows-style allocation macros:
 
-- `_expand`
-- `_recalloc`
-- `_aligned_recalloc`
-- `_aligned_malloc`
-- `_aligned_free`
-- `_aligned_offset_realloc`
+- `_expand!`
+- `_recalloc!`
+- `_aligned_recalloc!`
+- `_aligned_malloc!`
+- `_aligned_free!`
+- `_aligned_offset_realloc!`
 
 C++ operator shim macros:
 
-- `operatornew`
-- `operatornew_array`
-- `operatornew_nothrow`
-- `operatornew_array_nothrow`
-- `operatornew_aligned`
-- `operatornew_array_aligned`
-- `operatornew_aligned_nothrow`
-- `operatornew_array_aligned_nothrow`
-- `operatordelete`
-- `operatordelete_array`
-- `operatordelete_nothrow`
-- `operatordelete_array_nothrow`
-- `operatordelete_sized`
-- `operatordelete_array_sized`
-- `operatordelete_aligned`
-- `operatordelete_array_aligned`
-- `operatordelete_sized_aligned`
-- `operatordelete_array_sized_aligned`
-- `operatordelete_aligned_nothrow`
-- `operatordelete_array_aligned_nothrow`
+- `operatornew!`
+- `operatornew_array!`
+- `operatornew_nothrow!`
+- `operatornew_array_nothrow!`
+- `operatornew_aligned!`
+- `operatornew_array_aligned!`
+- `operatornew_aligned_nothrow!`
+- `operatornew_array_aligned_nothrow!`
+- `operatordelete!`
+- `operatordelete_array!`
+- `operatordelete_nothrow!`
+- `operatordelete_array_nothrow!`
+- `operatordelete_sized!`
+- `operatordelete_array_sized!`
+- `operatordelete_aligned!`
+- `operatordelete_array_aligned!`
+- `operatordelete_sized_aligned!`
+- `operatordelete_array_sized_aligned!`
+- `operatordelete_aligned_nothrow!`
+- `operatordelete_array_aligned_nothrow!`
+
+### Internal Compatibility Macro Exports
+
+Macro tier: `internal-compatibility`
+
+These `#[macro_export]` macros remain crate-root public because translated code
+uses upstream-style macro expansion and some downstream macro expansion tests
+exercise the same crate-root behavior. They are compatibility exports, not a
+recommended integration surface; new internal macros should not be exported
+unless downstream expansion or translated C-header parity requires it.
+
+Forwarding and interposition macros:
+
+- `MI_FORWARD1!`
+- `MI_FORWARD3!`
+- `MI_FORWARD02!`
+- `MI_INTERPOSE_FUN!`
+- `MI_INTERPOSE_MI!`
+
+Initialization, assertion, and utility macros:
+
+- `MI_INIT4!`
+- `MI_INIT5!`
+- `MI_INIT6!`
+- `MI_INIT8!`
+- `MI_INIT16!`
+- `MI_INIT32!`
+- `MI_INIT64!`
+- `MI_INIT74!`
+- `MI_INIT128!`
+- `MI_INIT256!`
+- `MI_UNUSED!`
+- `MI_UNUSED_RELEASE!`
+- `_mi_memzero_var!`
+- `mi_assert!`
+- `mi_assert_internal!`
+- `mi_assert_expensive!`
+- `mi_debug_assert!`
+- `mi_debug_assert_eq!`
+- `mi_trace_message!`
+
+Statistics and once/guard macros:
+
+- `MI_STAT_COUNT!`
+- `MI_STAT_COUNTER!`
+- `MI_STAT_FIELDS!`
+- `mi_stats_t_decl!`
+- `mi_theap_stat_counter_increase!`
+- `mi_theap_stat_decrease!`
+- `mi_theap_stat_adjust_decrease!`
+- `mi_heap_stat_counter_increase!`
+- `mi_heap_stat_decrease!`
+- `mi_heap_stat_adjust_decrease!`
+- `mi_subproc_stat_counter_increase!`
+- `mi_subproc_stat_decrease!`
+- `mi_subproc_stat_adjust_decrease!`
+- `mi_os_stat_counter_increase!`
+- `mi_os_stat_decrease!`
+- `mi_atomic_guard!`
+- `mi_atomic_do_once!`
 
 ## docs.rs Behavior
 

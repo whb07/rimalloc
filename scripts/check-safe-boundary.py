@@ -16,6 +16,7 @@ SAFE_BOUNDARY_FILES = [
 AUDIT_TAG = "SAFETY[AUDIT:"
 ALLOWED_PUBLIC_UNSAFE = {
     "src/safe/allocation.rs": {"assume_initialized"},
+    "src/safe/heap.rs": {"assume_initialized"},
 }
 CALLBACK_GUARDS = {"DeferredFreeCallbackGuard", "ErrorCallbackGuard"}
 

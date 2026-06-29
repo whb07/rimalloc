@@ -1,6 +1,6 @@
 use core::alloc::{GlobalAlloc, Layout};
 use core::fmt;
-use core::mem::ManuallyDrop;
+use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ptr;
 use core::ptr::NonNull;
 
@@ -196,6 +196,37 @@ impl Allocation {
     #[must_use]
     pub const fn as_mut_ptr(&mut self) -> *mut u8 {
         self.raw.ptr.as_ptr()
+    }
+
+    /// Returns this uninitialized allocation as a `MaybeUninit<u8>` slice.
+    ///
+    /// The slice length is the requested allocation size. Zero-sized
+    /// allocations return an empty slice and do not dereference the sentinel
+    /// pointer.
+    #[inline]
+    #[must_use]
+    pub fn as_uninit_slice(&self) -> &[MaybeUninit<u8>] {
+        // SAFETY[AUDIT:owned-allocation]: `self.raw.ptr` is valid for
+        // `self.len()` bytes when non-zero. `MaybeUninit<u8>` permits
+        // uninitialized contents, and zero-sized allocations produce an empty
+        // slice over the aligned sentinel.
+        unsafe { core::slice::from_raw_parts(self.as_ptr().cast(), self.len()) }
+    }
+
+    /// Returns this uninitialized allocation as a mutable `MaybeUninit<u8>`
+    /// slice.
+    ///
+    /// Use this to initialize bytes without raw pointer loops, then call the
+    /// explicit unsafe [`Allocation::assume_initialized`] transition after
+    /// every byte has been initialized.
+    #[inline]
+    #[must_use]
+    pub fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<u8>] {
+        // SAFETY[AUDIT:owned-allocation]: `&mut self` guarantees unique access
+        // to the allocation bytes. `MaybeUninit<u8>` permits writing
+        // uninitialized storage, and zero-sized allocations return an empty
+        // slice over the aligned sentinel.
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr().cast(), self.len()) }
     }
 
     /// Resizes this allocation to `new_layout`.

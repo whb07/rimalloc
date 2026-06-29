@@ -100,6 +100,22 @@ mod tests {
     }
 
     #[test]
+    fn maybe_uninit_allocation_views_initialize_without_raw_pointer_loop() {
+        let mut allocation = Allocation::with_size_align(8, 8).expect("allocation");
+        assert_eq!(allocation.as_uninit_slice().len(), 8);
+        for (idx, slot) in allocation.as_uninit_slice_mut().iter_mut().enumerate() {
+            slot.write((idx + 1) as u8);
+        }
+
+        let initialized = unsafe { allocation.assume_initialized() };
+        assert_eq!(initialized.as_bytes(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+
+        let mut zero = Allocation::with_size_align(0, 64).expect("zero allocation");
+        assert!(zero.as_uninit_slice().is_empty());
+        assert!(zero.as_uninit_slice_mut().is_empty());
+    }
+
+    #[test]
     fn zero_sized_allocation_does_not_call_allocator() {
         for align in [1usize, 2, 4, 8, 16, 64, 4096] {
             let layout = Layout::from_size_align(0, align).expect("layout");
@@ -357,6 +373,27 @@ mod tests {
             .expect_err("invalid layout");
         assert!(matches!(err.kind(), ResizeErrorKind::Layout(_)));
         assert_eq!(err.allocation().len(), 8);
+    }
+
+    #[test]
+    fn maybe_uninit_heap_views_initialize_without_raw_pointer_loop() {
+        let heap = Heap::new().expect("heap");
+        let mut allocation = heap
+            .allocate(Layout::from_size_align(6, 8).expect("layout"))
+            .expect("heap allocation");
+        assert_eq!(allocation.as_uninit_slice().len(), 6);
+        for (idx, slot) in allocation.as_uninit_slice_mut().iter_mut().enumerate() {
+            slot.write((idx + 10) as u8);
+        }
+
+        let initialized = unsafe { allocation.assume_initialized() };
+        assert_eq!(initialized.as_bytes(), &[10, 11, 12, 13, 14, 15]);
+
+        let mut zero = heap
+            .allocate(Layout::from_size_align(0, 64).expect("layout"))
+            .expect("zero heap allocation");
+        assert!(zero.as_uninit_slice().is_empty());
+        assert!(zero.as_uninit_slice_mut().is_empty());
     }
 
     #[test]

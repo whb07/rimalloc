@@ -75,7 +75,8 @@ should use `Allocation::zeroed`, `Allocation::zeroed_with_size_align`, or the
 matching `InitializedAllocation` constructors, which return
 `InitializedAllocation` directly. Code that fills an uninitialized `Allocation`
 through raw pointers must keep that transition explicit with unsafe
-`Allocation::assume_initialized` after every byte has been initialized.
+`Allocation::assume_initialized` or `HeapAllocation::assume_initialized` after
+every byte has been initialized.
 
 ## Naming Conventions
 

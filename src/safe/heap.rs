@@ -2,7 +2,7 @@ use core::alloc::Layout;
 use core::ffi::c_void;
 use core::fmt;
 use core::marker::PhantomData;
-use core::mem::ManuallyDrop;
+use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ptr;
 use core::ptr::NonNull;
 
@@ -268,6 +268,36 @@ impl<'heap> HeapAllocation<'heap> {
         self.raw.ptr.as_ptr()
     }
 
+    /// Returns this uninitialized heap allocation as a `MaybeUninit<u8>` slice.
+    ///
+    /// The slice length is the requested allocation size. Zero-sized heap
+    /// allocations return an empty slice and do not dereference the sentinel
+    /// pointer.
+    #[inline]
+    #[must_use]
+    pub fn as_uninit_slice(&self) -> &[MaybeUninit<u8>] {
+        // SAFETY[AUDIT:safe-heap]: `self.raw.ptr` is valid for `self.len()`
+        // bytes when non-zero. `MaybeUninit<u8>` permits uninitialized
+        // contents, and zero-sized allocations produce an empty slice over the
+        // aligned sentinel.
+        unsafe { core::slice::from_raw_parts(self.as_ptr().cast(), self.len()) }
+    }
+
+    /// Returns this uninitialized heap allocation as a mutable
+    /// `MaybeUninit<u8>` slice.
+    ///
+    /// Use this to initialize bytes without raw pointer loops, then keep the
+    /// transition to initialized reads explicit.
+    #[inline]
+    #[must_use]
+    pub fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<u8>] {
+        // SAFETY[AUDIT:safe-heap]: `&mut self` guarantees unique access to the
+        // heap allocation bytes. `MaybeUninit<u8>` permits writing
+        // uninitialized storage, and zero-sized allocations return an empty
+        // slice over the aligned sentinel.
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr().cast(), self.len()) }
+    }
+
     /// Resizes this heap allocation to `new_layout`.
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
@@ -297,6 +327,18 @@ impl<'heap> HeapAllocation<'heap> {
             });
         };
         self.resize(layout)
+    }
+
+    /// Marks this heap allocation initialized after the caller has initialized
+    /// every byte through raw pointers or `MaybeUninit` views.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee every byte in the allocation has been
+    /// initialized before calling this method.
+    #[inline]
+    pub unsafe fn assume_initialized(self) -> InitializedHeapAllocation<'heap> {
+        InitializedHeapAllocation { raw: self.raw }
     }
 }
 

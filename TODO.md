@@ -311,12 +311,15 @@ Problem:
 
 Tasks:
 
-- [ ] Add `Allocation::as_uninit_slice(&self) -> &[MaybeUninit<u8>]`.
-- [ ] Add `Allocation::as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<u8>]`.
-- [ ] Add matching `HeapAllocation` methods.
-- [ ] Ensure zero-sized allocations return empty slices and do not dereference sentinels.
-- [ ] Keep `assume_initialized` unsafe and explicit.
-- [ ] Add tests that initialize via `MaybeUninit` slices and then safely read through initialized wrappers.
+- [x] Add `Allocation::as_uninit_slice(&self) -> &[MaybeUninit<u8>]`.
+- [x] Add `Allocation::as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<u8>]`.
+- [x] Add matching `HeapAllocation` methods.
+- [x] Ensure zero-sized allocations return empty slices and do not dereference sentinels.
+  - Evidence: focused safe facade tests cover zero-sized owned and heap `MaybeUninit` views.
+- [x] Keep `assume_initialized` unsafe and explicit.
+  - Evidence: `Allocation::assume_initialized` remains unsafe, and `HeapAllocation::assume_initialized` was added with the same explicit all-bytes-initialized contract.
+- [x] Add tests that initialize via `MaybeUninit` slices and then safely read through initialized wrappers.
+  - Evidence: `cargo test --features std safe::tests::maybe_uninit -- --nocapture`, plus `scripts/check-safe-boundary.py` and `scripts/check-safe-docs.py`.
 
 ## 12. P2 safe facade: revisit `MainHeap` allocation lifetimes
 

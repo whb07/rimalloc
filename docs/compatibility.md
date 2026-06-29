@@ -37,12 +37,16 @@ parity tests. That feature is off by default and has no Rust SemVer guarantee.
 Raw facade changes require updating `docs/api-inventory.md`, ABI/layout checks,
 and any affected examples or parity tests.
 
-### Unsafe-Adjacent Rust Callbacks
+### Tier U: Unsafe Rust Convenience API
 
 `mechanical_mimalloc::unsafe_callbacks` contains borrowed callback guards that
-are public Rust API but not Tier S safe facade API. Changes to these guards must
-be reviewed for Rust source compatibility, documented safety obligations,
-process-global callback behavior, panic containment, and API inventory drift.
+are public unsafe Rust API but not Tier S safe facade API and not Tier R/C-shaped
+raw API. Changes to these guards must be reviewed for Rust source
+compatibility, documented safety obligations, process-global callback behavior,
+panic containment, and API inventory drift.
+
+Tier U currently contains `unsafe_callbacks::ErrorCallbackGuard` and
+`unsafe_callbacks::DeferredFreeCallbackGuard`.
 
 ### Tier C: C ABI
 

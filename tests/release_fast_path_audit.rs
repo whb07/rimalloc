@@ -1261,7 +1261,8 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
     );
     assert!(
         safe_doc.contains("`unsafe_callbacks`")
-            && safe_doc.contains("borrowed `FnMut` callback guards")
+            && safe_doc.contains("`FnMut` callback guards")
+            && safe_doc.contains("Tier U unsafe Rust convenience APIs")
             && safe_doc.contains("catch Rust panics")
             && unsafe_doc.contains("SAFETY[AUDIT:unsafe-callback]")
             && unsafe_doc.contains("restores that previous registration on drop")

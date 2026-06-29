@@ -185,11 +185,14 @@ Problem:
 
 Tasks:
 
-- [ ] Define Tier U: unsafe Rust API, Rust SemVer surface, not Tier S, not C-shaped raw API.
-- [ ] Classify `unsafe_callbacks::ErrorCallbackGuard` as Tier U.
-- [ ] Classify `unsafe_callbacks::DeferredFreeCallbackGuard` as Tier U.
-- [ ] Update API inventory and compatibility policy checks to require Tier U wording.
-- [ ] Ensure safe-boundary checks continue to reject callback guards as Tier S items.
+- [x] Define Tier U: unsafe Rust API, Rust SemVer surface, not Tier S, not C-shaped raw API.
+  - Evidence: `docs/api-inventory.md` and `docs/compatibility.md` now define Tier U explicitly.
+- [x] Classify `unsafe_callbacks::ErrorCallbackGuard` as Tier U.
+- [x] Classify `unsafe_callbacks::DeferredFreeCallbackGuard` as Tier U.
+- [x] Update API inventory and compatibility policy checks to require Tier U wording.
+  - Evidence: `scripts/check-api-inventory.py` requires Tier U wording for both callback guards.
+- [x] Ensure safe-boundary checks continue to reject callback guards as Tier S items.
+  - Evidence: `scripts/check-safe-boundary.py` keeps callback guards namespaced under `unsafe_callbacks` and rejects direct Tier S facade references outside tests.
 
 ## 7. P1 API inventory: enforce public macro exports
 

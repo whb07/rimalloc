@@ -45,6 +45,7 @@ EXPECTED_RAW_DEFAULT_MODULES = {
 EXPECTED_UNSTABLE_RAW_INTERNAL_MODULES = {
     "alloc",
     "alloc_aligned",
+    "aligned",
     "alloc_override",
     "alloc_posix",
     "arena",
@@ -89,6 +90,12 @@ def root_public_items(lib_rs: str) -> set[str]:
         items.update(
             item.strip().split(" as ")[-1] for item in group.split(",") if item.strip()
         )
+    for alias in re.findall(
+        r"^pub use\s+[A-Za-z0-9_:]+\s+as\s+([A-Za-z0-9_]+)\s*;",
+        lib_rs,
+        flags=re.M,
+    ):
+        items.add(alias)
 
     return items
 
@@ -109,10 +116,14 @@ def raw_modules_by_gate(raw_rs: str) -> tuple[set[str], set[str]]:
                 pending_attr = False
             continue
         if stripped.startswith("#["):
+            if stripped == '#[cfg(feature = "unstable-raw-internals")]':
+                pending_cfg = True
+                pending_attr = False
+                continue
             if not stripped.endswith("]"):
                 pending_attr = True
             continue
-        match = re.match(r"pub mod\s+([A-Za-z0-9_]+)\s*\{", line)
+        match = re.match(r"pub mod\s+([A-Za-z0-9_]+)\s*(?:\{|;)", line)
         if not match:
             if stripped:
                 pending_cfg = False
@@ -170,12 +181,19 @@ def main() -> int:
             f"`unsafe_callbacks::{item}`" in api_doc,
             f"docs/api-inventory.md must classify unsafe_callbacks::{item}",
         )
+        require(
+            f"`unsafe_callbacks::{item}`: Tier U" in api_doc,
+            f"docs/api-inventory.md must classify unsafe_callbacks::{item} as Tier U",
+        )
 
     for phrase in [
         "Tier S: safe Rust API, Rust SemVer surface.",
+        "Tier U: unsafe Rust convenience API, Rust SemVer surface, outside Tier S",
+        "Tier U is public unsafe Rust API with Rust SemVer review",
         "Tier R: raw Rust facade, unsafe and unstable unless explicitly versioned.",
         "Tier C: exported C ABI and raw layout compatibility surface.",
         "Tier I: internal implementation surface, not public API.",
+        "`unsafe_callbacks`: Tier U unsafe Rust callback guard namespace.",
         "The raw Rust module path surface is unstable until explicitly versioned.",
         "`unstable-raw-internals`",
         "symbols/public-symbol-classification.tsv",

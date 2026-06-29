@@ -6,6 +6,8 @@ implementation internals.
 ## Public API Tiers
 
 - Tier S: safe Rust API, Rust SemVer surface.
+- Tier U: unsafe Rust convenience API, Rust SemVer surface, outside Tier S and
+  not C-shaped raw API.
 - Tier R: raw Rust facade, unsafe and unstable unless explicitly versioned.
 - Tier C: exported C ABI and raw layout compatibility surface.
 - Tier I: internal implementation surface, not public API.
@@ -25,7 +27,7 @@ implementation internals.
   `TryAllocError`, `HeapError`, `OptionError`, `StatsError`:
   Tier S Rust-native error/status types for the safe API.
 - `raw`: Tier R explicit C-shaped compatibility facade.
-- `unsafe_callbacks`: unsafe-adjacent Rust callback namespace.
+- `unsafe_callbacks`: Tier U unsafe Rust callback guard namespace.
 
 Implementation modules such as allocation, page, heap, arena, OS, primitive,
 thread-local, and strict-type internals are crate-private and must not be
@@ -48,7 +50,7 @@ code cannot delete an owned heap while live heap allocations still exist.
 and observations without requiring callers to pass raw out-pointers. Unsupported
 or unavailable cases return typed Rust errors.
 
-Borrowed callback guards are intentionally outside Tier S. Users who can uphold
+Borrowed callback guards are Tier U, not Tier S. Users who can uphold
 process-global callback synchronization, lifetime, reentrancy, and allocator
 entry obligations can use `unsafe_callbacks::ErrorCallbackGuard` and
 `unsafe_callbacks::DeferredFreeCallbackGuard`.
@@ -96,15 +98,20 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
 - `TryAllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
 
-## Unsafe-Adjacent Rust Callbacks
+## Tier U Unsafe Rust Callbacks
 
-`mechanical_mimalloc::unsafe_callbacks` exposes
-`unsafe_callbacks::ErrorCallbackGuard` and
-`unsafe_callbacks::DeferredFreeCallbackGuard`. These borrowed `FnMut` RAII
-guards restore previous callback registrations on drop and catch panics before
-callback ABI return in `std` and test builds, but their constructors are unsafe
-because the callback slots are process-global and can be entered from allocator
-activity outside the registering scope.
+Tier U is public unsafe Rust API with Rust SemVer review, but it is not Tier S
+safe facade API and is not Tier R/C-shaped raw API.
+
+- `unsafe_callbacks::ErrorCallbackGuard`: Tier U borrowed `FnMut` RAII guard
+  for the process-global error callback slot.
+- `unsafe_callbacks::DeferredFreeCallbackGuard`: Tier U borrowed `FnMut` RAII
+  guard for the process-global deferred-free callback slot.
+
+These guards restore previous callback registrations on drop and catch panics
+before callback ABI return in `std` and test builds, but their constructors are
+unsafe because the callback slots are process-global and can be entered from
+allocator activity outside the registering scope.
 
 ## Raw Rust Facade
 

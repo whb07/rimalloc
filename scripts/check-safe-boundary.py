@@ -17,6 +17,7 @@ AUDIT_TAG = "SAFETY[AUDIT:"
 ALLOWED_PUBLIC_UNSAFE = {
     "src/safe/allocation.rs": {"assume_initialized"},
 }
+CALLBACK_GUARDS = {"DeferredFreeCallbackGuard", "ErrorCallbackGuard"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -64,9 +65,19 @@ def untagged_boundary_unsafe(text: str) -> list[str]:
     return offenders
 
 
+def callback_guard_safe_surface_mentions(rel: str, text: str) -> list[str]:
+    source = text.split("#[cfg(test)]", maxsplit=1)[0]
+    return [
+        guard
+        for guard in CALLBACK_GUARDS
+        if guard in source and rel != "src/lib.rs"
+    ]
+
+
 def main() -> int:
     all_public_unsafe: list[str] = []
     all_untagged: list[str] = []
+    callback_guard_mentions: list[str] = []
 
     synthetic = "pub unsafe fn synthetic_safe_escape() {}"
     require(
@@ -78,6 +89,11 @@ def main() -> int:
         text = (ROOT / rel).read_text()
         all_public_unsafe.extend(f"{rel}:{item}" for item in public_unsafe_items(rel, text))
         all_untagged.extend(f"{rel}:{item}" for item in untagged_boundary_unsafe(text))
+        callback_guard_mentions.extend(
+            f"{rel}:{guard}" for guard in callback_guard_safe_surface_mentions(rel, text)
+        )
+
+    lib_rs = (ROOT / "src/lib.rs").read_text()
 
     require(
         not all_public_unsafe,
@@ -87,6 +103,20 @@ def main() -> int:
         not all_untagged,
         "safe facade unsafe boundary lacks SAFETY[AUDIT:*] tag: "
         + "; ".join(all_untagged),
+    )
+    require(
+        "pub use ffi::callbacks as unsafe_callbacks;" in lib_rs,
+        "unsafe callback guards must stay namespaced under unsafe_callbacks",
+    )
+    require(
+        "DeferredFreeCallbackGuard, ErrorCallbackGuard" not in lib_rs
+        and "ErrorCallbackGuard" not in lib_rs.split("pub use ffi::callbacks as unsafe_callbacks;", 1)[0],
+        "callback guards must not be re-exported as crate-root Tier S items",
+    )
+    require(
+        not callback_guard_mentions,
+        "callback guards must not be referenced from Tier S safe facade source outside tests: "
+        + "; ".join(callback_guard_mentions),
     )
 
     print(

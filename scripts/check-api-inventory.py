@@ -15,6 +15,7 @@ EXPECTED_ROOT_ITEMS = {
     "MiMalloc",
     "Allocation",
     "AllocError",
+    "GlobalOptions",
     "Heap",
     "HeapAllocation",
     "HeapError",

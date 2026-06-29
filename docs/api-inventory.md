@@ -19,7 +19,8 @@ implementation internals.
 - `InitializedAllocation`: Tier S initialized owned byte allocation wrapper.
 - `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, `InitializedHeapAllocation`:
   Tier S heap ownership and heap-tied allocation wrappers.
-- `Options`, `OptionKey`: Tier S supported allocator option controls.
+- `GlobalOptions`, `Options`, `OptionKey`: Tier S supported allocator option
+  controls.
 - `StatsSnapshot`, `StatCount`, `StatTotal`: Tier S non-printing statistics
   snapshot wrappers.
 - `ProcessInfo`: Tier S typed process allocator information.
@@ -46,9 +47,11 @@ bytes or an explicit unsafe initialization assertion.
 heap pointers through safe APIs. Heap-tied allocations borrow the heap so safe
 code cannot delete an owned heap while live heap allocations still exist.
 
-`Options`, `StatsSnapshot`, and `ProcessInfo` cover supported runtime controls
-and observations without requiring callers to pass raw out-pointers. Unsupported
-or unavailable cases return typed Rust errors.
+`GlobalOptions`, `StatsSnapshot`, and `ProcessInfo` cover supported runtime
+controls and observations without requiring callers to pass raw out-pointers.
+`GlobalOptions` mutates mimalloc's process-global option table; callers that
+temporarily change options are expected to restore the previous values.
+Unsupported or unavailable cases return typed Rust errors.
 
 Borrowed callback guards are Tier U, not Tier S. Users who can uphold
 process-global callback synchronization, lifetime, reentrancy, and allocator
@@ -79,7 +82,10 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
 - `HeapAllocation`: implements `Drop` and `Debug`; frees through the heap
   allocation family and carries the heap lifetime.
 - `InitializedHeapAllocation`: initialized heap-tied byte allocation wrapper.
-- `Options`: namespace type for supported safe allocator options.
+- `GlobalOptions`: namespace type for supported process-global safe allocator
+  options.
+- `Options`: compatibility alias for `GlobalOptions`; new code should prefer
+  `GlobalOptions`.
 - `OptionKey`: non-exhaustive supported-option key set; invalid raw keys are
   rejected.
 - `StatsSnapshot`: non-printing copy of allocator statistics.

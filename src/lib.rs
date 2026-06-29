@@ -13,8 +13,8 @@
 //!
 //! Use [`MiMalloc`] as a global allocator when a Rust `GlobalAlloc` facade is
 //! needed, [`Allocation`] for owned byte allocations, [`Heap`] for safe heap
-//! ownership, [`Options`] and [`StatsSnapshot`] for non-printing allocator
-//! controls and observations, or [`raw`] for the explicit C-shaped
+//! ownership, [`GlobalOptions`] and [`StatsSnapshot`] for non-printing
+//! allocator controls and observations, or [`raw`] for the explicit C-shaped
 //! compatibility surface. Implementation modules are crate-private so internal
 //! translation structure does not become an accidental SemVer contract.
 //!
@@ -227,17 +227,19 @@ pub(crate) use raw::{macros as alloc_override, posix as alloc_posix};
 pub(crate) use types as core_types;
 
 pub use safe::{
-    AllocError, Allocation, Heap, HeapAllocation, HeapError, HeapRef, InitializedAllocation,
-    InitializedHeapAllocation, LayoutError, MainHeap, OptionError, OptionKey, Options, ProcessInfo,
-    ResizeError, ResizeErrorKind, StatCount, StatTotal, StatsError, StatsSnapshot, TryAllocError,
+    AllocError, Allocation, GlobalOptions, Heap, HeapAllocation, HeapError, HeapRef,
+    InitializedAllocation, InitializedHeapAllocation, LayoutError, MainHeap, OptionError,
+    OptionKey, Options, ProcessInfo, ResizeError, ResizeErrorKind, StatCount, StatTotal,
+    StatsError, StatsSnapshot, TryAllocError,
 };
 
 /// Rust [`GlobalAlloc`](core::alloc::GlobalAlloc) facade backed by the crate's
 /// mimalloc implementation.
 ///
 /// This wrapper is intentionally small and process-wide. Use [`Heap`] for
-/// heap-scoped allocation ownership, [`Options`] for supported safe options,
-/// and [`StatsSnapshot`] for non-printing statistics.
+/// heap-scoped allocation ownership, [`GlobalOptions`] for supported
+/// process-global safe options, and [`StatsSnapshot`] for non-printing
+/// statistics.
 ///
 /// # `GlobalAlloc` scope
 ///

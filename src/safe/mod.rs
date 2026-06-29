@@ -9,7 +9,7 @@ mod stats;
 pub use allocation::{Allocation, InitializedAllocation};
 pub use error::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError};
 pub use heap::{Heap, HeapAllocation, HeapError, HeapRef, InitializedHeapAllocation, MainHeap};
-pub use options::{OptionError, OptionKey, Options};
+pub use options::{GlobalOptions, OptionError, OptionKey, Options};
 pub use stats::{ProcessInfo, StatCount, StatTotal, StatsError, StatsSnapshot};
 
 #[cfg(test)]
@@ -440,26 +440,42 @@ mod tests {
         for key in OptionKey::ALL {
             assert_eq!(OptionKey::from_raw(key.as_raw()), Ok(key));
             assert_eq!(OptionKey::try_from(key.as_raw()), Ok(key));
-            let _ = Options::get(key);
+            let _ = GlobalOptions::get(key);
         }
         assert_eq!(OptionKey::from_raw(-1), Err(OptionError::InvalidKey));
         assert_eq!(OptionKey::try_from(-1), Err(OptionError::InvalidKey));
         assert_eq!(OptionKey::from_raw(2), Err(OptionError::Unsupported));
         assert_eq!(
-            Options::set(OptionKey::ShowStats, 1),
+            GlobalOptions::set(OptionKey::ShowStats, 1),
             Err(OptionError::Unsupported)
         );
 
-        let original = Options::get(OptionKey::MaxWarnings);
+        let original = GlobalOptions::get(OptionKey::MaxWarnings);
         let changed = if original == 7 { 8 } else { 7 };
-        Options::set(OptionKey::MaxWarnings, changed).expect("set");
-        assert_eq!(Options::get(OptionKey::MaxWarnings), changed);
-        Options::reset(OptionKey::MaxWarnings).expect("reset");
+        GlobalOptions::set(OptionKey::MaxWarnings, changed).expect("set");
+        assert_eq!(GlobalOptions::get(OptionKey::MaxWarnings), changed);
+        GlobalOptions::reset(OptionKey::MaxWarnings).expect("reset");
         assert_eq!(
-            Options::get(OptionKey::MaxWarnings),
+            GlobalOptions::get(OptionKey::MaxWarnings),
             OptionKey::MaxWarnings.default_value()
         );
-        Options::set(OptionKey::MaxWarnings, original).expect("restore");
+        GlobalOptions::set(OptionKey::MaxWarnings, original).expect("restore");
+    }
+
+    #[test]
+    fn global_options_mutations_are_process_global_and_restored() {
+        let original = GlobalOptions::get(OptionKey::MaxErrors);
+        let changed = if original == 11 { 12 } else { 11 };
+
+        GlobalOptions::set(OptionKey::MaxErrors, changed).expect("set max errors");
+        assert_eq!(GlobalOptions::get(OptionKey::MaxErrors), changed);
+        assert_eq!(
+            crate::options::mi_option_get(OptionKey::MaxErrors.raw_option()),
+            changed
+        );
+
+        GlobalOptions::set(OptionKey::MaxErrors, original).expect("restore max errors");
+        assert_eq!(GlobalOptions::get(OptionKey::MaxErrors), original);
     }
 
     #[test]
@@ -519,8 +535,8 @@ mod tests {
     fn error_callback_guard_invokes_and_restores_previous_callback_quietly() {
         let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
         let original = crate::options::registered_error_callback();
-        let original_show_errors = Options::get(OptionKey::ShowErrors);
-        Options::set(OptionKey::ShowErrors, 0).expect("disable error output");
+        let original_show_errors = GlobalOptions::get(OptionKey::ShowErrors);
+        GlobalOptions::set(OptionKey::ShowErrors, 0).expect("disable error output");
         PREVIOUS_ERROR_CALLBACK_HITS.store(0, Ordering::SeqCst);
         crate::options::mi_register_error(Some(previous_error_callback), ptr::null_mut());
 
@@ -547,15 +563,16 @@ mod tests {
         assert_eq!(PREVIOUS_ERROR_CALLBACK_HITS.load(Ordering::SeqCst), 1);
 
         crate::options::restore_error_callback(original);
-        Options::set(OptionKey::ShowErrors, original_show_errors).expect("restore show errors");
+        GlobalOptions::set(OptionKey::ShowErrors, original_show_errors)
+            .expect("restore show errors");
     }
 
     #[test]
     fn panicking_error_callback_is_caught_before_c_abi_return() {
         let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
         let original = crate::options::registered_error_callback();
-        let original_show_errors = Options::get(OptionKey::ShowErrors);
-        Options::set(OptionKey::ShowErrors, 0).expect("disable error output");
+        let original_show_errors = GlobalOptions::get(OptionKey::ShowErrors);
+        GlobalOptions::set(OptionKey::ShowErrors, 0).expect("disable error output");
         let old_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));
 
@@ -575,7 +592,8 @@ mod tests {
 
         std::panic::set_hook(old_hook);
         crate::options::restore_error_callback(original);
-        Options::set(OptionKey::ShowErrors, original_show_errors).expect("restore show errors");
+        GlobalOptions::set(OptionKey::ShowErrors, original_show_errors)
+            .expect("restore show errors");
     }
 
     #[test]

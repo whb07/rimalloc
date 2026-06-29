@@ -38,9 +38,10 @@ Current crate root public items are:
 - `InitializedHeapAllocation`
 - `LayoutError`
 - `MainHeap`
+- `GlobalOptions`
 - `OptionError`
 - `OptionKey`
-- `Options`
+- `Options` compatibility alias for `GlobalOptions`
 - `ProcessInfo`
 - `ResizeError`
 - `ResizeErrorKind`

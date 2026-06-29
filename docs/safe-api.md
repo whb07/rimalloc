@@ -48,8 +48,9 @@ Safe facade contact with allocator internals is file-specific and checked by
   `MainHeap` is a borrowed witness for the process-global main heap; dropping
   the handle does not delete the heap, so its allocations are tied to
   `HeapRef<'static>` rather than to the temporary handle borrow.
-- `Options` and `OptionKey`: supported safe allocator options with typed errors
-  for invalid or immutable keys.
+- `GlobalOptions` and `OptionKey`: supported process-global allocator options
+  with typed errors for invalid or immutable keys. `Options` remains a
+  compatibility alias, but new code should prefer `GlobalOptions`.
 - `StatsSnapshot`, `StatCount`, and `StatTotal`: owned non-printing statistics
   snapshots and typed statistic values.
 - `ProcessInfo`: typed process allocator information. Size totals are `None`
@@ -84,7 +85,7 @@ every byte has been initialized.
 ## Naming Conventions
 
 - Rust-facing names use idiomatic Rust names: `MiMalloc`, `Allocation`, `Heap`,
-  `StatsSnapshot`, `Options`, and similar.
+  `StatsSnapshot`, `GlobalOptions`, and similar.
 - C names remain under `raw` or the exported C ABI.
 - Fallible methods use `try_` when there is also an infallible variant or when
   Rust convention benefits from the prefix.

@@ -1,5 +1,5 @@
-// Raw/unsafe options API example. Prefer `mechanical_mimalloc::Options` unless
-// you need the C-shaped compatibility surface.
+// Raw/unsafe options API example. Prefer `mechanical_mimalloc::GlobalOptions`
+// unless you need the C-shaped compatibility surface.
 fn main() {
     let option = mechanical_mimalloc::raw::mi_option_t::mi_option_show_errors;
 

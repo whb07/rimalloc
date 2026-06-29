@@ -109,19 +109,24 @@ impl TryFrom<i32> for OptionKey {
     }
 }
 
-/// Safe access to supported mimalloc options.
+/// Process-global safe access to supported mimalloc options.
+///
+/// This is a namespace type, not an owned options object. Reads and writes go
+/// through mimalloc's process-global option table, so callers that temporarily
+/// mutate an option should restore the previous value before returning control
+/// to unrelated code.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Options;
+pub struct GlobalOptions;
 
-impl Options {
-    /// Returns the current value for a supported option key.
+impl GlobalOptions {
+    /// Returns the current process-global value for a supported option key.
     #[inline]
     #[must_use]
     pub fn get(key: OptionKey) -> c_long {
         crate::options::mi_option_get(key.raw_option())
     }
 
-    /// Sets a mutable supported option key.
+    /// Sets a mutable supported option key in the process-global option table.
     #[inline]
     pub fn set(key: OptionKey, value: c_long) -> Result<(), OptionError> {
         if !key.mutable() {
@@ -131,9 +136,15 @@ impl Options {
         Ok(())
     }
 
-    /// Resets a mutable supported option key to its default value.
+    /// Resets a mutable supported process-global option key to its default value.
     #[inline]
     pub fn reset(key: OptionKey) -> Result<(), OptionError> {
         Self::set(key, key.default_value())
     }
 }
+
+/// Compatibility alias for the process-global options namespace.
+///
+/// New code should prefer [`GlobalOptions`] so the process-global side effects
+/// are visible at the call site.
+pub type Options = GlobalOptions;

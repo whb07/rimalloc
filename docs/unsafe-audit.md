@@ -84,8 +84,9 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
 - `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
   `InitializedHeapAllocation` encode heap ownership and heap-allocation
   lifetimes without exposing raw deletion rights.
-- `Options`, `StatsSnapshot`, and `ProcessInfo` wrap supported allocator
-  controls and observations without raw out-pointers in safe caller code.
+- `GlobalOptions`, `Options`, `StatsSnapshot`, and `ProcessInfo` wrap
+  supported allocator controls and observations without raw out-pointers in
+  safe caller code.
 - `unsafe_callbacks::ErrorCallbackGuard` and
   `unsafe_callbacks::DeferredFreeCallbackGuard` prevent dangling callback
   contexts with Rust borrows, restore previous callback registrations on drop,

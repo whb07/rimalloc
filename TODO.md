@@ -357,10 +357,14 @@ Problem:
 
 Tasks:
 
-- [ ] Decide whether to rename `Options` to `GlobalOptions` before the API is stable.
-- [ ] If keeping `Options`, update item and method docs to consistently say “process-global allocator options.”
-- [ ] Add tests or docs that make process-global mutation/restoration expectations clear.
-- [ ] If renaming, plan any compatibility alias or migration before public release.
+- [x] Decide whether to rename `Options` to `GlobalOptions` before the API is stable.
+  - Evidence: `GlobalOptions` is now the primary Tier S namespace for supported process-global allocator options.
+- [x] If keeping `Options`, update item and method docs to consistently say “process-global allocator options.”
+  - Evidence: `Options` remains only as a compatibility alias for `GlobalOptions`; item and method docs now describe process-global option-table side effects.
+- [x] Add tests or docs that make process-global mutation/restoration expectations clear.
+  - Evidence: `global_options_mutations_are_process_global_and_restored` mutates `MaxErrors`, observes the same value through the raw option table, and restores the original value.
+- [x] If renaming, plan any compatibility alias or migration before public release.
+  - Evidence: `pub type Options = GlobalOptions` preserves the existing spelling while docs and examples direct new code to `GlobalOptions`.
 
 ## 14. P2 safe facade: resolve `ProcessInfo::page_faults` shape
 

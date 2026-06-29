@@ -13,6 +13,18 @@ pub(crate) enum Zeroed {
     Yes,
 }
 
+impl Zeroed {
+    #[inline(always)]
+    pub(crate) const fn from_bool(value: bool) -> Self {
+        if value { Self::Yes } else { Self::No }
+    }
+
+    #[inline(always)]
+    pub(crate) const fn as_bool(self) -> bool {
+        matches!(self, Self::Yes)
+    }
+}
+
 /// Represents the optional huge-page alignment payload packed into the generic
 /// allocation flag word. The raw value must keep bit 0 clear; bit 0 is reserved
 /// for the zeroing flag.

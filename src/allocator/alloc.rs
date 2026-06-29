@@ -131,15 +131,10 @@ unsafe fn mi_theap_strndup(theap: *mut mi_theap_t, s: *const c_char, n: usize) -
 unsafe fn mi_malloc_generic_fallback_from_padded(
     theap: *mut mi_theap_t,
     padded: crate::core_types::PaddedSize,
-    zero: bool,
+    zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
     unsafe {
-        let zeroed = if zero {
-            crate::core_types::Zeroed::Yes
-        } else {
-            crate::core_types::Zeroed::No
-        };
         let layout = crate::core_types::LayoutRequest::from_padded_unchecked(padded, zeroed);
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
@@ -160,7 +155,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
     theap: *mut mi_theap_t,
     available: crate::core_types::AvailablePage,
     padded: crate::core_types::PaddedSize,
-    zero: bool,
+    zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
     unsafe {
@@ -217,7 +212,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
             }
         }
 
-        if !zero {
+        if zeroed == crate::core_types::Zeroed::No {
             crate::core_types::BlockTag::write_aligned_to(
                 crate::core_types::BlockPtr::new_unchecked(block),
             );
@@ -297,21 +292,22 @@ pub(crate) unsafe extern "C" fn _mi_page_malloc_zero(
     zero: bool,
 ) -> *mut c_void {
     unsafe {
+        let zeroed = crate::core_types::Zeroed::from_bool(zero);
         let padded = crate::core_types::PaddedSize::new_unchecked(size);
         let active = crate::core_types::ActivePage::new_unchecked(
             crate::core_types::PagePtr::new_unchecked(page),
         );
         let Some(available) = active.available() else {
-            return mi_malloc_generic_fallback_from_padded(theap, padded, zero, ptr::null_mut());
+            return mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, ptr::null_mut());
         };
-        _mi_page_malloc_zero_typed(theap, available, padded, zero, ptr::null_mut())
+        _mi_page_malloc_zero_typed(theap, available, padded, zeroed, ptr::null_mut())
     }
 }
 
 unsafe fn mi_theap_malloc_small_zero_nonnull(
     theap: ThreadHeapLocal,
     size: crate::core_types::RequestedSize,
-    zero: bool,
+    zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
     unsafe {
@@ -328,6 +324,7 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
         if mi_unlikely(size == 0) {
             size = crate::core_types::RequestedSize::MIN_ZERO_SIZE;
         }
+        let zero = zeroed.as_bool();
         if crate::internal::MI_GUARDED != 0
             && mi_unlikely(mi_theap_malloc_use_guarded(
                 local_theap,
@@ -348,9 +345,9 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
             crate::core_types::PagePtr::new_unchecked(page),
         );
         let p = if let Some(available) = active.available() {
-            _mi_page_malloc_zero_typed(theap, available, padded, zero, usable)
+            _mi_page_malloc_zero_typed(theap, available, padded, zeroed, usable)
         } else {
-            mi_malloc_generic_fallback_from_padded(theap, padded, zero, usable)
+            mi_malloc_generic_fallback_from_padded(theap, padded, zeroed, usable)
         };
         mi_track_malloc(p, requested_size, zero);
 
@@ -425,10 +422,9 @@ fn alignment_or_report(size: usize, alignment: usize) -> Option<crate::core_type
 }
 
 fn malloc_layout_or_report(size: usize, zero: bool) -> Option<crate::core_types::LayoutRequest> {
-    let layout = if zero {
-        crate::core_types::LayoutRequest::zalloc(size)
-    } else {
-        crate::core_types::LayoutRequest::malloc(size)
+    let layout = match crate::core_types::Zeroed::from_bool(zero) {
+        crate::core_types::Zeroed::No => crate::core_types::LayoutRequest::malloc(size),
+        crate::core_types::Zeroed::Yes => crate::core_types::LayoutRequest::zalloc(size),
     };
     match layout {
         Ok(layout) => Some(layout),
@@ -451,7 +447,6 @@ unsafe fn mi_theap_malloc_zero_req(
     unsafe {
         let requested = layout.requested();
         let size = requested.get();
-        let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
         if size <= MI_SMALL_SIZE_MAX {
             crate::mi_assert_internal!(huge_alignment.get() == 0);
             let Some(theap) = _mi_theap_or_default_typed(theap) else {
@@ -460,7 +455,7 @@ unsafe fn mi_theap_malloc_zero_req(
             mi_theap_malloc_small_zero_nonnull(
                 ThreadHeapLocal::new_unchecked(theap),
                 requested,
-                zero,
+                layout.zeroed(),
                 usable,
             )
         } else {
@@ -479,7 +474,7 @@ unsafe fn mi_theap_malloc_zero_req(
 unsafe fn mi_theap_malloc_small_zero(
     theap: *mut mi_theap_t,
     size: crate::core_types::RequestedSize,
-    zero: bool,
+    zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
     unsafe {
@@ -490,11 +485,11 @@ unsafe fn mi_theap_malloc_small_zero(
             mi_theap_malloc_small_zero_typed(
                 ThreadHeapLocal::new_unchecked(theap),
                 size,
-                zero,
+                zeroed,
                 usable,
             )
         } else if MI_THEAP_INITASNULL {
-            mi_theap_malloc_zero_nonnull_lazy(theap, size.get(), zero, no_alignment(), usable)
+            mi_theap_malloc_zero_nonnull_lazy(theap, size.get(), zeroed, no_alignment(), usable)
         } else {
             let Some(theap) = _mi_theap_or_default_typed(theap) else {
                 return ptr::null_mut();
@@ -502,7 +497,7 @@ unsafe fn mi_theap_malloc_small_zero(
             mi_theap_malloc_small_zero_typed(
                 ThreadHeapLocal::new_unchecked(theap),
                 size,
-                zero,
+                zeroed,
                 usable,
             )
         }
@@ -512,10 +507,10 @@ unsafe fn mi_theap_malloc_small_zero(
 unsafe fn mi_theap_malloc_small_zero_typed(
     theap: ThreadHeapLocal,
     size: crate::core_types::RequestedSize,
-    zero: bool,
+    zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
-    unsafe { mi_theap_malloc_small_zero_nonnull(theap, size, zero, usable) }
+    unsafe { mi_theap_malloc_small_zero_nonnull(theap, size, zeroed, usable) }
 }
 
 unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapLocal> {
@@ -533,7 +528,7 @@ pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
         mi_theap_malloc_small_zero(
             _mi_theap_default(),
             crate::core_types::RequestedSize::new(size),
-            false,
+            crate::core_types::Zeroed::No,
             ptr::null_mut(),
         )
     }
@@ -548,7 +543,7 @@ pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usi
         mi_theap_malloc_small_zero(
             theap,
             crate::core_types::RequestedSize::new(size),
-            false,
+            crate::core_types::Zeroed::No,
             ptr::null_mut(),
         )
     }
@@ -575,21 +570,34 @@ unsafe fn mi_heap_malloc_small_typed(
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
         };
-        mi_theap_malloc_small_zero_nonnull(theap, size, false, ptr::null_mut())
+        mi_theap_malloc_small_zero_nonnull(
+            theap,
+            size,
+            crate::core_types::Zeroed::No,
+            ptr::null_mut(),
+        )
     }
 }
 
 unsafe fn mi_theap_malloc_zero_nonnull_lazy(
     theap: *mut mi_theap_t,
     size: usize,
-    zero: bool,
+    zeroed: crate::core_types::Zeroed,
     huge_alignment: crate::core_types::MaybeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
     unsafe {
-        if let Some(layout) = malloc_layout_or_report(size, zero) {
+        let layout = match zeroed {
+            crate::core_types::Zeroed::No => crate::core_types::LayoutRequest::malloc(size),
+            crate::core_types::Zeroed::Yes => crate::core_types::LayoutRequest::zalloc(size),
+        };
+        if let Ok(layout) = layout {
             mi_theap_malloc_zero_req(theap, layout, huge_alignment, usable)
         } else {
+            _mi_error_message_fmt(
+                Errno::EOVERFLOW,
+                format_args!("allocation request is too large ({size} bytes)\n"),
+            );
             ptr::null_mut()
         }
     }
@@ -643,10 +651,9 @@ unsafe fn _mi_theap_malloc_zero_ex_typed(
     unsafe {
         let requested = layout.requested();
         let size = requested.get();
-        let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
         if size <= MI_SMALL_SIZE_MAX {
             crate::mi_assert_internal!(huge_alignment.get() == 0);
-            mi_theap_malloc_small_zero_nonnull(theap, requested, zero, usable)
+            mi_theap_malloc_small_zero_nonnull(theap, requested, layout.zeroed(), usable)
         } else {
             let flags = crate::core_types::MallocGenericFlags::new(
                 layout.zeroed(),
@@ -771,7 +778,7 @@ pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
         mi_theap_malloc_small_zero(
             _mi_theap_default(),
             crate::core_types::RequestedSize::new(size),
-            true,
+            crate::core_types::Zeroed::Yes,
             ptr::null_mut(),
         )
     }
@@ -787,7 +794,7 @@ pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usi
             return mi_theap_malloc_small_zero(
                 theap,
                 crate::core_types::RequestedSize::new(size),
-                true,
+                crate::core_types::Zeroed::Yes,
                 ptr::null_mut(),
             );
         }
@@ -797,7 +804,7 @@ pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usi
         mi_theap_malloc_small_zero_typed(
             ThreadHeapLocal::new_unchecked(theap),
             crate::core_types::RequestedSize::new(size),
-            true,
+            crate::core_types::Zeroed::Yes,
             ptr::null_mut(),
         )
     }
@@ -824,7 +831,12 @@ unsafe fn mi_heap_zalloc_small_typed(
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
         };
-        mi_theap_malloc_small_zero_nonnull(theap, size, true, ptr::null_mut())
+        mi_theap_malloc_small_zero_nonnull(
+            theap,
+            size,
+            crate::core_types::Zeroed::Yes,
+            ptr::null_mut(),
+        )
     }
 }
 
@@ -1018,7 +1030,7 @@ pub unsafe extern "C" fn mi_umalloc_small(size: usize, usable: *mut usize) -> *m
         mi_theap_malloc_small_zero(
             _mi_theap_default(),
             crate::core_types::RequestedSize::new(size),
-            false,
+            crate::core_types::Zeroed::No,
             usable,
         )
     }
@@ -1032,7 +1044,7 @@ pub unsafe extern "C" fn mi_uzalloc_small(size: usize, usable: *mut usize) -> *m
         mi_theap_malloc_small_zero(
             _mi_theap_default(),
             crate::core_types::RequestedSize::new(size),
-            true,
+            crate::core_types::Zeroed::Yes,
             usable,
         )
     }

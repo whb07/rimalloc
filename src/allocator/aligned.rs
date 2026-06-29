@@ -409,7 +409,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_req(
                         theap,
                         available,
                         padded,
-                        zero,
+                        crate::core_types::Zeroed::from_bool(zero),
                         core::ptr::null_mut(),
                     )
                 };

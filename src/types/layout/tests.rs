@@ -50,6 +50,12 @@ fn from_effective_unchecked_keeps_normalized_size() {
 
 #[test]
 fn zeroing_and_alignment_flags_are_explicit() {
+    assert_eq!(core::mem::size_of::<Zeroed>(), core::mem::size_of::<bool>());
+    assert_eq!(Zeroed::from_bool(false), Zeroed::No);
+    assert_eq!(Zeroed::from_bool(true), Zeroed::Yes);
+    assert!(!Zeroed::No.as_bool());
+    assert!(Zeroed::Yes.as_bool());
+
     let zalloc = LayoutRequest::zalloc(8).expect("zalloc layout");
     assert_eq!(zalloc.zeroed(), Zeroed::Yes);
 

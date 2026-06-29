@@ -683,11 +683,16 @@ Problem:
 
 Tasks:
 
-- [ ] Inventory hot-path boolean parameters before changing them.
-- [ ] Convert only booleans whose meaning is unclear at call sites or easy to mix up.
-- [ ] Prefer small `Copy` enums/newtypes with `#[inline(always)]` accessors where needed.
-- [ ] Confirm generated code remains equivalent for hot allocation/free paths.
-- [ ] Avoid converting obvious local booleans if it adds noise without improving invariants.
+- [x] Inventory hot-path boolean parameters before changing them.
+  - Evidence: audited allocator bool parameters with `rg`; allocation zeroing, collection force flags, C ABI booleans, and local diagnostic booleans remain distinct groups.
+- [x] Convert only booleans whose meaning is unclear at call sites or easy to mix up.
+  - Evidence: converted the internal small/page allocation zeroing chain to `Zeroed`; C ABI entry points and obvious local booleans remain unchanged.
+- [x] Prefer small `Copy` enums/newtypes with `#[inline(always)]` accessors where needed.
+  - Evidence: `Zeroed` now has `#[inline(always)]` `from_bool` and `as_bool` helpers and remains bool-sized.
+- [x] Confirm generated code remains equivalent for hot allocation/free paths.
+  - Evidence: `Zeroed` conversion tests verify bool-sized representation; release/all-features validation and hotpath benchmark smoke tests pass without changing free paths.
+- [x] Avoid converting obvious local booleans if it adds noise without improving invariants.
+  - Evidence: force/commit/option/local diagnostic booleans and raw C ABI declarations are left unchanged.
 
 ## 28. P2 idiomatic polish: use RAII locks consistently where practical
 

@@ -5344,24 +5344,25 @@ fn free_path_internals_are_not_dynamic_exports() {
     assert!(
         alloc_rs
             .contains("pub(crate) unsafe fn _mi_page_malloc_zero_typed(\n    theap: *mut mi_theap_t,\n    available: crate::core_types::AvailablePage,\n    padded: crate::core_types::PaddedSize,")
+            && alloc_rs.contains("zeroed: crate::core_types::Zeroed,")
             && alloc_rs.contains("let page_ptr = available.page();")
             && alloc_rs.contains("let size = padded.get();")
             && alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
-            && alloc_rs.contains("let zeroed = if zero {")
+            && alloc_rs.contains("crate::core_types::Zeroed::from_bool(zero)")
             && alloc_rs.contains("_mi_page_malloc_zero_typed(")
             && alloc_rs.contains("let padded = crate::core_types::PaddedSize::new_unchecked(size);")
             && alloc_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero")
             && alloc_rs.contains("let Some(available) = active.available() else {")
-            && alloc_rs.contains("_mi_page_malloc_zero_typed(theap, available, padded, zero, ptr::null_mut())")
+            && alloc_rs.contains("_mi_page_malloc_zero_typed(theap, available, padded, zeroed, ptr::null_mut())")
             && page_rs.contains(
-                "_mi_page_malloc_zero_typed(theap, available, layout.padded(), zero, ptr::null_mut());"
+                "crate::core_types::Zeroed::from_bool(zero),\n            ptr::null_mut(),"
             )
             && internal.contains("pub(crate) unsafe fn _mi_theap_get_free_small_page_typed(\n    theap: crate::core_types::ThreadHeapLocal,\n    padded: crate::core_types::PaddedSize,")
             && internal.contains("let theap = theap.ptr().as_ptr();")
             && internal.contains("let idx = mi_direct_bin_from_padded(padded).as_usize();")
             && alloc_rs.contains("let page = _mi_theap_get_free_small_page_typed(local_theap, padded);")
-            && alloc_rs.contains("_mi_page_malloc_zero_typed(theap, available, padded, zero, usable)")
+            && alloc_rs.contains("_mi_page_malloc_zero_typed(theap, available, padded, zeroed, usable)")
             && alloc_aligned_rs.contains(
                 "let page =\n            unsafe { crate::internal::_mi_theap_get_free_small_page_typed(local_theap, padded) };"
             )
@@ -5371,6 +5372,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && alloc_aligned_rs.contains(
                 "_mi_page_malloc_zero_typed(\n                        theap,\n                        available,\n                        padded,"
             )
+            && alloc_aligned_rs.contains("crate::core_types::Zeroed::from_bool(zero),")
             && alloc_aligned_rs.contains("let padded = layout.padded();")
             && !page_rs.contains("let p = _mi_page_malloc_zero(theap, page, size, zero);")
             && !alloc_aligned_rs

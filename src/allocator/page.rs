@@ -3450,8 +3450,13 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
 
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
         let available = active.available().unwrap_unchecked();
-        let p =
-            _mi_page_malloc_zero_typed(theap, available, layout.padded(), zero, ptr::null_mut());
+        let p = _mi_page_malloc_zero_typed(
+            theap,
+            available,
+            layout.padded(),
+            crate::core_types::Zeroed::from_bool(zero),
+            ptr::null_mut(),
+        );
         crate::mi_assert_internal!(!p.is_null());
 
         if mi_page_block_size(page) > MI_SMALL_MAX_OBJ_SIZE

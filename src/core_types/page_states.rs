@@ -309,10 +309,8 @@ impl OwnedAbandonedPage {
     }
 
     #[inline(always)]
-    pub(crate) fn try_reabandon_to_mapped(
-        self,
-    ) -> Result<AbandonedMappedPageType, OwnedAbandonedPage> {
-        Ok(unsafe { AbandonedMappedPageType::new_unchecked(self.page()) })
+    pub(crate) fn reabandon_to_mapped(self) -> AbandonedMappedPageType {
+        unsafe { AbandonedMappedPageType::new_unchecked(self.page()) }
     }
 }
 
@@ -440,7 +438,7 @@ pub(super) fn __lint_touch() {
     let mapped = unsafe { AbandonedMappedPageType::new_unchecked(page) };
     let _ = mapped.remote_free_page();
     let owned = unsafe { OwnedAbandonedPage::new_unchecked(page) };
-    let _ = owned.try_reabandon_to_mapped();
+    let _ = owned.reabandon_to_mapped();
 
     if let PageFreeOwner::Local(local) =
         PageFreeOwner::Local(unsafe { LocalPage::new_unchecked(page) })

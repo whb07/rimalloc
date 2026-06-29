@@ -223,14 +223,11 @@ impl Allocation {
         size: usize,
         align: usize,
     ) -> Result<Self, ResizeError<Self>> {
-        let layout = match Layout::from_size_align(size, align) {
-            Ok(layout) => layout,
-            Err(_) => {
-                return Err(ResizeError {
-                    allocation: self,
-                    kind: ResizeErrorKind::Layout(LayoutError { size, align }),
-                });
-            }
+        let Ok(layout) = Layout::from_size_align(size, align) else {
+            return Err(ResizeError {
+                allocation: self,
+                kind: ResizeErrorKind::Layout(LayoutError { size, align }),
+            });
         };
         self.resize(layout)
     }
@@ -532,14 +529,11 @@ impl InitializedAllocation {
         size: usize,
         align: usize,
     ) -> Result<Self, ResizeError<Self>> {
-        let layout = match Layout::from_size_align(size, align) {
-            Ok(layout) => layout,
-            Err(_) => {
-                return Err(ResizeError {
-                    allocation: self,
-                    kind: ResizeErrorKind::Layout(LayoutError { size, align }),
-                });
-            }
+        let Ok(layout) = Layout::from_size_align(size, align) else {
+            return Err(ResizeError {
+                allocation: self,
+                kind: ResizeErrorKind::Layout(LayoutError { size, align }),
+            });
         };
         self.resize(layout)
     }

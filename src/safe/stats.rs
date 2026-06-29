@@ -74,6 +74,8 @@ impl StatTotal {
     const fn from_i64(value: i64) -> Self {
         if value <= 0 {
             Self(0)
+        } else if value as u64 > usize::MAX as u64 {
+            Self(usize::MAX)
         } else {
             Self(value as usize)
         }
@@ -321,5 +323,24 @@ const fn nonzero_total(value: usize) -> Option<StatTotal> {
         None
     } else {
         Some(StatTotal::new(value))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StatTotal;
+
+    #[test]
+    fn stat_total_from_i64_saturates_to_usize_domain() {
+        assert_eq!(StatTotal::from_i64(-1).get(), 0);
+        assert_eq!(StatTotal::from_i64(0).get(), 0);
+        assert_eq!(StatTotal::from_i64(42).get(), 42);
+
+        let expected = if usize::BITS < 64 {
+            usize::MAX
+        } else {
+            i64::MAX as usize
+        };
+        assert_eq!(StatTotal::from_i64(i64::MAX).get(), expected);
     }
 }

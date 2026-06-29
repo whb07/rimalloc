@@ -331,6 +331,12 @@ mod tests {
             .expect("zeroed");
         assert!(zeroed.as_bytes().iter().all(|byte| *byte == 0));
 
+        let zeroed = zeroed
+            .resize_with_size_align(24, 8)
+            .expect("grow initialized heap allocation");
+        assert_eq!(zeroed.len(), 24);
+        assert!(zeroed.as_bytes()[16..].iter().all(|byte| *byte == 0));
+
         let mut allocation = zeroed.into_allocation();
         for idx in 0..allocation.len() {
             unsafe { allocation.as_mut_ptr().add(idx).write(idx as u8) };
@@ -360,6 +366,11 @@ mod tests {
             .allocate(Layout::from_size_align(32, 8).expect("layout"))
             .expect("main heap allocation");
         assert_eq!(allocation.len(), 32);
+
+        let zeroed = main
+            .allocate_zeroed(Layout::from_size_align(16, 8).expect("layout"))
+            .expect("main heap zeroed allocation");
+        assert!(zeroed.as_bytes().iter().all(|byte| *byte == 0));
     }
 
     #[test]
@@ -420,8 +431,14 @@ mod tests {
         assert!(json.starts_with(b"{"));
 
         let heap = Heap::new().expect("heap");
-        let heap_stats = heap.as_ref().stats().expect("heap stats");
+        let heap_stats = heap.stats().expect("heap stats");
         assert!(heap_stats.pages_current().get() >= 0);
+
+        let main_stats = MainHeap::get()
+            .expect("main heap")
+            .stats()
+            .expect("main stats");
+        assert!(main_stats.pages_current().get() >= 0);
 
         let info = ProcessInfo::current();
         assert_eq!(info.elapsed().as_millis(), info.elapsed_msecs() as u128);
@@ -525,9 +542,9 @@ mod tests {
     where
         T: Copy,
     {
-        callback
-            .map(|callback| unsafe { core::mem::transmute_copy::<T, usize>(&callback) })
-            .unwrap_or(0)
+        callback.map_or(0, |callback| unsafe {
+            core::mem::transmute_copy::<T, usize>(&callback)
+        })
     }
 
     struct FixedBuf {

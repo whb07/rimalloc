@@ -95,10 +95,7 @@ fn abandon_and_reclaim_transitions_preserve_page_identity() {
         let owned = OwnedAbandonedPage::new_unchecked(page);
         let reclaimed = owned.reclaim(heap_owner());
         assert_eq!(reclaimed.page().as_ptr(), page.as_ptr());
-        let mapped = match owned.try_reabandon_to_mapped() {
-            Ok(mapped) => mapped,
-            Err(_) => panic!("owned page reabandoned to mapped witness"),
-        };
+        let mapped = owned.reabandon_to_mapped();
         assert_eq!(mapped.page().as_ptr(), page.as_ptr());
     });
 }

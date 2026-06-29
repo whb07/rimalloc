@@ -92,6 +92,12 @@ impl Heap {
     ) -> Result<InitializedHeapAllocation<'_>, AllocError> {
         self.as_ref().allocate_zeroed(layout)
     }
+
+    /// Captures a statistics snapshot for this heap.
+    #[inline]
+    pub fn stats(&self) -> Result<StatsSnapshot, StatsError> {
+        self.as_ref().stats()
+    }
 }
 
 impl Drop for Heap {
@@ -176,6 +182,21 @@ impl MainHeap {
     #[inline]
     pub fn allocate(&self, layout: Layout) -> Result<HeapAllocation<'_>, AllocError> {
         self.as_ref().allocate(layout)
+    }
+
+    /// Allocates a zero-initialized byte block from the main heap.
+    #[inline]
+    pub fn allocate_zeroed(
+        &self,
+        layout: Layout,
+    ) -> Result<InitializedHeapAllocation<'_>, AllocError> {
+        self.as_ref().allocate_zeroed(layout)
+    }
+
+    /// Captures a statistics snapshot for the main heap.
+    #[inline]
+    pub fn stats(&self) -> Result<StatsSnapshot, StatsError> {
+        self.as_ref().stats()
     }
 }
 
@@ -269,14 +290,11 @@ impl<'heap> HeapAllocation<'heap> {
         size: usize,
         align: usize,
     ) -> Result<Self, ResizeError<Self>> {
-        let layout = match Layout::from_size_align(size, align) {
-            Ok(layout) => layout,
-            Err(_) => {
-                return Err(ResizeError {
-                    allocation: self,
-                    kind: ResizeErrorKind::Layout(LayoutError { size, align }),
-                });
-            }
+        let Ok(layout) = Layout::from_size_align(size, align) else {
+            return Err(ResizeError {
+                allocation: self,
+                kind: ResizeErrorKind::Layout(LayoutError { size, align }),
+            });
         };
         self.resize(layout)
     }
@@ -564,6 +582,22 @@ impl<'heap> InitializedHeapAllocation<'heap> {
                 })
             }
         }
+    }
+
+    /// Builds a layout from `size` and `align`, then resizes this allocation.
+    #[inline]
+    pub fn resize_with_size_align(
+        self,
+        size: usize,
+        align: usize,
+    ) -> Result<Self, ResizeError<Self>> {
+        let Ok(layout) = Layout::from_size_align(size, align) else {
+            return Err(ResizeError {
+                allocation: self,
+                kind: ResizeErrorKind::Layout(LayoutError { size, align }),
+            });
+        };
+        self.resize(layout)
     }
 }
 

@@ -64,6 +64,15 @@ Per-file review:
   `src/core_types/scalar.rs`, and `src/core_types/track.rs`: typed wrappers
   encode allocator layout, pointer, scalar, callback, and tracking invariants;
   arithmetic remains a checked facade over the same C-compatible metadata.
+- Nested core-type tests with pointer and arithmetic fixtures cover these wrapper
+  invariants without creating public API:
+  `src/core_types/arena/tests.rs`,
+  `src/core_types/atomic_wrappers/tests.rs`,
+  `src/core_types/freelist/tests.rs`,
+  `src/core_types/memid/tests.rs`,
+  `src/core_types/padding/tests.rs`,
+  `src/core_types/ptr/tests.rs`, and
+  `src/core_types/scalar/tests.rs`.
 - `src/free.rs`: free paths compute block starts, padding locations, and guarded
   page addresses only after page lookup/ownership checks.
 - `src/headers.rs`: macro casts preserve C header API types and forward to the
@@ -104,6 +113,9 @@ Per-file review:
   conversion.
 - `src/safe.rs`: safe facade pointer casts are limited to forwarding caller-owned
   handles into the raw ABI after preserving the public API contract.
+- `src/safe/allocations.rs`, `src/safe/heaps.rs`, and `src/safe/stats.rs`: safe
+  wrappers expose raw pointer escape hatches, heap allocation handles, and stats
+  buffers only after preserving wrapper ownership and bounds.
 - `src/stats.rs`: output-buffer pointer increments are bounded by buffer size;
   stat-to-process-info conversions clamp negative counters before casting.
 - `src/theap.rs`: page/block visitors walk initialized page areas with capacity

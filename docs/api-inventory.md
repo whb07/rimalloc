@@ -21,12 +21,11 @@ implementation internals.
 - `StatsSnapshot`, `StatCount`, `StatTotal`: Tier S non-printing statistics
   snapshot wrappers.
 - `ProcessInfo`: Tier S typed process allocator information.
-- `ErrorCallbackGuard`, `DeferredFreeCallbackGuard`: Tier S callback guards
-  that restore prior callback state on drop.
 - `AllocError`, `LayoutError`, `ResizeError`, `ResizeErrorKind`,
-  `TryAllocError`, `HeapError`, `OptionError`, `StatsError`, `CallbackError`:
+  `TryAllocError`, `HeapError`, `OptionError`, `StatsError`:
   Tier S Rust-native error/status types for the safe API.
 - `raw`: Tier R explicit C-shaped compatibility facade.
+- `unsafe_callbacks`: unsafe-adjacent Rust callback namespace.
 
 Implementation modules such as allocation, page, heap, arena, OS, primitive,
 thread-local, and strict-type internals are crate-private and must not be
@@ -45,10 +44,14 @@ bytes or an explicit unsafe initialization assertion.
 heap pointers through safe APIs. Heap-tied allocations borrow the heap so safe
 code cannot delete an owned heap while live heap allocations still exist.
 
-`Options`, `StatsSnapshot`, `ProcessInfo`, `ErrorCallbackGuard`, and
-`DeferredFreeCallbackGuard` cover supported runtime controls and observations
-without requiring callers to pass raw out-pointers or manage callback
-restoration manually. Unsupported or unavailable cases return typed Rust errors.
+`Options`, `StatsSnapshot`, and `ProcessInfo` cover supported runtime controls
+and observations without requiring callers to pass raw out-pointers. Unsupported
+or unavailable cases return typed Rust errors.
+
+Borrowed callback guards are intentionally outside Tier S. Users who can uphold
+process-global callback synchronization, lifetime, reentrancy, and allocator
+entry obligations can use `unsafe_callbacks::ErrorCallbackGuard` and
+`unsafe_callbacks::DeferredFreeCallbackGuard`.
 
 Adding a safe wrapper requires documenting how it enforces ownership, lifetime,
 aliasing, nullability, alignment, threading, and unwind requirements without
@@ -81,18 +84,26 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
   `PartialOrd`, and `Ord` typed integer wrappers.
 - `ProcessInfo`: typed process allocator information with unavailable fields
   represented as `Option`.
-- `ErrorCallbackGuard`, `DeferredFreeCallbackGuard`: restore previous callback
-  registrations on drop and catch panics before callback ABI return.
 - `AllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
 - `LayoutError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
-- `ResizeError`, `ResizeErrorKind`, `HeapError`, `OptionError`, `StatsError`,
-  and `CallbackError`: typed failure states for safe allocation, heap, option,
-  stats, and callback APIs; implement `Display` and `std::error::Error` when
-  `std` is enabled where owned allocation preservation permits.
+- `ResizeError`, `ResizeErrorKind`, `HeapError`, `OptionError`, and
+  `StatsError`: typed failure states for safe allocation, heap, option, and
+  stats APIs; implement `Display` and `std::error::Error` when `std` is enabled
+  where owned allocation preservation permits.
 - `TryAllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
+
+## Unsafe-Adjacent Rust Callbacks
+
+`mechanical_mimalloc::unsafe_callbacks` exposes
+`unsafe_callbacks::ErrorCallbackGuard` and
+`unsafe_callbacks::DeferredFreeCallbackGuard`. These borrowed `FnMut` RAII
+guards restore previous callback registrations on drop and catch panics before
+callback ABI return in `std` and test builds, but their constructors are unsafe
+because the callback slots are process-global and can be entered from allocator
+activity outside the registering scope.
 
 ## Raw Rust Facade
 

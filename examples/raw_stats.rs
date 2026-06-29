@@ -1,4 +1,5 @@
-// Raw/unsafe stats API example. There is no safe `StatsSnapshot` facade yet.
+// Raw/unsafe stats API example. Prefer `mechanical_mimalloc::StatsSnapshot`
+// unless you need the C-shaped compatibility surface.
 fn main() {
     unsafe {
         mechanical_mimalloc::raw::mi_stats_reset();

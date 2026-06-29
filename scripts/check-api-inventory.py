@@ -11,12 +11,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 EXPECTED_ROOT_ITEMS = {
     "raw",
+    "unsafe_callbacks",
     "MiMalloc",
     "Allocation",
     "AllocError",
-    "CallbackError",
-    "DeferredFreeCallbackGuard",
-    "ErrorCallbackGuard",
     "Heap",
     "HeapAllocation",
     "HeapError",
@@ -142,6 +140,15 @@ def main() -> int:
         f"crate-root public inventory drift: missing={sorted(EXPECTED_ROOT_ITEMS - actual_root)} "
         f"extra={sorted(actual_root - EXPECTED_ROOT_ITEMS)}",
     )
+    for unsafe_callback_item in [
+        "CallbackError",
+        "DeferredFreeCallbackGuard",
+        "ErrorCallbackGuard",
+    ]:
+        require(
+            unsafe_callback_item not in actual_root,
+            f"{unsafe_callback_item} must not be reintroduced as a crate-root Tier S item",
+        )
 
     actual_raw, actual_unstable = raw_modules_by_gate(raw_rs)
     require(
@@ -158,6 +165,11 @@ def main() -> int:
 
     for item in sorted(EXPECTED_ROOT_ITEMS):
         require(item in api_doc, f"docs/api-inventory.md does not mention crate-root item {item}")
+    for item in ["ErrorCallbackGuard", "DeferredFreeCallbackGuard"]:
+        require(
+            f"`unsafe_callbacks::{item}`" in api_doc,
+            f"docs/api-inventory.md must classify unsafe_callbacks::{item}",
+        )
 
     for phrase in [
         "Tier S: safe Rust API, Rust SemVer surface.",

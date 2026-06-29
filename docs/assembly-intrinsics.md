@@ -84,7 +84,7 @@ Relevant local checks are:
 ```sh
 scripts/check-abi-symbols.sh
 scripts/check-layout.sh
-cargo test --quiet --test release_fast_path_audit
+cargo test --quiet --test release_fast_path_audit --features "std unstable-raw-internals"
 ```
 
 The release fast-path audit checks the expected TLS symbol usage, hidden-symbol

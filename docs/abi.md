@@ -306,12 +306,18 @@ raw facade and must not be stabilized without adding them to this inventory and
 documenting the same nullability, lifetime, threading, reentrancy, and unwind
 contract.
 
-Raw callback registration remains unsafe. Safe `ErrorCallbackGuard` and
-`DeferredFreeCallbackGuard` wrappers are available for callback families where
-the crate can tie the callback context to a Rust borrow, restore the previous
-registration on drop, and catch panic or unwind before returning across the
-callback C ABI boundary. Output callbacks remain raw until output recursion and
-diagnostic allocation semantics are designed.
+Raw callback registration remains unsafe. `unsafe_callbacks::ErrorCallbackGuard`
+and `unsafe_callbacks::DeferredFreeCallbackGuard` wrappers are available for
+callback families where the crate can tie the callback context to a Rust borrow,
+restore the previous registration on drop, and catch panic or unwind before
+returning across the callback C ABI boundary. They are unsafe-adjacent Rust APIs,
+not Tier S safe facade APIs. Output callbacks remain raw until output recursion
+and diagnostic allocation semantics are designed.
+`unsafe_callbacks::ErrorCallbackGuard` and
+`unsafe_callbacks::DeferredFreeCallbackGuard` are the only borrowed guard
+wrappers currently provided.
+Those wrappers catch panic or unwind before returning across the
+callback C ABI boundary in `std` and test builds.
 
 ## Null, Errno, and Error Behavior
 

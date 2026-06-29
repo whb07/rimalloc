@@ -32,6 +32,7 @@ pub struct AllocError {
 }
 
 impl AllocError {
+    /// Returns the layout for the failed allocation request.
     #[inline]
     #[must_use]
     pub const fn layout(self) -> Layout {
@@ -61,16 +62,20 @@ impl std::error::Error for AllocError {}
 /// Recovery: pass a non-zero power-of-two alignment and a size/alignment pair
 /// that fits Rust's layout rules.
 ///
-/// ```rust,ignore
+/// ```rust
 /// use mechanical_mimalloc::{Allocation, TryAllocError};
 ///
-/// let err = Allocation::with_size_align(8, 3).unwrap_err();
+/// let err = match Allocation::with_size_align(8, 3) {
+///     Err(err) => err,
+///     Ok(_) => unreachable!("invalid alignment should not allocate"),
+/// };
 /// match err {
 ///     TryAllocError::Layout(layout) => {
 ///         assert_eq!(layout.size(), 8);
 ///         assert_eq!(layout.align(), 3);
 ///     }
 ///     TryAllocError::Alloc(_) => unreachable!(),
+///     _ => unreachable!(),
 /// }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,12 +85,14 @@ pub struct LayoutError {
 }
 
 impl LayoutError {
+    /// Returns the rejected size.
     #[inline]
     #[must_use]
     pub const fn size(self) -> usize {
         self.size
     }
 
+    /// Returns the rejected alignment.
     #[inline]
     #[must_use]
     pub const fn align(self) -> usize {
@@ -112,15 +119,21 @@ impl std::error::Error for LayoutError {}
 /// requested layout was invalid. `TryAllocError::Alloc` means the layout was
 /// valid but allocation failed.
 ///
-/// ```rust,ignore
+/// ```rust
 /// use mechanical_mimalloc::{Allocation, TryAllocError};
 ///
-/// let err = Allocation::zeroed_with_size_align(1, 3).unwrap_err();
+/// let err = match Allocation::zeroed_with_size_align(1, 3) {
+///     Err(err) => err,
+///     Ok(_) => unreachable!("invalid alignment should not allocate"),
+/// };
 /// assert!(matches!(err, TryAllocError::Layout(_)));
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TryAllocError {
+    /// The requested size/alignment pair was not a valid [`Layout`].
     Layout(LayoutError),
+    /// The layout was valid, but mimalloc returned null.
     Alloc(AllocError),
 }
 
@@ -134,12 +147,22 @@ impl fmt::Display for TryAllocError {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for TryAllocError {}
+impl std::error::Error for TryAllocError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Layout(err) => Some(err),
+            Self::Alloc(err) => Some(err),
+        }
+    }
+}
 
 /// Cause of a failed resize operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ResizeErrorKind {
+    /// The requested new size/alignment pair was not a valid [`Layout`].
     Layout(LayoutError),
+    /// The requested new layout was valid, but mimalloc returned null.
     Alloc(AllocError),
 }
 
@@ -153,7 +176,14 @@ impl fmt::Display for ResizeErrorKind {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for ResizeErrorKind {}
+impl std::error::Error for ResizeErrorKind {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Layout(err) => Some(err),
+            Self::Alloc(err) => Some(err),
+        }
+    }
+}
 
 /// Error returned when resizing fails without consuming the original allocation.
 #[derive(Debug, PartialEq, Eq)]
@@ -163,30 +193,35 @@ pub struct ResizeError<A> {
 }
 
 impl<A> ResizeError<A> {
+    /// Returns the resize failure kind.
     #[inline]
     #[must_use]
     pub const fn kind(&self) -> ResizeErrorKind {
         self.kind
     }
 
+    /// Returns the original allocation preserved after resize failure.
     #[inline]
     #[must_use]
     pub const fn allocation(&self) -> &A {
         &self.allocation
     }
 
+    /// Returns mutable access to the original allocation.
     #[inline]
     #[must_use]
     pub const fn allocation_mut(&mut self) -> &mut A {
         &mut self.allocation
     }
 
+    /// Consumes the error and returns the original allocation.
     #[inline]
     #[must_use]
     pub fn into_allocation(self) -> A {
         self.allocation
     }
 
+    /// Consumes the error and returns the original allocation and failure kind.
     #[inline]
     #[must_use]
     pub fn into_parts(self) -> (A, ResizeErrorKind) {
@@ -201,4 +236,8 @@ impl<A> fmt::Display for ResizeError<A> {
 }
 
 #[cfg(feature = "std")]
-impl<A: fmt::Debug> std::error::Error for ResizeError<A> {}
+impl<A: fmt::Debug> std::error::Error for ResizeError<A> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.kind)
+    }
+}

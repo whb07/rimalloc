@@ -1,14 +1,12 @@
 #![deny(clippy::must_use_candidate)]
 
 mod allocations;
-mod callbacks;
 mod errors;
 mod heaps;
 mod options;
 mod stats;
 
 pub use allocations::{Allocation, InitializedAllocation};
-pub use callbacks::{CallbackError, DeferredFreeCallbackGuard, ErrorCallbackGuard};
 pub use errors::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError};
 pub use heaps::{Heap, HeapAllocation, HeapError, HeapRef, InitializedHeapAllocation, MainHeap};
 pub use options::{OptionError, OptionKey, Options};
@@ -23,6 +21,8 @@ mod tests {
     use core::ptr;
     use core::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
+
+    use crate::unsafe_callbacks::{DeferredFreeCallbackGuard, ErrorCallbackGuard};
 
     static CALLBACK_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -48,7 +48,7 @@ mod tests {
                 assert_eq!(allocation.layout(), layout);
                 assert_eq!(allocation.len(), size);
                 assert!(!allocation.is_empty());
-                assert_ne!(allocation.as_ptr(), core::ptr::null_mut());
+                assert_ne!(allocation.as_ptr(), core::ptr::null());
                 assert_eq!(allocation.as_ptr() as usize % align, 0);
             }
         }
@@ -84,11 +84,14 @@ mod tests {
 
     #[test]
     fn uninitialized_allocation_can_be_written_before_unsafe_read() {
-        let allocation = Allocation::with_size_align(32, 16).expect("allocation");
-        assert_eq!(allocation.as_non_null().as_ptr(), allocation.as_ptr());
+        let mut allocation = Allocation::with_size_align(32, 16).expect("allocation");
+        assert_eq!(
+            allocation.as_non_null().as_ptr().cast_const(),
+            allocation.as_ptr()
+        );
 
         for i in 0..allocation.len() {
-            unsafe { allocation.as_ptr().add(i).write((i % 251) as u8) };
+            unsafe { allocation.as_mut_ptr().add(i).write((i % 251) as u8) };
         }
 
         let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
@@ -114,12 +117,12 @@ mod tests {
 
     #[test]
     fn allocation_is_move_only_and_drops_once() {
-        let allocation = Allocation::with_size_align(64, 16).expect("allocation");
-        let ptr = allocation.as_ptr();
+        let mut allocation = Allocation::with_size_align(64, 16).expect("allocation");
+        let ptr = allocation.as_mut_ptr();
         unsafe { ptr.write(42) };
 
         let moved = allocation;
-        assert_eq!(moved.as_ptr(), ptr);
+        assert_eq!(moved.as_ptr(), ptr.cast_const());
         assert_eq!(unsafe { moved.as_ptr().read() }, 42);
     }
 
@@ -201,9 +204,9 @@ mod tests {
     #[test]
     fn allocation_resize_grow_shrink_same_and_zero_edges() {
         let layout = Layout::from_size_align(16, 8).expect("layout");
-        let allocation = Allocation::new(layout).expect("allocation");
+        let mut allocation = Allocation::new(layout).expect("allocation");
         for idx in 0..allocation.len() {
-            unsafe { allocation.as_ptr().add(idx).write(idx as u8) };
+            unsafe { allocation.as_mut_ptr().add(idx).write(idx as u8) };
         }
 
         let grown_layout = Layout::from_size_align(64, 8).expect("layout");
@@ -256,16 +259,27 @@ mod tests {
         assert_eq!(allocation.as_bytes()[31], 9);
 
         let cloned = allocation
-            .try_clone_zeroed_contents()
+            .try_clone_contents()
             .expect("clone initialized bytes");
         assert_eq!(cloned.as_bytes(), allocation.as_bytes());
+
+        fn takes_bytes(bytes: impl AsRef<[u8]>) -> usize {
+            bytes.as_ref().len()
+        }
+        fn fills_first(mut bytes: impl AsMut<[u8]>) {
+            bytes.as_mut()[0] = 11;
+        }
+
+        assert_eq!(takes_bytes(&allocation), 32);
+        fills_first(&mut allocation);
+        assert_eq!(allocation.as_bytes()[0], 11);
     }
 
     #[test]
     fn uninitialized_allocation_requires_explicit_initialization() {
-        let allocation = Allocation::with_size_align(8, 8).expect("allocation");
+        let mut allocation = Allocation::with_size_align(8, 8).expect("allocation");
         for idx in 0..allocation.len() {
-            unsafe { allocation.as_ptr().add(idx).write((idx + 1) as u8) };
+            unsafe { allocation.as_mut_ptr().add(idx).write((idx + 1) as u8) };
         }
         let initialized = unsafe { allocation.assume_initialized() };
         assert_eq!(initialized.as_bytes(), &[1, 2, 3, 4, 5, 6, 7, 8]);
@@ -317,9 +331,9 @@ mod tests {
             .expect("zeroed");
         assert!(zeroed.as_bytes().iter().all(|byte| *byte == 0));
 
-        let allocation = zeroed.into_allocation();
+        let mut allocation = zeroed.into_allocation();
         for idx in 0..allocation.len() {
-            unsafe { allocation.as_ptr().add(idx).write(idx as u8) };
+            unsafe { allocation.as_mut_ptr().add(idx).write(idx as u8) };
         }
         let grown = allocation
             .resize(Layout::from_size_align(32, 8).expect("layout"))
@@ -355,23 +369,25 @@ mod tests {
 
         for key in OptionKey::ALL {
             assert_eq!(OptionKey::from_raw(key.as_raw()), Ok(key));
-            let _ = Options::get(key).expect("get supported key");
+            assert_eq!(OptionKey::try_from(key.as_raw()), Ok(key));
+            let _ = Options::get(key);
         }
         assert_eq!(OptionKey::from_raw(-1), Err(OptionError::InvalidKey));
+        assert_eq!(OptionKey::try_from(-1), Err(OptionError::InvalidKey));
         assert_eq!(OptionKey::from_raw(2), Err(OptionError::Unsupported));
         assert_eq!(
             Options::set(OptionKey::ShowStats, 1),
             Err(OptionError::Unsupported)
         );
 
-        let original = Options::get(OptionKey::MaxWarnings).expect("original");
+        let original = Options::get(OptionKey::MaxWarnings);
         let changed = if original == 7 { 8 } else { 7 };
         Options::set(OptionKey::MaxWarnings, changed).expect("set");
-        assert_eq!(Options::get(OptionKey::MaxWarnings), Ok(changed));
+        assert_eq!(Options::get(OptionKey::MaxWarnings), changed);
         Options::reset(OptionKey::MaxWarnings).expect("reset");
         assert_eq!(
             Options::get(OptionKey::MaxWarnings),
-            Ok(OptionKey::MaxWarnings.default_value())
+            OptionKey::MaxWarnings.default_value()
         );
         Options::set(OptionKey::MaxWarnings, original).expect("restore");
     }
@@ -408,6 +424,9 @@ mod tests {
         assert!(heap_stats.pages_current().get() >= 0);
 
         let info = ProcessInfo::current();
+        assert_eq!(info.elapsed().as_millis(), info.elapsed_msecs() as u128);
+        assert_eq!(info.user_time().as_millis(), info.user_msecs() as u128);
+        assert_eq!(info.system_time().as_millis(), info.system_msecs() as u128);
         assert!(info.page_size().is_some_and(|page_size| page_size > 0));
         assert!(info.page_faults().is_some());
         let raw_page_size = unsafe { crate::os::_mi_os_page_size() };
@@ -424,7 +443,7 @@ mod tests {
     fn error_callback_guard_invokes_and_restores_previous_callback_quietly() {
         let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
         let original = crate::options::registered_error_callback();
-        let original_show_errors = Options::get(OptionKey::ShowErrors).expect("show errors");
+        let original_show_errors = Options::get(OptionKey::ShowErrors);
         Options::set(OptionKey::ShowErrors, 0).expect("disable error output");
         PREVIOUS_ERROR_CALLBACK_HITS.store(0, Ordering::SeqCst);
         crate::options::mi_register_error(Some(previous_error_callback), ptr::null_mut());
@@ -437,7 +456,7 @@ mod tests {
             // SAFETY: this test holds the process-wide callback test lock,
             // triggers the callback synchronously, and restores the original
             // registration before releasing the lock.
-            let _guard = unsafe { ErrorCallbackGuard::new(&mut callback).expect("guard") };
+            let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
             crate::options::_mi_error_message_fmt(
                 crate::core_types::Errno::EINVAL,
                 format_args!("safe error callback guard test\n"),
@@ -459,7 +478,7 @@ mod tests {
     fn panicking_error_callback_is_caught_before_c_abi_return() {
         let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
         let original = crate::options::registered_error_callback();
-        let original_show_errors = Options::get(OptionKey::ShowErrors).expect("show errors");
+        let original_show_errors = Options::get(OptionKey::ShowErrors);
         Options::set(OptionKey::ShowErrors, 0).expect("disable error output");
         let old_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));
@@ -471,7 +490,7 @@ mod tests {
             // SAFETY: this test holds the process-wide callback test lock,
             // triggers the callback synchronously, and restores the original
             // registration before releasing the lock.
-            let _guard = unsafe { ErrorCallbackGuard::new(&mut callback).expect("guard") };
+            let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
             crate::options::_mi_error_message_fmt(
                 crate::core_types::Errno::EINVAL,
                 format_args!("safe panic callback guard test\n"),
@@ -492,7 +511,7 @@ mod tests {
             // SAFETY: this test holds the process-wide callback test lock and
             // only observes registration state without concurrent allocator
             // callback entry.
-            let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback).expect("guard") };
+            let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
             let current = unsafe { crate::page::registered_deferred_free_callback() };
             assert!(current.0.is_some());
         }
@@ -500,15 +519,6 @@ mod tests {
         assert_eq!(callback_addr(restored.0), callback_addr(original.0));
         assert_eq!(restored.1, original.1);
         unsafe { crate::page::restore_deferred_free_callback(original) };
-    }
-
-    #[test]
-    fn callback_error_variants_are_distinct() {
-        assert!(matches!(CallbackError::Register, CallbackError::Register));
-        assert!(matches!(
-            CallbackError::Unsupported,
-            CallbackError::Unsupported
-        ));
     }
 
     fn callback_addr<T>(callback: Option<T>) -> usize

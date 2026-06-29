@@ -29,10 +29,28 @@ Current crate root public items are:
 
 - `MiMalloc`
 - `Allocation`
+- `InitializedAllocation`
 - `AllocError`
+- `Heap`
+- `HeapAllocation`
+- `HeapError`
+- `HeapRef`
+- `InitializedHeapAllocation`
 - `LayoutError`
+- `MainHeap`
+- `OptionError`
+- `OptionKey`
+- `Options`
+- `ProcessInfo`
+- `ResizeError`
+- `ResizeErrorKind`
+- `StatCount`
+- `StatTotal`
+- `StatsError`
+- `StatsSnapshot`
 - `TryAllocError`
 - `raw`
+- `unsafe_callbacks`
 
 `scripts/check-api-inventory.py` validates this list against
 `docs/api-inventory.md` and the source. Implementation modules such as `alloc`,
@@ -43,8 +61,11 @@ Intentional API changes reviewed:
 
 - Removed crate-root implementation modules from the public facade. This is
   intentional Tier I cleanup, not a safe API removal.
-- Added and documented the safe Tier S facade: `MiMalloc`, `Allocation`, and
-  the allocation error/status types.
+- Added and documented the safe Tier S facade: `MiMalloc`, allocation wrappers,
+  heap wrappers, options, stats, process info, and the safe error/status types.
+- Classified `mechanical_mimalloc::unsafe_callbacks` as unsafe-adjacent Rust
+  API outside Tier S because borrowed callback guards require process-global
+  synchronization and lifetime obligations.
 - Classified `mechanical_mimalloc::raw` as Tier R: unsafe, C-shaped, and
   unstable as a Rust path surface unless explicitly versioned later.
 - Kept default `raw` narrow: root `mi_*` C-header mirror plus `raw::abi`,

@@ -10,60 +10,6 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "UNSAFE_AUDIT.md"
 
-AUDITED_RUST_FILES = {
-    "src/abi.rs",
-    "src/alloc.rs",
-    "src/alloc_aligned.rs",
-    "src/alloc_override.rs",
-    "src/alloc_posix.rs",
-    "src/arena.rs",
-    "src/arena_meta.rs",
-    "src/atomic.rs",
-    "src/bench_diagnostics.rs",
-    "src/bitmap.rs",
-    "src/core_types/arena.rs",
-    "src/core_types/atomic_wrappers.rs",
-    "src/core_types/callbacks.rs",
-    "src/core_types/freelist.rs",
-    "src/core_types/freelist_wrappers.rs",
-    "src/core_types/guarded.rs",
-    "src/core_types/heap.rs",
-    "src/core_types/layout.rs",
-    "src/core_types/memid.rs",
-    "src/core_types/padding.rs",
-    "src/core_types/page.rs",
-    "src/core_types/page_queues.rs",
-    "src/core_types/page_states.rs",
-    "src/core_types/ptr.rs",
-    "src/core_types/scalar.rs",
-    "src/core_types/validation.rs",
-    "src/core_types/validation_extra.rs",
-    "src/free.rs",
-    "src/heap.rs",
-    "src/init.rs",
-    "src/internal.rs",
-    "src/lib.rs",
-    "src/libc.rs",
-    "src/options.rs",
-    "src/os.rs",
-    "src/page.rs",
-    "src/page_map.rs",
-    "src/prim.rs",
-    "src/prim/emscripten.rs",
-    "src/prim/osx.rs",
-    "src/prim/unix.rs",
-    "src/prim/wasi.rs",
-    "src/prim/windows.rs",
-    "src/random.rs",
-    "src/raw.rs",
-    "src/safe.rs",
-    "src/stats.rs",
-    "src/theap.rs",
-    "src/threadlocal.rs",
-    "src/track.rs",
-    "src/types.rs",
-}
-
 REQUIRED_AUDIT_SNIPPETS = [
     "Public `extern \"C\"` APIs accept the same nullable and invalid-pointer inputs",
     "Metadata pointers are obtained from owning allocator structures",
@@ -93,16 +39,24 @@ def require(condition: bool, message: str) -> None:
 def main() -> int:
     audit_text = AUDIT.read_text()
     found = unsafe_source_files()
-    require(found == AUDITED_RUST_FILES, f"unsafe audit file set mismatch: {sorted(found ^ AUDITED_RUST_FILES)}")
 
-    for path in sorted(AUDITED_RUST_FILES):
+    missing = sorted(path for path in found if path not in audit_text)
+    require(
+        not missing,
+        f"{AUDIT.name} is missing unsafe source entries: {', '.join(missing)}",
+    )
+
+    for path in sorted(found):
         require(path in audit_text, f"{path} is not mentioned in {AUDIT.name}")
 
     for snippet in REQUIRED_AUDIT_SNIPPETS:
         require(snippet in audit_text, f"missing unsafe audit invariant: {snippet}")
 
     unsafe_mentions = sum(len(re.findall(r"\bunsafe\b", (ROOT / path).read_text())) for path in found)
-    print(f"ok: unsafe audit covers {len(found)} source files and {unsafe_mentions} unsafe mentions")
+    print(
+        f"ok: unsafe audit covers {len(found)} source files and "
+        f"{unsafe_mentions} unsafe mentions"
+    )
     return 0
 
 

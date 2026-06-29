@@ -1,7 +1,7 @@
 # Feature Policy
 
-Default features are intentionally empty. Optimized Linux non-test builds use
-`no_std` unless the `std` feature is enabled.
+Default features are intentionally empty. Linux non-test builds use `no_std`
+unless the `std` feature is enabled.
 
 ## Features
 

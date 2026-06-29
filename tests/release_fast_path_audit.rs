@@ -516,14 +516,14 @@ fn crate_root_exposes_only_curated_rust_facade() {
 
     assert!(
         lib_rs.contains("pub mod raw;")
+            && lib_rs.contains("pub mod unsafe_callbacks;")
             && lib_rs.contains("pub struct MiMalloc;")
-            && lib_rs.contains("CallbackError")
-            && lib_rs.contains("DeferredFreeCallbackGuard")
-            && lib_rs.contains("ErrorCallbackGuard")
+            && !lib_rs.contains("CallbackError")
+            && !lib_rs.contains("DeferredFreeCallbackGuard, ErrorCallbackGuard")
             && lib_rs.contains("HeapAllocation")
             && lib_rs.contains("InitializedAllocation")
             && lib_rs.contains("StatsSnapshot"),
-        "crate root should expose the explicit raw facade and finalized safe Rust allocator facade"
+        "crate root should expose the raw facade, unsafe-adjacent callbacks, and finalized safe Rust allocator facade"
     );
 
     for module in [
@@ -981,7 +981,8 @@ fn raw_pointer_nullability_policy_stays_documented() {
             && safe_allocations_rs
                 .contains("let ptr = NonNull::new(ptr).ok_or(AllocError { layout })?;")
             && safe_allocations_rs.contains("pub const fn as_non_null(&self) -> NonNull<u8>")
-            && safe_allocations_rs.contains("pub const fn as_ptr(&self) -> *mut u8")
+            && safe_allocations_rs.contains("pub const fn as_ptr(&self) -> *const u8")
+            && safe_allocations_rs.contains("pub const fn as_mut_ptr(&mut self) -> *mut u8")
             && !safe_rs.contains("Option<*mut")
             && !safe_rs.contains("Option<*const")
             && !safe_rs.contains("Result<*mut")
@@ -1224,13 +1225,13 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
     let unsafe_doc =
         fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read docs/unsafe-audit.md");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
-    let safe_callbacks_rs =
-        fs::read_to_string(root.join("src/safe/callbacks.rs")).expect("read safe callbacks");
+    let unsafe_callbacks_rs =
+        fs::read_to_string(root.join("src/unsafe_callbacks.rs")).expect("read unsafe callbacks");
 
     assert!(
         abi_doc.contains("Raw callback registration remains unsafe.")
-            && abi_doc.contains("Safe `ErrorCallbackGuard` and\n`DeferredFreeCallbackGuard`")
-            && abi_doc.contains("restore the previous\nregistration on drop")
+            && abi_doc.contains("`unsafe_callbacks::ErrorCallbackGuard` and")
+            && abi_doc.contains("restore the previous registration on drop")
             && abi_doc.contains(
                 "catch panic or unwind before returning across the\ncallback C ABI boundary"
             )
@@ -1238,10 +1239,10 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
         "docs/abi.md should document the safe callback guard proof and remaining raw output callback gap"
     );
     assert!(
-        safe_doc.contains("`ErrorCallbackGuard` and `DeferredFreeCallbackGuard`")
-            && safe_doc.contains("restore previous callback registrations on drop")
+        safe_doc.contains("`unsafe_callbacks`")
+            && safe_doc.contains("borrowed `FnMut` callback guards")
             && safe_doc.contains("catch Rust panics")
-            && unsafe_doc.contains("SAFETY[AUDIT:safe-callback]")
+            && unsafe_doc.contains("SAFETY[AUDIT:unsafe-callback]")
             && unsafe_doc.contains("restores that previous registration on drop")
             && unsafe_doc.contains("catches Rust\n  panics before callback ABI return")
             && unsafe_doc.contains("`error_callback_trampoline::<F>`")
@@ -1253,13 +1254,12 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
     );
 
     assert!(
-        lib_rs.contains("ErrorCallbackGuard")
-            && lib_rs.contains("DeferredFreeCallbackGuard")
-            && safe_callbacks_rs.contains("std::panic::catch_unwind")
-            && safe_callbacks_rs.contains("mi_register_error")
-            && safe_callbacks_rs.contains("mi_register_deferred_free")
-            && !safe_callbacks_rs.contains("mi_register_output"),
-        "safe facade should expose only callback guards that catch panics and restore previous registrations"
+        lib_rs.contains("pub mod unsafe_callbacks;")
+            && unsafe_callbacks_rs.contains("std::panic::catch_unwind")
+            && unsafe_callbacks_rs.contains("mi_register_error")
+            && unsafe_callbacks_rs.contains("mi_register_deferred_free")
+            && !unsafe_callbacks_rs.contains("mi_register_output"),
+        "unsafe callback namespace should expose only callback guards that catch panics and restore previous registrations"
     );
 }
 

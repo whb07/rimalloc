@@ -94,7 +94,7 @@ fn representative_header_macros_expand_from_downstream_crate() {
     fs::write(
         temp.join("Cargo.toml"),
         format!(
-            "[package]\nname = \"header_macro_smoke\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nmechanical_mimalloc = {{ path = {root:?} }}\n"
+            "[package]\nname = \"header_macro_smoke\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nmechanical_mimalloc = {{ path = {root:?}, features = [\"std\"] }}\n"
         ),
     )
     .expect("write temp Cargo.toml");

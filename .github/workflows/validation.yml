@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.92.0
       - name: Test std surface
         run: cargo test --quiet --features std
       - name: Lints and feature matrix
@@ -28,41 +28,50 @@ jobs:
           scripts/check-layout.sh
           scripts/check-abi-symbols.sh
           scripts/check-strict-types.py
-      - name: Release no-default build
-        run: cargo build --release --no-default-features
+      - name: Audit drift checks
+        run: |
+          scripts/check-unsafe-audit.py
+          scripts/check-atomic-ordering-audit.py
+          scripts/check-pointer-provenance-audit.py
+          scripts/check-no-allocation-audit.py
+          scripts/check-safe-docs.py
+      - name: No-default builds
+        run: |
+          cargo check --no-default-features
+          cargo build --release --no-default-features
       - name: Build-tool diagnostics
         run: scripts/check-build-tools.sh
       - name: Package smoke
         run: scripts/check-package.sh
 
   linux-aarch64:
-    name: Linux aarch64 core validation
+    name: Linux aarch64 smoke validation
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.92.0
       - name: Core tests
         run: cargo test --quiet --features std
       - name: Layout matrix
         run: scripts/check-layout.sh
 
   macos:
-    name: macOS validation
+    name: macOS smoke validation
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.92.0
       - name: macOS allocator and override tests
         run: |
           cargo test --quiet --features std
           cargo test --quiet --features std --test original_main_override
 
   windows:
-    name: Windows validation
+    name: Windows smoke validation
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.92.0
       - name: Windows allocator tests
         run: cargo test --quiet --features std
 
@@ -71,7 +80,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.92.0
       - name: Stress, fuzz, oversize, alignment, and zero-size coverage
         run: scripts/check-safety-stress.sh
 

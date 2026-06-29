@@ -26,6 +26,9 @@ supported default matrix:
 - `src/alloc.rs`: the cached `PATH_MAX` value follows `alloc.c`: acquire loads
   observe the published value and acq-rel compare-exchange publishes the first
   successful discovery.
+- `src/alloc_override.rs`: override bootstrap allocation tracking uses atomic
+  counters to coordinate C/C++ interposition tests without publishing allocator
+  metadata.
 - `src/bitmap.rs`: bitmap bit updates mirror `bitmap.c`: set/clear transitions
   use acq-rel RMW/CAS, state queries that synchronize with those transitions use
   acquire loads, and scan-only/counting paths retain relaxed loads.
@@ -33,6 +36,10 @@ supported default matrix:
   pointer-to-atomic reinterpretation and expose the fixed acquire/release/acq-rel
   helper operations used by page ownership, thread-free lists, arena state, and
   page-map publication.
+- `src/core_types/atomic_wrappers/concurrency_models.rs`: loom models exercise
+  the ordering contracts for remote free-list and ownership transitions.
+- `src/core_types/atomic_wrappers/tests.rs`: unit tests assert the wrapper-level
+  acquire/release/acq-rel operations used by allocator metadata fields.
 - `src/heap.rs`: heap sequence/count updates and arena-page cleanup retain the C
   relaxed ordering because external synchronization or ownership already protects
   the structural mutation.
@@ -59,6 +66,8 @@ supported default matrix:
   monotonic caches. They use relaxed compare-exchange/load because callers do not
   publish allocator metadata through these values; allocator stats counters use
   the audited mimalloc atomic helpers.
+- `src/safe.rs`: tests use atomics to count callback invocations and panic
+  containment effects; they do not publish allocator metadata.
 - `src/threadlocal.rs`: thread-local slot free-list publication uses release
   stores and acquire loads; version counters are relaxed because they are advisory
   freshness checks, matching their non-owning role.

@@ -13,6 +13,20 @@ if grep -E '(^|/)__pycache__/|\.pyc$|\.pyo$' "$package_list" >/dev/null; then
   exit 1
 fi
 
+if grep -E '^scripts/' "$package_list" >/dev/null; then
+  echo "repo-only scripts must not be packaged" >&2
+  rm -f "$package_list"
+  exit 1
+fi
+
+for required in Cargo.toml Cargo.lock build.rs README.md LICENSE; do
+  if ! grep -Fx "$required" "$package_list" >/dev/null; then
+    echo "required package input is missing: $required" >&2
+    rm -f "$package_list"
+    exit 1
+  fi
+done
+
 rm -f "$package_list"
 run cargo package --allow-dirty
 

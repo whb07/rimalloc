@@ -4,8 +4,9 @@ This repository is pre-release, but compatibility domains are tracked now so
 accidental public commitments do not leak out of the mechanical translation.
 
 This crate is a mimalloc-compatible C ABI allocator artifact. It also provides
-safe Rust allocation, heap, options, statistics, process-info, and callback
-guard facades over the translated allocator.
+safe Rust allocation, heap, options, statistics, and process-info facades over
+the translated allocator. Borrowed callback guards live under the explicit
+unsafe-adjacent Rust callback namespace.
 
 ## Public API Tiers
 
@@ -13,8 +14,8 @@ guard facades over the translated allocator.
 
 The crate-root safe API is the Rust SemVer surface. It contains `MiMalloc`,
 owned allocation wrappers, heap wrappers, supported options, non-printing stats
-snapshots, process information, callback guards, and the typed error/status
-types listed in `docs/api-inventory.md`.
+snapshots, process information, and the typed error/status types listed in
+`docs/api-inventory.md`.
 
 Compatibility-sensitive changes include removing or renaming public safe items,
 changing public method signatures, changing trait implementations, changing
@@ -35,6 +36,13 @@ parity tests. That feature is off by default and has no Rust SemVer guarantee.
 
 Raw facade changes require updating `docs/api-inventory.md`, ABI/layout checks,
 and any affected examples or parity tests.
+
+### Unsafe-Adjacent Rust Callbacks
+
+`mechanical_mimalloc::unsafe_callbacks` contains borrowed callback guards that
+are public Rust API but not Tier S safe facade API. Changes to these guards must
+be reviewed for Rust source compatibility, documented safety obligations,
+process-global callback behavior, panic containment, and API inventory drift.
 
 ### Tier C: C ABI
 

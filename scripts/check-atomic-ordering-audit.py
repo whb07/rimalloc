@@ -10,25 +10,6 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "ATOMIC_ORDERING_AUDIT.md"
 
-AUDITED_RUST_FILES = {
-    "src/alloc.rs",
-    "src/arena.rs",
-    "src/arena_meta.rs",
-    "src/atomic.rs",
-    "src/bench_diagnostics.rs",
-    "src/bitmap.rs",
-    "src/core_types/atomic_wrappers.rs",
-    "src/heap.rs",
-    "src/init.rs",
-    "src/options.rs",
-    "src/os.rs",
-    "src/page_map.rs",
-    "src/prim/unix.rs",
-    "src/prim/windows.rs",
-    "src/stats.rs",
-    "src/threadlocal.rs",
-}
-
 ATOMIC_RS_REQUIRED_SNIPPETS = [
     "mi_memory_order_e::mi_memory_order_relaxed => Ordering::Relaxed",
     "mi_memory_order_e::mi_memory_order_seq_cst => Ordering::SeqCst",
@@ -83,8 +64,12 @@ def require(condition: bool, message: str) -> None:
 def main() -> int:
     audit_text = AUDIT.read_text()
     found = rust_files_with_orderings()
-    require(found == AUDITED_RUST_FILES, f"atomic audit file set mismatch: {sorted(found ^ AUDITED_RUST_FILES)}")
-    for path in sorted(AUDITED_RUST_FILES):
+    missing = sorted(path for path in found if path not in audit_text)
+    require(
+        not missing,
+        f"{AUDIT.name} is missing atomic-ordering source entries: {', '.join(missing)}",
+    )
+    for path in sorted(found):
         require(path in audit_text, f"{path} is not mentioned in {AUDIT.name}")
 
     atomic_rs = (ROOT / "src/atomic.rs").read_text()

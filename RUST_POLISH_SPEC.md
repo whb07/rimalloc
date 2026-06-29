@@ -6,6 +6,8 @@ Scope: issues found while reviewing the translated Rust mimalloc 3.3.2 allocator
 
 This spec treats the C-compatible `raw`/ABI layer as intentionally C-shaped. The goal is not to make that layer look like ordinary Rust; the goal is to ensure a Rust developer can clearly tell which parts are safe Rust API, which parts are raw compatibility surface, and which parts are internal translation machinery.
 
+Status: this is a review/fix plan, not evidence that the fixes are already implemented.
+
 ## Guiding decisions
 
 1. Keep C ABI compatibility explicit and separate from the Rust-facing API.
@@ -57,6 +59,8 @@ Make audit scripts authoritative again and run them in CI/release checks.
   - `src/safe.rs`
   - every file under `src/safe/*.rs`
 - Ensure the safe-boundary script detects public unsafe functions in module files, not only in `src/safe.rs`.
+- Keep safe-boundary allowlists path- and item-specific when module scanning is added. For example, any allowance for `assume_initialized` must point at its actual module file, `src/safe/allocations.rs`, not stale `src/safe.rs` inventory.
+- Make the script fail if a `src/safe/*.rs` module exposes a public `unsafe fn` without an explicit non-Tier-S classification.
 - Add these scripts to `.github/workflows/validation.yml`:
   - `scripts/check-unsafe-audit.py`
   - `scripts/check-atomic-ordering-audit.py`
@@ -101,12 +105,13 @@ Do not try to present the current scoped borrowed guards as fully safe Tier S AP
 
 ### Required changes
 
-- Move or re-export these guards from an explicitly unsafe/raw-adjacent namespace, for example:
-  - `raw::callback_guards`, or
-  - `unsafe_callbacks`, or
-  - a clearly named crate-root `UnsafeCallbackGuard` style API.
+- Put these Rust-facing-but-unsafe RAII guards in one explicit namespace: `unsafe_callbacks`.
+  - Keep C-shaped callback functions in `raw`.
+  - Remove the borrowed guard re-exports from `src/safe.rs`/`safe`.
+  - Remove crate-root re-exports that present the borrowed guard types as Tier S peers.
 - Remove them from the Tier S safe API inventory.
-- Update `docs/safe-api.md`, `docs/api-inventory.md`, and crate docs so they no longer imply these are safe facade APIs.
+- Update `README.md`, `docs/safe-api.md`, `docs/api-inventory.md`, and crate docs so they no longer imply these are safe facade APIs.
+- Update `scripts/check-api-inventory.py` so its expected crate-root inventory no longer hard-codes `CallbackError`, `DeferredFreeCallbackGuard`, or `ErrorCallbackGuard` as safe/root items. If `unsafe_callbacks` is public, inventory it as an unsafe-adjacent module instead.
 - Change constructors from:
 
 ```rust
@@ -122,7 +127,10 @@ pub unsafe fn new(callback: &'a mut F) -> Self
 unless a real registration failure path is added.
 
 - Remove `CallbackError`, or keep it only if a real fallible API uses it.
+- Update callback tests that currently call `.expect("guard")` on the constructors; after the infallible change they should bind the guard directly.
+- Remove or rewrite tests that only assert placeholder `CallbackError` variants exist unless a real fallible callback API remains.
 - Keep the detailed `# Safety` docs on both constructors.
+- Add an explicit safety requirement that callers must not leak, `mem::forget`, wrap in `ManuallyDrop`, or otherwise prevent `Drop` from running, because the process-global C callback slot may otherwise keep pointing at borrowed Rust state.
 - Keep panic containment in the trampolines for `std`/test builds.
 
 ### Future safe callback API
@@ -144,12 +152,14 @@ Design constraints for any future safe callback API:
 - require `Sync` for possible concurrent invocation;
 - do not use RAII to restore arbitrary previous raw callbacks;
 - either install only once or restore only callbacks installed by the safe API itself;
+- own the synchronization semantics with an explicit global lock/once-cell model;
+- document whether registration must happen before allocator concurrency starts or is internally synchronized across registration, restoration, and callback entry;
 - document callback panic behavior and allocator reentry behavior.
 
 ### Validation
 
 ```sh
-cargo test --features std safe::callbacks
+cargo test --features std callbacks
 scripts/check-safe-boundary.py
 scripts/check-api-inventory.py
 cargo test --doc --features std
@@ -173,6 +183,7 @@ Observed safe-facade gaps include:
 
 There is also stale documentation:
 
+- `README.md` lists callback guards as part of the safe Rust facade.
 - `docs/final-api-surface-review.md` lists an older, much smaller crate-root API.
 - Some examples say there is no safe `Heap`, `Options`, or `StatsSnapshot` facade even though those now exist.
 
@@ -183,7 +194,7 @@ Add a Tier S documentation gate first. Do not block on documenting every raw ABI
 ### Required changes
 
 - Add item-level rustdoc for every crate-root safe facade type, method, enum variant, and accessor.
-- Update stale docs that list old public API inventory.
+- Update stale docs that list old public API inventory, including `README.md`.
 - Update examples with stale comments:
   - `examples/raw_heap.rs`
   - `examples/raw_options.rs`
@@ -595,7 +606,7 @@ cargo package --list --allow-dirty
 This polish pass is complete when:
 
 1. all audit scripts pass and are required by CI/release checks;
-2. unsafe borrowed callback guards are no longer classified as safe Tier S API;
+2. unsafe borrowed callback guards live under `unsafe_callbacks`, are no longer classified as safe Tier S API, and docs plus API-inventory tooling enforce that classification;
 3. Tier S rustdoc is complete and stale docs/examples are fixed;
 4. `no_std`, package contents, and toolchain policy are clear and validated;
 5. safe facade API names and ownership/borrowing shapes feel idiomatic;

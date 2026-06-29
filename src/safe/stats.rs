@@ -2,14 +2,19 @@ use core::ffi::CStr;
 use core::fmt;
 use core::ptr;
 use core::ptr::NonNull;
+use core::time::Duration;
 
 use super::HeapRef;
 
 /// Error returned by safe statistics APIs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StatsError {
+    /// Process-wide statistics could not be captured.
     Unavailable,
+    /// Heap statistics could not be captured.
     HeapUnavailable,
+    /// The caller-provided output buffer is too small.
     BufferTooSmall,
 }
 
@@ -32,11 +37,13 @@ impl std::error::Error for StatsError {}
 pub struct StatCount(i64);
 
 impl StatCount {
+    /// Creates a signed statistic count or delta.
     #[inline]
     pub const fn new(value: i64) -> Self {
         Self(value)
     }
 
+    /// Returns the signed statistic value.
     #[inline]
     #[must_use]
     pub const fn get(self) -> i64 {
@@ -50,11 +57,13 @@ impl StatCount {
 pub struct StatTotal(usize);
 
 impl StatTotal {
+    /// Creates a byte total.
     #[inline]
     pub const fn new(value: usize) -> Self {
         Self(value)
     }
 
+    /// Returns the byte total.
     #[inline]
     #[must_use]
     pub const fn get(self) -> usize {
@@ -79,6 +88,7 @@ pub struct StatsSnapshot {
 }
 
 impl StatsSnapshot {
+    /// Captures a process-wide non-printing statistics snapshot.
     #[inline]
     pub fn capture() -> Result<Self, StatsError> {
         let mut raw = crate::stats::mi_stats_t::default();
@@ -95,6 +105,7 @@ impl StatsSnapshot {
         }
     }
 
+    /// Captures a non-printing statistics snapshot for `heap`.
     #[inline]
     pub fn for_heap(heap: HeapRef<'_>) -> Result<Self, StatsError> {
         let mut raw = crate::stats::mi_stats_t::default();
@@ -112,21 +123,25 @@ impl StatsSnapshot {
         }
     }
 
+    /// Returns total requested malloc bytes from the snapshot.
     #[inline]
     pub fn malloc_requested_total(&self) -> StatTotal {
         StatTotal::from_i64(self.raw.malloc_requested.total)
     }
 
+    /// Returns current reserved bytes from the snapshot.
     #[inline]
     pub fn reserved_current(&self) -> StatTotal {
         StatTotal::from_i64(self.raw.reserved.current)
     }
 
+    /// Returns the current page count from the snapshot.
     #[inline]
     pub fn pages_current(&self) -> StatCount {
         StatCount::new(self.raw.pages.current)
     }
 
+    /// Writes this snapshot as JSON into `output`.
     #[inline]
     pub fn write_json(&self, output: &mut [u8]) -> Result<usize, StatsError> {
         if output.is_empty() {
@@ -170,6 +185,7 @@ pub struct ProcessInfo {
 }
 
 impl ProcessInfo {
+    /// Captures current process allocator information.
     #[inline]
     pub fn current() -> Self {
         let mut elapsed_msecs = 0usize;
@@ -208,54 +224,84 @@ impl ProcessInfo {
         }
     }
 
+    /// Returns elapsed process time in raw milliseconds.
     #[inline]
     #[must_use]
     pub const fn elapsed_msecs(self) -> usize {
         self.elapsed_msecs
     }
 
+    /// Returns elapsed process time as a [`Duration`].
+    #[inline]
+    #[must_use]
+    pub const fn elapsed(self) -> Duration {
+        Duration::from_millis(self.elapsed_msecs as u64)
+    }
+
+    /// Returns user CPU time in raw milliseconds.
     #[inline]
     #[must_use]
     pub const fn user_msecs(self) -> usize {
         self.user_msecs
     }
 
+    /// Returns user CPU time as a [`Duration`].
+    #[inline]
+    #[must_use]
+    pub const fn user_time(self) -> Duration {
+        Duration::from_millis(self.user_msecs as u64)
+    }
+
+    /// Returns system CPU time in raw milliseconds.
     #[inline]
     #[must_use]
     pub const fn system_msecs(self) -> usize {
         self.system_msecs
     }
 
+    /// Returns system CPU time as a [`Duration`].
+    #[inline]
+    #[must_use]
+    pub const fn system_time(self) -> Duration {
+        Duration::from_millis(self.system_msecs as u64)
+    }
+
+    /// Returns current resident set size when available.
     #[inline]
     #[must_use]
     pub const fn current_rss(self) -> Option<StatTotal> {
         self.current_rss
     }
 
+    /// Returns peak resident set size when available.
     #[inline]
     #[must_use]
     pub const fn peak_rss(self) -> Option<StatTotal> {
         self.peak_rss
     }
 
+    /// Returns current committed memory when available.
     #[inline]
     #[must_use]
     pub const fn current_commit(self) -> Option<StatTotal> {
         self.current_commit
     }
 
+    /// Returns peak committed memory when available.
     #[inline]
     #[must_use]
     pub const fn peak_commit(self) -> Option<StatTotal> {
         self.peak_commit
     }
 
+    /// Returns process page-fault count when available.
     #[inline]
     #[must_use]
     pub const fn page_faults(self) -> Option<StatCount> {
         self.page_faults
     }
 
+    /// Returns OS page size when available.
     #[inline]
     #[must_use]
     pub const fn page_size(self) -> Option<usize> {

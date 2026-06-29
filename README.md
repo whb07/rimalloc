@@ -3,8 +3,9 @@
 Mechanical Rust translation foundation for mimalloc 3.3.2.
 
 This crate is a mimalloc-compatible C ABI allocator artifact. It also provides
-safe Rust allocation, heap, options, statistics, process-info, and callback
-guard facades over the translated allocator.
+safe Rust allocation, heap, options, statistics, and process-info facades over
+the translated allocator. Borrowed callback guards live under the explicit
+`unsafe_callbacks` namespace.
 
 This repository currently builds both:
 
@@ -18,7 +19,10 @@ tracked by source-shape, layout, symbol, lint, package, and benchmark gates.
 
 - Safe Rust facade: crate-root `MiMalloc`, owned allocation wrappers, heap
   wrappers, supported options, non-printing stats snapshots, process
-  information, callback guards, and their typed error/status types.
+  information, and their typed error/status types.
+- Unsafe-adjacent Rust callbacks: `mechanical_mimalloc::unsafe_callbacks`,
+  borrowed RAII callback guards with process-global synchronization and lifetime
+  obligations.
 - Raw Rust facade: `mechanical_mimalloc::raw`, a C-shaped Rust path for
   low-level tests, benchmarks, and integration code that can uphold mimalloc's
   unsafe pointer and lifetime contracts. The raw Rust path surface is not
@@ -66,9 +70,9 @@ unsafe {
 ## Status
 
 This crate is pre-release at version `0.1.0` and is configured for packaging.
-The crate root exposes only the intended safe Rust facade plus the explicit
-`raw` facade; implementation modules are private so translation structure does
-not become an accidental SemVer contract.
+The crate root exposes only the intended safe Rust facade, the explicit
+`unsafe_callbacks` namespace, and the `raw` facade; implementation modules are
+private so translation structure does not become an accidental SemVer contract.
 The raw Rust facade is unstable as a Rust path surface; use it only behind an
 explicit unsafe boundary and expect inventory or migration notes before treating
 paths as stable.
@@ -80,7 +84,8 @@ maintained Rust target without parity and CI evidence.
 
 Default features are empty.
 
-- `std`: opt into `std` for tooling, tests, examples, and benchmarks.
+- `std`: opt into `std` for tooling, tests, examples, and benchmarks. Linux
+  builds without this feature use `no_std`.
 - `bench`: enable Criterion benchmark targets; implies `std`.
 - `compare`: enable comparison-oriented benchmark and test code.
 - `secure`: enable secure-mode padding and encoded free lists.
@@ -111,16 +116,16 @@ Individual entrypoints are available under `scripts/` for formatting, lints,
 feature sweeps, ABI symbols, layout, docs, packaging, benchmark smoke/full
 runs, Miri, sanitizers, and environment capture.
 
-For direct Clippy runs, use the Cargo alias:
+For direct Clippy runs, use the full workspace command:
 
 ```sh
-cargo clippy-strict
+cargo clippy --workspace --all-targets --all-features
 ```
 
-The alias expands to `cargo clippy --all-targets --all-features`; lint levels
-are defined in `Cargo.toml`, so plain `cargo clippy` uses the same deny policy
-for Cargo's default target/feature selection. The `scripts/check-lints.sh`
-entrypoint remains the compatibility sweep for the tracked feature matrix.
+Lint levels are defined in `Cargo.toml`, so plain `cargo clippy` uses the same
+deny policy for Cargo's default target/feature selection. The
+`scripts/check-lints.sh` entrypoint remains the compatibility sweep for the
+tracked feature matrix.
 
 Benchmark evidence is tracked in `BENCHMARK_RESULTS.md`; policy and thresholds
 are documented in `docs/performance.md`. Performance-sensitive changes should

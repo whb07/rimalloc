@@ -368,7 +368,7 @@ def run(command: list[str]) -> str:
 
 
 def feature_args() -> list[str]:
-    features = os.environ.get("MIMALLOC_CHECK_FEATURES", "").split()
+    features = os.environ.get("MIMALLOC_CHECK_FEATURES", "std").split()
     if not features:
         return []
     return ["--features", " ".join(features)]

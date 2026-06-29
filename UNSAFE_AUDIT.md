@@ -69,6 +69,8 @@ Per-file review:
 - `src/free.rs`: free paths recover page metadata from owned block pointers,
   validate page ownership where C does, and route remote frees through delayed
   free queues instead of mutating foreign-thread page state directly.
+- `src/headers.rs`: exported compatibility macros preserve the C header surface
+  and forward unsafe pointer use to the raw allocator APIs.
 - `src/heap.rs`: heap creation/deletion/collection touches heap and theap
   metadata only after initialization checks and mirrors the C ownership transfer
   rules for live blocks and abandoned pages.
@@ -115,9 +117,17 @@ Per-file review:
   allocator-owned range metadata in memids.
 - `src/random.rs`: entropy buffer writes use slice creation only after checking
   for null and length, and random contexts are caller-owned allocator metadata.
+- `src/provenance.rs`: pointer-address helpers preserve provenance-sensitive
+  conversions in one small module used by allocator layout code.
 - `src/raw.rs`: raw module re-exports preserve the C ABI contract for callers.
 - `src/safe.rs`: safe facade wrappers forward to raw allocator APIs while keeping
   unsafe pointer use at the boundary.
+- `src/safe/allocations.rs`, `src/safe/heaps.rs`, and `src/safe/stats.rs`:
+  Rust-facing wrappers keep unsafe allocator, heap, and statistics calls behind
+  documented ownership and lifetime boundaries.
+- `src/unsafe_callbacks.rs`: unsafe-adjacent borrowed callback guards keep
+  process-global callback registration, restoration, panic containment, and
+  borrowed `FnMut` lifetime requirements in an explicit namespace.
 - `src/stats.rs`: stats pointers are null-checked for public getters, and
   internal merges operate on allocator-owned stats structures. Callback output
   uses C-compatible function pointers.
@@ -135,6 +145,23 @@ Per-file review:
 - `src/types.rs`: unsafe `Send`/`Sync` impls preserve the allocator's C
   concurrency model: mutation is protected by ownership, atomics, or locks; raw
   callback types are ABI declarations only.
+- Nested core-type tests with unsafe fixtures exercise wrapper invariants
+  without widening the production API:
+  `src/core_types/arena/tests.rs`,
+  `src/core_types/atomic_wrappers/tests.rs`,
+  `src/core_types/callbacks/tests.rs`,
+  `src/core_types/freelist/tests.rs`,
+  `src/core_types/freelist_wrappers/tests.rs`,
+  `src/core_types/heap/tests.rs`,
+  `src/core_types/layout/tests.rs`,
+  `src/core_types/memid/tests.rs`,
+  `src/core_types/padding/tests.rs`,
+  `src/core_types/page/tests.rs`,
+  `src/core_types/page_queues/tests.rs`,
+  `src/core_types/page_states/tests.rs`,
+  `src/core_types/ptr/tests.rs`,
+  `src/core_types/scalar/tests.rs`, and
+  `src/core_types/validation/tests.rs`.
 
 Validation:
 

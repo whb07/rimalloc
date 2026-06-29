@@ -47,7 +47,7 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   allocation macros and C header override macros expand to unsafe raw C-shaped
   calls without internal unsafe blocks, so the downstream expansion site must
   provide the unsafe boundary.
-- `SAFETY[AUDIT:safe-callback]`: callback guards. Unsafe guard construction
+- `SAFETY[AUDIT:unsafe-callback]`: unsafe-adjacent callback guards. Unsafe guard construction
   registers a trampoline with a borrowed callback context, stores the previous
   registration, restores that previous registration on drop, and catches Rust
   panics before callback ABI return in `std` and test builds. Callers must
@@ -86,12 +86,13 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   lifetimes without exposing raw deletion rights.
 - `Options`, `StatsSnapshot`, and `ProcessInfo` wrap supported allocator
   controls and observations without raw out-pointers in safe caller code.
-- `ErrorCallbackGuard` and `DeferredFreeCallbackGuard` prevent dangling
-  callback contexts with Rust borrows, restore previous callback registrations
-  on drop, and catch callback panics before ABI return in `std` and test builds.
-  Their constructors are unsafe because mimalloc registers process-global
-  callbacks and upstream does not provide a single-threaded, non-reentrant
-  guarantee strong enough for safe borrowed `FnMut` mutation.
+- `unsafe_callbacks::ErrorCallbackGuard` and
+  `unsafe_callbacks::DeferredFreeCallbackGuard` prevent dangling callback
+  contexts with Rust borrows, restore previous callback registrations on drop,
+  and catch callback panics before ABI return in `std` and test builds. Their
+  constructors are unsafe because mimalloc registers process-global callbacks
+  and upstream does not provide a single-threaded, non-reentrant guarantee
+  strong enough for Tier S borrowed `FnMut` mutation.
 
 ## Callback Threading And Reentry Audit
 

@@ -77,7 +77,7 @@ The release fast-path audit checks the current source-shape contract:
 Run:
 
 ```sh
-cargo test --quiet --test release_fast_path_audit
+cargo test --quiet --test release_fast_path_audit --features "std unstable-raw-internals"
 cargo test --quiet --lib
 ```
 

@@ -29,7 +29,7 @@ use super::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError
 /// `Allocation` is move-only. Dropping it frees the allocation exactly once;
 /// there is no `Clone`, `Copy`, `from_raw`, or `into_raw` API.
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use core::alloc::Layout;
 /// use mechanical_mimalloc::Allocation;
 ///
@@ -183,7 +183,18 @@ impl Allocation {
     /// be dereferenced.
     #[inline]
     #[must_use]
-    pub const fn as_ptr(&self) -> *mut u8 {
+    pub const fn as_ptr(&self) -> *const u8 {
+        self.raw.ptr.as_ptr().cast_const()
+    }
+
+    /// Returns the allocation pointer for mutation.
+    ///
+    /// The pointer is valid only while this `Allocation` is alive. Callers must
+    /// initialize bytes before reading them, and zero-sized allocation pointers
+    /// remain aligned sentinels that must not be dereferenced.
+    #[inline]
+    #[must_use]
+    pub const fn as_mut_ptr(&mut self) -> *mut u8 {
         self.raw.ptr.as_ptr()
     }
 
@@ -418,11 +429,13 @@ unsafe impl Send for InitializedAllocation {}
 unsafe impl Sync for InitializedAllocation {}
 
 impl InitializedAllocation {
+    /// Allocates a zero-initialized byte block for `layout`.
     #[inline]
     pub fn zeroed(layout: Layout) -> Result<Self, AllocError> {
         RawAllocation::allocate(layout, true).map(|raw| Self { raw })
     }
 
+    /// Builds a layout from `size` and `align`, then allocates a zeroed block.
     #[inline]
     pub fn zeroed_with_size_align(size: usize, align: usize) -> Result<Self, TryAllocError> {
         let layout = Layout::from_size_align(size, align)
@@ -430,52 +443,67 @@ impl InitializedAllocation {
         Self::zeroed(layout).map_err(TryAllocError::Alloc)
     }
 
+    /// Returns the layout used to allocate this block.
     #[inline]
     #[must_use]
     pub const fn layout(&self) -> Layout {
         self.raw.layout
     }
 
+    /// Returns the requested allocation size in bytes.
     #[inline]
     #[must_use]
     pub const fn len(&self) -> usize {
         self.raw.layout.size()
     }
 
+    /// Returns whether this is a zero-sized allocation.
     #[inline]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.raw.layout.size() == 0
     }
 
+    /// Returns the allocation pointer as [`NonNull<u8>`].
     #[inline]
     #[must_use]
     pub const fn as_non_null(&self) -> NonNull<u8> {
         self.raw.ptr
     }
 
+    /// Returns a shared raw pointer to the initialized bytes.
     #[inline]
     #[must_use]
-    pub const fn as_ptr(&self) -> *mut u8 {
+    pub const fn as_ptr(&self) -> *const u8 {
+        self.raw.ptr.as_ptr().cast_const()
+    }
+
+    /// Returns a mutable raw pointer to the initialized bytes.
+    #[inline]
+    #[must_use]
+    pub const fn as_mut_ptr(&mut self) -> *mut u8 {
         self.raw.ptr.as_ptr()
     }
 
+    /// Returns the initialized bytes as an immutable slice.
     #[inline]
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         // SAFETY[AUDIT:owned-allocation]: `InitializedAllocation` guarantees
         // all bytes in the stored layout are initialized for reads.
-        unsafe { core::slice::from_raw_parts(self.as_ptr().cast_const(), self.len()) }
+        unsafe { core::slice::from_raw_parts(self.as_ptr(), self.len()) }
     }
 
+    /// Returns the initialized bytes as a mutable slice.
     #[inline]
     #[must_use]
     pub fn as_mut_bytes(&mut self) -> &mut [u8] {
         // SAFETY[AUDIT:owned-allocation]: `&mut self` guarantees unique access
         // to the allocation bytes.
-        unsafe { core::slice::from_raw_parts_mut(self.as_ptr(), self.len()) }
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.len()) }
     }
 
+    /// Converts this initialized wrapper back into an uninitialized allocation wrapper.
     #[inline]
     pub fn into_allocation(self) -> Allocation {
         Allocation { raw: self.raw }
@@ -497,6 +525,7 @@ impl InitializedAllocation {
         }
     }
 
+    /// Builds a layout from `size` and `align`, then resizes this allocation.
     #[inline]
     pub fn resize_with_size_align(
         self,
@@ -517,10 +546,24 @@ impl InitializedAllocation {
 
     /// Allocates a new initialized allocation and copies this allocation's bytes.
     #[inline]
-    pub fn try_clone_zeroed_contents(&self) -> Result<Self, AllocError> {
+    pub fn try_clone_contents(&self) -> Result<Self, AllocError> {
         let mut cloned = RawAllocation::allocate(self.layout(), false).map(|raw| Self { raw })?;
         cloned.as_mut_bytes().copy_from_slice(self.as_bytes());
         Ok(cloned)
+    }
+}
+
+impl AsRef<[u8]> for InitializedAllocation {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl AsMut<[u8]> for InitializedAllocation {
+    #[inline]
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.as_mut_bytes()
     }
 }
 

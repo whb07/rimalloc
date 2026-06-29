@@ -8,10 +8,14 @@ import re
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SAFE_BOUNDARY_FILES = ["src/lib.rs", "src/safe.rs"]
+SAFE_BOUNDARY_FILES = [
+    "src/lib.rs",
+    "src/safe.rs",
+    *sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / "src/safe").glob("*.rs")),
+]
 AUDIT_TAG = "SAFETY[AUDIT:"
 ALLOWED_PUBLIC_UNSAFE = {
-    "src/safe.rs": {"assume_initialized"},
+    "src/safe/allocations.rs": {"assume_initialized"},
 }
 
 
@@ -63,6 +67,12 @@ def untagged_boundary_unsafe(text: str) -> list[str]:
 def main() -> int:
     all_public_unsafe: list[str] = []
     all_untagged: list[str] = []
+
+    synthetic = "pub unsafe fn synthetic_safe_escape() {}"
+    require(
+        public_unsafe_items("src/safe/synthetic.rs", synthetic),
+        "safe-boundary regression check failed to flag a synthetic public unsafe fn",
+    )
 
     for rel in SAFE_BOUNDARY_FILES:
         text = (ROOT / rel).read_text()

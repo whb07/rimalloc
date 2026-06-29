@@ -13,9 +13,13 @@ use super::{
 
 /// Error returned by safe heap ownership APIs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HeapError {
+    /// Mimalloc returned null while creating a heap.
     Create,
+    /// The process main heap was unavailable.
     MainUnavailable,
+    /// The requested heap operation is not supported by the safe facade.
     Unsupported,
 }
 
@@ -55,6 +59,7 @@ pub struct Heap {
 }
 
 impl Heap {
+    /// Creates a new owned mimalloc heap.
     #[inline]
     pub fn new() -> Result<Self, HeapError> {
         // SAFETY[AUDIT:safe-heap]: heap creation initializes allocator runtime
@@ -64,6 +69,7 @@ impl Heap {
         Ok(Self { ptr })
     }
 
+    /// Borrows this heap as a copyable [`HeapRef`].
     #[inline]
     pub fn as_ref(&self) -> HeapRef<'_> {
         HeapRef {
@@ -72,11 +78,13 @@ impl Heap {
         }
     }
 
+    /// Allocates an uninitialized byte block from this heap.
     #[inline]
     pub fn allocate(&self, layout: Layout) -> Result<HeapAllocation<'_>, AllocError> {
         self.as_ref().allocate(layout)
     }
 
+    /// Allocates a zero-initialized byte block from this heap.
     #[inline]
     pub fn allocate_zeroed(
         &self,
@@ -109,11 +117,13 @@ pub struct HeapRef<'heap> {
 }
 
 impl<'heap> HeapRef<'heap> {
+    /// Allocates an uninitialized byte block from this borrowed heap.
     #[inline]
     pub fn allocate(self, layout: Layout) -> Result<HeapAllocation<'heap>, AllocError> {
         HeapAllocation::allocate_in(self.ptr, layout, false)
     }
 
+    /// Allocates a zero-initialized byte block from this borrowed heap.
     #[inline]
     pub fn allocate_zeroed(
         self,
@@ -122,6 +132,7 @@ impl<'heap> HeapRef<'heap> {
         InitializedHeapAllocation::allocate_zeroed_in(self.ptr, layout)
     }
 
+    /// Captures a statistics snapshot for this heap.
     #[inline]
     pub fn stats(self) -> Result<StatsSnapshot, StatsError> {
         StatsSnapshot::for_heap(self)
@@ -142,6 +153,7 @@ pub struct MainHeap {
 }
 
 impl MainHeap {
+    /// Returns a borrowed handle to the process main heap.
     #[inline]
     pub fn get() -> Result<Self, HeapError> {
         // SAFETY[AUDIT:safe-heap]: returns the process main heap or null if
@@ -151,6 +163,7 @@ impl MainHeap {
         Ok(Self { ptr })
     }
 
+    /// Borrows the main heap as a copyable [`HeapRef`].
     #[inline]
     pub fn as_ref(&self) -> HeapRef<'_> {
         HeapRef {
@@ -159,6 +172,7 @@ impl MainHeap {
         }
     }
 
+    /// Allocates an uninitialized byte block from the main heap.
     #[inline]
     pub fn allocate(&self, layout: Layout) -> Result<HeapAllocation<'_>, AllocError> {
         self.as_ref().allocate(layout)
@@ -198,30 +212,42 @@ impl<'heap> HeapAllocation<'heap> {
         RawHeapAllocation::allocate_in(heap, layout, zeroed).map(|raw| Self { raw })
     }
 
+    /// Returns the layout used to allocate this heap block.
     #[inline]
     #[must_use]
     pub const fn layout(&self) -> Layout {
         self.raw.layout
     }
 
+    /// Returns the requested allocation size in bytes.
     #[inline]
     #[must_use]
     pub const fn len(&self) -> usize {
         self.raw.layout.size()
     }
 
+    /// Returns whether this is a zero-sized allocation.
     #[inline]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.raw.layout.size() == 0
     }
 
+    /// Returns a shared raw pointer to the heap allocation.
     #[inline]
     #[must_use]
-    pub const fn as_ptr(&self) -> *mut u8 {
+    pub const fn as_ptr(&self) -> *const u8 {
+        self.raw.ptr.as_ptr().cast_const()
+    }
+
+    /// Returns a mutable raw pointer to the heap allocation.
+    #[inline]
+    #[must_use]
+    pub const fn as_mut_ptr(&mut self) -> *mut u8 {
         self.raw.ptr.as_ptr()
     }
 
+    /// Resizes this heap allocation to `new_layout`.
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
         self.raw
@@ -236,6 +262,7 @@ impl<'heap> HeapAllocation<'heap> {
             })
     }
 
+    /// Builds a layout from `size` and `align`, then resizes this allocation.
     #[inline]
     pub fn resize_with_size_align(
         self,
@@ -466,50 +493,65 @@ impl<'heap> InitializedHeapAllocation<'heap> {
         RawHeapAllocation::allocate_in(heap, layout, true).map(|raw| Self { raw })
     }
 
+    /// Returns the layout used to allocate this heap block.
     #[inline]
     #[must_use]
     pub const fn layout(&self) -> Layout {
         self.raw.layout
     }
 
+    /// Returns the requested allocation size in bytes.
     #[inline]
     #[must_use]
     pub const fn len(&self) -> usize {
         self.raw.layout.size()
     }
 
+    /// Returns whether this is a zero-sized allocation.
     #[inline]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.raw.layout.size() == 0
     }
 
+    /// Returns a shared raw pointer to the initialized bytes.
     #[inline]
     #[must_use]
-    pub const fn as_ptr(&self) -> *mut u8 {
+    pub const fn as_ptr(&self) -> *const u8 {
+        self.raw.ptr.as_ptr().cast_const()
+    }
+
+    /// Returns a mutable raw pointer to the initialized bytes.
+    #[inline]
+    #[must_use]
+    pub const fn as_mut_ptr(&mut self) -> *mut u8 {
         self.raw.ptr.as_ptr()
     }
 
+    /// Returns the initialized bytes as an immutable slice.
     #[inline]
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         // SAFETY[AUDIT:safe-heap]: initialized heap allocation guarantees
         // readable initialized bytes.
-        unsafe { core::slice::from_raw_parts(self.as_ptr().cast_const(), self.len()) }
+        unsafe { core::slice::from_raw_parts(self.as_ptr(), self.len()) }
     }
 
+    /// Returns the initialized bytes as a mutable slice.
     #[inline]
     #[must_use]
     pub fn as_mut_bytes(&mut self) -> &mut [u8] {
         // SAFETY[AUDIT:safe-heap]: `&mut self` guarantees unique access.
-        unsafe { core::slice::from_raw_parts_mut(self.as_ptr(), self.len()) }
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.len()) }
     }
 
+    /// Converts this initialized wrapper back into a heap allocation wrapper.
     #[inline]
     pub fn into_allocation(self) -> HeapAllocation<'heap> {
         HeapAllocation { raw: self.raw }
     }
 
+    /// Resizes this initialized heap allocation, zeroing any newly exposed tail.
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
         match self.raw.resize_initialized(new_layout) {
@@ -530,5 +572,19 @@ impl fmt::Debug for InitializedHeapAllocation<'_> {
         f.debug_struct("InitializedHeapAllocation")
             .field("raw", &self.raw)
             .finish()
+    }
+}
+
+impl AsRef<[u8]> for InitializedHeapAllocation<'_> {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl AsMut<[u8]> for InitializedHeapAllocation<'_> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.as_mut_bytes()
     }
 }

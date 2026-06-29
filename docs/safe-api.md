@@ -2,8 +2,8 @@
 
 The safe Rust API is intentionally narrow. This crate is primarily a
 mimalloc-compatible C ABI allocator artifact, with Rust wrappers that encode
-the allocator ownership, initialization, heap lifetime, callback, and snapshot
-rules that can be upheld without caller discipline.
+the allocator ownership, initialization, heap lifetime, and snapshot rules that
+can be upheld without caller discipline.
 
 ## Design Rules
 
@@ -49,16 +49,20 @@ private unless explicitly exposed through an audited unstable-internals gate.
   snapshots and typed statistic values.
 - `ProcessInfo`: typed process allocator information; unavailable fields are
   represented with `Option`.
-- `ErrorCallbackGuard` and `DeferredFreeCallbackGuard`: unsafe-to-construct
-  RAII callback guards that restore previous callback registrations on drop and
-  catch Rust panics before returning through the callback ABI.
 - `AllocError`, `LayoutError`, `TryAllocError`, `ResizeError`,
-  `ResizeErrorKind`, `HeapError`, `OptionError`, `StatsError`, and
-  `CallbackError`: typed failure states for the safe API.
+  `ResizeErrorKind`, `HeapError`, `OptionError`, and `StatsError`: typed
+  failure states for the safe API.
 
 Raw heap, stats, option, process-info, and callback functions remain available
 under `raw` for C-shaped integration and parity testing. Safe wrappers do not
 expose raw allocator metadata pointers or transfer raw deletion rights.
+Borrowed `FnMut` callback guards are available under `unsafe_callbacks` for
+callers that can uphold the process-global synchronization, lifetime,
+reentrancy, and allocator-entry obligations. They restore previous callback
+registrations on drop and catch Rust panics before returning through the
+callback ABI in `std` and test builds, but they are not Tier S safe facade APIs.
+The borrowed `FnMut` callback guards remain separate from this current safe
+surface.
 
 ## Pre-release Migration Notes
 
@@ -113,7 +117,6 @@ Safe APIs translate raw C failure conventions at the safe boundary:
 | Heap creation or unsupported heap operation | `HeapError` |
 | Invalid, immutable, or unsupported option | `OptionError` |
 | Unavailable stats or too-small JSON buffer | `StatsError` |
-| Unsupported callback registration or unsafe callback guard construction | `CallbackError` |
 | Raw errno-style behavior | remains under `raw` until wrapped by a typed safe API |
 
 ## Feature Expectations

@@ -1,1 +1,15 @@
 /target
+
+# Python/local tool caches.
+__pycache__/
+*.py[cod]
+
+# Local service dumps and debugger scratch files.
+dump.rdb
+*.gdb
+
+# Local benchmark scratch output.
+mimalloc-bench/
+
+# Local patch scratch files.
+*.patch

@@ -1,25 +1,12 @@
+//! Unsafe-adjacent Rust callback guards.
+//!
+//! These guards provide scoped registration for mimalloc callback slots while
+//! borrowing Rust `FnMut` closures. They are not part of the Tier S safe facade:
+//! constructors are unsafe because callers must uphold process-global callback
+//! synchronization, lifetime, reentrancy, and allocator-entry obligations.
+
 use core::ffi::c_void;
-use core::fmt;
 use core::ptr;
-
-/// Error returned by safe callback guard registration.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CallbackError {
-    Register,
-    Unsupported,
-}
-
-impl fmt::Display for CallbackError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Register => f.write_str("mimalloc callback registration failed"),
-            Self::Unsupported => f.write_str("mimalloc callback is unsupported"),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for CallbackError {}
 
 /// RAII guard for a temporary error callback registration.
 ///
@@ -29,13 +16,13 @@ impl std::error::Error for CallbackError {}
 /// builds; `no_std` builds must not panic from the callback.
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::ErrorCallbackGuard;
+/// use mechanical_mimalloc::unsafe_callbacks::ErrorCallbackGuard;
 ///
 /// let guard;
 /// {
 ///     let mut hits = 0usize;
 ///     let mut callback = |_err| hits += 1;
-///     guard = unsafe { ErrorCallbackGuard::new(&mut callback).unwrap() };
+///     guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
 /// }
 /// drop(guard);
 /// ```
@@ -50,23 +37,37 @@ impl<'a, F: FnMut(i32)> ErrorCallbackGuard<'a, F> {
     ///
     /// # Safety
     ///
-    /// The caller must ensure no other thread can enter, replace, or restore
-    /// the error callback while this guard is active, and the callback must not
-    /// reenter allocator paths that can invoke the same error callback before
-    /// the current invocation returns. These obligations prevent simultaneous
-    /// mutable access to the borrowed `FnMut` and keep the global registration
-    /// stack well formed.
+    /// The error callback slot is process-global. The caller must synchronize
+    /// registration, restoration, and callback entry with every thread and all
+    /// allocator activity that could invoke or replace the callback.
+    ///
+    /// Mimalloc may invoke the callback from another thread unless upstream
+    /// evidence proves otherwise, and callback invocation may be reentrant. The
+    /// callback must not reenter allocator paths that can invoke the same error
+    /// callback before the current invocation returns.
+    ///
+    /// The borrowed closure must outlive every possible callback invocation.
+    /// Callers must not leak the guard, call [`core::mem::forget`] on it, or
+    /// wrap it in [`core::mem::ManuallyDrop`] unless they manually restore the
+    /// previous callback state before borrowed state can be invalidated.
+    /// Preventing [`Drop`] can leave a process-global C callback pointing at
+    /// borrowed Rust state.
+    ///
+    /// In `std` and test builds, the trampoline catches Rust panics before C ABI
+    /// return. In `no_std` builds, callbacks must not panic. Callback bodies must
+    /// also avoid allocator reentry unless the caller has proven the reentry path
+    /// cannot trigger the same callback or violate the required synchronization.
     #[inline]
-    pub unsafe fn new(callback: &'a mut F) -> Result<Self, CallbackError> {
+    pub unsafe fn new(callback: &'a mut F) -> Self {
         let previous = crate::options::registered_error_callback();
         crate::options::mi_register_error(
             Some(error_callback_trampoline::<F>),
             ptr::from_mut(callback).cast::<c_void>(),
         );
-        Ok(Self {
+        Self {
             previous,
             _callback: callback,
-        })
+        }
     }
 }
 
@@ -84,13 +85,13 @@ impl<F: FnMut(i32)> Drop for ErrorCallbackGuard<'_, F> {
 /// builds; `no_std` builds must not panic from the callback.
 ///
 /// ```rust,compile_fail
-/// use mechanical_mimalloc::DeferredFreeCallbackGuard;
+/// use mechanical_mimalloc::unsafe_callbacks::DeferredFreeCallbackGuard;
 ///
 /// let guard;
 /// {
 ///     let mut heartbeats = Vec::new();
 ///     let mut callback = |_force, heartbeat| heartbeats.push(heartbeat);
-///     guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback).unwrap() };
+///     guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
 /// }
 /// drop(guard);
 /// ```
@@ -106,19 +107,33 @@ impl<'a, F: FnMut(bool, u64)> DeferredFreeCallbackGuard<'a, F> {
     ///
     /// # Safety
     ///
-    /// The caller must install the guard before allocator concurrency begins or
-    /// otherwise ensure no other thread can enter, replace, or restore the
-    /// deferred-free callback while this guard is active. The callback must not
-    /// reenter allocator paths that can invoke the same deferred-free callback
-    /// before the current invocation returns. These obligations prevent
-    /// simultaneous mutable access to the borrowed `FnMut` and keep the global
-    /// registration stack well formed.
+    /// The deferred-free callback slot is process-global. The caller must
+    /// synchronize registration, restoration, and callback entry with every
+    /// thread and all allocator activity that could invoke or replace the
+    /// callback.
+    ///
+    /// Mimalloc may invoke the callback from another thread unless upstream
+    /// evidence proves otherwise, and callback invocation may be reentrant. The
+    /// callback must not reenter allocator paths that can invoke the same
+    /// deferred-free callback before the current invocation returns.
+    ///
+    /// The borrowed closure must outlive every possible callback invocation.
+    /// Callers must not leak the guard, call [`core::mem::forget`] on it, or
+    /// wrap it in [`core::mem::ManuallyDrop`] unless they manually restore the
+    /// previous callback state before borrowed state can be invalidated.
+    /// Preventing [`Drop`] can leave a process-global C callback pointing at
+    /// borrowed Rust state.
+    ///
+    /// In `std` and test builds, the trampoline catches Rust panics before C ABI
+    /// return. In `no_std` builds, callbacks must not panic. Callback bodies must
+    /// also avoid allocator reentry unless the caller has proven the reentry path
+    /// cannot trigger the same callback or violate the required synchronization.
     #[inline]
-    pub unsafe fn new(callback: &'a mut F) -> Result<Self, CallbackError> {
-        // SAFETY[AUDIT:safe-callback]: this snapshots global callback state
+    pub unsafe fn new(callback: &'a mut F) -> Self {
+        // SAFETY[AUDIT:unsafe-callback]: this snapshots global callback state
         // before replacing it with a trampoline tied to `callback`.
         let previous = unsafe { crate::page::registered_deferred_free_callback() };
-        // SAFETY[AUDIT:safe-callback]: the guard stores `callback` for at
+        // SAFETY[AUDIT:unsafe-callback]: the guard stores `callback` for at
         // least as long as the registration is active and restores the previous
         // callback in `Drop`.
         unsafe {
@@ -127,28 +142,28 @@ impl<'a, F: FnMut(bool, u64)> DeferredFreeCallbackGuard<'a, F> {
                 ptr::from_mut(callback).cast::<c_void>(),
             );
         }
-        Ok(Self {
+        Self {
             previous,
             _callback: callback,
-        })
+        }
     }
 }
 
 impl<F: FnMut(bool, u64)> Drop for DeferredFreeCallbackGuard<'_, F> {
     fn drop(&mut self) {
-        // SAFETY[AUDIT:safe-callback]: restoring the exact callback snapshot
+        // SAFETY[AUDIT:unsafe-callback]: restoring the exact callback snapshot
         // captured during guard construction.
         unsafe { crate::page::restore_deferred_free_callback(self.previous) };
     }
 }
 
-// SAFETY[AUDIT:safe-callback]: registered only with callback arguments created
-// by `ErrorCallbackGuard`, and it catches Rust panics before ABI return.
+// SAFETY[AUDIT:unsafe-callback]: registered only with callback arguments
+// created by `ErrorCallbackGuard`, and it catches Rust panics before ABI return.
 unsafe extern "C" fn error_callback_trampoline<F: FnMut(i32)>(err: i32, arg: *mut c_void) {
     if arg.is_null() {
         return;
     }
-    // SAFETY[AUDIT:safe-callback]: guard construction stores a valid `&mut F`
+    // SAFETY[AUDIT:unsafe-callback]: guard construction stores a valid `&mut F`
     // as the callback argument for the active registration lifetime.
     let Some(callback) = (unsafe { arg.cast::<F>().as_mut() }) else {
         return;
@@ -163,8 +178,9 @@ unsafe extern "C" fn error_callback_trampoline<F: FnMut(i32)>(err: i32, arg: *mu
     }
 }
 
-// SAFETY[AUDIT:safe-callback]: registered only with callback arguments created
-// by `DeferredFreeCallbackGuard`, and it catches Rust panics before ABI return.
+// SAFETY[AUDIT:unsafe-callback]: registered only with callback arguments
+// created by `DeferredFreeCallbackGuard`, and it catches Rust panics before ABI
+// return.
 unsafe extern "C" fn deferred_free_callback_trampoline<F: FnMut(bool, u64)>(
     force: bool,
     heartbeat: u64,
@@ -173,7 +189,7 @@ unsafe extern "C" fn deferred_free_callback_trampoline<F: FnMut(bool, u64)>(
     if arg.is_null() {
         return;
     }
-    // SAFETY[AUDIT:safe-callback]: guard construction stores a valid `&mut F`
+    // SAFETY[AUDIT:unsafe-callback]: guard construction stores a valid `&mut F`
     // as the callback argument for the active registration lifetime.
     let Some(callback) = (unsafe { arg.cast::<F>().as_mut() }) else {
         return;

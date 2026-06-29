@@ -1,8 +1,9 @@
 //! Mechanical Rust translation foundation for mimalloc 3.3.2.
 //!
 //! This crate is a mimalloc-compatible C ABI allocator artifact. It also
-//! provides safe Rust allocation, heap, options, statistics, process-info, and
-//! callback guard facades over the translated allocator.
+//! provides safe Rust allocation, heap, options, statistics, and process-info
+//! facades over the translated allocator. Borrowed callback guards live under
+//! [`unsafe_callbacks`] because they require process-global safety obligations.
 //!
 //! This crate is currently a dual artifact:
 //!
@@ -19,8 +20,8 @@
 //!
 //! # Features
 //!
-//! - `std`: opt in to `std` for tooling, tests, and benchmarks. Optimized Linux
-//!   builds without this feature use `no_std`.
+//! - `std`: opt in to `std` for tooling, tests, and benchmarks. Linux builds
+//!   without this feature use `no_std`.
 //! - `bench`: enables Criterion benchmarks and implies `std`.
 //! - `compare`: enables comparison-oriented benchmark/test code.
 //! - `bench-diagnostics`: enables benchmark-only hotspot counters.
@@ -58,7 +59,7 @@
 //! Use the safe owned allocation wrapper when you want a Rust `Result` instead
 //! of the C API's null-on-failure convention:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use core::alloc::Layout;
 //! use mechanical_mimalloc::Allocation;
 //!
@@ -192,19 +193,12 @@
 //! ```
 
 #![cfg_attr(mi_sanitizer_runtime, feature(sanitize))]
-#![cfg_attr(
-    all(
-        not(test),
-        target_os = "linux",
-        not(debug_assertions),
-        not(feature = "std")
-    ),
-    no_std
-)]
+#![cfg_attr(all(not(test), target_os = "linux", not(feature = "std")), no_std)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![warn(rustdoc::bare_urls)]
 
 pub mod raw;
+pub mod unsafe_callbacks;
 
 mod abi;
 mod alloc;
@@ -244,10 +238,9 @@ mod track;
 mod types;
 
 pub use safe::{
-    AllocError, Allocation, CallbackError, DeferredFreeCallbackGuard, ErrorCallbackGuard, Heap,
-    HeapAllocation, HeapError, HeapRef, InitializedAllocation, InitializedHeapAllocation,
-    LayoutError, MainHeap, OptionError, OptionKey, Options, ProcessInfo, ResizeError,
-    ResizeErrorKind, StatCount, StatTotal, StatsError, StatsSnapshot, TryAllocError,
+    AllocError, Allocation, Heap, HeapAllocation, HeapError, HeapRef, InitializedAllocation,
+    InitializedHeapAllocation, LayoutError, MainHeap, OptionError, OptionKey, Options, ProcessInfo,
+    ResizeError, ResizeErrorKind, StatCount, StatTotal, StatsError, StatsSnapshot, TryAllocError,
 };
 
 /// Rust [`GlobalAlloc`](core::alloc::GlobalAlloc) facade backed by the crate's
@@ -298,9 +291,9 @@ pub use safe::{
 ///
 /// # Panic and unwind behavior
 ///
-/// The facade itself does not intentionally panic. Optimized `no_std` Linux
-/// builds use the crate panic handler; `std` tooling, tests, docs, and examples
-/// use normal Rust panic behavior outside allocator calls.
+/// The facade itself does not intentionally panic. `no_std` Linux builds use
+/// the crate panic handler; `std` tooling, tests, docs, and examples use normal
+/// Rust panic behavior outside allocator calls.
 ///
 /// # Thread behavior
 ///
@@ -378,12 +371,7 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
     }
 }
 
-#[cfg(all(
-    not(test),
-    target_os = "linux",
-    not(debug_assertions),
-    not(feature = "std")
-))]
+#[cfg(all(not(test), target_os = "linux", not(feature = "std")))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
     // SAFETY[AUDIT:panic-boundary]: the no_std panic handler forwards a static
@@ -391,12 +379,7 @@ fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
     unsafe { options::_mi_assert_fail(c"panic".as_ptr(), c"rust".as_ptr(), 0, core::ptr::null()) }
 }
 
-#[cfg(all(
-    not(test),
-    target_os = "linux",
-    not(debug_assertions),
-    not(feature = "std")
-))]
+#[cfg(all(not(test), target_os = "linux", not(feature = "std")))]
 // SAFETY[AUDIT:panic-boundary]: declaration of the platform abort symbol used
 // only by the no_std personality shim.
 unsafe extern "C" {
@@ -404,15 +387,10 @@ unsafe extern "C" {
     fn c_abort() -> !;
 }
 
-#[cfg(all(
-    not(test),
-    target_os = "linux",
-    not(debug_assertions),
-    not(feature = "std")
-))]
+#[cfg(all(not(test), target_os = "linux", not(feature = "std")))]
 #[unsafe(no_mangle)]
 extern "C" fn rust_eh_personality() {
-    // SAFETY[AUDIT:panic-boundary]: optimized no_std builds abort if an
-    // unwinding personality is reached.
+    // SAFETY[AUDIT:panic-boundary]: no_std builds abort if an unwinding
+    // personality is reached.
     unsafe { c_abort() }
 }

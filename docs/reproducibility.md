@@ -7,6 +7,8 @@ This repository pins the local Rust toolchain through `rust-toolchain.toml`.
 - Rust channel: `1.92.0`
 - Required components: `rustfmt`, `clippy`
 - Edition: Rust 2024
+- CI installs the same pinned toolchain for maintained-target validation. Other
+  platform jobs are smoke checks unless `docs/platforms.md` promotes them.
 
 ## Capturing Environment Evidence
 
@@ -37,12 +39,12 @@ Rust warnings and the `clippy::all`, `clippy::pedantic`, `clippy::nursery`, and
 For direct Clippy runs, use:
 
 ```sh
-cargo clippy-strict
+cargo clippy --workspace --all-targets --all-features
 ```
 
-This Cargo alias expands to `cargo clippy --all-targets --all-features`.
-Running plain `cargo clippy` applies the same lint deny policy, but only to
-Cargo's default target and feature selection.
+Repository checkouts may define shorter local aliases, but package-facing
+commands use the full Cargo invocation because aliases are not part of the
+published crate.
 
 The full repository lint entrypoint is:
 

@@ -27,7 +27,6 @@ include = [
   "/benches/**",
   "/benchmarks/**",
   "/docs/**",
-  "/scripts/**",
   "/build.rs",
   "/PARITY.md",
   "/BENCHMARK_RESULTS.md",
@@ -40,8 +39,8 @@ include = [
 crate-type = ["rlib", "cdylib"]
 
 [features]
-# Default features are intentionally empty so optimized Linux cdylib builds can
-# stay `no_std` unless tooling explicitly opts into `std`.
+# Default features are intentionally empty so Linux cdylib builds can stay
+# `no_std` unless tooling explicitly opts into `std`.
 default = []
 # Enable Valgrind tracking shims. When enabled together with `track-asan`
 # through aggregate tooling builds, Valgrind mode takes precedence.

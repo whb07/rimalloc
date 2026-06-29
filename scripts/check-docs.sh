@@ -5,3 +5,4 @@ cd_repo_root
 
 run cargo doc --no-deps --features std
 run cargo test --doc --features std
+run scripts/check-safe-docs.py

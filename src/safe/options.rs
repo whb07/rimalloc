@@ -3,8 +3,11 @@ use core::fmt;
 
 /// Error returned by safe options APIs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum OptionError {
+    /// The raw option code is outside mimalloc's option range.
     InvalidKey,
+    /// The option exists in raw mimalloc but is not supported or mutable here.
     Unsupported,
 }
 
@@ -23,13 +26,18 @@ impl std::error::Error for OptionError {}
 /// Safe mimalloc option key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OptionKey {
+    /// Controls whether mimalloc prints error diagnostics.
     ShowErrors,
+    /// Controls whether mimalloc prints statistics at process exit.
     ShowStats,
+    /// Maximum number of error diagnostics.
     MaxErrors,
+    /// Maximum number of warning diagnostics.
     MaxWarnings,
 }
 
 impl OptionKey {
+    /// All option keys currently supported by the safe facade.
     pub const ALL: [Self; 4] = [
         Self::ShowErrors,
         Self::ShowStats,
@@ -37,6 +45,7 @@ impl OptionKey {
         Self::MaxWarnings,
     ];
 
+    /// Converts a raw mimalloc option code into a supported safe option key.
     #[inline]
     pub fn from_raw(raw: i32) -> Result<Self, OptionError> {
         match raw {
@@ -51,6 +60,7 @@ impl OptionKey {
         }
     }
 
+    /// Returns the raw mimalloc option code for this key.
     #[inline]
     #[must_use]
     pub const fn as_raw(self) -> i32 {
@@ -89,16 +99,28 @@ impl OptionKey {
     }
 }
 
+impl TryFrom<i32> for OptionKey {
+    type Error = OptionError;
+
+    #[inline]
+    fn try_from(raw: i32) -> Result<Self, Self::Error> {
+        Self::from_raw(raw)
+    }
+}
+
 /// Safe access to supported mimalloc options.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Options;
 
 impl Options {
+    /// Returns the current value for a supported option key.
     #[inline]
-    pub fn get(key: OptionKey) -> Result<c_long, OptionError> {
-        Ok(crate::options::mi_option_get(key.raw_option()))
+    #[must_use]
+    pub fn get(key: OptionKey) -> c_long {
+        crate::options::mi_option_get(key.raw_option())
     }
 
+    /// Sets a mutable supported option key.
     #[inline]
     pub fn set(key: OptionKey, value: c_long) -> Result<(), OptionError> {
         if !key.mutable() {
@@ -108,6 +130,7 @@ impl Options {
         Ok(())
     }
 
+    /// Resets a mutable supported option key to its default value.
     #[inline]
     pub fn reset(key: OptionKey) -> Result<(), OptionError> {
         Self::set(key, key.default_value())

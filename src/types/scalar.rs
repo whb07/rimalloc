@@ -41,6 +41,8 @@ impl Errno {
 pub(crate) struct RequestedSize(pub(crate) usize);
 
 impl RequestedSize {
+    pub(crate) const MIN_ZERO_SIZE: usize = core::mem::size_of::<usize>();
+
     #[inline(always)]
     pub(crate) const fn new(size: usize) -> Self {
         Self(size)
@@ -48,6 +50,14 @@ impl RequestedSize {
     #[inline(always)]
     pub(crate) const fn get(self) -> usize {
         self.0
+    }
+    #[inline(always)]
+    pub(crate) const fn effective_size(self) -> usize {
+        if self.0 == 0 {
+            Self::MIN_ZERO_SIZE
+        } else {
+            self.0
+        }
     }
     #[inline]
     pub(crate) fn checked_add(self, add: usize) -> Result<Self, AllocSizeError> {

@@ -26,6 +26,12 @@ fn assert_freeable(p: *mut c_void) {
     unsafe { mi_free(p) };
 }
 
+unsafe fn assert_freeable_with_usable(p: *mut c_void, usable: usize) {
+    assert!(!p.is_null());
+    assert!(usable >= core::mem::size_of::<usize>());
+    unsafe { mi_free(p) };
+}
+
 fn assert_aligned_at(p: *mut c_void, alignment: usize, offset: usize) {
     assert!(!p.is_null());
     assert_eq!((p as usize + offset) % alignment, 0);
@@ -37,6 +43,19 @@ fn zero_size_allocations_return_freeable_pointers() {
         assert_freeable(mi_malloc(0));
         assert_freeable(mi_zalloc(0));
 
+        let mut usable = 0;
+        let p = mi_umalloc(0, &mut usable);
+        assert_freeable_with_usable(p, usable);
+
+        usable = 0;
+        let p = mi_uzalloc(0, &mut usable);
+        assert_freeable_with_usable(p, usable);
+
+        assert_freeable(mi_calloc(0, 8));
+        assert_freeable(mi_calloc(8, 0));
+        assert_freeable(mi_mallocn(0, 8));
+        assert_freeable(mi_mallocn(8, 0));
+
         let p = mi_malloc_aligned(0, 64);
         assert_aligned_at(p, 64, 0);
         mi_free(p);
@@ -44,6 +63,41 @@ fn zero_size_allocations_return_freeable_pointers() {
         let p = mi_malloc_aligned_at(0, 64, 8);
         assert_aligned_at(p, 64, 8);
         mi_free(p);
+    }
+}
+
+#[test]
+fn zero_size_heap_allocations_return_freeable_pointers() {
+    unsafe {
+        let heap = mi_heap_new();
+        assert!(!heap.is_null());
+
+        let p = mi_heap_malloc(heap, 0);
+        assert!(!p.is_null());
+        mi_free(p);
+
+        let p = mi_heap_zalloc(heap, 0);
+        assert!(!p.is_null());
+        mi_free(p);
+
+        let p = mi_heap_calloc(heap, 0, 8);
+        assert!(!p.is_null());
+        mi_free(p);
+
+        let p = mi_heap_mallocn(heap, 8, 0);
+        assert!(!p.is_null());
+        mi_free(p);
+
+        mi_heap_destroy(heap);
+    }
+}
+
+#[test]
+fn zero_size_good_size_uses_minimum_bin() {
+    unsafe {
+        let good = mi_good_size(0);
+        assert!(good >= core::mem::size_of::<usize>());
+        assert_eq!(mi_malloc_good_size(0), good);
     }
 }
 

@@ -163,11 +163,13 @@ pub unsafe fn mi_track_malloc(p: *mut c_void, reqsize: usize, zero: bool) {
         return;
     }
     if crate::types::MI_PADDING != 0 {
+        let usable = unsafe { crate::mimalloc::mi_usable_size(p.cast_const()) };
         crate::mi_assert_internal!(
-            unsafe { crate::mimalloc::mi_usable_size(p.cast_const()) } == reqsize
+            usable == reqsize
+                || (reqsize == 0 && usable >= crate::core_types::RequestedSize::MIN_ZERO_SIZE)
         );
         if MI_TRACK_ENABLED != 0 {
-            unsafe { mi_track_malloc_size(p, reqsize, reqsize, zero) };
+            unsafe { mi_track_malloc_size(p, reqsize, usable, zero) };
         }
     } else {
         crate::mi_assert_internal!(

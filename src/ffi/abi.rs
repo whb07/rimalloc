@@ -189,6 +189,7 @@ unsafe extern "C" {
     pub fn mi_thread_set_in_threadpool();
 
     pub fn mi_umalloc(size: usize, block_size: *mut usize) -> *mut c_void;
+    pub fn mi_uzalloc(size: usize, block_size: *mut usize) -> *mut c_void;
     pub fn mi_ucalloc(count: usize, size: usize, block_size: *mut usize) -> *mut c_void;
     pub fn mi_urealloc(
         p: *mut c_void,

@@ -324,8 +324,9 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
             let tid = _mi_thread_id();
             crate::mi_assert!((*(*theap).tld).thread_id == 0 || (*(*theap).tld).thread_id == tid);
         }
-        if (MI_PADDING != 0 || crate::internal::MI_GUARDED != 0) && mi_unlikely(size == 0) {
-            size = size_of::<*mut c_void>();
+        let requested_size = size;
+        if mi_unlikely(size == 0) {
+            size = crate::core_types::RequestedSize::MIN_ZERO_SIZE;
         }
         if crate::internal::MI_GUARDED != 0
             && mi_unlikely(mi_theap_malloc_use_guarded(
@@ -351,10 +352,10 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
         } else {
             mi_malloc_generic_fallback_from_padded(theap, padded, zero, usable)
         };
-        mi_track_malloc(p, size, zero);
+        mi_track_malloc(p, requested_size, zero);
 
-        if cfg!(debug_assertions) && !p.is_null() && zero {
-            crate::mi_assert_expensive!(crate::internal::mi_mem_is_zero(p, size));
+        if cfg!(debug_assertions) && !p.is_null() && zero && requested_size != 0 {
+            crate::mi_assert_expensive!(crate::internal::mi_mem_is_zero(p, requested_size));
         }
         p
     }

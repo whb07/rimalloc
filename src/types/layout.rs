@@ -83,8 +83,11 @@ impl LayoutRequest {
 
     pub(crate) fn malloc(size: usize) -> Result<Self, LayoutError> {
         let requested = RequestedSize::new(size);
-        // Effective size for malloc is at least 1, up to the implementation limits.
-        let eff_size = if size == 0 { 1 } else { size };
+        // Mimalloc normalizes zero-size C allocation requests to the minimum
+        // word-sized allocation before choosing a size class. Keep the original
+        // requested size for API-visible accounting, but never build a zero
+        // `PaddedSize`.
+        let eff_size = requested.effective_size();
         // Unsafe is fine here as we've explicitly guarded against 0.
         let effective = unsafe { EffectiveSize::new_unchecked(eff_size) };
         Self::from_parts(
@@ -166,11 +169,7 @@ impl LayoutRequest {
             "padded allocation size must include padding"
         );
         let requested_size = padded.get().wrapping_sub(crate::types::MI_PADDING_SIZE);
-        let effective_size = if requested_size == 0 {
-            1
-        } else {
-            requested_size
-        };
+        let effective_size = RequestedSize::new(requested_size).effective_size();
         Self {
             requested: RequestedSize::new(requested_size),
             effective: unsafe { EffectiveSize::new_unchecked(effective_size) },

@@ -12,8 +12,11 @@ fn internal_layout_error_is_distinct_from_public_safe_error() {
 fn malloc_layout_preserves_requested_and_normalizes_effective_size() {
     let zero = LayoutRequest::malloc(0).expect("zero-size malloc layout");
     assert_eq!(zero.requested().get(), 0);
-    assert_eq!(zero.effective().get(), 1);
-    assert_eq!(zero.padded().get(), crate::types::MI_PADDING_SIZE + 1);
+    assert_eq!(zero.effective().get(), RequestedSize::MIN_ZERO_SIZE);
+    assert_eq!(
+        zero.padded().get(),
+        crate::types::MI_PADDING_SIZE + RequestedSize::MIN_ZERO_SIZE
+    );
     assert_eq!(zero.zeroed(), Zeroed::No);
 
     let nonzero = LayoutRequest::malloc(17).expect("malloc layout");

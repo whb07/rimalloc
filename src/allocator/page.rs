@@ -175,7 +175,8 @@ fn mi_good_size_small(padded: crate::core_types::PaddedSize) -> crate::core_type
 pub(crate) fn mi_good_size_typed(
     size: crate::core_types::RequestedSize,
 ) -> crate::core_types::GoodSize {
-    let sz = size.get();
+    let sz = size.effective_size();
+    let size = crate::core_types::RequestedSize::new(sz);
     if sz <= MI_LARGE_MAX_OBJ_SIZE {
         // `sz <= MI_LARGE_MAX_OBJ_SIZE` is far below `usize::MAX`, so padding
         // cannot overflow; `checked_padded` makes that explicit rather than open-
@@ -3353,13 +3354,14 @@ pub(crate) unsafe extern "C" fn _mi_malloc_generic(
         // SAFETY: `zero_huge_alignment` is the C-compatible packed flag word:
         // bit 0 is zeroing and the remaining bits are the huge-alignment payload.
         let flags = crate::core_types::MallocGenericFlags::from_raw(zero_huge_alignment);
-        if size == 0 {
-            return ptr::null_mut();
-        }
-        let layout = crate::core_types::LayoutRequest::from_padded_unchecked(
-            crate::core_types::PaddedSize::new_unchecked(size),
-            flags.zeroed(),
-        );
+        let padded = if size == 0 {
+            crate::core_types::RequestedSize::new(crate::core_types::RequestedSize::MIN_ZERO_SIZE)
+                .padded_unchecked()
+        } else {
+            crate::core_types::PaddedSize::new_unchecked(size)
+        };
+        let layout =
+            crate::core_types::LayoutRequest::from_padded_unchecked(padded, flags.zeroed());
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
         };

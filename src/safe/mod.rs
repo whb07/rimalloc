@@ -411,6 +411,28 @@ mod tests {
     }
 
     #[test]
+    fn main_heap_allocations_outlive_temporary_handle() {
+        let mut allocation;
+        let zeroed;
+        {
+            let main = MainHeap::get().expect("main heap");
+            allocation = main
+                .allocate(Layout::from_size_align(4, 4).expect("layout"))
+                .expect("main heap allocation");
+            zeroed = MainHeap::get()
+                .expect("main heap")
+                .as_ref()
+                .allocate_zeroed(Layout::from_size_align(3, 1).expect("layout"))
+                .expect("main heap zeroed allocation");
+        }
+
+        allocation.as_uninit_slice_mut()[0].write(42);
+        let initialized = unsafe { allocation.assume_initialized() };
+        assert_eq!(initialized.as_bytes()[0], 42);
+        assert_eq!(zeroed.as_bytes(), &[0, 0, 0]);
+    }
+
+    #[test]
     fn safe_options_cover_supported_invalid_and_immutable_keys() {
         assert!(matches!(OptionError::InvalidKey, OptionError::InvalidKey));
         assert!(matches!(OptionError::Unsupported, OptionError::Unsupported));

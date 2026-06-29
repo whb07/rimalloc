@@ -152,6 +152,11 @@ impl fmt::Debug for HeapRef<'_> {
 }
 
 /// Borrowed process main heap handle.
+///
+/// `MainHeap` does not own or delete the process main heap. Allocations made
+/// through it use the same heap-tied allocation wrappers as owned heaps, but
+/// are tied to the process-global main heap lifetime instead of to a temporary
+/// `MainHeap` value.
 #[derive(Clone, Copy, Debug)]
 #[must_use]
 pub struct MainHeap {
@@ -169,27 +174,38 @@ impl MainHeap {
         Ok(Self { ptr })
     }
 
-    /// Borrows the main heap as a copyable [`HeapRef`].
+    /// Borrows the process-global main heap as a copyable [`HeapRef`].
+    ///
+    /// This returns `HeapRef<'static>` because `MainHeap` is only a borrowed
+    /// witness for mimalloc's process main heap. Dropping `MainHeap` does not
+    /// delete the heap, so allocations made through this reference are not tied
+    /// to the short borrow of the handle value.
     #[inline]
-    pub fn as_ref(&self) -> HeapRef<'_> {
+    pub fn as_ref(&self) -> HeapRef<'static> {
         HeapRef {
             ptr: self.ptr,
             _marker: PhantomData,
         }
     }
 
-    /// Allocates an uninitialized byte block from the main heap.
+    /// Allocates an uninitialized byte block from the process main heap.
+    ///
+    /// The returned allocation is tied to the process-global main heap, not to
+    /// this temporary `MainHeap` handle.
     #[inline]
-    pub fn allocate(&self, layout: Layout) -> Result<HeapAllocation<'_>, AllocError> {
+    pub fn allocate(&self, layout: Layout) -> Result<HeapAllocation<'static>, AllocError> {
         self.as_ref().allocate(layout)
     }
 
-    /// Allocates a zero-initialized byte block from the main heap.
+    /// Allocates a zero-initialized byte block from the process main heap.
+    ///
+    /// The returned allocation is tied to the process-global main heap, not to
+    /// this temporary `MainHeap` handle.
     #[inline]
     pub fn allocate_zeroed(
         &self,
         layout: Layout,
-    ) -> Result<InitializedHeapAllocation<'_>, AllocError> {
+    ) -> Result<InitializedHeapAllocation<'static>, AllocError> {
         self.as_ref().allocate_zeroed(layout)
     }
 

@@ -45,6 +45,9 @@ Safe facade contact with allocator internals is file-specific and checked by
 - `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
   `InitializedHeapAllocation`: heap ownership and heap-tied allocation wrappers
   that prevent deleting an owned heap while safe heap allocations are live.
+  `MainHeap` is a borrowed witness for the process-global main heap; dropping
+  the handle does not delete the heap, so its allocations are tied to
+  `HeapRef<'static>` rather than to the temporary handle borrow.
 - `Options` and `OptionKey`: supported safe allocator options with typed errors
   for invalid or immutable keys.
 - `StatsSnapshot`, `StatCount`, and `StatTotal`: owned non-printing statistics

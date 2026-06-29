@@ -334,10 +334,14 @@ Problem:
 
 Tasks:
 
-- [ ] Decide whether main-heap allocations should have a dedicated `MainHeapAllocation` / `InitializedMainHeapAllocation` type without a borrowed heap lifetime.
-- [ ] Alternatively, decide whether `MainHeap::as_ref` should return `HeapRef<'static>` and document why that is sound.
-- [ ] Preserve lifetime protection for owned non-main `Heap` allocations.
-- [ ] Add compile-fail tests for owned heap allocation lifetimes and positive tests for main-heap ergonomics.
+- [x] Decide whether main-heap allocations should have a dedicated `MainHeapAllocation` / `InitializedMainHeapAllocation` type without a borrowed heap lifetime.
+  - Evidence: no dedicated main-heap allocation wrappers were added; the existing heap allocation wrappers already encode heap ownership, so the main-heap handle now creates process-lifetime `HeapRef<'static>` allocations.
+- [x] Alternatively, decide whether `MainHeap::as_ref` should return `HeapRef<'static>` and document why that is sound.
+  - Evidence: `MainHeap::as_ref` returns `HeapRef<'static>` with docs explaining that `MainHeap` is a borrowed witness for the process-global main heap and does not delete it.
+- [x] Preserve lifetime protection for owned non-main `Heap` allocations.
+  - Evidence: `Heap::as_ref`, `Heap::allocate`, and `Heap::allocate_zeroed` remain tied to the `&self` borrow; existing compile-fail rustdoc examples still cover owned heap allocations escaping the heap.
+- [x] Add compile-fail tests for owned heap allocation lifetimes and positive tests for main-heap ergonomics.
+  - Evidence: owned heap compile-fail rustdoc examples remain in `src/safe/heap.rs`; `cargo test --features std safe::tests::main_heap -- --nocapture` covers main-heap allocations outliving temporary handles.
 
 ## 13. P2 safe facade: make global side effects explicit in `Options`
 

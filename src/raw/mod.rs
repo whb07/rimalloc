@@ -51,6 +51,7 @@
 //! ```
 
 #![allow(unused_imports)]
+#![deny(clippy::must_use_candidate)]
 
 pub(crate) mod macros;
 pub(crate) mod posix;

@@ -2,6 +2,7 @@
 
 // Retains upstream override/interposition shims for platforms and C++ ABI
 // variants that are selected by target linker/runtime behavior.
+#![allow(clippy::must_use_candidate)]
 #![allow(
     dead_code,
     non_camel_case_types,

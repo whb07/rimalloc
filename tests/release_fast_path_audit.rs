@@ -3197,6 +3197,7 @@ fn phase6_clippy_allowances_stay_intentional() {
         (("src/internal/bitmap.rs", "many_single_char_names"), 1),
         (("src/allocator/free.rs", "absurd_extreme_comparisons"), 1),
         (("src/ffi/libc.rs", "many_single_char_names"), 2),
+        (("src/raw/macros.rs", "must_use_candidate"), 1),
         (("src/platform/os.rs", "absurd_extreme_comparisons"), 3),
         (("src/platform/os.rs", "too_many_arguments"), 1),
         (("src/allocator/page.rs", "absurd_extreme_comparisons"), 1),
@@ -3210,9 +3211,25 @@ fn phase6_clippy_allowances_stay_intentional() {
     );
 
     let safe_rs = fs::read_to_string(root.join("src/safe/mod.rs")).expect("read safe facade");
+    let callbacks_rs =
+        fs::read_to_string(root.join("src/ffi/callbacks.rs")).expect("read callback guards");
+    let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read raw facade");
+    let safe_boundary_script =
+        fs::read_to_string(root.join("scripts/check-safe-boundary.py")).expect("read safe check");
     assert!(
         safe_rs.starts_with("#![deny(clippy::must_use_candidate)]"),
         "safe Rust facade should locally deny missing must-use markers even while translated internals keep the package allowance"
+    );
+    assert!(
+        callbacks_rs.contains("#![deny(clippy::must_use_candidate)]")
+            && raw_rs.contains("#![deny(clippy::must_use_candidate)]")
+            && safe_boundary_script.contains("STRICT_LINT_POLICY_FILES = {")
+            && safe_boundary_script.contains("\"src/safe/mod.rs\"")
+            && safe_boundary_script.contains("\"src/ffi/callbacks.rs\"")
+            && safe_boundary_script.contains("\"src/raw/mod.rs\"")
+            && safe_boundary_script.contains("SAFE_FACING_LINT_FILES = [")
+            && safe_boundary_script.contains("allow(clippy::"),
+        "safe-facing callback and raw facade glue should locally deny must-use drift and CI should reject unaudited Clippy allowances"
     );
 }
 

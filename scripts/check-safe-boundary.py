@@ -19,6 +19,17 @@ ALLOWED_PUBLIC_UNSAFE = {
     "src/safe/heap.rs": {"assume_initialized"},
 }
 CALLBACK_GUARDS = {"DeferredFreeCallbackGuard", "ErrorCallbackGuard"}
+STRICT_MUST_USE_POLICY = "#![deny(clippy::must_use_candidate)]"
+STRICT_LINT_POLICY_FILES = {
+    "src/safe/mod.rs",
+    "src/ffi/callbacks.rs",
+    "src/raw/mod.rs",
+}
+SAFE_FACING_LINT_FILES = [
+    *SAFE_BOUNDARY_FILES,
+    "src/ffi/callbacks.rs",
+    "src/raw/mod.rs",
+]
 
 
 def require(condition: bool, message: str) -> None:
@@ -75,10 +86,25 @@ def callback_guard_safe_surface_mentions(rel: str, text: str) -> list[str]:
     ]
 
 
+def missing_strict_lint_policy(rel: str, text: str) -> bool:
+    return rel in STRICT_LINT_POLICY_FILES and STRICT_MUST_USE_POLICY not in text
+
+
+def local_clippy_allowances(rel: str, text: str) -> list[str]:
+    source = text.split("#[cfg(test)]", maxsplit=1)[0]
+    return [
+        f"line {lineno}: {line.strip()}"
+        for lineno, line in enumerate(source.splitlines(), start=1)
+        if "allow(clippy::" in line
+    ]
+
+
 def main() -> int:
     all_public_unsafe: list[str] = []
     all_untagged: list[str] = []
     callback_guard_mentions: list[str] = []
+    missing_policy: list[str] = []
+    clippy_allowances: list[str] = []
 
     synthetic = "pub unsafe fn synthetic_safe_escape() {}"
     require(
@@ -92,6 +118,14 @@ def main() -> int:
         all_untagged.extend(f"{rel}:{item}" for item in untagged_boundary_unsafe(text))
         callback_guard_mentions.extend(
             f"{rel}:{guard}" for guard in callback_guard_safe_surface_mentions(rel, text)
+        )
+
+    for rel in SAFE_FACING_LINT_FILES:
+        text = (ROOT / rel).read_text()
+        if missing_strict_lint_policy(rel, text):
+            missing_policy.append(rel)
+        clippy_allowances.extend(
+            f"{rel}:{item}" for item in local_clippy_allowances(rel, text)
         )
 
     lib_rs = (ROOT / "src/lib.rs").read_text()
@@ -119,10 +153,20 @@ def main() -> int:
         "callback guards must not be referenced from Tier S safe facade source outside tests: "
         + "; ".join(callback_guard_mentions),
     )
+    require(
+        not missing_policy,
+        "safe-facing modules must locally deny clippy::must_use_candidate: "
+        + "; ".join(missing_policy),
+    )
+    require(
+        not clippy_allowances,
+        "safe-facing modules must not add local Clippy allowances without updating the audited policy: "
+        + "; ".join(clippy_allowances),
+    )
 
     print(
-        "ok: safe facade unsafe boundary has only allowlisted public unsafe items "
-        "and all unsafe blocks are audit-tagged"
+        "ok: safe facade unsafe boundary has only allowlisted public unsafe items, "
+        "all unsafe blocks are audit-tagged, and safe-facing lint policy is local"
     )
     return 0
 

@@ -5,6 +5,8 @@
 //! constructors are unsafe because callers must uphold process-global callback
 //! synchronization, lifetime, reentrancy, and allocator-entry obligations.
 
+#![deny(clippy::must_use_candidate)]
+
 use core::ffi::c_void;
 use core::ptr;
 

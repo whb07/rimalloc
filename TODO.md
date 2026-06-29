@@ -450,10 +450,14 @@ Problem:
 
 Tasks:
 
-- [ ] Keep mechanical-backend allowances where they are needed.
-- [ ] Add stricter local lint policy for `src/safe/`, `src/ffi/callbacks.rs`, and raw facade glue.
-- [ ] Move allowances that are only needed by translated modules from Cargo-level config into those modules over time.
-- [ ] Add CI/script checks so new safe-facing files do not silently inherit broad mechanical allowances.
+- [x] Keep mechanical-backend allowances where they are needed.
+  - Evidence: Cargo-level mechanical translation allowances remain unchanged, while existing backend-local allowances stay covered by `phase6_clippy_allowances_stay_intentional`.
+- [x] Add stricter local lint policy for `src/safe/`, `src/ffi/callbacks.rs`, and raw facade glue.
+  - Evidence: `src/safe/mod.rs`, `src/ffi/callbacks.rs`, and `src/raw/mod.rs` locally deny `clippy::must_use_candidate` so Rust-facing APIs do not rely on the package-level mechanical allowance.
+- [x] Move allowances that are only needed by translated modules from Cargo-level config into those modules over time.
+  - Evidence: no broad Cargo-level allowance was added; this slice adds local denies for Rust-facing modules and leaves the existing mechanical allowlist audited for future shrinkage.
+- [x] Add CI/script checks so new safe-facing files do not silently inherit broad mechanical allowances.
+  - Evidence: `scripts/check-safe-boundary.py` now verifies the strict local policy files and rejects safe-facing `allow(clippy::...)` attributes outside the audited policy.
 
 ## 18. P2 audit tooling: move from file-level to operation-level coverage
 

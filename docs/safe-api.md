@@ -54,7 +54,8 @@ Safe facade contact with allocator internals is file-specific and checked by
 - `StatsSnapshot`, `StatCount`, and `StatTotal`: owned non-printing statistics
   snapshots and typed statistic values.
 - `ProcessInfo`: typed process allocator information. Size totals are `None`
-  when the raw process-info API reports zero; page faults always return a count.
+  when the raw process-info API reports zero; `page_faults()` returns a direct
+  count because zero is a valid observed count.
 - `AllocError`, `LayoutError`, `TryAllocError`, `ResizeError`,
   `ResizeErrorKind`, `HeapError`, `OptionError`, and `StatsError`: typed
   failure states for the safe API.

@@ -379,9 +379,12 @@ Problem:
 
 Tasks:
 
-- [ ] Decide whether `page_faults` should return `StatCount` directly.
-- [ ] If retaining `Option<StatCount>`, document the future/platform reason and add a test that encodes the current behavior.
-- [ ] Keep the JSON/raw stats parity tests aligned with the chosen safe facade shape.
+- [x] Decide whether `page_faults` should return `StatCount` directly.
+  - Evidence: `ProcessInfo` now stores `page_faults: StatCount` and `ProcessInfo::page_faults()` returns `StatCount` directly.
+- [x] If retaining `Option<StatCount>`, document the future/platform reason and add a test that encodes the current behavior.
+  - Evidence: not retained; docs now state that zero is a valid observed page-fault count, not an unavailable sentinel.
+- [x] Keep the JSON/raw stats parity tests aligned with the chosen safe facade shape.
+  - Evidence: `stats_and_process_info_are_typed_and_nonprinting` checks the direct safe count against the raw `mi_process_info` page-fault output; `cargo test --features std stats_and_process_info -- --nocapture` passes.
 
 ## 15. P2 safe facade: make heap auto-trait contracts explicit
 

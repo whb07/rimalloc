@@ -520,9 +520,27 @@ mod tests {
         assert_eq!(info.user_time().as_millis(), info.user_msecs() as u128);
         assert_eq!(info.system_time().as_millis(), info.system_msecs() as u128);
         assert!(info.page_size().is_some_and(|page_size| page_size > 0));
-        assert!(info.page_faults().is_some());
+        assert!(info.page_faults().get() >= 0);
         let raw_page_size = unsafe { crate::os::_mi_os_page_size() };
         assert_eq!(info.page_size(), Some(raw_page_size));
+
+        let mut raw_page_faults = 0usize;
+        unsafe {
+            crate::stats::mi_process_info(
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                &mut raw_page_faults,
+            );
+        }
+        assert!(
+            raw_page_faults.min(i64::MAX as usize) as i64 >= info.page_faults().get(),
+            "raw process page-fault count should not go backward"
+        );
     }
 
     static PREVIOUS_ERROR_CALLBACK_HITS: AtomicUsize = AtomicUsize::new(0);

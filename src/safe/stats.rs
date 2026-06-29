@@ -176,8 +176,8 @@ impl StatsSnapshot {
 /// Mimalloc's process-info C API reports unavailable numeric fields as zero on
 /// some platforms. Size totals use `None` when the raw value is zero, so a
 /// reported zero total is indistinguishable from an unavailable total through
-/// this safe facade. Page faults are always returned because zero is a valid
-/// observed count for that field.
+/// this safe facade. Page faults return a direct count because zero is a valid
+/// observed count for that field, not an unavailable sentinel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[must_use]
 pub struct ProcessInfo {
@@ -188,7 +188,7 @@ pub struct ProcessInfo {
     peak_rss: Option<StatTotal>,
     current_commit: Option<StatTotal>,
     peak_commit: Option<StatTotal>,
-    page_faults: Option<StatCount>,
+    page_faults: StatCount,
     page_size: Option<usize>,
 }
 
@@ -227,7 +227,7 @@ impl ProcessInfo {
             peak_rss: nonzero_total(peak_rss),
             current_commit: nonzero_total(current_commit),
             peak_commit: nonzero_total(peak_commit),
-            page_faults: Some(StatCount::new(page_faults.min(i64::MAX as usize) as i64)),
+            page_faults: StatCount::new(page_faults.min(i64::MAX as usize) as i64),
             page_size: (page_size != 0).then_some(page_size),
         }
     }
@@ -302,10 +302,9 @@ impl ProcessInfo {
         self.peak_commit
     }
 
-    /// Returns process page-fault count when available.
+    /// Returns the process page-fault count.
     #[inline]
-    #[must_use]
-    pub const fn page_faults(self) -> Option<StatCount> {
+    pub const fn page_faults(self) -> StatCount {
         self.page_faults
     }
 

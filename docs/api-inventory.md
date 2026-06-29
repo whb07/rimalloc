@@ -92,7 +92,8 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
 - `StatCount`, `StatTotal`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`,
   `PartialOrd`, and `Ord` typed integer wrappers.
 - `ProcessInfo`: typed process allocator information. Size totals are `None`
-  when the raw process-info API reports zero; page faults always return a count.
+  when the raw process-info API reports zero; `page_faults()` returns a direct
+  count because zero is a valid observed count.
 - `AllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
 - `LayoutError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and

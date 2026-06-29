@@ -399,6 +399,39 @@ mod tests {
     }
 
     #[test]
+    fn heap_byte_allocation_apis_use_alignment_one() {
+        let heap = Heap::new().expect("heap");
+        let zero = heap.allocate_bytes(0).expect("zero heap bytes");
+        assert_eq!(zero.len(), 0);
+        assert_eq!(zero.layout().align(), 1);
+        assert!(zero.is_empty());
+
+        let allocation = heap.allocate_bytes(17).expect("heap bytes");
+        assert_eq!(allocation.len(), 17);
+        assert_eq!(allocation.layout().align(), 1);
+
+        let borrowed = heap.as_ref();
+        let zeroed = borrowed
+            .allocate_zeroed_bytes(19)
+            .expect("borrowed zeroed heap bytes");
+        assert_eq!(zeroed.len(), 19);
+        assert_eq!(zeroed.layout().align(), 1);
+        assert!(zeroed.as_bytes().iter().all(|byte| *byte == 0));
+
+        let main = MainHeap::get().expect("main heap");
+        let main_allocation = main.allocate_bytes(23).expect("main heap bytes");
+        assert_eq!(main_allocation.len(), 23);
+        assert_eq!(main_allocation.layout().align(), 1);
+
+        let main_zeroed = main
+            .allocate_zeroed_bytes(29)
+            .expect("main heap zeroed bytes");
+        assert_eq!(main_zeroed.len(), 29);
+        assert_eq!(main_zeroed.layout().align(), 1);
+        assert!(main_zeroed.as_bytes().iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
     fn maybe_uninit_heap_views_initialize_without_raw_pointer_loop() {
         let heap = Heap::new().expect("heap");
         let mut allocation = heap

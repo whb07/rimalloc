@@ -565,11 +565,16 @@ Affected areas:
 
 Tasks:
 
-- [ ] Consider `Heap::allocate_bytes(len)`.
-- [ ] Consider `Heap::allocate_zeroed_bytes(len)`.
-- [ ] Consider `HeapRef::allocate_bytes(len)` and `HeapRef::allocate_zeroed_bytes(len)` if useful.
-- [ ] Consider matching `MainHeap` convenience APIs after resolving main-heap lifetime shape.
-- [ ] Keep `Layout` APIs for alignment-sensitive callers.
+- [x] Consider `Heap::allocate_bytes(len)`.
+  - Evidence: `Heap::allocate_bytes` allocates an alignment-1 byte block and returns `TryAllocError` for invalid byte layouts.
+- [x] Consider `Heap::allocate_zeroed_bytes(len)`.
+  - Evidence: `Heap::allocate_zeroed_bytes` mirrors the zeroed layout API with alignment 1.
+- [x] Consider `HeapRef::allocate_bytes(len)` and `HeapRef::allocate_zeroed_bytes(len)` if useful.
+  - Evidence: `HeapRef` now exposes both byte APIs so borrowed heap handles can use the same convenience path without taking ownership.
+- [x] Consider matching `MainHeap` convenience APIs after resolving main-heap lifetime shape.
+  - Evidence: `MainHeap` now exposes matching byte APIs returning `'static` heap-tied allocations through `MainHeap::as_ref()`.
+- [x] Keep `Layout` APIs for alignment-sensitive callers.
+  - Evidence: existing `allocate` and `allocate_zeroed` layout APIs are unchanged; byte APIs are alignment-1 wrappers.
 
 ## 23. P3 safe facade: add stats snapshot accessors gradually
 

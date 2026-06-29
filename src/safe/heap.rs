@@ -8,7 +8,7 @@ use core::ptr::NonNull;
 
 use super::{
     AllocError, LayoutError, ResizeError, ResizeErrorKind, StatsError, StatsSnapshot,
-    allocation::dangling_for,
+    TryAllocError, allocation::dangling_for,
 };
 
 type NotSendSync = PhantomData<*mut ()>;
@@ -130,6 +130,12 @@ impl Heap {
         self.as_ref().allocate(layout)
     }
 
+    /// Allocates an uninitialized byte block with alignment 1 from this heap.
+    #[inline]
+    pub fn allocate_bytes(&self, len: usize) -> Result<HeapAllocation<'_>, TryAllocError> {
+        self.as_ref().allocate_bytes(len)
+    }
+
     /// Allocates a zero-initialized byte block from this heap.
     #[inline]
     pub fn allocate_zeroed(
@@ -137,6 +143,15 @@ impl Heap {
         layout: Layout,
     ) -> Result<InitializedHeapAllocation<'_>, AllocError> {
         self.as_ref().allocate_zeroed(layout)
+    }
+
+    /// Allocates a zero-initialized byte block with alignment 1 from this heap.
+    #[inline]
+    pub fn allocate_zeroed_bytes(
+        &self,
+        len: usize,
+    ) -> Result<InitializedHeapAllocation<'_>, TryAllocError> {
+        self.as_ref().allocate_zeroed_bytes(len)
     }
 
     /// Captures a statistics snapshot for this heap.
@@ -178,6 +193,18 @@ impl<'heap> HeapRef<'heap> {
         HeapAllocation::allocate_in(self.ptr, layout, false)
     }
 
+    /// Allocates an uninitialized byte block with alignment 1 from this borrowed heap.
+    #[inline]
+    pub fn allocate_bytes(self, len: usize) -> Result<HeapAllocation<'heap>, TryAllocError> {
+        let layout = Layout::from_size_align(len, 1).map_err(|_| {
+            TryAllocError::Layout(LayoutError {
+                size: len,
+                align: 1,
+            })
+        })?;
+        self.allocate(layout).map_err(TryAllocError::Alloc)
+    }
+
     /// Allocates a zero-initialized byte block from this borrowed heap.
     #[inline]
     pub fn allocate_zeroed(
@@ -185,6 +212,21 @@ impl<'heap> HeapRef<'heap> {
         layout: Layout,
     ) -> Result<InitializedHeapAllocation<'heap>, AllocError> {
         InitializedHeapAllocation::allocate_zeroed_in(self.ptr, layout)
+    }
+
+    /// Allocates a zero-initialized byte block with alignment 1 from this borrowed heap.
+    #[inline]
+    pub fn allocate_zeroed_bytes(
+        self,
+        len: usize,
+    ) -> Result<InitializedHeapAllocation<'heap>, TryAllocError> {
+        let layout = Layout::from_size_align(len, 1).map_err(|_| {
+            TryAllocError::Layout(LayoutError {
+                size: len,
+                align: 1,
+            })
+        })?;
+        self.allocate_zeroed(layout).map_err(TryAllocError::Alloc)
     }
 
     /// Captures a statistics snapshot for this heap.
@@ -261,6 +303,15 @@ impl MainHeap {
         self.as_ref().allocate(layout)
     }
 
+    /// Allocates an uninitialized byte block with alignment 1 from the process main heap.
+    ///
+    /// The returned allocation is tied to the process-global main heap, not to
+    /// this temporary `MainHeap` handle.
+    #[inline]
+    pub fn allocate_bytes(&self, len: usize) -> Result<HeapAllocation<'static>, TryAllocError> {
+        self.as_ref().allocate_bytes(len)
+    }
+
     /// Allocates a zero-initialized byte block from the process main heap.
     ///
     /// The returned allocation is tied to the process-global main heap, not to
@@ -271,6 +322,18 @@ impl MainHeap {
         layout: Layout,
     ) -> Result<InitializedHeapAllocation<'static>, AllocError> {
         self.as_ref().allocate_zeroed(layout)
+    }
+
+    /// Allocates a zero-initialized byte block with alignment 1 from the process main heap.
+    ///
+    /// The returned allocation is tied to the process-global main heap, not to
+    /// this temporary `MainHeap` handle.
+    #[inline]
+    pub fn allocate_zeroed_bytes(
+        &self,
+        len: usize,
+    ) -> Result<InitializedHeapAllocation<'static>, TryAllocError> {
+        self.as_ref().allocate_zeroed_bytes(len)
     }
 
     /// Captures a statistics snapshot for the main heap.

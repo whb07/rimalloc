@@ -16,7 +16,7 @@ EXPORT_FILE_CLASSIFICATION = {
     "src/raw/macros.rs": "malloc-cxx-override",
     "src/raw/posix.rs": "c-abi",
     "src/allocator/arena.rs": "c-abi-internal-classified",
-    "src/bench_diagnostics.rs": "benchmark-diagnostics",
+    "src/allocator/bench_diagnostics.rs": "benchmark-diagnostics",
     "src/allocator/free.rs": "c-abi",
     "src/allocator/heap.rs": "c-abi",
     "src/allocator/init.rs": "runtime-boundary",
@@ -140,8 +140,11 @@ def main() -> int:
 
     build_rs = (ROOT / "build.rs").read_text()
     require(
-        "version_script" in build_rs and "--version-script" in build_rs,
-        "build.rs must emit the Linux cdylib linker version script",
+        "c_abi" in build_rs
+        and "version_script" in build_rs
+        and "rustc-link-arg" in build_rs
+        and "--version-script" in build_rs,
+        "build.rs must gate the Linux cdylib linker version script on the C ABI build mode",
     )
     for pattern in VERSION_SCRIPT_PATTERNS:
         require(

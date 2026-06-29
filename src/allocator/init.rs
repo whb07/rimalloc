@@ -6,7 +6,12 @@
 
 #[cfg(any(
     miri,
-    not(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))
+    not(all(
+        target_os = "linux",
+        any(feature = "tls-shim", not(feature = "std")),
+        target_arch = "x86_64",
+        not(target_env = "musl")
+    ))
 ))]
 use core::cell::Cell;
 use core::ffi::{c_char, c_long, c_void};
@@ -799,18 +804,25 @@ static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(8);
 ))]
 thread_local! {
     static THREAD_ID: Cell<usize> = const { Cell::new(0) };
-    #[cfg(any(miri, not(target_os = "linux")))]
+}
+
+#[cfg(any(
+    miri,
+    not(target_os = "linux"),
+    all(feature = "std", not(feature = "tls-shim"))
+))]
+thread_local! {
     static THEAP_MAIN: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 unsafe extern "C" {
     fn _mi_tls_theap_main_get() -> *mut mi_theap_t;
     #[link_name = "_mi_tls_theap_main_set"]
     fn _mi_tls_theap_main_set_raw(theap: *mut c_void);
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 #[inline(always)]
 unsafe fn _mi_tls_theap_main_set(theap: Option<ThreadHeapPtr>) {
     let theap = theap
@@ -823,6 +835,7 @@ unsafe fn _mi_tls_theap_main_set(theap: Option<ThreadHeapPtr>) {
 #[cfg(all(
     not(miri),
     target_os = "linux",
+    any(feature = "tls-shim", not(feature = "std")),
     target_arch = "x86_64",
     not(target_env = "musl")
 ))]
@@ -844,6 +857,7 @@ unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
 #[cfg(all(
     not(miri),
     target_os = "linux",
+    any(feature = "tls-shim", not(feature = "std")),
     target_arch = "x86_64",
     not(target_env = "musl")
 ))]
@@ -870,6 +884,16 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
     #[cfg(all(
         not(miri),
         target_os = "linux",
+        feature = "std",
+        not(feature = "tls-shim")
+    ))]
+    {
+        THEAP_MAIN.with(Cell::get)
+    }
+    #[cfg(all(
+        not(miri),
+        target_os = "linux",
+        any(feature = "tls-shim", not(feature = "std")),
         target_arch = "x86_64",
         not(target_env = "musl")
     ))]
@@ -879,6 +903,7 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
     #[cfg(all(
         not(miri),
         target_os = "linux",
+        any(feature = "tls-shim", not(feature = "std")),
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
     unsafe {
@@ -900,6 +925,17 @@ pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
     #[cfg(all(
         not(miri),
         target_os = "linux",
+        feature = "std",
+        not(feature = "tls-shim")
+    ))]
+    {
+        let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
+        THEAP_MAIN.with(|slot| slot.set(theap));
+    }
+    #[cfg(all(
+        not(miri),
+        target_os = "linux",
+        any(feature = "tls-shim", not(feature = "std")),
         target_arch = "x86_64",
         not(target_env = "musl")
     ))]
@@ -909,6 +945,7 @@ pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
     #[cfg(all(
         not(miri),
         target_os = "linux",
+        any(feature = "tls-shim", not(feature = "std")),
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
     unsafe {

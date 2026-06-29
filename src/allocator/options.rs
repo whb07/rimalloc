@@ -3,7 +3,10 @@
 // Retains upstream option aliases for C header compatibility.
 #![allow(dead_code, non_camel_case_types, non_upper_case_globals)]
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(any(
+    not(target_os = "linux"),
+    all(feature = "std", not(feature = "tls-shim"))
+))]
 use core::cell::Cell;
 use core::cell::UnsafeCell;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
@@ -553,12 +556,15 @@ static OPTIONS: LockedOptions = LockedOptions(UnsafeCell::new([
     ),
 ]));
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(any(
+    not(target_os = "linux"),
+    all(feature = "std", not(feature = "tls-shim"))
+))]
 thread_local! {
     static recurse: Cell<bool> = const { Cell::new(false) };
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 unsafe extern "C" {
     fn _mi_tls_recurse_get() -> c_int;
     fn _mi_tls_recurse_set(recurse: c_int);
@@ -782,7 +788,7 @@ fn mi_add_stderr_output() {
 
 #[inline(never)]
 fn mi_recurse_enter_prim() -> bool {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
     unsafe {
         if _mi_tls_recurse_get() != 0 {
             false
@@ -791,7 +797,10 @@ fn mi_recurse_enter_prim() -> bool {
             true
         }
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(
+        not(target_os = "linux"),
+        all(target_os = "linux", feature = "std", not(feature = "tls-shim"))
+    ))]
     {
         recurse.with(|slot| {
             if slot.get() {
@@ -817,11 +826,14 @@ fn mi_recurse_enter() -> bool {
 
 #[inline(never)]
 fn mi_recurse_exit_prim() {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
     unsafe {
         _mi_tls_recurse_set(0);
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(
+        not(target_os = "linux"),
+        all(target_os = "linux", feature = "std", not(feature = "tls-shim"))
+    ))]
     {
         recurse.with(|slot| slot.set(false));
     }

@@ -158,13 +158,17 @@ Problem:
 
 Tasks:
 
-- [ ] Decide whether to split into separate crates (`mechanical_mimalloc` Rust facade plus `mechanical_mimalloc_cabi` cdylib/interposition artifact) or keep one crate with explicit features.
-- [ ] If staying in one crate, design feature gates such as `c-abi`, `cxx-overrides`, `tls-shim`, and `interpose` without changing the default safe Rust facade behavior accidentally.
-- [ ] Make `build.rs` compile `src/cxx_new_shim.cpp` only when the selected build mode needs C++ overrides.
-- [ ] Make `build.rs` compile `src/tls_shim.c` / `src/tls_recurse_shim.c` only when the selected build mode needs that TLS model.
-- [ ] Make Linux version-script / exported-symbol setup conditional on the C ABI artifact build mode.
-- [ ] Preserve current cdylib/interposition behavior under the explicit feature/build mode.
-- [ ] Add CI coverage for both the Rust rlib facade mode and the C ABI/interposition mode.
+- [x] Decide whether to split into separate crates (`mechanical_mimalloc` Rust facade plus `mechanical_mimalloc_cabi` cdylib/interposition artifact) or keep one crate with explicit features.
+  - Evidence: stayed in one crate to avoid package churn; Cargo selects cdylib/staticlib artifacts with `cargo rustc`, and features now select the C ABI/interposition build-script work.
+- [x] If staying in one crate, design feature gates such as `c-abi`, `cxx-overrides`, `tls-shim`, and `interpose` without changing the default safe Rust facade behavior accidentally.
+  - Evidence: `Cargo.toml` keeps the default feature set empty, `crate-type = ["rlib"]`, and adds explicit `c-abi`, `cxx-overrides`, `tls-shim`, and aggregate `interpose` features.
+- [x] Make `build.rs` compile `src/cxx_new_shim.cpp` only when the selected build mode needs C++ overrides.
+- [x] Make `build.rs` compile `src/tls_shim.c` / `src/tls_recurse_shim.c` only when the selected build mode needs that TLS model.
+- [x] Make Linux version-script / exported-symbol setup conditional on the C ABI artifact build mode.
+- [x] Preserve current cdylib/interposition behavior under the explicit feature/build mode.
+  - Evidence: CI and feature checks build the release cdylib with `cargo rustc --features interpose --lib --release -- --crate-type cdylib`.
+- [x] Add CI coverage for both the Rust rlib facade mode and the C ABI/interposition mode.
+  - Evidence: `.github/workflows/validation.yml` now has a build-mode coverage step for `cargo check --features std` and the explicit `interpose` cdylib command.
 
 ## 6. P1 API architecture: define formal Tier U for unsafe Rust conveniences
 

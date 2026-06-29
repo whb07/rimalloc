@@ -164,15 +164,28 @@ fn target_supports_tls_shim(target_os: &str) -> bool {
     target_os == "linux"
 }
 
+fn feature_enabled(name: &str) -> bool {
+    env::var_os(format!("CARGO_FEATURE_{name}")).is_some()
+}
+
 fn main() {
     let target_os = required_env("CARGO_CFG_TARGET_OS");
     let target_arch = required_env("CARGO_CFG_TARGET_ARCH");
     let profile = required_env("PROFILE");
+    let c_abi = feature_enabled("C_ABI") || feature_enabled("INTERPOSE");
+    let cxx_overrides = feature_enabled("CXX_OVERRIDES") || feature_enabled("INTERPOSE");
+    let tls_shim = feature_enabled("TLS_SHIM") || feature_enabled("INTERPOSE");
+    let interpose = feature_enabled("INTERPOSE");
+    let std = feature_enabled("STD");
 
     println!("cargo:rerun-if-changed=src/track_shim.c");
     println!("cargo:rerun-if-changed=src/cxx_new_shim.cpp");
     println!("cargo:rerun-if-changed=src/tls_shim.c");
     println!("cargo:rerun-if-changed=src/tls_recurse_shim.c");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_C_ABI");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_CXX_OVERRIDES");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TLS_SHIM");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_INTERPOSE");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_VALGRIND");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TRACK_ASAN");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_SECURE");
@@ -185,15 +198,18 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(mi_internal_c_probe)");
     println!("cargo:rustc-check-cfg=cfg(mi_sanitizer_runtime)");
 
-    if target_os != "windows" && target_supports_cxx_shim(&target_os) {
+    if cxx_overrides && target_os != "windows" && target_supports_cxx_shim(&target_os) {
         compile_cxx_new_shim();
-    } else if target_os != "windows" {
+    } else if cxx_overrides && target_os != "windows" {
         println!("cargo:warning=skipping C++ new/delete shim on unsupported target_os={target_os}");
     }
     if target_os == "linux" {
-        link_linux_cdylib_exports();
+        if c_abi {
+            link_linux_cdylib_exports();
+        }
         let default_fast_override = profile == "release"
             && target_arch == "x86_64"
+            && interpose
             && env::var_os("CARGO_FEATURE_SECURE").is_none()
             && env::var_os("CARGO_FEATURE_GUARDED").is_none()
             && env::var_os("CARGO_FEATURE_TRACK_VALGRIND").is_none()
@@ -201,13 +217,14 @@ fn main() {
         if default_fast_override {
             println!("cargo:rustc-cfg=mi_c_malloc_fast");
         }
-        if target_supports_tls_shim(&target_os) {
+        let needs_c_tls_shim = tls_shim || !std;
+        if needs_c_tls_shim && target_supports_tls_shim(&target_os) {
             compile_tls_shim();
-        } else {
+        } else if needs_c_tls_shim {
             println!("cargo:warning=skipping TLS shim on unsupported target_os={target_os}");
         }
     }
-    if target_os == "macos" && profile == "release" {
+    if target_os == "macos" && profile == "release" && interpose {
         println!("cargo:rustc-cfg=mi_osx_interpose");
     }
 

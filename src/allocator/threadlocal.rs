@@ -25,28 +25,51 @@ pub const MI_TLS_IDX_MASK: usize = (1usize << MI_TLS_IDX_BITS) - 1;
 pub const MI_TLS_IDX_MAX: usize = MI_TLS_IDX_MASK;
 pub const MI_TLS_VERSION_MAX: usize = usize::MAX >> MI_TLS_IDX_BITS;
 
-#[cfg(not(target_os = "linux"))]
-static mi_thread_locals_empty: mi_thread_locals_t = mi_thread_locals_t {
+#[cfg(any(
+    not(target_os = "linux"),
+    all(feature = "std", not(feature = "tls-shim"))
+))]
+struct ThreadLocalsEmpty(mi_thread_locals_t);
+
+#[cfg(any(
+    not(target_os = "linux"),
+    all(feature = "std", not(feature = "tls-shim"))
+))]
+unsafe impl Sync for ThreadLocalsEmpty {}
+
+#[cfg(any(
+    not(target_os = "linux"),
+    all(feature = "std", not(feature = "tls-shim"))
+))]
+static mi_thread_locals_empty: ThreadLocalsEmpty = ThreadLocalsEmpty(mi_thread_locals_t {
     count: 0,
     slots: [mi_tls_slot_t {
         version: 0,
         value: ptr::null_mut(),
     }],
-};
+});
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(any(
+    not(target_os = "linux"),
+    all(feature = "std", not(feature = "tls-shim"))
+))]
 thread_local! {
     pub static mi_thread_locals: core::cell::Cell<*mut mi_thread_locals_t> = const { core::cell::Cell::new(ptr::null_mut()) };
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 unsafe extern "C" {
     static mi_thread_locals_empty: mi_thread_locals_t;
     fn _mi_tls_thread_locals_get() -> *mut mi_thread_locals_t;
     fn _mi_tls_thread_locals_set(tls: *mut mi_thread_locals_t);
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+#[cfg(all(
+    target_os = "linux",
+    any(feature = "tls-shim", not(feature = "std")),
+    target_arch = "x86_64",
+    not(target_env = "musl")
+))]
 #[inline(always)]
 unsafe fn mi_linux_x64_thread_locals_get() -> *mut mi_thread_locals_t {
     let tls: *mut mi_thread_locals_t;
@@ -62,7 +85,12 @@ unsafe fn mi_linux_x64_thread_locals_get() -> *mut mi_thread_locals_t {
     tls
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+#[cfg(all(
+    target_os = "linux",
+    any(feature = "tls-shim", not(feature = "std")),
+    target_arch = "x86_64",
+    not(target_env = "musl")
+))]
 #[inline(always)]
 unsafe fn mi_linux_x64_thread_locals_set(tls: *mut mi_thread_locals_t) {
     unsafe {
@@ -80,11 +108,18 @@ unsafe fn mi_linux_x64_thread_locals_set(tls: *mut mi_thread_locals_t) {
 fn thread_locals_empty_ptr() -> *mut mi_thread_locals_t {
     #[cfg(target_os = "linux")]
     {
-        ptr::addr_of!(mi_thread_locals_empty).cast_mut()
+        #[cfg(any(feature = "tls-shim", not(feature = "std")))]
+        {
+            ptr::addr_of!(mi_thread_locals_empty).cast_mut()
+        }
+        #[cfg(all(feature = "std", not(feature = "tls-shim")))]
+        {
+            ptr::addr_of!(mi_thread_locals_empty.0).cast_mut()
+        }
     }
     #[cfg(not(target_os = "linux"))]
     {
-        ptr::from_ref(&mi_thread_locals_empty).cast_mut()
+        ptr::from_ref(&mi_thread_locals_empty.0).cast_mut()
     }
 }
 
@@ -95,18 +130,27 @@ static mi_thread_locals_version: AtomicUsize = AtomicUsize::new(0);
 
 #[inline]
 fn thread_locals_ptr() -> *mut mi_thread_locals_t {
-    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    #[cfg(all(
+        target_os = "linux",
+        any(feature = "tls-shim", not(feature = "std")),
+        target_arch = "x86_64",
+        not(target_env = "musl")
+    ))]
     unsafe {
         mi_linux_x64_thread_locals_get()
     }
     #[cfg(all(
         target_os = "linux",
+        any(feature = "tls-shim", not(feature = "std")),
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
     {
         unsafe { _mi_tls_thread_locals_get() }
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(
+        not(target_os = "linux"),
+        all(target_os = "linux", feature = "std", not(feature = "tls-shim"))
+    ))]
     {
         mi_thread_locals.with(|slot| {
             let mut tls = slot.get();
@@ -121,18 +165,27 @@ fn thread_locals_ptr() -> *mut mi_thread_locals_t {
 
 #[inline]
 fn set_thread_locals_ptr(tls: *mut mi_thread_locals_t) {
-    #[cfg(all(target_os = "linux", target_arch = "x86_64", not(target_env = "musl")))]
+    #[cfg(all(
+        target_os = "linux",
+        any(feature = "tls-shim", not(feature = "std")),
+        target_arch = "x86_64",
+        not(target_env = "musl")
+    ))]
     unsafe {
         mi_linux_x64_thread_locals_set(tls);
     }
     #[cfg(all(
         target_os = "linux",
+        any(feature = "tls-shim", not(feature = "std")),
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
     unsafe {
         _mi_tls_thread_locals_set(tls);
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(
+        not(target_os = "linux"),
+        all(target_os = "linux", feature = "std", not(feature = "tls-shim"))
+    ))]
     {
         mi_thread_locals.with(|slot| slot.set(tls));
     }

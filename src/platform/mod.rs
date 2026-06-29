@@ -23,7 +23,11 @@ pub mod wasi;
 #[cfg(windows)]
 pub mod windows;
 
-#[cfg(any(miri, not(target_os = "linux")))]
+#[cfg(any(
+    miri,
+    not(target_os = "linux"),
+    all(feature = "std", not(feature = "tls-shim"))
+))]
 use core::cell::Cell;
 use core::ffi::{c_char, c_void};
 use core::ptr;
@@ -104,7 +108,11 @@ pub struct mi_init_done_t;
 
 pub static mi_init_done: mi_init_done_t = mi_init_done_t;
 
-#[cfg(any(miri, not(target_os = "linux")))]
+#[cfg(any(
+    miri,
+    not(target_os = "linux"),
+    all(feature = "std", not(feature = "tls-shim"))
+))]
 thread_local! {
     static TLS_SLOT_DEFAULT: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
     static TLS_SLOT_CACHED: Cell<*mut c_void> = const { Cell::new(ptr::null_mut()) };
@@ -171,7 +179,7 @@ unsafe extern "C" {
     pub fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut c_void;
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 unsafe extern "C" {
     fn _mi_tls_theap_default_get() -> *mut mi_theap_t;
     #[link_name = "_mi_tls_theap_default_set"]
@@ -181,7 +189,7 @@ unsafe extern "C" {
     fn _mi_tls_theap_cached_set_raw(theap: *mut c_void);
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 #[inline(always)]
 unsafe fn _mi_tls_theap_default_set(theap: Option<ThreadHeapPtr>) {
     let theap = theap
@@ -191,7 +199,7 @@ unsafe fn _mi_tls_theap_default_set(theap: Option<ThreadHeapPtr>) {
     unsafe { _mi_tls_theap_default_set_raw(theap) };
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 #[inline(always)]
 unsafe fn _mi_tls_theap_cached_set(theap: Option<ThreadHeapPtr>) {
     let theap = theap
@@ -204,6 +212,7 @@ unsafe fn _mi_tls_theap_cached_set(theap: Option<ThreadHeapPtr>) {
 #[cfg(all(
     not(miri),
     target_os = "linux",
+    any(feature = "tls-shim", not(feature = "std")),
     target_arch = "x86_64",
     not(target_env = "musl")
 ))]
@@ -225,6 +234,7 @@ unsafe fn mi_linux_x64_theap_default_get() -> *mut mi_theap_t {
 #[cfg(all(
     not(miri),
     target_os = "linux",
+    any(feature = "tls-shim", not(feature = "std")),
     target_arch = "x86_64",
     not(target_env = "musl")
 ))]
@@ -245,6 +255,7 @@ unsafe fn mi_linux_x64_theap_default_set(theap: Option<ThreadHeapPtr>) {
 #[cfg(all(
     not(miri),
     target_os = "linux",
+    any(feature = "tls-shim", not(feature = "std")),
     target_arch = "x86_64",
     not(target_env = "musl")
 ))]
@@ -266,6 +277,7 @@ unsafe fn mi_linux_x64_theap_cached_get() -> *mut mi_theap_t {
 #[cfg(all(
     not(miri),
     target_os = "linux",
+    any(feature = "tls-shim", not(feature = "std")),
     target_arch = "x86_64",
     not(target_env = "musl")
 ))]
@@ -419,6 +431,16 @@ pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
         #[cfg(all(
             not(miri),
             target_os = "linux",
+            feature = "std",
+            not(feature = "tls-shim")
+        ))]
+        {
+            TLS_THEAP_DEFAULT.with(Cell::get)
+        }
+        #[cfg(all(
+            not(miri),
+            target_os = "linux",
+            any(feature = "tls-shim", not(feature = "std")),
             target_arch = "x86_64",
             not(target_env = "musl")
         ))]
@@ -428,6 +450,7 @@ pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
         #[cfg(all(
             not(miri),
             target_os = "linux",
+            any(feature = "tls-shim", not(feature = "std")),
             not(all(target_arch = "x86_64", not(target_env = "musl")))
         ))]
         {
@@ -483,6 +506,21 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         #[cfg(all(
             not(miri),
             target_os = "linux",
+            feature = "std",
+            not(feature = "tls-shim")
+        ))]
+        {
+            let theap = TLS_THEAP_CACHED.with(Cell::get);
+            if theap.is_null() {
+                unsafe { __mi_theap_empty() }
+            } else {
+                theap
+            }
+        }
+        #[cfg(all(
+            not(miri),
+            target_os = "linux",
+            any(feature = "tls-shim", not(feature = "std")),
             target_arch = "x86_64",
             not(target_env = "musl")
         ))]
@@ -497,6 +535,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         #[cfg(all(
             not(miri),
             target_os = "linux",
+            any(feature = "tls-shim", not(feature = "std")),
             not(all(target_arch = "x86_64", not(target_env = "musl")))
         ))]
         {
@@ -540,6 +579,15 @@ pub(crate) fn mi_prim_thread_local_default_set(theap: Option<ThreadHeapPtr>) {
         #[cfg(all(
             not(miri),
             target_os = "linux",
+            feature = "std",
+            not(feature = "tls-shim")
+        ))]
+        TLS_THEAP_DEFAULT
+            .with(|cell| cell.set(theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut())));
+        #[cfg(all(
+            not(miri),
+            target_os = "linux",
+            any(feature = "tls-shim", not(feature = "std")),
             target_arch = "x86_64",
             not(target_env = "musl")
         ))]
@@ -549,6 +597,7 @@ pub(crate) fn mi_prim_thread_local_default_set(theap: Option<ThreadHeapPtr>) {
         #[cfg(all(
             not(miri),
             target_os = "linux",
+            any(feature = "tls-shim", not(feature = "std")),
             not(all(target_arch = "x86_64", not(target_env = "musl")))
         ))]
         unsafe {
@@ -569,6 +618,15 @@ pub(crate) fn mi_prim_thread_local_cached_set(theap: Option<ThreadHeapPtr>) {
         #[cfg(all(
             not(miri),
             target_os = "linux",
+            feature = "std",
+            not(feature = "tls-shim")
+        ))]
+        TLS_THEAP_CACHED
+            .with(|cell| cell.set(theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut())));
+        #[cfg(all(
+            not(miri),
+            target_os = "linux",
+            any(feature = "tls-shim", not(feature = "std")),
             target_arch = "x86_64",
             not(target_env = "musl")
         ))]
@@ -578,6 +636,7 @@ pub(crate) fn mi_prim_thread_local_cached_set(theap: Option<ThreadHeapPtr>) {
         #[cfg(all(
             not(miri),
             target_os = "linux",
+            any(feature = "tls-shim", not(feature = "std")),
             not(all(target_arch = "x86_64", not(target_env = "musl")))
         ))]
         unsafe {
@@ -744,7 +803,7 @@ mod tests {
         assert_ne!(tid, child);
     }
 
-    #[cfg(all(target_os = "linux", not(miri)))]
+    #[cfg(all(target_os = "linux", feature = "tls-shim", not(miri)))]
     #[test]
     fn linux_theap_tls_shim_stores_empty_sentinel() {
         unsafe {
@@ -758,7 +817,7 @@ mod tests {
         }
     }
 
-    #[cfg(all(target_os = "linux", not(miri)))]
+    #[cfg(all(target_os = "linux", feature = "tls-shim", not(miri)))]
     #[test]
     fn linux_theap_tls_accessors_map_null_to_empty() {
         unsafe {

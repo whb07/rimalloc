@@ -36,7 +36,7 @@ include = [
 ]
 
 [lib]
-crate-type = ["rlib", "cdylib"]
+crate-type = ["rlib"]
 
 [features]
 # Default features are intentionally empty so Linux cdylib builds can stay
@@ -60,6 +60,16 @@ compare = []
 # Enable benchmark-only hotspot counters. This is intended for local profiling
 # builds and is compiled out unless explicitly requested.
 bench-diagnostics = []
+# Enable build-script setup for C ABI artifacts. Cargo crate types are selected
+# by the build command; use `cargo rustc --features interpose --lib -- --crate-type cdylib`
+# for the malloc-interposing shared library.
+c-abi = []
+# Compile and link the C++ operator new/delete override shim.
+cxx-overrides = ["c-abi"]
+# Compile and link the Linux initial-exec TLS shim.
+tls-shim = ["c-abi"]
+# Restore the full C ABI/interposition artifact build mode.
+interpose = ["c-abi", "cxx-overrides", "tls-shim"]
 # Expose translated implementation modules through `raw` for repository
 # internal audits while the facade is being narrowed. This is not a public API.
 unstable-raw-internals = []

@@ -1285,7 +1285,7 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
 }
 
 #[test]
-fn default_linux_malloc_override_uses_c_tls_fast_path() {
+fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
@@ -1309,10 +1309,14 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         .expect("read src/allocator/threadlocal.rs");
 
     assert!(
-        cargo_toml.contains("crate-type = [\"rlib\", \"cdylib\"]")
+        cargo_toml.contains("crate-type = [\"rlib\"]")
+            && cargo_toml.contains("c-abi = []")
+            && cargo_toml.contains("cxx-overrides = [\"c-abi\"]")
+            && cargo_toml.contains("tls-shim = [\"c-abi\"]")
+            && cargo_toml.contains("interpose = [\"c-abi\", \"cxx-overrides\", \"tls-shim\"]")
             && cargo_toml.contains("lto = \"fat\"")
             && cargo_toml.contains("codegen-units = 1"),
-        "release builds should produce the benchmark cdylib directly with one optimized codegen unit"
+        "ordinary builds should stay rlib-first while the explicit interpose feature restores the optimized cdylib artifact mode"
     );
     assert!(
         lib_rs.contains("not(feature = \"std\")")
@@ -1386,12 +1390,18 @@ fn default_linux_malloc_override_uses_c_tls_fast_path() {
         "dynamic thread-local cleanup should skip the lock path when no dynamic TLS slots were allocated"
     );
     assert!(
-        build_rs.contains("target_arch == \"x86_64\"")
+        build_rs.contains("let interpose = feature_enabled(\"INTERPOSE\")")
+            && build_rs.contains("let cxx_overrides = feature_enabled(\"CXX_OVERRIDES\")")
+            && build_rs.contains("let tls_shim = feature_enabled(\"TLS_SHIM\")")
+            && build_rs.contains("if cxx_overrides")
+            && build_rs.contains("let needs_c_tls_shim = tls_shim || !std")
+            && build_rs.contains("if needs_c_tls_shim")
+            && build_rs.contains("target_arch == \"x86_64\"")
             && build_rs.contains("cargo:rustc-cfg=mi_c_malloc_fast")
             && build_rs.contains("src/tls_shim.c")
             && build_rs.contains("src/tls_recurse_shim.c")
             && build_rs.contains("ar.arg(\"crs\").arg(&lib).arg(&tls_obj).arg(&recurse_obj);"),
-        "assembly malloc fast override must be limited to the supported target"
+        "assembly malloc fast override must be limited to the explicit interpose build mode and supported target"
     );
     assert!(
         override_rs.contains("#[unsafe(naked)]")
@@ -3489,8 +3499,9 @@ fn linux_cdylib_export_script_declares_allocator_symbols() {
         .expect("read build.rs");
 
     assert!(
-        build_rs.contains("cargo:rustc-link-arg=-Wl,--version-script="),
-        "Linux builds should pass the allocator export script through the link step"
+        build_rs.contains("if c_abi")
+            && build_rs.contains("cargo:rustc-link-arg=-Wl,--version-script="),
+        "Linux C ABI artifact builds should pass the allocator export script through the cdylib link step"
     );
     assert!(
         build_rs.contains("mi_*;") && build_rs.contains("local:\n    *;"),

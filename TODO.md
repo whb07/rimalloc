@@ -721,12 +721,19 @@ Tasks:
 
 ## 29. Final validation
 
-- [ ] Run focused tests added for zero-size allocation and `mi_good_size(0)`.
-- [ ] Run atomic wrapper/concurrency tests after ordering changes.
-- [ ] Run allocator boundary tests in debug and release with `--features std`.
-- [ ] Run API inventory, safe-boundary, safe-docs, unsafe-audit, atomic-ordering-audit, pointer-provenance-audit, and no-allocation audit scripts after tooling changes.
-- [ ] Run relevant benchmarks for `mi_malloc`/`mi_free` hot paths if the fast path is changed.
-- [ ] Run `cargo fmt --all`.
-- [ ] Run `cargo clippy --workspace --all-targets --all-features`.
-- [ ] Run `cargo test --workspace --all-targets --all-features`.
-- [ ] Record any unrelated blocker explicitly in this file before marking the checklist complete.
+- [x] Run focused tests added for zero-size allocation and `mi_good_size(0)`.
+  - Evidence: `cargo test --features std --test allocation_boundary_cases zero_size -- --nocapture`.
+- [x] Run atomic wrapper/concurrency tests after ordering changes.
+  - Evidence: `cargo test --features std types::atomic -- --nocapture`.
+- [x] Run allocator boundary tests in debug and release with `--features std`.
+  - Evidence: `cargo test --features std --test allocation_boundary_cases -- --nocapture` and `cargo test --release --features std --test allocation_boundary_cases -- --nocapture`.
+- [x] Run API inventory, safe-boundary, safe-docs, unsafe-audit, atomic-ordering-audit, pointer-provenance-audit, and no-allocation audit scripts after tooling changes.
+  - Evidence: `scripts/check-api-inventory.py`, `scripts/check-safe-boundary.py`, `scripts/check-safe-docs.py`, `scripts/check-unsafe-audit.py`, `scripts/check-atomic-ordering-audit.py`, `scripts/check-pointer-provenance-audit.py`, and `cargo test --features "std unstable-raw-internals" --test no_allocation_critical_paths -- --nocapture`.
+- [x] Run relevant benchmarks for `mi_malloc`/`mi_free` hot paths if the fast path is changed.
+  - Evidence: `MIMALLOC_HOTPATH_SAMPLE_SIZE=10 MIMALLOC_HOTPATH_NRESAMPLES=1000 cargo bench --features "std bench" --bench hotpath -- mechanical_mimalloc/64`.
+  - Observation: the command completed successfully; Criterion reported a saved-baseline regression for `hotpath/free_only/mechanical_mimalloc/64`, while the final TODO slice did not change the `mi_free` fast path.
+- [x] Run `cargo fmt --all`.
+- [x] Run `cargo clippy --workspace --all-targets --all-features`.
+- [x] Run `cargo test --workspace --all-targets --all-features`.
+- [x] Record any unrelated blocker explicitly in this file before marking the checklist complete.
+  - Evidence: no unrelated blockers were encountered.

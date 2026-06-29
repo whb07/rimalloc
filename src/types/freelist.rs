@@ -43,6 +43,8 @@ impl ThreadFreeWord {
 
         #[cfg(not(miri))]
         {
+            // PROVENANCE[AUDIT:packed-thread-free-word]: the word was formed
+            // from a block pointer plus the low ownership bit in this type.
             ptr_val as *mut mi_block_t
         }
     }
@@ -81,6 +83,8 @@ impl ThreadFreeWord {
     pub(crate) fn from_parts(head: Option<BlockPtr>, owned: ThreadFreeOwner) -> Self {
         let ptr_val = match head {
             Some(ptr) => {
+                // PROVENANCE[AUDIT:packed-thread-free-word]: expose only the
+                // block address bits needed for the xthread_free packed word.
                 let val = ptr_exposed_addr(ptr.as_ptr());
                 crate::mi_assert_internal!((val & Self::OWNED_BIT) == 0);
                 crate::provenance::remember_address(val, ptr.as_ptr());

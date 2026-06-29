@@ -475,11 +475,16 @@ Problem:
 
 Tasks:
 
-- [ ] Adopt stable operation IDs such as `SAFETY[AUDIT:<id>]` for unsafe blocks and other audited operations.
-- [ ] Make the unsafe audit script verify every unsafe block has a `SAFETY[AUDIT:<id>]` marker or an explicit allowed reason.
-- [ ] Make audit docs list each `<id>` exactly once with invariant notes and code paths.
-- [ ] Apply similar operation-level checks to atomic ordering and pointer-provenance-sensitive operations.
-- [ ] Add migration steps so this can be rolled out incrementally without blocking unrelated work.
+- [x] Adopt stable operation IDs such as `SAFETY[AUDIT:<id>]` for unsafe blocks and other audited operations.
+  - Evidence: source markers now cover migrated unsafe callback operations, the central atomic memory-order mapping, and the packed thread-free pointer/provenance conversion.
+- [x] Make the unsafe audit script verify every unsafe block has a `SAFETY[AUDIT:<id>]` marker or an explicit allowed reason.
+  - Evidence: `scripts/check-unsafe-audit.py` enforces nearby `SAFETY[AUDIT:<id>]` markers for migrated unsafe files and keeps legacy unsafe files under explicit file-level migration coverage until they are moved into `MIGRATED_UNSAFE_FILES`.
+- [x] Make audit docs list each `<id>` exactly once with invariant notes and code paths.
+  - Evidence: `UNSAFE_AUDIT.md`, `ATOMIC_ORDERING_AUDIT.md`, and `POINTER_PROVENANCE_AUDIT.md` now include operation ID sections, and the scripts reject missing or duplicate doc IDs.
+- [x] Apply similar operation-level checks to atomic ordering and pointer-provenance-sensitive operations.
+  - Evidence: `scripts/check-atomic-ordering-audit.py` checks `ORDERING[AUDIT:<id>]` markers, and `scripts/check-pointer-provenance-audit.py` checks `PROVENANCE[AUDIT:<id>]` markers.
+- [x] Add migration steps so this can be rolled out incrementally without blocking unrelated work.
+  - Evidence: each audit doc now has migration guidance for moving files from file-level review to operation-level review, and the scripts retain path-alias compatibility for the historical audit structure.
 
 ## 19. P2 safe docs tooling: require enum variant docs
 

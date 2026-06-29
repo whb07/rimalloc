@@ -9,6 +9,16 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "ATOMIC_ORDERING_AUDIT.md"
+ORDERING_ID_RE = re.compile(r"ORDERING\[AUDIT:([a-z0-9_.-]+)\]")
+PATH_ALIASES = {
+    "src/platform/os.rs": ["src/os.rs"],
+    "src/safe/mod.rs": ["src/safe.rs"],
+    "src/types/atomic.rs": ["src/core_types/atomic_wrappers.rs"],
+    "src/types/atomic/concurrency_models.rs": [
+        "src/core_types/atomic_wrappers/concurrency_models.rs"
+    ],
+    "src/types/atomic/tests.rs": ["src/core_types/atomic_wrappers/tests.rs"],
+}
 
 ATOMIC_RS_REQUIRED_SNIPPETS = [
     "mi_memory_order_e::mi_memory_order_relaxed => Ordering::Relaxed",
@@ -56,6 +66,42 @@ def rust_files_with_orderings() -> set[str]:
     return files
 
 
+def audit_path_candidates(path: str) -> list[str]:
+    candidates = [path]
+    candidates.extend(PATH_ALIASES.get(path, []))
+    prefixes = {
+        "src/allocator/": "src/",
+        "src/internal/": "src/",
+        "src/platform/": "src/prim/",
+        "src/raw/": "src/alloc_override.rs",
+    }
+    for old, new in prefixes.items():
+        if path.startswith(old):
+            if new.endswith(".rs"):
+                candidates.append(new)
+            else:
+                candidates.append(new + path.removeprefix(old))
+    return candidates
+
+
+def audit_mentions_path(audit_text: str, path: str) -> bool:
+    return any(candidate in audit_text for candidate in audit_path_candidates(path))
+
+
+def audit_id_counts(text: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for audit_id in ORDERING_ID_RE.findall(text):
+        counts[audit_id] = counts.get(audit_id, 0) + 1
+    return counts
+
+
+def source_audit_ids() -> set[str]:
+    ids: set[str] = set()
+    for path in (ROOT / "src").rglob("*.rs"):
+        ids.update(ORDERING_ID_RE.findall(path.read_text()))
+    return ids
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
@@ -64,13 +110,15 @@ def require(condition: bool, message: str) -> None:
 def main() -> int:
     audit_text = AUDIT.read_text()
     found = rust_files_with_orderings()
-    missing = sorted(path for path in found if path not in audit_text)
+    doc_ids = audit_id_counts(audit_text)
+    ids_in_source = source_audit_ids()
+    missing = sorted(path for path in found if not audit_mentions_path(audit_text, path))
     require(
         not missing,
         f"{AUDIT.name} is missing atomic-ordering source entries: {', '.join(missing)}",
     )
     for path in sorted(found):
-        require(path in audit_text, f"{path} is not mentioned in {AUDIT.name}")
+        require(audit_mentions_path(audit_text, path), f"{path} is not mentioned in {AUDIT.name}")
 
     atomic_rs = (ROOT / "src/internal/atomic.rs").read_text()
     for snippet in ATOMIC_RS_REQUIRED_SNIPPETS:
@@ -80,8 +128,22 @@ def main() -> int:
     for snippet in C_ATOMIC_REQUIRED_SNIPPETS:
         require(snippet in c_atomic, f"missing C atomic baseline snippet: {snippet}")
 
+    missing_doc_ids = sorted(audit_id for audit_id in ids_in_source if audit_id not in doc_ids)
+    duplicate_doc_ids = sorted(audit_id for audit_id, count in doc_ids.items() if count != 1)
+    require(
+        not missing_doc_ids,
+        f"{AUDIT.name} is missing operation ID entries: {', '.join(missing_doc_ids)}",
+    )
+    require(
+        not duplicate_doc_ids,
+        f"{AUDIT.name} must list each operation ID exactly once: {', '.join(duplicate_doc_ids)}",
+    )
+
     ordering_mentions = len(re.findall(r"Ordering::", "\n".join((ROOT / path).read_text() for path in found)))
-    print(f"ok: atomic ordering audit covers {len(found)} source files and {ordering_mentions} direct Ordering uses")
+    print(
+        f"ok: atomic ordering audit covers {len(found)} source files and "
+        f"{ordering_mentions} direct Ordering uses; {len(ids_in_source)} operation IDs checked"
+    )
     return 0
 
 

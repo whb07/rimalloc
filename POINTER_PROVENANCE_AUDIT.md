@@ -125,10 +125,28 @@ Per-file review:
 - `src/types.rs`: max-allocation constants and C layout declarations preserve
   mimalloc's size limits and ABI shapes.
 
+Operation IDs:
+
+- `PROVENANCE[AUDIT:packed-thread-free-word]`: `src/types/freelist.rs`
+  converts between a block pointer and the packed `xthread_free` word. Only the
+  low ownership bit is mixed with the exposed block address, null remains the
+  zero word, and Miri builds resolve remembered addresses before rebuilding a raw
+  pointer.
+
+Migration:
+
+- Operation-level enforcement is incremental. `scripts/check-pointer-provenance-audit.py`
+  verifies every source `PROVENANCE[AUDIT:<id>]` is listed exactly once here
+  while preserving the existing file-level pointer/arithmetic inventory.
+- New pointer/integer round trips, raw alignment arithmetic, or packed-pointer
+  conversions should add a stable operation ID and invariant entry before the
+  surrounding file is treated as migrated from file-level to operation-level
+  coverage.
+
 Validation:
 
 - `scripts/check-pointer-provenance-audit.py` verifies every `src/` file with
-  pointer/arithmetic patterns is listed here.
+  pointer/arithmetic patterns is listed here and checks operation IDs.
 - `cargo test` covers public boundary cases including overflow, alignment,
   usable-size, heap/theap ownership, and lifecycle tests.
 - `scripts/check-behavioral-parity.py` compares C and Rust behavior for

@@ -198,6 +198,8 @@ macro_rules! mi_atomic_do_once {
 }
 
 #[inline]
+// ORDERING[AUDIT:atomic-memory-order-map]: preserve the C mi_memory_order_e
+// mapping in one place so callers cannot invent local ordering translations.
 fn load_order(order: mi_memory_order_e) -> Ordering {
     match order {
         mi_memory_order_e::mi_memory_order_relaxed => Ordering::Relaxed,

@@ -72,11 +72,28 @@ supported default matrix:
   stores and acquire loads; version counters are relaxed because they are advisory
   freshness checks, matching their non-owning role.
 
+Operation IDs:
+
+- `ORDERING[AUDIT:atomic-memory-order-map]`: `src/internal/atomic.rs` maps
+  `mi_memory_order_e` to Rust `Ordering` values in the central load/store/RMW/CAS
+  helper functions. This preserves the C `atomic.h` contract and keeps translated
+  call sites from inventing local order conversions.
+
+Migration:
+
+- Operation-level enforcement is incremental. `scripts/check-atomic-ordering-audit.py`
+  verifies every source `ORDERING[AUDIT:<id>]` is listed exactly once here while
+  preserving the existing source-file and required-snippet checks.
+- New direct `Ordering::` use should either route through the existing typed
+  wrappers or add a stable operation ID with a short invariant entry here. Files
+  can then be moved from file-level review to operation-level review without
+  blocking unrelated allocator work.
+
 Validation:
 
 - `scripts/check-atomic-ordering-audit.py` verifies every `src/` file with direct
-  `Ordering::` usage is listed here, and checks the central C-to-Rust helper
-  ordering mappings in `src/atomic.rs`.
+  `Ordering::` usage is listed here, checks operation IDs, and checks the central
+  C-to-Rust helper ordering mappings in `src/atomic.rs`.
 - `cargo test` exercises the cross-thread allocation/free, abandoned-page,
   process/thread lifecycle, callback reentrancy, and stress workloads that depend
   on these orderings.

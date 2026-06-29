@@ -163,11 +163,59 @@ Per-file review:
   `src/core_types/scalar/tests.rs`, and
   `src/core_types/validation/tests.rs`.
 
+Operation IDs:
+
+- `SAFETY[AUDIT:c-header-macro-reentry]`: `src/ffi/abi.rs` exposes C header
+  compatibility macros whose expansion may reenter allocator APIs. The macros
+  preserve C surface behavior and keep unsafety at the raw ABI call boundary.
+- `SAFETY[AUDIT:global-alloc]`: `src/lib.rs` implements `GlobalAlloc` for the
+  zero-sized `MiMalloc` facade. Rust's allocator contract supplies the layout,
+  pointer, and ownership preconditions, and each operation forwards directly to
+  the matching allocator entry point.
+- `SAFETY[AUDIT:owned-allocation]`: `src/safe/allocation.rs` owns non-zero
+  allocations through move-only wrappers. Slice views and copies are bounded by
+  the stored layout, and `Drop` releases live blocks exactly once.
+- `SAFETY[AUDIT:panic-boundary]`: `src/lib.rs` no-std panic handling and abort
+  declarations terminate instead of unwinding across allocator or C ABI
+  boundaries.
+- `SAFETY[AUDIT:raw-auto-trait]`: `src/types/constants.rs` implements raw
+  auto-traits only for immutable sentinel metadata values whose mutation remains
+  protected by allocator ownership, atomics, or locks.
+- `SAFETY[AUDIT:raw-macro-boundary]`: `src/ffi/abi.rs` and
+  `src/ffi/headers.rs` expose raw C-header macro compatibility without adding
+  Rust ownership guarantees; callers inherit the documented raw ABI contract.
+- `SAFETY[AUDIT:safe-heap]`: `src/safe/heap.rs` ties heap allocations to the
+  owning heap lifetime, prevents main-heap deletion through owned heap handles,
+  and keeps raw heap/block calls behind wrapper ownership checks.
+- `SAFETY[AUDIT:safe-process-info]`: `src/safe/stats.rs` passes valid local
+  out-pointers to process-info collection and copies returned counters into
+  typed Rust values before exposing them.
+- `SAFETY[AUDIT:safe-stats]`: `src/safe/stats.rs` initializes stats buffers
+  before use, passes valid writable output slices to JSON formatting, and
+  exposes only typed totals/counts to callers.
+- `SAFETY[AUDIT:unsafe-callback]`: `src/ffi/callbacks.rs` owns the unsafe
+  callback registration/trampoline boundary. The registered argument pointer is
+  created from the borrowed closure held by the guard, remains valid until
+  `Drop` restores the previous process-global callback state, and trampoline
+  entry catches Rust panics before returning through the C ABI where `std` or
+  tests permit panic containment.
+
+Migration:
+
+- Operation-level enforcement is incremental. `scripts/check-unsafe-audit.py`
+  verifies every source `SAFETY[AUDIT:<id>]` is listed exactly once here and
+  currently requires every unsafe operation in `src/ffi/callbacks.rs` to carry a
+  nearby ID marker.
+- Legacy unsafe files remain under the per-file review above until they are
+  moved into the script's migrated-file set. Migrating a file means adding
+  stable operation IDs near unsafe blocks, documenting each ID in this section,
+  and then adding the file to `MIGRATED_UNSAFE_FILES`.
+
 Validation:
 
 - `scripts/check-unsafe-audit.py` verifies every `src/` file containing `unsafe`
-  is listed here and that the audit references the related atomic-ordering and
-  tracked-mode follow-up audits.
+  is listed here, checks migrated operation IDs, and verifies that the audit
+  references the related atomic-ordering and tracked-mode follow-up audits.
 - `cargo test` exercises the public ABI, heap/theap/subprocess lifecycle,
   cross-thread free, abandoned-page, statistics, and callback reentrancy paths.
 - `scripts/check-behavioral-parity.py` compares the same supported-matrix

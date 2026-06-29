@@ -109,6 +109,24 @@ unsafe fn realloc_roundtrip() -> bool {
     true
 }
 
+unsafe fn calloc_free_roundtrip() -> bool {
+    let p = unsafe { mi_calloc(4, 16) };
+    if p.is_null() {
+        return false;
+    }
+    unsafe { mi_free(p) };
+    true
+}
+
+unsafe fn zalloc_aligned_free_roundtrip() -> bool {
+    let p = unsafe { mi_zalloc_aligned(128, 64) };
+    if p.is_null() || !(p as usize).is_multiple_of(64) {
+        return false;
+    }
+    unsafe { mi_free(p) };
+    true
+}
+
 unsafe fn heap_lifecycle_roundtrip() -> bool {
     let heap = unsafe { mi_heap_new() };
     if heap.is_null() {
@@ -138,6 +156,8 @@ fn allocator_critical_paths_do_not_use_rust_global_allocator() {
     assert_no_global_allocations("mi_malloc/mi_free", malloc_free_roundtrip);
     assert_no_global_allocations("mi_malloc_small/mi_free_small", small_malloc_free_roundtrip);
     assert_no_global_allocations("mi_malloc_aligned/mi_free", aligned_malloc_free_roundtrip);
+    assert_no_global_allocations("mi_calloc/mi_free", calloc_free_roundtrip);
     assert_no_global_allocations("mi_rezalloc/mi_free", realloc_roundtrip);
+    assert_no_global_allocations("mi_zalloc_aligned/mi_free", zalloc_aligned_free_roundtrip);
     assert_no_global_allocations("mi_heap_new/mi_heap_delete", heap_lifecycle_roundtrip);
 }

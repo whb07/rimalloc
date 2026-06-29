@@ -522,11 +522,16 @@ Problem:
 
 Tasks:
 
-- [ ] Keep the regex guard as a fast smoke test.
-- [ ] Add a critical-path manifest that maps functions/entrypoints, not only files.
-- [ ] Expand runtime global-allocator sentinel coverage for public hot paths.
-- [ ] Fail if critical functions start calling non-whitelisted helpers known to allocate.
-- [ ] Keep false-positive handling explicit and local.
+- [x] Keep the regex guard as a fast smoke test.
+  - Evidence: `scripts/check-no-allocation-audit.py` still scans critical files for obvious Rust allocation constructs before deeper entrypoint checks.
+- [x] Add a critical-path manifest that maps functions/entrypoints, not only files.
+  - Evidence: `NO_ALLOCATION_CRITICAL_PATHS.json` maps public hot-path entrypoints such as `mi_malloc`, `mi_calloc`, `mi_zalloc_aligned`, and `mi_free` to owning source files.
+- [x] Expand runtime global-allocator sentinel coverage for public hot paths.
+  - Evidence: `tests/no_allocation_critical_paths.rs` now covers `mi_calloc` and `mi_zalloc_aligned` in addition to the existing malloc/free/realloc/heap paths.
+- [x] Fail if critical functions start calling non-whitelisted helpers known to allocate.
+  - Evidence: the no-allocation checker extracts manifest entrypoint bodies and rejects calls to known allocating helpers such as `Vec::`, `String::`, `CString::`, `format!`, `std::alloc`, and `alloc_zeroed`.
+- [x] Keep false-positive handling explicit and local.
+  - Evidence: path compatibility aliases and allocating-helper rules live in `scripts/check-no-allocation-audit.py`; entrypoint scope lives in `NO_ALLOCATION_CRITICAL_PATHS.json`.
 
 ## 21. P3 safe facade convenience: byte allocation constructors
 

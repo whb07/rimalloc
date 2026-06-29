@@ -1,0 +1,40 @@
+{
+  "critical_paths": [
+    {
+      "entrypoint": "mi_malloc",
+      "file": "src/allocator/alloc.rs"
+    },
+    {
+      "entrypoint": "mi_malloc_small",
+      "file": "src/allocator/alloc.rs"
+    },
+    {
+      "entrypoint": "mi_calloc",
+      "file": "src/allocator/alloc.rs"
+    },
+    {
+      "entrypoint": "mi_rezalloc",
+      "file": "src/allocator/alloc.rs"
+    },
+    {
+      "entrypoint": "mi_heap_malloc",
+      "file": "src/allocator/alloc.rs"
+    },
+    {
+      "entrypoint": "mi_zalloc_aligned",
+      "file": "src/allocator/aligned.rs"
+    },
+    {
+      "entrypoint": "mi_free",
+      "file": "src/allocator/free.rs"
+    },
+    {
+      "entrypoint": "mi_free_small",
+      "file": "src/allocator/free.rs"
+    },
+    {
+      "entrypoint": "mi_heap_delete",
+      "file": "src/allocator/heap.rs"
+    }
+  ]
+}

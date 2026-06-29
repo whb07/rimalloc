@@ -26,6 +26,8 @@ dynamic TLS storage follows the C baseline's `mi_rezalloc`,
   heap allocation. Dynamic subprocess metadata uses `_mi_meta_zalloc` and
   `_mi_meta_free`; dynamic TLS tables use mimalloc's `mi_rezalloc`,
   `mi_zalloc_aligned`, and `mi_free`, matching `mimalloc-3.3.2/src/threadlocal.c`.
+  Current Rust module paths for those lifecycle/TLS checks include
+  `src/allocator/init.rs` and `src/allocator/threadlocal.rs`.
 - `src/bitmap.rs`, `src/page_map.rs`, `src/internal.rs`, and `src/os.rs`: shared
   metadata helpers operate on caller-provided or OS/mimalloc-owned memory and do
   not allocate through Rust's global allocator.
@@ -48,7 +50,9 @@ or deallocation while representative critical mimalloc APIs execute:
 - `mi_malloc`/`mi_free`
 - `mi_malloc_small`/`mi_free_small`
 - `mi_malloc_aligned`/`mi_free`
+- `mi_calloc`/`mi_free`
 - `mi_rezalloc`/`mi_free`
+- `mi_zalloc_aligned`/`mi_free`
 - `mi_heap_new`/`mi_heap_delete`
 
 This is intentionally a recursion detector for Rust global allocator use, not a
@@ -56,9 +60,14 @@ ban on mimalloc allocating pages or metadata for its own operation.
 
 ## Guardrail
 
-`scripts/check-no-allocation-audit.py` checks this audit, the runtime guard
-test, and the reviewed critical source files. The full validation for this audit
-is:
+`NO_ALLOCATION_CRITICAL_PATHS.json` maps public critical entrypoints to the
+source files that own them: `mi_malloc`, `mi_malloc_small`, `mi_calloc`,
+`mi_rezalloc`, `mi_heap_malloc`, `mi_zalloc_aligned`, `mi_free`,
+`mi_free_small`, and `mi_heap_delete`. `scripts/check-no-allocation-audit.py`
+checks this manifest, this audit, the runtime guard test, the reviewed critical
+source files, regex smoke-test allocation constructs, and direct calls from
+manifest entrypoints to known allocating helpers. The full validation for this
+audit is:
 
 ```sh
 python3 scripts/check-no-allocation-audit.py

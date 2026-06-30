@@ -248,19 +248,36 @@ Validated remaining issues:
     completed.
   - Verify: docs and release checklist use the same staticlib status.
 
-- [ ] If staticlib is production-supported, reduce accidental symbol leakage.
-  - [ ] Audit every `_mi_*` static archive export currently covered by the
+- [x] If staticlib is production-supported, reduce accidental symbol leakage.
+  - [x] Audit every `_mi_*` static archive export currently covered by the
         prefix classification.
-  - [ ] Determine which internal C-shaped symbols are truly required by the
+        Not applicable for this release: staticlib is preview-only.
+  - [x] Determine which internal C-shaped symbols are truly required by the
         static archive link model.
-  - [ ] Hide, make Rust-private, or prefix internal symbols that do not need
+        Not applicable for this release: no production static archive symbol
+        contract is frozen.
+  - [x] Hide, make Rust-private, or prefix internal symbols that do not need
         external linkage.
-  - [ ] Add a static archive symbol manifest with expected public and internal
+        Not applicable for this release: static archive exports remain
+        preview-only and explicitly unstable.
+  - [x] Add a static archive symbol manifest with expected public and internal
         groups.
-  - [ ] Fail CI if a new `_mi_*`, `mi_*`, malloc-family, or C++ symbol appears
+        Not applicable for this release: checked static manifests are required
+        before changing the staticlib policy to production-supported.
+  - [x] Fail CI if a new `_mi_*`, `mi_*`, malloc-family, or C++ symbol appears
         without classification.
+        Existing static symbol classification remains checked by
+        `scripts/check-public-symbols.py`.
+  - Evidence: staticlib is preview-only in README, `docs/abi.md`,
+    `docs/ffi-linking.md`, `docs/release.md`, and `docs/compatibility.md`.
+    Production static archive leakage reduction and checked static manifests
+    are deferred until the release policy changes from preview-only to
+    production-supported; the current static archive classification gate remains
+    `scripts/check-public-symbols.py`.
   - Verify: `scripts/check-public-symbols.py` plus the new static manifest
     check.
+    Static manifest check not applicable until staticlib is
+    production-supported.
 
 - [ ] Add static link collision tests.
   - [ ] Build a C app that links the Rust staticlib and another object/library

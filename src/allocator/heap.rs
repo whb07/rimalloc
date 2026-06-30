@@ -87,7 +87,7 @@ unsafe fn mi_heap_set_numa_affinity_typed(heap: HeapPtr, numa_node: crate::core_
 ///
 /// `heap` may be null. A non-null heap must be live and its stats must not be
 /// concurrently mutated outside the allocator synchronization rules.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_main(heap: *mut mi_heap_t) {
     unsafe {
         let Some(heap) = BorrowedHeap::from_lookup_raw(heap) else {
@@ -389,7 +389,7 @@ pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_vo
 ///
 /// `heap` may be null to select the main heap. Non-null heap and pointer
 /// arguments must remain valid for allocator ownership inspection.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_void) -> bool {
     let heap = if heap.is_null() {
         // SAFETY: null heap selects the main heap by API contract.
@@ -428,6 +428,12 @@ unsafe fn mi_heap_check_owned_borrowed(heap: BorrowedHeap, p: *const c_void) -> 
     // SAFETY: forwards this API's ownership-inspection contract.
     core::ptr::eq(heap.ptr().as_ptr().cast_const(), unsafe { mi_heap_of(p) })
 }
+
+#[cfg(feature = "c-abi")]
+const _: unsafe extern "C" fn(*mut mi_heap_t) = mi_heap_stats_merge_to_main;
+
+#[cfg(feature = "c-abi")]
+const _: unsafe extern "C" fn(*mut mi_heap_t, *const c_void) -> bool = mi_heap_check_owned;
 
 /// # Safety
 ///

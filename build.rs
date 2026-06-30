@@ -2,6 +2,11 @@ use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
+const PUBLIC_HEADERS: [&str; 2] = [
+    "mimalloc-3.3.2/include/mimalloc.h",
+    "mimalloc-3.3.2/include/mimalloc-stats.h",
+];
+
 fn required_env(name: &str) -> String {
     env::var(name).unwrap_or_else(|err| {
         panic!("Cargo did not provide required build environment variable {name}: {err}")
@@ -121,10 +126,76 @@ fn compile_tls_shim() {
     println!("cargo:rustc-link-lib=static=mechanical_mimalloc_tls_shim");
 }
 
+fn without_c_comments(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    let mut in_block = false;
+    let mut in_line = false;
+
+    while let Some(ch) = chars.next() {
+        if in_block {
+            if ch == '*' && chars.peek() == Some(&'/') {
+                chars.next();
+                in_block = false;
+            }
+            continue;
+        }
+        if in_line {
+            if ch == '\n' {
+                in_line = false;
+                output.push('\n');
+            }
+            continue;
+        }
+        if ch == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            in_block = true;
+            continue;
+        }
+        if ch == '/' && chars.peek() == Some(&'/') {
+            chars.next();
+            in_line = true;
+            continue;
+        }
+        output.push(ch);
+    }
+
+    output
+}
+
+fn public_mi_symbols_from_headers() -> Vec<String> {
+    let mut symbols = Vec::new();
+    for header in PUBLIC_HEADERS {
+        let text = std::fs::read_to_string(header)
+            .unwrap_or_else(|err| panic!("failed to read public header {header}: {err}"));
+        for line in without_c_comments(&text).lines() {
+            if !line.contains("mi_decl") {
+                continue;
+            }
+            for token in line.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_')) {
+                if token.starts_with("mi_")
+                    && !token.starts_with("mi_decl")
+                    && !token.starts_with("mi_attr")
+                    && line.contains(&format!("{token}("))
+                    && !symbols.iter().any(|existing| existing == token)
+                {
+                    symbols.push(token.to_owned());
+                }
+            }
+        }
+    }
+    assert!(
+        !symbols.is_empty(),
+        "public header symbol allowlist generation produced no mi_* exports"
+    );
+    symbols
+}
+
 fn link_linux_cdylib_exports() {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let version_script = out_dir.join("mimalloc.exports");
-    let exports = r"{
+    let mut exports = String::from(
+        r"{
   global:
     _Zda*;
     _Zdl*;
@@ -143,13 +214,22 @@ fn link_linux_cdylib_exports() {
     pvalloc*;
     realloc*;
     valloc*;
-    mi_*;
-  local:
+",
+    );
+    for symbol in public_mi_symbols_from_headers() {
+        exports.push_str("    ");
+        exports.push_str(&symbol);
+        exports.push_str(";\n");
+    }
+    exports.push_str(
+        r"  local:
     *;
 };
-";
+",
+    );
 
     std::fs::write(&version_script, exports).expect("failed to write Linux export script");
+    println!("cargo:rustc-link-arg=-Wl,--undefined-version");
     println!(
         "cargo:rustc-link-arg=-Wl,--version-script={}",
         version_script.display()
@@ -182,6 +262,9 @@ fn main() {
     println!("cargo:rerun-if-changed=src/cxx_new_shim.cpp");
     println!("cargo:rerun-if-changed=src/tls_shim.c");
     println!("cargo:rerun-if-changed=src/tls_recurse_shim.c");
+    for header in PUBLIC_HEADERS {
+        println!("cargo:rerun-if-changed={header}");
+    }
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_C_ABI");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_CXX_OVERRIDES");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_TLS_SHIM");

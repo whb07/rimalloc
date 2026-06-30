@@ -747,7 +747,7 @@ static MI_ARENA_FROM_ID_KEEP: unsafe extern "C" fn(mi_arena_id_t) -> *mut mi_are
 
 /// # Safety
 /// `arena` must be null or a valid top-level `mi_arena_t*`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arena_id_from_arena(arena: *mut mi_arena_t) -> mi_arena_id_t {
     let Some(arena) = ArenaPtr::new(arena) else {
         return unsafe { _mi_arena_id_none() };
@@ -799,7 +799,7 @@ pub(crate) unsafe extern "C" fn _mi_arena_memid_is_suitable(
 
 /// # Safety
 /// `subproc` must point to a valid `mi_subproc_t`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usize {
     let Some(subproc) = SubprocPtr::new(subproc) else {
         crate::mi_assert_internal!(false);
@@ -1408,7 +1408,7 @@ unsafe fn mi_arena_try_alloc_at(
 
 /// # Safety
 /// `subproc` must point to a valid `mi_subproc_t`, and `idx` must be in range.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arena_from_index(
     subproc: *mut mi_subproc_t,
     idx: usize,
@@ -1424,6 +1424,15 @@ pub unsafe extern "C" fn mi_arena_from_index(
     crate::mi_assert_internal!(idx < unsafe { mi_arenas_get_count_typed(subproc_ptr) });
     unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) }
 }
+
+#[cfg(feature = "c-abi")]
+const _: unsafe extern "C" fn(*mut mi_arena_t) -> mi_arena_id_t = mi_arena_id_from_arena;
+
+#[cfg(feature = "c-abi")]
+const _: unsafe extern "C" fn(*mut mi_subproc_t) -> usize = mi_arenas_get_count;
+
+#[cfg(feature = "c-abi")]
+const _: unsafe extern "C" fn(*mut mi_subproc_t, usize) -> *mut mi_arena_t = mi_arena_from_index;
 
 unsafe fn mi_arena_start_idx(
     heap: BorrowedHeap,

@@ -1508,14 +1508,14 @@ unsafe fn mi_os_alloc_aligned_ex(
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_commit(p: *mut c_void, size: usize) {
     let _ = unsafe { _mi_os_commit(p, size, core::ptr::null_mut()) };
 }
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_alloc_aligned(
     size: usize,
     alignment: usize,
@@ -1539,7 +1539,7 @@ pub unsafe extern "C" fn mi_os_alloc_aligned(
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_alloc(
     size: usize,
     commit: bool,
@@ -1558,7 +1558,7 @@ pub unsafe extern "C" fn mi_os_alloc(
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_alloc_aligned_allow_large(
     size: usize,
     alignment: usize,
@@ -1584,7 +1584,7 @@ pub unsafe extern "C" fn mi_os_alloc_aligned_allow_large(
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_free(p: *mut c_void, size: usize) {
     if p.is_null() || size == 0 {
         return;
@@ -1602,7 +1602,7 @@ pub unsafe extern "C" fn mi_os_free(p: *mut c_void, size: usize) {
 
 /// # Safety
 /// Preserves the exported C ABI wrapper from `src/os.c`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_os_decommit(p: *mut c_void, size: usize) {
     let _ = unsafe { _mi_os_decommit(p, size) };
 }

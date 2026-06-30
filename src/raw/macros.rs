@@ -664,7 +664,7 @@ pub static _mi_cxx_interposes: [mi_interpose_s; 8] = [
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_malloc_size_checked(p: *mut c_void) -> usize {
     if !unsafe { crate::mimalloc::mi_is_in_heap_region(p.cast_const()) } {
         return 0;

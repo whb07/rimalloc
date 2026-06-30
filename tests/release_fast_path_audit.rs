@@ -3704,8 +3704,12 @@ fn linux_cdylib_export_script_declares_allocator_symbols() {
         "Linux C ABI artifact builds should pass the allocator export script through the cdylib link step"
     );
     assert!(
-        build_rs.contains("mi_*;") && build_rs.contains("local:\n    *;"),
-        "version script should export public mi_* APIs while hiding unmatched internals"
+        build_rs.contains("PUBLIC_HEADERS")
+            && build_rs.contains("public_mi_symbols_from_headers")
+            && build_rs.contains("exports.push_str(&symbol)")
+            && !build_rs.contains("mi_*;")
+            && build_rs.contains("local:\n    *;"),
+        "version script should export exact public-header mi_* APIs while hiding unmatched internals"
     );
     assert!(
         !build_rs.contains("_Z*;")

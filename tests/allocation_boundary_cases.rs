@@ -47,9 +47,12 @@ fn zero_size_allocations_return_freeable_pointers() {
         let p = mi_umalloc(0, &mut usable);
         assert_freeable_with_usable(p, usable);
 
-        usable = 0;
-        let p = mi_uzalloc(0, &mut usable);
-        assert_freeable_with_usable(p, usable);
+        #[cfg(not(feature = "c-abi"))]
+        {
+            usable = 0;
+            let p = mi_uzalloc(0, &mut usable);
+            assert_freeable_with_usable(p, usable);
+        }
 
         assert_freeable(mi_calloc(0, 8));
         assert_freeable(mi_calloc(8, 0));

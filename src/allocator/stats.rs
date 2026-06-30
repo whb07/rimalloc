@@ -1901,7 +1901,7 @@ fn append_stats_json(hbuf: &mut mi_json_buf_t, stats: &mi_stats_t) {
 /// # Safety
 /// `stats` must point to a valid `mi_stats_t` when non-null. If `output_buf` is non-null it
 /// must be writable for `output_size` bytes.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_stats_get_json_from(
     stats: *const mi_stats_t,
     output_size: usize,

@@ -136,17 +136,22 @@ Validated remaining issues:
 
 ## P0 - Clean the dynamic C ABI
 
-- [ ] Replace the broad Linux `mi_*` dynamic export pattern with an exact
+- [x] Replace the broad Linux `mi_*` dynamic export pattern with an exact
       allowlist.
-  - [ ] Generate the public `mi_*` allowlist from
+  - [x] Generate the public `mi_*` allowlist from
         `mimalloc-3.3.2/include/mimalloc.h` and
         `mimalloc-3.3.2/include/mimalloc-stats.h`.
-  - [ ] Include only documented public-header symbols in the default C ABI
+  - [x] Include only documented public-header symbols in the default C ABI
         symbol group.
-  - [ ] Keep Rust-extension `mi_*` helpers out of the default dynamic export
+  - [x] Keep Rust-extension `mi_*` helpers out of the default dynamic export
         set unless they are renamed or documented as extension ABI.
-  - [ ] Fail the check if a new dynamic `mi_*` symbol appears without an
+  - [x] Fail the check if a new dynamic `mi_*` symbol appears without an
         explicit public-header or extension-ABI decision.
+  - Evidence: `build.rs` generates the Linux cdylib `mi_*` version-script
+    allowlist from the vendored public headers, extension-only `mi_*` helpers
+    are not `no_mangle` in `c-abi` builds, and
+    `scripts/check-public-symbols.py --dynamic-mi` fails on any dynamic
+    `mi_*` export outside the public headers.
   - Verify: new dynamic symbol check plus `scripts/check-abi-symbols.sh`.
 
 - [ ] Split dynamic export groups by artifact mode.

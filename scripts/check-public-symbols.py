@@ -128,6 +128,37 @@ def rust_staticlib() -> pathlib.Path:
     return libs[0]
 
 
+def rust_cdylib() -> pathlib.Path:
+    target_dir = ROOT / "target/symbol-check/c-abi"
+    subprocess.run(
+        [
+            "cargo",
+            "rustc",
+            "--lib",
+            "--features",
+            "c-abi",
+            "--target-dir",
+            str(target_dir),
+            "--",
+            "--crate-type",
+            "cdylib",
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+    libs = sorted(
+        [
+            *target_dir.glob("debug/deps/libmechanical_mimalloc*.so"),
+            *target_dir.glob("debug/libmechanical_mimalloc.so"),
+        ],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not libs:
+        raise SystemExit("no Rust cdylib artifact found")
+    return libs[0]
+
+
 def exported_symbols(staticlib: pathlib.Path) -> set[str]:
     nm = subprocess.run(
         ["nm", "-g", "--defined-only", str(staticlib)],
@@ -155,6 +186,49 @@ def exported_symbols(staticlib: pathlib.Path) -> set[str]:
         if len(parts) >= 8 and parts[4] == "GLOBAL" and parts[5] == "HIDDEN":
             hidden.add(parts[7])
     return symbols - hidden
+
+
+def dynamic_symbols(cdylib: pathlib.Path) -> set[str]:
+    readelf = subprocess.run(
+        ["readelf", "-Ws", str(cdylib)],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    )
+    symbols: set[str] = set()
+    for line in readelf.stdout.splitlines():
+        parts = line.split()
+        if len(parts) < 8:
+            continue
+        index, _value, _size, kind, bind, visibility, section, name = parts[:8]
+        if not index.endswith(":"):
+            continue
+        if section == "UND" or bind not in {"GLOBAL", "WEAK"} or visibility != "DEFAULT":
+            continue
+        if kind not in {"FUNC", "OBJECT", "NOTYPE"}:
+            continue
+        symbols.add(name.split("@", 1)[0])
+    return symbols
+
+
+def check_dynamic_mi_exports() -> int:
+    expected = set(public_header_symbols())
+    exported = {symbol for symbol in dynamic_symbols(rust_cdylib()) if symbol.startswith("mi_")}
+    missing = sorted(expected - exported)
+    extra = sorted(exported - expected)
+    if missing:
+        print("missing dynamic public mi_* symbols:", file=sys.stderr)
+        for symbol in missing:
+            print(symbol, file=sys.stderr)
+    if extra:
+        print("unexpected dynamic mi_* symbols:", file=sys.stderr)
+        for symbol in extra:
+            print(symbol, file=sys.stderr)
+    if missing or extra:
+        return 1
+    print(f"ok: c-abi cdylib exports exactly {len(expected)} public header mi_* symbols")
+    return 0
 
 
 def is_relevant_export(symbol: str) -> bool:
@@ -208,7 +282,15 @@ def main() -> int:
         action="store_true",
         help="only check that public C header declarations are exported",
     )
+    parser.add_argument(
+        "--dynamic-mi",
+        action="store_true",
+        help="check c-abi cdylib dynamic mi_* exports against public headers",
+    )
     args = parser.parse_args()
+
+    if args.dynamic_mi:
+        return check_dynamic_mi_exports()
 
     expected = public_header_symbols()
     exported = exported_symbols(rust_staticlib())

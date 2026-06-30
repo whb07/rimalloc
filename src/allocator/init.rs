@@ -2104,7 +2104,7 @@ pub unsafe extern "C" fn mi_subproc_destroy(subproc_id: mi_subproc_id_t) {
     unsafe { mi_subproc_unsafe_destroy(subproc, true) };
 }
 
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 /// # Safety
 /// Same requirements as `mi_subproc_destroy`.
 pub unsafe extern "C" fn mi_subproc_delete(subproc_id: mi_subproc_id_t) {

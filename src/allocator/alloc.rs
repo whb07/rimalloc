@@ -1053,7 +1053,7 @@ pub unsafe extern "C" fn mi_uzalloc_small(size: usize, usable: *mut usize) -> *m
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// If `usable` is non-null it must be writable for one `usize`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_theap_umalloc(
     theap: *mut mi_theap_t,
     size: usize,
@@ -1090,7 +1090,7 @@ pub unsafe extern "C" fn mi_umalloc(size: usize, usable: *mut usize) -> *mut c_v
 
 /// # Safety
 /// If `usable` is non-null it must be writable for one `usize`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_void {
     unsafe { _mi_theap_malloc_zero_ex(_mi_theap_default(), size, true, 0, usable) }
 }
@@ -2017,7 +2017,7 @@ unsafe fn mi_theap_realpath_typed(
 /// # Safety
 /// `fname` must point to a valid NUL-terminated path. If `resolved_name` is non-null it must be
 /// writable as required by `realpath`.
-#[unsafe(no_mangle)]
+#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_theap_realpath(
     theap: *mut mi_theap_t,
     fname: *const c_char,

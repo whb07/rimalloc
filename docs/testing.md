@@ -22,12 +22,12 @@ usable-size, zero-fill, alignment, preservation, and heap-containment
 properties without requiring an external fuzzing engine.
 
 `tests/fuzz_alloc_sequences.rs` adds a byte-stream operation interpreter over a
-fixed corpus. It covers malloc, zalloc, calloc, aligned allocation, heap
-allocation, heap-aligned allocation, realloc, rezalloc, collect, null realloc,
-overflow-sized request rejection, usable-size lower bounds, zero-fill,
-alignment, preservation, and heap ownership. The interpreter is deterministic
-in normal tests but keeps the operation model close to a future cargo-fuzz
-target.
+fixed corpus. The maintained external fuzz harness in `fuzz/` uses the same
+operation model outside the normal test crate. It covers malloc, zalloc,
+calloc, aligned allocation, heap allocation, heap-aligned allocation, realloc,
+rezalloc, collect, null realloc/free, overflow-sized request rejection,
+cross-thread free, usable-size lower bounds, stats capture, zero-fill,
+alignment, preservation, and heap ownership.
 
 ## Safe API / Raw Facade Split Checks
 
@@ -119,20 +119,33 @@ Known unresolved baseline mismatches remain documented in `PARITY.md`.
 
 ## Fuzzing Policy
 
-The current repository has deterministic property and byte-stream fuzz-corpus
-tests but does not yet claim a maintained libFuzzer, AFL, or cargo-fuzz target.
-A future external fuzz target should generate operation sequences over:
+The maintained external fuzz target is:
 
-- malloc, calloc, zalloc, realloc, aligned allocation, heap allocation, collect,
-  and free,
+```sh
+scripts/check-fuzz-smoke.sh
+```
+
+The script builds `fuzz/Cargo.toml` and runs `fuzz/fuzz_targets/alloc_sequences.rs`
+for a bounded smoke pass over `fuzz/corpus/alloc_sequences` plus deterministic
+generated inputs. Release candidates should increase `--runs` locally or in a
+dedicated workflow when deeper fuzzing time is available.
+
+The fuzz target generates operation sequences over:
+
+- malloc, calloc, zalloc, realloc, rezalloc, aligned allocation, heap allocation,
+  collect, and free,
 - nulls, zero sizes, overflow-sized requests, small sizes, large sizes, and
   alignment classes,
 - per-heap ownership, cross-thread free, realloc preservation, zeroing,
-  usable-size lower bounds, stats consistency, and feature-mode diagnostics.
+  usable-size lower bounds, and stats consistency.
 
-Fuzz reproducers that trigger allocator misuse must classify whether the input
-is valid API use, documented C-compatible abort behavior, or intentionally
-unsupported invalid/double-free behavior.
+When a fuzz input fails, first classify whether it is valid API use, documented
+C-compatible abort behavior, or intentionally unsupported invalid/double-free
+behavior. Minimize by deleting bytes from the failing input while preserving the
+failure under `cargo run --manifest-path fuzz/Cargo.toml --bin alloc_sequences -- <input>`.
+Commit minimized valid reproducers under `fuzz/corpus/alloc_sequences/` with a
+descriptive filename and add a regression test when the failure maps to a fixed
+allocator bug.
 
 ## Miri
 

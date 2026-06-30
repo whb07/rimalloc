@@ -1,4 +1,5 @@
 /target
+/fuzz/target
 
 # Python/local tool caches.
 __pycache__/

@@ -99,7 +99,7 @@ fn zero_size_heap_allocations_return_freeable_pointers() {
 fn zero_size_good_size_uses_minimum_bin() {
     unsafe {
         let good = mi_good_size(0);
-        assert!(good >= core::mem::size_of::<usize>());
+        assert_eq!(good, core::mem::size_of::<usize>());
         assert_eq!(mi_malloc_good_size(0), good);
     }
 }

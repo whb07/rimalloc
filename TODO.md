@@ -660,18 +660,24 @@ Validated remaining issues:
 
 ## P1 - Add real fuzzing and failure injection
 
-- [ ] Add maintained external fuzz targets.
-  - [ ] Create a `cargo-fuzz` workspace or an equivalent maintained fuzzing
+- [x] Add maintained external fuzz targets.
+  - [x] Create a `cargo-fuzz` workspace or an equivalent maintained fuzzing
         harness.
-  - [ ] Fuzz raw allocation operation sequences: malloc, zalloc, calloc,
+  - [x] Fuzz raw allocation operation sequences: malloc, zalloc, calloc,
         realloc, aligned allocation, heap allocation, collect, and free.
-  - [ ] Include nulls, zero sizes, overflow-sized requests, small sizes, large
+  - [x] Include nulls, zero sizes, overflow-sized requests, small sizes, large
         sizes, and alignment classes.
-  - [ ] Include per-heap ownership, cross-thread free, realloc preservation,
+  - [x] Include per-heap ownership, cross-thread free, realloc preservation,
         zeroing, usable-size lower bounds, and stats consistency.
-  - [ ] Add corpus seeds derived from `tests/fuzz_alloc_sequences.rs` and
+  - [x] Add corpus seeds derived from `tests/fuzz_alloc_sequences.rs` and
         `tests/property_alloc_sequences.rs`.
-  - [ ] Document how to minimize and commit reproducers.
+  - [x] Document how to minimize and commit reproducers.
+  - Evidence: `fuzz/` now contains an external allocation-sequence fuzz harness
+    with corpus seeds and deterministic generated inputs. `scripts/check-fuzz-smoke.sh`
+    builds and runs the target for a bounded smoke duration, and
+    `scripts/check-safety-stress.sh` runs that smoke target with the other
+    safety-stress checks. `docs/testing.md` documents deeper runs, minimization,
+    corpus commits, and invalid-caller classification.
   - Verify: fuzz target builds and runs for a bounded smoke duration in CI or
     release candidate checks.
 

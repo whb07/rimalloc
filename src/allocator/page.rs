@@ -175,6 +175,9 @@ fn mi_good_size_small(padded: crate::core_types::PaddedSize) -> crate::core_type
 pub(crate) fn mi_good_size_typed(
     size: crate::core_types::RequestedSize,
 ) -> crate::core_types::GoodSize {
+    if size.get() == 0 {
+        return crate::core_types::GoodSize::new(size_of::<usize>());
+    }
     let sz = size.effective_size();
     let size = crate::core_types::RequestedSize::new(sz);
     if sz <= MI_LARGE_MAX_OBJ_SIZE {

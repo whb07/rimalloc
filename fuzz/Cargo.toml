@@ -1,0 +1,12 @@
+[package]
+name = "mechanical_mimalloc_fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+mechanical_mimalloc = { path = "..", features = ["std"] }
+
+[[bin]]
+name = "alloc_sequences"
+path = "fuzz_targets/alloc_sequences.rs"

@@ -2,6 +2,29 @@
 
 This repository is pre-release at version `0.1.0`, with packaging enabled.
 
+## Production Contract
+
+`docs/api-inventory.md` is the authoritative public API inventory for release
+signoff unless a future release explicitly introduces a separate
+`PUBLIC_API.md`. Release review must treat any mismatch between that inventory
+and the source as release-blocking until the inventory, compatibility policy,
+and source-shape checks agree.
+
+The production contract is split into compatibility tiers:
+
+- Tier S is the only stable safe Rust API surface.
+- Tier U is public unsafe Rust API. It receives Rust SemVer review, but it is
+  not Tier S and callers must uphold the documented unsafe obligations.
+- Tier R is the unsafe raw Rust facade. It remains Rust-path unstable unless a
+  later version explicitly stabilizes a subset.
+- Tier C is a C ABI contract only. It does not imply Rust ABI, Rust layout, or
+  Rust module-path stability.
+- Tier I is private implementation machinery and is not public API.
+
+Release signoff must confirm that no new crate-root public item was added
+without inventory classification, compatibility review, and corresponding
+source-shape check updates.
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.

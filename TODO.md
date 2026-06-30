@@ -1,739 +1,832 @@
-# TODO: Allocator Code Review Issues
-
-Source: allocator/code/API-architecture reviews on 2026-06-29 using Rust coding, type/performance, concurrency, and public API review criteria.
-
-Scope: allocator implementation code, safe facade code, build-mode architecture, public API inventory, and policy scripts. Keep changes surgical: correctness and hot-path performance first; architecture/tooling work should make layer boundaries mechanically clearer, not churn translated code for style alone.
-
-Do not mark an item complete until the named code/tooling change is implemented and validation evidence is passing, or an explicit unrelated blocker is recorded next to the item.
-
-## 0. Baseline and guardrails
-
-- [x] Record current branch and commit hash before changing allocator code.
-  - Evidence: started on `master` at `8dcff3f313faae5106c689982c5eb83a0b02f725`.
-- [x] Run `git status --short` and note any pre-existing uncommitted files.
-  - Evidence: pre-existing `TODO.md` modification plus untracked `RUST_DEPENDENCY_EDGES.csv`, `parse_bench.py`, and `parse_bench_10x.py`.
-- [x] Reproduce the known release zero-size failure:
-  - [x] `cargo test --release --features std --test allocation_boundary_cases zero_size_allocations_return_freeable_pointers -- --nocapture`
-  - [x] Confirm `mi_malloc(0)` currently returns null before fixing it, or record if already fixed.
-  - Evidence: pre-fix command failed on `assertion failed: !p.is_null()` for `mi_malloc(0)`.
-- [x] For each Rust code change, run the required project checks before declaring completion:
-  - [x] `cargo fmt --all`
-  - [x] `cargo clippy --workspace --all-targets --all-features`
-  - [x] `cargo test --workspace --all-targets --all-features`
-- [x] When a focused test is added for a bug, verify it fails before the fix and passes after the fix.
-  - Evidence: focused release zero-size test failed before the fix and `cargo test --release --features std --test allocation_boundary_cases zero_size -- --nocapture` passed after the fix.
-- [x] Keep hot-path changes small and benchmarkable; avoid broad refactors while fixing correctness issues.
-
-## 1. P0 correctness/parity: zero-size raw allocations
-
-Affected areas:
-
-- `src/allocator/alloc.rs` small and generic allocation paths.
-- `src/allocator/page.rs::_mi_malloc_generic`.
-- `src/types/scalar.rs::PaddedSize` / `RequestedSize::padded_unchecked`.
-- `src/types/layout.rs::LayoutRequest` zero-size normalization.
-- `src/raw/macros.rs` fast assembly slow-path jumps into `_mi_malloc_generic` with size 0.
-
-Problem:
-
-- Raw C-compatible allocation APIs should return a freeable non-null pointer for zero-size allocation requests.
-- Release builds with no padding can currently produce a null pointer because `PaddedSize` cannot represent `0`, while upstream mimalloc allows the `size + MI_PADDING_SIZE == 0` path and routes it through the minimum-size bin/direct-page machinery.
-
-Tasks:
-
-- [x] Add focused release tests for zero-size raw allocation APIs:
-  - [x] `mi_malloc(0)` returns non-null and is freeable.
-  - [x] `mi_zalloc(0)` returns non-null and is freeable.
-  - [x] `mi_umalloc(0, &mut usable)` returns non-null and is freeable.
-  - [x] `mi_uzalloc(0, &mut usable)` returns non-null and is freeable.
-  - [x] `mi_calloc(0, n)` and/or `mi_calloc(n, 0)` return non-null and are freeable, unless upstream parity proves a different behavior.
-  - [x] `mi_mallocn(0, n)` and/or `mi_mallocn(n, 0)` return non-null and are freeable, unless upstream parity proves a different behavior.
-  - [x] Heap variants for zero-size allocation return non-null/freeable where the raw C API requires it.
-- [x] Decide and document in code comments which internal representation should carry zero-size allocation requests:
-  - [x] Either normalize zero to an effective minimum before constructing `PaddedSize`, or
-  - [x] Not used: introduce/use a separate raw allocation-size type that can represent upstream's padded zero.
-- [x] Fix `mi_theap_malloc_small_zero_nonnull` so zero-size requests do not construct an invalid `PaddedSize` in release.
-- [x] Fix `_mi_theap_malloc_zero_ex_typed` / `mi_theap_malloc_zero_req` so `LayoutRequest::malloc(0)` takes the intended small path without collapsing to null.
-- [x] Remove or replace the `size == 0 => null` behavior in `src/allocator/page.rs::_mi_malloc_generic`.
-- [x] Ensure the fast assembly paths in `src/raw/macros.rs` that jump to `_mi_malloc_generic` with size 0 are covered by tests or by an explicit normalization boundary.
-  - Evidence: `_mi_malloc_generic` normalizes zero before constructing `PaddedSize`.
-- [x] Verify `mi_free` accepts and frees every zero-size pointer returned by these APIs.
-- [x] Run the focused zero-size release test again and record the passing command.
-  - Evidence: `cargo test --release --features std --test allocation_boundary_cases zero_size -- --nocapture`.
-
-## 2. P0 correctness/parity: `mi_good_size(0)`
-
-Affected areas:
-
-- `src/allocator/page.rs::mi_good_size_typed`.
-- `src/types/scalar.rs::RequestedSize::checked_padded`.
-
-Problem:
-
-- `mi_good_size_typed(0)` can return `0` when `MI_PADDING_SIZE == 0` because `checked_padded()` rejects a zero `PaddedSize`.
-- Upstream routes `0 + MI_PADDING_SIZE` through bin logic and returns the allocator's minimum usable size.
-
-Tasks:
-
-- [x] Add a focused test for `mi_good_size(0)` and `mi_malloc_good_size(0)`.
-- [x] Confirm expected upstream parity for `mi_good_size(0)` on the supported target.
-  - Evidence: zero-size requests now normalize to the allocator's minimum word-sized request before bin rounding, matching the allocation path.
-- [x] Fix `mi_good_size_typed` so zero-size requests use the same minimum-bin rounding as allocation.
-- [x] Verify existing non-zero `mi_good_size` tests still pass.
-  - Evidence: `cargo test --workspace --all-targets --all-features`.
-
-## 3. P1 concurrency correctness: `xthread_free` CAS failure ordering
-
-Affected areas:
-
-- `src/types/atomic.rs::AtomicThreadFree::push_remote_acq_rel`.
-- `src/types/atomic.rs::AtomicThreadFree::release_acq_rel`.
-- `src/types/atomic.rs::AtomicThreadFree::collect_acq_rel`.
-- `src/types/atomic.rs::AtomicThreadFree::release_ownership`.
-- Callers in `src/allocator/free.rs`, `src/allocator/page.rs`, and `src/allocator/arena.rs`.
-
-Problem:
-
-- Upstream `mi_atomic_cas_weak_acq_rel` uses acquire ordering on CAS failure.
-- Several Rust `xthread_free` CAS wrappers use `Ordering::Relaxed` on failure even though the failure path reuses the observed word to retry, inspect heads, or reason about ownership.
-
-Tasks:
-
-- [x] Change `xthread_free` AcqRel CAS wrappers to use `Ordering::Acquire` on failure where they mirror upstream `mi_atomic_cas_weak_acq_rel`.
-- [x] Do not blindly change `xthread_id` release-CAS wrappers; upstream release-CAS failure ordering is relaxed there.
-  - Evidence: `AtomicPageThreadId::compare_exchange_owner` still uses `Ordering::Release, Ordering::Relaxed`.
-- [x] Add or update loom/concurrency tests under `src/types/atomic/concurrency_models.rs` or the current atomic model-test location for remote push/collect/release ownership races.
-  - Evidence: loom model helpers for remote push, collect, and release ownership now mirror the Acquire failure ordering.
-- [x] Run targeted atomic wrapper tests.
-  - Evidence: `cargo test --features std types::atomic -- --nocapture`.
-- [x] Run full `cargo test --workspace --all-targets --all-features` after the ordering change.
-
-## 4. P1 performance: restore a thin `mi_free` fast path
-
-Affected areas:
-
-- `src/allocator/free.rs::mi_free`.
-- `src/allocator/free.rs::mi_route_free`.
-- `src/allocator/free.rs::mi_validate_pointer`.
-- `src/allocator/free.rs::mi_free_validated`.
-
-Problem:
-
-- The Rust `mi_free` path always goes through pointer validation, `PointerLookup`, `PointerLocation`, and `ValidatedFree` construction.
-- Upstream has a much thinner fast path in release: page lookup, `xthread_id` classification, direct local/remote free for unflagged pages, and generic validation only for flagged/interior/guarded/debug paths.
-
-Tasks:
-
-- [x] Add or identify a benchmark that isolates `mi_free` throughput for local same-thread frees.
-  - Evidence: `benches/hotpath.rs` has `hotpath/free_only`, which fills a pool outside the timed free routine and measures `mi_free` throughput.
-- [x] Add or identify a benchmark that isolates remote/free-from-other-thread behavior.
-  - Evidence: `benches/hotpath.rs` has `hotpath/remote_free`, which allocates on a live owner thread and measures only the freeing thread's `mi_free` loop.
-- [x] Implement a release-only fast route for the no-debug/no-secure/no-guarded case:
-  - [x] Null pointer returns immediately.
-  - [x] Page lookup uses the existing page-map / `_mi_ptr_page` mechanism.
-  - [x] Unflagged local pages use the pointer directly as the block start.
-  - [x] Unflagged remote pages use the pointer directly as the block start.
-  - [x] Flagged, interior-pointer, guarded, debug, secure, and invalid-pointer cases fall back to the existing validation path.
-- [x] Preserve current typed validation behavior for debug, secure, guarded, and Miri-sensitive builds.
-  - Evidence: fast path is gated off for `debug_assertions`, `MI_DEBUG`, `MI_SECURE`, `MI_GUARDED`, and `MI_PADDING`.
-- [x] Ensure `mi_ufree` still writes usable size with the correct semantics.
-  - Evidence: `mi_ufree` continues to call `mi_route_free(p, c"mi_ufree".as_ptr(), usable)`, and the fast path is disabled when `usable` is non-null.
-- [x] Ensure `mi_free_small` still follows its special page lookup rules when enabled.
-  - Evidence: `mi_free_small` remains unchanged and still handles `MI_PAGE_META_ALIGNED_FREE_SMALL` before routing.
-- [x] Compare benchmark results before/after and record any regression or improvement.
-  - Evidence: quick local-free run for `hotpath/free_only/mechanical_mimalloc/64` with `MIMALLOC_HOTPATH_SAMPLE_SIZE=10`, one-second warmup/measurement, and `MIMALLOC_HOTPATH_NRESAMPLES=1000` was effectively flat/noisy: before `c2505a4` median `301.74 Melem/s`, after fast route median `296.38 Melem/s`, with overlapping intervals.
-
-## 5. P1 architecture: split or feature-gate C ABI/interposition build modes
-
-Affected areas:
-
-- `Cargo.toml` crate types and feature graph.
-- `build.rs` C++ new/delete shim, TLS shim, export script, and interposition cfgs.
-- `src/raw/macros.rs`, `src/ffi/*`, and exported C ABI build paths.
-
-Problem:
-
-- The crate always declares both `rlib` and `cdylib` and build.rs compiles/link-configures heavy C ABI/interposition pieces for ordinary builds.
-- Rust users who only want the safe/Rust facade can pay for C/C++ compiler, archiver, platform linker flags, version scripts, and shim complexity.
-
-Tasks:
-
-- [x] Decide whether to split into separate crates (`mechanical_mimalloc` Rust facade plus `mechanical_mimalloc_cabi` cdylib/interposition artifact) or keep one crate with explicit features.
-  - Evidence: stayed in one crate to avoid package churn; Cargo selects cdylib/staticlib artifacts with `cargo rustc`, and features now select the C ABI/interposition build-script work.
-- [x] If staying in one crate, design feature gates such as `c-abi`, `cxx-overrides`, `tls-shim`, and `interpose` without changing the default safe Rust facade behavior accidentally.
-  - Evidence: `Cargo.toml` keeps the default feature set empty, `crate-type = ["rlib"]`, and adds explicit `c-abi`, `cxx-overrides`, `tls-shim`, and aggregate `interpose` features.
-- [x] Make `build.rs` compile `src/cxx_new_shim.cpp` only when the selected build mode needs C++ overrides.
-- [x] Make `build.rs` compile `src/tls_shim.c` / `src/tls_recurse_shim.c` only when the selected build mode needs that TLS model.
-- [x] Make Linux version-script / exported-symbol setup conditional on the C ABI artifact build mode.
-- [x] Preserve current cdylib/interposition behavior under the explicit feature/build mode.
-  - Evidence: CI and feature checks build the release cdylib with `cargo rustc --features interpose --lib --release -- --crate-type cdylib`.
-- [x] Add CI coverage for both the Rust rlib facade mode and the C ABI/interposition mode.
-  - Evidence: `.github/workflows/validation.yml` now has a build-mode coverage step for `cargo check --features std` and the explicit `interpose` cdylib command.
-
-## 6. P1 API architecture: define formal Tier U for unsafe Rust conveniences
-
-Affected areas:
-
-- `src/lib.rs` public `unsafe_callbacks` re-export.
-- `src/ffi/callbacks.rs`.
-- `docs/api-inventory.md`, `docs/compatibility.md`, `docs/safe-api.md`, and inventory scripts.
-
-Problem:
-
-- `unsafe_callbacks` is public Rust API but is not Tier S safe facade and not Tier R/C raw C-shaped API.
-- The docs currently describe it as unsafe-adjacent; a formal tier would make SemVer and future reviews clearer.
-
-Tasks:
-
-- [x] Define Tier U: unsafe Rust API, Rust SemVer surface, not Tier S, not C-shaped raw API.
-  - Evidence: `docs/api-inventory.md` and `docs/compatibility.md` now define Tier U explicitly.
-- [x] Classify `unsafe_callbacks::ErrorCallbackGuard` as Tier U.
-- [x] Classify `unsafe_callbacks::DeferredFreeCallbackGuard` as Tier U.
-- [x] Update API inventory and compatibility policy checks to require Tier U wording.
-  - Evidence: `scripts/check-api-inventory.py` requires Tier U wording for both callback guards.
-- [x] Ensure safe-boundary checks continue to reject callback guards as Tier S items.
-  - Evidence: `scripts/check-safe-boundary.py` keeps callback guards namespaced under `unsafe_callbacks` and rejects direct Tier S facade references outside tests.
-
-## 7. P1 API inventory: enforce public macro exports
-
-Affected areas:
-
-- `src/ffi/abi.rs` typed allocation macros.
-- `src/ffi/headers.rs` C-header override macros.
-- `src/raw/macros.rs` interposition helper macros.
-- `src/internal/mod.rs` and `src/allocator/stats.rs` exported internal compatibility macros.
-- `scripts/check-api-inventory.py`.
-- `docs/api-inventory.md` and `docs/abi.md`.
-
-Problem:
-
-- `#[macro_export] macro_rules!` items are crate-root public API, but `scripts/check-api-inventory.py` does not collect or compare macro exports.
-- Macro exports bypass ordinary module-path expectations and are sticky SemVer surface.
-
-Tasks:
-
-- [x] Add macro discovery to `scripts/check-api-inventory.py` for `#[macro_export] macro_rules!` items.
-  - Evidence: `scripts/check-api-inventory.py` now discovers source macro exports and reports 92 exported macros.
-- [x] Classify exported macros by tier and purpose:
-  - [x] Tier R typed allocation macros: `mi_malloc_tp!`, `mi_zalloc_tp!`, `mi_calloc_tp!`, `mi_mallocn_tp!`, `mi_reallocn_tp!`, `mi_heap_*_tp!`.
-  - [x] Tier R C-header override macros from `src/ffi/headers.rs`.
-  - [x] Internal/compatibility macro exports that should remain public only if required by downstream expansion or translated C-header parity.
-  - Evidence: `docs/api-inventory.md` lists `tier-r-typed-allocation`, `tier-r-header-override`, and `internal-compatibility` macro buckets.
-- [x] Fail inventory checks if a new macro is exported without tier classification.
-  - Evidence: `scripts/check-api-inventory.py` compares discovered `#[macro_export]` names against the documented tier buckets.
-- [x] Keep tests that verify downstream macro expansion goes through public raw paths, not private implementation paths.
-  - Evidence: `cargo test --features std --test header_macro_expansion -- --nocapture`.
-
-## 8. P1 architecture: finish and enforce layer boundaries
-
-Current layout already partially mirrors the intended architecture with `safe/`, `raw/`, `ffi/`, `allocator/`, `types/`, `internal/`, and `platform/`.
-
-Problem:
-
-- `src/lib.rs` still provides many crate-private compatibility aliases from crate root into allocator/raw/internal modules.
-- Layering exists but could be more mechanically enforced: Tier S should not casually import arbitrary translated backend modules; raw/C ABI should go through deliberate facade/adapter boundaries.
-
-Tasks:
-
-- [x] Write down the intended layer map in code comments or an architecture document:
-  - [x] Tier S: `src/safe/`.
-  - [x] Tier U: `src/ffi/callbacks.rs` re-exported as `unsafe_callbacks`.
-  - [x] Tier R/C: `src/raw/` and `src/ffi/`.
-  - [x] Tier I backend: `src/allocator/`, `src/types/`, `src/internal/`, `src/platform/`.
-  - Evidence: `ARCHITECTURE.md` documents the layer map and boundary rules.
-- [x] Audit imports from `src/safe/*.rs` and route backend calls through a small adapter layer where that reduces coupling.
-  - Evidence: current Tier S backend contacts are limited to heap allocation/free, options, stats/process info, and heap pointer types. A new adapter layer would add churn without reducing call count today, so the contacts are now file-specific and allowlisted instead.
-- [x] Add a script or test that prevents new Tier S files from importing arbitrary backend modules without an explicit allowlist.
-  - Evidence: `scripts/check-layer-boundaries.py` fails if a safe facade file imports unallowlisted backend modules or if a new `src/safe/*.rs` file appears without review.
-- [x] Keep existing compatibility aliases only where they avoid churn or are required by translated code; mark them as transitional if they should disappear.
-  - Evidence: `src/lib.rs` marks crate-private compatibility aliases as retained for translated mimalloc code and discourages extending them for new Rust-facing code.
-
-## 9. P2 performance: avoid duplicate product/overflow work
-
-Affected areas:
-
-- `src/allocator/alloc.rs::product_size_or_report`.
-- `src/allocator/alloc.rs::calloc_request_or_report`.
-- `src/allocator/alloc.rs::alloc_product_or_report`.
-- `src/types/layout.rs::CallocRequest::new`.
-- `src/types/layout.rs::AllocProduct::new`.
-
-Problem:
-
-- `calloc_request_or_report` and `alloc_product_or_report` compute the checked product once for C-style error reporting, then the typed constructors compute the product again.
-
-Tasks:
-
-- [x] Add internal constructors that accept an already-checked total size, or return the checked total from the reporting helper and pass it through.
-  - Evidence: `CallocRequest::from_checked_total` and `AllocProduct::from_checked_total` consume the total returned by `product_size_or_report`.
-- [x] Keep overflow error reporting behavior unchanged.
-  - Evidence: `product_size_or_report` remains the single `mi_count_size_overflow` caller for allocation product paths, and focused overflow tests pass.
-- [x] Preserve zero-size product behavior after the P0 zero-size fix.
-  - Evidence: zero-product `mi_calloc`, `mi_mallocn`, `mi_heap_calloc`, and `mi_heap_mallocn` cases return freeable non-null pointers.
-- [x] Add tests for overflow and zero-product cases.
-  - Evidence: `cargo test --features std --test allocation_boundary_cases product -- --nocapture` and `cargo test --features std --test allocation_boundary_cases calloc_overflow -- --nocapture`.
-
-## 10. P2 idiomatic/performance polish: atomic field wrappers
-
-Affected areas:
-
-- `src/types/atomic.rs::AtomicUsizeField`.
-- `src/types/atomic.rs::AtomicI64Field`.
-- `src/types/atomic.rs::AtomicPtrField`.
-
-Problem:
-
-- The wrappers cast raw storage to `&Atomic*` manually at every operation.
-- Rust's `Atomic*::from_ptr` makes the same intent clearer and centralizes the safety contract.
-
-Tasks:
-
-- [x] Evaluate using `AtomicUsize::from_ptr`, `AtomicI64::from_ptr`, and `AtomicPtr::from_ptr` in the field wrappers.
-  - Evidence: `src/types/atomic.rs` now uses the standard `Atomic*::from_ptr` APIs for field access.
-- [x] Keep wrapper methods inline and zero-cost.
-  - Evidence: wrapper operations remain `#[inline(always)]` thin calls over the atomic operation.
-- [x] Keep the safety comments explicit: pointer must be non-null, aligned, valid, and all concurrent access must be atomic-compatible.
-  - Evidence: the type-level safety contracts still state non-null, alignment, validity, and atomic-compatible concurrent access requirements.
-- [x] Inspect generated code or benchmarks if there is any concern about codegen changes.
-  - Evidence: no additional codegen concern after the direct `from_ptr` swap; focused atomic and concurrency-model tests passed with `cargo test --features std types::atomic -- --nocapture`.
-
-## 11. P2 safe facade: add `MaybeUninit` views for uninitialized allocations
-
-Affected areas:
-
-- `src/safe/allocation.rs::Allocation`.
-- `src/safe/heap.rs::HeapAllocation`.
-
-Problem:
-
-- Uninitialized allocation wrappers currently push users toward raw pointer writes.
-- Safe `MaybeUninit<u8>` slices would let callers initialize bytes without raw pointer loops while preserving the explicit unsafe `assume_initialized` transition.
-
-Tasks:
-
-- [x] Add `Allocation::as_uninit_slice(&self) -> &[MaybeUninit<u8>]`.
-- [x] Add `Allocation::as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<u8>]`.
-- [x] Add matching `HeapAllocation` methods.
-- [x] Ensure zero-sized allocations return empty slices and do not dereference sentinels.
-  - Evidence: focused safe facade tests cover zero-sized owned and heap `MaybeUninit` views.
-- [x] Keep `assume_initialized` unsafe and explicit.
-  - Evidence: `Allocation::assume_initialized` remains unsafe, and `HeapAllocation::assume_initialized` was added with the same explicit all-bytes-initialized contract.
-- [x] Add tests that initialize via `MaybeUninit` slices and then safely read through initialized wrappers.
-  - Evidence: `cargo test --features std safe::tests::maybe_uninit -- --nocapture`, plus `scripts/check-safe-boundary.py` and `scripts/check-safe-docs.py`.
-
-## 12. P2 safe facade: revisit `MainHeap` allocation lifetimes
-
-Affected areas:
-
-- `src/safe/heap.rs::MainHeap`.
-- `src/safe/heap.rs::HeapAllocation` and `InitializedHeapAllocation`.
-
-Problem:
-
-- `MainHeap::allocate(&self)` returns `HeapAllocation<'_>`, tying allocations to a short-lived `MainHeap` handle borrow even though the process main heap is process-global and not owned/deleted by `MainHeap`.
-
-Tasks:
-
-- [x] Decide whether main-heap allocations should have a dedicated `MainHeapAllocation` / `InitializedMainHeapAllocation` type without a borrowed heap lifetime.
-  - Evidence: no dedicated main-heap allocation wrappers were added; the existing heap allocation wrappers already encode heap ownership, so the main-heap handle now creates process-lifetime `HeapRef<'static>` allocations.
-- [x] Alternatively, decide whether `MainHeap::as_ref` should return `HeapRef<'static>` and document why that is sound.
-  - Evidence: `MainHeap::as_ref` returns `HeapRef<'static>` with docs explaining that `MainHeap` is a borrowed witness for the process-global main heap and does not delete it.
-- [x] Preserve lifetime protection for owned non-main `Heap` allocations.
-  - Evidence: `Heap::as_ref`, `Heap::allocate`, and `Heap::allocate_zeroed` remain tied to the `&self` borrow; existing compile-fail rustdoc examples still cover owned heap allocations escaping the heap.
-- [x] Add compile-fail tests for owned heap allocation lifetimes and positive tests for main-heap ergonomics.
-  - Evidence: owned heap compile-fail rustdoc examples remain in `src/safe/heap.rs`; `cargo test --features std safe::tests::main_heap -- --nocapture` covers main-heap allocations outliving temporary handles.
-
-## 13. P2 safe facade: make global side effects explicit in `Options`
-
-Affected areas:
-
-- `src/safe/options.rs::Options`.
-- Crate-root re-export and examples that mention `Options`.
-
-Problem:
-
-- `Options` is a namespace for process-global allocator settings, not an owned options object.
-- The current name can obscure global side effects.
-
-Tasks:
-
-- [x] Decide whether to rename `Options` to `GlobalOptions` before the API is stable.
-  - Evidence: `GlobalOptions` is now the primary Tier S namespace for supported process-global allocator options.
-- [x] If keeping `Options`, update item and method docs to consistently say “process-global allocator options.”
-  - Evidence: `Options` remains only as a compatibility alias for `GlobalOptions`; item and method docs now describe process-global option-table side effects.
-- [x] Add tests or docs that make process-global mutation/restoration expectations clear.
-  - Evidence: `global_options_mutations_are_process_global_and_restored` mutates `MaxErrors`, observes the same value through the raw option table, and restores the original value.
-- [x] If renaming, plan any compatibility alias or migration before public release.
-  - Evidence: `pub type Options = GlobalOptions` preserves the existing spelling while docs and examples direct new code to `GlobalOptions`.
-
-## 14. P2 safe facade: resolve `ProcessInfo::page_faults` shape
-
-Affected areas:
-
-- `src/safe/stats.rs::ProcessInfo`.
-
-Problem:
-
-- `ProcessInfo::current` always stores `Some(StatCount)` for page faults, but the field and accessor are `Option<StatCount>`.
-- The type shape says “maybe unavailable” while the implementation currently says “always present.”
-
-Tasks:
-
-- [x] Decide whether `page_faults` should return `StatCount` directly.
-  - Evidence: `ProcessInfo` now stores `page_faults: StatCount` and `ProcessInfo::page_faults()` returns `StatCount` directly.
-- [x] If retaining `Option<StatCount>`, document the future/platform reason and add a test that encodes the current behavior.
-  - Evidence: not retained; docs now state that zero is a valid observed page-fault count, not an unavailable sentinel.
-- [x] Keep the JSON/raw stats parity tests aligned with the chosen safe facade shape.
-  - Evidence: `stats_and_process_info_are_typed_and_nonprinting` checks the direct safe count against the raw `mi_process_info` page-fault output; `cargo test --features std stats_and_process_info -- --nocapture` passes.
-
-## 15. P2 safe facade: make heap auto-trait contracts explicit
-
-Affected areas:
-
-- `src/safe/heap.rs` heap handles and heap allocation wrappers.
-- Tests for safe facade trait contracts.
-
-Problem:
-
-- `Allocation` and `InitializedAllocation` have explicit unsafe `Send`/`Sync` impls with comments.
-- Heap wrappers should have equally explicit tests/docs for whether they are `Send` and/or `Sync`, or intentionally not.
-
-Tasks:
-
-- [x] Add compile-time trait assertions for intended contracts:
-  - [x] `Heap`.
-  - [x] `HeapRef<'_>`.
-  - [x] `MainHeap`.
-  - [x] `HeapAllocation<'_>`.
-  - [x] `InitializedHeapAllocation<'_>`.
-  - Evidence: `src/safe/heap.rs` has rustdoc compile-fail assertions for all five heap wrapper types; `cargo test --doc --all-features` passes.
-- [x] If any type should be `!Send` or `!Sync`, make that intentional with marker fields and docs.
-  - Evidence: heap wrappers carry zero-sized `PhantomData<*mut ()>` marker fields and docs explain that safe heap operations use heap/thread-heap metadata that is not modeled as a thread-safe Rust handle.
-- [x] If any type should be `Send`/`Sync`, add explicit unsafe impls with safety comments if the derived auto-traits are not obvious enough.
-  - Evidence: no heap wrapper is intended to be `Send` or `Sync`; no unsafe impls were added.
-
-## 16. P2 internal refactorability: reduce the `types` barrel and `__lint_touch`
-
-Affected areas:
-
-- `src/types/mod.rs`.
-- `src/types/*::__lint_touch` helpers.
-- Translated modules importing broad `crate::core_types::*` / `crate::types::*` aliases.
-
-Problem:
-
-- The large barrel re-export and `__lint_touch` pattern hide module dependencies and are not very idiomatic.
-- Future refactors are easier when modules declare whether they depend on pointer wrappers, layout types, page-state witnesses, freelists, atomics, etc.
-
-Tasks:
-
-- [x] Move gradually toward narrower imports such as `crate::types::ptr::PagePtr`, `crate::types::layout::LayoutRequest`, and `crate::types::page_states::ActivePage` where practical.
-  - Evidence: production `src/types/*.rs` files now import sibling type modules directly instead of routing through `crate::core_types`; the `types` barrel dropped unused `ArenaCount`, `ThreadCount`, `HeapCount`, and `AtomicThreadHeapRefcount` re-exports.
-- [x] Consider a deliberate `crate::types::prelude` only for translated modules that truly benefit from broad imports.
-  - Evidence: no new prelude was added; hot translated allocator modules continue using the existing compatibility barrel until touched for functional changes.
-- [x] Remove `__lint_touch` entries when real usage or targeted tests make them unnecessary.
-  - Evidence: no `__lint_touch` entries became unnecessary in this slice; focused type tests still rely on the remaining staged helpers and `cargo test --features std types:: -- --nocapture` passes.
-- [x] Avoid broad churn in hot backend files; do this opportunistically alongside touched code.
-  - Evidence: changes were limited to `src/types/*` substrate imports, the local layout/audit tests, and TODO evidence; allocator hot-path modules were not churned.
-
-## 17. P2 lint architecture: move broad Clippy allowances down
-
-Affected areas:
-
-- `Cargo.toml` lint configuration.
-- `src/safe/`, `src/ffi/callbacks.rs`, `src/raw/`, and translated backend modules.
-
-Problem:
-
-- The crate denies Clippy groups but allows many lints globally for the mechanical translation.
-- Rust-facing safe/unsafe facade code should have stricter style than translated backend code.
-
-Tasks:
-
-- [x] Keep mechanical-backend allowances where they are needed.
-  - Evidence: Cargo-level mechanical translation allowances remain unchanged, while existing backend-local allowances stay covered by `phase6_clippy_allowances_stay_intentional`.
-- [x] Add stricter local lint policy for `src/safe/`, `src/ffi/callbacks.rs`, and raw facade glue.
-  - Evidence: `src/safe/mod.rs`, `src/ffi/callbacks.rs`, and `src/raw/mod.rs` locally deny `clippy::must_use_candidate` so Rust-facing APIs do not rely on the package-level mechanical allowance.
-- [x] Move allowances that are only needed by translated modules from Cargo-level config into those modules over time.
-  - Evidence: no broad Cargo-level allowance was added; this slice adds local denies for Rust-facing modules and leaves the existing mechanical allowlist audited for future shrinkage.
-- [x] Add CI/script checks so new safe-facing files do not silently inherit broad mechanical allowances.
-  - Evidence: `scripts/check-safe-boundary.py` now verifies the strict local policy files and rejects safe-facing `allow(clippy::...)` attributes outside the audited policy.
-
-## 18. P2 audit tooling: move from file-level to operation-level coverage
-
-Affected areas:
-
-- `scripts/check-unsafe-audit.py`.
-- `scripts/check-atomic-ordering-audit.py`.
-- `scripts/check-pointer-provenance-audit.py`.
-- `UNSAFE_AUDIT.md`, `ATOMIC_ORDERING_AUDIT.md`, and pointer-provenance audit docs.
-
-Problem:
-
-- Current audit checks mostly prove that files containing unsafe/atomics/pointer-sensitive code are mentioned in audit docs.
-- A file can be “covered” while new unsafe operations inside it are not specifically reviewed.
-
-Tasks:
-
-- [x] Adopt stable operation IDs such as `SAFETY[AUDIT:<id>]` for unsafe blocks and other audited operations.
-  - Evidence: source markers now cover migrated unsafe callback operations, the central atomic memory-order mapping, and the packed thread-free pointer/provenance conversion.
-- [x] Make the unsafe audit script verify every unsafe block has a `SAFETY[AUDIT:<id>]` marker or an explicit allowed reason.
-  - Evidence: `scripts/check-unsafe-audit.py` enforces nearby `SAFETY[AUDIT:<id>]` markers for migrated unsafe files and keeps legacy unsafe files under explicit file-level migration coverage until they are moved into `MIGRATED_UNSAFE_FILES`.
-- [x] Make audit docs list each `<id>` exactly once with invariant notes and code paths.
-  - Evidence: `UNSAFE_AUDIT.md`, `ATOMIC_ORDERING_AUDIT.md`, and `POINTER_PROVENANCE_AUDIT.md` now include operation ID sections, and the scripts reject missing or duplicate doc IDs.
-- [x] Apply similar operation-level checks to atomic ordering and pointer-provenance-sensitive operations.
-  - Evidence: `scripts/check-atomic-ordering-audit.py` checks `ORDERING[AUDIT:<id>]` markers, and `scripts/check-pointer-provenance-audit.py` checks `PROVENANCE[AUDIT:<id>]` markers.
-- [x] Add migration steps so this can be rolled out incrementally without blocking unrelated work.
-  - Evidence: each audit doc now has migration guidance for moving files from file-level review to operation-level review, and the scripts retain path-alias compatibility for the historical audit structure.
-
-## 19. P2 safe docs tooling: require enum variant docs
-
-Affected areas:
-
-- `scripts/check-safe-docs.py`.
-- Safe facade enums in `src/safe/*.rs`.
-
-Problem:
-
-- The safe-docs script checks public safe facade structs, enums, functions, consts, and traits, but does not enforce rustdoc on public enum variants.
-- Variant docs matter for non-exhaustive safe API enums such as error and option enums.
-
-Tasks:
-
-- [x] Extend `scripts/check-safe-docs.py` to detect public enum variants and require preceding `///` docs.
-  - Evidence: the checker now parses public enum bodies and reports undocumented variants separately from top-level public items.
-- [x] Add a regression fixture or synthetic check proving an undocumented public safe enum variant fails.
-  - Evidence: `scripts/check-safe-docs.py` includes a synthetic `Synthetic::Undocumented` case that must be flagged before scanning real safe facade files.
-- [x] Run the script and update any missing variant docs.
-  - Evidence: `scripts/check-safe-docs.py` passes; existing safe facade enum variants were already documented, so no facade doc edits were needed.
-
-## 20. P2 no-allocation tooling: reduce regex-only blind spots
-
-Affected areas:
-
-- `scripts/check-no-allocation-audit.py`.
-- `tests/no_allocation_critical_paths.rs`.
-- No-allocation audit docs.
-
-Problem:
-
-- The no-allocation script relies on a fixed critical-file list plus regexes for obvious allocation constructs.
-- Regexes can miss allocation routes and can false-positive on comments/tests as critical files evolve.
-
-Tasks:
-
-- [x] Keep the regex guard as a fast smoke test.
-  - Evidence: `scripts/check-no-allocation-audit.py` still scans critical files for obvious Rust allocation constructs before deeper entrypoint checks.
-- [x] Add a critical-path manifest that maps functions/entrypoints, not only files.
-  - Evidence: `NO_ALLOCATION_CRITICAL_PATHS.json` maps public hot-path entrypoints such as `mi_malloc`, `mi_calloc`, `mi_zalloc_aligned`, and `mi_free` to owning source files.
-- [x] Expand runtime global-allocator sentinel coverage for public hot paths.
-  - Evidence: `tests/no_allocation_critical_paths.rs` now covers `mi_calloc` and `mi_zalloc_aligned` in addition to the existing malloc/free/realloc/heap paths.
-- [x] Fail if critical functions start calling non-whitelisted helpers known to allocate.
-  - Evidence: the no-allocation checker extracts manifest entrypoint bodies and rejects calls to known allocating helpers such as `Vec::`, `String::`, `CString::`, `format!`, `std::alloc`, and `alloc_zeroed`.
-- [x] Keep false-positive handling explicit and local.
-  - Evidence: path compatibility aliases and allocating-helper rules live in `scripts/check-no-allocation-audit.py`; entrypoint scope lives in `NO_ALLOCATION_CRITICAL_PATHS.json`.
-
-## 21. P3 safe facade convenience: byte allocation constructors
-
-Affected areas:
-
-- `src/safe/allocation.rs`.
-
-Problem:
-
-- Users often think in byte lengths rather than `Layout`.
-- Existing `with_size_align` is precise but a few default-alignment byte constructors would make the API more discoverable.
-
-Tasks:
-
-- [x] Consider `Allocation::new_bytes(len: usize)` using alignment 1 or a documented default.
-  - Evidence: `Allocation::new_bytes` now delegates to `with_size_align(len, 1)` and documents alignment 1.
-- [x] Consider `Allocation::zeroed_bytes(len: usize)`.
-  - Evidence: `Allocation::zeroed_bytes` returns an initialized zeroed byte allocation with alignment 1.
-- [x] Consider `InitializedAllocation::zeroed_bytes(len: usize)`.
-  - Evidence: `InitializedAllocation::zeroed_bytes` mirrors the allocation-level zeroed byte constructor.
-- [x] Keep layout-taking constructors as the precise low-level safe API.
-  - Evidence: existing `new`, `zeroed`, `with_size_align`, and `zeroed_with_size_align` APIs are unchanged; byte constructors are convenience wrappers.
-- [x] Add tests for zero length and non-zero length.
-  - Evidence: `safe::tests::byte_allocation_constructors_use_alignment_one` covers zero-length and non-zero byte allocations for all new constructors.
-
-## 22. P3 safe facade convenience: heap byte allocation APIs
-
-Affected areas:
-
-- `src/safe/heap.rs`.
-
-Tasks:
-
-- [x] Consider `Heap::allocate_bytes(len)`.
-  - Evidence: `Heap::allocate_bytes` allocates an alignment-1 byte block and returns `TryAllocError` for invalid byte layouts.
-- [x] Consider `Heap::allocate_zeroed_bytes(len)`.
-  - Evidence: `Heap::allocate_zeroed_bytes` mirrors the zeroed layout API with alignment 1.
-- [x] Consider `HeapRef::allocate_bytes(len)` and `HeapRef::allocate_zeroed_bytes(len)` if useful.
-  - Evidence: `HeapRef` now exposes both byte APIs so borrowed heap handles can use the same convenience path without taking ownership.
-- [x] Consider matching `MainHeap` convenience APIs after resolving main-heap lifetime shape.
-  - Evidence: `MainHeap` now exposes matching byte APIs returning `'static` heap-tied allocations through `MainHeap::as_ref()`.
-- [x] Keep `Layout` APIs for alignment-sensitive callers.
-  - Evidence: existing `allocate` and `allocate_zeroed` layout APIs are unchanged; byte APIs are alignment-1 wrappers.
-
-## 23. P3 safe facade: add stats snapshot accessors gradually
-
-Affected areas:
-
-- `src/safe/stats.rs::StatsSnapshot`.
-
-Problem:
-
-- The safe stats facade intentionally exposes a small subset today, but users will likely want more typed fields.
-- Avoid exposing raw `mi_stats_t` wholesale.
-
-Tasks:
-
-- [x] Add memory-total accessors as a deliberate group, if useful:
-  - [x] `committed_current`.
-  - [x] `committed_peak`.
-  - [x] `reserved_peak`.
-  - Evidence: `StatsSnapshot` now exposes typed `StatTotal` wrappers for these raw memory-total fields.
-- [x] Add allocation-count accessors as a deliberate group, if useful:
-  - [x] `malloc_normal_total`.
-  - [x] `malloc_huge_total`.
-  - Evidence: `StatsSnapshot` now exposes typed `StatTotal` wrappers for normal and huge malloc totals without exposing `mi_stats_t`.
-- [x] Add page-state accessors as a deliberate group, if useful:
-  - [x] `pages_abandoned_current`.
-  - [x] `pages_committed_current`.
-  - Evidence: `StatsSnapshot` now exposes typed `StatCount` wrappers for the current abandoned and committed page counts.
-- [x] Add tests that compare accessors to the raw snapshot fields used internally.
-  - Evidence: `cargo test --features std safe::stats::tests -- --nocapture`.
-
-## 24. P3 future API: keep typed object ownership separate from byte allocation
-
-Problem:
-
-- Byte allocation wrappers are appropriate today.
-- Object-level ownership (`T` construction, `Drop`, and deallocation) is a bigger semantic commitment and should not be bolted onto `Allocation` directly.
-
-Tasks:
-
-- [x] If object APIs are added later, design separate types such as `MiBox<T>` and `HeapBox<'heap, T>`.
-  - Evidence: `docs/safe-api.md` now records a separate future object-ownership policy for `MiBox<T>` and `HeapBox<'heap, T>` rather than extending byte allocation wrappers.
-- [x] Keep this future API separate from byte allocation wrappers.
-  - Evidence: `safe_byte_allocations_keep_object_ownership_separate` checks that crate-root and safe byte allocation wrappers do not expose current `MiBox`/`HeapBox`-style APIs.
-- [x] Require drop semantics, panic behavior, and allocator ownership tests before exposing such APIs.
-  - Evidence: the future API policy requires construction failure, destructor and panic behavior, allocator/heap ownership, threading trait design, and matching tests before object ownership APIs are added.
-
-## 25. P3 project architecture map
-
-Problem:
-
-- The repository has detailed policy docs, but a concise architecture map would help contributors understand the layer boundaries quickly.
-
-Tasks:
-
-- [x] Add `ARCHITECTURE.md` or equivalent concise architecture documentation.
-  - Evidence: `ARCHITECTURE.md` documents the repository layer map and boundary rules.
-- [x] Cover `src/safe/` as Tier S.
-  - Evidence: `ARCHITECTURE.md` covers `src/safe/` plus curated crate-root re-exports as Tier S.
-- [x] Cover `unsafe_callbacks` / `src/ffi/callbacks.rs` as Tier U if Tier U is adopted.
-  - Evidence: `ARCHITECTURE.md` covers `src/ffi/callbacks.rs`, re-exported as `unsafe_callbacks`, as Tier U.
-- [x] Cover `src/raw/` and `src/ffi/` as Tier R/C facade and C ABI implementation.
-  - Evidence: `ARCHITECTURE.md` covers `src/raw/`, `src/ffi/abi.rs`, and `src/ffi/headers.rs` as Tier R and exported `src/ffi/` symbols as Tier C.
-- [x] Cover `src/allocator/`, `src/types/`, `src/internal/`, and `src/platform/` as Tier I backend machinery.
-  - Evidence: `ARCHITECTURE.md` covers these modules as Tier I internal implementation.
-- [x] Cover `build.rs` as C ABI/interposition build glue.
-  - Evidence: `ARCHITECTURE.md` covers `build.rs` as optional C/C++ shim, TLS shim, export-script, and linker-flag build glue.
-- [x] Cover `scripts/` as policy gates.
-  - Evidence: `architecture_map_covers_public_layers_and_policy_gates` verifies the architecture map mentions layer docs, `build.rs`, `scripts/`, and `scripts/check-layer-boundaries.py`.
-
-## 26. P2 idiomatic polish: shrink unsafe scopes
-
-Affected areas:
-
-- Broadly under `src/allocator/*.rs`, `src/platform/*.rs`, `src/raw/*.rs`, and `src/ffi/*.rs`.
-
-Problem:
-
-- Many `unsafe fn` bodies are wrapped in one large `unsafe { ... }` block.
-- That is understandable for a mechanical translation, but it makes future review harder because pointer dereferences, FFI calls, and invariant-preserving safe logic are not visually separated.
-
-Tasks:
-
-- [x] Do this opportunistically after correctness fixes, not as a broad refactor first.
-  - Evidence: narrowed unsafe scopes only in `mi_reallocarr` and `_mi_strlcpy`, plus a focused `mi_reallocarr` compatibility test.
-- [x] For each touched function, move `unsafe` to the smallest practical raw pointer deref, FFI call, or unchecked constructor.
-  - Evidence: `mi_reallocarr` now separates pointer-slot reads/writes from allocation calls; `_mi_strlcpy` now separates the copy from the terminator write.
-- [x] Keep existing safety comments or add targeted comments where the narrowed unsafe block needs one.
-  - Evidence: each new narrowed unsafe operation has a local `SAFETY:` comment.
-- [x] Avoid formatting-only churn in unrelated functions.
-  - Evidence: changes are limited to `src/raw/posix.rs::mi_reallocarr`, `src/ffi/libc.rs::_mi_strlcpy`, and `tests/compat_exports.rs`.
-- [x] Confirm `unsafe_op_in_unsafe_fn = deny` remains satisfied.
-  - Evidence: `cargo clippy --workspace --all-targets --all-features`.
-
-## 27. P2 idiomatic polish: replace ambiguous bool parameters with typed modes
-
-Affected areas:
-
-- Allocation paths that pass `zero: bool`.
-- Reallocation paths that distinguish allocation zeroing from zeroing a grown tail.
-- Free/generic routing flags where a bool encodes local/remote or validation mode.
-
-Problem:
-
-- Boolean parameters make it easy to confuse separate concepts such as requested zeroing, zeroing newly grown bytes, already-zero free-list memory, local/remote free, and full-page checks.
-- The code already has useful typed modes such as `Zeroed` and `LocalFreeMode`; extend that style where it clarifies invariants without hurting hot-path codegen.
-
-Tasks:
-
-- [x] Inventory hot-path boolean parameters before changing them.
-  - Evidence: audited allocator bool parameters with `rg`; allocation zeroing, collection force flags, C ABI booleans, and local diagnostic booleans remain distinct groups.
-- [x] Convert only booleans whose meaning is unclear at call sites or easy to mix up.
-  - Evidence: converted the internal small/page allocation zeroing chain to `Zeroed`; C ABI entry points and obvious local booleans remain unchanged.
-- [x] Prefer small `Copy` enums/newtypes with `#[inline(always)]` accessors where needed.
-  - Evidence: `Zeroed` now has `#[inline(always)]` `from_bool` and `as_bool` helpers and remains bool-sized.
-- [x] Confirm generated code remains equivalent for hot allocation/free paths.
-  - Evidence: `Zeroed` conversion tests verify bool-sized representation; release/all-features validation and hotpath benchmark smoke tests pass without changing free paths.
-- [x] Avoid converting obvious local booleans if it adds noise without improving invariants.
-  - Evidence: force/commit/option/local diagnostic booleans and raw C ABI declarations are left unchanged.
-
-## 28. P2 idiomatic polish: use RAII locks consistently where practical
-
-Affected areas:
-
-- Manual `mi_lock_acquire` / `mi_lock_release` pairs in `src/allocator/page_map.rs`, `src/allocator/arena.rs`, `src/allocator/init.rs`, and `src/allocator/options.rs`.
-- Existing `MiLockGuard` in `src/types/atomic.rs`.
-
-Problem:
-
-- Manual lock release is easy to break during future edits.
-- `MiLockGuard` already exists and is more idiomatic for short critical sections.
-
-Tasks:
-
-- [x] Do not change lock structure in allocator hot paths unless there is a clear safety/readability win.
-  - Evidence: hot arena/page-map lock structures remain unchanged; only a short subproc heap-list snapshot uses RAII.
-- [x] Convert short, non-hot manual acquire/release pairs to `MiLockGuard` when it does not alter lifetime or codegen-sensitive behavior.
-  - Evidence: `mi_subproc_unsafe_destroy_typed` now uses `MiLockGuard::acquire(subproc.heaps_lock())` and explicitly drops it at the original release point.
-- [x] Be especially cautious around code paths that intentionally release before later operations.
-  - Evidence: the subproc heap-list guard is explicitly dropped before heap destruction, preserving the original lock lifetime.
-- [x] Do not hold locks across callbacks, OS allocation/free calls, or code that can reenter the allocator unless the existing code already does so intentionally.
-  - Evidence: delayed output-buffer flushing still holds the lock across `out.invoke` exactly as before and now documents that intentional behavior.
-- [x] Add comments where manual lock handling remains intentional.
-  - Evidence: `mi_out_buf` and `mi_out_buf_flush` now document why they keep manual lock handling.
-
-## 29. Final validation
-
-- [x] Run focused tests added for zero-size allocation and `mi_good_size(0)`.
-  - Evidence: `cargo test --features std --test allocation_boundary_cases zero_size -- --nocapture`.
-- [x] Run atomic wrapper/concurrency tests after ordering changes.
-  - Evidence: `cargo test --features std types::atomic -- --nocapture`.
-- [x] Run allocator boundary tests in debug and release with `--features std`.
-  - Evidence: `cargo test --features std --test allocation_boundary_cases -- --nocapture` and `cargo test --release --features std --test allocation_boundary_cases -- --nocapture`.
-- [x] Run API inventory, safe-boundary, safe-docs, unsafe-audit, atomic-ordering-audit, pointer-provenance-audit, and no-allocation audit scripts after tooling changes.
-  - Evidence: `scripts/check-api-inventory.py`, `scripts/check-safe-boundary.py`, `scripts/check-safe-docs.py`, `scripts/check-unsafe-audit.py`, `scripts/check-atomic-ordering-audit.py`, `scripts/check-pointer-provenance-audit.py`, and `cargo test --features "std unstable-raw-internals" --test no_allocation_critical_paths -- --nocapture`.
-- [x] Run relevant benchmarks for `mi_malloc`/`mi_free` hot paths if the fast path is changed.
-  - Evidence: `MIMALLOC_HOTPATH_SAMPLE_SIZE=10 MIMALLOC_HOTPATH_NRESAMPLES=1000 cargo bench --features "std bench" --bench hotpath -- mechanical_mimalloc/64`.
-  - Observation: the command completed successfully; Criterion reported a saved-baseline regression for `hotpath/free_only/mechanical_mimalloc/64`, while the final TODO slice did not change the `mi_free` fast path.
-- [x] Run `cargo fmt --all`.
-- [x] Run `cargo clippy --workspace --all-targets --all-features`.
-- [x] Run `cargo test --workspace --all-targets --all-features`.
-- [x] Record any unrelated blocker explicitly in this file before marking the checklist complete.
-  - Evidence: no unrelated blockers were encountered.
+# TODO: Release Readiness Backlog
+
+Source: local validation of the 2026-06 release-readiness review against the
+current checkout. This backlog keeps only issues that are supported by the
+repository and are actionable before a production-style release.
+
+Scope: public Rust API contract, raw facade contract, C ABI artifacts, symbol
+exports, unsafe audit evidence, hardening, tests, release automation,
+documentation, platform policy, and security governance.
+
+Rules:
+
+- Do not mark an item complete until the named code, documentation, or tooling
+  change exists and its validation command passes.
+- Keep Tier S safe Rust API narrow unless a separate design document and tests
+  justify expanding it.
+- Treat C ABI, raw Rust paths, feature flags, macros, MSRV, and supported
+  targets as compatibility-sensitive surfaces.
+- Preserve hot-path behavior. Any allocator-core or strict-type change needs
+  the benchmark evidence required by `docs/performance.md`.
+- For Rust code changes, run the project-required Rust verification before
+  declaring completion: `cargo fmt --all`, `cargo clippy --workspace
+  --all-targets --all-features`, and `cargo test --workspace --all-targets
+  --all-features`.
+
+## Validation notes
+
+These review concerns are already addressed in the current checkout and are not
+repeated as TODO work:
+
+- The crate root is already narrow and implementation modules are private by
+  default.
+- The Tier S, Tier U, Tier R, Tier C, and Tier I classification exists in
+  `docs/api-inventory.md` and `docs/compatibility.md`.
+- `unsafe_callbacks` is already separate from the crate-root Tier S facade.
+- `raw` is already documented as unsafe and unstable as a Rust path surface.
+- `unstable-raw-internals` is already off by default and gates translated
+  implementation modules.
+- `Cargo.toml` currently declares `[lib] crate-type = ["rlib"]`; cdylib and
+  staticlib artifacts are selected explicitly with `cargo rustc`.
+- C++ override and TLS shims are already feature-gated in `build.rs`.
+- Maintained target claims are already limited to Linux x86_64 GNU.
+- Object ownership APIs such as `MiBox<T>` and `HeapBox<'heap, T>` are already
+  explicitly deferred.
+- ASan, TSan, Miri, Valgrind, and safety-stress workflows already exist; the
+  remaining work is to align release policy and artifact-level coverage with
+  those workflows.
+
+Validated remaining issues:
+
+- `build.rs` still uses a broad Linux version-script pattern (`mi_*`) and also
+  exposes malloc/C++ patterns whenever `c-abi` is enabled, not only when the
+  interpose/C++ override modes require them.
+- `symbols/public-symbol-classification.tsv` still classifies Rust-extension
+  `mi_*` symbols and a prefix `_mi_` internal static archive surface.
+- Public macro exports are still large and include internal compatibility
+  macros, even though they are now inventoried.
+- `Options` remains an undecorated compatibility alias for `GlobalOptions`.
+- The C API example still says `cargo build --release` builds the linkable C
+  library, which conflicts with the current `rlib` default.
+- The crate package excludes repo scripts and vendored C headers, so FFI users
+  need a separate artifact story or explicit source-build instructions.
+- There is no maintained `cargo-fuzz`, libFuzzer, or AFL target, only
+  deterministic property and byte-stream fuzz-style tests.
+- Unsafe audit tooling does not yet require `SAFETY[AUDIT:*]` markers for every
+  unsafe operation in every source file.
+- Existing C/C++/LD_PRELOAD parity helpers are not fully promoted into the
+  main release checklist or validation workflow.
+
+## P0 - Freeze the production contract
+
+- [x] Record the production contract in `docs/release.md`.
+  - [x] State that `docs/api-inventory.md` is the authoritative public API
+        inventory for release signoff unless a separate `PUBLIC_API.md` is
+        created.
+  - [x] State that Tier S is the only stable Rust safe API surface.
+  - [x] State that Tier U is public unsafe Rust API with Rust SemVer review,
+        but is not Tier S.
+  - [x] State that Tier R remains unsafe and Rust-path unstable unless a later
+        version explicitly stabilizes it.
+  - [x] State that Tier C is a C ABI contract only and does not imply Rust ABI,
+        Rust layout, or Rust module-path stability.
+  - [x] Add a release-signoff checklist entry that confirms no new crate-root
+        public item was added without inventory and compatibility review.
+  - Evidence: `docs/release.md` now has a "Production Contract" section and
+    release signoff requirement for new crate-root public items.
+  - Verify: `scripts/check-api-inventory.py`.
+
+- [ ] Make the pre-1.0 decision for `Options`.
+  - [ ] Decide whether `Options` is removed before the first stable release or
+        kept as a deprecated compatibility alias.
+  - [ ] If removed, delete the alias, remove it from the crate-root re-export,
+        update `docs/api-inventory.md`, update `docs/safe-api.md`, and add a
+        changelog migration note to use `GlobalOptions`.
+  - [ ] If kept, add `#[deprecated]` to the alias with a replacement note,
+        update examples and docs to use only `GlobalOptions`, and keep tests
+        compiling with `#[allow(deprecated)]` only where compatibility is being
+        tested.
+  - [ ] Update API inventory expectations in `scripts/check-api-inventory.py`.
+  - Verify: `cargo test --doc --features std` and
+    `scripts/check-api-inventory.py`.
+
+- [ ] Confirm the long-term shape of `raw`.
+  - [ ] Decide whether the current Option A is the release policy: public
+        `raw`, explicitly unsafe, explicitly unstable as a Rust path surface.
+  - [ ] If Option A is kept, add a release note that `raw` remains available for
+        C-header parity, tests, benchmarks, and low-level integrations only.
+  - [ ] If Option B is chosen, gate `raw` behind an explicit feature before
+        the stable release and update examples, tests, docs, and inventory.
+  - [ ] If Option C is chosen, create a split-crate design for a safe Rust crate
+        plus a `-sys` or FFI artifact crate before implementation.
+  - Verify: `scripts/check-raw-facade.sh` and `scripts/check-docs.sh`.
+
+- [ ] Add a release API diff artifact for Tier S and Tier U.
+  - [ ] Choose either an existing tool such as `cargo public-api` or extend
+        `scripts/check-api-inventory.py` to emit a checked snapshot.
+  - [ ] Store the release snapshot under a stable path such as
+        `docs/api-snapshots/`.
+  - [ ] Add release instructions for comparing the current snapshot to the
+        previous release tag.
+  - [ ] Ensure raw/Tier R changes remain classified separately from Tier S/U
+        Rust source compatibility.
+  - Verify: release snapshot command exits cleanly and the snapshot diff is
+    reviewed.
+
+## P0 - Clean the dynamic C ABI
+
+- [ ] Replace the broad Linux `mi_*` dynamic export pattern with an exact
+      allowlist.
+  - [ ] Generate the public `mi_*` allowlist from
+        `mimalloc-3.3.2/include/mimalloc.h` and
+        `mimalloc-3.3.2/include/mimalloc-stats.h`.
+  - [ ] Include only documented public-header symbols in the default C ABI
+        symbol group.
+  - [ ] Keep Rust-extension `mi_*` helpers out of the default dynamic export
+        set unless they are renamed or documented as extension ABI.
+  - [ ] Fail the check if a new dynamic `mi_*` symbol appears without an
+        explicit public-header or extension-ABI decision.
+  - Verify: new dynamic symbol check plus `scripts/check-abi-symbols.sh`.
+
+- [ ] Split dynamic export groups by artifact mode.
+  - [ ] For `--features c-abi --crate-type cdylib`, export public mimalloc
+        `mi_*` symbols and required public layouts/callbacks only.
+  - [ ] For `--features interpose --crate-type cdylib`, add malloc-family
+        override symbols.
+  - [ ] For `--features cxx-overrides` or `interpose`, add Itanium C++
+        operator new/delete override symbols only when the C++ shim is linked.
+  - [ ] Ensure `c-abi` alone does not export malloc-family or C++ operator
+        symbols by version-script pattern.
+  - [ ] Add negative tests proving those symbols are absent from the wrong
+        artifact modes.
+  - Verify: `readelf -Ws` or `nm -D` checks for `c-abi`, `cxx-overrides`, and
+    `interpose` cdylibs.
+
+- [ ] Decide the Rust-extension symbol policy.
+  - [ ] Review each `rust-extension` and `platform-helper-extension` entry in
+        `symbols/public-symbol-classification.tsv`.
+  - [ ] For each extra `mi_*` symbol, choose one outcome: hide, rename with a
+        `mechanical_mimalloc_*` prefix, or document as intentional extension
+        ABI.
+  - [ ] If hidden, remove it from the dynamic export allowlist and keep only
+        internal Rust reachability.
+  - [ ] If renamed, provide compatibility only if the old symbol was already
+        part of a promised release.
+  - [ ] If documented, add ownership, nullability, threading, and stability
+        text to `docs/abi.md`.
+  - Verify: dynamic symbol manifest shows no unintentional extra `mi_*`
+    symbols.
+
+- [ ] Add dynamic ABI golden manifests.
+  - [ ] Produce one checked manifest for `c-abi` cdylib exports.
+  - [ ] Produce one checked manifest for `interpose` cdylib exports.
+  - [ ] Include symbol names, binding, visibility, version where available, and
+        artifact build command.
+  - [ ] Add a script that diffs current output against the checked manifest.
+  - [ ] Document how to intentionally update the manifest.
+  - Verify: manifest check fails on an injected extra symbol in a local
+    self-test or fixture.
+
+- [ ] Add ABI diff checks between releases.
+  - [ ] Define where previous release symbol manifests are stored or fetched.
+  - [ ] Compare new cdylib and staticlib manifests against the previous release.
+  - [ ] Classify removed, added, renamed, and visibility-changed symbols.
+  - [ ] Require a changelog entry for every intentional ABI change.
+  - Verify: release checklist includes the ABI diff command.
+
+## P0 - Decide and clean the staticlib story
+
+- [ ] Decide whether staticlib is production-supported or preview-only.
+  - [ ] If production-supported, define the exact static archive symbol
+        contract.
+  - [ ] If preview-only, state this in README, `docs/abi.md`,
+        `docs/release.md`, and the FFI linking guide.
+  - [ ] Make the decision visible in release notes and artifact names.
+  - Verify: docs and release checklist use the same staticlib status.
+
+- [ ] If staticlib is production-supported, reduce accidental symbol leakage.
+  - [ ] Audit every `_mi_*` static archive export currently covered by the
+        prefix classification.
+  - [ ] Determine which internal C-shaped symbols are truly required by the
+        static archive link model.
+  - [ ] Hide, make Rust-private, or prefix internal symbols that do not need
+        external linkage.
+  - [ ] Add a static archive symbol manifest with expected public and internal
+        groups.
+  - [ ] Fail CI if a new `_mi_*`, `mi_*`, malloc-family, or C++ symbol appears
+        without classification.
+  - Verify: `scripts/check-public-symbols.py` plus the new static manifest
+    check.
+
+- [ ] Add static link collision tests.
+  - [ ] Build a C app that links the Rust staticlib and another object/library
+        with representative non-conflicting symbols.
+  - [ ] Add a negative fixture for a known collision class if static leakage is
+        intentionally preview-only.
+  - [ ] Verify malloc-family symbols behave as documented in static link mode.
+  - [ ] Verify internal `_mi_*` symbols are either absent or explicitly
+        documented as not stable.
+  - Verify: new static collision script in the release checklist.
+
+## P0 - Build and ship release artifacts
+
+- [ ] Choose the FFI artifact distribution model.
+  - [ ] Decide between crates.io Rust crate only plus GitHub release assets,
+        crates.io package with enough source-build instructions, or a split
+        Rust/FFI crate model.
+  - [ ] Document why the chosen model works even though `scripts/` and
+        vendored headers are not included in the current crate package.
+  - [ ] Update `docs/release.md` and README with the chosen model.
+  - Verify: `scripts/check-package.sh` and a release dry-run artifact build.
+
+- [ ] Add an explicit release artifact build script.
+  - [ ] Build the Rust library artifact:
+        `cargo build --release --lib`.
+  - [ ] Build C ABI cdylib:
+        `cargo rustc --release --features c-abi --lib --
+        --crate-type cdylib`.
+  - [ ] Build C ABI staticlib:
+        `cargo rustc --release --features c-abi --lib --
+        --crate-type staticlib`.
+  - [ ] Build interpose cdylib:
+        `cargo rustc --release --features interpose --lib --
+        --crate-type cdylib`.
+  - [ ] Build interpose staticlib:
+        `cargo rustc --release --features interpose --lib --
+        --crate-type staticlib`.
+  - [ ] Use isolated `CARGO_TARGET_DIR` values so artifacts from different
+        modes cannot be confused.
+  - [ ] Emit a machine-readable manifest containing artifact path, feature set,
+        target triple, profile, rustc version, and checksum.
+  - Verify: artifact build script exits cleanly from a fresh checkout.
+
+- [ ] Ship C headers with release artifacts.
+  - [ ] Include `mimalloc.h`.
+  - [ ] Include `mimalloc-stats.h`.
+  - [ ] Decide whether to include `mimalloc-override.h` for interposition
+        users.
+  - [ ] Decide whether to include `mimalloc-new-delete.h` for C++ users.
+  - [ ] Record the header hashes from `PARITY.md` or regenerate them in the
+        artifact manifest.
+  - Verify: a C consumer builds using only the staged release artifact
+    directory, not the repository source tree.
+
+- [ ] Add link metadata for FFI consumers.
+  - [ ] Generate `mechanical_mimalloc.pc`.
+  - [ ] Generate `mechanical_mimalloc-config.cmake`.
+  - [ ] Include library search paths, include paths, pthread/dl/m link
+        requirements, and artifact-mode notes.
+  - [ ] Test pkg-config with a C consumer.
+  - [ ] Test CMake `find_package` with a C consumer.
+  - Verify: package metadata tests run from a temporary directory outside the
+    repository.
+
+- [ ] Produce release integrity files.
+  - [ ] Generate `SHA256SUMS`.
+  - [ ] Generate a checked ABI symbol manifest for every shipped binary
+        artifact.
+  - [ ] Generate an environment/reproducibility note using
+        `scripts/env-info.sh`.
+  - [ ] Include benchmark report references or attach the benchmark summary
+        required by `docs/performance.md`.
+  - Verify: release dry-run produces all expected files.
+
+- [ ] Fix stale C API build instructions.
+  - [ ] Update `examples/c_api.c`; `cargo build --release` no longer builds a
+        linkable cdylib with the current `[lib] crate-type = ["rlib"]`.
+  - [ ] Show the correct cdylib and staticlib commands.
+  - [ ] Show the correct `cc` command for dynamic linking.
+  - [ ] Show the correct `cc` command for static linking.
+  - [ ] Keep the example aligned with the chosen artifact distribution model.
+  - Verify: run the documented commands from a clean target directory.
+
+## P0 - Add real C and C++ consumer tests
+
+- [ ] Extend C public API link tests to cover release artifact modes.
+  - [ ] Keep the existing static public API smoke coverage.
+  - [ ] Add a dynamic C smoke test against the `c-abi` cdylib.
+  - [ ] Add a static C smoke test against the `c-abi` staticlib.
+  - [ ] Add a dynamic C smoke test against the `interpose` cdylib when
+        interposition symbols are expected.
+  - [ ] Add a static C smoke test against the `interpose` staticlib.
+  - [ ] Build consumers from a temporary directory using staged headers and
+        libraries.
+  - Verify: new C consumer script is run by validation or release CI.
+
+- [ ] Add focused `dlopen`/`dlsym` tests.
+  - [ ] Build the documented `c-abi` cdylib.
+  - [ ] `dlopen` the artifact with `RTLD_NOW`.
+  - [ ] Resolve `mi_malloc`, `mi_free`, `mi_good_size`, and representative
+        stats/options symbols.
+  - [ ] Allocate and free through resolved function pointers.
+  - [ ] Assert plain `malloc` is not redirected by `dlopen` alone.
+  - [ ] Assert no unexpected extension symbol is resolvable in the clean
+        default C ABI artifact.
+  - Verify: focused dynamic loading script passes on Linux x86_64 GNU.
+
+- [ ] Add focused `LD_PRELOAD` interposition tests.
+  - [ ] Build the documented `interpose` cdylib.
+  - [ ] Run a C program under `LD_PRELOAD` and verify `malloc`, `calloc`,
+        `realloc`, `free`, `aligned_alloc`, `posix_memalign`, `memalign`,
+        `valloc`, and `malloc_usable_size` route to the allocator.
+  - [ ] Verify `mi_check_owned` or equivalent ownership checks where the C
+        contract supports them.
+  - [ ] Verify shutdown stats behavior when `mimalloc_show_stats=1`.
+  - [ ] Keep this as a small CI-friendly script even if
+        `scripts/check-behavioral-parity.py` remains broader.
+  - Verify: focused LD_PRELOAD script is run by validation or release CI.
+
+- [ ] Align broad behavioral parity with documented artifact modes.
+  - [ ] Update `scripts/check-behavioral-parity.py` so `rust_cdylib()` builds
+        the documented dynamic artifact mode, not an unfeatured cdylib unless
+        that is intentionally being tested.
+  - [ ] Add separate helper names for plain cdylib, `c-abi` cdylib, and
+        `interpose` cdylib if all three modes remain useful.
+  - [ ] Record which parity cases require interposition and which require only
+        C ABI exports.
+  - [ ] Add command-line flags if the full parity script remains too expensive
+        for every CI run.
+  - Verify: broad parity output identifies the exact artifact mode under test.
+
+- [ ] Add C++ release artifact tests.
+  - [ ] Test C++ operator new/delete overrides for the `interpose` staticlib.
+  - [ ] Test C++ operator new/delete overrides for the `interpose` cdylib if
+        that is a supported artifact.
+  - [ ] Test nothrow, aligned, sized delete, array new/delete, and
+        `std::new_handler` behavior.
+  - [ ] Keep the documented bad-allocation divergence for Rust-originated
+        `mi_new*` C ABI entry points.
+  - Verify: `scripts/check-cxx-operator-new-parity.py` or a new artifact-mode
+    variant passes for supported C++ modes.
+
+## P0 - Reduce public macro surface
+
+- [ ] Decide which exported macros are part of the production contract.
+  - [ ] Review the `tier-r-typed-allocation` macro list.
+  - [ ] Review the `tier-r-header-override` macro list.
+  - [ ] Review every `internal-compatibility` macro.
+  - [ ] Choose keep, feature-gate, make crate-private, or remove for each
+        macro bucket before a stable release.
+  - [ ] Document the decision in `docs/api-inventory.md` and `docs/abi.md`.
+  - Verify: `scripts/check-api-inventory.py`.
+
+- [ ] Remove or privatize internal compatibility macros where possible.
+  - [ ] Inventory each internal macro call site.
+  - [ ] Replace single-crate call sites with crate-private `macro_rules!`
+        definitions when downstream expansion does not require
+        `#[macro_export]`.
+  - [ ] Replace simple statement-like macros with functions where that does
+        not affect hot-path codegen or translated parity.
+  - [ ] Keep `#[macro_export]` only where downstream expansion or C-header
+        parity requires it.
+  - [ ] Add release-fast-path or assembly evidence for any hot-path macro
+        replacement.
+  - Verify: `cargo test --workspace --all-targets --all-features` and relevant
+    benchmark smoke if hot paths moved.
+
+- [ ] Feature-gate C-header compatibility macros if they are not part of the
+      default Rust contract.
+  - [ ] Decide on a feature name such as `c-header-macros` if gating is chosen.
+  - [ ] Ensure typed allocation macros and header override macros are available
+        only in intended configurations.
+  - [ ] Update examples and doctests to enable the feature when needed.
+  - [ ] Update `scripts/check-api-inventory.py` to check macro inventory per
+        feature set.
+  - [ ] Keep compile-fail tests proving raw macros require caller-side unsafe
+        blocks.
+  - Verify: `cargo test --doc --features std` plus macro feature checks.
+
+## P1 - Retire `unstable-raw-internals`
+
+- [ ] Move internal-invariant integration tests into crate-private unit tests
+      where practical.
+  - [ ] Start with tests listed in `docs/raw-facade-migration.md` that use
+        `raw::internal`, `raw::types`, `raw::page`, `raw::bits`, `raw::track`,
+        or `raw::bitmap`.
+  - [ ] Keep public C API behavior tests on root `raw::mi_*` paths.
+  - [ ] Avoid exposing new public helper APIs just to satisfy tests.
+  - Verify: `scripts/check-raw-facade.sh`.
+
+- [ ] Remove the `unstable-raw-internals` feature after no repository tests
+      require it.
+  - [ ] Delete gated module re-exports from `src/raw/mod.rs`.
+  - [ ] Remove feature references from `Cargo.toml`.
+  - [ ] Update `docs/raw-facade-migration.md`, `docs/api-inventory.md`,
+        `docs/features.md`, and `docs/limitations.md`.
+  - [ ] Update scripts that currently expect unstable raw-internals modules.
+  - Verify: `scripts/check-api-inventory.py`, `scripts/check-raw-facade.sh`,
+    and the full Rust test suite.
+
+## P1 - Finish unsafe audit coverage
+
+- [ ] Require `SAFETY[AUDIT:*]` markers for every unsafe operation.
+  - [ ] Expand `scripts/check-unsafe-audit.py` beyond the currently migrated
+        file subset.
+  - [ ] Detect untagged `unsafe { ... }` blocks.
+  - [ ] Detect untagged `unsafe impl` blocks.
+  - [ ] Detect untagged `unsafe extern` blocks and exported ABI wrappers.
+  - [ ] Detect untagged naked/assembly or export-name safety boundaries where
+        the source syntax permits it.
+  - [ ] Provide a migration allowlist only for files with explicit owner and
+        removal date.
+  - Verify: `scripts/check-unsafe-audit.py`.
+
+- [ ] Map every audit tag to tests or manual evidence.
+  - [ ] Add a table to `UNSAFE_AUDIT.md` or a machine-readable audit evidence
+        file.
+  - [ ] For each `SAFETY[AUDIT:*]` tag, list direct tests, parity scripts,
+        Miri model tests, sanitizer evidence, benchmark/assembly evidence, or
+        manual proof.
+  - [ ] Add a script that fails when a source audit tag has no evidence entry.
+  - [ ] Add a script that fails when an evidence entry references a missing
+        test or script.
+  - Verify: new audit-evidence check plus `scripts/check-unsafe-audit.py`.
+
+- [ ] Add an advisory unsafe inventory report.
+  - [ ] Choose `cargo geiger` or a local equivalent.
+  - [ ] Generate a report for normal, `c-abi`, `interpose`, `secure`,
+        `guarded`, `track-valgrind`, and `track-asan` builds.
+  - [ ] Store the release report as advisory evidence, not as the sole safety
+        proof.
+  - [ ] Document how new unsafe count changes are reviewed.
+  - Verify: release checklist includes the unsafe inventory report command.
+
+## P1 - Add real fuzzing and failure injection
+
+- [ ] Add maintained external fuzz targets.
+  - [ ] Create a `cargo-fuzz` workspace or an equivalent maintained fuzzing
+        harness.
+  - [ ] Fuzz raw allocation operation sequences: malloc, zalloc, calloc,
+        realloc, aligned allocation, heap allocation, collect, and free.
+  - [ ] Include nulls, zero sizes, overflow-sized requests, small sizes, large
+        sizes, and alignment classes.
+  - [ ] Include per-heap ownership, cross-thread free, realloc preservation,
+        zeroing, usable-size lower bounds, and stats consistency.
+  - [ ] Add corpus seeds derived from `tests/fuzz_alloc_sequences.rs` and
+        `tests/property_alloc_sequences.rs`.
+  - [ ] Document how to minimize and commit reproducers.
+  - Verify: fuzz target builds and runs for a bounded smoke duration in CI or
+    release candidate checks.
+
+- [ ] Add deterministic OOM/failure injection.
+  - [ ] Identify allocator OS hooks or internal allocation paths that can be
+        made fail deterministically in tests.
+  - [ ] Test safe `Allocation` failure returns `AllocError` without leaking.
+  - [ ] Test safe resize failure preserves the original allocation in
+        `ResizeError`.
+  - [ ] Test heap allocation failure preserves heap ownership and does not
+        double-free.
+  - [ ] Test raw allocation failure preserves C null/errno behavior where
+        mimalloc specifies it.
+  - [ ] Avoid relying only on huge allocation attempts, which are platform and
+        overcommit sensitive.
+  - Verify: focused failure-injection tests pass in debug and release.
+
+- [ ] Add callback concurrency and reentry tests.
+  - [ ] Model process-global callback registration/restoration races where
+        possible.
+  - [ ] Add tests for callback guard drop restoring the previous callback under
+        nested registration.
+  - [ ] Add tests for allocator reentry from error and deferred-free
+        callbacks.
+  - [ ] Add tests for panic containment in `std` and test builds.
+  - [ ] Document which callback races remain caller obligations because Tier U
+        constructors are unsafe.
+  - Verify: callback tests and any model tests pass under the safety-stress
+    script.
+
+- [ ] Add artifact-level no-unwind tests.
+  - [ ] Build the release `c-abi` cdylib with panic abort.
+  - [ ] Trigger representative error, callback, and OOM paths from a C
+        consumer.
+  - [ ] Assert Rust panic/unwind does not cross the C ABI boundary.
+  - [ ] Include callback panic containment where `std` or test builds catch
+        panics.
+  - Verify: no-unwind artifact test passes on Linux x86_64 GNU.
+
+- [ ] Add sustained thread-stress coverage for release candidates.
+  - [ ] Stress same-thread allocate/free.
+  - [ ] Stress cross-thread free.
+  - [ ] Stress abandoned page reclaim.
+  - [ ] Stress thread init/done.
+  - [ ] Stress process done and shutdown stats.
+  - [ ] Add fork/exec constraints only if they are claimed as supported.
+  - Verify: stress script is part of release-candidate validation.
+
+## P1 - Align CI and release gates
+
+- [ ] Make formatting a first-class validation workflow step.
+  - [ ] Add `scripts/check-fmt.sh` to `.github/workflows/validation.yml`.
+  - [ ] Consider changing `scripts/check-fmt.sh` to `cargo fmt --all --check`
+        so it matches the project-required developer command.
+  - [ ] Keep `git diff --check` for whitespace errors.
+  - Verify: validation workflow runs formatting before lints.
+
+- [ ] Add feature-sensitive ABI checks to CI.
+  - [ ] Run `scripts/check-feature-abi.sh` in validation or release CI.
+  - [ ] Include default, `secure`, `guarded`, `track-valgrind`, and
+        `track-asan` symbol/layout checks as currently scripted.
+  - [ ] Add dynamic cdylib feature-mode symbol checks after dynamic manifests
+        exist.
+  - Verify: feature ABI job reports each feature set separately.
+
+- [ ] Add C and C++ artifact consumer checks to CI.
+  - [ ] Run the focused C static and dynamic consumer script.
+  - [ ] Run the focused `dlopen` script.
+  - [ ] Run the focused `LD_PRELOAD` script.
+  - [ ] Run the supported C++ override script.
+  - [ ] Keep broad behavioral parity available as a release-candidate job if it
+        remains too slow for every pull request.
+  - Verify: validation or release workflow names the artifact mode under test.
+
+- [ ] Align `docs/release.md` with existing hardening workflows.
+  - [ ] Add ASan to the release checklist.
+  - [ ] Add TSan to the release checklist.
+  - [ ] Add Valgrind tracking parity to the release checklist.
+  - [ ] Add Miri core unsafe validation to the release checklist.
+  - [ ] Add safety-stress to the release checklist.
+  - [ ] State which jobs must be green before a release tag.
+  - Verify: release checklist and `.github/workflows/validation.yml` agree.
+
+- [ ] Pin performance workflow toolchain consistently.
+  - [ ] Change `.github/workflows/performance.yml` from `stable` to the pinned
+        release toolchain or document why benchmark gates intentionally use
+        floating stable.
+  - [ ] Capture `scripts/env-info.sh` output in performance artifacts.
+  - [ ] Upload benchmark CSV and environment evidence.
+  - Verify: performance workflow artifacts include threshold and environment
+    files.
+
+- [ ] Add package consumer matrix coverage.
+  - [ ] Keep the existing packaged safe-Rust consumer test.
+  - [ ] Add a default-feature packaged consumer if it differs from the current
+        `std` consumer.
+  - [ ] Add an FFI artifact consumer test that does not rely on unpublished
+        repo scripts.
+  - [ ] Add docs.rs-style documentation build verification if not already
+        covered by `scripts/check-docs.sh`.
+  - Verify: `scripts/check-package.sh` plus new FFI consumer check.
+
+## P1 - Safe API polish without broadening the API
+
+- [ ] Add examples or doctests for every Tier S type.
+  - [ ] Cover `MiMalloc`.
+  - [ ] Cover `Allocation` and `InitializedAllocation`.
+  - [ ] Cover `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
+        `InitializedHeapAllocation`.
+  - [ ] Cover `GlobalOptions` and `OptionKey`.
+  - [ ] Cover `StatsSnapshot`, `StatCount`, `StatTotal`, and `ProcessInfo`.
+  - [ ] Cover every safe error/status type.
+  - Verify: `cargo test --doc --features std`.
+
+- [ ] Enforce rustdoc sections for safe APIs.
+  - [ ] Add `# Errors` sections to fallible Tier S methods.
+  - [ ] Add `# Panics` sections where a safe API can panic, or state that it
+        does not panic beyond standard library argument constructors.
+  - [ ] Add `# Safety` sections to all unsafe Tier U and Tier R public items.
+  - [ ] Extend `scripts/check-safe-docs.py` or add a new docs check for these
+        sections.
+  - Verify: `scripts/check-docs.sh`.
+
+- [ ] Enable or emulate `missing_docs` for Tier S and Tier U.
+  - [ ] Decide whether to use module-level `#![warn(missing_docs)]` or extend
+        the current safe-docs script.
+  - [ ] Include public enum variants, type aliases, trait impl notes where
+        appropriate, and unsafe callback guard docs.
+  - [ ] Keep global `missing_docs` staged until raw/Tier R policy permits it.
+  - Verify: docs check fails on a synthetic undocumented Tier S item.
+
+- [ ] Add trait behavior tests for safe facade types.
+  - [ ] Assert `MiMalloc` expected traits.
+  - [ ] Assert `Allocation` and `InitializedAllocation` are `Send`/`Sync` only
+        as documented.
+  - [ ] Assert `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
+        `InitializedHeapAllocation` are not `Send` and not `Sync`.
+  - [ ] Prefer compile-fail doctests or a dedicated static assertion helper.
+  - Verify: trait tests fail if auto-traits change accidentally.
+
+- [ ] Add compile-fail tests for heap lifetime misuse.
+  - [ ] Prove a `HeapAllocation<'heap>` cannot outlive its `Heap`.
+  - [ ] Prove an `InitializedHeapAllocation<'heap>` cannot outlive its `Heap`.
+  - [ ] Prove deleting/dropping a heap while safe heap allocations are live is
+        rejected by the borrow checker.
+  - [ ] Include `MainHeap` examples separately because it produces
+        `HeapRef<'static>` by design.
+  - Verify: compile-fail tests run under doctest or trybuild-equivalent
+    tooling.
+
+- [ ] Add an initialization walkthrough.
+  - [ ] Show `Allocation::new` returning uninitialized bytes.
+  - [ ] Show writing through `MaybeUninit<u8>` without reading uninitialized
+        memory.
+  - [ ] Show the unsafe `assume_initialized` transition after every byte is
+        initialized.
+  - [ ] Show the zeroed path as the safe alternative.
+  - Verify: example compiles and doctests pass.
+
+- [ ] Keep object ownership APIs out of the current safe facade.
+  - [ ] Add a release checklist item that rejects `MiBox<T>` or
+        `HeapBox<'heap, T>` additions without a separate design.
+  - [ ] If object APIs are designed later, cover construction failure,
+        destructor behavior, panic behavior, heap ownership, and threading
+        traits before implementation.
+  - Verify: API inventory has no object ownership types unless the design is
+    complete.
+
+## P1 - Performance signoff
+
+- [ ] Promote full benchmark evidence for release candidates.
+  - [ ] Run `scripts/check-bench-full.sh` before release candidates.
+  - [ ] Capture `scripts/env-info.sh` output.
+  - [ ] Store the threshold CSV from the full run.
+  - [ ] Update `BENCHMARK_RESULTS.md` with command lines, feature flags, and
+        noisy-benchmark notes.
+  - Verify: release checklist points to the exact benchmark evidence.
+
+- [ ] Measure documented artifact modes separately.
+  - [ ] Benchmark default Rust library mode.
+  - [ ] Benchmark `interpose` mode separately.
+  - [ ] Avoid reusing Criterion baselines across feature/artifact modes.
+  - [ ] Record Rust-vs-C ratios for native scenario benchmarks.
+  - Verify: benchmark report identifies feature set and artifact mode.
+
+- [ ] Require evidence for new strict internal wrappers.
+  - [ ] Update `docs/strict-types.md` or `docs/performance.md` to state what
+        assembly or benchmark evidence is required for new hot-path witnesses.
+  - [ ] Capture release assembly for free-list pop, local free, remote free,
+        small page lookup, and any changed hot path.
+  - [ ] Fail release signoff if a new wrapper adds branches, calls, memory
+        traffic, stack spills, formatting, allocation, or panic paths in a
+        tracked hot path without justification.
+  - Verify: `scripts/capture-release-assembly.sh` output or benchmark evidence
+    is attached to the change.
+
+- [ ] Publish per-release performance summaries.
+  - [ ] Summarize geomean Rust/C ratios.
+  - [ ] Summarize hot-path deltas against previous release evidence.
+  - [ ] Separate noisy watch items from release-blocking regressions.
+  - [ ] Link raw Criterion summaries or CSV artifacts.
+  - Verify: release notes link to `BENCHMARK_RESULTS.md` or an attached report.
+
+## P2 - Documentation polish
+
+- [ ] Rewrite README around three user stories.
+  - [ ] Rust global allocator.
+  - [ ] Safe Rust owned bytes, heaps, stats, and options.
+  - [ ] C ABI artifact and interposition.
+  - [ ] Keep raw API examples below the safe facade and label them unsafe and
+        unstable.
+  - Verify: README examples match current commands and features.
+
+- [ ] Add a dedicated Rust safety model page.
+  - [ ] Explain ownership and lifetime encoding in safe APIs.
+  - [ ] Explain why uninitialized memory is not exposed as `&[u8]`.
+  - [ ] Explain heap-tied allocation lifetimes.
+  - [ ] Explain why process-global callback guards are Tier U unsafe APIs.
+  - [ ] Explain raw pointer isolation at FFI and hot-path boundaries.
+  - [ ] Explain audit tags and no-allocation critical-path evidence.
+  - [ ] Explain strict internal types and zero-cost expectations.
+  - Verify: README links to the page and `scripts/check-docs.sh` passes.
+
+- [ ] Add an FFI linking guide.
+  - [ ] Document dynamic C ABI linking.
+  - [ ] Document static C ABI linking.
+  - [ ] Document interposition with `LD_PRELOAD`.
+  - [ ] Document C++ operator override modes.
+  - [ ] Document headers and link metadata.
+  - [ ] Document supported target and unsupported platform caveats.
+  - Verify: guide commands are exercised by consumer tests.
+
+- [ ] Add a symbol and versioning policy page or section.
+  - [ ] Define public C header symbols.
+  - [ ] Define malloc-family interposition symbols.
+  - [ ] Define C++ operator symbols.
+  - [ ] Define extension ABI naming rules.
+  - [ ] Define static archive internal-symbol policy.
+  - [ ] Define release-to-release ABI diff expectations.
+  - Verify: policy matches symbol scripts and manifests.
+
+- [ ] Add a migration guide from C mimalloc.
+  - [ ] Map C headers to Rust release artifacts.
+  - [ ] Map common allocation/free APIs to safe Rust and raw Rust choices.
+  - [ ] Explain callback differences and Tier U guard obligations.
+  - [ ] Explain options/stats safe wrappers.
+  - [ ] Explain unsupported platform and feature differences.
+  - Verify: guide links to compatibility and ABI docs.
+
+- [ ] Update production status text.
+  - [ ] State exactly what is supported.
+  - [ ] State exactly what is preview-only.
+  - [ ] State exactly what is unstable.
+  - [ ] Keep Linux x86_64 GNU as the only maintained target until more evidence
+        exists.
+  - Verify: README, `docs/limitations.md`, `docs/platforms.md`, and
+    `docs/release.md` agree.
+
+## P2 - Platform promotion policy
+
+- [ ] Convert platform promotion rules into a checklist.
+  - [ ] Require compile and test CI for the platform.
+  - [ ] Require ABI/layout checks where the platform has a C ABI story.
+  - [ ] Require C and C++ link tests where FFI artifacts are claimed.
+  - [ ] Require sanitizer or equivalent hardening evidence.
+  - [ ] Require platform primitive audit.
+  - [ ] Require benchmark evidence or an explicit performance caveat.
+  - [ ] Require documented limitations.
+  - Verify: `docs/platforms.md` contains the checklist.
+
+- [ ] Keep source-present platforms out of release marketing.
+  - [ ] Ensure macOS, Windows, WASI, Emscripten, aarch64, and other source
+        present targets are described as smoke/source-present only unless
+        promoted.
+  - [ ] Ensure CI smoke jobs do not imply maintained support.
+  - [ ] Add release-note language for unsupported target reports and triage.
+  - Verify: README and platform docs do not overclaim.
+
+## P2 - Security and governance
+
+- [ ] Add a concrete private vulnerability reporting process.
+  - [ ] Add a security email address or GitHub Security Advisory instructions.
+  - [ ] State expected acknowledgement and triage timelines.
+  - [ ] State what information reporters should include.
+  - [ ] Keep unsupported-target triage policy clear.
+  - Verify: `SECURITY.md` has a concrete private contact path.
+
+- [ ] Add release signing.
+  - [ ] Choose signing mechanism for source tags and binary artifacts.
+  - [ ] Document key ownership and rotation.
+  - [ ] Sign release checksums or artifacts.
+  - [ ] Verify signatures in the release dry run.
+  - Verify: release checklist includes signing verification.
+
+- [ ] Add SBOM or dependency report.
+  - [ ] Generate a dependency report for runtime and development dependencies.
+  - [ ] Include build-tool requirements such as C compiler, C++ compiler, and
+        archiver.
+  - [ ] Attach the report to release artifacts or release notes.
+  - Verify: release dry run includes the SBOM/dependency report.
+
+- [ ] Expand reproducible release instructions.
+  - [ ] Document clean checkout requirements.
+  - [ ] Document exact Rust toolchain and components.
+  - [ ] Document artifact build commands.
+  - [ ] Document expected checksums and symbol manifests.
+  - [ ] Document environment capture.
+  - Verify: another checkout can reproduce artifact names and manifests.
+
+- [ ] Add supported-version policy after releases exist.
+  - [ ] Define which release lines receive security fixes.
+  - [ ] Define patch release expectations.
+  - [ ] Define when pre-release branches stop receiving fixes.
+  - Verify: `SECURITY.md` and release docs agree.
+
+- [ ] Add CVE and advisory handling policy.
+  - [ ] Define severity triage.
+  - [ ] Define embargo handling.
+  - [ ] Define coordinated disclosure steps.
+  - [ ] Define changelog and advisory publication requirements.
+  - Verify: governance docs link to the policy.
+
+- [ ] Add fuzz corpus and reproducer policy.
+  - [ ] Define where minimized reproducers live.
+  - [ ] Define when corpus additions are required.
+  - [ ] Define how to classify invalid-caller UB versus allocator bugs.
+  - [ ] Define how fuzz findings map to unsafe audit entries.
+  - Verify: fuzzing docs and security docs agree.
+
+- [ ] Add a hardening threat model.
+  - [ ] Describe what `secure` is expected to detect or mitigate.
+  - [ ] Describe what `guarded` is expected to detect or mitigate.
+  - [ ] Describe what remains out of scope for malicious unsafe callers.
+  - [ ] Describe entropy, canary, and metadata corruption assumptions.
+  - Verify: `SECURITY.md` links to the threat model.
+
+- [ ] Add memory corruption triage checklist.
+  - [ ] Include allocation/free/realloc reproduction data.
+  - [ ] Include feature set and target platform.
+  - [ ] Include sanitizer/Valgrind/Miri evidence where applicable.
+  - [ ] Include upstream C mimalloc comparison requirement.
+  - [ ] Include symbol/artifact mode if the report involves FFI.
+  - Verify: issue template or security docs include the checklist.
+
+- [ ] Define upstream sync cadence.
+  - [ ] State how often vendored mimalloc is reviewed.
+  - [ ] State what must be re-run when upstream headers or implementation
+        change.
+  - [ ] State how `UPSTREAM_DIFF.md`, `PARITY.md`, ABI manifests, and
+        benchmark evidence are updated.
+  - Verify: `docs/upstream.md` includes cadence and required checks.
+
+## Definition of done for a production-style release
+
+- [ ] Tier S/Tier U Rust API contract is frozen and diffed.
+- [ ] `Options` alias decision is complete.
+- [ ] `raw` release policy is explicit and tested.
+- [ ] Dynamic C ABI has no unintentional extra `mi_*` exports.
+- [ ] Staticlib is either clean enough for production or explicitly
+      preview-only.
+- [ ] Release artifacts include headers, link metadata, checksums, symbol
+      manifests, and reproducibility notes.
+- [ ] C and C++ consumers link dynamically and statically in CI or release CI.
+- [ ] `LD_PRELOAD` interposition is tested for the documented artifact mode.
+- [ ] ASan, TSan, Valgrind, Miri, layout, symbol, and parity checks are release
+      gates.
+- [ ] Maintained external fuzz targets exist and have seed corpora.
+- [ ] Every unsafe audit tag maps to tests, tooling evidence, or manual proof.
+- [ ] Benchmark report shows wrapper and strict-type changes stay within
+      documented budgets.
+- [ ] Docs clearly distinguish safe Rust API, unsafe raw Rust API, and C ABI
+      artifacts.
+- [ ] Supported target claims remain narrow and evidence-backed.
+- [ ] Security reporting, signing, SBOM/dependency report, and release
+      reproduction process are documented.

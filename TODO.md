@@ -1269,12 +1269,18 @@ Validated remaining issues:
     `docs/release.md` lists it with related policy documents.
   - Verify: `SECURITY.md` links to the threat model.
 
-- [ ] Add memory corruption triage checklist.
-  - [ ] Include allocation/free/realloc reproduction data.
-  - [ ] Include feature set and target platform.
-  - [ ] Include sanitizer/Valgrind/Miri evidence where applicable.
-  - [ ] Include upstream C mimalloc comparison requirement.
-  - [ ] Include symbol/artifact mode if the report involves FFI.
+- [x] Add memory corruption triage checklist.
+  - [x] Include allocation/free/realloc reproduction data.
+  - [x] Include feature set and target platform.
+  - [x] Include sanitizer/Valgrind/Miri evidence where applicable.
+  - [x] Include upstream C mimalloc comparison requirement.
+  - [x] Include symbol/artifact mode if the report involves FFI.
+  - Evidence: `SECURITY.md` now includes a memory-corruption triage checklist
+    requiring allocation/free/realloc sequence details, feature and target
+    information, sanitizer/Valgrind/Miri evidence or applicability notes,
+    vendored C mimalloc 3.3.2 comparison, and FFI symbol/artifact mode details
+    for C, C++, dynamic loading, interposition, static preview archives, and
+    unexpected symbol resolution.
   - Verify: issue template or security docs include the checklist.
 
 - [ ] Define upstream sync cadence.

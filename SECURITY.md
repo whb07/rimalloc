@@ -62,6 +62,27 @@ including where public reproducers live, when corpus additions are required, how
 to classify invalid-caller undefined behavior versus allocator bugs, and how
 confirmed fuzz findings map back to unsafe-audit evidence.
 
+## Memory Corruption Triage Checklist
+
+For suspected allocator memory corruption, include these details privately:
+
+- allocation/free/realloc sequence, including API names, sizes, alignments,
+  zeroing expectations, preserved-byte expectations, allocation origin, heap or
+  main-heap ownership, thread ownership, cross-thread transfer, and the exact
+  operation where corruption, crash, leak, or invariant failure appears,
+- feature set and target platform, including Cargo features, target triple,
+  operating system, Rust toolchain, `secure`/`guarded`/tracking mode, relevant
+  mimalloc options, and environment variables,
+- sanitizer/Valgrind/Miri evidence where applicable, including exact commands,
+  logs, stack traces, core dump notes, debugger output, or an explanation when a
+  tool is not applicable to the reproducer,
+- upstream C mimalloc comparison against vendored C mimalloc 3.3.2 or a written
+  explanation for why the comparison cannot be run,
+- FFI symbol/artifact mode details when the report involves C, C++, dynamic
+  loading, or interposition, including `c-abi-cdylib`, `interpose-cdylib`,
+  preview static archive mode, linked headers, `LD_PRELOAD`, `dlopen`, C++
+  operator override use, and any unexpected exported or resolved symbol.
+
 ## Response Timeline
 
 The maintainer response targets are:

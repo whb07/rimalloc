@@ -297,13 +297,20 @@ Validated remaining issues:
 
 ## P0 - Build and ship release artifacts
 
-- [ ] Choose the FFI artifact distribution model.
-  - [ ] Decide between crates.io Rust crate only plus GitHub release assets,
+- [x] Choose the FFI artifact distribution model.
+  - [x] Decide between crates.io Rust crate only plus GitHub release assets,
         crates.io package with enough source-build instructions, or a split
         Rust/FFI crate model.
-  - [ ] Document why the chosen model works even though `scripts/` and
+  - [x] Document why the chosen model works even though `scripts/` and
         vendored headers are not included in the current crate package.
-  - [ ] Update `docs/release.md` and README with the chosen model.
+  - [x] Update `docs/release.md` and README with the chosen model.
+  - Evidence: README, `docs/release.md`, and `docs/ffi-linking.md` now define
+    the model as a crates.io Rust library package plus GitHub release assets
+    for C ABI libraries, headers, link metadata, checksums, ABI manifests, and
+    reproducibility notes. The docs explicitly say FFI assets are built from
+    the tagged repository checkout because repo-only scripts and vendored C
+    headers are intentionally outside the crate package, and that a split
+    Rust/FFI crate is deferred until there is a separate FFI package contract.
   - Verify: `scripts/check-package.sh` and a release dry-run artifact build.
 
 - [ ] Add an explicit release artifact build script.

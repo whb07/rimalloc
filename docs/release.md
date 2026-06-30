@@ -110,6 +110,21 @@ archives are attached for evaluation before the production policy changes, use
 a preview-marked name such as `mechanical_mimalloc-static-preview` and state
 that the archive is not a stable static ABI.
 
+## FFI Artifact Distribution
+
+The chosen distribution model is a crates.io Rust crate plus GitHub release
+assets for FFI consumers. The crates.io package is the Rust library
+distribution and is validated by `scripts/check-package.sh`. Production C ABI
+libraries, C headers, link metadata, checksums, ABI manifests, and
+reproducibility notes are built from the tagged repository checkout and
+attached to the GitHub release.
+
+This model is intentional because repo-only release scripts and the vendored C
+headers under `mimalloc-3.3.2/include/` are not included in the crate package.
+FFI asset production therefore uses the full release checkout, not the
+published crate tarball. A split Rust/FFI crate is deferred until there is a
+separate supported FFI package contract.
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.

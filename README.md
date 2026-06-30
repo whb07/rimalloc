@@ -17,6 +17,16 @@ The dynamic C ABI/interposition artifact is opt-in:
 cargo rustc --features interpose --lib --release -- --crate-type cdylib
 ```
 
+## Distribution Model
+
+The crates.io package is the Rust library distribution. Production C ABI
+libraries, C headers, link metadata, checksums, and ABI manifests are shipped as
+GitHub release assets built from the tagged repository checkout, not as files
+generated from the crates.io package. Repo-only release scripts and vendored C
+headers are intentionally outside the crate package, so FFI asset production
+uses the full release checkout and the commands documented in
+`docs/ffi-linking.md` and `docs/release.md`.
+
 The C ABI compatibility surface and the crate-root safe Rust facade are both
 tracked by source-shape, layout, symbol, lint, package, and benchmark gates.
 

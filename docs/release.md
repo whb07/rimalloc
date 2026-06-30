@@ -285,6 +285,7 @@ Related policy documents:
 - `docs/safe-api.md`
 - `docs/abi.md`
 - `docs/ffi-linking.md`
+- `docs/c-mimalloc-migration.md`
 - `docs/raw-facade-migration.md`
 - `docs/assembly-intrinsics.md`
 - `docs/compatibility.md`

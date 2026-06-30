@@ -1079,12 +1079,21 @@ Validated remaining issues:
     ABI manifests, and classification TSV.
   - Verify: policy matches symbol scripts and manifests.
 
-- [ ] Add a migration guide from C mimalloc.
-  - [ ] Map C headers to Rust release artifacts.
-  - [ ] Map common allocation/free APIs to safe Rust and raw Rust choices.
-  - [ ] Explain callback differences and Tier U guard obligations.
-  - [ ] Explain options/stats safe wrappers.
-  - [ ] Explain unsupported platform and feature differences.
+- [x] Add a migration guide from C mimalloc.
+  - [x] Map C headers to Rust release artifacts.
+  - [x] Map common allocation/free APIs to safe Rust and raw Rust choices.
+  - [x] Explain callback differences and Tier U guard obligations.
+  - [x] Explain options/stats safe wrappers.
+  - [x] Explain unsupported platform and feature differences.
+  - Evidence: `docs/c-mimalloc-migration.md` now maps mimalloc headers to
+    release artifact modes, maps common allocation/free families to
+    `MiMalloc`, safe byte/heap wrappers, the raw facade, or C ABI artifacts,
+    documents Tier U callback guard obligations, maps options/stats/process
+    info APIs to safe wrappers, and explains maintained target, unsupported
+    platform, feature, interposition, C++ override, and static-preview caveats.
+    README and `docs/release.md` link to the guide, and
+    `tests/release_fast_path_audit.rs` checks that it stays aligned with
+    compatibility, ABI, FFI linking, feature, and safe API docs.
   - Verify: guide links to compatibility and ABI docs.
 
 - [ ] Update production status text.

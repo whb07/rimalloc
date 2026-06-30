@@ -74,9 +74,10 @@ Production C ABI libraries, C headers, link metadata, checksums, and ABI
 manifests are shipped as GitHub release assets built from the tagged repository
 checkout. The crates.io package is the Rust library distribution.
 
-See `docs/ffi-linking.md`, `docs/abi.md`, `docs/symbol-versioning.md`, and
-`docs/release.md` for artifact modes, headers, link metadata, symbol policy,
-and release validation.
+See `docs/ffi-linking.md`, `docs/c-mimalloc-migration.md`, `docs/abi.md`,
+`docs/symbol-versioning.md`, and `docs/release.md` for artifact modes, headers,
+link metadata, migration from C mimalloc, symbol policy, and release
+validation.
 
 ### Unsafe Raw Facade
 

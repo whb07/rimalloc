@@ -1114,14 +1114,22 @@ Validated remaining issues:
 
 ## P2 - Platform promotion policy
 
-- [ ] Convert platform promotion rules into a checklist.
-  - [ ] Require compile and test CI for the platform.
-  - [ ] Require ABI/layout checks where the platform has a C ABI story.
-  - [ ] Require C and C++ link tests where FFI artifacts are claimed.
-  - [ ] Require sanitizer or equivalent hardening evidence.
-  - [ ] Require platform primitive audit.
-  - [ ] Require benchmark evidence or an explicit performance caveat.
-  - [ ] Require documented limitations.
+- [x] Convert platform promotion rules into a checklist.
+  - [x] Require compile and test CI for the platform.
+  - [x] Require ABI/layout checks where the platform has a C ABI story.
+  - [x] Require C and C++ link tests where FFI artifacts are claimed.
+  - [x] Require sanitizer or equivalent hardening evidence.
+  - [x] Require platform primitive audit.
+  - [x] Require benchmark evidence or an explicit performance caveat.
+  - [x] Require documented limitations.
+  - Evidence: `docs/platforms.md` now contains a "Platform Promotion
+    Checklist" requiring platform compile/test CI, ABI/layout evidence,
+    C/C++ link and artifact consumer tests when FFI artifacts are claimed,
+    sanitizer or equivalent hardening evidence, platform primitive audit,
+    benchmark evidence or an explicit performance caveat, and documented
+    limitations before a source-present or smoke-tested platform can be
+    promoted to maintained. `tests/release_fast_path_audit.rs` checks the
+    checklist and named validation evidence.
   - Verify: `docs/platforms.md` contains the checklist.
 
 - [ ] Keep source-present platforms out of release marketing.

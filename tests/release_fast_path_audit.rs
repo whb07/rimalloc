@@ -2194,6 +2194,45 @@ fn production_status_text_agrees_across_public_docs() {
 }
 
 #[test]
+fn platform_promotion_policy_requires_release_evidence_checklist() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let platforms = fs::read_to_string(root.join("docs/platforms.md")).expect("read platforms");
+
+    for required in [
+        "## Platform Promotion Checklist",
+        "Compile and test CI for the platform",
+        "ABI/layout checks where the platform has a C ABI story",
+        "C and C++ link tests where FFI artifacts are claimed",
+        "Sanitizer or equivalent hardening evidence",
+        "Platform primitive audit",
+        "Benchmark evidence on the promoted platform",
+        "Documented limitations",
+        "Until every checklist item is complete, the platform remains source-present or\nsmoke-tested only, not maintained.",
+    ] {
+        assert!(
+            platforms.contains(required),
+            "docs/platforms.md should require promotion evidence: {required}"
+        );
+    }
+    for check in [
+        "scripts/check-layout.sh",
+        "scripts/check-release-artifact-consumer.py",
+        "scripts/check-release-link-metadata.py",
+        "scripts/check-release-dlopen.py",
+        "scripts/check-release-ld-preload.py",
+        "scripts/check-release-cxx-artifacts.py",
+        "ASan/TSan",
+        "Miri",
+        "Valgrind",
+    ] {
+        assert!(
+            platforms.contains(check),
+            "platform promotion checklist should name relevant validation evidence: {check}"
+        );
+    }
+}
+
+#[test]
 fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");

@@ -41,6 +41,39 @@ CI may run smoke validation for Linux aarch64, macOS, and Windows. Those jobs
 check that the source keeps compiling and basic allocator tests run, but they do
 not by themselves promote those platforms to maintained targets.
 
+## Platform Promotion Checklist
+
+A source-present platform can be promoted to maintained target status only when
+the release owner records all of the following evidence in this document or a
+linked release signoff artifact:
+
+- Compile and test CI for the platform, including the default library build and
+  the relevant feature combinations for that target.
+- ABI/layout checks where the platform has a C ABI story, including
+  `scripts/check-layout.sh` or a platform-specific equivalent that verifies
+  public `repr(C)` layouts, constants, callback signatures, and symbol
+  expectations.
+- C and C++ link tests where FFI artifacts are claimed, including consumer
+  coverage equivalent to `scripts/check-release-artifact-consumer.py`,
+  `scripts/check-release-link-metadata.py`,
+  `scripts/check-release-dlopen.py`,
+  `scripts/check-release-ld-preload.py`, and
+  `scripts/check-release-cxx-artifacts.py` when those modes apply.
+- Sanitizer or equivalent hardening evidence, such as ASan/TSan, Miri,
+  Valgrind, platform-native memory diagnostics, or a written explanation for
+  why the platform cannot run those tools with comparable coverage.
+- Platform primitive audit covering allocator OS calls, TLS, locking, entropy,
+  stderr/output routing, page-size discovery, huge-page behavior, and dynamic
+  loader behavior for that platform.
+- Benchmark evidence on the promoted platform, or an explicit performance
+  caveat stating which workloads lack measurement and why promotion is still
+  acceptable.
+- Documented limitations covering unsupported features, smoke-only paths,
+  required toolchains, known behavioral divergences, and release triage policy.
+
+Until every checklist item is complete, the platform remains source-present or
+smoke-tested only, not maintained.
+
 ## no_std
 
 Linux non-test builds use `no_std` when `std` is not enabled. The exact crate

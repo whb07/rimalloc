@@ -1062,13 +1062,21 @@ Validated remaining issues:
     names, headers, metadata targets, and consumer scripts.
   - Verify: guide commands are exercised by consumer tests.
 
-- [ ] Add a symbol and versioning policy page or section.
-  - [ ] Define public C header symbols.
-  - [ ] Define malloc-family interposition symbols.
-  - [ ] Define C++ operator symbols.
-  - [ ] Define extension ABI naming rules.
-  - [ ] Define static archive internal-symbol policy.
-  - [ ] Define release-to-release ABI diff expectations.
+- [x] Add a symbol and versioning policy page or section.
+  - [x] Define public C header symbols.
+  - [x] Define malloc-family interposition symbols.
+  - [x] Define C++ operator symbols.
+  - [x] Define extension ABI naming rules.
+  - [x] Define static archive internal-symbol policy.
+  - [x] Define release-to-release ABI diff expectations.
+  - Evidence: `docs/symbol-versioning.md` now defines the public-header
+    `mi_*` source of truth, malloc-family interposition groups, Itanium C++
+    operator override symbols, extension ABI naming rules, preview static
+    archive internal-symbol classifications, checked dynamic manifest set, and
+    `ABI-CHANGE` release diff marker policy. README, `docs/abi.md`, and
+    `docs/release.md` link to the page, and
+    `tests/release_fast_path_audit.rs` checks it against the symbol scripts,
+    ABI manifests, and classification TSV.
   - Verify: policy matches symbol scripts and manifests.
 
 - [ ] Add a migration guide from C mimalloc.

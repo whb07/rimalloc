@@ -74,7 +74,7 @@ scripts/check-abi-symbols.sh
 ```
 
 Any manifest diff must be classified in `CHANGELOG.md` and reviewed against
-`docs/abi.md`.
+`docs/abi.md` and `docs/symbol-versioning.md`.
 
 For release review against a previous tag:
 

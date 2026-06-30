@@ -36,6 +36,11 @@ The expected exported C surface is derived from:
 - static archive and no-`c-abi` compatibility classifications in
   `symbols/public-symbol-classification.tsv`
 
+See `docs/symbol-versioning.md` for the release-facing symbol and versioning
+policy, including public-header symbols, interposition symbols, C++ operator
+symbols, extension ABI naming, static archive internal-symbol policy, and
+release-to-release ABI diff expectations.
+
 Run:
 
 ```sh

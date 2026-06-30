@@ -904,13 +904,19 @@ Validated remaining issues:
     `Sync` on each safe heap handle/allocation type.
   - Verify: trait tests fail if auto-traits change accidentally.
 
-- [ ] Add compile-fail tests for heap lifetime misuse.
-  - [ ] Prove a `HeapAllocation<'heap>` cannot outlive its `Heap`.
-  - [ ] Prove an `InitializedHeapAllocation<'heap>` cannot outlive its `Heap`.
-  - [ ] Prove deleting/dropping a heap while safe heap allocations are live is
+- [x] Add compile-fail tests for heap lifetime misuse.
+  - [x] Prove a `HeapAllocation<'heap>` cannot outlive its `Heap`.
+  - [x] Prove an `InitializedHeapAllocation<'heap>` cannot outlive its `Heap`.
+  - [x] Prove deleting/dropping a heap while safe heap allocations are live is
         rejected by the borrow checker.
-  - [ ] Include `MainHeap` examples separately because it produces
+  - [x] Include `MainHeap` examples separately because it produces
         `HeapRef<'static>` by design.
+  - Evidence: `Heap` rustdoc now has compile-fail examples for leaking
+    `HeapAllocation<'static>` and `InitializedHeapAllocation<'static>`, plus
+    explicit `drop(heap)` misuse while uninitialized and initialized heap-tied
+    allocations are live. `MainHeap` rustdoc separately shows allocation
+    values outliving temporary `MainHeap` handles because those wrappers are
+    tied to the process-global main heap.
   - Verify: compile-fail tests run under doctest or trybuild-equivalent
     tooling.
 

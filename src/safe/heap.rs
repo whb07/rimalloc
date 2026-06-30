@@ -70,6 +70,40 @@ impl std::error::Error for HeapError {}
 /// drop(leaked);
 /// ```
 ///
+/// Initialized heap allocations carry the same heap lifetime:
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::{Heap, InitializedHeapAllocation};
+///
+/// let leaked: InitializedHeapAllocation<'static>;
+/// {
+///     let heap = Heap::new().unwrap();
+///     leaked = heap.allocate_zeroed_bytes(16).unwrap();
+/// }
+/// drop(leaked);
+/// ```
+///
+/// Safe code also cannot move or drop a heap while a heap-tied allocation is
+/// still live:
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::Heap;
+///
+/// let heap = Heap::new().unwrap();
+/// let allocation = heap.allocate_bytes(16).unwrap();
+/// drop(heap);
+/// drop(allocation);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::Heap;
+///
+/// let heap = Heap::new().unwrap();
+/// let allocation = heap.allocate_zeroed_bytes(16).unwrap();
+/// drop(heap);
+/// drop(allocation);
+/// ```
+///
 /// Heap handles and heap-tied allocations are intentionally not `Send` or
 /// `Sync`. Safe heap allocation, resize, and stats operations use mimalloc
 /// heap/thread-heap metadata that is not exposed as a thread-safe Rust handle.
@@ -409,6 +443,22 @@ impl fmt::Debug for HeapRef<'_> {
 ///
 /// let stats = main_ref.stats().unwrap();
 /// assert!(stats.reserved_peak().get() >= stats.reserved_current().get());
+/// ```
+///
+/// `MainHeap` allocations use the process-global main heap lifetime, so they
+/// can outlive the temporary handle value:
+///
+/// ```rust
+/// use mechanical_mimalloc::MainHeap;
+///
+/// let allocation = {
+///     let main = MainHeap::get().unwrap();
+///     main.allocate_bytes(8).unwrap()
+/// };
+/// assert_eq!(allocation.len(), 8);
+///
+/// let zeroed = MainHeap::get().unwrap().allocate_zeroed_bytes(4).unwrap();
+/// assert_eq!(zeroed.as_bytes(), &[0, 0, 0, 0]);
 /// ```
 #[derive(Clone, Copy)]
 #[must_use]

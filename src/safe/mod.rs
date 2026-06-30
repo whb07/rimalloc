@@ -208,12 +208,13 @@ mod tests {
     }
 
     #[test]
-    fn allocation_has_expected_thread_traits() {
+    fn allocation_types_have_expected_thread_traits() {
         fn assert_traits<T: Send + Sync>() -> bool {
             let _ = core::marker::PhantomData::<T>;
             true
         }
         assert!(assert_traits::<Allocation>());
+        assert!(assert_traits::<InitializedAllocation>());
     }
 
     #[test]

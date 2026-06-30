@@ -890,13 +890,18 @@ Validated remaining issues:
     requiring rustdoc-only impl notes where Rust's lint does not require them.
   - Verify: docs check fails on a synthetic undocumented Tier S item.
 
-- [ ] Add trait behavior tests for safe facade types.
-  - [ ] Assert `MiMalloc` expected traits.
-  - [ ] Assert `Allocation` and `InitializedAllocation` are `Send`/`Sync` only
+- [x] Add trait behavior tests for safe facade types.
+  - [x] Assert `MiMalloc` expected traits.
+  - [x] Assert `Allocation` and `InitializedAllocation` are `Send`/`Sync` only
         as documented.
-  - [ ] Assert `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
+  - [x] Assert `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
         `InitializedHeapAllocation` are not `Send` and not `Sync`.
-  - [ ] Prefer compile-fail doctests or a dedicated static assertion helper.
+  - [x] Prefer compile-fail doctests or a dedicated static assertion helper.
+  - Evidence: `tests/mimalloc_global_alloc.rs` now asserts `MiMalloc`
+    implements `GlobalAlloc` plus its documented marker traits;
+    `src/safe/mod.rs` asserts both owned allocation wrappers are `Send + Sync`;
+    and `src/safe/heap.rs` has separate compile-fail doctests for `Send` and
+    `Sync` on each safe heap handle/allocation type.
   - Verify: trait tests fail if auto-traits change accidentally.
 
 - [ ] Add compile-fail tests for heap lifetime misuse.

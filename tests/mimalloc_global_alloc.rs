@@ -2,7 +2,7 @@ use core::alloc::{GlobalAlloc, Layout};
 
 use mechanical_mimalloc::MiMalloc;
 
-fn assert_traits<T: Copy + Clone + Default + core::fmt::Debug + Send + Sync>() {}
+fn assert_traits<T: GlobalAlloc + Copy + Clone + Default + core::fmt::Debug + Send + Sync>() {}
 
 #[test]
 fn mimalloc_facade_has_expected_traits() {

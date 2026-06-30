@@ -77,36 +77,71 @@ impl std::error::Error for HeapError {}
 /// ```rust,compile_fail
 /// use mechanical_mimalloc::Heap;
 ///
-/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
-/// let _ = MustBeSendSync::<Heap>(core::marker::PhantomData);
+/// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
+/// let _ = MustBeSend::<Heap>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
 /// use mechanical_mimalloc::HeapRef;
 ///
-/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
-/// let _ = MustBeSendSync::<HeapRef<'static>>(core::marker::PhantomData);
+/// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
+/// let _ = MustBeSend::<HeapRef<'static>>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
 /// use mechanical_mimalloc::MainHeap;
 ///
-/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
-/// let _ = MustBeSendSync::<MainHeap>(core::marker::PhantomData);
+/// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
+/// let _ = MustBeSend::<MainHeap>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
 /// use mechanical_mimalloc::HeapAllocation;
 ///
-/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
-/// let _ = MustBeSendSync::<HeapAllocation<'static>>(core::marker::PhantomData);
+/// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
+/// let _ = MustBeSend::<HeapAllocation<'static>>(core::marker::PhantomData);
 /// ```
 ///
 /// ```rust,compile_fail
 /// use mechanical_mimalloc::InitializedHeapAllocation;
 ///
-/// struct MustBeSendSync<T: Send + Sync>(core::marker::PhantomData<T>);
-/// let _ = MustBeSendSync::<InitializedHeapAllocation<'static>>(core::marker::PhantomData);
+/// struct MustBeSend<T: Send>(core::marker::PhantomData<T>);
+/// let _ = MustBeSend::<InitializedHeapAllocation<'static>>(core::marker::PhantomData);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::Heap;
+///
+/// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSync::<Heap>(core::marker::PhantomData);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::HeapRef;
+///
+/// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSync::<HeapRef<'static>>(core::marker::PhantomData);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::MainHeap;
+///
+/// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSync::<MainHeap>(core::marker::PhantomData);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::HeapAllocation;
+///
+/// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSync::<HeapAllocation<'static>>(core::marker::PhantomData);
+/// ```
+///
+/// ```rust,compile_fail
+/// use mechanical_mimalloc::InitializedHeapAllocation;
+///
+/// struct MustBeSync<T: Sync>(core::marker::PhantomData<T>);
+/// let _ = MustBeSync::<InitializedHeapAllocation<'static>>(core::marker::PhantomData);
 /// ```
 #[must_use]
 pub struct Heap {

@@ -184,6 +184,12 @@ scripts/check-release-dlopen.py
 scripts/check-release-ld-preload.py
 ```
 
+Validate C++ operator new/delete release artifact behavior:
+
+```sh
+scripts/check-release-cxx-artifacts.py
+```
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.
@@ -199,17 +205,18 @@ Before publishing or tagging a release:
    `scripts/check-release-link-metadata.py`.
 9. Run `scripts/check-release-dlopen.py`.
 10. Run `scripts/check-release-ld-preload.py`.
-11. Run `scripts/check-release-integrity.py`.
-12. Run `scripts/check-layout.sh` for ABI/layout audits.
-13. Run audit drift checks: `scripts/check-unsafe-audit.py`,
+11. Run `scripts/check-release-cxx-artifacts.py`.
+12. Run `scripts/check-release-integrity.py`.
+13. Run `scripts/check-layout.sh` for ABI/layout audits.
+14. Run audit drift checks: `scripts/check-unsafe-audit.py`,
    `scripts/check-atomic-ordering-audit.py`,
    `scripts/check-pointer-provenance-audit.py`,
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
-14. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
+15. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
    using `docs/performance.md` for thresholds and noise handling.
-15. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
-16. Capture `scripts/env-info.sh` output alongside benchmark evidence.
+16. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
+17. Capture `scripts/env-info.sh` output alongside benchmark evidence.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

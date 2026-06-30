@@ -99,6 +99,7 @@ the scripts listed in `PARITY.md`, especially:
 ```sh
 scripts/check-behavioral-parity.py
 scripts/check-cxx-operator-new-parity.py
+scripts/check-release-cxx-artifacts.py
 scripts/check-secure-mode-parity.py
 scripts/check-guarded-mode-parity.py
 scripts/check-asan-tracking-parity.py

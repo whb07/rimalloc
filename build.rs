@@ -105,7 +105,7 @@ fn compile_cxx_new_shim() {
     run_tool("C++ new/delete shim archiver", "AR", &mut ar);
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
-    println!("cargo:rustc-link-lib=static=mechanical_mimalloc_cxx_new_shim");
+    println!("cargo:rustc-link-lib=static:+whole-archive=mechanical_mimalloc_cxx_new_shim");
 }
 
 fn compile_tls_shim() {
@@ -290,6 +290,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CXX");
     println!("cargo:rerun-if-env-changed=AR");
     println!("cargo:rustc-check-cfg=cfg(mi_c_malloc_fast)");
+    println!("cargo:rustc-check-cfg=cfg(mi_cxx_shim_linked)");
     println!("cargo:rustc-check-cfg=cfg(mi_osx_interpose)");
     println!("cargo:rustc-check-cfg=cfg(mi_internal_c_probe)");
     println!("cargo:rustc-check-cfg=cfg(mi_sanitizer_runtime)");
@@ -297,6 +298,7 @@ fn main() {
     let cxx_shim_linked =
         cxx_overrides && target_os != "windows" && target_supports_cxx_shim(&target_os);
     if cxx_shim_linked {
+        println!("cargo:rustc-cfg=mi_cxx_shim_linked");
         compile_cxx_new_shim();
     } else if cxx_overrides && target_os != "windows" {
         println!("cargo:warning=skipping C++ new/delete shim on unsupported target_os={target_os}");

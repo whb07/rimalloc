@@ -497,16 +497,27 @@ Validated remaining issues:
     `scripts/check-behavioral-parity.py --only dynamic` pass and identify the
     exact artifact modes under test.
 
-- [ ] Add C++ release artifact tests.
-  - [ ] Test C++ operator new/delete overrides for the `interpose` staticlib.
-  - [ ] Test C++ operator new/delete overrides for the `interpose` cdylib if
+- [x] Add C++ release artifact tests.
+  - [x] Test C++ operator new/delete overrides for the `interpose` staticlib.
+  - [x] Test C++ operator new/delete overrides for the `interpose` cdylib if
         that is a supported artifact.
-  - [ ] Test nothrow, aligned, sized delete, array new/delete, and
+  - [x] Test nothrow, aligned, sized delete, array new/delete, and
         `std::new_handler` behavior.
-  - [ ] Keep the documented bad-allocation divergence for Rust-originated
+  - [x] Keep the documented bad-allocation divergence for Rust-originated
         `mi_new*` C ABI entry points.
-  - Verify: `scripts/check-cxx-operator-new-parity.py` or a new artifact-mode
-    variant passes for supported C++ modes.
+  - Evidence: `scripts/check-release-cxx-artifacts.py` rebuilds staged release
+    artifacts, copies the release payload outside the repository, compiles a
+    C++20 probe against the staged `interpose` cdylib and `interpose` static
+    preview archive, and verifies scalar, array, nothrow, sized delete,
+    aligned object, aligned raw, aligned nothrow, and `std::new_handler`
+    throwing behavior. `build.rs` now exposes `mi_cxx_shim_linked`, and
+    `src/raw/macros.rs` suppresses Rust fallback `operator new` exports when
+    the C++ shim is linked so release artifacts use the throwing C++ shim while
+    retaining the documented Rust-originated `mi_new*` C ABI divergence.
+    `scripts/check-cxx-operator-new-parity.py` now builds its Rust staticlib
+    with `--features cxx-overrides`, matching the behavior it verifies.
+  - Verify: `scripts/check-release-cxx-artifacts.py` passes for supported C++
+    release artifact modes.
 
 ## P0 - Reduce public macro surface
 

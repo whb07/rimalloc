@@ -135,7 +135,19 @@ def rust_staticlib() -> pathlib.Path:
     target_dir = BUILD_DIR / "rust-target"
     env = dict(os.environ)
     env["CARGO_TARGET_DIR"] = str(target_dir)
-    run(["cargo", "rustc", "--lib", "--", "--crate-type", "staticlib"], env=env)
+    run(
+        [
+            "cargo",
+            "rustc",
+            "--features",
+            "cxx-overrides",
+            "--lib",
+            "--",
+            "--crate-type",
+            "staticlib",
+        ],
+        env=env,
+    )
     libs = sorted(
         (target_dir / "debug/deps").glob("libmechanical_mimalloc-*.a"),
         key=lambda path: path.stat().st_mtime,

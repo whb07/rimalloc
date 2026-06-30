@@ -292,7 +292,7 @@ macro_rules! MI_FORWARD1 {
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
-#[cfg(mi_c_malloc_fast)]
+#[cfg(all(mi_c_malloc_fast, not(mi_cxx_shim_linked)))]
 #[unsafe(naked)]
 #[unsafe(export_name = "_Znwm")]
 pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
@@ -321,7 +321,7 @@ pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
     );
 }
 
-#[cfg(mi_c_malloc_fast)]
+#[cfg(all(mi_c_malloc_fast, not(mi_cxx_shim_linked)))]
 core::arch::global_asm!(".globl _Znam", ".type _Znam,@function", ".set _Znam, _Znwm",);
 
 // Keep the fast override entrypoints on the validated cache-line layout. The
@@ -1098,6 +1098,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array_aligned_nothrow(
     all(
         not(windows),
         not(mi_c_malloc_fast),
+        not(mi_cxx_shim_linked),
         any(not(feature = "c-abi"), feature = "cxx-overrides")
     ),
     unsafe(export_name = "_Znwm")
@@ -1116,6 +1117,7 @@ pub unsafe extern "C" fn mi_cxx_new_64(n: usize) -> *mut c_void {
     all(
         not(windows),
         not(mi_c_malloc_fast),
+        not(mi_cxx_shim_linked),
         any(not(feature = "c-abi"), feature = "cxx-overrides")
     ),
     unsafe(export_name = "_Znam")
@@ -1131,7 +1133,11 @@ pub unsafe extern "C" fn mi_cxx_new_array_64(n: usize) -> *mut c_void {
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnwmRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
@@ -1146,7 +1152,11 @@ pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnamRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_array_64_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
@@ -1161,7 +1171,11 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_nothrow(n: usize, tag: mi_nothrow_t
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnwmSt11align_val_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_64_aligned(n: usize, al: usize) -> *mut c_void {
@@ -1175,7 +1189,11 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned(n: usize, al: usize) -> *mut c_vo
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnamSt11align_val_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_array_64_aligned(n: usize, al: usize) -> *mut c_void {
@@ -1189,7 +1207,11 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_aligned(n: usize, al: usize) -> *mu
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnwmSt11align_val_tRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_64_aligned_nothrow(
@@ -1208,7 +1230,11 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned_nothrow(
     all(target_pointer_width = "32", target_os = "emscripten")
 ))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnamSt11align_val_tRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_array_64_aligned_nothrow(
@@ -1224,7 +1250,11 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_aligned_nothrow(
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_Znwj")
 )]
 pub unsafe extern "C" fn mi_cxx_new_32(n: usize) -> *mut c_void {
@@ -1235,7 +1265,11 @@ pub unsafe extern "C" fn mi_cxx_new_32(n: usize) -> *mut c_void {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_Znaj")
 )]
 pub unsafe extern "C" fn mi_cxx_new_array_32(n: usize) -> *mut c_void {
@@ -1246,7 +1280,11 @@ pub unsafe extern "C" fn mi_cxx_new_array_32(n: usize) -> *mut c_void {
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnwjRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_32_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
@@ -1258,7 +1296,11 @@ pub unsafe extern "C" fn mi_cxx_new_32_nothrow(n: usize, tag: mi_nothrow_t) -> *
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnajRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_array_32_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
@@ -1270,7 +1312,11 @@ pub unsafe extern "C" fn mi_cxx_new_array_32_nothrow(n: usize, tag: mi_nothrow_t
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnwjSt11align_val_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_32_aligned(n: usize, al: usize) -> *mut c_void {
@@ -1281,7 +1327,11 @@ pub unsafe extern "C" fn mi_cxx_new_32_aligned(n: usize, al: usize) -> *mut c_vo
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnajSt11align_val_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_array_32_aligned(n: usize, al: usize) -> *mut c_void {
@@ -1292,7 +1342,11 @@ pub unsafe extern "C" fn mi_cxx_new_array_32_aligned(n: usize, al: usize) -> *mu
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnwjSt11align_val_tRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_32_aligned_nothrow(
@@ -1308,7 +1362,11 @@ pub unsafe extern "C" fn mi_cxx_new_32_aligned_nothrow(
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(target_pointer_width = "32", not(target_os = "emscripten")))]
 #[cfg_attr(
-    all(not(windows), any(not(feature = "c-abi"), feature = "cxx-overrides")),
+    all(
+        not(windows),
+        not(mi_cxx_shim_linked),
+        any(not(feature = "c-abi"), feature = "cxx-overrides")
+    ),
     unsafe(export_name = "_ZnajSt11align_val_tRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_array_32_aligned_nothrow(

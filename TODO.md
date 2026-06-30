@@ -454,17 +454,24 @@ Validated remaining issues:
     artifact.
   - Verify: focused dynamic loading script passes on Linux x86_64 GNU.
 
-- [ ] Add focused `LD_PRELOAD` interposition tests.
-  - [ ] Build the documented `interpose` cdylib.
-  - [ ] Run a C program under `LD_PRELOAD` and verify `malloc`, `calloc`,
+- [x] Add focused `LD_PRELOAD` interposition tests.
+  - [x] Build the documented `interpose` cdylib.
+  - [x] Run a C program under `LD_PRELOAD` and verify `malloc`, `calloc`,
         `realloc`, `free`, `aligned_alloc`, `posix_memalign`, `memalign`,
         `valloc`, and `malloc_usable_size` route to the allocator.
-  - [ ] Verify `mi_check_owned` or equivalent ownership checks where the C
+  - [x] Verify `mi_check_owned` or equivalent ownership checks where the C
         contract supports them.
-  - [ ] Verify shutdown stats behavior when `mimalloc_show_stats=1`.
-  - [ ] Keep this as a small CI-friendly script even if
+  - [x] Verify shutdown stats behavior when `mimalloc_show_stats=1`.
+  - [x] Keep this as a small CI-friendly script even if
         `scripts/check-behavioral-parity.py` remains broader.
-  - Verify: focused LD_PRELOAD script is run by validation or release CI.
+  - Evidence: `scripts/check-release-ld-preload.py` rebuilds the staged
+    release artifacts, copies the release payload to a temporary directory
+    outside the repository, compiles a C probe, runs it with the staged
+    `interpose` cdylib in `LD_PRELOAD`, verifies malloc-family allocations are
+    owned by mimalloc through `mi_check_owned`, checks `malloc_usable_size` and
+    alignment-sensitive allocation APIs, and runs a stats-enabled pass that
+    verifies shutdown stats sections are emitted for `mimalloc_show_stats=1`.
+  - Verify: focused LD_PRELOAD script passes on Linux x86_64 GNU.
 
 - [ ] Align broad behavioral parity with documented artifact modes.
   - [ ] Update `scripts/check-behavioral-parity.py` so `rust_cdylib()` builds

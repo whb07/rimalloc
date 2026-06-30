@@ -24,10 +24,11 @@ scripts/build-release-artifacts.py
 
 The script builds each artifact mode with an isolated `CARGO_TARGET_DIR`, copies
 the outputs under `target/release-artifacts/artifacts/`, stages public headers
-under `target/release-artifacts/include/`, and writes
+under `target/release-artifacts/include/`, generates link metadata under
+`target/release-artifacts/lib/`, and writes
 `target/release-artifacts/release-artifacts.json` with artifact paths, header
-paths, feature sets, target triple, profile, rustc version, and SHA-256
-checksums.
+paths, link metadata paths, feature sets, target triple, profile, rustc
+version, and SHA-256 checksums.
 
 The staged headers are:
 
@@ -35,6 +36,25 @@ The staged headers are:
 - `mimalloc-stats.h` for stats APIs.
 - `mimalloc-override.h` for C interposition users.
 - `mimalloc-new-delete.h` for C++ operator new/delete users.
+
+The staged link metadata is:
+
+- `lib/pkgconfig/mechanical_mimalloc.pc`, whose default `Libs` line links the
+  production `c-abi` cdylib and records include path, artifact path, `pthread`,
+  `dl`, `m`, and artifact-mode notes. Preview static archive paths are exposed
+  as variables, not as the default production link mode.
+- `lib/cmake/mechanical_mimalloc/mechanical_mimalloc-config.cmake`, which
+  defines `mechanical_mimalloc::c_abi`,
+  `mechanical_mimalloc::interpose`,
+  `mechanical_mimalloc::c_abi_static_preview`, and
+  `mechanical_mimalloc::interpose_static_preview` imported targets.
+
+Validate package metadata consumers from a temporary directory outside the
+repository:
+
+```sh
+scripts/check-release-link-metadata.py
+```
 
 Static archives are preview-only. They are used by repository parity tests,
 source-build experiments, and static archive audits, but they are not a

@@ -361,13 +361,22 @@ Validated remaining issues:
   - Verify: a C consumer builds using only the staged release artifact
     directory, not the repository source tree.
 
-- [ ] Add link metadata for FFI consumers.
-  - [ ] Generate `mechanical_mimalloc.pc`.
-  - [ ] Generate `mechanical_mimalloc-config.cmake`.
-  - [ ] Include library search paths, include paths, pthread/dl/m link
+- [x] Add link metadata for FFI consumers.
+  - [x] Generate `mechanical_mimalloc.pc`.
+  - [x] Generate `mechanical_mimalloc-config.cmake`.
+  - [x] Include library search paths, include paths, pthread/dl/m link
         requirements, and artifact-mode notes.
-  - [ ] Test pkg-config with a C consumer.
-  - [ ] Test CMake `find_package` with a C consumer.
+  - [x] Test pkg-config with a C consumer.
+  - [x] Test CMake `find_package` with a C consumer.
+  - Evidence: `scripts/build-release-artifacts.py` writes
+    `target/release-artifacts/lib/pkgconfig/mechanical_mimalloc.pc` and
+    `target/release-artifacts/lib/cmake/mechanical_mimalloc/mechanical_mimalloc-config.cmake`,
+    records both files with SHA-256 checksums in `link_metadata`, and keeps the
+    default package link target on the production `c-abi` cdylib while exposing
+    preview static artifacts as explicitly named preview variables/targets.
+    `scripts/check-release-link-metadata.py` copies the staged release tree to a
+    temporary directory outside the repository, then builds and runs C consumers
+    through pkg-config and CMake `find_package`.
   - Verify: package metadata tests run from a temporary directory outside the
     repository.
 

@@ -136,15 +136,24 @@ The script builds the Rust `rlib`, `c-abi` cdylib, `c-abi` staticlib preview,
 `CARGO_TARGET_DIR` values. It copies outputs under
 `target/release-artifacts/artifacts/`, stages `mimalloc.h`,
 `mimalloc-stats.h`, `mimalloc-override.h`, and `mimalloc-new-delete.h` under
-`target/release-artifacts/include/`, and writes
+`target/release-artifacts/include/`, generates
+`lib/pkgconfig/mechanical_mimalloc.pc` and
+`lib/cmake/mechanical_mimalloc/mechanical_mimalloc-config.cmake`, and writes
 `target/release-artifacts/release-artifacts.json` with each artifact path,
-header path, feature set, target triple, release profile, rustc version, and
-SHA-256 checksum.
+header path, link metadata path, feature set, target triple, release profile,
+rustc version, and SHA-256 checksum.
 
 Validate a staged C consumer without repository include paths:
 
 ```sh
 scripts/check-release-artifact-consumer.py
+```
+
+Validate pkg-config and CMake consumers from a temporary directory outside the
+repository:
+
+```sh
+scripts/check-release-link-metadata.py
 ```
 
 Before publishing or tagging a release:
@@ -158,16 +167,18 @@ Before publishing or tagging a release:
    release-to-release ABI review.
 7. Run `scripts/check-static-link-collisions.py` for preview static archive
    link and collision evidence.
-8. Run `scripts/check-layout.sh` for ABI/layout audits.
-9. Run audit drift checks: `scripts/check-unsafe-audit.py`,
+8. Run `scripts/check-release-artifact-consumer.py` and
+   `scripts/check-release-link-metadata.py`.
+9. Run `scripts/check-layout.sh` for ABI/layout audits.
+10. Run audit drift checks: `scripts/check-unsafe-audit.py`,
    `scripts/check-atomic-ordering-audit.py`,
    `scripts/check-pointer-provenance-audit.py`,
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
-10. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
+11. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
    using `docs/performance.md` for thresholds and noise handling.
-11. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
-12. Capture `scripts/env-info.sh` output alongside benchmark evidence.
+12. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
+13. Capture `scripts/env-info.sh` output alongside benchmark evidence.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

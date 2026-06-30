@@ -63,6 +63,19 @@ The checked manifests currently cover the `c-abi` and `interpose` cdylib
 artifacts and record symbol name, binding, visibility, version, type, and the
 artifact build command.
 
+For release-to-release ABI review, compare the checked manifests against the
+previous release tag:
+
+```sh
+scripts/check-abi-diff.py --previous-ref <previous-tag>
+```
+
+The diff check uses the previous tag's `docs/abi-manifests/` contents, or an
+explicit `--previous-dir`, and classifies added, removed, possible-renamed,
+visibility-changed, binding-changed, version-changed, and type-changed symbols.
+Every intentional ABI change must have a matching `ABI-CHANGE: <manifest>
+<symbol>` marker in the changelog ABI section.
+
 ## Hidden Symbols
 
 On Linux cdylib builds, `build.rs` emits a linker version script that marks the

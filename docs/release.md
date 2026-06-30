@@ -76,6 +76,27 @@ scripts/check-abi-symbols.sh
 Any manifest diff must be classified in `CHANGELOG.md` and reviewed against
 `docs/abi.md`.
 
+For release review against a previous tag:
+
+```sh
+scripts/check-abi-diff.py --previous-ref <previous-tag>
+```
+
+For release review against an unpacked previous release asset directory:
+
+```sh
+scripts/check-abi-diff.py --previous-dir <previous-release>/abi-manifests
+```
+
+The diff check compares every checked manifest under `docs/abi-manifests/`.
+That includes current cdylib manifests and any staticlib manifests added by the
+static artifact policy. It classifies added, removed, possible-renamed,
+visibility-changed, binding-changed, version-changed, and type-changed symbols.
+Every intentional symbol change must be recorded in the changelog ABI section
+with `ABI-CHANGE: <manifest> <symbol>`, or with
+`ABI-CHANGE: <manifest> *` for an explicitly reviewed full-manifest baseline
+or broad artifact-mode update.
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.
@@ -83,16 +104,18 @@ Before publishing or tagging a release:
 3. Run `scripts/check-ffi-boundary.py`.
 4. Run `scripts/check-local.sh`.
 5. Run `scripts/check-abi-symbols.sh` for exported C symbol inventory.
-6. Run `scripts/check-layout.sh` for ABI/layout audits.
-7. Run audit drift checks: `scripts/check-unsafe-audit.py`,
+6. Run `scripts/check-abi-diff.py --previous-ref <previous-tag>` for Tier C
+   release-to-release ABI review.
+7. Run `scripts/check-layout.sh` for ABI/layout audits.
+8. Run audit drift checks: `scripts/check-unsafe-audit.py`,
    `scripts/check-atomic-ordering-audit.py`,
    `scripts/check-pointer-provenance-audit.py`,
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
-8. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
+9. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
    using `docs/performance.md` for thresholds and noise handling.
-9. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
-10. Capture `scripts/env-info.sh` output alongside benchmark evidence.
+10. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
+11. Capture `scripts/env-info.sh` output alongside benchmark evidence.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

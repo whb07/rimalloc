@@ -216,11 +216,19 @@ Validated remaining issues:
   - Verify: manifest check fails on an injected extra symbol in a local
     self-test or fixture.
 
-- [ ] Add ABI diff checks between releases.
-  - [ ] Define where previous release symbol manifests are stored or fetched.
-  - [ ] Compare new cdylib and staticlib manifests against the previous release.
-  - [ ] Classify removed, added, renamed, and visibility-changed symbols.
-  - [ ] Require a changelog entry for every intentional ABI change.
+- [x] Add ABI diff checks between releases.
+  - [x] Define where previous release symbol manifests are stored or fetched.
+  - [x] Compare new cdylib and staticlib manifests against the previous release.
+  - [x] Classify removed, added, renamed, and visibility-changed symbols.
+  - [x] Require a changelog entry for every intentional ABI change.
+  - Evidence: `scripts/check-abi-diff.py` compares the current checked
+    `docs/abi-manifests/*.tsv` files against either `--previous-ref` or
+    `--previous-dir`, so current cdylib manifests and future staticlib
+    manifests share one release-diff path. It classifies added, removed,
+    possible-renamed, visibility-changed, binding-changed, version-changed, and
+    type-changed symbols, requires `ABI-CHANGE: <manifest> <symbol>` changelog
+    markers for intentional differences, and has a self-test wired into
+    `scripts/check-abi-symbols.sh`.
   - Verify: release checklist includes the ABI diff command.
 
 ## P0 - Decide and clean the staticlib story

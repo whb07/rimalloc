@@ -200,11 +200,10 @@ exposure is intentionally narrower than the full file:
 Exported macros are not Tier S safe Rust API. The production decision is:
 
 - Keep `tier-r-typed-allocation` macros as Tier R C-header compatibility
-  macros for this release. They remain unsafe raw-facade conveniences, not
-  recommended safe Rust allocation APIs.
+  macros for this release behind the `c-header-macros` feature. They remain
+  unsafe raw-facade conveniences, not recommended safe Rust allocation APIs.
 - Keep `tier-r-header-override` macros as Tier R C/C++ header compatibility
-  macros for this release. They stay available in the default build until the
-  separate macro feature-gating work chooses a narrower feature surface.
+  macros for this release behind the `c-header-macros` feature.
 - Treat `internal-compatibility` macros as temporary compatibility exports.
   Before a stable release, each macro in that bucket must be made
   crate-private, removed, or explicitly retained with downstream expansion,
@@ -216,8 +215,9 @@ Exported macros are not Tier S safe Rust API. The production decision is:
 Macro tier: `tier-r-typed-allocation`
 
 The typed allocation macros in `src/ffi/abi.rs` are Tier R public compatibility
-surface. They mirror mimalloc C-header convenience spellings and expand through
-public `raw::mi_*` paths without internal `unsafe` blocks.
+surface when the `c-header-macros` feature is enabled. They mirror mimalloc
+C-header convenience spellings and expand through public `raw::mi_*` paths
+without internal `unsafe` blocks.
 
 - `mi_malloc_tp!`
 - `mi_zalloc_tp!`
@@ -236,10 +236,9 @@ public `raw::mi_*` paths without internal `unsafe` blocks.
 Macro tier: `tier-r-header-override`
 
 The exported macros in `src/ffi/headers.rs` are Tier R public compatibility
-surface. They model C header override and C++ operator shim spellings while
-expanding through public `raw::mi_*` paths so downstream crates do not observe
-implementation modules. There are no internal-only or gated header macros in
-the default build today.
+surface when the `c-header-macros` feature is enabled. They model C header
+override and C++ operator shim spellings while expanding through public
+`raw::mi_*` paths so downstream crates do not observe implementation modules.
 
 Allocation and string macros:
 

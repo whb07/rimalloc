@@ -113,6 +113,7 @@ Default features are empty.
 - `guarded`: enable guarded allocation sampling.
 - `track-valgrind`: enable Valgrind tracking shims.
 - `track-asan`: enable ASan tracking shims.
+- `c-header-macros`: expose raw mimalloc C-header compatibility macros.
 - `c-abi`: enable build-script setup for C ABI artifacts.
 - `cxx-overrides`: compile and link C++ operator new/delete overrides; implies
   `c-abi`.

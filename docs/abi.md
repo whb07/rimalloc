@@ -289,25 +289,27 @@ not safe Rust wrappers.
 
 - Typed allocation macros in `src/ffi/abi.rs` (`mi_malloc_tp!`, `mi_zalloc_tp!`,
   `mi_calloc_tp!`, `mi_mallocn_tp!`, `mi_reallocn_tp!`, and the heap typed
-  variants) expand directly to `raw::mi_*` calls and pointer casts. They do not
-  contain internal `unsafe` blocks, so callers must use them inside an unsafe
-  boundary. The compile-fail doctests in `src/lib.rs` cover each typed macro
-  form outside unsafe.
+  variants) are available only with the `c-header-macros` feature. They expand
+  directly to `raw::mi_*` calls and pointer casts. They do not contain internal
+  `unsafe` blocks, so callers must use them inside an unsafe boundary. The
+  compile-fail doctests in `src/lib.rs` cover each typed macro form outside
+  unsafe when docs are tested with `c-header-macros`.
 - Header override macros in `src/ffi/headers.rs` (`malloc!`, `realloc!`, C++
   operator shims, aligned allocation shims, and related header spellings)
-  likewise expand through public `raw::mi_*` calls without internal `unsafe`
-  blocks. They require caller-side unsafe for the same pointer ownership,
-  layout, lifetime, and threading obligations as the raw functions they call.
+  are also available only with `c-header-macros`. They likewise expand through
+  public `raw::mi_*` calls without internal `unsafe` blocks. They require
+  caller-side unsafe for the same pointer ownership, layout, lifetime, and
+  threading obligations as the raw functions they call.
 - There are no intentionally safe public allocation macros today. Any future
   safe macro must expand only to safe APIs such as `Allocation` or `Heap`
   wrappers and must be documented separately from the raw macro boundary.
 
 Macro production policy is intentionally conservative. Typed allocation macros
-and header override macros are retained as Tier R compatibility surface for
-this release. Internal compatibility macros are not a stable ABI or recommended
-integration surface; they are scheduled for privatization/removal unless a
-specific macro needs to remain exported for downstream expansion, translated C
-parity, or measured hot-path codegen.
+and header override macros are retained as opt-in Tier R compatibility surface
+for this release through `c-header-macros`. Internal compatibility macros are
+not a stable ABI or recommended integration surface; they are scheduled for
+privatization/removal unless a specific macro needs to remain exported for
+downstream expansion, translated C parity, or measured hot-path codegen.
 
 `scripts/check-api-inventory.py` discovers every `#[macro_export] macro_rules!`
 item and fails if it is not classified in `docs/api-inventory.md`.

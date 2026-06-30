@@ -557,16 +557,22 @@ Validated remaining issues:
   - Verify: `cargo test --workspace --all-targets --all-features` and relevant
     benchmark smoke if hot paths moved.
 
-- [ ] Feature-gate C-header compatibility macros if they are not part of the
+- [x] Feature-gate C-header compatibility macros if they are not part of the
       default Rust contract.
-  - [ ] Decide on a feature name such as `c-header-macros` if gating is chosen.
-  - [ ] Ensure typed allocation macros and header override macros are available
+  - [x] Decide on a feature name such as `c-header-macros` if gating is chosen.
+  - [x] Ensure typed allocation macros and header override macros are available
         only in intended configurations.
-  - [ ] Update examples and doctests to enable the feature when needed.
-  - [ ] Update `scripts/check-api-inventory.py` to check macro inventory per
+  - [x] Update examples and doctests to enable the feature when needed.
+  - [x] Update `scripts/check-api-inventory.py` to check macro inventory per
         feature set.
-  - [ ] Keep compile-fail tests proving raw macros require caller-side unsafe
+  - [x] Keep compile-fail tests proving raw macros require caller-side unsafe
         blocks.
+  - Evidence: added the `c-header-macros` feature; gated typed allocation
+    macros in `src/ffi/abi.rs` and header override macros in
+    `src/ffi/headers.rs`; taught `scripts/check-api-inventory.py` to verify
+    the default macro surface separately from the feature-expanded surface; and
+    added downstream macro tests for feature-off absence, feature-on expansion,
+    and caller-side unsafe enforcement.
   - Verify: `cargo test --doc --features std` plus macro feature checks.
 
 ## P1 - Retire `unstable-raw-internals`

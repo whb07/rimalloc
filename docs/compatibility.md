@@ -103,8 +103,8 @@ scripts/check-layout.sh
 
 Feature behavior is compatibility-sensitive. Defaults are intentionally empty.
 `std`, `bench`, `compare`, `bench-diagnostics`, `secure`, `guarded`,
-`track-valgrind`, `track-asan`, `c-abi`, `cxx-overrides`, `tls-shim`,
-`interpose`, and `unstable-raw-internals` are documented in
+`track-valgrind`, `track-asan`, `c-header-macros`, `c-abi`, `cxx-overrides`,
+`tls-shim`, `interpose`, and `unstable-raw-internals` are documented in
 `docs/features.md`.
 
 When `track-valgrind` and `track-asan` are both enabled, Valgrind mode takes

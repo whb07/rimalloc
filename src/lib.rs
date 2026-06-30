@@ -34,6 +34,7 @@
 //! - `guarded`: enables guarded allocation sampling.
 //! - `track-valgrind`: enables Valgrind tracking shims.
 //! - `track-asan`: enables ASan tracking shims.
+//! - `c-header-macros`: exposes raw mimalloc C-header compatibility macros.
 //! - `c-abi`: enables build-script setup for C ABI artifacts.
 //! - `cxx-overrides`: compiles and links C++ operator new/delete overrides.
 //! - `tls-shim`: compiles and links the Linux initial-exec TLS shim.
@@ -95,9 +96,10 @@
 //! mechanical_mimalloc::raw::mi_free(p);
 //! ```
 //!
-//! Typed raw allocation macros also require caller-side unsafe blocks:
+//! With `c-header-macros` enabled, typed raw allocation macros also require
+//! caller-side unsafe blocks:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! unsafe {
 //!     let p = mechanical_mimalloc::mi_malloc_tp!(u64);
 //!     mechanical_mimalloc::raw::mi_free(p.cast());

@@ -94,7 +94,7 @@ fn representative_header_macros_expand_from_downstream_crate() {
     fs::write(
         temp.join("Cargo.toml"),
         format!(
-            "[package]\nname = \"header_macro_smoke\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nmechanical_mimalloc = {{ path = {root:?}, features = [\"std\"] }}\n"
+            "[package]\nname = \"header_macro_smoke\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nmechanical_mimalloc = {{ path = {root:?}, features = [\"std\", \"c-header-macros\"] }}\n"
         ),
     )
     .expect("write temp Cargo.toml");
@@ -147,6 +147,107 @@ fn main() {
         "downstream header macro smoke failed\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
+    );
+
+    fs::remove_dir_all(&temp).expect("remove temp crate");
+}
+
+#[test]
+fn header_macros_are_not_available_without_feature() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let temp = std::env::temp_dir().join(format!(
+        "mechanical_mimalloc_header_macro_default_gate_{}",
+        std::process::id()
+    ));
+    if temp.exists() {
+        fs::remove_dir_all(&temp).expect("remove old temp crate");
+    }
+    fs::create_dir_all(temp.join("src")).expect("create temp crate");
+    fs::write(
+        temp.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"header_macro_default_gate\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nmechanical_mimalloc = {{ path = {root:?}, features = [\"std\"] }}\n"
+        ),
+    )
+    .expect("write temp Cargo.toml");
+    fs::write(
+        temp.join("src/main.rs"),
+        r#"
+fn main() {
+    unsafe {
+        let p = mechanical_mimalloc::malloc!(8);
+        mechanical_mimalloc::raw::mi_free(p);
+    }
+}
+"#,
+    )
+    .expect("write temp main.rs");
+
+    let output = Command::new("cargo")
+        .arg("check")
+        .arg("--quiet")
+        .arg("--manifest-path")
+        .arg(temp.join("Cargo.toml"))
+        .output()
+        .expect("run downstream cargo check");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success() && stderr.contains("could not find `malloc`"),
+        "header macros should be gated by c-header-macros\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        stderr
+    );
+
+    fs::remove_dir_all(&temp).expect("remove temp crate");
+}
+
+#[test]
+fn c_header_macros_still_require_unsafe_boundary() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    let temp = std::env::temp_dir().join(format!(
+        "mechanical_mimalloc_header_macro_unsafe_gate_{}",
+        std::process::id()
+    ));
+    if temp.exists() {
+        fs::remove_dir_all(&temp).expect("remove old temp crate");
+    }
+    fs::create_dir_all(temp.join("src")).expect("create temp crate");
+    fs::write(
+        temp.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"header_macro_unsafe_gate\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\nmechanical_mimalloc = {{ path = {root:?}, features = [\"std\", \"c-header-macros\"] }}\n"
+        ),
+    )
+    .expect("write temp Cargo.toml");
+    fs::write(
+        temp.join("src/main.rs"),
+        r#"
+fn main() {
+    let p = mechanical_mimalloc::malloc!(8);
+    let q = mechanical_mimalloc::mi_malloc_tp!(u64);
+    let _ = (p, q);
+}
+"#,
+    )
+    .expect("write temp main.rs");
+
+    let output = Command::new("cargo")
+        .arg("check")
+        .arg("--quiet")
+        .arg("--manifest-path")
+        .arg(temp.join("Cargo.toml"))
+        .output()
+        .expect("run downstream cargo check");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success()
+            && stderr.contains("call to unsafe function")
+            && stderr.contains("requires unsafe"),
+        "c-header macros should preserve caller-side unsafe boundary\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        stderr
     );
 
     fs::remove_dir_all(&temp).expect("remove temp crate");

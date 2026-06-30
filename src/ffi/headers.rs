@@ -4,6 +4,7 @@
 // through public raw C-shaped functions without internal `unsafe` blocks.
 // Downstream callers must use an unsafe boundary for the expanded raw calls.
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! malloc {
     ($n:expr) => {
@@ -11,6 +12,7 @@ macro_rules! malloc {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! realloc {
     ($p:expr, $n:expr) => {
@@ -18,6 +20,7 @@ macro_rules! realloc {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! strdup {
     ($s:expr) => {
@@ -25,6 +28,7 @@ macro_rules! strdup {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! _strdup {
     ($s:expr) => {
@@ -32,6 +36,7 @@ macro_rules! _strdup {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! realpath {
     ($f:expr, $n:expr) => {
@@ -39,6 +44,7 @@ macro_rules! realpath {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! reallocarray {
     ($p:expr, $c:expr, $n:expr) => {
@@ -46,6 +52,7 @@ macro_rules! reallocarray {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! posix_memalign {
     ($p:expr, $a:expr, $n:expr) => {
@@ -53,6 +60,7 @@ macro_rules! posix_memalign {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! _expand {
     ($p:expr, $n:expr) => {
@@ -60,6 +68,7 @@ macro_rules! _expand {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! _recalloc {
     ($p:expr, $c:expr, $n:expr) => {
@@ -67,6 +76,7 @@ macro_rules! _recalloc {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! _aligned_recalloc {
     ($p:expr, $c:expr, $n:expr, $a:expr) => {
@@ -74,6 +84,7 @@ macro_rules! _aligned_recalloc {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! _wcsdup {
     ($s:expr) => {
@@ -81,6 +92,7 @@ macro_rules! _wcsdup {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! _dupenv_s {
     ($buf:expr, $n:expr, $nm:expr) => {
@@ -88,6 +100,7 @@ macro_rules! _dupenv_s {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! reallocf {
     ($p:expr, $n:expr) => {
@@ -95,6 +108,7 @@ macro_rules! reallocf {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! malloc_usable_size {
     ($p:expr) => {
@@ -102,6 +116,7 @@ macro_rules! malloc_usable_size {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! cfree {
     ($p:expr) => {
@@ -109,6 +124,7 @@ macro_rules! cfree {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! valloc {
     ($n:expr) => {
@@ -116,6 +132,7 @@ macro_rules! valloc {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! memalign {
     ($a:expr, $n:expr) => {
@@ -123,6 +140,7 @@ macro_rules! memalign {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! _aligned_malloc {
     ($n:expr, $a:expr) => {
@@ -130,6 +148,7 @@ macro_rules! _aligned_malloc {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! _aligned_free {
     ($p:expr) => {
@@ -137,6 +156,7 @@ macro_rules! _aligned_free {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! _aligned_offset_realloc {
     ($p:expr, $n:expr, $a:expr, $o:expr) => {
@@ -150,6 +170,7 @@ pub const mi_decl_new: () = ();
 #[allow(non_upper_case_globals)]
 pub const mi_decl_new_nothrow: () = ();
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete {
     ($p:expr) => {
@@ -157,6 +178,7 @@ macro_rules! operatordelete {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_array {
     ($p:expr) => {
@@ -164,6 +186,7 @@ macro_rules! operatordelete_array {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_nothrow {
     ($p:expr, $tag:expr) => {{
@@ -172,6 +195,7 @@ macro_rules! operatordelete_nothrow {
     }};
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_array_nothrow {
     ($p:expr, $tag:expr) => {{
@@ -180,6 +204,7 @@ macro_rules! operatordelete_array_nothrow {
     }};
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatornew {
     ($n:expr) => {
@@ -187,6 +212,7 @@ macro_rules! operatornew {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatornew_array {
     ($n:expr) => {
@@ -194,6 +220,7 @@ macro_rules! operatornew_array {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatornew_nothrow {
     ($n:expr, $tag:expr) => {{
@@ -202,6 +229,7 @@ macro_rules! operatornew_nothrow {
     }};
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatornew_array_nothrow {
     ($n:expr, $tag:expr) => {{
@@ -210,6 +238,7 @@ macro_rules! operatornew_array_nothrow {
     }};
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_sized {
     ($p:expr, $n:expr) => {
@@ -217,6 +246,7 @@ macro_rules! operatordelete_sized {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_array_sized {
     ($p:expr, $n:expr) => {
@@ -224,6 +254,7 @@ macro_rules! operatordelete_array_sized {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_aligned {
     ($p:expr, $al:expr) => {
@@ -231,6 +262,7 @@ macro_rules! operatordelete_aligned {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_array_aligned {
     ($p:expr, $al:expr) => {
@@ -238,6 +270,7 @@ macro_rules! operatordelete_array_aligned {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_sized_aligned {
     ($p:expr, $n:expr, $al:expr) => {
@@ -245,6 +278,7 @@ macro_rules! operatordelete_sized_aligned {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_array_sized_aligned {
     ($p:expr, $n:expr, $al:expr) => {
@@ -252,6 +286,7 @@ macro_rules! operatordelete_array_sized_aligned {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_aligned_nothrow {
     ($p:expr, $al:expr, $tag:expr) => {{
@@ -260,6 +295,7 @@ macro_rules! operatordelete_aligned_nothrow {
     }};
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatordelete_array_aligned_nothrow {
     ($p:expr, $al:expr, $tag:expr) => {{
@@ -268,6 +304,7 @@ macro_rules! operatordelete_array_aligned_nothrow {
     }};
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatornew_aligned {
     ($n:expr, $al:expr) => {
@@ -275,6 +312,7 @@ macro_rules! operatornew_aligned {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatornew_array_aligned {
     ($n:expr, $al:expr) => {
@@ -282,6 +320,7 @@ macro_rules! operatornew_array_aligned {
     };
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatornew_aligned_nothrow {
     ($n:expr, $al:expr, $tag:expr) => {{
@@ -290,6 +329,7 @@ macro_rules! operatornew_aligned_nothrow {
     }};
 }
 
+#[cfg(feature = "c-header-macros")]
 #[macro_export]
 macro_rules! operatornew_array_aligned_nothrow {
     ($n:expr, $al:expr, $tag:expr) => {{

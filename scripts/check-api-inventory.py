@@ -171,6 +171,14 @@ EXPECTED_EXPORTED_MACROS_BY_TIER = {
     },
 }
 
+C_HEADER_MACRO_TIERS = {
+    "tier-r-typed-allocation",
+    "tier-r-header-override",
+}
+C_HEADER_MACROS = set().union(
+    *(EXPECTED_EXPORTED_MACROS_BY_TIER[tier] for tier in C_HEADER_MACRO_TIERS)
+)
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -235,24 +243,36 @@ def raw_modules_by_gate(raw_rs: str) -> tuple[set[str], set[str]]:
     return default, unstable
 
 
-def exported_macros() -> dict[str, pathlib.Path]:
+def exported_macros() -> dict[str, tuple[pathlib.Path, bool]]:
     macros = {}
-    pending_export: pathlib.Path | None = None
+    pending_c_header_cfg = False
+    pending_export: tuple[pathlib.Path, bool] | None = None
     for path in sorted((ROOT / "src").rglob("*.rs")):
         for line in path.read_text().splitlines():
             stripped = line.strip()
+            if stripped == '#[cfg(feature = "c-header-macros")]':
+                pending_c_header_cfg = True
+                continue
             if stripped == "#[macro_export]":
-                pending_export = path
+                pending_export = (path, pending_c_header_cfg)
+                pending_c_header_cfg = False
                 continue
             if pending_export is None:
+                if stripped and not stripped.startswith("#[") and not stripped.startswith("//"):
+                    pending_c_header_cfg = False
                 continue
             match = re.match(r"macro_rules!\s+([A-Za-z0-9_]+)\b", stripped)
             if match:
-                macros[match.group(1)] = pending_export.relative_to(ROOT)
+                export_path, gated_by_c_header_macros = pending_export
+                macros[match.group(1)] = (
+                    export_path.relative_to(ROOT),
+                    gated_by_c_header_macros,
+                )
                 pending_export = None
                 continue
             if stripped and not stripped.startswith("#[") and not stripped.startswith("//"):
                 pending_export = None
+                pending_c_header_cfg = False
     return macros
 
 
@@ -332,13 +352,34 @@ def main() -> int:
     )
 
     expected_macros = set().union(*EXPECTED_EXPORTED_MACROS_BY_TIER.values())
-    actual_macros = set(exported_macros())
+    macro_inventory = exported_macros()
+    actual_macros = set(macro_inventory)
     require(
         actual_macros == expected_macros,
-        "exported macro inventory drift: "
+        "c-header-macros feature macro inventory drift: "
         f"missing={sorted(expected_macros - actual_macros)} "
         f"extra={sorted(actual_macros - expected_macros)}",
     )
+    actual_default_macros = {
+        name for name, (_, gated) in macro_inventory.items() if not gated
+    }
+    expected_default_macros = expected_macros - C_HEADER_MACROS
+    require(
+        actual_default_macros == expected_default_macros,
+        "default macro inventory drift: "
+        f"missing={sorted(expected_default_macros - actual_default_macros)} "
+        f"extra={sorted(actual_default_macros - expected_default_macros)}",
+    )
+    for macro_name in sorted(C_HEADER_MACROS):
+        require(
+            macro_inventory[macro_name][1],
+            f"c-header macro {macro_name}! must be gated by feature c-header-macros",
+        )
+    for macro_name in sorted(expected_default_macros):
+        require(
+            not macro_inventory[macro_name][1],
+            f"default macro {macro_name}! must not be gated by feature c-header-macros",
+        )
 
     for item in sorted(EXPECTED_ROOT_ITEMS):
         require(item in api_doc, f"docs/api-inventory.md does not mention crate-root item {item}")
@@ -421,7 +462,8 @@ def main() -> int:
         f"ok: public API inventory covers {len(actual_root)} crate-root items "
         f"{len(actual_raw)} default raw facade modules, and "
         f"{len(actual_unstable)} unstable raw-internals modules, and "
-        f"{len(actual_macros)} exported macros"
+        f"{len(actual_default_macros)} default macros / "
+        f"{len(actual_macros)} c-header-macros feature macros"
     )
     return 0
 

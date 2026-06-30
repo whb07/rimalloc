@@ -5,4 +5,5 @@ cd_repo_root
 
 run cargo doc --no-deps --features std
 run cargo test --doc --features std
+run cargo test --doc --features "std c-header-macros"
 run scripts/check-safe-docs.py

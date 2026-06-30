@@ -60,6 +60,9 @@ compare = []
 # Enable benchmark-only hotspot counters. This is intended for local profiling
 # builds and is compiled out unless explicitly requested.
 bench-diagnostics = []
+# Expose Rust macro translations of mimalloc C header convenience macros.
+# These are raw Tier R compatibility helpers, not the default safe Rust API.
+c-header-macros = []
 # Enable build-script setup for C ABI artifacts. Cargo crate types are selected
 # by the build command; use `cargo rustc --features interpose --lib -- --crate-type cdylib`
 # for the malloc-interposing shared library.

@@ -94,6 +94,10 @@ objects, or violate alignment and ownership contracts. Those caller bugs are
 outside the safe Rust model and may remain undefined behavior unless a specific
 hardening mode detects them first.
 
+`docs/hardening-threat-model.md` defines the detailed hardening threat model for
+`secure`, `guarded`, malicious unsafe callers, entropy, canaries, and allocator
+metadata corruption.
+
 Security-relevant reports include:
 
 - allocator-owned memory corruption,

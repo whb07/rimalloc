@@ -1256,11 +1256,17 @@ Validated remaining issues:
     proofs and `docs/unsafe-audit-evidence.tsv`.
   - Verify: fuzzing docs and security docs agree.
 
-- [ ] Add a hardening threat model.
-  - [ ] Describe what `secure` is expected to detect or mitigate.
-  - [ ] Describe what `guarded` is expected to detect or mitigate.
-  - [ ] Describe what remains out of scope for malicious unsafe callers.
-  - [ ] Describe entropy, canary, and metadata corruption assumptions.
+- [x] Add a hardening threat model.
+  - [x] Describe what `secure` is expected to detect or mitigate.
+  - [x] Describe what `guarded` is expected to detect or mitigate.
+  - [x] Describe what remains out of scope for malicious unsafe callers.
+  - [x] Describe entropy, canary, and metadata corruption assumptions.
+  - Evidence: `docs/hardening-threat-model.md` now defines baseline caller
+    assumptions, `secure` coverage and non-goals, `guarded` coverage and
+    non-goals, malicious unsafe-caller behavior that remains out of scope,
+    entropy/canary/metadata corruption assumptions, and required hardening
+    report evidence. `SECURITY.md` links to the threat model, and
+    `docs/release.md` lists it with related policy documents.
   - Verify: `SECURITY.md` links to the threat model.
 
 - [ ] Add memory corruption triage checklist.

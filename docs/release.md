@@ -370,6 +370,7 @@ Related policy documents:
 - `docs/strict-types.md`
 - `docs/governance.md`
 - `docs/security-advisories.md`
+- `docs/hardening-threat-model.md`
 - `docs/limitations.md`
 - `docs/upstream.md`
 - `../UPSTREAM_DIFF.md`

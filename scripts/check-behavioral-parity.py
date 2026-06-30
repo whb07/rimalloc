@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
-import os
+import argparse
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -13,6 +14,13 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BUILD_DIR = ROOT / "target/behavioral-parity"
+
+
+ARTIFACT_MODE_NOTES = (
+    "core: direct C ABI parity uses the vendored C static source and Rust staticlib artifacts",
+    "dynamic dlopen: C baseline uses a shared override library; Rust uses the c-abi cdylib",
+    "dynamic preload: C baseline uses a shared override library; Rust uses the interpose cdylib",
+)
 
 
 SCENARIO_C = r"""
@@ -5539,7 +5547,8 @@ def rust_staticlib() -> pathlib.Path:
 def rust_staticlib_release() -> pathlib.Path:
     env = os.environ.copy()
     rustflags = env.get("RUSTFLAGS", "")
-    env["RUSTFLAGS"] = f"{rustflags} --cfg mi_internal_c_probe".strip()
+    native_object_flags = "-C lto=off -C linker-plugin-lto=no -C embed-bitcode=no"
+    env["RUSTFLAGS"] = f"{rustflags} --cfg mi_internal_c_probe {native_object_flags}".strip()
     subprocess.run(
         ["cargo", "rustc", "--release", "--lib", "--", "--crate-type", "staticlib"],
         cwd=ROOT,
@@ -5560,24 +5569,36 @@ def rust_staticlib_release() -> pathlib.Path:
     return libs[0]
 
 
-def rust_cdylib() -> pathlib.Path:
+def rust_cdylib_artifact(name: str, features: str) -> pathlib.Path:
+    target_dir = BUILD_DIR / f"cargo-{name}"
+    env = os.environ.copy()
+    env["CARGO_TARGET_DIR"] = str(target_dir)
     subprocess.run(
-        ["cargo", "rustc", "--lib", "--", "--crate-type", "cdylib"],
+        ["cargo", "rustc", "--features", features, "--lib", "--", "--crate-type", "cdylib"],
         cwd=ROOT,
         check=True,
+        env=env,
     )
     libs = sorted(
         [
-            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.so"),
-            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc.so"),
-            *(ROOT / "target/debug").glob("libmechanical_mimalloc.so"),
+            *(target_dir / "debug/deps").glob("libmechanical_mimalloc-*.so"),
+            *(target_dir / "debug/deps").glob("libmechanical_mimalloc.so"),
+            *(target_dir / "debug").glob("libmechanical_mimalloc.so"),
         ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
     if not libs:
-        raise SystemExit("no Rust cdylib artifact found")
+        raise SystemExit(f"no Rust {name} cdylib artifact found")
     return libs[0]
+
+
+def rust_c_abi_cdylib() -> pathlib.Path:
+    return rust_cdylib_artifact("c-abi-cdylib", "c-abi")
+
+
+def rust_interpose_cdylib() -> pathlib.Path:
+    return rust_cdylib_artifact("interpose-cdylib", "interpose")
 
 
 def compile_binary(
@@ -6097,29 +6118,43 @@ def parse_redirect_capture(output: str) -> dict[str, int | str]:
     return values
 
 
-def validate_redirect_capture(
-    c_static_bin: pathlib.Path,
-    rust_static_bin: pathlib.Path,
+def validate_static_redirect_capture(
+    c_static_bin: pathlib.Path, rust_static_bin: pathlib.Path
+) -> None:
+    c_values = parse_redirect_capture(run(c_static_bin))
+    rust_values = parse_redirect_capture(run(rust_static_bin))
+    if c_values != rust_values:
+        raise AssertionError(f"C={c_values} Rust={rust_values}")
+    if c_values["mode"] != "static":
+        raise AssertionError(f"static reported wrong mode: {c_values}")
+    if c_values["mi_malloc_owned"] != 1:
+        raise AssertionError(f"static mi_malloc allocation was not owned: {c_values}")
+    if c_values["family_ok"] != 1:
+        raise AssertionError(f"static malloc family aliases failed: {c_values}")
+
+
+def validate_dynamic_redirect_capture(
     c_dynamic_bin: pathlib.Path,
     rust_dynamic_bin: pathlib.Path,
     c_shared: pathlib.Path,
-    rust_shared: pathlib.Path,
+    rust_c_abi_shared: pathlib.Path,
+    rust_interpose_shared: pathlib.Path,
 ) -> None:
     cases = {
-        "static": (
-            parse_redirect_capture(run(c_static_bin)),
-            parse_redirect_capture(run(rust_static_bin)),
-        ),
         "dlopen": (
             parse_redirect_capture(run_args(c_dynamic_bin, [str(c_shared)])),
-            parse_redirect_capture(run_args(rust_dynamic_bin, [str(rust_shared)])),
+            parse_redirect_capture(run_args(rust_dynamic_bin, [str(rust_c_abi_shared)])),
         ),
         "preload": (
             parse_redirect_capture(
                 run_with_env(c_dynamic_bin, {"LD_PRELOAD": str(c_shared)}, "C redirect preload")
             ),
             parse_redirect_capture(
-                run_with_env(rust_dynamic_bin, {"LD_PRELOAD": str(rust_shared)}, "Rust redirect preload")
+                run_with_env(
+                    rust_dynamic_bin,
+                    {"LD_PRELOAD": str(rust_interpose_shared)},
+                    "Rust redirect preload",
+                )
             ),
         ),
     }
@@ -6134,8 +6169,6 @@ def validate_redirect_capture(
         raise AssertionError(f"dlopen unexpectedly redirects plain malloc: {cases['dlopen'][0]}")
     if cases["preload"][0]["malloc_owned"] != 1:
         raise AssertionError(f"LD_PRELOAD did not redirect plain malloc: {cases['preload'][0]}")
-    if cases["static"][0]["family_ok"] != 1:
-        raise AssertionError(f"static malloc family aliases failed: {cases['static'][0]}")
     if cases["dlopen"][0]["family_ok"] != -1:
         raise AssertionError(f"dlopen unexpectedly exercised malloc family aliases: {cases['dlopen'][0]}")
     if cases["preload"][0]["family_ok"] != 1:
@@ -6146,11 +6179,11 @@ def validate_preload_show_stats(
     c_dynamic_bin: pathlib.Path,
     rust_dynamic_bin: pathlib.Path,
     c_shared: pathlib.Path,
-    rust_shared: pathlib.Path,
+    rust_interpose_shared: pathlib.Path,
 ) -> None:
     cases = (
         ("C", c_dynamic_bin, c_shared),
-        ("Rust", rust_dynamic_bin, rust_shared),
+        ("Rust", rust_dynamic_bin, rust_interpose_shared),
     )
     for name, binary, shared in cases:
         stdout, stderr = run_with_env_capture(
@@ -6547,13 +6580,48 @@ def validate_page_policy_capture(c_bin: pathlib.Path, rust_bin: pathlib.Path) ->
                 raise AssertionError(f"{label} {name} page policy invariant failed: {values}")
 
 
-def main() -> int:
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run C mimalloc/Rust mimalloc behavioral parity checks."
+    )
+    parser.add_argument(
+        "--only",
+        choices=("all", "core", "dynamic"),
+        default="all",
+        help="run all checks, only direct static/API checks, or only dynamic artifact-mode checks",
+    )
+    parser.add_argument(
+        "--list-artifact-modes",
+        action="store_true",
+        help="print the artifact modes covered by this script and exit",
+    )
+    return parser.parse_args(argv)
+
+
+def print_artifact_modes() -> None:
+    for note in ARTIFACT_MODE_NOTES:
+        print(f"artifact mode: {note}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    if args.list_artifact_modes:
+        print_artifact_modes()
+        return 0
+
+    run_core = args.only in ("all", "core")
+    run_dynamic = args.only in ("all", "dynamic")
+
     cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if cc is None:
         raise SystemExit("no C compiler found; set CC")
-    cxx = os.environ.get("CXX") or shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
-    if cxx is None:
-        raise SystemExit("no C++ compiler found; set CXX")
+    cxx = None
+    if run_core:
+        cxx = os.environ.get("CXX") or shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
+        if cxx is None:
+            raise SystemExit("no C++ compiler found; set CXX")
+
+    print_artifact_modes()
 
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     scenario = BUILD_DIR / "behavioral-parity.c"
@@ -6597,9 +6665,6 @@ def main() -> int:
     redirect_static_capture.write_text(REDIRECT_STATIC_CAPTURE_C)
     redirect_dynamic_capture.write_text(REDIRECT_DYNAMIC_CAPTURE_C)
 
-    rust_lib = rust_staticlib()
-    rust_release_lib = rust_staticlib_release()
-    rust_shared = rust_cdylib()
     c_bin = BUILD_DIR / "behavioral-parity-c"
     rust_bin = BUILD_DIR / "behavioral-parity-rust"
     c_json_bin = BUILD_DIR / "json-capture-c"
@@ -6642,77 +6707,117 @@ def main() -> int:
     rust_redirect_dynamic_bin = BUILD_DIR / "redirect-dynamic-rust"
     c_shared = BUILD_DIR / "libmimalloc-c.so"
 
-    compile_binary(cc, c_bin, [ROOT / "mimalloc-3.3.2/src/static.c", scenario])
-    compile_binary(cc, rust_bin, [scenario, rust_lib])
-    compile_binary(cc, c_json_bin, [ROOT / "mimalloc-3.3.2/src/static.c", json_capture])
-    compile_binary(cc, rust_json_bin, [json_capture, rust_lib], ["-DRUST_HELPER_CAPTURE"])
-    compile_cxx_binary(cxx, c_cxx_new_handler_bin, [cxx_new_handler_capture, ROOT / "mimalloc-3.3.2/src/static.c"])
-    compile_cxx_binary(cxx, rust_cxx_new_handler_bin, [cxx_new_handler_capture, rust_lib])
-    compile_cxx_binary(
-        cxx,
-        c_cxx_override_bin,
-        [cxx_override_capture, ROOT / "mimalloc-3.3.2/src/static.c"],
-        ["-DMI_MALLOC_OVERRIDE"],
-    )
-    compile_cxx_binary(cxx, rust_cxx_override_bin, [cxx_override_capture, rust_lib])
-    compile_cxx_binary(cxx, c_cxx_stl_allocator_bin, [cxx_stl_allocator_capture, ROOT / "mimalloc-3.3.2/src/static.c"])
-    compile_cxx_binary(cxx, rust_cxx_stl_allocator_bin, [cxx_stl_allocator_capture, rust_lib])
-    compile_binary(cc, c_process_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_capture])
-    compile_binary(cc, rust_process_bin, [process_capture, rust_lib])
-    compile_binary(cc, c_env_bin, [ROOT / "mimalloc-3.3.2/src/static.c", env_capture])
-    compile_binary(cc, rust_env_bin, [env_capture, rust_lib])
-    compile_binary(cc, c_throttle_bin, [ROOT / "mimalloc-3.3.2/src/static.c", throttle_capture])
-    compile_binary(cc, rust_throttle_bin, [throttle_capture, rust_lib])
-    compile_binary(cc, c_lifecycle_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_lifecycle])
-    compile_binary(cc, rust_lifecycle_bin, [process_lifecycle, rust_lib])
-    compile_binary(cc, c_numa_affinity_bin, [ROOT / "mimalloc-3.3.2/src/static.c", numa_affinity_capture])
-    compile_binary(cc, rust_numa_affinity_bin, [numa_affinity_capture, rust_lib])
-    compile_binary(cc, c_numa_count_bin, [ROOT / "mimalloc-3.3.2/src/static.c", numa_count_capture])
-    compile_binary(cc, rust_numa_count_bin, [numa_count_capture, rust_lib])
-    compile_binary(cc, c_arena_fallback_bin, [ROOT / "mimalloc-3.3.2/src/static.c", arena_fallback_capture])
-    compile_binary(cc, rust_arena_fallback_bin, [arena_fallback_capture, rust_lib])
-    compile_binary(
-        cc,
-        c_free_hint_release_bin,
-        [ROOT / "mimalloc-3.3.2/src/static.c", free_hint_release_capture],
-        ["-DNDEBUG"],
-    )
-    compile_binary(cc, rust_free_hint_release_bin, [free_hint_release_capture, rust_release_lib], ["-DNDEBUG"])
-    compile_binary(
-        cc,
-        c_lazy_commit_release_bin,
-        [ROOT / "mimalloc-3.3.2/src/static.c", lazy_commit_release_capture],
-        ["-DNDEBUG"],
-    )
-    compile_binary(cc, rust_lazy_commit_release_bin, [lazy_commit_release_capture, rust_release_lib], ["-DNDEBUG"])
-    compile_binary(
-        cc,
-        c_stress_release_bin,
-        [ROOT / "mimalloc-3.3.2/src/static.c", stress_release_capture],
-        ["-DNDEBUG"],
-    )
-    compile_binary(cc, rust_stress_release_bin, [stress_release_capture, rust_release_lib], ["-DNDEBUG"])
-    compile_binary(cc, c_page_policy_bin, [ROOT / "mimalloc-3.3.2/src/static.c", page_policy_capture])
-    compile_binary(cc, rust_page_policy_bin, [page_policy_capture, rust_lib])
-    compile_binary(cc, c_randomized_bin, [ROOT / "mimalloc-3.3.2/src/static.c", randomized_capture])
-    compile_binary(cc, rust_randomized_bin, [randomized_capture, rust_lib])
-    compile_binary(cc, c_huge_os_pages_bin, [ROOT / "mimalloc-3.3.2/src/static.c", huge_os_pages_capture])
-    compile_binary(cc, rust_huge_os_pages_bin, [huge_os_pages_capture, rust_lib])
-    compile_binary(
-        cc,
-        c_redirect_static_bin,
-        [ROOT / "mimalloc-3.3.2/src/static.c", redirect_static_capture],
-        ["-DMI_MALLOC_OVERRIDE"],
-    )
-    compile_binary(cc, rust_redirect_static_bin, [redirect_static_capture, rust_lib])
-    compile_binary(cc, c_redirect_dynamic_bin, [redirect_dynamic_capture])
-    compile_binary(cc, rust_redirect_dynamic_bin, [redirect_dynamic_capture])
-    compile_shared_library(
-        cc,
-        c_shared,
-        [ROOT / "mimalloc-3.3.2/src/static.c"],
-        ["-DMI_MALLOC_OVERRIDE"],
-    )
+    rust_c_abi_shared = None
+    rust_interpose_shared = None
+    if run_core:
+        assert cxx is not None
+        rust_lib = rust_staticlib()
+        rust_release_lib = rust_staticlib_release()
+        compile_binary(cc, c_bin, [ROOT / "mimalloc-3.3.2/src/static.c", scenario])
+        compile_binary(cc, rust_bin, [scenario, rust_lib])
+        compile_binary(cc, c_json_bin, [ROOT / "mimalloc-3.3.2/src/static.c", json_capture])
+        compile_binary(cc, rust_json_bin, [json_capture, rust_lib], ["-DRUST_HELPER_CAPTURE"])
+        compile_cxx_binary(cxx, c_cxx_new_handler_bin, [cxx_new_handler_capture, ROOT / "mimalloc-3.3.2/src/static.c"])
+        compile_cxx_binary(cxx, rust_cxx_new_handler_bin, [cxx_new_handler_capture, rust_lib])
+        compile_cxx_binary(
+            cxx,
+            c_cxx_override_bin,
+            [cxx_override_capture, ROOT / "mimalloc-3.3.2/src/static.c"],
+            ["-DMI_MALLOC_OVERRIDE"],
+        )
+        compile_cxx_binary(cxx, rust_cxx_override_bin, [cxx_override_capture, rust_lib])
+        compile_cxx_binary(cxx, c_cxx_stl_allocator_bin, [cxx_stl_allocator_capture, ROOT / "mimalloc-3.3.2/src/static.c"])
+        compile_cxx_binary(cxx, rust_cxx_stl_allocator_bin, [cxx_stl_allocator_capture, rust_lib])
+        compile_binary(cc, c_process_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_capture])
+        compile_binary(cc, rust_process_bin, [process_capture, rust_lib])
+        compile_binary(cc, c_env_bin, [ROOT / "mimalloc-3.3.2/src/static.c", env_capture])
+        compile_binary(cc, rust_env_bin, [env_capture, rust_lib])
+        compile_binary(cc, c_throttle_bin, [ROOT / "mimalloc-3.3.2/src/static.c", throttle_capture])
+        compile_binary(cc, rust_throttle_bin, [throttle_capture, rust_lib])
+        compile_binary(cc, c_lifecycle_bin, [ROOT / "mimalloc-3.3.2/src/static.c", process_lifecycle])
+        compile_binary(cc, rust_lifecycle_bin, [process_lifecycle, rust_lib])
+        compile_binary(cc, c_numa_affinity_bin, [ROOT / "mimalloc-3.3.2/src/static.c", numa_affinity_capture])
+        compile_binary(cc, rust_numa_affinity_bin, [numa_affinity_capture, rust_lib])
+        compile_binary(cc, c_numa_count_bin, [ROOT / "mimalloc-3.3.2/src/static.c", numa_count_capture])
+        compile_binary(cc, rust_numa_count_bin, [numa_count_capture, rust_lib])
+        compile_binary(cc, c_arena_fallback_bin, [ROOT / "mimalloc-3.3.2/src/static.c", arena_fallback_capture])
+        compile_binary(cc, rust_arena_fallback_bin, [arena_fallback_capture, rust_lib])
+        compile_binary(
+            cc,
+            c_free_hint_release_bin,
+            [ROOT / "mimalloc-3.3.2/src/static.c", free_hint_release_capture],
+            ["-DNDEBUG"],
+        )
+        compile_binary(cc, rust_free_hint_release_bin, [free_hint_release_capture, rust_release_lib], ["-DNDEBUG"])
+        compile_binary(
+            cc,
+            c_lazy_commit_release_bin,
+            [ROOT / "mimalloc-3.3.2/src/static.c", lazy_commit_release_capture],
+            ["-DNDEBUG"],
+        )
+        compile_binary(cc, rust_lazy_commit_release_bin, [lazy_commit_release_capture, rust_release_lib], ["-DNDEBUG"])
+        compile_binary(
+            cc,
+            c_stress_release_bin,
+            [ROOT / "mimalloc-3.3.2/src/static.c", stress_release_capture],
+            ["-DNDEBUG"],
+        )
+        compile_binary(cc, rust_stress_release_bin, [stress_release_capture, rust_release_lib], ["-DNDEBUG"])
+        compile_binary(cc, c_page_policy_bin, [ROOT / "mimalloc-3.3.2/src/static.c", page_policy_capture])
+        compile_binary(cc, rust_page_policy_bin, [page_policy_capture, rust_lib])
+        compile_binary(cc, c_randomized_bin, [ROOT / "mimalloc-3.3.2/src/static.c", randomized_capture])
+        compile_binary(cc, rust_randomized_bin, [randomized_capture, rust_lib])
+        compile_binary(cc, c_huge_os_pages_bin, [ROOT / "mimalloc-3.3.2/src/static.c", huge_os_pages_capture])
+        compile_binary(cc, rust_huge_os_pages_bin, [huge_os_pages_capture, rust_lib])
+        compile_binary(
+            cc,
+            c_redirect_static_bin,
+            [ROOT / "mimalloc-3.3.2/src/static.c", redirect_static_capture],
+            ["-DMI_MALLOC_OVERRIDE"],
+        )
+        compile_binary(cc, rust_redirect_static_bin, [redirect_static_capture, rust_lib])
+
+    if run_dynamic:
+        rust_c_abi_shared = rust_c_abi_cdylib()
+        rust_interpose_shared = rust_interpose_cdylib()
+        compile_binary(cc, c_redirect_dynamic_bin, [redirect_dynamic_capture])
+        compile_binary(cc, rust_redirect_dynamic_bin, [redirect_dynamic_capture])
+        compile_shared_library(
+            cc,
+            c_shared,
+            [ROOT / "mimalloc-3.3.2/src/static.c"],
+            ["-DMI_MALLOC_OVERRIDE"],
+        )
+
+    if run_dynamic and not run_core:
+        assert rust_c_abi_shared is not None
+        assert rust_interpose_shared is not None
+        try:
+            validate_dynamic_redirect_capture(
+                c_redirect_dynamic_bin,
+                rust_redirect_dynamic_bin,
+                c_shared,
+                rust_c_abi_shared,
+                rust_interpose_shared,
+            )
+        except AssertionError as err:
+            print(f"dynamic redirection parity mismatch: {err}", file=sys.stderr)
+            return 1
+
+        try:
+            validate_preload_show_stats(
+                c_redirect_dynamic_bin,
+                rust_redirect_dynamic_bin,
+                c_shared,
+                rust_interpose_shared,
+            )
+        except AssertionError as err:
+            print(f"preload show-stats parity mismatch: {err}", file=sys.stderr)
+            return 1
+
+        print("ok: C and Rust mimalloc dynamic redirection artifact modes match")
+        print("ok: C and Rust mimalloc LD_PRELOAD show-stats shutdown behavior matches")
+        return 0
 
     c_output = run(c_bin)
     rust_output = run(rust_bin)
@@ -6858,23 +6963,36 @@ def main() -> int:
         return 1
 
     try:
-        validate_redirect_capture(
-            c_redirect_static_bin,
-            rust_redirect_static_bin,
-            c_redirect_dynamic_bin,
-            rust_redirect_dynamic_bin,
-            c_shared,
-            rust_shared,
-        )
+        validate_static_redirect_capture(c_redirect_static_bin, rust_redirect_static_bin)
     except AssertionError as err:
-        print(f"redirection parity mismatch: {err}", file=sys.stderr)
+        print(f"static redirection parity mismatch: {err}", file=sys.stderr)
         return 1
 
-    try:
-        validate_preload_show_stats(c_redirect_dynamic_bin, rust_redirect_dynamic_bin, c_shared, rust_shared)
-    except AssertionError as err:
-        print(f"preload show-stats parity mismatch: {err}", file=sys.stderr)
-        return 1
+    if run_dynamic:
+        assert rust_c_abi_shared is not None
+        assert rust_interpose_shared is not None
+        try:
+            validate_dynamic_redirect_capture(
+                c_redirect_dynamic_bin,
+                rust_redirect_dynamic_bin,
+                c_shared,
+                rust_c_abi_shared,
+                rust_interpose_shared,
+            )
+        except AssertionError as err:
+            print(f"dynamic redirection parity mismatch: {err}", file=sys.stderr)
+            return 1
+
+        try:
+            validate_preload_show_stats(
+                c_redirect_dynamic_bin,
+                rust_redirect_dynamic_bin,
+                c_shared,
+                rust_interpose_shared,
+            )
+        except AssertionError as err:
+            print(f"preload show-stats parity mismatch: {err}", file=sys.stderr)
+            return 1
 
     print("ok: C and Rust mimalloc behavior smoke outputs match")
     print("ok: C and Rust mimalloc JSON schemas parse and match")
@@ -6894,8 +7012,10 @@ def main() -> int:
     print("ok: C and Rust mimalloc page policy behavior matches")
     print("ok: C and Rust mimalloc seeded randomized allocation behavior matches")
     print("ok: C and Rust mimalloc huge OS page fallback behavior matches")
-    print("ok: C and Rust mimalloc static/dynamic redirection behavior matches")
-    print("ok: C and Rust mimalloc LD_PRELOAD show-stats shutdown behavior matches")
+    print("ok: C and Rust mimalloc static redirection behavior matches")
+    if run_dynamic:
+        print("ok: C and Rust mimalloc dynamic redirection artifact modes match")
+        print("ok: C and Rust mimalloc LD_PRELOAD show-stats shutdown behavior matches")
     print(c_output, end="")
     return 0
 

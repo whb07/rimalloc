@@ -473,17 +473,29 @@ Validated remaining issues:
     verifies shutdown stats sections are emitted for `mimalloc_show_stats=1`.
   - Verify: focused LD_PRELOAD script passes on Linux x86_64 GNU.
 
-- [ ] Align broad behavioral parity with documented artifact modes.
-  - [ ] Update `scripts/check-behavioral-parity.py` so `rust_cdylib()` builds
+- [x] Align broad behavioral parity with documented artifact modes.
+  - [x] Update `scripts/check-behavioral-parity.py` so `rust_cdylib()` builds
         the documented dynamic artifact mode, not an unfeatured cdylib unless
         that is intentionally being tested.
-  - [ ] Add separate helper names for plain cdylib, `c-abi` cdylib, and
+  - [x] Add separate helper names for plain cdylib, `c-abi` cdylib, and
         `interpose` cdylib if all three modes remain useful.
-  - [ ] Record which parity cases require interposition and which require only
+        Plain unfeatured cdylib is not used by the supported parity matrix.
+  - [x] Record which parity cases require interposition and which require only
         C ABI exports.
-  - [ ] Add command-line flags if the full parity script remains too expensive
+  - [x] Add command-line flags if the full parity script remains too expensive
         for every CI run.
-  - Verify: broad parity output identifies the exact artifact mode under test.
+  - Evidence: `scripts/check-behavioral-parity.py` now has explicit
+    `rust_c_abi_cdylib()` and `rust_interpose_cdylib()` helpers with isolated
+    Cargo target directories. Dynamic `dlopen` parity loads the Rust `c-abi`
+    cdylib, while dynamic `LD_PRELOAD` and show-stats parity use the Rust
+    `interpose` cdylib. The script prints the artifact mode plan at startup,
+    supports `--list-artifact-modes`, and supports `--only all|core|dynamic`
+    so CI can run just the dynamic artifact-mode slice. The release-static
+    helper now uses native-object rustflags so its C linker smoke tests do not
+    depend on LLVM bitcode support.
+  - Verify: `scripts/check-behavioral-parity.py --list-artifact-modes` and
+    `scripts/check-behavioral-parity.py --only dynamic` pass and identify the
+    exact artifact modes under test.
 
 - [ ] Add C++ release artifact tests.
   - [ ] Test C++ operator new/delete overrides for the `interpose` staticlib.

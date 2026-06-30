@@ -108,6 +108,12 @@ scripts/check-valgrind-tracking-parity.py
 These checks compare null behavior, usable-size behavior, alignment, realloc
 preservation, heap APIs, options, stats, feature modes, C++ overrides, and
 platform-specific behavior where the current supported matrix claims parity.
+`scripts/check-behavioral-parity.py` prints the artifact modes it exercises at
+startup. Use `scripts/check-behavioral-parity.py --only dynamic` for the
+CI-friendly dynamic artifact-mode slice: `dlopen` loads the Rust `c-abi`
+cdylib, while `LD_PRELOAD` and shutdown show-stats checks use the Rust
+`interpose` cdylib. Use `--list-artifact-modes` to print the current mapping
+without building artifacts.
 Known unresolved baseline mismatches remain documented in `PARITY.md`.
 
 ## Fuzzing Policy

@@ -10,10 +10,12 @@ performance relative to C mimalloc 3.3.2.
 - Use `scripts/check-bench-full.sh` before treating allocator-wide results as
   authoritative.
 - Before a release candidate, run `scripts/check-bench-full.sh`, capture
-  `scripts/env-info.sh`, preserve
-  `target/criterion/benchmark-thresholds-full.csv`, and update
-  `BENCHMARK_RESULTS.md` with the exact command lines, feature flags, and noisy
-  benchmark notes for the release commit.
+  `scripts/env-info.sh`, preserve the default
+  `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` and
+  interpose `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv`
+  threshold reports, and update `BENCHMARK_RESULTS.md` with the exact command
+  lines, feature flags, artifact modes, Rust/C ratios, and noisy benchmark notes
+  for the release commit.
 - Capture `scripts/env-info.sh` output with any committed full benchmark report.
 - Record benchmark evidence in `BENCHMARK_RESULTS.md`, including commit hash,
   allocator versions, feature flags, command lines, and noisy-benchmark notes.
@@ -67,6 +69,19 @@ The native mimalloc-bench Criterion ports support:
 - `MIMALLOC_BENCH_SAMPLE_SIZE`
 - `MIMALLOC_BENCH_MEASUREMENT_SECS`
 - `MIMALLOC_BENCH_WARMUP_SECS`
+
+`scripts/check-bench-full.sh` keeps release-candidate measurements separate by
+artifact mode:
+
+- Default Rust library mode uses `target/bench-full/default-rust`.
+- `interpose` mode uses `target/bench-full/interpose`.
+
+Keep those target directories separate, or override
+`MIMALLOC_BENCH_DEFAULT_TARGET_DIR` and `MIMALLOC_BENCH_INTERPOSE_TARGET_DIR`
+with two different paths. Release reports must label each section with the
+artifact mode and feature set. Rust-vs-C ratios come from the native scenario
+benchmarks in the default Rust library mode, while interpose hot-path evidence
+is reported separately.
 
 ## Regression Budgets
 

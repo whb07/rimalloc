@@ -244,9 +244,11 @@ Before publishing or tagging a release:
 21. Run `scripts/check-valgrind-tracking-parity.py`.
 22. Before a release candidate, run `scripts/check-bench-full.sh`, capture
    `scripts/env-info.sh`, preserve
-   `target/criterion/benchmark-thresholds-full.csv`, and update
-   `BENCHMARK_RESULTS.md` with exact command lines, feature flags, and
-   noisy-benchmark notes for the release commit.
+   `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` and
+   `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv`, and
+   update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,
+   artifact modes, Rust/C ratios, and noisy-benchmark notes for the release
+   commit.
 23. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,

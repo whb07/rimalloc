@@ -1,5 +1,29 @@
 # Mimalloc Rust vs C Benchmark Results
 
+## Release Candidate Artifact-Mode Evidence
+
+For a release candidate, collect performance evidence with:
+
+```bash
+scripts/check-bench-full.sh
+scripts/env-info.sh > target/bench-full/environment.txt
+```
+
+The full benchmark script intentionally writes default Rust-library and
+`interpose` measurements to separate Criterion directories:
+
+| Artifact mode | Feature set | Criterion directory | Threshold CSV |
+|---|---|---|---|
+| default Rust library | `bench` / `bench compare` | `target/bench-full/default-rust/criterion` | `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` |
+| interpose hot path | `bench interpose` | `target/bench-full/interpose/criterion` | `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv` |
+
+Do not reuse Criterion baselines across artifact modes. Report each artifact
+mode under a separate heading with the exact command line and feature set. The
+native scenario section for the default Rust library mode must include the
+Rust-vs-C ratios emitted by `scripts/summarize-criterion.py`; the `interpose`
+section must remain separate and must not be compared against default-mode saved
+baselines.
+
 ## Strict-Type Assembly Comparison Checklist
 
 Use `scripts/capture-release-assembly.sh` before and after each strict-type

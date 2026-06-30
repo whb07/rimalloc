@@ -624,14 +624,17 @@ fn release_candidates_require_full_benchmark_evidence() {
         fs::read_to_string(root.join("docs/release.md")).expect("read docs/release.md");
     let performance_md =
         fs::read_to_string(root.join("docs/performance.md")).expect("read docs/performance.md");
+    let benchmark_results_md =
+        fs::read_to_string(root.join("BENCHMARK_RESULTS.md")).expect("read BENCHMARK_RESULTS.md");
     let check_bench_full = fs::read_to_string(root.join("scripts/check-bench-full.sh"))
         .expect("read full bench script");
 
     for required in [
         "Before a release candidate, run `scripts/check-bench-full.sh`",
         "capture\n   `scripts/env-info.sh`",
-        "preserve\n   `target/criterion/benchmark-thresholds-full.csv`",
-        "update\n   `BENCHMARK_RESULTS.md` with exact command lines, feature flags, and\n   noisy-benchmark notes",
+        "target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv",
+        "target/bench-full/interpose/criterion/benchmark-thresholds-full.csv",
+        "artifact modes, Rust/C ratios, and noisy-benchmark notes",
     ] {
         assert!(
             release_md.contains(required),
@@ -642,8 +645,9 @@ fn release_candidates_require_full_benchmark_evidence() {
     for required in [
         "Before a release candidate, run `scripts/check-bench-full.sh`",
         "capture\n  `scripts/env-info.sh`",
-        "preserve\n  `target/criterion/benchmark-thresholds-full.csv`",
-        "update\n  `BENCHMARK_RESULTS.md` with the exact command lines, feature flags, and noisy\n  benchmark notes",
+        "target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv",
+        "target/bench-full/interpose/criterion/benchmark-thresholds-full.csv",
+        "Rust-vs-C ratios come from the native scenario\nbenchmarks in the default Rust library mode",
     ] {
         assert!(
             performance_md.contains(required),
@@ -651,10 +655,32 @@ fn release_candidates_require_full_benchmark_evidence() {
         );
     }
 
-    assert!(
-        check_bench_full.contains("--csv-out target/criterion/benchmark-thresholds-full.csv"),
-        "full benchmark script should emit the threshold CSV named by the release checklist"
-    );
+    for required in [
+        "CARGO_TARGET_DIR=\"$default_target_dir\"",
+        "CARGO_TARGET_DIR=\"$interpose_target_dir\"",
+        "--csv-out \"$default_target_dir/criterion/benchmark-thresholds-full.csv\"",
+        "--csv-out \"$interpose_target_dir/criterion/benchmark-thresholds-full.csv\"",
+        "cargo bench --features \"bench interpose\" --bench hotpath",
+        "--allow-missing",
+    ] {
+        assert!(
+            check_bench_full.contains(required),
+            "full benchmark script should keep release artifact modes separate: {required}"
+        );
+    }
+
+    for required in [
+        "## Release Candidate Artifact-Mode Evidence",
+        "default Rust library",
+        "interpose hot path",
+        "Do not reuse Criterion baselines across artifact modes.",
+        "Rust-vs-C ratios emitted by `scripts/summarize-criterion.py`",
+    ] {
+        assert!(
+            benchmark_results_md.contains(required),
+            "benchmark report template should identify artifact mode evidence: {required}"
+        );
+    }
 }
 
 #[test]

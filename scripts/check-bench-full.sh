@@ -12,13 +12,23 @@ export MIMALLOC_BENCH_MEASUREMENT_SECS
 export MIMALLOC_BENCH_WARMUP_SECS
 export MIMALLOC_BENCH_ALLOCATORS="${MIMALLOC_BENCH_ALLOCATORS:-rust,c}"
 
-run cargo check --benches --features "bench compare"
+default_target_dir="${MIMALLOC_BENCH_DEFAULT_TARGET_DIR:-target/bench-full/default-rust}"
+interpose_target_dir="${MIMALLOC_BENCH_INTERPOSE_TARGET_DIR:-target/bench-full/interpose}"
+
+run env CARGO_TARGET_DIR="$default_target_dir" cargo check --benches --features "bench compare"
+run env CARGO_TARGET_DIR="$interpose_target_dir" cargo check --benches --features "bench interpose"
 run scripts/check-bench-thresholds.py --self-test
-run cargo bench --features bench --bench hotpath
-run cargo bench --features "bench compare" --bench hotpath -- hotpath/paired_alloc_free
-run cargo bench --features bench --bench workloads
-run cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
+run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench hotpath
+run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features "bench compare" --bench hotpath -- hotpath/paired_alloc_free
+run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench workloads
+run env CARGO_TARGET_DIR="$default_target_dir" cargo bench --features bench --bench mimalloc_bench -- mimalloc-bench-native
 run scripts/check-bench-thresholds.py \
   --thresholds benchmarks/thresholds.json \
-  --criterion-dir target/criterion \
-  --csv-out target/criterion/benchmark-thresholds-full.csv
+  --criterion-dir "$default_target_dir/criterion" \
+  --csv-out "$default_target_dir/criterion/benchmark-thresholds-full.csv"
+run env CARGO_TARGET_DIR="$interpose_target_dir" cargo bench --features "bench interpose" --bench hotpath
+run scripts/check-bench-thresholds.py \
+  --thresholds benchmarks/thresholds.json \
+  --criterion-dir "$interpose_target_dir/criterion" \
+  --csv-out "$interpose_target_dir/criterion/benchmark-thresholds-full.csv" \
+  --allow-missing

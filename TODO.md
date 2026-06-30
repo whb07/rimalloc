@@ -969,11 +969,18 @@ Validated remaining issues:
     stay aligned.
   - Verify: release checklist points to the exact benchmark evidence.
 
-- [ ] Measure documented artifact modes separately.
-  - [ ] Benchmark default Rust library mode.
-  - [ ] Benchmark `interpose` mode separately.
-  - [ ] Avoid reusing Criterion baselines across feature/artifact modes.
-  - [ ] Record Rust-vs-C ratios for native scenario benchmarks.
+- [x] Measure documented artifact modes separately.
+  - [x] Benchmark default Rust library mode.
+  - [x] Benchmark `interpose` mode separately.
+  - [x] Avoid reusing Criterion baselines across feature/artifact modes.
+  - [x] Record Rust-vs-C ratios for native scenario benchmarks.
+  - Evidence: `scripts/check-bench-full.sh` now runs default Rust-library
+    benchmark targets under `target/bench-full/default-rust` and `interpose`
+    hot-path benchmarks under `target/bench-full/interpose`, writing separate
+    threshold CSVs for each mode. `docs/performance.md`, `docs/release.md`, and
+    `BENCHMARK_RESULTS.md` require release reports to keep those artifact modes
+    separate, avoid shared Criterion baselines, and record Rust/C ratios from
+    the native default-mode scenario benchmarks.
   - Verify: benchmark report identifies feature set and artifact mode.
 
 - [ ] Require evidence for new strict internal wrappers.

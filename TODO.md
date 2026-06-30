@@ -118,15 +118,19 @@ Validated remaining issues:
     policy, and `CHANGELOG.md` records the release-note text.
   - Verify: `scripts/check-raw-facade.sh` and `scripts/check-docs.sh`.
 
-- [ ] Add a release API diff artifact for Tier S and Tier U.
-  - [ ] Choose either an existing tool such as `cargo public-api` or extend
+- [x] Add a release API diff artifact for Tier S and Tier U.
+  - [x] Choose either an existing tool such as `cargo public-api` or extend
         `scripts/check-api-inventory.py` to emit a checked snapshot.
-  - [ ] Store the release snapshot under a stable path such as
+  - [x] Store the release snapshot under a stable path such as
         `docs/api-snapshots/`.
-  - [ ] Add release instructions for comparing the current snapshot to the
+  - [x] Add release instructions for comparing the current snapshot to the
         previous release tag.
-  - [ ] Ensure raw/Tier R changes remain classified separately from Tier S/U
+  - [x] Ensure raw/Tier R changes remain classified separately from Tier S/U
         Rust source compatibility.
+  - Evidence: `scripts/check-api-inventory.py` now checks
+    `docs/api-snapshots/tier-s-u.txt`, can regenerate it with
+    `--write-tier-su-snapshot`, and `docs/release.md` documents previous-tag
+    diff review while excluding Tier R/Tier C from the snapshot.
   - Verify: release snapshot command exits cleanly and the snapshot diff is
     reviewed.
 
@@ -816,7 +820,7 @@ Validated remaining issues:
 
 ## Definition of done for a production-style release
 
-- [ ] Tier S/Tier U Rust API contract is frozen and diffed.
+- [x] Tier S/Tier U Rust API contract is frozen and diffed.
 - [x] `Options` alias decision is complete.
 - [x] `raw` release policy is explicit and tested.
 - [ ] Dynamic C ABI has no unintentional extra `mi_*` exports.

@@ -34,6 +34,31 @@ same pointer ownership, lifetime, layout, alignment, threading, and callback
 contracts as the C API. Keeping `raw` available does not stabilize translated
 implementation module paths or Rust layouts.
 
+## Tier S/U API Diff Snapshot
+
+Tier S and Tier U Rust source compatibility is tracked with
+`docs/api-snapshots/tier-s-u.txt`. The checked snapshot excludes Tier R raw
+paths and Tier C ABI symbols because those surfaces have separate raw-facade,
+symbol, and layout checks.
+
+After an intentional Tier S or Tier U API change, regenerate and review the
+snapshot:
+
+```sh
+scripts/check-api-inventory.py --write-tier-su-snapshot
+scripts/check-api-inventory.py
+```
+
+For release review against a previous tag:
+
+```sh
+git show <previous-tag>:docs/api-snapshots/tier-s-u.txt > /tmp/previous-tier-s-u.txt
+diff -u /tmp/previous-tier-s-u.txt docs/api-snapshots/tier-s-u.txt
+```
+
+Any diff must be classified in `CHANGELOG.md` and reviewed against
+`docs/compatibility.md`.
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.

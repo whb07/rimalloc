@@ -11,12 +11,17 @@ import os
 import pathlib
 import shutil
 import subprocess
+import tempfile
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_OUT_DIR = ROOT / "target/release-artifacts"
 CRATE_NAME = "mechanical_mimalloc"
 HEADER_DIR = ROOT / "mimalloc-3.3.2/include"
+SIGNING_KEY_ENV = "MECHANICAL_MIMALLOC_RELEASE_SIGNING_KEY"
+SIGNING_IDENTITY_ENV = "MECHANICAL_MIMALLOC_RELEASE_SIGNING_IDENTITY"
+DEFAULT_SIGNING_IDENTITY = "mechanical_mimalloc_release"
+SIGNING_NAMESPACE = "file"
 
 
 HEADER_SPECS = [
@@ -56,6 +61,15 @@ def command_output_with_stderr(cmd: list[str]) -> str:
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+    ).stdout
+
+
+def command_output_bytes(cmd: list[str]) -> bytes:
+    return subprocess.run(
+        cmd,
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
     ).stdout
 
 
@@ -180,6 +194,105 @@ def metadata_entry(name: str, role: str, path: pathlib.Path) -> dict[str, object
         "bytes": path.stat().st_size,
         "sha256": sha256(path),
     }
+
+
+def signing_identity() -> str:
+    return os.environ.get(SIGNING_IDENTITY_ENV, DEFAULT_SIGNING_IDENTITY)
+
+
+def signing_key() -> tuple[pathlib.Path, str]:
+    configured = os.environ.get(SIGNING_KEY_ENV)
+    if configured:
+        key = release_path(configured)
+        if not key.exists():
+            raise SystemExit(f"{SIGNING_KEY_ENV} points to missing key: {key}")
+        return key, "configured-release-key"
+
+    key_dir = pathlib.Path(
+        tempfile.mkdtemp(prefix="mechanical-mimalloc-release-signing-")
+    )
+    key = key_dir / "release-signing-dry-run-key"
+    key.parent.mkdir(parents=True, exist_ok=True)
+    key.parent.chmod(0o700)
+    run(
+        [
+            "ssh-keygen",
+            "-q",
+            "-t",
+            "ed25519",
+            "-N",
+            "",
+            "-C",
+            "mechanical_mimalloc release dry-run key",
+            "-f",
+            str(key),
+        ]
+    )
+    key.chmod(0o600)
+    return key, "ephemeral-dry-run-key"
+
+
+def write_signing_public_key(
+    out_dir: pathlib.Path, key: pathlib.Path, identity: str
+) -> tuple[pathlib.Path, pathlib.Path, str]:
+    signing_dir = out_dir / "integrity/signing"
+    signing_dir.mkdir(parents=True, exist_ok=True)
+    public_key = signing_dir / "release-signing.pub"
+    allowed_signers = signing_dir / "release-allowed-signers"
+
+    public_key.write_bytes(command_output_bytes(["ssh-keygen", "-y", "-f", str(key)]))
+    allowed_signers.write_text(f"{identity} {public_key.read_text().strip()}\n")
+    fingerprint = command_output(["ssh-keygen", "-l", "-E", "sha256", "-f", str(public_key)])
+    return public_key, allowed_signers, fingerprint
+
+
+def sign_checksum_file(out_dir: pathlib.Path, key: pathlib.Path) -> pathlib.Path:
+    checksum_path = out_dir / "SHA256SUMS"
+    signature_path = out_dir / "SHA256SUMS.sig"
+    if signature_path.exists():
+        signature_path.unlink()
+    run(
+        [
+            "ssh-keygen",
+            "-Y",
+            "sign",
+            "-f",
+            str(key),
+            "-n",
+            SIGNING_NAMESPACE,
+            str(checksum_path),
+        ]
+    )
+    if not signature_path.exists():
+        raise SystemExit(f"missing checksum signature: {signature_path}")
+    return signature_path
+
+
+def verify_checksum_signature(
+    checksum_path: pathlib.Path,
+    signature_path: pathlib.Path,
+    allowed_signers: pathlib.Path,
+    identity: str,
+) -> None:
+    with checksum_path.open("rb") as checksum:
+        subprocess.run(
+            [
+                "ssh-keygen",
+                "-Y",
+                "verify",
+                "-f",
+                str(allowed_signers),
+                "-I",
+                identity,
+                "-n",
+                SIGNING_NAMESPACE,
+                "-s",
+                str(signature_path),
+            ],
+            cwd=ROOT,
+            stdin=checksum,
+            check=True,
+        )
 
 
 def parse_symbol_version(name: str) -> tuple[str, str]:
@@ -418,7 +531,10 @@ def release_files(out_dir: pathlib.Path) -> list[pathlib.Path]:
         if not path.is_file():
             continue
         relative = path.relative_to(out_dir)
-        if relative.parts[0] == "build" or relative.name == "SHA256SUMS":
+        if relative.parts[0] == "build" or relative.name in {
+            "SHA256SUMS",
+            "SHA256SUMS.sig",
+        }:
             continue
         files.append(path)
     return sorted(files, key=lambda path: path.relative_to(out_dir).as_posix())
@@ -464,6 +580,24 @@ def validate_integrity(out_dir: pathlib.Path, manifest: dict[str, object]) -> No
         if not path.exists():
             raise SystemExit(f"missing integrity file: {path}")
 
+    signing = manifest.get("signing")
+    if not isinstance(signing, dict):
+        raise SystemExit("release manifest is missing signing metadata")
+    if signing.get("mechanism") != "ssh-ed25519-detached-sha256sums":
+        raise SystemExit("release manifest has unexpected signing mechanism")
+    signature_path = release_path(str(signing["signature_file"]))
+    public_key_path = release_path(str(signing["public_key_file"]))
+    allowed_signers_path = release_path(str(signing["allowed_signers_file"]))
+    for path in [signature_path, public_key_path, allowed_signers_path]:
+        if not path.exists():
+            raise SystemExit(f"missing signing file: {path}")
+    verify_checksum_signature(
+        checksum_path,
+        signature_path,
+        allowed_signers_path,
+        str(signing["identity"]),
+    )
+
     checked = 0
     for artifact in manifest["artifacts"]:
         if artifact["kind"] not in {"cdylib", "staticlib"}:
@@ -483,7 +617,9 @@ def validate_integrity(out_dir: pathlib.Path, manifest: dict[str, object]) -> No
             )
             raise SystemExit(f"symbol manifest is stale: {artifact['name']}\n{diff}")
         checked += 1
-    print(f"ok: release integrity files validated for {checked} binary artifacts")
+    print(
+        f"ok: release integrity files and checksum signature validated for {checked} binary artifacts"
+    )
 
 
 def display_path(path: pathlib.Path) -> str:
@@ -604,6 +740,7 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
     headers: list[dict[str, object]] = []
     link_metadata: list[dict[str, object]] = []
     integrity_files: list[dict[str, object]] = []
+    signing: dict[str, object] = {}
     manifest: dict[str, object] = {
         "schema_version": 1,
         "package": CRATE_NAME,
@@ -616,6 +753,7 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
         "link_metadata": link_metadata,
         "integrity_files": integrity_files,
         "checksum_file": display_path(out_dir / "SHA256SUMS"),
+        "signing": signing,
     }
 
     if out_dir.exists():
@@ -657,10 +795,41 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
     integrity_files.extend(write_symbol_manifests(out_dir, artifacts))
     integrity_files.append(write_environment_note(out_dir))
     integrity_files.append(write_benchmark_note(out_dir))
+    key, key_source = signing_key()
+    identity = signing_identity()
+    public_key, allowed_signers, fingerprint = write_signing_public_key(out_dir, key, identity)
+    integrity_files.extend(
+        [
+            metadata_entry("release-signing.pub", "release-signing-public-key", public_key),
+            metadata_entry(
+                "release-allowed-signers",
+                "release-signing-allowed-signers",
+                allowed_signers,
+            ),
+        ]
+    )
+    signing.update(
+        {
+            "mechanism": "ssh-ed25519-detached-sha256sums",
+            "namespace": SIGNING_NAMESPACE,
+            "identity": identity,
+            "key_source": key_source,
+            "public_key_file": display_path(public_key),
+            "allowed_signers_file": display_path(allowed_signers),
+            "public_key_fingerprint": fingerprint,
+            "signed_file": display_path(out_dir / "SHA256SUMS"),
+            "signature_file": display_path(out_dir / "SHA256SUMS.sig"),
+            "source_tag_policy": "signed annotated Git tag using the release SSH signing key",
+        }
+    )
 
     manifest_path = out_dir / "release-artifacts.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     write_sha256sums(out_dir)
+    signature_path = sign_checksum_file(out_dir, key)
+    verify_checksum_signature(out_dir / "SHA256SUMS", signature_path, allowed_signers, identity)
+    if key_source == "ephemeral-dry-run-key":
+        shutil.rmtree(key.parent)
     print(f"wrote {display_path(manifest_path)}")
     return manifest
 

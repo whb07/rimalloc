@@ -1166,11 +1166,21 @@ Validated remaining issues:
     unsupported-target policy.
   - Verify: `SECURITY.md` has a concrete private contact path.
 
-- [ ] Add release signing.
-  - [ ] Choose signing mechanism for source tags and binary artifacts.
-  - [ ] Document key ownership and rotation.
-  - [ ] Sign release checksums or artifacts.
-  - [ ] Verify signatures in the release dry run.
+- [x] Add release signing.
+  - [x] Choose signing mechanism for source tags and binary artifacts.
+  - [x] Document key ownership and rotation.
+  - [x] Sign release checksums or artifacts.
+  - [x] Verify signatures in the release dry run.
+  - Evidence: `docs/release-signing.md` defines SSH Ed25519 signing for signed
+    annotated Git source tags and detached `SHA256SUMS` signatures, including
+    key ownership, configured release-key use, ephemeral dry-run key limits,
+    verification commands, and rotation steps. `scripts/build-release-artifacts.py`
+    now stages signing public-key material, signs `SHA256SUMS`, records signing
+    metadata in `release-artifacts.json`, and verifies `SHA256SUMS.sig`.
+    `scripts/check-release-integrity.py` validates that signature through the
+    builder integrity check. `docs/release.md` adds signing files and release
+    checklist gates for checksum signature verification, release-key
+    fingerprint publication, and signed source-tag verification.
   - Verify: release checklist includes signing verification.
 
 - [ ] Add SBOM or dependency report.

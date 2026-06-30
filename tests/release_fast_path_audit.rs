@@ -2333,6 +2333,67 @@ fn private_vulnerability_reporting_process_is_concrete() {
 }
 
 #[test]
+fn release_signing_policy_and_dry_run_are_concrete() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let signing =
+        fs::read_to_string(root.join("docs/release-signing.md")).expect("read release-signing");
+    let release = fs::read_to_string(root.join("docs/release.md")).expect("read release");
+    let build_release = fs::read_to_string(root.join("scripts/build-release-artifacts.py"))
+        .expect("read build-release-artifacts");
+    let integrity = fs::read_to_string(root.join("scripts/check-release-integrity.py"))
+        .expect("read check-release-integrity");
+
+    for required in [
+        "Release signing uses SSH Ed25519 signatures",
+        "signed annotated Git tags",
+        "git tag -s vX.Y.Z",
+        "SHA256SUMS.sig",
+        "ssh-ed25519-detached-sha256sums",
+        "MECHANICAL_MIMALLOC_RELEASE_SIGNING_KEY",
+        "mechanical_mimalloc_release",
+        "ephemeral test-only",
+        "Do not treat an allowed-signers file from an\nuntrusted asset bundle as the trust root.",
+        "## Rotation",
+    ] {
+        assert!(
+            signing.contains(required),
+            "release signing policy should document {required}"
+        );
+    }
+
+    for script_marker in [
+        "ssh-keygen",
+        "-Y",
+        "sign",
+        "verify_checksum_signature",
+        "SHA256SUMS.sig",
+        "release-signing.pub",
+        "release-allowed-signers",
+        "MECHANICAL_MIMALLOC_RELEASE_SIGNING_KEY",
+        "ephemeral-dry-run-key",
+        "ssh-ed25519-detached-sha256sums",
+    ] {
+        assert!(
+            build_release.contains(script_marker),
+            "release artifact builder should wire signing marker {script_marker}"
+        );
+    }
+
+    assert!(
+        integrity.contains("builder.validate_integrity(OUT_DIR, manifest)"),
+        "release integrity dry run should verify signatures through the builder validation path"
+    );
+    assert!(
+        release.contains("docs/release-signing.md")
+            && release.contains("SHA256SUMS.sig")
+            && release.contains("configured release SSH Ed25519 key")
+            && release.contains("public key fingerprint from `release-artifacts.json`")
+            && release.contains("signed annotated source tag with the release SSH\n   signing key"),
+        "release checklist should include checksum signature and source tag verification"
+    );
+}
+
+#[test]
 fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");

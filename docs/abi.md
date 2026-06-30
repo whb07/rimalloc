@@ -384,6 +384,9 @@ and diagnostic allocation semantics are designed.
 wrappers currently provided.
 Those wrappers catch panic or unwind before returning across the
 callback C ABI boundary in `std` and test builds.
+Nested borrowed guards must be dropped in LIFO order; concurrent registration,
+restoration, or callback entry for the borrowed closure remains the caller's
+Tier U obligation.
 
 ## Null, Errno, and Error Behavior
 

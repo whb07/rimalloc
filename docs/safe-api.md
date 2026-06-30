@@ -68,6 +68,8 @@ callers that can uphold the process-global synchronization, lifetime,
 reentrancy, and allocator-entry obligations. They restore previous callback
 registrations on drop and catch Rust panics before returning through the
 callback ABI in `std` and test builds, but they are not Tier S safe facade APIs.
+Nested guards must be dropped in LIFO order, and concurrent registration,
+restoration, or callback entry remains the caller's obligation.
 They are Tier U unsafe Rust convenience APIs and remain separate from this
 current safe surface.
 

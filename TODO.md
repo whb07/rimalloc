@@ -701,16 +701,24 @@ Validated remaining issues:
     null returns without relying on huge overcommit-sensitive requests.
   - Verify: focused failure-injection tests pass in debug and release.
 
-- [ ] Add callback concurrency and reentry tests.
-  - [ ] Model process-global callback registration/restoration races where
+- [x] Add callback concurrency and reentry tests.
+  - [x] Model process-global callback registration/restoration races where
         possible.
-  - [ ] Add tests for callback guard drop restoring the previous callback under
+  - [x] Add tests for callback guard drop restoring the previous callback under
         nested registration.
-  - [ ] Add tests for allocator reentry from error and deferred-free
+  - [x] Add tests for allocator reentry from error and deferred-free
         callbacks.
-  - [ ] Add tests for panic containment in `std` and test builds.
-  - [ ] Document which callback races remain caller obligations because Tier U
+  - [x] Add tests for panic containment in `std` and test builds.
+  - [x] Document which callback races remain caller obligations because Tier U
         constructors are unsafe.
+  - Evidence: callback unit coverage now includes a deterministic registration
+    model for stale snapshot hazards, ignored serialized process-global tests
+    for nested LIFO restore of both callback guards, allocator reentry from
+    error and deferred-free callbacks, deferred-free reentry suppression, and
+    panic containment for both guard families. The safety-stress script runs
+    those ignored Tier U tests with `--test-threads=1`, and the safe API,
+    API inventory, ABI, and unsafe-audit docs now state the LIFO and
+    concurrency obligations left to callers.
   - Verify: callback tests and any model tests pass under the safety-stress
     script.
 

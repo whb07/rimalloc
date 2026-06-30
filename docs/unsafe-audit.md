@@ -120,8 +120,10 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
 - Decision: borrowed `FnMut` callback guards cannot remain safe under the
   documented upstream contract. Construction is unsafe and requires callers to
   serialize registration, restoration, and callback entry for the borrowed
-  closure. The trampolines retain panic containment for `std` and test builds;
-  optimized `no_std` callers must not panic from callbacks.
+  closure. Nested guards must be dropped in LIFO order because each guard
+  restores the process-global snapshot it captured during construction. The
+  trampolines retain panic containment for `std` and test builds; optimized
+  `no_std` callers must not panic from callbacks.
 - `error_callback_trampoline::<F>` is registered only by
   `ErrorCallbackGuard::new`. `arg` must be the non-null `&mut F` pointer stored
   by the guard for the active registration lifetime; the trampoline returns

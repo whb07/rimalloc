@@ -119,6 +119,9 @@ These guards restore previous callback registrations on drop and catch panics
 before callback ABI return in `std` and test builds, but their constructors are
 unsafe because the callback slots are process-global and can be entered from
 allocator activity outside the registering scope.
+Nested guards must be dropped in LIFO order. Concurrent registration,
+restoration, or callback entry for the borrowed closure remains the caller's
+obligation.
 
 ## Raw Rust Facade
 

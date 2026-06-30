@@ -27,6 +27,13 @@ exercises `AllocError`, `ResizeError`, heap ownership preservation, and raw
 overflow null-return behavior without relying on huge allocations or host
 overcommit policy.
 
+Process-global callback guard tests are marked ignored in the default parallel
+unit-test run because the Tier U constructors borrow Rust closures through
+process-global callback slots. `scripts/check-safety-stress.sh` runs those
+ignored callback tests with `--test-threads=1`; they cover serialized
+registration/restoration, nested LIFO restore, allocator reentry, deferred-free
+reentry suppression, and panic containment.
+
 `tests/fuzz_alloc_sequences.rs` adds a byte-stream operation interpreter over a
 fixed corpus. The maintained external fuzz harness in `fuzz/` uses the same
 operation model outside the normal test crate. It covers malloc, zalloc,

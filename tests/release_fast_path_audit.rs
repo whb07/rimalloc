@@ -1307,6 +1307,7 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
             && abi_doc.contains(
                 "catch panic or unwind before returning across the\ncallback C ABI boundary"
             )
+            && abi_doc.contains("Nested borrowed guards must be dropped in LIFO order")
             && abi_doc.contains("Output callbacks remain raw"),
         "docs/abi.md should document the safe callback guard proof and remaining raw output callback gap"
     );
@@ -1315,8 +1316,10 @@ fn safe_callback_guards_document_lifetime_restore_and_unwind_policy() {
             && safe_doc.contains("`FnMut` callback guards")
             && safe_doc.contains("Tier U unsafe Rust convenience APIs")
             && safe_doc.contains("catch Rust panics")
+            && safe_doc.contains("Nested guards must be dropped in LIFO order")
             && unsafe_doc.contains("SAFETY[AUDIT:unsafe-callback]")
             && unsafe_doc.contains("restores that previous registration on drop")
+            && unsafe_doc.contains("restores the process-global snapshot")
             && unsafe_doc.contains("catches Rust\n  panics before callback ABI return")
             && unsafe_doc.contains("`error_callback_trampoline::<F>`")
             && unsafe_doc.contains("`deferred_free_callback_trampoline::<F>`")

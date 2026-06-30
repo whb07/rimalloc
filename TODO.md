@@ -279,14 +279,20 @@ Validated remaining issues:
     Static manifest check not applicable until staticlib is
     production-supported.
 
-- [ ] Add static link collision tests.
-  - [ ] Build a C app that links the Rust staticlib and another object/library
+- [x] Add static link collision tests.
+  - [x] Build a C app that links the Rust staticlib and another object/library
         with representative non-conflicting symbols.
-  - [ ] Add a negative fixture for a known collision class if static leakage is
+  - [x] Add a negative fixture for a known collision class if static leakage is
         intentionally preview-only.
-  - [ ] Verify malloc-family symbols behave as documented in static link mode.
-  - [ ] Verify internal `_mi_*` symbols are either absent or explicitly
+  - [x] Verify malloc-family symbols behave as documented in static link mode.
+  - [x] Verify internal `_mi_*` symbols are either absent or explicitly
         documented as not stable.
+  - Evidence: `scripts/check-static-link-collisions.py` builds and runs a C
+    program linked against the Rust staticlib plus an unrelated support object,
+    verifies `malloc` allocations are owned by mimalloc in that static link
+    mode, checks the preview-only internal `_mi_*` documentation, and asserts a
+    duplicate `_mi_tls_theap_default_get` object fails to link as the documented
+    preview collision class.
   - Verify: new static collision script in the release checklist.
 
 ## P0 - Build and ship release artifacts

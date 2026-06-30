@@ -70,6 +70,9 @@ The maintainer response targets are:
   entry, and release notes after a fix is available, unless the reporter and
   maintainers agree on a different timeline.
 
+`docs/security-advisories.md` defines severity triage, CVE handling, embargoes,
+coordinated disclosure, and changelog/advisory publication requirements.
+
 ## Scope
 
 Security-sensitive areas include allocation/free/realloc behavior, cross-thread

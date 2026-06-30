@@ -40,4 +40,6 @@ A release owner must confirm:
 ## Security Ownership
 
 Security-sensitive reports should be handled privately until a fix and advisory
-plan exist. `SECURITY.md` defines the current reporting scope.
+plan exist. `SECURITY.md` defines the current reporting scope, and
+`docs/security-advisories.md` defines severity triage, CVE handling, embargoes,
+coordinated disclosure, and changelog/advisory publication requirements.

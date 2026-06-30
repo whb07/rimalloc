@@ -1229,11 +1229,17 @@ Validated remaining issues:
     requiring both docs to agree.
   - Verify: `SECURITY.md` and release docs agree.
 
-- [ ] Add CVE and advisory handling policy.
-  - [ ] Define severity triage.
-  - [ ] Define embargo handling.
-  - [ ] Define coordinated disclosure steps.
-  - [ ] Define changelog and advisory publication requirements.
+- [x] Add CVE and advisory handling policy.
+  - [x] Define severity triage.
+  - [x] Define embargo handling.
+  - [x] Define coordinated disclosure steps.
+  - [x] Define changelog and advisory publication requirements.
+  - Evidence: `docs/security-advisories.md` now defines severity levels and
+    triage evidence, CVE request rules, embargo limits and extension handling,
+    coordinated private-fix disclosure steps, and changelog/GitHub Security
+    Advisory publication fields. `SECURITY.md`, `docs/governance.md`, and
+    `docs/release.md` link to the policy, and release signoff requires the
+    security advisory process for security releases.
   - Verify: governance docs link to the policy.
 
 - [ ] Add fuzz corpus and reproducer policy.

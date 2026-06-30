@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+use crate::atomic::mi_lock_t;
 use crate::core_types::{OwnedAbandonedPage, PagePtr};
 use crate::types::{mi_block_t, mi_page_t};
 use core::{

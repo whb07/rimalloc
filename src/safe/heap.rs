@@ -503,6 +503,11 @@ impl<'heap> RawHeapAllocation<'heap> {
             });
         }
 
+        #[cfg(test)]
+        if super::failure_injection::should_fail_allocation() {
+            return Err(AllocError { layout });
+        }
+
         // SAFETY[AUDIT:safe-heap]: `heap` is a live heap borrowed for
         // `'heap`; raw allocation returns null on failure.
         let ptr = unsafe {
@@ -578,6 +583,14 @@ impl<'heap> RawHeapAllocation<'heap> {
         }
 
         if old_size != 0 && old_layout.align() == new_layout.align() {
+            #[cfg(test)]
+            if super::failure_injection::should_fail_allocation() {
+                return Err(ResizeError {
+                    allocation: ManuallyDrop::into_inner(old),
+                    kind: ResizeErrorKind::Alloc(AllocError { layout: new_layout }),
+                });
+            }
+
             // SAFETY[AUDIT:safe-heap]: `old` owns this heap allocation and
             // mimalloc leaves it valid on realloc failure.
             let ptr = unsafe {

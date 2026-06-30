@@ -681,18 +681,24 @@ Validated remaining issues:
   - Verify: fuzz target builds and runs for a bounded smoke duration in CI or
     release candidate checks.
 
-- [ ] Add deterministic OOM/failure injection.
-  - [ ] Identify allocator OS hooks or internal allocation paths that can be
+- [x] Add deterministic OOM/failure injection.
+  - [x] Identify allocator OS hooks or internal allocation paths that can be
         made fail deterministically in tests.
-  - [ ] Test safe `Allocation` failure returns `AllocError` without leaking.
-  - [ ] Test safe resize failure preserves the original allocation in
+  - [x] Test safe `Allocation` failure returns `AllocError` without leaking.
+  - [x] Test safe resize failure preserves the original allocation in
         `ResizeError`.
-  - [ ] Test heap allocation failure preserves heap ownership and does not
+  - [x] Test heap allocation failure preserves heap ownership and does not
         double-free.
-  - [ ] Test raw allocation failure preserves C null/errno behavior where
+  - [x] Test raw allocation failure preserves C null/errno behavior where
         mimalloc specifies it.
-  - [ ] Avoid relying only on huge allocation attempts, which are platform and
+  - [x] Avoid relying only on huge allocation attempts, which are platform and
         overcommit sensitive.
+  - Evidence: safe wrapper allocation and resize paths now have a `#[cfg(test)]`
+    deterministic failure hook that never enters production builds. Unit tests
+    cover `Allocation` returning `AllocError`, resize returning `ResizeError`
+    with the original allocation and bytes preserved, heap allocation/resize
+    failure leaving the heap usable, and deterministic raw product-overflow
+    null returns without relying on huge overcommit-sensitive requests.
   - Verify: focused failure-injection tests pass in debug and release.
 
 - [ ] Add callback concurrency and reentry tests.

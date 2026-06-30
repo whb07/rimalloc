@@ -6,6 +6,25 @@ mod heap;
 mod options;
 mod stats;
 
+#[cfg(test)]
+pub(super) mod failure_injection {
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    static FAILING_ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+
+    pub(super) fn fail_next_allocations(count: usize) {
+        FAILING_ALLOCATIONS.store(count, Ordering::SeqCst);
+    }
+
+    pub(super) fn should_fail_allocation() -> bool {
+        FAILING_ALLOCATIONS
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+    }
+}
+
 pub use allocation::{Allocation, InitializedAllocation};
 pub use error::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError};
 pub use heap::{Heap, HeapAllocation, HeapError, HeapRef, InitializedHeapAllocation, MainHeap};
@@ -16,7 +35,7 @@ pub use stats::{ProcessInfo, StatCount, StatTotal, StatsError, StatsSnapshot};
 mod tests {
     use super::*;
     use core::alloc::Layout;
-    use core::ffi::c_void;
+    use core::ffi::{c_long, c_void};
     use core::fmt::{self, Write};
     use core::ptr;
     use core::sync::atomic::{AtomicUsize, Ordering};
@@ -25,6 +44,23 @@ mod tests {
     use crate::unsafe_callbacks::{DeferredFreeCallbackGuard, ErrorCallbackGuard};
 
     static CALLBACK_TEST_LOCK: Mutex<()> = Mutex::new(());
+    static FAILURE_INJECTION_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    struct ShowErrorsGuard(c_long);
+
+    impl ShowErrorsGuard {
+        fn disabled() -> Self {
+            let previous = GlobalOptions::get(OptionKey::ShowErrors);
+            GlobalOptions::set(OptionKey::ShowErrors, 0).expect("disable expected error output");
+            Self(previous)
+        }
+    }
+
+    impl Drop for ShowErrorsGuard {
+        fn drop(&mut self) {
+            let _ = GlobalOptions::set(OptionKey::ShowErrors, self.0);
+        }
+    }
 
     #[test]
     fn owned_allocation_round_trips_bytes() {
@@ -335,6 +371,43 @@ mod tests {
     }
 
     #[test]
+    fn deterministic_allocation_failure_returns_alloc_error_without_leaking_state() {
+        let _lock = FAILURE_INJECTION_TEST_LOCK.lock().expect("failure lock");
+        let layout = Layout::from_size_align(32, 8).expect("layout");
+
+        failure_injection::fail_next_allocations(1);
+        let err = Allocation::new(layout).expect_err("injected allocation failure");
+        assert_eq!(err.layout(), layout);
+
+        let allocation = Allocation::new(layout).expect("allocation after injected failure");
+        assert_eq!(allocation.layout(), layout);
+    }
+
+    #[test]
+    fn deterministic_resize_failure_preserves_original_allocation() {
+        let _lock = FAILURE_INJECTION_TEST_LOCK.lock().expect("failure lock");
+        let old_layout = Layout::from_size_align(8, 8).expect("old layout");
+        let new_layout = Layout::from_size_align(32, 8).expect("new layout");
+        let mut allocation = Allocation::new(old_layout).expect("allocation");
+        for (idx, slot) in allocation.as_uninit_slice_mut().iter_mut().enumerate() {
+            slot.write((idx + 1) as u8);
+        }
+
+        failure_injection::fail_next_allocations(1);
+        let err = allocation
+            .resize(new_layout)
+            .expect_err("injected resize failure");
+        assert!(matches!(err.kind(), ResizeErrorKind::Alloc(_)));
+        assert_eq!(err.allocation().layout(), old_layout);
+        let allocation = err.into_allocation();
+        let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
+        assert_eq!(bytes, &[1, 2, 3, 4, 5, 6, 7, 8]);
+
+        let grown = allocation.resize(new_layout).expect("resize after failure");
+        assert_eq!(grown.layout(), new_layout);
+    }
+
+    #[test]
     fn heap_errors_and_owned_heap_allocation_paths_work() {
         assert!(matches!(HeapError::Create, HeapError::Create));
         assert!(matches!(
@@ -396,6 +469,55 @@ mod tests {
             .expect_err("invalid layout");
         assert!(matches!(err.kind(), ResizeErrorKind::Layout(_)));
         assert_eq!(err.allocation().len(), 8);
+    }
+
+    #[test]
+    fn deterministic_heap_allocation_failure_preserves_heap_ownership() {
+        let _lock = FAILURE_INJECTION_TEST_LOCK.lock().expect("failure lock");
+        let heap = Heap::new().expect("heap");
+        let layout = Layout::from_size_align(24, 8).expect("layout");
+
+        failure_injection::fail_next_allocations(1);
+        let err = heap
+            .allocate(layout)
+            .expect_err("injected heap allocation failure");
+        assert_eq!(err.layout(), layout);
+
+        let allocation = heap
+            .allocate(layout)
+            .expect("heap allocation after failure");
+        assert_eq!(allocation.layout(), layout);
+
+        let new_layout = Layout::from_size_align(48, 8).expect("new layout");
+        failure_injection::fail_next_allocations(1);
+        let err = allocation
+            .resize(new_layout)
+            .expect_err("injected heap resize failure");
+        assert!(matches!(err.kind(), ResizeErrorKind::Alloc(_)));
+        assert_eq!(err.allocation().layout(), layout);
+
+        let allocation = err
+            .into_allocation()
+            .resize(new_layout)
+            .expect("heap resize after failure");
+        assert_eq!(allocation.layout(), new_layout);
+        let another = heap
+            .allocate(Layout::from_size_align(8, 8).expect("layout"))
+            .expect("heap still usable");
+        assert_eq!(another.len(), 8);
+    }
+
+    #[test]
+    fn raw_product_allocation_failure_is_deterministic_and_null_returning() {
+        let _quiet_expected_errors = ShowErrorsGuard::disabled();
+        unsafe {
+            assert!(crate::mimalloc::mi_mallocn(usize::MAX, 2).is_null());
+            assert!(crate::mimalloc::mi_calloc(usize::MAX, 2).is_null());
+            assert!(
+                crate::mimalloc::mi_heap_mallocn(crate::init::mi_heap_main(), usize::MAX, 2)
+                    .is_null()
+            );
+        }
     }
 
     #[test]

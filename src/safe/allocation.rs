@@ -307,6 +307,11 @@ impl RawAllocation {
             });
         }
 
+        #[cfg(test)]
+        if super::failure_injection::should_fail_allocation() {
+            return Err(AllocError { layout });
+        }
+
         let ptr = unsafe {
             if zeroed {
                 MiMalloc.alloc_zeroed(layout)
@@ -372,6 +377,14 @@ impl RawAllocation {
         }
 
         if old_layout.align() == new_layout.align() {
+            #[cfg(test)]
+            if super::failure_injection::should_fail_allocation() {
+                return Err(ResizeError {
+                    allocation: ManuallyDrop::into_inner(old),
+                    kind: ResizeErrorKind::Alloc(AllocError { layout: new_layout }),
+                });
+            }
+
             // SAFETY[AUDIT:owned-allocation]: `old` owns `ptr` with
             // `old_layout`; `realloc` preserves the original allocation on
             // failure and transfers ownership to the returned pointer on

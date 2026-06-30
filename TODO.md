@@ -199,13 +199,20 @@ Validated remaining issues:
   - Verify: dynamic symbol manifest shows no unintentional extra `mi_*`
     symbols.
 
-- [ ] Add dynamic ABI golden manifests.
-  - [ ] Produce one checked manifest for `c-abi` cdylib exports.
-  - [ ] Produce one checked manifest for `interpose` cdylib exports.
-  - [ ] Include symbol names, binding, visibility, version where available, and
+- [x] Add dynamic ABI golden manifests.
+  - [x] Produce one checked manifest for `c-abi` cdylib exports.
+  - [x] Produce one checked manifest for `interpose` cdylib exports.
+  - [x] Include symbol names, binding, visibility, version where available, and
         artifact build command.
-  - [ ] Add a script that diffs current output against the checked manifest.
-  - [ ] Document how to intentionally update the manifest.
+  - [x] Add a script that diffs current output against the checked manifest.
+  - [x] Document how to intentionally update the manifest.
+  - Evidence: `docs/abi-manifests/c-abi-dynamic.tsv` and
+    `docs/abi-manifests/interpose-dynamic.tsv` are checked manifests,
+    `scripts/check-public-symbols.py --dynamic-manifests` diffs current
+    `readelf --dyn-syms` output against them,
+    `scripts/check-public-symbols.py --dynamic-manifest-self-test` verifies an
+    injected extra symbol is detected, and `docs/abi.md`/`docs/release.md`
+    document the update command.
   - Verify: manifest check fails on an injected extra symbol in a local
     self-test or fixture.
 

@@ -32,6 +32,7 @@ The expected exported C surface is derived from:
   interposition artifacts
 - Itanium C++ operator new/delete override symbols, only for artifacts that
   link the C++ shim
+- checked dynamic manifests under `docs/abi-manifests/`
 - static archive and no-`c-abi` compatibility classifications in
   `symbols/public-symbol-classification.tsv`
 
@@ -50,6 +51,17 @@ The FFI boundary check classifies source files containing export attributes as
 C ABI, malloc/C++ override, runtime boundary, or internal-classified exception,
 and verifies that the Linux linker version script keeps the expected public
 symbol patterns available to the matching artifact mode.
+
+After an intentional dynamic ABI change, regenerate and review the manifests:
+
+```sh
+scripts/check-public-symbols.py --write-dynamic-manifests
+scripts/check-public-symbols.py --dynamic-manifests
+```
+
+The checked manifests currently cover the `c-abi` and `interpose` cdylib
+artifacts and record symbol name, binding, visibility, version, type, and the
+artifact build command.
 
 ## Hidden Symbols
 

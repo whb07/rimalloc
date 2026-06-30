@@ -59,6 +59,23 @@ diff -u /tmp/previous-tier-s-u.txt docs/api-snapshots/tier-s-u.txt
 Any diff must be classified in `CHANGELOG.md` and reviewed against
 `docs/compatibility.md`.
 
+## Dynamic ABI Manifests
+
+Tier C dynamic exports are tracked with checked manifests under
+`docs/abi-manifests/` for the `c-abi` and `interpose` cdylib artifacts. Each
+manifest records the artifact build command plus symbol name, binding,
+visibility, version, and type.
+
+After an intentional dynamic ABI change, regenerate and review the manifests:
+
+```sh
+scripts/check-public-symbols.py --write-dynamic-manifests
+scripts/check-abi-symbols.sh
+```
+
+Any manifest diff must be classified in `CHANGELOG.md` and reviewed against
+`docs/abi.md`.
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.

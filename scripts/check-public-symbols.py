@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import difflib
 import os
 import pathlib
 import re
@@ -17,6 +19,7 @@ PUBLIC_HEADERS = [
     ROOT / "mimalloc-3.3.2/include/mimalloc-stats.h",
 ]
 CLASSIFICATION_FILE = ROOT / "symbols/public-symbol-classification.tsv"
+MANIFEST_DIR = ROOT / "docs/abi-manifests"
 
 # These names and the Itanium C++ operators are actual externally visible
 # override symbols in the C `MI_MALLOC_OVERRIDE` artifact on Linux.
@@ -59,6 +62,18 @@ CXX_OPERATOR_OVERRIDE_SYMBOLS = {
     "_ZnwmSt11align_val_tRKSt9nothrow_t",
 }
 
+LIBC_OVERRIDE_SYMBOLS = {
+    "__libc_calloc",
+    "__libc_cfree",
+    "__libc_free",
+    "__libc_malloc",
+    "__libc_memalign",
+    "__libc_pvalloc",
+    "__libc_realloc",
+    "__libc_valloc",
+    "__posix_memalign",
+}
+
 MALLOC_FAMILY_SYMBOLS = MALLOC_OVERRIDE_SYMBOLS | {
     "cfree",
     "posix_memalign",
@@ -85,6 +100,36 @@ STATIC_MALLOC_EXTRA_SYMBOLS = {
     "strdup",
     "strndup",
 }
+
+
+@dataclasses.dataclass(frozen=True)
+class DynamicManifest:
+    artifact: str
+    features: str
+    path: pathlib.Path
+
+    @property
+    def build_command(self) -> str:
+        return (
+            "cargo rustc --lib "
+            f"--features {self.features} "
+            f"--target-dir target/symbol-check/{self.artifact} "
+            "-- --crate-type cdylib"
+        )
+
+
+DYNAMIC_MANIFESTS = [
+    DynamicManifest(
+        artifact="c-abi",
+        features="c-abi",
+        path=MANIFEST_DIR / "c-abi-dynamic.tsv",
+    ),
+    DynamicManifest(
+        artifact="interpose",
+        features="interpose",
+        path=MANIFEST_DIR / "interpose-dynamic.tsv",
+    ),
+]
 
 
 def feature_args() -> list[str]:
@@ -188,15 +233,15 @@ def exported_symbols(staticlib: pathlib.Path) -> set[str]:
     return symbols - hidden
 
 
-def dynamic_symbols(cdylib: pathlib.Path) -> set[str]:
+def dynamic_symbol_entries(cdylib: pathlib.Path) -> list[tuple[str, str, str, str, str]]:
     readelf = subprocess.run(
-        ["readelf", "-Ws", str(cdylib)],
+        ["readelf", "-W", "--dyn-syms", str(cdylib)],
         cwd=ROOT,
         check=True,
         text=True,
         stdout=subprocess.PIPE,
     )
-    symbols: set[str] = set()
+    entries: dict[str, tuple[str, str, str, str, str]] = {}
     for line in readelf.stdout.splitlines():
         parts = line.split()
         if len(parts) < 8:
@@ -208,8 +253,87 @@ def dynamic_symbols(cdylib: pathlib.Path) -> set[str]:
             continue
         if kind not in {"FUNC", "OBJECT", "NOTYPE"}:
             continue
-        symbols.add(name.split("@", 1)[0])
-    return symbols
+        symbol, version = parse_symbol_version(name)
+        entries[symbol] = (symbol, bind, visibility, version, kind)
+    return [entries[symbol] for symbol in sorted(entries)]
+
+
+def parse_symbol_version(name: str) -> tuple[str, str]:
+    symbol, separator, version = name.partition("@")
+    if not separator:
+        return name, "-"
+    return symbol, version.lstrip("@") or "-"
+
+
+def dynamic_symbols(cdylib: pathlib.Path) -> set[str]:
+    return {entry[0] for entry in dynamic_symbol_entries(cdylib)}
+
+
+def render_dynamic_manifest(manifest: DynamicManifest) -> str:
+    entries = dynamic_symbol_entries(rust_cdylib(manifest.features, manifest.artifact))
+    lines = [
+        "# mechanical_mimalloc dynamic ABI manifest",
+        f"# artifact: {manifest.artifact}",
+        f"# build-command: {manifest.build_command}",
+        "# columns: symbol\tbinding\tvisibility\tversion\ttype",
+        "symbol\tbinding\tvisibility\tversion\ttype",
+    ]
+    lines.extend("\t".join(entry) for entry in entries)
+    return "\n".join(lines) + "\n"
+
+
+def manifest_diff(expected: str, actual: str, path: pathlib.Path) -> list[str]:
+    return list(
+        difflib.unified_diff(
+            expected.splitlines(),
+            actual.splitlines(),
+            fromfile=str(path),
+            tofile="current",
+            lineterm="",
+        )
+    )
+
+
+def check_dynamic_manifests(write: bool) -> int:
+    MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
+    failed = False
+    for manifest in DYNAMIC_MANIFESTS:
+        actual = render_dynamic_manifest(manifest)
+        if write:
+            manifest.path.write_text(actual)
+            print(f"wrote {manifest.path.relative_to(ROOT)}")
+            continue
+        if not manifest.path.exists():
+            print(f"missing dynamic ABI manifest: {manifest.path}", file=sys.stderr)
+            failed = True
+            continue
+        expected = manifest.path.read_text()
+        diff = manifest_diff(expected, actual, manifest.path)
+        if diff:
+            print(
+                f"dynamic ABI manifest differs: {manifest.path.relative_to(ROOT)}",
+                file=sys.stderr,
+            )
+            for line in diff:
+                print(line, file=sys.stderr)
+            failed = True
+    if failed:
+        return 1
+    if not write:
+        print(f"ok: {len(DYNAMIC_MANIFESTS)} dynamic ABI manifests match")
+    return 0
+
+
+def self_test_dynamic_manifest_diff() -> int:
+    manifest = DYNAMIC_MANIFESTS[0]
+    actual = render_dynamic_manifest(manifest)
+    injected = actual + "zz_injected_symbol\tGLOBAL\tDEFAULT\t-\tFUNC\n"
+    diff = manifest_diff(injected, actual, manifest.path)
+    if not diff:
+        print("dynamic manifest self-test failed to detect injected symbol", file=sys.stderr)
+        return 1
+    print("ok: dynamic manifest diff self-test detects an injected extra symbol")
+    return 0
 
 
 def check_dynamic_mi_exports() -> int:
@@ -247,12 +371,14 @@ def check_dynamic_export_groups() -> int:
     interpose = dynamic_symbols(rust_cdylib("interpose", "interpose"))
 
     failed = False
-    c_abi_extra = sorted((MALLOC_FAMILY_SYMBOLS | CXX_OPERATOR_OVERRIDE_SYMBOLS) & c_abi)
+    c_abi_extra = sorted(
+        (MALLOC_FAMILY_SYMBOLS | CXX_OPERATOR_OVERRIDE_SYMBOLS | LIBC_OVERRIDE_SYMBOLS) & c_abi
+    )
     if c_abi_extra:
         report_symbols("c-abi cdylib unexpectedly exports override symbols:", c_abi_extra)
         failed = True
 
-    cxx_malloc_extra = sorted(MALLOC_FAMILY_SYMBOLS & cxx)
+    cxx_malloc_extra = sorted((MALLOC_FAMILY_SYMBOLS | LIBC_OVERRIDE_SYMBOLS) & cxx)
     if cxx_malloc_extra:
         report_symbols(
             "cxx-overrides cdylib unexpectedly exports malloc-family symbols:",
@@ -265,7 +391,10 @@ def check_dynamic_export_groups() -> int:
         report_symbols("cxx-overrides cdylib is missing C++ operator symbols:", cxx_missing)
         failed = True
 
-    interpose_missing = sorted((MALLOC_OVERRIDE_SYMBOLS | CXX_OPERATOR_OVERRIDE_SYMBOLS) - interpose)
+    interpose_missing = sorted(
+        (MALLOC_OVERRIDE_SYMBOLS | CXX_OPERATOR_OVERRIDE_SYMBOLS | LIBC_OVERRIDE_SYMBOLS)
+        - interpose
+    )
     if interpose_missing:
         report_symbols(
             "interpose cdylib is missing allocator override symbols:",
@@ -343,12 +472,33 @@ def main() -> int:
         action="store_true",
         help="check dynamic cdylib export groups for c-abi, cxx-overrides, and interpose",
     )
+    parser.add_argument(
+        "--dynamic-manifests",
+        action="store_true",
+        help="check dynamic cdylib exports against checked manifests",
+    )
+    parser.add_argument(
+        "--write-dynamic-manifests",
+        action="store_true",
+        help="rewrite checked dynamic cdylib export manifests",
+    )
+    parser.add_argument(
+        "--dynamic-manifest-self-test",
+        action="store_true",
+        help="verify dynamic manifest diffing fails on an injected extra symbol",
+    )
     args = parser.parse_args()
 
     if args.dynamic_mi:
         return check_dynamic_mi_exports()
     if args.dynamic_groups:
         return check_dynamic_export_groups()
+    if args.dynamic_manifests:
+        return check_dynamic_manifests(write=False)
+    if args.write_dynamic_manifests:
+        return check_dynamic_manifests(write=True)
+    if args.dynamic_manifest_self_test:
+        return self_test_dynamic_manifest_diff()
 
     expected = public_header_symbols()
     exported = exported_symbols(rust_staticlib())

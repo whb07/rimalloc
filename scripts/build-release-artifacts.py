@@ -64,6 +64,18 @@ def command_output_with_stderr(cmd: list[str]) -> str:
     ).stdout
 
 
+def command_output_optional(cmd: list[str]) -> str:
+    completed = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    return completed.stdout.strip()
+
+
 def command_output_bytes(cmd: list[str]) -> bytes:
     return subprocess.run(
         cmd,
@@ -90,6 +102,14 @@ def package_version() -> str:
         command_output(["cargo", "metadata", "--no-deps", "--format-version", "1"])
     )
     return metadata["packages"][0]["version"]
+
+
+def cargo_metadata_all_features() -> dict[str, object]:
+    return json.loads(
+        command_output(
+            ["cargo", "metadata", "--locked", "--format-version", "1", "--all-features"]
+        )
+    )
 
 
 def release_dirs(target_dir: pathlib.Path, target_triple: str) -> list[pathlib.Path]:
@@ -425,6 +445,165 @@ def write_benchmark_note(out_dir: pathlib.Path) -> dict[str, object]:
     return metadata_entry(path.name, "benchmark-evidence-reference", path)
 
 
+def package_label(package: dict[str, object]) -> str:
+    source = package.get("source")
+    source_text = str(source) if source else "path"
+    return f"{package['name']} {package['version']} ({source_text})"
+
+
+def root_dependency_names(metadata: dict[str, object], kind: str | None) -> list[str]:
+    resolve = metadata.get("resolve")
+    if not isinstance(resolve, dict):
+        return []
+    root = resolve.get("root")
+    nodes = {
+        node["id"]: node
+        for node in resolve.get("nodes", [])
+        if isinstance(node, dict) and "id" in node
+    }
+    root_node = nodes.get(root)
+    if not isinstance(root_node, dict):
+        return []
+    names: list[str] = []
+    for dep in root_node.get("deps", []):
+        if not isinstance(dep, dict):
+            continue
+        if any(dep_kind.get("kind") == kind for dep_kind in dep.get("dep_kinds", [])):
+            names.append(str(dep["name"]))
+    return sorted(names)
+
+
+def resolved_dependency_packages(metadata: dict[str, object]) -> list[dict[str, object]]:
+    root = (
+        metadata.get("resolve", {}).get("root")
+        if isinstance(metadata.get("resolve"), dict)
+        else None
+    )
+    packages = [
+        package
+        for package in metadata.get("packages", [])
+        if isinstance(package, dict) and package.get("id") != root
+    ]
+    return sorted(
+        packages, key=lambda package: (str(package["name"]), str(package["version"]))
+    )
+
+
+def tool_probe(
+    name: str, env_name: str | None, default: str, version_args: list[str]
+) -> dict[str, str]:
+    configured = os.environ.get(env_name) if env_name else None
+    executable = configured or shutil.which(default)
+    if not executable:
+        return {
+            "name": name,
+            "env": env_name or "-",
+            "executable": default,
+            "status": "missing",
+            "version": "-",
+        }
+    version = (
+        command_output_optional([executable, *version_args]).splitlines()
+        if version_args
+        else []
+    )
+    return {
+        "name": name,
+        "env": env_name or "-",
+        "executable": executable,
+        "status": "found",
+        "version": version[0] if version else "-",
+    }
+
+
+def write_dependency_report(out_dir: pathlib.Path) -> dict[str, object]:
+    path = out_dir / "integrity/dependencies.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    metadata = cargo_metadata_all_features()
+    root_package = next(
+        package
+        for package in metadata["packages"]
+        if package["id"] == metadata["resolve"]["root"]
+    )
+    normal_deps = root_dependency_names(metadata, None)
+    build_deps = root_dependency_names(metadata, "build")
+    dev_deps = root_dependency_names(metadata, "dev")
+    resolved = resolved_dependency_packages(metadata)
+    tools = [
+        tool_probe("Rust compiler", None, "rustc", ["-V"]),
+        tool_probe("Cargo", None, "cargo", ["-V"]),
+        tool_probe("C compiler", "CC", "cc", ["--version"]),
+        tool_probe("C++ compiler", "CXX", "c++", ["--version"]),
+        tool_probe("Archiver", "AR", "ar", ["--version"]),
+        tool_probe("ELF dynamic symbol reader", None, "readelf", ["--version"]),
+        tool_probe("Static symbol reader", None, "nm", ["--version"]),
+        tool_probe("SSH signing tool", None, "ssh-keygen", []),
+    ]
+
+    lines = [
+        "# Release Dependency Report",
+        "",
+        f"- Package: `{root_package['name']} {root_package['version']}`",
+        "- Cargo metadata command: `cargo metadata --locked --format-version 1 --all-features`",
+        "- Feature scope: all crate features, all release artifact modes, tests, examples, and benches",
+        "- Runtime dependency policy: normal dependencies are release runtime dependencies; dev dependencies are test, benchmark, and tooling inputs only.",
+        "",
+        "## Direct Runtime Dependencies",
+        "",
+    ]
+    if normal_deps:
+        lines.extend(f"- `{name}`" for name in normal_deps)
+    else:
+        lines.append("- None. `[dependencies]` is intentionally empty.")
+    lines.extend(["", "## Direct Build Dependencies", ""])
+    if build_deps:
+        lines.extend(f"- `{name}`" for name in build_deps)
+    else:
+        lines.append("- None declared in Cargo metadata.")
+    lines.extend(["", "## Direct Development Dependencies", ""])
+    if dev_deps:
+        lines.extend(f"- `{name}`" for name in dev_deps)
+    else:
+        lines.append("- None declared in Cargo metadata.")
+
+    lines.extend(
+        [
+            "",
+            "## Build Tool Requirements",
+            "",
+            "| Tool | Env override | Executable | Status | Version |",
+            "|---|---|---|---|---|",
+        ]
+    )
+    for tool in tools:
+        lines.append(
+            "| {name} | `{env}` | `{executable}` | {status} | {version} |".format(
+                **tool
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Resolved Third-Party Packages",
+            "",
+            "| Package | License | Source | Repository |",
+            "|---|---|---|---|",
+        ]
+    )
+    for package in resolved:
+        license_text = str(package.get("license") or "-")
+        source = str(package.get("source") or "path")
+        repository = str(package.get("repository") or "-")
+        lines.append(
+            f"| `{package_label(package)}` | {license_text} | {source} | {repository} |"
+        )
+
+    lines.append("")
+    path.write_text("\n".join(lines))
+    return metadata_entry(path.name, "dependency-report", path)
+
+
 def write_pkg_config(
     out_dir: pathlib.Path, version: str, artifacts: list[dict[str, object]]
 ) -> pathlib.Path:
@@ -579,6 +758,24 @@ def validate_integrity(out_dir: pathlib.Path, manifest: dict[str, object]) -> No
         path = release_path(str(entry["path"]))
         if not path.exists():
             raise SystemExit(f"missing integrity file: {path}")
+
+    dependency_reports = [
+        entry for entry in integrity_files if entry.get("role") == "dependency-report"
+    ]
+    if len(dependency_reports) != 1:
+        raise SystemExit("release manifest must include exactly one dependency report")
+    dependency_report = release_path(str(dependency_reports[0]["path"])).read_text()
+    for required in [
+        "## Direct Runtime Dependencies",
+        "## Direct Development Dependencies",
+        "## Build Tool Requirements",
+        "C compiler",
+        "C++ compiler",
+        "Archiver",
+        "## Resolved Third-Party Packages",
+    ]:
+        if required not in dependency_report:
+            raise SystemExit(f"dependency report is missing {required}")
 
     signing = manifest.get("signing")
     if not isinstance(signing, dict):
@@ -795,6 +992,7 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
     integrity_files.extend(write_symbol_manifests(out_dir, artifacts))
     integrity_files.append(write_environment_note(out_dir))
     integrity_files.append(write_benchmark_note(out_dir))
+    integrity_files.append(write_dependency_report(out_dir))
     key, key_source = signing_key()
     identity = signing_identity()
     public_key, allowed_signers, fingerprint = write_signing_public_key(out_dir, key, identity)

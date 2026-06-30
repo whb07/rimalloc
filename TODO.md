@@ -1183,11 +1183,21 @@ Validated remaining issues:
     fingerprint publication, and signed source-tag verification.
   - Verify: release checklist includes signing verification.
 
-- [ ] Add SBOM or dependency report.
-  - [ ] Generate a dependency report for runtime and development dependencies.
-  - [ ] Include build-tool requirements such as C compiler, C++ compiler, and
+- [x] Add SBOM or dependency report.
+  - [x] Generate a dependency report for runtime and development dependencies.
+  - [x] Include build-tool requirements such as C compiler, C++ compiler, and
         archiver.
-  - [ ] Attach the report to release artifacts or release notes.
+  - [x] Attach the report to release artifacts or release notes.
+  - Evidence: `scripts/build-release-artifacts.py` now writes
+    `target/release-artifacts/integrity/dependencies.md` from
+    `cargo metadata --locked --format-version 1 --all-features`, lists direct
+    runtime, build, and development dependencies, includes the resolved
+    third-party package graph, records release build-tool probes for the Rust
+    toolchain, C compiler, C++ compiler, archiver, symbol readers, and SSH
+    signing tool, and validates the report from
+    `scripts/check-release-integrity.py`. `docs/dependencies.md` documents the
+    generated report and `docs/release.md` requires attaching or linking it from
+    release notes.
   - Verify: release dry run includes the SBOM/dependency report.
 
 - [ ] Expand reproducible release instructions.

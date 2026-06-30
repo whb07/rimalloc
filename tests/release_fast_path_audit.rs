@@ -564,6 +564,8 @@ fn safe_byte_allocations_keep_object_ownership_separate() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let safe_api_md =
         fs::read_to_string(root.join("docs/safe-api.md")).expect("read docs/safe-api.md");
+    let release_md =
+        fs::read_to_string(root.join("docs/release.md")).expect("read docs/release.md");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let allocation_rs =
         fs::read_to_string(root.join("src/safe/allocation.rs")).expect("read allocation.rs");
@@ -580,6 +582,16 @@ fn safe_byte_allocations_keep_object_ownership_separate() {
         assert!(
             safe_api_md.contains(required),
             "safe object ownership policy should document {required}"
+        );
+    }
+    for required in [
+        "Confirm no object ownership APIs such as `MiBox<T>`, `HeapBox<'heap, T>`",
+        "construction failure, destructor and panic",
+        "allocator/heap ownership, and threading traits",
+    ] {
+        assert!(
+            release_md.contains(required),
+            "release checklist should keep object ownership policy gated by {required}"
         );
     }
 

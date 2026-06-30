@@ -207,41 +207,45 @@ release commit:
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.
-2. Run `scripts/check-api-inventory.py`.
-3. Run `scripts/check-ffi-boundary.py`.
-4. Run `scripts/check-local.sh`.
-5. Run `scripts/check-abi-symbols.sh` for exported C symbol inventory.
-6. Run `scripts/check-abi-diff.py --previous-ref <previous-tag>` for Tier C
+2. Confirm no object ownership APIs such as `MiBox<T>`, `HeapBox<'heap, T>`,
+   object constructors, or object destructors were added to the safe facade
+   without a separate design covering construction failure, destructor and panic
+   behavior, allocator/heap ownership, and threading traits.
+3. Run `scripts/check-api-inventory.py`.
+4. Run `scripts/check-ffi-boundary.py`.
+5. Run `scripts/check-local.sh`.
+6. Run `scripts/check-abi-symbols.sh` for exported C symbol inventory.
+7. Run `scripts/check-abi-diff.py --previous-ref <previous-tag>` for Tier C
    release-to-release ABI review.
-7. Run `scripts/check-static-link-collisions.py` for preview static archive
+8. Run `scripts/check-static-link-collisions.py` for preview static archive
    link and collision evidence.
-8. Run `scripts/check-release-artifact-consumer.py` and
+9. Run `scripts/check-release-artifact-consumer.py` and
    `scripts/check-release-link-metadata.py`.
-9. Run `scripts/check-release-dlopen.py`.
-10. Run `scripts/check-release-ld-preload.py`.
-11. Run `scripts/check-release-cxx-artifacts.py`.
-12. Run `scripts/check-release-integrity.py`.
-13. Run `scripts/check-layout.sh` for ABI/layout audits.
-14. Run audit drift checks: `scripts/check-unsafe-inventory.py --verify-builds`,
+10. Run `scripts/check-release-dlopen.py`.
+11. Run `scripts/check-release-ld-preload.py`.
+12. Run `scripts/check-release-cxx-artifacts.py`.
+13. Run `scripts/check-release-integrity.py`.
+14. Run `scripts/check-layout.sh` for ABI/layout audits.
+15. Run audit drift checks: `scripts/check-unsafe-inventory.py --verify-builds`,
    `scripts/check-unsafe-audit.py`,
    `scripts/check-unsafe-audit-evidence.py`,
    `scripts/check-atomic-ordering-audit.py`,
    `scripts/check-pointer-provenance-audit.py`,
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
-15. Run `scripts/check-release-thread-stress.py`.
-16. Run `scripts/check-safety-stress.sh`.
-17. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
+16. Run `scripts/check-release-thread-stress.py`.
+17. Run `scripts/check-safety-stress.sh`.
+18. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
    toolchain.
-18. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
+19. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-19. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
+20. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-20. Run `scripts/check-valgrind-tracking-parity.py`.
-21. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
+21. Run `scripts/check-valgrind-tracking-parity.py`.
+22. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
    using `docs/performance.md` for thresholds and noise handling.
-22. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
-23. Capture `scripts/env-info.sh` output alongside benchmark evidence.
+23. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
+24. Capture `scripts/env-info.sh` output alongside benchmark evidence.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

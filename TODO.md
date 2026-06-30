@@ -935,12 +935,19 @@ Validated remaining issues:
     aligned zeroed allocation alternative compiled.
   - Verify: example compiles and doctests pass.
 
-- [ ] Keep object ownership APIs out of the current safe facade.
-  - [ ] Add a release checklist item that rejects `MiBox<T>` or
+- [x] Keep object ownership APIs out of the current safe facade.
+  - [x] Add a release checklist item that rejects `MiBox<T>` or
         `HeapBox<'heap, T>` additions without a separate design.
-  - [ ] If object APIs are designed later, cover construction failure,
+  - [x] If object APIs are designed later, cover construction failure,
         destructor behavior, panic behavior, heap ownership, and threading
         traits before implementation.
+  - Evidence: `docs/release.md` now requires release signoff to reject
+    `MiBox<T>`, `HeapBox<'heap, T>`, object constructors, or object destructors
+    unless a separate object-ownership design covers construction failure,
+    destructor and panic behavior, allocator/heap ownership, and threading
+    traits. `tests/release_fast_path_audit.rs` checks that the safe API policy,
+    release checklist, and source remain aligned and that current API inventory
+    has no object ownership types.
   - Verify: API inventory has no object ownership types unless the design is
     complete.
 

@@ -19,7 +19,7 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   and cross-thread publication.
 - `atomic`: acquire/release/relaxed ordering around free lists, ownership, locks,
   and once initialization.
-- `core_types`: crate-private witnesses for pointer domains, layout requests,
+- `types`: crate-private witnesses for pointer domains, layout requests,
   free-list ownership, page states, memid views, and atomic metadata fields.
 - `track`: Valgrind/ASan hooks and feature-exclusive instrumentation.
 - `raw ABI`: C callbacks, null/error conventions, exported symbols, and panic
@@ -149,17 +149,17 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   `mi_thread_locals_t`, and `mi_option_desc_t`; no current safe wrapper or
   translated static requires those raw layout types to be shareable through
   safe references.
-- Retained `Sync` for `mi_page_s` because `src/init.rs` exposes the immutable
+- Retained `Sync` for `mi_page_s` because `src/allocator/init.rs` exposes the immutable
   `_mi_page_empty` sentinel static as a translated C compatibility object. Live
   pages are still allocator-owned mutable metadata and are not made safe to
   share by this impl.
-- Retained `Sync` for `mi_theap_s` because `src/init.rs` exposes immutable
+- Retained `Sync` for `mi_theap_s` because `src/allocator/init.rs` exposes immutable
   empty thread-heap sentinel statics. Live thread heaps remain thread-owned
   allocator state and are accessed through raw allocator paths or typestate
   wrappers.
-- Unit tests in `src/types.rs` assert the intentionally retained raw `Sync`
+- Unit tests in `src/types/` assert the intentionally retained raw `Sync`
   impls so accidental removals are visible during routine builds. Source search
-  for `unsafe impl Send` in `src/types.rs` should remain empty.
+  for `unsafe impl Send` in `src/types/` should remain empty.
 
 ## Policy
 

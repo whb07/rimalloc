@@ -2,11 +2,11 @@
 
 `TYPES_SPEC.md` is the acceptance source for the allocator's internal type
 model. `MIGRATION_PHASES.md` records the implementation status. This document
-is the short maintainer map for the current `src/core_types` modules.
+is the short maintainer map for the current `src/types/` modules.
 
 The strict-type layer is crate-private. It exists to make allocator invariants
 explicit without changing the raw C ABI or hot-path code shape. Raw C-compatible
-types remain in `src/types.rs` and C-shaped declarations remain behind
+types remain in `src/types/` and C-shaped declarations remain behind
 `mechanical_mimalloc::raw`.
 
 ## Status Labels
@@ -32,7 +32,7 @@ types remain in `src/types.rs` and C-shaped declarations remain behind
 | `page_states` | live scaffold | Provides page typestate witnesses for local, foreign, full, abandoned, and all-free paths. |
 | `page_queues` | live | Requires typed queue/page witnesses for full/unfull transitions. |
 | `memid` | live scaffold | Restricts union-arm interpretation to typed `MemId::view` and constructors. |
-| `atomic_wrappers` | live | Centralizes pointer-to-atomic field casts and fixed acquire/release/acqrel metadata operations. |
+| `atomic` | live | Centralizes pointer-to-atomic field casts and fixed acquire/release/acqrel metadata operations. |
 | `padding` | live | Owns padding pointer, canary, and delta access for allocation/free support paths. |
 | `arena` | live scaffold | Models arena slice ranges and bounds-checked slice counts. |
 | `heap` | live | Provides heap/thread-heap/subprocess ownership and borrow witnesses used below raw shims. |
@@ -41,7 +41,7 @@ types remain in `src/types.rs` and C-shaped declarations remain behind
 ## Page Owner And Free-Path Signoff
 
 `TYPES_SPEC.md` sections 6.2 and 6.3 are live in
-`src/core_types/page.rs`.
+`src/types/page.rs`.
 
 - `ThreadId::new` rejects zero and ids with low page-flag bits set;
   `new_unchecked` remains for proven raw thread-id reads.
@@ -55,18 +55,18 @@ types remain in `src/types.rs` and C-shaped declarations remain behind
 
 ## Dead-Code Discipline
 
-`core_types` does not rely on broad dead-code allowances. Retained proof and
+`types` does not rely on broad dead-code allowances. Retained proof and
 compatibility helpers must either be used by allocator code, removed, or tied to
 narrow compile-time reachability references that name the exact function,
 method, enum payload, or field being preserved.
 
-Do not add a broad module-level `#![allow(dead_code)]` to `core_types`.
+Do not add a broad module-level `#![allow(dead_code)]` to `types`.
 
 ## Verification
 
 The release fast-path audit checks the current source-shape contract:
 
-- `core_types` owns the semantic wrapper modules,
+- `types` owns the semantic wrapper modules,
 - metadata wrappers do not implement `Deref` or `DerefMut`,
 - memid union reads stay behind `MemId::view` or typed constructors,
 - pointer-to-atomic casts stay behind `Atomic*Field` wrappers,
@@ -144,13 +144,13 @@ boundary.
   layout definition, with `scripts/check-strict-types.py` enforcing that
   boundary.
 - Pointer-to-atomic casts for allocator metadata are centralized in
-  `AtomicUsizeField`, `AtomicI64Field`, and `AtomicPtrField`. `src/atomic.rs`
-  remains the raw `mi_atomic_*` compatibility layer, while new internal
-  metadata access goes through typed atomic field wrappers and the strict
-  checker rejects direct casts elsewhere.
-- C-compatible `mi_memory_order_e` values are confined to `src/atomic.rs`,
+  `AtomicUsizeField`, `AtomicI64Field`, and `AtomicPtrField`.
+  `src/internal/atomic.rs` remains the raw `mi_atomic_*` compatibility layer,
+  while new internal metadata access goes through typed atomic field wrappers
+  and the strict checker rejects direct casts elsewhere.
+- C-compatible `mi_memory_order_e` values are confined to `src/internal/atomic.rs`,
   where the raw `mi_atomic_*` facade maps them to Rust `Ordering`. Internal
-  allocator code uses `core_types::MemoryOrder` or `core::sync::atomic::Ordering`
+  allocator code uses `types::MemoryOrder` or `core::sync::atomic::Ordering`
   directly instead of propagating the C enum.
 - Pointer-to-integer round trips are centralized in typed packed-pointer and
   provenance helpers: `ThreadFreeWord` owns `xthread_free` pointer/owner
@@ -166,7 +166,7 @@ boundary.
   `metadata-reference` allowlist entries.
 - Pointer wrappers and allocator typestate wrappers remain raw-pointer style
   value types. The release fast-path audit rejects `Deref` and `DerefMut`
-  implementations under `src/core_types`, so callers must use explicit field,
+  implementations under `src/types/`, so callers must use explicit field,
   conversion, or witness methods instead of implicit references.
 - Hot strict-type wrappers stay zero-cost: pointer wrappers, copied page/queue
   witnesses, free-list wrappers, packed words, and atomic field wrappers are
@@ -182,7 +182,7 @@ boundary.
   `DeferredFreeCallback`, `OutputCallback`, `ErrorCallback`,
   `HeapVisitCallback`, `BlockVisitCallback`, `ThreadLocalClaimCallback`, and
   their `*CallbackArg` context wrappers. Raw callback typedefs remain in
-  `src/types.rs`/`src/abi.rs` C ABI declarations.
+  `src/types/` and `src/ffi/abi.rs` C ABI declarations.
 - Optimized allocator internals remain covered by `no_std`/no-allocation audit
   tests: strict-type modules and allocation/free hot-path helpers reject `std`,
   `alloc`, formatting allocation, synchronization primitives, and Rust

@@ -56,7 +56,7 @@ Current crate root public items are:
 `scripts/check-api-inventory.py` validates this list against
 `docs/api-inventory.md` and the source. Implementation modules such as `alloc`,
 `arena`, `free`, `heap`, `internal`, `os`, `page`, `page_map`, `prim`,
-`threadlocal`, and `core_types` are not public crate-root API.
+`threadlocal`, and `types` are not public crate-root API.
 
 Intentional API changes reviewed:
 
@@ -73,7 +73,7 @@ Intentional API changes reviewed:
   `raw::mimalloc`, and `raw::headers`.
 - Moved translated implementation modules behind `unstable-raw-internals`.
   This is raw facade cleanup, not C ABI removal.
-- Kept C ABI declarations and raw layouts owned by `src/abi.rs`, exposed
+- Kept C ABI declarations and raw layouts owned by `src/ffi/abi.rs`, exposed
   through `raw::abi` and `raw::mimalloc`.
 
 Review result: the final API shape matches `docs/api-inventory.md`,

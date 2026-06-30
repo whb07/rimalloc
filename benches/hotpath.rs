@@ -6,8 +6,18 @@
 //! allocator once at setup, so the only allocator traffic during measurement is
 //! the allocator under test.
 //!
-//! Run with: `cargo bench --features bench --bench hotpath`
-//! Compare against system: `cargo bench --features bench,compare --bench hotpath`
+//! Run the default Rust library build with:
+//! `cargo bench --features bench --bench hotpath`
+//!
+//! Run the C ABI/interposition hot-path build with:
+//! `cargo bench --features "bench interpose" --bench hotpath`
+//!
+//! Compare against system with:
+//! `cargo bench --features "bench compare" --bench hotpath`
+//!
+//! Criterion IDs do not include Cargo feature sets. Use a clean
+//! `CARGO_TARGET_DIR` or clear `target/criterion` when comparing default and
+//! interposition builds.
 //!
 //! Quick iteration controls:
 //!   MIMALLOC_HOTPATH_SAMPLE_SIZE=10

@@ -349,8 +349,14 @@ targets and are not presented as normal library APIs in rustdoc.
 
 ## C ABI Symbols
 
-The Tier C `cdylib` exports mimalloc-compatible C ABI symbols. The authoritative local
-checks are:
+The Tier C surface is exported by the opt-in `cdylib` artifact built with the
+explicit interposition feature set:
+
+```sh
+cargo rustc --features interpose --lib --release -- --crate-type cdylib
+```
+
+The authoritative local checks are:
 
 ```sh
 scripts/check-abi-symbols.sh
@@ -380,7 +386,7 @@ corresponding source-shape checks are updated.
 - Crate root safe API: Rust SemVer surface.
 - `raw`: unstable low-level Rust path surface until explicitly versioned.
 - C ABI symbols and layouts: C compatibility surface.
-- `core_types`: private design surface, not public SemVer.
+- `types`: private design surface, not public SemVer.
 - Benchmarks, scripts, and docs: release-process surface, not allocator API.
 
 Detailed compatibility domains and release classification rules are documented

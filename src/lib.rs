@@ -1,15 +1,20 @@
 //! Mechanical Rust translation foundation for mimalloc 3.3.2.
 //!
-//! This crate is a mimalloc-compatible C ABI allocator artifact. It also
-//! provides safe Rust allocation, heap, options, statistics, and process-info
-//! facades over the translated allocator. Borrowed callback guards live under
-//! [`unsafe_callbacks`] because they require process-global safety obligations.
+//! This crate provides safe Rust allocation, heap, options, statistics, and
+//! process-info facades over a translated mimalloc allocator. It can also build
+//! an explicit mimalloc-compatible C ABI/interposition artifact. Borrowed
+//! callback guards live under [`unsafe_callbacks`] because they require
+//! process-global safety obligations.
 //!
-//! This crate is currently a dual artifact:
+//! The default library build produces:
 //!
-//! - a `cdylib` that exports mimalloc-compatible C ABI symbols, and
-//! - an `rlib` with a deliberately small Rust-facing surface for tests,
-//!   benchmarks, and experimental integration.
+//! - an `rlib` with a deliberately small Rust-facing surface.
+//!
+//! Build the dynamic C ABI/interposition artifact explicitly:
+//!
+//! ```text
+//! cargo rustc --features interpose --lib --release -- --crate-type cdylib
+//! ```
 //!
 //! Use [`MiMalloc`] as a global allocator when a Rust `GlobalAlloc` facade is
 //! needed, [`Allocation`] for owned byte allocations, [`Heap`] for safe heap
@@ -29,6 +34,12 @@
 //! - `guarded`: enables guarded allocation sampling.
 //! - `track-valgrind`: enables Valgrind tracking shims.
 //! - `track-asan`: enables ASan tracking shims.
+//! - `c-abi`: enables build-script setup for C ABI artifacts.
+//! - `cxx-overrides`: compiles and links C++ operator new/delete overrides.
+//! - `tls-shim`: compiles and links the Linux initial-exec TLS shim.
+//! - `interpose`: enables the aggregate C ABI/interposition build mode.
+//! - `unstable-raw-internals`: exposes translated implementation modules for
+//!   repository audits only.
 //!
 //! When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
 //! builds, Valgrind mode takes precedence.
@@ -185,11 +196,11 @@
 //! pages, or validated free requests:
 //!
 //! ```rust,compile_fail
-//! use mechanical_mimalloc::core_types::{LocalPage, ForeignPage, OwnedAbandonedPage};
+//! use mechanical_mimalloc::types::{LocalPage, ForeignPage, OwnedAbandonedPage};
 //! ```
 //!
 //! ```rust,compile_fail
-//! use mechanical_mimalloc::core_types::ValidatedFree;
+//! use mechanical_mimalloc::types::ValidatedFree;
 //! ```
 
 #![cfg_attr(mi_sanitizer_runtime, feature(sanitize))]

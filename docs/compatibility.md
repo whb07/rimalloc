@@ -3,10 +3,10 @@
 This repository is pre-release, but compatibility domains are tracked now so
 accidental public commitments do not leak out of the mechanical translation.
 
-This crate is a mimalloc-compatible C ABI allocator artifact. It also provides
-safe Rust allocation, heap, options, statistics, and process-info facades over
-the translated allocator. Borrowed callback guards live under the explicit
-unsafe-adjacent Rust callback namespace.
+This crate provides safe Rust allocation, heap, options, statistics, and
+process-info facades over a translated mimalloc allocator. It can also build an
+explicit mimalloc-compatible C ABI/interposition artifact. Borrowed callback
+guards live under the explicit unsafe-adjacent Rust callback namespace.
 
 ## Public API Tiers
 
@@ -50,7 +50,8 @@ Tier U currently contains `unsafe_callbacks::ErrorCallbackGuard` and
 
 ### Tier C: C ABI
 
-The `cdylib` exports mimalloc-compatible C ABI symbols. Compatibility-sensitive
+The opt-in `cdylib` artifact exports mimalloc-compatible C ABI symbols when
+built with the explicit interposition feature set. Compatibility-sensitive
 changes include exported symbol additions/removals, calling convention changes,
 panic/unwind behavior, errno/null behavior, callback ABI changes, and C++
 operator new/delete override behavior.
@@ -69,8 +70,8 @@ item outside the crate-root facade or documented `raw` allowlist is
 release-blocking until classified. Any new `#[unsafe(no_mangle)]`,
 `#[unsafe(export_name = ...)]`, naked ABI shim, or `global_asm!` export outside
 approved FFI boundary files is release-blocking until classified.
-`core_types` is a private design surface for strict internal wrappers and
-invariant witnesses; it is not part of the safe API, raw facade, or C ABI.
+`types` is a private design surface for strict internal wrappers and invariant
+witnesses; it is not part of the safe API, raw facade, or C ABI.
 
 Use:
 
@@ -96,8 +97,10 @@ scripts/check-layout.sh
 ### Features
 
 Feature behavior is compatibility-sensitive. Defaults are intentionally empty.
-`std`, `bench`, `compare`, `secure`, `guarded`, `track-valgrind`, and
-`track-asan` are documented in `docs/features.md`.
+`std`, `bench`, `compare`, `bench-diagnostics`, `secure`, `guarded`,
+`track-valgrind`, `track-asan`, `c-abi`, `cxx-overrides`, `tls-shim`,
+`interpose`, and `unstable-raw-internals` are documented in
+`docs/features.md`.
 
 When `track-valgrind` and `track-asan` are both enabled, Valgrind mode takes
 precedence. New features should be additive unless a compile-time conflict is

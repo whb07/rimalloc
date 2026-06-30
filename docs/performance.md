@@ -34,6 +34,27 @@ The hotpath Criterion harness supports:
 - `MIMALLOC_HOTPATH_WARMUP_SECS`
 - `MIMALLOC_HOTPATH_NRESAMPLES`
 
+## Build Mode Comparability
+
+Hotpath results are only comparable when the Cargo feature set and artifact mode
+match. The default command:
+
+```sh
+cargo bench --features "std bench" --bench hotpath
+```
+
+measures the default Rust library build. The C ABI/interposition hot path should
+be measured explicitly:
+
+```sh
+cargo bench --features "std bench interpose" --bench hotpath
+```
+
+Do not compare Criterion's saved baseline across those two modes. Criterion
+benchmark IDs do not encode Cargo features, so use a fresh `CARGO_TARGET_DIR`,
+clear `target/criterion`, or save separate external reports when switching
+between default and interposition measurements.
+
 The native mimalloc-bench Criterion ports support:
 
 - `MIMALLOC_BENCH_SCENARIOS`

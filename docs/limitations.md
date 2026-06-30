@@ -15,5 +15,5 @@
 - When `track-valgrind` and `track-asan` are both enabled, Valgrind mode takes
   precedence.
 - Internal strict types are complete for the current migration scope, but
-  `core_types` remains crate-private and may change without SemVer notice.
+  `types` remains crate-private and may change without SemVer notice.
 - The crate does not currently publish an allocator-api trait integration layer.

@@ -23,10 +23,10 @@ model symbols:
 - `mi_thread_locals`
 
 The C shim in `src/tls_shim.c` owns the hidden TLS storage. Rust accessors in
-`src/prim.rs`, `src/init.rs`, and `src/threadlocal.rs` use `@GOTTPOFF` loads and
-`fs:` addressing to read or write those cells. Scratch registers for TLS offsets
-are declared as assembly outputs; the call sites must not rely on their prior
-values.
+`src/platform/mod.rs`, `src/allocator/init.rs`, and
+`src/allocator/threadlocal.rs` use `@GOTTPOFF` loads and `fs:` addressing to
+read or write those cells. Scratch registers for TLS offsets are declared as
+assembly outputs; the call sites must not rely on their prior values.
 
 ## Malloc And Free Fast Paths
 

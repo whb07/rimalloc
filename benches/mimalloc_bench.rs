@@ -8,6 +8,7 @@
 //! Examples:
 //!   cargo bench --features bench --bench mimalloc_bench -- glibc-simple
 //!   MIMALLOC_BENCH_SCENARIOS=mleak10 cargo bench --features bench --bench mimalloc_bench
+//!   cargo rustc --features interpose --lib --release -- --crate-type cdylib
 //!
 //! Useful environment variables:
 //!   MIMALLOC_BENCH_SCENARIOS=glibc-simple,mleak10,xmalloc-testN
@@ -309,12 +310,24 @@ fn ensure_rust_mimalloc(root: &Path) -> PathBuf {
     let lib = root.join("target/release/libmechanical_mimalloc.so");
     if !skip_build() {
         let mut command = Command::new("cargo");
-        command.current_dir(root).arg("build").arg("--release");
-        run_status(command, "cargo build --release for Rust mimalloc cdylib");
+        command
+            .current_dir(root)
+            .arg("rustc")
+            .arg("--features")
+            .arg("interpose")
+            .arg("--lib")
+            .arg("--release")
+            .arg("--")
+            .arg("--crate-type")
+            .arg("cdylib");
+        run_status(
+            command,
+            "cargo rustc --features interpose --lib --release -- --crate-type cdylib",
+        );
     }
     assert!(
         lib.exists(),
-        "missing Rust mimalloc cdylib at {}; run `cargo build --release` or set MIMALLOC_RUST_LIB",
+        "missing Rust mimalloc cdylib at {}; run `cargo rustc --features interpose --lib --release -- --crate-type cdylib` or set MIMALLOC_RUST_LIB",
         lib.display()
     );
     lib

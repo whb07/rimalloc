@@ -1,9 +1,14 @@
 # ABI Policy
 
-The crate builds a `cdylib` that exports mimalloc-compatible C ABI symbols and
-an `rlib` with an explicit Rust `raw` facade. The raw Rust facade lives under
-`mechanical_mimalloc::raw` and mirrors the C shape for tests, benchmarks, and
-low-level integration.
+Default Cargo library builds produce an `rlib` with an explicit Rust `raw`
+facade. The dynamic C ABI/interposition artifact is opt-in:
+
+```sh
+cargo rustc --features interpose --lib --release -- --crate-type cdylib
+```
+
+The raw Rust facade lives under `mechanical_mimalloc::raw` and mirrors the C
+shape for tests, benchmarks, and low-level integration.
 
 ## Compatibility Domains
 
@@ -140,7 +145,7 @@ Current ownership is the final layout for this migration phase:
 | C header declarations and layouts | `src/ffi/abi.rs` exposed through `raw::abi` and `raw::mimalloc` | Public `mi_*` declarations, `repr(C)` layouts, C-compatible aliases, constants, and callback type aliases mirrored from public headers. |
 | Raw C-shaped Rust facade | `src/raw/mod.rs` | Default root `mi_*` re-exports plus `raw::abi`, `raw::mimalloc`, and `raw::headers`; translated internals are gated by `unstable-raw-internals`. |
 | Exported C ABI implementations | existing implementation files approved by `scripts/check-ffi-boundary.py` | `#[unsafe(no_mangle)]`, `#[unsafe(export_name = ...)]`, naked ABI shims, and public assembly aliases. |
-| Strict internal types | `src/types.rs` and `src/types/` | Private invariant-carrying wrappers and witness types used inside allocator internals; never part of the raw C facade or C ABI declaration owner. |
+| Strict internal types | `src/types/` | Private invariant-carrying wrappers and witness types used inside allocator internals; never part of the raw C facade or C ABI declaration owner. |
 | Internal compatibility aliases | `src/ffi/mimalloc.rs` and selected translated helpers | C-shaped helper paths used by the mechanical translation but not a public Rust API. |
 | Allocator internals | private modules such as `alloc`, `free`, `heap`, `page`, `arena`, `os`, and `threadlocal` | Implementation logic and typed invariant witnesses. |
 
@@ -164,23 +169,22 @@ unstable raw internals
   -> private translated modules
 ```
 
-`raw.rs` must remain a structured facade, not an unbounded re-export bucket.
+`src/raw/mod.rs` must remain a structured facade, not an unbounded re-export bucket.
 `scripts/check-api-inventory.py` enforces the default raw module set and the
 feature-gated `unstable-raw-internals` module set.
 
 ## Current File Layout
 
-This project keeps the ABI declaration owner flat for now instead of creating a
-new `src/raw/` or `src/ffi/` tree. A structural move can happen later only with
-the same parity evidence and inventory checks.
+This project uses an explicit facade and implementation layout. A structural
+move can happen later only with the same parity evidence and inventory checks.
 
 | New work | File owner |
 | --- | --- |
 | New public C ABI declarations, `repr(C)` layouts, C-compatible aliases, public constants, or callback type aliases | `src/ffi/abi.rs`, exposed through `raw::abi` and `raw::mimalloc` |
 | New public-header macro translations or header-level compatibility helpers | `src/ffi/headers.rs`, exposed through `raw::headers` when they are part of the raw header mirror |
 | New exported C ABI implementations or symbol aliases | the matching classified implementation file checked by `scripts/check-ffi-boundary.py`; update that script if a new export file is introduced |
-| New malloc-family or C++ override symbols | `src/alloc_override.rs` or a classified platform override file |
-| New runtime, init, assembly, or platform ABI shims | `src/init.rs`, `src/prim.rs`, `src/prim/unix.rs`, or another file classified by `scripts/check-ffi-boundary.py` |
+| New malloc-family or C++ override symbols | `src/raw/macros.rs` or a classified platform override file |
+| New runtime, init, assembly, or platform ABI shims | `src/allocator/init.rs`, `src/platform/mod.rs`, a platform-specific `src/platform/*.rs` file, or another file classified by `scripts/check-ffi-boundary.py` |
 | New internal C-shaped compatibility alias needed by translated code | `src/ffi/mimalloc.rs` or a private translated module, not the default `raw` facade |
 | New allocator implementation logic | private allocator modules such as `alloc`, `free`, `heap`, `page`, `arena`, `os`, or `threadlocal`; do not re-export it from default `raw` |
 

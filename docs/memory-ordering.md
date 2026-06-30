@@ -8,15 +8,15 @@ it.
 
 ## Atomic Wrapper Boundary
 
-Raw field-to-atomic casts are centralized in `src/core_types/atomic_wrappers.rs`.
-Allocator code should use the typed wrappers instead of spelling
-`AtomicUsize::from_ptr`, `AtomicPtr::from_ptr`, or direct pointer casts at call
-sites. This keeps provenance, alignment, and field-domain assumptions visible
-at the boundary where C layout is reinterpreted as Rust atomics.
+Raw field-to-atomic casts are centralized in `src/types/atomic.rs`. Allocator
+code should use the typed wrappers instead of spelling `AtomicUsize::from_ptr`,
+`AtomicPtr::from_ptr`, or direct pointer casts at call sites. This keeps
+provenance, alignment, and field-domain assumptions visible at the boundary
+where C layout is reinterpreted as Rust atomics.
 
-`src/atomic.rs` remains the C ABI compatibility layer for the upstream
-`mi_atomic_*` API. New internal code should prefer the typed wrappers when it
-is operating on allocator metadata fields.
+`src/internal/atomic.rs` remains the C-shaped compatibility layer for the
+upstream `mi_atomic_*` API. New internal code should prefer the typed wrappers
+when it is operating on allocator metadata fields.
 
 ## Ordering Vocabulary
 

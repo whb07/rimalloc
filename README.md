@@ -2,15 +2,20 @@
 
 Mechanical Rust translation foundation for mimalloc 3.3.2.
 
-This crate is a mimalloc-compatible C ABI allocator artifact. It also provides
-safe Rust allocation, heap, options, statistics, and process-info facades over
-the translated allocator. Borrowed callback guards live under the explicit
-`unsafe_callbacks` namespace.
+This crate provides safe Rust allocation, heap, options, statistics, and
+process-info facades over a translated mimalloc allocator. It can also build an
+explicit mimalloc-compatible C ABI/interposition artifact. Borrowed callback
+guards live under the explicit `unsafe_callbacks` namespace.
 
-This repository currently builds both:
+The default library build produces:
 
-- an `rlib` for Rust tests, benchmarks, and experimental integration, and
-- a `cdylib` that exports mimalloc-compatible C ABI symbols.
+- an `rlib` for Rust integration, tests, benchmarks, and examples.
+
+The dynamic C ABI/interposition artifact is opt-in:
+
+```sh
+cargo rustc --features interpose --lib --release -- --crate-type cdylib
+```
 
 The C ABI compatibility surface and the crate-root safe Rust facade are both
 tracked by source-shape, layout, symbol, lint, package, and benchmark gates.
@@ -27,9 +32,10 @@ tracked by source-shape, layout, symbol, lint, package, and benchmark gates.
   low-level tests, benchmarks, and integration code that can uphold mimalloc's
   unsafe pointer and lifetime contracts. The raw Rust path surface is not
   stabilized as a Rust SemVer API yet.
-- Dynamic C ABI: the `cdylib` export surface, which preserves
-  mimalloc-compatible C symbols, layouts, callbacks, and calling conventions.
-  This is tracked separately from Rust SemVer.
+- Dynamic C ABI: the opt-in `cdylib` export surface, which preserves
+  mimalloc-compatible C symbols, layouts, callbacks, and calling conventions
+  when built with the explicit interposition feature set. This is tracked
+  separately from Rust SemVer.
 
 See `docs/safe-api.md`, `docs/abi.md`, and `docs/api-inventory.md` for the
 current boundary policy and inventory.
@@ -88,10 +94,20 @@ Default features are empty.
   builds without this feature use `no_std`.
 - `bench`: enable Criterion benchmark targets; implies `std`.
 - `compare`: enable comparison-oriented benchmark and test code.
+- `bench-diagnostics`: enable benchmark-only hotspot counters.
 - `secure`: enable secure-mode padding and encoded free lists.
 - `guarded`: enable guarded allocation sampling.
 - `track-valgrind`: enable Valgrind tracking shims.
 - `track-asan`: enable ASan tracking shims.
+- `c-abi`: enable build-script setup for C ABI artifacts.
+- `cxx-overrides`: compile and link C++ operator new/delete overrides; implies
+  `c-abi`.
+- `tls-shim`: compile and link the Linux initial-exec TLS shim; implies
+  `c-abi`.
+- `interpose`: aggregate C ABI/interposition build mode; implies `c-abi`,
+  `cxx-overrides`, and `tls-shim`.
+- `unstable-raw-internals`: expose translated implementation modules for
+  repository audits only; not public API.
 
 When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
 builds, Valgrind mode takes precedence.

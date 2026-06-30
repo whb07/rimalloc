@@ -3468,3 +3468,54 @@ pub(crate) unsafe fn _mi_malloc_generic_typed(
         p
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bits::{MI_INTPTR_SIZE, MI_SIZE_BITS, mi_clz};
+
+    const LARGE_WSIZE_MAX_FOR_BIN_TEST: usize = (4 * 1024 * 1024) / MI_INTPTR_SIZE;
+
+    fn upstream_bin4(size: usize) -> u8 {
+        let wsize = _mi_wsize_from_size(size);
+        if wsize <= 1 {
+            return 1;
+        }
+        if cfg!(target_pointer_width = "32") && wsize <= 4 {
+            return ((wsize + 1) & !1) as u8;
+        }
+        if cfg!(target_pointer_width = "64") && wsize <= 8 {
+            return ((wsize + 1) & !1) as u8;
+        }
+        if !cfg!(any(
+            target_pointer_width = "32",
+            target_pointer_width = "64"
+        )) && wsize <= 8
+        {
+            return wsize as u8;
+        }
+        if wsize > LARGE_WSIZE_MAX_FOR_BIN_TEST {
+            return MI_BIN_HUGE as u8;
+        }
+
+        let b = (MI_SIZE_BITS - 1 - mi_clz(wsize)) as u8;
+        ((b << 1) + ((wsize >> (b - 1)) & 0x01) as u8) + 3
+    }
+
+    #[test]
+    fn bin_classification_characterization_retains_huge_bounds() {
+        let mut last_bin = 0usize;
+        let mut transitions = 0usize;
+        for wsize in 1..=((4 * 1024 * 1024) / 8 + 1024) {
+            let size = wsize * MI_INTPTR_SIZE;
+            let bin = mi_bin(size);
+            let alt_bin = upstream_bin4(size);
+            assert!(alt_bin <= MI_BIN_HUGE as u8);
+            if bin != last_bin {
+                transitions += 1;
+                last_bin = bin;
+            }
+        }
+        assert!(transitions > 0);
+    }
+}

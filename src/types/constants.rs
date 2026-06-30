@@ -531,7 +531,9 @@ impl mi_subproc_id_t {
 
 #[cfg(test)]
 mod tests {
-    use super::{mi_page_s, mi_theap_s};
+    use super::{
+        MI_ENCODE_FREELIST, MI_PADDING, MI_PADDING_CHECK, MI_SECURE, mi_page_s, mi_theap_s,
+    };
 
     fn assert_sync<T: Sync>() -> usize {
         core::mem::size_of::<T>()
@@ -541,5 +543,19 @@ mod tests {
     fn intentional_raw_sync_impls_are_limited_to_sentinel_static_types() {
         assert!(assert_sync::<mi_page_s>() > 0);
         assert!(assert_sync::<mi_theap_s>() > 0);
+    }
+
+    #[test]
+    fn secure_feature_constants_follow_c_mode_rules() {
+        if cfg!(feature = "secure") {
+            assert_eq!(crate::internal::MI_SECURE, 4);
+            assert_eq!(MI_SECURE, 4);
+            assert_eq!(MI_PADDING, 1);
+            assert_eq!(MI_PADDING_CHECK, 1);
+            assert_eq!(MI_ENCODE_FREELIST, 1);
+        } else {
+            assert_eq!(crate::internal::MI_SECURE, 0);
+            assert_eq!(MI_SECURE, 0);
+        }
     }
 }

@@ -1,11 +1,5 @@
-#![cfg(feature = "unstable-raw-internals")]
-
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-
-#[cfg(unix)]
-use std::os::unix::process::ExitStatusExt;
 
 const FORBIDDEN: [&str; 7] = [
     "panic!",
@@ -186,36 +180,4 @@ fn callback_unwind_policy_is_documented_and_safe_guards_catch_panics() {
         !unsafe_callbacks_rs.contains("mi_register_output"),
         "safe API should not expose an output callback guard until output recursion semantics are designed"
     );
-}
-
-#[test]
-fn mimalloc_assert_fail_aborts_instead_of_unwinding() {
-    const CHILD_ENV: &str = "MI_FFI_PANIC_AUDIT_ASSERT_CHILD";
-
-    if std::env::var_os(CHILD_ENV).is_some() {
-        unsafe {
-            mechanical_mimalloc::raw::options::_mi_assert_fail(
-                c"false".as_ptr(),
-                c"ffi_panic_audit.rs".as_ptr(),
-                line!(),
-                c"mimalloc_assert_fail_aborts_instead_of_unwinding".as_ptr(),
-            )
-        };
-    }
-
-    let current_exe = std::env::current_exe().expect("current test executable path");
-    let status = Command::new(current_exe)
-        .arg("--exact")
-        .arg("mimalloc_assert_fail_aborts_instead_of_unwinding")
-        .arg("--nocapture")
-        .env(CHILD_ENV, "1")
-        .status()
-        .expect("run assertion-abort child process");
-
-    assert!(
-        !status.success(),
-        "assert failure child unexpectedly returned"
-    );
-    #[cfg(unix)]
-    assert_eq!(status.signal(), Some(6), "expected SIGABRT from child");
 }

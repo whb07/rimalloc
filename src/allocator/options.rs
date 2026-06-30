@@ -1670,3 +1670,46 @@ pub(crate) extern "C" fn _mi_options_post_init() {
         mi_options_print();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    #[cfg(unix)]
+    use std::os::unix::process::ExitStatusExt;
+
+    #[test]
+    fn mimalloc_assert_fail_aborts_instead_of_unwinding() {
+        const CHILD_ENV: &str = "MI_FFI_PANIC_AUDIT_ASSERT_CHILD";
+        const TEST_NAME: &str =
+            "allocator::options::tests::mimalloc_assert_fail_aborts_instead_of_unwinding";
+
+        if std::env::var_os(CHILD_ENV).is_some() {
+            unsafe {
+                _mi_assert_fail(
+                    c"false".as_ptr(),
+                    c"options.rs".as_ptr(),
+                    line!(),
+                    c"mimalloc_assert_fail_aborts_instead_of_unwinding".as_ptr(),
+                )
+            };
+        }
+
+        let current_exe = std::env::current_exe().expect("current test executable path");
+        let status = Command::new(current_exe)
+            .arg("--exact")
+            .arg(TEST_NAME)
+            .arg("--nocapture")
+            .env(CHILD_ENV, "1")
+            .status()
+            .expect("run assertion-abort child process");
+
+        assert!(
+            !status.success(),
+            "assert failure child unexpectedly returned"
+        );
+        #[cfg(unix)]
+        assert_eq!(status.signal(), Some(6), "expected SIGABRT from child");
+    }
+}

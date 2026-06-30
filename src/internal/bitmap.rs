@@ -2571,3 +2571,26 @@ static MI_BBITMAP_SET_CHUNK_BIN_KEEP: fn(&mut mi_bbitmap_t, usize, mi_chunkbin_t
 #[used]
 static MI_BBITMAP_CHUNKMAP_TRY_CLEAR_KEEP: fn(&mut mi_bbitmap_t, usize) -> bool =
     mi_bbitmap_chunkmap_try_clear;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bbitmap_find_and_clear_claims_one_range() {
+        let mut bitmap = mi_bbitmap_t::default();
+        unsafe {
+            mi_bbitmap_init(&mut bitmap, 1024, true);
+            assert!(mi_bbitmap_setN(&mut bitmap, 0, 4));
+
+            let mut idx = usize::MAX;
+            assert!(mi_bbitmap_try_find_and_clearN(&mut bitmap, 0, 1, &mut idx));
+            assert_eq!(idx, 0);
+
+            let remaining = (0..4)
+                .filter(|i| mi_bbitmap_is_setN(&mut bitmap, *i, 1))
+                .count();
+            assert_eq!(remaining, 3);
+        }
+    }
+}

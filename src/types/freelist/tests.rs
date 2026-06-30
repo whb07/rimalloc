@@ -1,4 +1,5 @@
 use super::*;
+use core::ptr;
 
 #[test]
 fn thread_free_word_round_trips_owner_without_head() {
@@ -60,4 +61,24 @@ fn thread_free_word_clears_head_without_decoding_owner() {
     assert!(!unowned_without_head.is_owned());
     assert!(unowned_without_head.head().is_none());
     assert_eq!(unowned_without_head.raw(), 0);
+}
+
+#[test]
+fn default_freelist_links_are_raw_pointers() {
+    if crate::types::MI_ENCODE_FREELIST != 0 {
+        return;
+    }
+
+    let keys = [0x1234usize, 0x5678usize];
+    let raw_next = 0x1234_5678usize as *mut crate::types::mi_block_t;
+    let mut block = crate::types::mi_block_t {
+        next: raw_next as usize,
+    };
+
+    let decoded = unsafe { crate::internal::mi_block_nextx(ptr::null(), &block, &keys) };
+    assert_eq!(decoded, raw_next);
+
+    let replacement = 0x8765_4321usize as *const crate::types::mi_block_t;
+    unsafe { crate::internal::mi_block_set_nextx(ptr::null(), &mut block, replacement, &keys) };
+    assert_eq!(block.next, replacement as usize);
 }

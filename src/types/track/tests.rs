@@ -35,3 +35,29 @@ fn flags_match_modes() {
     assert_eq!(TrackMode::Asan.heap_destroy_flag(), 0);
     assert_eq!(TrackMode::Asan.tool_name(), "asan");
 }
+
+#[test]
+fn internal_tracking_constants_follow_track_module() {
+    assert_eq!(crate::internal::MI_TRACK_ASAN, crate::track::MI_TRACK_ASAN);
+    assert_eq!(
+        crate::internal::MI_TRACK_ENABLED,
+        crate::track::MI_TRACK_ENABLED
+    );
+}
+
+#[cfg(not(any(feature = "track-valgrind", feature = "track-asan")))]
+#[test]
+fn default_tracking_mode_is_disabled() {
+    assert_eq!(crate::track::MI_TRACK_ENABLED, 0);
+    assert_eq!(crate::track::MI_TRACK_HEAP_DESTROY, 0);
+    assert_eq!(crate::track::MI_TRACK_TOOL, "none");
+}
+
+#[cfg(all(feature = "track-valgrind", feature = "track-asan"))]
+#[test]
+fn aggregate_tracking_features_prefer_valgrind() {
+    assert_eq!(crate::track::MI_TRACK_ENABLED, 1);
+    assert_eq!(crate::track::MI_TRACK_VALGRIND, 1);
+    assert_eq!(crate::track::MI_TRACK_ASAN, 0);
+    assert_eq!(crate::track::MI_TRACK_TOOL, "valgrind");
+}

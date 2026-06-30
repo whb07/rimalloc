@@ -1,19 +1,28 @@
-#![cfg(feature = "unstable-raw-internals")]
-
 #[path = "original_testhelper.rs"]
 mod original_testhelper;
 
 use std::slice;
 
-use mechanical_mimalloc::raw::internal::MI_DEBUG;
-use mechanical_mimalloc::raw::track::{MI_TRACK_ASAN, MI_TRACK_VALGRIND};
-use mechanical_mimalloc::raw::types::{MI_DEBUG_FREED, MI_DEBUG_UNINIT};
 use mechanical_mimalloc::raw::{
     MI_MAX_ALIGN_SIZE, MI_SMALL_SIZE_MAX, mi_calloc, mi_calloc_aligned, mi_free, mi_malloc_aligned,
     mi_malloc_small, mi_mallocn, mi_option_disable, mi_option_t, mi_realloc_aligned, mi_reallocn,
     mi_recalloc, mi_recalloc_aligned, mi_rezalloc, mi_rezalloc_aligned, mi_zalloc,
     mi_zalloc_aligned, mi_zalloc_small,
 };
+
+const MI_DEBUG: usize = if cfg!(debug_assertions) { 2 } else { 0 };
+const MI_TRACK_VALGRIND: usize = if cfg!(feature = "track-valgrind") {
+    1
+} else {
+    0
+};
+const MI_TRACK_ASAN: usize = if cfg!(all(feature = "track-asan", not(feature = "track-valgrind"))) {
+    1
+} else {
+    0
+};
+const MI_DEBUG_UNINIT: u8 = 0xD0;
+const MI_DEBUG_FREED: u8 = 0xDF;
 
 fn check_zero_init(p: *const u8, size: usize) -> bool {
     if p.is_null() {

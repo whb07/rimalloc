@@ -577,13 +577,20 @@ Validated remaining issues:
 
 ## P1 - Retire `unstable-raw-internals`
 
-- [ ] Move internal-invariant integration tests into crate-private unit tests
+- [x] Move internal-invariant integration tests into crate-private unit tests
       where practical.
-  - [ ] Start with tests listed in `docs/raw-facade-migration.md` that use
+  - [x] Start with tests listed in `docs/raw-facade-migration.md` that use
         `raw::internal`, `raw::types`, `raw::page`, `raw::bits`, `raw::track`,
         or `raw::bitmap`.
-  - [ ] Keep public C API behavior tests on root `raw::mi_*` paths.
-  - [ ] Avoid exposing new public helper APIs just to satisfy tests.
+  - [x] Keep public C API behavior tests on root `raw::mi_*` paths.
+  - [x] Avoid exposing new public helper APIs just to satisfy tests.
+  - Evidence: bitmap, free-list encoding, secure constants, tracking
+    constants, page bin characterization, and `_mi_assert_fail` abort coverage
+    moved into crate-private unit tests. `tests/original_main_override_static.rs`,
+    `tests/original_test_api_fill.rs`, and `tests/ffi_panic_audit.rs` no longer
+    require `unstable-raw-internals`; the remaining gated
+    `tests/release_fast_path_audit.rs` is a source-shape audit that still needs
+    raw internal layout aliases.
   - Verify: `scripts/check-raw-facade.sh`.
 
 - [ ] Remove the `unstable-raw-internals` feature after no repository tests

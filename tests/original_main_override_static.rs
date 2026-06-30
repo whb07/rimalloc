@@ -1,20 +1,14 @@
-#![cfg(feature = "unstable-raw-internals")]
 #![allow(deprecated)]
 
 use core::ffi::c_void;
 use core::ptr;
 use std::ffi::CString;
 
-use mechanical_mimalloc::raw::bits::{MI_INTPTR_SIZE, MI_SIZE_BITS, mi_clz};
-use mechanical_mimalloc::raw::internal::_mi_wsize_from_size;
-use mechanical_mimalloc::raw::page;
 use mechanical_mimalloc::raw::{
-    self, MI_BIN_HUGE, MI_STAT_VERSION, mi_arena_id_t, mi_heap_area_t, mi_heap_t, mi_option_t,
-    mi_stats_t,
+    self, MI_STAT_VERSION, mi_arena_id_t, mi_heap_area_t, mi_heap_t, mi_option_t, mi_stats_t,
 };
 
 const HUGE_ALLOC_SIZE: usize = 67_108_872;
-const LARGE_WSIZE_MAX: usize = (4 * 1024 * 1024) / MI_INTPTR_SIZE;
 
 #[derive(Default)]
 struct VisitState {
@@ -190,48 +184,6 @@ unsafe fn test_internal_arena_purge_does_not_recommit() {
     );
 }
 
-fn _mi_bin4(size: usize) -> u8 {
-    let wsize = _mi_wsize_from_size(size);
-    if wsize <= 1 {
-        return 1;
-    }
-    if cfg!(target_pointer_width = "32") && wsize <= 4 {
-        return ((wsize + 1) & !1) as u8;
-    }
-    if cfg!(target_pointer_width = "64") && wsize <= 8 {
-        return ((wsize + 1) & !1) as u8;
-    }
-    if !cfg!(any(
-        target_pointer_width = "32",
-        target_pointer_width = "64"
-    )) && wsize <= 8
-    {
-        return wsize as u8;
-    }
-    if wsize > LARGE_WSIZE_MAX {
-        return MI_BIN_HUGE as u8;
-    }
-
-    let b = (MI_SIZE_BITS - 1 - mi_clz(wsize)) as u8;
-    ((b << 1) + ((wsize >> (b - 1)) & 0x01) as u8) + 3
-}
-
-fn mi_bins() {
-    let mut last_bin = 0usize;
-    let mut transitions = 0usize;
-    for wsize in 1..=((4 * 1024 * 1024) / 8 + 1024) {
-        let size = wsize * MI_INTPTR_SIZE;
-        let bin = page::mi_bin(size);
-        let alt_bin = _mi_bin4(size);
-        assert!(alt_bin <= MI_BIN_HUGE as u8);
-        if bin != last_bin {
-            transitions += 1;
-            last_bin = bin;
-        }
-    }
-    assert!(transitions > 0);
-}
-
 unsafe fn test_canary_leak() {
     let p = unsafe { raw::mi_mallocn(22, core::mem::size_of::<u8>()) }.cast::<u8>();
     assert!(!p.is_null());
@@ -297,9 +249,4 @@ fn large_pages_characterization() {
 #[test]
 fn internal_arena_purge_does_not_recommit() {
     unsafe { test_internal_arena_purge_does_not_recommit() };
-}
-
-#[test]
-fn bins_characterization() {
-    mi_bins();
 }

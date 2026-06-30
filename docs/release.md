@@ -242,10 +242,12 @@ Before publishing or tagging a release:
 20. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
 21. Run `scripts/check-valgrind-tracking-parity.py`.
-22. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
-   using `docs/performance.md` for thresholds and noise handling.
+22. Before a release candidate, run `scripts/check-bench-full.sh`, capture
+   `scripts/env-info.sh`, preserve
+   `target/criterion/benchmark-thresholds-full.csv`, and update
+   `BENCHMARK_RESULTS.md` with exact command lines, feature flags, and
+   noisy-benchmark notes for the release commit.
 23. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
-24. Capture `scripts/env-info.sh` output alongside benchmark evidence.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

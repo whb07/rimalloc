@@ -618,6 +618,46 @@ fn safe_byte_allocations_keep_object_ownership_separate() {
 }
 
 #[test]
+fn release_candidates_require_full_benchmark_evidence() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let release_md =
+        fs::read_to_string(root.join("docs/release.md")).expect("read docs/release.md");
+    let performance_md =
+        fs::read_to_string(root.join("docs/performance.md")).expect("read docs/performance.md");
+    let check_bench_full = fs::read_to_string(root.join("scripts/check-bench-full.sh"))
+        .expect("read full bench script");
+
+    for required in [
+        "Before a release candidate, run `scripts/check-bench-full.sh`",
+        "capture\n   `scripts/env-info.sh`",
+        "preserve\n   `target/criterion/benchmark-thresholds-full.csv`",
+        "update\n   `BENCHMARK_RESULTS.md` with exact command lines, feature flags, and\n   noisy-benchmark notes",
+    ] {
+        assert!(
+            release_md.contains(required),
+            "release checklist should require full benchmark evidence: {required}"
+        );
+    }
+
+    for required in [
+        "Before a release candidate, run `scripts/check-bench-full.sh`",
+        "capture\n  `scripts/env-info.sh`",
+        "preserve\n  `target/criterion/benchmark-thresholds-full.csv`",
+        "update\n  `BENCHMARK_RESULTS.md` with the exact command lines, feature flags, and noisy\n  benchmark notes",
+    ] {
+        assert!(
+            performance_md.contains(required),
+            "performance policy should define release candidate benchmark evidence: {required}"
+        );
+    }
+
+    assert!(
+        check_bench_full.contains("--csv-out target/criterion/benchmark-thresholds-full.csv"),
+        "full benchmark script should emit the threshold CSV named by the release checklist"
+    );
+}
+
+#[test]
 fn architecture_map_covers_public_layers_and_policy_gates() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let architecture =

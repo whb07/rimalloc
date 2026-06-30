@@ -953,12 +953,20 @@ Validated remaining issues:
 
 ## P1 - Performance signoff
 
-- [ ] Promote full benchmark evidence for release candidates.
-  - [ ] Run `scripts/check-bench-full.sh` before release candidates.
-  - [ ] Capture `scripts/env-info.sh` output.
-  - [ ] Store the threshold CSV from the full run.
-  - [ ] Update `BENCHMARK_RESULTS.md` with command lines, feature flags, and
+- [x] Promote full benchmark evidence for release candidates.
+  - [x] Run `scripts/check-bench-full.sh` before release candidates.
+  - [x] Capture `scripts/env-info.sh` output.
+  - [x] Store the threshold CSV from the full run.
+  - [x] Update `BENCHMARK_RESULTS.md` with command lines, feature flags, and
         noisy-benchmark notes.
+  - Evidence: `docs/release.md` and `docs/performance.md` now require every
+    release candidate to run `scripts/check-bench-full.sh`, capture
+    `scripts/env-info.sh`, preserve
+    `target/criterion/benchmark-thresholds-full.csv`, and update
+    `BENCHMARK_RESULTS.md` with exact command lines, feature flags, and noisy
+    benchmark notes for the release commit. `tests/release_fast_path_audit.rs`
+    checks the release checklist, performance policy, and full benchmark script
+    stay aligned.
   - Verify: release checklist points to the exact benchmark evidence.
 
 - [ ] Measure documented artifact modes separately.

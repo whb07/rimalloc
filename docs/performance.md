@@ -9,6 +9,11 @@ performance relative to C mimalloc 3.3.2.
   may affect allocator hot paths.
 - Use `scripts/check-bench-full.sh` before treating allocator-wide results as
   authoritative.
+- Before a release candidate, run `scripts/check-bench-full.sh`, capture
+  `scripts/env-info.sh`, preserve
+  `target/criterion/benchmark-thresholds-full.csv`, and update
+  `BENCHMARK_RESULTS.md` with the exact command lines, feature flags, and noisy
+  benchmark notes for the release commit.
 - Capture `scripts/env-info.sh` output with any committed full benchmark report.
 - Record benchmark evidence in `BENCHMARK_RESULTS.md`, including commit hash,
   allocator versions, feature flags, command lines, and noisy-benchmark notes.

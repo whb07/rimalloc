@@ -195,6 +195,22 @@ exposure is intentionally narrower than the full file:
 | `mi_option_desc_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated option table layout. |
 | `mi_subproc_id_t` | Re-exported by `src/ffi/abi.rs` | `repr(C)` size is public, but the field is private so the identifier is opaque to downstream Rust. |
 
+### Macro Production Contract
+
+Exported macros are not Tier S safe Rust API. The production decision is:
+
+- Keep `tier-r-typed-allocation` macros as Tier R C-header compatibility
+  macros for this release. They remain unsafe raw-facade conveniences, not
+  recommended safe Rust allocation APIs.
+- Keep `tier-r-header-override` macros as Tier R C/C++ header compatibility
+  macros for this release. They stay available in the default build until the
+  separate macro feature-gating work chooses a narrower feature surface.
+- Treat `internal-compatibility` macros as temporary compatibility exports.
+  Before a stable release, each macro in that bucket must be made
+  crate-private, removed, or explicitly retained with downstream expansion,
+  translated parity, or hot-path evidence. New internal macros must not use
+  `#[macro_export]` unless they are first classified here.
+
 ### Typed Allocation Macros
 
 Macro tier: `tier-r-typed-allocation`

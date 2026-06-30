@@ -302,6 +302,13 @@ not safe Rust wrappers.
   safe macro must expand only to safe APIs such as `Allocation` or `Heap`
   wrappers and must be documented separately from the raw macro boundary.
 
+Macro production policy is intentionally conservative. Typed allocation macros
+and header override macros are retained as Tier R compatibility surface for
+this release. Internal compatibility macros are not a stable ABI or recommended
+integration surface; they are scheduled for privatization/removal unless a
+specific macro needs to remain exported for downstream expansion, translated C
+parity, or measured hot-path codegen.
+
 `scripts/check-api-inventory.py` discovers every `#[macro_export] macro_rules!`
 item and fails if it is not classified in `docs/api-inventory.md`.
 

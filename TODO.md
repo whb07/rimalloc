@@ -521,13 +521,20 @@ Validated remaining issues:
 
 ## P0 - Reduce public macro surface
 
-- [ ] Decide which exported macros are part of the production contract.
-  - [ ] Review the `tier-r-typed-allocation` macro list.
-  - [ ] Review the `tier-r-header-override` macro list.
-  - [ ] Review every `internal-compatibility` macro.
-  - [ ] Choose keep, feature-gate, make crate-private, or remove for each
+- [x] Decide which exported macros are part of the production contract.
+  - [x] Review the `tier-r-typed-allocation` macro list.
+  - [x] Review the `tier-r-header-override` macro list.
+  - [x] Review every `internal-compatibility` macro.
+  - [x] Choose keep, feature-gate, make crate-private, or remove for each
         macro bucket before a stable release.
-  - [ ] Document the decision in `docs/api-inventory.md` and `docs/abi.md`.
+  - [x] Document the decision in `docs/api-inventory.md` and `docs/abi.md`.
+  - Evidence: `docs/api-inventory.md` now records the macro production
+    contract: keep typed allocation macros as Tier R C-header compatibility,
+    keep header override macros as Tier R C/C++ header compatibility until the
+    separate feature-gating decision, and treat `internal-compatibility` macros
+    as temporary exports to privatize, remove, or explicitly retain with
+    downstream expansion, translated parity, or hot-path evidence before a
+    stable release. `docs/abi.md` mirrors that ABI policy.
   - Verify: `scripts/check-api-inventory.py`.
 
 - [ ] Remove or privatize internal compatibility macros where possible.

@@ -203,9 +203,9 @@ paths or allocator-wide behavior can move.
 
 Additional policy documents live under `docs/`, including API inventory, ABI,
 safe API policy, assembly and platform intrinsics, compatibility, features,
-memory ordering, performance, release, testing and hardening, strict types,
-unsafe audit, reproducibility, governance, upstream synchronization, and
-dependency policy.
+memory ordering, performance, release, Rust safety model, testing and
+hardening, strict types, unsafe audit, reproducibility, governance, upstream
+synchronization, and dependency policy.
 Concrete local differences from upstream mimalloc are tracked in
 `UPSTREAM_DIFF.md`.
 
@@ -222,7 +222,8 @@ cargo run --example allocation --features std
 
 ## Safety Model
 
-`raw` mirrors a C allocator API. Calling it is unsafe unless the caller respects
-ownership, allocation origin, alignment, object lifetime, nullability, and
-threading requirements. Rust safe wrappers are added only where those invariants
-can be upheld without relying on caller discipline.
+See `docs/rust-safety-model.md` for the Rust-facing safety model. In short,
+safe wrappers are added only where ownership, initialization, heap lifetime,
+nullability, threading, callback, and raw pointer invariants can be upheld
+without caller discipline. `raw` mirrors a C allocator API and remains unsafe
+and unstable as a Rust path surface.

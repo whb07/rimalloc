@@ -1030,14 +1030,19 @@ Validated remaining issues:
     labels it unsafe and not stabilized as a Rust SemVer path API.
   - Verify: README examples match current commands and features.
 
-- [ ] Add a dedicated Rust safety model page.
-  - [ ] Explain ownership and lifetime encoding in safe APIs.
-  - [ ] Explain why uninitialized memory is not exposed as `&[u8]`.
-  - [ ] Explain heap-tied allocation lifetimes.
-  - [ ] Explain why process-global callback guards are Tier U unsafe APIs.
-  - [ ] Explain raw pointer isolation at FFI and hot-path boundaries.
-  - [ ] Explain audit tags and no-allocation critical-path evidence.
-  - [ ] Explain strict internal types and zero-cost expectations.
+- [x] Add a dedicated Rust safety model page.
+  - [x] Explain ownership and lifetime encoding in safe APIs.
+  - [x] Explain why uninitialized memory is not exposed as `&[u8]`.
+  - [x] Explain heap-tied allocation lifetimes.
+  - [x] Explain why process-global callback guards are Tier U unsafe APIs.
+  - [x] Explain raw pointer isolation at FFI and hot-path boundaries.
+  - [x] Explain audit tags and no-allocation critical-path evidence.
+  - [x] Explain strict internal types and zero-cost expectations.
+  - Evidence: `docs/rust-safety-model.md` now documents the Rust-facing safety
+    model for safe ownership, initialization, heap lifetimes, Tier U callback
+    guards, raw pointer boundaries, audit tags, no-allocation evidence, and
+    strict internal zero-cost expectations. `README.md` links to the page from
+    the Safety Model section and the docs index paragraph.
   - Verify: README links to the page and `scripts/check-docs.sh` passes.
 
 - [ ] Add an FFI linking guide.

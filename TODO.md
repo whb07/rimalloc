@@ -627,15 +627,20 @@ Validated remaining issues:
     and reason; stale or malformed entries fail the check.
   - Verify: `scripts/check-unsafe-audit.py`.
 
-- [ ] Map every audit tag to tests or manual evidence.
-  - [ ] Add a table to `UNSAFE_AUDIT.md` or a machine-readable audit evidence
+- [x] Map every audit tag to tests or manual evidence.
+  - [x] Add a table to `UNSAFE_AUDIT.md` or a machine-readable audit evidence
         file.
-  - [ ] For each `SAFETY[AUDIT:*]` tag, list direct tests, parity scripts,
+  - [x] For each `SAFETY[AUDIT:*]` tag, list direct tests, parity scripts,
         Miri model tests, sanitizer evidence, benchmark/assembly evidence, or
         manual proof.
-  - [ ] Add a script that fails when a source audit tag has no evidence entry.
-  - [ ] Add a script that fails when an evidence entry references a missing
+  - [x] Add a script that fails when a source audit tag has no evidence entry.
+  - [x] Add a script that fails when an evidence entry references a missing
         test or script.
+  - Evidence: `docs/unsafe-audit-evidence.tsv` maps every source
+    `SAFETY[AUDIT:*]` operation ID to existing tests, scripts, or structural
+    audit checks. `scripts/check-unsafe-audit-evidence.py` rejects missing
+    source IDs, unknown IDs, malformed evidence rows, and evidence paths that do
+    not exist; CI, release docs, and `scripts/check-local.sh` now run it.
   - Verify: new audit-evidence check plus `scripts/check-unsafe-audit.py`.
 
 - [ ] Add an advisory unsafe inventory report.

@@ -34,6 +34,7 @@ jobs:
       - name: Audit drift checks
         run: |
           scripts/check-unsafe-audit.py
+          scripts/check-unsafe-audit-evidence.py
           scripts/check-atomic-ordering-audit.py
           scripts/check-pointer-provenance-audit.py
           scripts/check-no-allocation-audit.py

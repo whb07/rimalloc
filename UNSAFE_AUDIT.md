@@ -200,6 +200,13 @@ Operation IDs:
   entry catches Rust panics before returning through the C ABI where `std` or
   tests permit panic containment.
 
+Evidence:
+
+- `docs/unsafe-audit-evidence.tsv` maps each source `SAFETY[AUDIT:*]` operation
+  ID to direct tests, validation scripts, structural audit checks, or manual
+  proof. `scripts/check-unsafe-audit-evidence.py` rejects source IDs without
+  evidence and evidence rows that reference missing files.
+
 Migration:
 
 - Operation-level enforcement now scans every Rust source file under `src/`.
@@ -219,6 +226,8 @@ Validation:
   is listed here, checks operation IDs, enforces the dated migration allowlist,
   and verifies that the audit references the related atomic-ordering and
   tracked-mode follow-up audits.
+- `scripts/check-unsafe-audit-evidence.py` verifies operation-level audit
+  evidence for every source `SAFETY[AUDIT:*]` tag.
 - `cargo test` exercises the public ABI, heap/theap/subprocess lifecycle,
   cross-thread free, abandoned-page, statistics, and callback reentrancy paths.
 - `scripts/check-behavioral-parity.py` compares the same supported-matrix

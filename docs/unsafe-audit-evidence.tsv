@@ -1,0 +1,21 @@
+audit_id	type	path	detail
+c-header-macro-reentry	script	scripts/check-ffi-boundary.py	Checks C header macro boundary files retain the required audit tags.
+c-header-macro-reentry	test	tests/header_macro_expansion.rs	Exercises downstream C header macro expansion and feature gating.
+global-alloc	test	tests/mimalloc_global_alloc.rs	Exercises GlobalAlloc alignment, reallocation preservation, and facade traits.
+global-alloc	test	tests/mimalloc_global_allocator_std.rs	Exercises MiMalloc as the process global allocator under std.
+owned-allocation	test	src/safe/mod.rs	Exercises safe owned Allocation construction, resize, initialization, and drop paths.
+owned-allocation	test	tests/allocation_boundary_cases.rs	Covers allocation boundary cases that the owned wrapper forwards to.
+panic-boundary	test	tests/ffi_panic_audit.rs	Checks production panic-abort policy and callback panic containment documentation.
+panic-boundary	test	tests/release_fast_path_audit.rs	Checks callback and C ABI paths retain no-unwind/no-allocation boundary structure.
+raw-auto-trait	test	src/types/constants.rs	Unit tests assert the intentionally retained sentinel Sync impls.
+raw-auto-trait	test	tests/release_fast_path_audit.rs	Structural audit keeps raw layout and callback types bounded to documented surfaces.
+raw-macro-boundary	script	scripts/check-ffi-boundary.py	Checks raw macro boundary files retain their required audit tags.
+raw-macro-boundary	test	tests/header_macro_expansion.rs	Exercises macro expansion through public raw paths and unsafe call sites.
+safe-heap	test	src/safe/mod.rs	Exercises safe heap creation, main heap handling, heap-tied allocation, resize, and stats paths.
+safe-heap	test	tests/lifecycle_stats_exports.rs	Exercises raw heap lifecycle and heap statistics behavior used by safe heap wrappers.
+safe-process-info	test	src/safe/mod.rs	Exercises ProcessInfo capture through typed safe output values.
+safe-process-info	test	tests/release_fast_path_audit.rs	Checks safe facade exposes process/stat APIs without widening unsafe raw surfaces.
+safe-stats	test	src/safe/mod.rs	Exercises StatsSnapshot capture, heap stats, JSON output, and buffer failure behavior.
+safe-stats	test	tests/stats_exports.rs	Exercises raw stats bin export bounds used by typed stats wrappers.
+unsafe-callback	test	src/safe/mod.rs	Exercises unsafe callback guards, restoration, and panic containment.
+unsafe-callback	test	tests/release_fast_path_audit.rs	Checks callback guard docs, namespace, no-unwind, and registration boundaries.

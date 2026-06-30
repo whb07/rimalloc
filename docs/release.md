@@ -249,7 +249,13 @@ Before publishing or tagging a release:
    update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,
    artifact modes, Rust/C ratios, and noisy-benchmark notes for the release
    commit.
-23. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
+23. For new strict internal wrappers on allocator hot paths, attach
+   `scripts/capture-release-assembly.sh` output covering free-list pop, local
+   free, remote free, small page lookup, and any changed hot path; fail signoff
+   unless the evidence shows no added branch, call, memory traffic, stack spill,
+   formatting, allocation, panic path, bounds-check slow path, or wrapper
+   constructor traffic without measured justification.
+24. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

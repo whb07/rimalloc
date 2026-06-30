@@ -94,6 +94,11 @@ Treat any of these as requiring investigation before merge or release:
   than 1%.
 - Any low-level allocator path shows a new allocation, syscall, lock, panic,
   or formatting dependency in a documented no-allocation critical path.
+- A new strict internal wrapper changes release assembly for free-list pop,
+  local free, remote free, small page lookup, or another tracked hot path by
+  adding a branch, call, memory operation, lock prefix, stack spill, formatting,
+  allocation, panic path, bounds-check slow path, or wrapper-constructor traffic
+  without a measured justification.
 
 Small single-run deltas are not authoritative when the scenario is explicitly
 classified noisy. Re-run noisy cases with more samples or a longer measurement

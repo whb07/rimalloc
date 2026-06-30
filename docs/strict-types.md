@@ -187,6 +187,16 @@ boundary.
   tests: strict-type modules and allocation/free hot-path helpers reject `std`,
   `alloc`, formatting allocation, synchronization primitives, and Rust
   heap-allocating library types.
+- New strict internal wrappers on allocator hot paths require release assembly
+  evidence before signoff. Run `scripts/capture-release-assembly.sh` and attach
+  the generated `target/strict-type-assembly/` files or preserved artifact
+  links. The review must cover free-list pop, local free, remote free, small
+  page lookup, and any changed hot path. Reject the wrapper unless the
+  before/after evidence shows no added hot-path branch, call, load, store,
+  atomic memory operation, lock prefix, stack spill, formatting, allocation,
+  panic path, bounds-check slow path, or wrapper-constructor traffic; otherwise
+  record a measured justification and redesign if the wrapper cost is not
+  intentional.
 - Final strict-type completion is validated by the TODO gate: formatting,
   default library tests, the release fast-path audit, `std` feature tests,
   layout, raw facade, FFI, API inventory, safe-boundary, strict-type, lint,

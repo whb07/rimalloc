@@ -684,6 +684,84 @@ fn release_candidates_require_full_benchmark_evidence() {
 }
 
 #[test]
+fn strict_wrapper_hot_path_changes_require_assembly_evidence() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let strict_types_md =
+        fs::read_to_string(root.join("docs/strict-types.md")).expect("read docs/strict-types.md");
+    let performance_md =
+        fs::read_to_string(root.join("docs/performance.md")).expect("read docs/performance.md");
+    let release_md =
+        fs::read_to_string(root.join("docs/release.md")).expect("read docs/release.md");
+    let benchmark_results_md =
+        fs::read_to_string(root.join("BENCHMARK_RESULTS.md")).expect("read BENCHMARK_RESULTS.md");
+    let capture_release_assembly =
+        fs::read_to_string(root.join("scripts/capture-release-assembly.sh"))
+            .expect("read capture-release-assembly.sh");
+
+    for required in [
+        "New strict internal wrappers on allocator hot paths require release assembly",
+        "Run `scripts/capture-release-assembly.sh`",
+        "free-list pop, local free, remote free, small\n  page lookup, and any changed hot path",
+        "no added hot-path branch, call, load, store,\n  atomic memory operation, lock prefix, stack spill, formatting, allocation,\n  panic path, bounds-check slow path, or wrapper-constructor traffic",
+    ] {
+        assert!(
+            strict_types_md.contains(required),
+            "strict-type policy should gate new hot-path wrappers with assembly evidence: {required}"
+        );
+    }
+
+    for required in [
+        "A new strict internal wrapper changes release assembly for free-list pop",
+        "local free, remote free, small page lookup",
+        "adding a branch, call, memory operation, lock prefix, stack spill, formatting",
+        "panic path, bounds-check slow path, or wrapper-constructor traffic",
+    ] {
+        assert!(
+            performance_md.contains(required),
+            "performance policy should treat unproven strict-wrapper assembly changes as regressions: {required}"
+        );
+    }
+
+    for required in [
+        "For new strict internal wrappers on allocator hot paths",
+        "`scripts/capture-release-assembly.sh` output covering free-list pop, local\n   free, remote free, small page lookup, and any changed hot path",
+        "fail signoff\n   unless the evidence shows no added branch, call, memory traffic, stack spill",
+        "panic path, bounds-check slow path, or wrapper\n   constructor traffic without measured justification",
+    ] {
+        assert!(
+            release_md.contains(required),
+            "release checklist should fail unproven strict-wrapper hot-path changes: {required}"
+        );
+    }
+
+    for required in [
+        "## Strict-Type Assembly Comparison Checklist",
+        "Use `scripts/capture-release-assembly.sh` before and after each strict-type\nhot-path migration.",
+        "`mi_malloc`",
+        "`mi_malloc_small`",
+        "`mi_free`",
+        "`_mi_theap_malloc_zero_ex`",
+    ] {
+        assert!(
+            benchmark_results_md.contains(required),
+            "benchmark report should preserve strict-wrapper assembly evidence guidance: {required}"
+        );
+    }
+
+    for symbol in [
+        "capture_symbol mi_malloc",
+        "capture_symbol mi_malloc_small",
+        "capture_symbol mi_free",
+        "capture_symbol _mi_theap_malloc_zero_ex",
+    ] {
+        assert!(
+            capture_release_assembly.contains(symbol),
+            "assembly capture script should include strict-wrapper hot-path symbol: {symbol}"
+        );
+    }
+}
+
+#[test]
 fn architecture_map_covers_public_layers_and_policy_gates() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let architecture =

@@ -983,14 +983,21 @@ Validated remaining issues:
     the native default-mode scenario benchmarks.
   - Verify: benchmark report identifies feature set and artifact mode.
 
-- [ ] Require evidence for new strict internal wrappers.
-  - [ ] Update `docs/strict-types.md` or `docs/performance.md` to state what
+- [x] Require evidence for new strict internal wrappers.
+  - [x] Update `docs/strict-types.md` or `docs/performance.md` to state what
         assembly or benchmark evidence is required for new hot-path witnesses.
-  - [ ] Capture release assembly for free-list pop, local free, remote free,
+  - [x] Capture release assembly for free-list pop, local free, remote free,
         small page lookup, and any changed hot path.
-  - [ ] Fail release signoff if a new wrapper adds branches, calls, memory
+  - [x] Fail release signoff if a new wrapper adds branches, calls, memory
         traffic, stack spills, formatting, allocation, or panic paths in a
         tracked hot path without justification.
+  - Evidence: `docs/strict-types.md`, `docs/performance.md`, and
+    `docs/release.md` now require `scripts/capture-release-assembly.sh` output
+    for new hot-path strict wrappers, with review coverage for free-list pop,
+    local free, remote free, small page lookup, and any changed hot path. The
+    release checklist rejects added branches, calls, memory traffic, stack
+    spills, formatting, allocation, panic paths, bounds-check slow paths, or
+    wrapper-constructor traffic without measured justification.
   - Verify: `scripts/capture-release-assembly.sh` output or benchmark evidence
     is attached to the change.
 

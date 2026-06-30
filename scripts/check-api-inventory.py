@@ -26,7 +26,6 @@ EXPECTED_ROOT_ITEMS = {
     "MainHeap",
     "OptionError",
     "OptionKey",
-    "Options",
     "ProcessInfo",
     "ResizeError",
     "ResizeErrorKind",

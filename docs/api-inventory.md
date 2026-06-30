@@ -19,8 +19,7 @@ implementation internals.
 - `InitializedAllocation`: Tier S initialized owned byte allocation wrapper.
 - `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, `InitializedHeapAllocation`:
   Tier S heap ownership and heap-tied allocation wrappers.
-- `GlobalOptions`, `Options`, `OptionKey`: Tier S supported allocator option
-  controls.
+- `GlobalOptions`, `OptionKey`: Tier S supported allocator option controls.
 - `StatsSnapshot`, `StatCount`, `StatTotal`: Tier S non-printing statistics
   snapshot wrappers.
 - `ProcessInfo`: Tier S typed process allocator information.
@@ -87,8 +86,6 @@ Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
   intentionally not `Send` or `Sync`.
 - `GlobalOptions`: namespace type for supported process-global safe allocator
   options.
-- `Options`: compatibility alias for `GlobalOptions`; new code should prefer
-  `GlobalOptions`.
 - `OptionKey`: non-exhaustive supported-option key set; invalid raw keys are
   rejected.
 - `StatsSnapshot`: non-printing copy of allocator statistics.

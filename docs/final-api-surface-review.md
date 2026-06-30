@@ -41,7 +41,6 @@ Current crate root public items are:
 - `GlobalOptions`
 - `OptionError`
 - `OptionKey`
-- `Options` compatibility alias for `GlobalOptions`
 - `ProcessInfo`
 - `ResizeError`
 - `ResizeErrorKind`

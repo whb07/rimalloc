@@ -86,9 +86,8 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
   lifetimes without exposing raw deletion rights. They are intentionally not
   `Send` or `Sync` because safe heap operations use heap/thread-heap metadata
   that is not modeled as a thread-safe Rust handle.
-- `GlobalOptions`, `Options`, `StatsSnapshot`, and `ProcessInfo` wrap
-  supported allocator controls and observations without raw out-pointers in
-  safe caller code.
+- `GlobalOptions`, `StatsSnapshot`, and `ProcessInfo` wrap supported allocator
+  controls and observations without raw out-pointers in safe caller code.
 - `unsafe_callbacks::ErrorCallbackGuard` and
   `unsafe_callbacks::DeferredFreeCallbackGuard` prevent dangling callback
   contexts with Rust borrows, restore previous callback registrations on drop,

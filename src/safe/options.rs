@@ -142,9 +142,3 @@ impl GlobalOptions {
         Self::set(key, key.default_value())
     }
 }
-
-/// Compatibility alias for the process-global options namespace.
-///
-/// New code should prefer [`GlobalOptions`] so the process-global side effects
-/// are visible at the call site.
-pub type Options = GlobalOptions;

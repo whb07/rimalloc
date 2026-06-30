@@ -55,7 +55,6 @@ Validated remaining issues:
   `mi_*` symbols and a prefix `_mi_` internal static archive surface.
 - Public macro exports are still large and include internal compatibility
   macros, even though they are now inventoried.
-- `Options` remains an undecorated compatibility alias for `GlobalOptions`.
 - The C API example still says `cargo build --release` builds the linkable C
   library, which conflicts with the current `rlib` default.
 - The crate package excludes repo scripts and vendored C headers, so FFI users
@@ -86,17 +85,21 @@ Validated remaining issues:
     release signoff requirement for new crate-root public items.
   - Verify: `scripts/check-api-inventory.py`.
 
-- [ ] Make the pre-1.0 decision for `Options`.
-  - [ ] Decide whether `Options` is removed before the first stable release or
+- [x] Make the pre-1.0 decision for `Options`.
+  - [x] Decide whether `Options` is removed before the first stable release or
         kept as a deprecated compatibility alias.
-  - [ ] If removed, delete the alias, remove it from the crate-root re-export,
+  - [x] If removed, delete the alias, remove it from the crate-root re-export,
         update `docs/api-inventory.md`, update `docs/safe-api.md`, and add a
         changelog migration note to use `GlobalOptions`.
-  - [ ] If kept, add `#[deprecated]` to the alias with a replacement note,
+  - [x] If kept, add `#[deprecated]` to the alias with a replacement note,
         update examples and docs to use only `GlobalOptions`, and keep tests
         compiling with `#[allow(deprecated)]` only where compatibility is being
         tested.
-  - [ ] Update API inventory expectations in `scripts/check-api-inventory.py`.
+        Not applicable: the pre-1.0 decision is to remove the alias.
+  - [x] Update API inventory expectations in `scripts/check-api-inventory.py`.
+  - Evidence: `Options` was removed from the safe facade, crate-root re-export,
+    API inventory, and inventory script; `CHANGELOG.md` directs callers to
+    `GlobalOptions`.
   - Verify: `cargo test --doc --features std` and
     `scripts/check-api-inventory.py`.
 
@@ -810,7 +813,7 @@ Validated remaining issues:
 ## Definition of done for a production-style release
 
 - [ ] Tier S/Tier U Rust API contract is frozen and diffed.
-- [ ] `Options` alias decision is complete.
+- [x] `Options` alias decision is complete.
 - [ ] `raw` release policy is explicit and tested.
 - [ ] Dynamic C ABI has no unintentional extra `mi_*` exports.
 - [ ] Staticlib is either clean enough for production or explicitly

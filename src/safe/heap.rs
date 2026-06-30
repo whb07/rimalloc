@@ -116,6 +116,14 @@ pub struct Heap {
 
 impl Heap {
     /// Creates a new owned mimalloc heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HeapError::Create`] if mimalloc cannot create the heap.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn new() -> Result<Self, HeapError> {
         // SAFETY[AUDIT:safe-heap]: heap creation initializes allocator runtime
@@ -139,18 +147,45 @@ impl Heap {
     }
 
     /// Allocates an uninitialized byte block from this heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot satisfy a non-zero allocation
+    /// request for `layout`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate(&self, layout: Layout) -> Result<HeapAllocation<'_>, AllocError> {
         self.as_ref().allocate(layout)
     }
 
     /// Allocates an uninitialized byte block with alignment 1 from this heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `len` cannot form a Rust layout, or
+    /// [`TryAllocError::Alloc`] if mimalloc cannot satisfy the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate_bytes(&self, len: usize) -> Result<HeapAllocation<'_>, TryAllocError> {
         self.as_ref().allocate_bytes(len)
     }
 
     /// Allocates a zero-initialized byte block from this heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot satisfy a non-zero allocation
+    /// request for `layout`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate_zeroed(
         &self,
@@ -160,6 +195,15 @@ impl Heap {
     }
 
     /// Allocates a zero-initialized byte block with alignment 1 from this heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `len` cannot form a Rust layout, or
+    /// [`TryAllocError::Alloc`] if mimalloc cannot satisfy the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate_zeroed_bytes(
         &self,
@@ -169,6 +213,15 @@ impl Heap {
     }
 
     /// Captures a statistics snapshot for this heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StatsError::HeapUnavailable`] if mimalloc cannot capture heap
+    /// statistics for this heap.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn stats(&self) -> Result<StatsSnapshot, StatsError> {
         self.as_ref().stats()
@@ -202,12 +255,30 @@ pub struct HeapRef<'heap> {
 
 impl<'heap> HeapRef<'heap> {
     /// Allocates an uninitialized byte block from this borrowed heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot satisfy a non-zero allocation
+    /// request for `layout`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate(self, layout: Layout) -> Result<HeapAllocation<'heap>, AllocError> {
         HeapAllocation::allocate_in(self.ptr, layout, false)
     }
 
     /// Allocates an uninitialized byte block with alignment 1 from this borrowed heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `len` cannot form a Rust layout, or
+    /// [`TryAllocError::Alloc`] if mimalloc cannot satisfy the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate_bytes(self, len: usize) -> Result<HeapAllocation<'heap>, TryAllocError> {
         let layout = Layout::from_size_align(len, 1).map_err(|_| {
@@ -220,6 +291,15 @@ impl<'heap> HeapRef<'heap> {
     }
 
     /// Allocates a zero-initialized byte block from this borrowed heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot satisfy a non-zero allocation
+    /// request for `layout`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate_zeroed(
         self,
@@ -229,6 +309,15 @@ impl<'heap> HeapRef<'heap> {
     }
 
     /// Allocates a zero-initialized byte block with alignment 1 from this borrowed heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `len` cannot form a Rust layout, or
+    /// [`TryAllocError::Alloc`] if mimalloc cannot satisfy the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate_zeroed_bytes(
         self,
@@ -244,6 +333,15 @@ impl<'heap> HeapRef<'heap> {
     }
 
     /// Captures a statistics snapshot for this heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StatsError::HeapUnavailable`] if mimalloc cannot capture heap
+    /// statistics for this heap.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn stats(self) -> Result<StatsSnapshot, StatsError> {
         StatsSnapshot::for_heap(self)
@@ -294,6 +392,15 @@ impl fmt::Debug for MainHeap {
 
 impl MainHeap {
     /// Returns a borrowed handle to the process main heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HeapError::MainUnavailable`] if mimalloc does not provide the
+    /// process main heap.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn get() -> Result<Self, HeapError> {
         // SAFETY[AUDIT:safe-heap]: returns the process main heap or null if
@@ -325,6 +432,15 @@ impl MainHeap {
     ///
     /// The returned allocation is tied to the process-global main heap, not to
     /// this temporary `MainHeap` handle.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot satisfy a non-zero allocation
+    /// request for `layout`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate(&self, layout: Layout) -> Result<HeapAllocation<'static>, AllocError> {
         self.as_ref().allocate(layout)
@@ -334,6 +450,15 @@ impl MainHeap {
     ///
     /// The returned allocation is tied to the process-global main heap, not to
     /// this temporary `MainHeap` handle.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `len` cannot form a Rust layout, or
+    /// [`TryAllocError::Alloc`] if mimalloc cannot satisfy the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate_bytes(&self, len: usize) -> Result<HeapAllocation<'static>, TryAllocError> {
         self.as_ref().allocate_bytes(len)
@@ -343,6 +468,15 @@ impl MainHeap {
     ///
     /// The returned allocation is tied to the process-global main heap, not to
     /// this temporary `MainHeap` handle.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot satisfy a non-zero allocation
+    /// request for `layout`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate_zeroed(
         &self,
@@ -355,6 +489,15 @@ impl MainHeap {
     ///
     /// The returned allocation is tied to the process-global main heap, not to
     /// this temporary `MainHeap` handle.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `len` cannot form a Rust layout, or
+    /// [`TryAllocError::Alloc`] if mimalloc cannot satisfy the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn allocate_zeroed_bytes(
         &self,
@@ -364,6 +507,15 @@ impl MainHeap {
     }
 
     /// Captures a statistics snapshot for the main heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StatsError::HeapUnavailable`] if mimalloc cannot capture heap
+    /// statistics for the process main heap.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn stats(&self) -> Result<StatsSnapshot, StatsError> {
         self.as_ref().stats()
@@ -483,6 +635,15 @@ impl<'heap> HeapAllocation<'heap> {
     }
 
     /// Resizes this heap allocation to `new_layout`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResizeError`] if mimalloc cannot satisfy a non-zero resize
+    /// request. The error preserves the original allocation.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
         self.raw
@@ -498,6 +659,17 @@ impl<'heap> HeapAllocation<'heap> {
     }
 
     /// Builds a layout from `size` and `align`, then resizes this allocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResizeError`] with [`ResizeErrorKind::Layout`] if `size` and
+    /// `align` do not form a valid [`Layout`], or [`ResizeErrorKind::Alloc`] if
+    /// mimalloc cannot satisfy the resize request. The error preserves the
+    /// original allocation.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn resize_with_size_align(
         self,
@@ -824,6 +996,15 @@ impl<'heap> InitializedHeapAllocation<'heap> {
     }
 
     /// Resizes this initialized heap allocation, zeroing any newly exposed tail.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResizeError`] if mimalloc cannot satisfy a non-zero resize
+    /// request. The error preserves the original allocation.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
         match self.raw.resize_initialized(new_layout) {
@@ -839,6 +1020,17 @@ impl<'heap> InitializedHeapAllocation<'heap> {
     }
 
     /// Builds a layout from `size` and `align`, then resizes this allocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResizeError`] with [`ResizeErrorKind::Layout`] if `size` and
+    /// `align` do not form a valid [`Layout`], or [`ResizeErrorKind::Alloc`] if
+    /// mimalloc cannot satisfy the resize request. The error preserves the
+    /// original allocation.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn resize_with_size_align(
         self,

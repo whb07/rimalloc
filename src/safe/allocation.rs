@@ -105,24 +105,60 @@ impl fmt::Debug for Allocation {
 
 impl Allocation {
     /// Allocates an uninitialized byte block for `layout`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot satisfy a non-zero allocation
+    /// request for `layout`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn new(layout: Layout) -> Result<Self, AllocError> {
         RawAllocation::allocate(layout, false).map(|raw| Self { raw })
     }
 
     /// Allocates a zero-initialized byte block for `layout`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot satisfy a non-zero allocation
+    /// request for `layout`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn zeroed(layout: Layout) -> Result<InitializedAllocation, AllocError> {
         InitializedAllocation::zeroed(layout)
     }
 
     /// Allocates an uninitialized byte block with alignment 1.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `len` cannot form a Rust layout, or
+    /// [`TryAllocError::Alloc`] if mimalloc cannot satisfy the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn new_bytes(len: usize) -> Result<Self, TryAllocError> {
         Self::with_size_align(len, 1)
     }
 
     /// Allocates a zero-initialized byte block with alignment 1.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `len` cannot form a Rust layout, or
+    /// [`TryAllocError::Alloc`] if mimalloc cannot satisfy the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn zeroed_bytes(len: usize) -> Result<InitializedAllocation, TryAllocError> {
         Self::zeroed_with_size_align(len, 1)
@@ -130,6 +166,16 @@ impl Allocation {
 
     /// Builds a layout from `size` and `align`, then allocates an uninitialized
     /// byte block.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `size` and `align` do not form a
+    /// valid [`Layout`], or [`TryAllocError::Alloc`] if mimalloc cannot satisfy
+    /// the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn with_size_align(size: usize, align: usize) -> Result<Self, TryAllocError> {
         let layout = Layout::from_size_align(size, align)
@@ -139,6 +185,16 @@ impl Allocation {
 
     /// Builds a layout from `size` and `align`, then allocates a zeroed byte
     /// block.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `size` and `align` do not form a
+    /// valid [`Layout`], or [`TryAllocError::Alloc`] if mimalloc cannot satisfy
+    /// the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn zeroed_with_size_align(
         size: usize,
@@ -245,6 +301,15 @@ impl Allocation {
     ///
     /// On success, bytes up to `min(old_len, new_len)` are preserved. On
     /// failure, the original allocation is returned inside [`ResizeError`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResizeError`] if mimalloc cannot satisfy a non-zero resize
+    /// request. The error preserves the original allocation.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
         self.raw
@@ -260,6 +325,17 @@ impl Allocation {
     }
 
     /// Builds a layout from `size` and `align`, then resizes this allocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResizeError`] with [`ResizeErrorKind::Layout`] if `size` and
+    /// `align` do not form a valid [`Layout`], or [`ResizeErrorKind::Alloc`] if
+    /// mimalloc cannot satisfy the resize request. The error preserves the
+    /// original allocation.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn resize_with_size_align(
         self,
@@ -494,18 +570,46 @@ unsafe impl Sync for InitializedAllocation {}
 
 impl InitializedAllocation {
     /// Allocates a zero-initialized byte block for `layout`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot satisfy a non-zero allocation
+    /// request for `layout`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn zeroed(layout: Layout) -> Result<Self, AllocError> {
         RawAllocation::allocate(layout, true).map(|raw| Self { raw })
     }
 
     /// Allocates a zero-initialized byte block with alignment 1.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `len` cannot form a Rust layout, or
+    /// [`TryAllocError::Alloc`] if mimalloc cannot satisfy the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn zeroed_bytes(len: usize) -> Result<Self, TryAllocError> {
         Self::zeroed_with_size_align(len, 1)
     }
 
     /// Builds a layout from `size` and `align`, then allocates a zeroed block.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TryAllocError::Layout`] if `size` and `align` do not form a
+    /// valid [`Layout`], or [`TryAllocError::Alloc`] if mimalloc cannot satisfy
+    /// the request.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn zeroed_with_size_align(size: usize, align: usize) -> Result<Self, TryAllocError> {
         let layout = Layout::from_size_align(size, align)
@@ -581,6 +685,15 @@ impl InitializedAllocation {
 
     /// Resizes this initialized allocation, zeroing any newly exposed tail
     /// bytes so the result remains initialized.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResizeError`] if mimalloc cannot satisfy a non-zero resize
+    /// request. The error preserves the original allocation.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn resize(self, new_layout: Layout) -> Result<Self, ResizeError<Self>> {
         match self.raw.resize_initialized(new_layout) {
@@ -596,6 +709,17 @@ impl InitializedAllocation {
     }
 
     /// Builds a layout from `size` and `align`, then resizes this allocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ResizeError`] with [`ResizeErrorKind::Layout`] if `size` and
+    /// `align` do not form a valid [`Layout`], or [`ResizeErrorKind::Alloc`] if
+    /// mimalloc cannot satisfy the resize request. The error preserves the
+    /// original allocation.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn resize_with_size_align(
         self,
@@ -612,6 +736,14 @@ impl InitializedAllocation {
     }
 
     /// Allocates a new initialized allocation and copies this allocation's bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AllocError`] if mimalloc cannot allocate the destination block.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn try_clone_contents(&self) -> Result<Self, AllocError> {
         let mut cloned = RawAllocation::allocate(self.layout(), false).map(|raw| Self { raw })?;

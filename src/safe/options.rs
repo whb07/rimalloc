@@ -62,6 +62,16 @@ impl OptionKey {
     ];
 
     /// Converts a raw mimalloc option code into a supported safe option key.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OptionError::InvalidKey`] if `raw` is outside mimalloc's raw
+    /// option range, or [`OptionError::Unsupported`] if the key exists in
+    /// mimalloc but is not exposed by the safe facade.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn from_raw(raw: i32) -> Result<Self, OptionError> {
         match raw {
@@ -152,6 +162,15 @@ impl GlobalOptions {
     }
 
     /// Sets a mutable supported option key in the process-global option table.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OptionError::Unsupported`] if `key` is supported for reads but
+    /// cannot be mutated through the safe facade.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn set(key: OptionKey, value: c_long) -> Result<(), OptionError> {
         if !key.mutable() {
@@ -162,6 +181,15 @@ impl GlobalOptions {
     }
 
     /// Resets a mutable supported process-global option key to its default value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OptionError::Unsupported`] if `key` is supported for reads but
+    /// cannot be reset through the safe facade.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn reset(key: OptionKey) -> Result<(), OptionError> {
         Self::set(key, key.default_value())

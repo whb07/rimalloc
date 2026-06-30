@@ -125,6 +125,15 @@ pub struct StatsSnapshot {
 
 impl StatsSnapshot {
     /// Captures a process-wide non-printing statistics snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StatsError::Unavailable`] if mimalloc cannot capture
+    /// process-wide statistics.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn capture() -> Result<Self, StatsError> {
         let mut raw = crate::stats::mi_stats_t::default();
@@ -142,6 +151,15 @@ impl StatsSnapshot {
     }
 
     /// Captures a non-printing statistics snapshot for `heap`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StatsError::HeapUnavailable`] if mimalloc cannot capture
+    /// statistics for `heap`.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn for_heap(heap: HeapRef<'_>) -> Result<Self, StatsError> {
         let mut raw = crate::stats::mi_stats_t::default();
@@ -220,6 +238,15 @@ impl StatsSnapshot {
     }
 
     /// Writes this snapshot as JSON into `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StatsError::BufferTooSmall`] if `output` is empty or too small
+    /// for mimalloc's JSON representation of the snapshot.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic.
     #[inline]
     pub fn write_json(&self, output: &mut [u8]) -> Result<usize, StatsError> {
         if output.is_empty() {

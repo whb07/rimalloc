@@ -862,13 +862,18 @@ Validated remaining issues:
     `Allocation`, `AllocError`, `LayoutError`, and `TryAllocError`.
   - Verify: `cargo test --doc --features std`.
 
-- [ ] Enforce rustdoc sections for safe APIs.
-  - [ ] Add `# Errors` sections to fallible Tier S methods.
-  - [ ] Add `# Panics` sections where a safe API can panic, or state that it
+- [x] Enforce rustdoc sections for safe APIs.
+  - [x] Add `# Errors` sections to fallible Tier S methods.
+  - [x] Add `# Panics` sections where a safe API can panic, or state that it
         does not panic beyond standard library argument constructors.
-  - [ ] Add `# Safety` sections to all unsafe Tier U and Tier R public items.
-  - [ ] Extend `scripts/check-safe-docs.py` or add a new docs check for these
+  - [x] Add `# Safety` sections to all unsafe Tier U and Tier R public items.
+  - [x] Extend `scripts/check-safe-docs.py` or add a new docs check for these
         sections.
+  - Evidence: fallible Tier S safe methods now document `# Errors` and
+    `# Panics`, public unsafe Tier S/Tier U/Tier R functions are checked for
+    `# Safety`, and `scripts/check-safe-docs.py` now has synthetic regressions
+    for missing enum variant docs, fallible method sections, and unsafe safety
+    sections.
   - Verify: `scripts/check-docs.sh`.
 
 - [ ] Enable or emulate `missing_docs` for Tier S and Tier U.

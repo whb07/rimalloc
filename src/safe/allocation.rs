@@ -63,6 +63,28 @@ use super::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError
 /// let _use_after_move = allocation.len();
 /// drop(moved);
 /// ```
+///
+/// Initialize an uninitialized allocation by writing through
+/// `MaybeUninit<u8>`, then make the initialized transition explicit:
+///
+/// ```rust
+/// use core::alloc::Layout;
+/// use core::mem::MaybeUninit;
+/// use mechanical_mimalloc::Allocation;
+///
+/// let layout = Layout::from_size_align(4, 1).unwrap();
+/// let mut allocation = Allocation::new(layout).unwrap();
+/// let slots: &mut [MaybeUninit<u8>] = allocation.as_uninit_slice_mut();
+/// for (slot, byte) in slots.iter_mut().zip([1, 2, 3, 4]) {
+///     slot.write(byte);
+/// }
+///
+/// let initialized = unsafe { allocation.assume_initialized() };
+/// assert_eq!(initialized.as_bytes(), &[1, 2, 3, 4]);
+///
+/// let zeroed = Allocation::zeroed_bytes(4).unwrap();
+/// assert_eq!(zeroed.as_bytes(), &[0, 0, 0, 0]);
+/// ```
 #[must_use]
 pub struct Allocation {
     raw: RawAllocation,

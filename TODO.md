@@ -920,13 +920,19 @@ Validated remaining issues:
   - Verify: compile-fail tests run under doctest or trybuild-equivalent
     tooling.
 
-- [ ] Add an initialization walkthrough.
-  - [ ] Show `Allocation::new` returning uninitialized bytes.
-  - [ ] Show writing through `MaybeUninit<u8>` without reading uninitialized
+- [x] Add an initialization walkthrough.
+  - [x] Show `Allocation::new` returning uninitialized bytes.
+  - [x] Show writing through `MaybeUninit<u8>` without reading uninitialized
         memory.
-  - [ ] Show the unsafe `assume_initialized` transition after every byte is
+  - [x] Show the unsafe `assume_initialized` transition after every byte is
         initialized.
-  - [ ] Show the zeroed path as the safe alternative.
+  - [x] Show the zeroed path as the safe alternative.
+  - Evidence: `Allocation` rustdoc now includes a runnable initialization
+    walkthrough that allocates uninitialized bytes, writes every byte through
+    `MaybeUninit<u8>`, performs the explicit unsafe `assume_initialized`
+    transition, and contrasts it with `Allocation::zeroed_bytes`. The
+    standalone `examples/allocation.rs` mirrors that flow and keeps the
+    aligned zeroed allocation alternative compiled.
   - Verify: example compiles and doctests pass.
 
 - [ ] Keep object ownership APIs out of the current safe facade.

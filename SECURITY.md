@@ -57,6 +57,11 @@ Include:
 - whether C mimalloc 3.3.2 reproduces the same behavior,
 - sanitizer, Miri, Valgrind, debugger, core dump, or log output when available.
 
+`docs/testing.md` defines the fuzz corpus and minimized reproducer policy,
+including where public reproducers live, when corpus additions are required, how
+to classify invalid-caller undefined behavior versus allocator bugs, and how
+confirmed fuzz findings map back to unsafe-audit evidence.
+
 ## Response Timeline
 
 The maintainer response targets are:

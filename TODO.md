@@ -1242,11 +1242,18 @@ Validated remaining issues:
     security advisory process for security releases.
   - Verify: governance docs link to the policy.
 
-- [ ] Add fuzz corpus and reproducer policy.
-  - [ ] Define where minimized reproducers live.
-  - [ ] Define when corpus additions are required.
-  - [ ] Define how to classify invalid-caller UB versus allocator bugs.
-  - [ ] Define how fuzz findings map to unsafe audit entries.
+- [x] Add fuzz corpus and reproducer policy.
+  - [x] Define where minimized reproducers live.
+  - [x] Define when corpus additions are required.
+  - [x] Define how to classify invalid-caller UB versus allocator bugs.
+  - [x] Define how fuzz findings map to unsafe audit entries.
+  - Evidence: `docs/testing.md` now defines public minimized reproducer
+    locations, required corpus or regression-test additions for confirmed
+    allocator bugs and security findings, invalid-caller UB versus allocator bug
+    classification, private security reproducer handling, and unsafe-audit
+    evidence updates for confirmed fuzz findings. `SECURITY.md` links to the
+    policy, and `docs/unsafe-audit.md` explains how fuzz findings update audit
+    proofs and `docs/unsafe-audit-evidence.tsv`.
   - Verify: fuzzing docs and security docs agree.
 
 - [ ] Add a hardening threat model.

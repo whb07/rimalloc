@@ -25,6 +25,14 @@ alignment, initialization, aliasing, concurrency, and unwind behavior.
 - `raw ABI`: C callbacks, null/error conventions, exported symbols, and panic
   boundaries.
 
+## Fuzz Finding Mapping
+
+`docs/testing.md` defines the fuzz corpus and minimized reproducer policy. A
+confirmed fuzz finding that changes an unsafe proof obligation must update this
+audit document, add or update the relevant `SAFETY[AUDIT:*]` tag when a boundary
+changes, and record the corpus file, regression test, sanitizer/Miri script, or
+release artifact script in `docs/unsafe-audit-evidence.tsv`.
+
 ## Boundary Audit Tags
 
 - `SAFETY[AUDIT:global-alloc]`: the `MiMalloc` `GlobalAlloc` facade. Callers

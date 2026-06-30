@@ -176,6 +176,50 @@ Commit minimized valid reproducers under `fuzz/corpus/alloc_sequences/` with a
 descriptive filename and add a regression test when the failure maps to a fixed
 allocator bug.
 
+Minimized reproducers live in one of two places:
+
+- `fuzz/corpus/alloc_sequences/<descriptive-name>` for byte inputs accepted by
+  `fuzz/fuzz_targets/alloc_sequences.rs`.
+- A focused Rust regression test under `tests/` or the owning source module
+  when the failure needs setup that cannot be represented as an alloc-sequence
+  corpus input.
+
+Corpus additions are required when a confirmed bug is reachable through valid
+safe API use, documented raw/C ABI use, release artifact behavior, or a
+hardening feature mode. Add a corpus entry or focused regression before closing
+any fix for allocator-owned memory corruption, realloc preservation, zeroing,
+alignment, heap ownership, cross-thread free, stats/process observation,
+panic/unwind, or supported artifact-mode behavior. Add corpus coverage when the
+fuzz target gains a new operation class or when a minimized security reproducer
+can be safely committed after disclosure.
+
+Do not commit corpus inputs that depend on invalid caller UB unless the harness
+is being changed to reject, classify, or safely model that invalid input. A
+finding is an allocator bug when well-formed safe Rust, documented raw/C ABI
+use, or a documented hardening mode violates this crate's contract or diverges
+from C mimalloc 3.3.2 on a maintained target without a documented exception. A
+finding is invalid-caller UB when it requires forged pointers, foreign
+allocations, use-after-free, unsynchronized raw shared state, invalid alignment,
+or ownership violations outside the safe facade and documented C ABI contract.
+Documented C-compatible abort behavior is not an allocator bug unless this crate
+documents a stronger non-aborting guarantee for that path.
+
+Confirmed fuzz findings that touch unsafe invariants must update the unsafe
+audit mapping before the fix is complete:
+
+- Update `docs/unsafe-audit.md` when the proof obligation or boundary
+  explanation changes.
+- Update `docs/unsafe-audit-evidence.tsv` with the new corpus path, regression
+  test, sanitizer/Miri script, or release artifact script that proves the
+  affected `SAFETY[AUDIT:*]` boundary.
+- Add a new `SAFETY[AUDIT:*]` tag and evidence row if the finding exposes a
+  previously undocumented unsafe boundary.
+
+Private security reproducers stay out of the public corpus until coordinated
+disclosure allows publication. `SECURITY.md` and
+`docs/security-advisories.md` define the private reporting and disclosure
+process.
+
 ## Miri
 
 Miri is limited to pure Rust models and small library tests. The crate keeps

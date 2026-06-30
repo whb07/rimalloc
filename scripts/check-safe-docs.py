@@ -14,16 +14,22 @@ SAFE_FILES = sorted(
         *((ROOT / "src/safe").glob("*.rs")),
     }
 )
+TIER_U_FILES = [ROOT / "src/ffi/callbacks.rs"]
+PUBLIC_DOC_FILES = [
+    ROOT / "src/lib.rs",
+    *SAFE_FILES,
+    *TIER_U_FILES,
+]
 UNSAFE_SECTION_FILES = [
     *SAFE_FILES,
-    ROOT / "src/ffi/callbacks.rs",
+    *TIER_U_FILES,
     *sorted((ROOT / "src/raw").glob("*.rs")),
 ]
 
 PUBLIC_ITEM = re.compile(
     r"^\s*pub\s+"
     r"(?:const\s+)?(?:async\s+)?(?:unsafe\s+)?"
-    r"(?:struct|enum|trait|fn|const)\s+[A-Za-z_][A-Za-z0-9_]*\b"
+    r"(?:struct|enum|trait|type|fn|const)\s+[A-Za-z_][A-Za-z0-9_]*\b"
 )
 PUBLIC_ENUM = re.compile(r"^\s*pub\s+enum\s+[A-Za-z_][A-Za-z0-9_]*\b")
 ENUM_VARIANT = re.compile(r"^\s*([A-Z][A-Za-z0-9_]*)\s*(?:[,({=]|$)")
@@ -107,6 +113,14 @@ def missing_public_enum_variant_docs(rel: str, lines: list[str]) -> list[str]:
     return missing
 
 
+def missing_public_item_docs(rel: str, lines: list[str]) -> list[str]:
+    missing: list[str] = []
+    for index, line in enumerate(lines):
+        if PUBLIC_ITEM.match(line) and not has_doc(lines, index):
+            missing.append(f"{rel}:{index + 1}: {line.strip()}")
+    return missing
+
+
 def missing_safe_result_sections(rel: str, lines: list[str]) -> list[str]:
     missing: list[str] = []
     for index, line in enumerate(lines):
@@ -140,6 +154,14 @@ def missing_unsafe_sections(rel: str, lines: list[str]) -> list[str]:
 
 def main() -> int:
     missing: list[str] = []
+    synthetic_item = ["pub struct Undocumented;"]
+    if not missing_public_item_docs("synthetic.rs", synthetic_item):
+        print("safe-docs regression failed to flag an undocumented public item")
+        return 1
+    synthetic_type = ["pub type Alias = ();"]
+    if not missing_public_item_docs("synthetic.rs", synthetic_type):
+        print("safe-docs regression failed to flag an undocumented type alias")
+        return 1
     synthetic = ["pub enum Synthetic {", "    Undocumented,", "}"]
     if not missing_public_enum_variant_docs("synthetic.rs", synthetic):
         print("safe-docs regression failed to flag an undocumented enum variant")
@@ -153,13 +175,15 @@ def main() -> int:
         print("safe-docs regression failed to flag a missing unsafe method section")
         return 1
 
+    for path in PUBLIC_DOC_FILES:
+        rel = path.relative_to(ROOT).as_posix()
+        lines = path.read_text().splitlines()
+        missing.extend(missing_public_item_docs(rel, lines))
+        missing.extend(missing_public_enum_variant_docs(rel, lines))
+
     for path in SAFE_FILES:
         rel = path.relative_to(ROOT).as_posix()
         lines = path.read_text().splitlines()
-        for index, line in enumerate(lines):
-            if PUBLIC_ITEM.match(line) and not has_doc(lines, index):
-                missing.append(f"{rel}:{index + 1}: {line.strip()}")
-        missing.extend(missing_public_enum_variant_docs(rel, lines))
         missing.extend(missing_safe_result_sections(rel, lines))
 
     for path in UNSAFE_SECTION_FILES:
@@ -173,8 +197,9 @@ def main() -> int:
         return 1
 
     print(
-        "ok: public docs cover Tier S items, fallible safe method sections, "
-        f"and public unsafe safety sections across {len(UNSAFE_SECTION_FILES)} files"
+        "ok: public docs cover Tier S/Tier U items, fallible safe method "
+        "sections, and public unsafe safety sections across "
+        f"{len(PUBLIC_DOC_FILES)} documented files and {len(UNSAFE_SECTION_FILES)} unsafe files"
     )
     return 0
 

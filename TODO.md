@@ -876,12 +876,18 @@ Validated remaining issues:
     sections.
   - Verify: `scripts/check-docs.sh`.
 
-- [ ] Enable or emulate `missing_docs` for Tier S and Tier U.
-  - [ ] Decide whether to use module-level `#![warn(missing_docs)]` or extend
+- [x] Enable or emulate `missing_docs` for Tier S and Tier U.
+  - [x] Decide whether to use module-level `#![warn(missing_docs)]` or extend
         the current safe-docs script.
-  - [ ] Include public enum variants, type aliases, trait impl notes where
+  - [x] Include public enum variants, type aliases, trait impl notes where
         appropriate, and unsafe callback guard docs.
-  - [ ] Keep global `missing_docs` staged until raw/Tier R policy permits it.
+  - [x] Keep global `missing_docs` staged until raw/Tier R policy permits it.
+  - Evidence: `scripts/check-safe-docs.py` now emulates `missing_docs` for
+    Tier S/Tier U by checking `src/lib.rs`, `src/safe/*.rs`, and
+    `src/ffi/callbacks.rs` public items; includes enum variants and future
+    public type aliases; keeps raw/Tier R out of the global missing-docs lint;
+    and retains trait behavior notes in `docs/api-inventory.md` rather than
+    requiring rustdoc-only impl notes where Rust's lint does not require them.
   - Verify: docs check fails on a synthetic undocumented Tier S item.
 
 - [ ] Add trait behavior tests for safe facade types.

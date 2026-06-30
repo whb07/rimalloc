@@ -380,14 +380,22 @@ Validated remaining issues:
   - Verify: package metadata tests run from a temporary directory outside the
     repository.
 
-- [ ] Produce release integrity files.
-  - [ ] Generate `SHA256SUMS`.
-  - [ ] Generate a checked ABI symbol manifest for every shipped binary
+- [x] Produce release integrity files.
+  - [x] Generate `SHA256SUMS`.
+  - [x] Generate a checked ABI symbol manifest for every shipped binary
         artifact.
-  - [ ] Generate an environment/reproducibility note using
+  - [x] Generate an environment/reproducibility note using
         `scripts/env-info.sh`.
-  - [ ] Include benchmark report references or attach the benchmark summary
+  - [x] Include benchmark report references or attach the benchmark summary
         required by `docs/performance.md`.
+  - Evidence: `scripts/build-release-artifacts.py` writes `SHA256SUMS`,
+    checked ABI symbol manifests under
+    `target/release-artifacts/integrity/abi-symbols/`, an
+    `environment.txt` capture from `scripts/env-info.sh`, and
+    `benchmark-evidence.md` with `docs/performance.md`,
+    `BENCHMARK_RESULTS.md`, and benchmark command references.
+    `scripts/check-release-integrity.py` performs a fresh dry run and validates
+    the checksum file plus regenerated cdylib/staticlib symbol manifests.
   - Verify: release dry-run produces all expected files.
 
 - [ ] Fix stale C API build instructions.

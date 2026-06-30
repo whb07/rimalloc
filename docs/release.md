@@ -143,6 +143,18 @@ The script builds the Rust `rlib`, `c-abi` cdylib, `c-abi` staticlib preview,
 header path, link metadata path, feature set, target triple, release profile,
 rustc version, and SHA-256 checksum.
 
+The dry run also writes release integrity files:
+
+- `target/release-artifacts/SHA256SUMS` for every staged release file outside
+  the temporary build directory.
+- `target/release-artifacts/integrity/abi-symbols/*.tsv` for every staged
+  cdylib/staticlib artifact.
+- `target/release-artifacts/integrity/environment.txt`, captured with
+  `scripts/env-info.sh`.
+- `target/release-artifacts/integrity/benchmark-evidence.md`, which points to
+  `docs/performance.md`, `BENCHMARK_RESULTS.md`, and the required benchmark
+  commands.
+
 Validate a staged C consumer without repository include paths:
 
 ```sh
@@ -154,6 +166,12 @@ repository:
 
 ```sh
 scripts/check-release-link-metadata.py
+```
+
+Validate release integrity files from a fresh dry run:
+
+```sh
+scripts/check-release-integrity.py
 ```
 
 Before publishing or tagging a release:
@@ -169,16 +187,17 @@ Before publishing or tagging a release:
    link and collision evidence.
 8. Run `scripts/check-release-artifact-consumer.py` and
    `scripts/check-release-link-metadata.py`.
-9. Run `scripts/check-layout.sh` for ABI/layout audits.
-10. Run audit drift checks: `scripts/check-unsafe-audit.py`,
+9. Run `scripts/check-release-integrity.py`.
+10. Run `scripts/check-layout.sh` for ABI/layout audits.
+11. Run audit drift checks: `scripts/check-unsafe-audit.py`,
    `scripts/check-atomic-ordering-audit.py`,
    `scripts/check-pointer-provenance-audit.py`,
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
-11. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
+12. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
    using `docs/performance.md` for thresholds and noise handling.
-12. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
-13. Capture `scripts/env-info.sh` output alongside benchmark evidence.
+13. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
+14. Capture `scripts/env-info.sh` output alongside benchmark evidence.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

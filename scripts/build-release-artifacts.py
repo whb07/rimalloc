@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -45,6 +46,17 @@ def command_output(cmd: list[str]) -> str:
         text=True,
         stdout=subprocess.PIPE,
     ).stdout.strip()
+
+
+def command_output_with_stderr(cmd: list[str]) -> str:
+    return subprocess.run(
+        cmd,
+        cwd=ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    ).stdout
 
 
 def rustc_info() -> tuple[str, str]:
@@ -115,6 +127,13 @@ def sha256(path: pathlib.Path) -> str:
     return hasher.hexdigest()
 
 
+def release_path(path: str | pathlib.Path) -> pathlib.Path:
+    candidate = pathlib.Path(path)
+    if candidate.is_absolute():
+        return candidate
+    return ROOT / candidate
+
+
 def copy_artifact(
     source: pathlib.Path, artifacts_dir: pathlib.Path, output_name: str
 ) -> pathlib.Path:
@@ -161,6 +180,136 @@ def metadata_entry(name: str, role: str, path: pathlib.Path) -> dict[str, object
         "bytes": path.stat().st_size,
         "sha256": sha256(path),
     }
+
+
+def parse_symbol_version(name: str) -> tuple[str, str]:
+    symbol, separator, version = name.partition("@")
+    if not separator:
+        return name, "-"
+    return symbol, version.lstrip("@") or "-"
+
+
+def dynamic_symbol_entries(path: pathlib.Path) -> list[tuple[str, str, str, str, str]]:
+    readelf = command_output(["readelf", "-W", "--dyn-syms", str(path)])
+    entries: dict[str, tuple[str, str, str, str, str]] = {}
+    for line in readelf.splitlines():
+        parts = line.split()
+        if len(parts) < 8:
+            continue
+        index, _value, _size, kind, bind, visibility, section, name = parts[:8]
+        if not index.endswith(":"):
+            continue
+        if section == "UND" or bind not in {"GLOBAL", "WEAK"}:
+            continue
+        if visibility != "DEFAULT" or kind not in {"FUNC", "OBJECT", "NOTYPE"}:
+            continue
+        symbol, version = parse_symbol_version(name)
+        entries[symbol] = (symbol, bind, visibility, version, kind)
+    return [entries[symbol] for symbol in sorted(entries)]
+
+
+def static_symbol_entries(path: pathlib.Path) -> list[tuple[str, str]]:
+    nm = subprocess.run(
+        ["nm", "-g", "--defined-only", str(path)],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout
+    entries: dict[str, tuple[str, str]] = {}
+    for line in nm.splitlines():
+        parts = line.split()
+        if len(parts) < 3 or parts[0].endswith(":"):
+            continue
+        kind = parts[-2]
+        symbol = parts[-1]
+        if len(kind) == 1:
+            entries[symbol] = (symbol, kind)
+    return [entries[symbol] for symbol in sorted(entries)]
+
+
+def render_symbol_manifest(artifact: dict[str, object]) -> str:
+    artifact_path = release_path(str(artifact["path"]))
+    lines = [
+        "# mechanical_mimalloc release ABI symbol manifest",
+        f"# artifact: {artifact['name']}",
+        f"# kind: {artifact['kind']}",
+        f"# path: {artifact['path']}",
+        f"# sha256: {artifact['sha256']}",
+        "# build-command: " + " ".join(str(part) for part in artifact["build_command"]),
+    ]
+    if artifact["kind"] == "cdylib":
+        lines.append("# columns: symbol\tbinding\tvisibility\tversion\ttype")
+        lines.append("symbol\tbinding\tvisibility\tversion\ttype")
+        lines.extend("\t".join(entry) for entry in dynamic_symbol_entries(artifact_path))
+    elif artifact["kind"] == "staticlib":
+        lines.append("# columns: symbol\ttype")
+        lines.append("symbol\ttype")
+        lines.extend("\t".join(entry) for entry in static_symbol_entries(artifact_path))
+    else:
+        raise SystemExit(f"unsupported symbol manifest kind: {artifact['kind']}")
+    return "\n".join(lines) + "\n"
+
+
+def write_symbol_manifests(
+    out_dir: pathlib.Path, artifacts: list[dict[str, object]]
+) -> list[dict[str, object]]:
+    symbol_dir = out_dir / "integrity/abi-symbols"
+    symbol_dir.mkdir(parents=True, exist_ok=True)
+    entries: list[dict[str, object]] = []
+    for artifact in artifacts:
+        if artifact["kind"] not in {"cdylib", "staticlib"}:
+            continue
+        path = symbol_dir / f"{artifact['name']}.tsv"
+        path.write_text(render_symbol_manifest(artifact))
+        entry = metadata_entry(path.name, "abi-symbol-manifest", path)
+        entry["artifact"] = artifact["name"]
+        entries.append(entry)
+    return entries
+
+
+def write_environment_note(out_dir: pathlib.Path) -> dict[str, object]:
+    path = out_dir / "integrity/environment.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    output = command_output_with_stderr(["scripts/env-info.sh"])
+    path.write_text(
+        "# mechanical_mimalloc release environment\n\n"
+        "Captured with `scripts/env-info.sh` during release artifact staging.\n\n"
+        "```text\n"
+        f"{output.rstrip()}\n"
+        "```\n"
+    )
+    return metadata_entry(path.name, "environment-reproducibility-note", path)
+
+
+def write_benchmark_note(out_dir: pathlib.Path) -> dict[str, object]:
+    path = out_dir / "integrity/benchmark-evidence.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    commit = command_output(["git", "rev-parse", "HEAD"])
+    path.write_text(
+        "\n".join(
+            [
+                "# Release Benchmark Evidence",
+                "",
+                f"- Commit: `{commit}`",
+                "- Policy: `docs/performance.md`",
+                "- Project benchmark report: `BENCHMARK_RESULTS.md`",
+                "- Full release command: `scripts/check-bench-full.sh`",
+                "- Smoke iteration command: `scripts/check-bench-smoke.sh`",
+                "- Environment capture command: `scripts/env-info.sh`",
+                "",
+                "This release artifact dry run does not attach fresh benchmark",
+                "measurements. `docs/performance.md` permits skipping benchmark",
+                "reruns for documentation, packaging, lint-only, and export-only",
+                "changes when allocator logic and hot-path control flow do not",
+                "move. A release candidate that changes allocator behavior must",
+                "attach the full benchmark summary required by that policy.",
+                "",
+            ]
+        )
+    )
+    return metadata_entry(path.name, "benchmark-evidence-reference", path)
 
 
 def write_pkg_config(
@@ -261,6 +410,80 @@ def write_link_metadata(
             "mechanical_mimalloc-config.cmake", "cmake-package-config", cmake_config
         ),
     ]
+
+
+def release_files(out_dir: pathlib.Path) -> list[pathlib.Path]:
+    files: list[pathlib.Path] = []
+    for path in out_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(out_dir)
+        if relative.parts[0] == "build" or relative.name == "SHA256SUMS":
+            continue
+        files.append(path)
+    return sorted(files, key=lambda path: path.relative_to(out_dir).as_posix())
+
+
+def sha256sums_text(out_dir: pathlib.Path) -> str:
+    lines = []
+    for path in release_files(out_dir):
+        relative = path.relative_to(out_dir).as_posix()
+        lines.append(f"{sha256(path)}  {relative}")
+    return "\n".join(lines) + "\n"
+
+
+def write_sha256sums(out_dir: pathlib.Path) -> pathlib.Path:
+    path = out_dir / "SHA256SUMS"
+    path.write_text(sha256sums_text(out_dir))
+    return path
+
+
+def validate_integrity(out_dir: pathlib.Path, manifest: dict[str, object]) -> None:
+    checksum_path = release_path(str(manifest["checksum_file"]))
+    if not checksum_path.exists():
+        raise SystemExit(f"missing checksum file: {checksum_path}")
+    expected_checksums = sha256sums_text(out_dir)
+    actual_checksums = checksum_path.read_text()
+    if actual_checksums != expected_checksums:
+        diff = "\n".join(
+            difflib.unified_diff(
+                actual_checksums.splitlines(),
+                expected_checksums.splitlines(),
+                fromfile=str(checksum_path),
+                tofile="current",
+                lineterm="",
+            )
+        )
+        raise SystemExit(f"SHA256SUMS is stale:\n{diff}")
+
+    integrity_files = manifest.get("integrity_files")
+    if not isinstance(integrity_files, list):
+        raise SystemExit("release manifest is missing integrity_files")
+    for entry in integrity_files:
+        path = release_path(str(entry["path"]))
+        if not path.exists():
+            raise SystemExit(f"missing integrity file: {path}")
+
+    checked = 0
+    for artifact in manifest["artifacts"]:
+        if artifact["kind"] not in {"cdylib", "staticlib"}:
+            continue
+        manifest_path = out_dir / "integrity/abi-symbols" / f"{artifact['name']}.tsv"
+        actual = manifest_path.read_text()
+        expected = render_symbol_manifest(artifact)
+        if actual != expected:
+            diff = "\n".join(
+                difflib.unified_diff(
+                    actual.splitlines(),
+                    expected.splitlines(),
+                    fromfile=str(manifest_path),
+                    tofile="current",
+                    lineterm="",
+                )
+            )
+            raise SystemExit(f"symbol manifest is stale: {artifact['name']}\n{diff}")
+        checked += 1
+    print(f"ok: release integrity files validated for {checked} binary artifacts")
 
 
 def display_path(path: pathlib.Path) -> str:
@@ -364,6 +587,7 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
     artifacts: list[dict[str, object]] = []
     headers: list[dict[str, object]] = []
     link_metadata: list[dict[str, object]] = []
+    integrity_files: list[dict[str, object]] = []
     manifest: dict[str, object] = {
         "schema_version": 1,
         "package": CRATE_NAME,
@@ -374,6 +598,8 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
         "artifacts": artifacts,
         "headers": headers,
         "link_metadata": link_metadata,
+        "integrity_files": integrity_files,
+        "checksum_file": display_path(out_dir / "SHA256SUMS"),
     }
 
     if out_dir.exists():
@@ -407,9 +633,13 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
         artifacts.append(artifact)
 
     link_metadata.extend(write_link_metadata(out_dir, version, artifacts))
+    integrity_files.extend(write_symbol_manifests(out_dir, artifacts))
+    integrity_files.append(write_environment_note(out_dir))
+    integrity_files.append(write_benchmark_note(out_dir))
 
     manifest_path = out_dir / "release-artifacts.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    write_sha256sums(out_dir)
     print(f"wrote {display_path(manifest_path)}")
     return manifest
 

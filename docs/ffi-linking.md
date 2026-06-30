@@ -56,6 +56,12 @@ repository:
 scripts/check-release-link-metadata.py
 ```
 
+Release integrity evidence is generated under
+`target/release-artifacts/integrity/`. The dry run writes `SHA256SUMS`, ABI
+symbol manifests for each staged cdylib/staticlib artifact, an environment note
+captured with `scripts/env-info.sh`, and benchmark evidence references aligned
+with `docs/performance.md`.
+
 Static archives are preview-only. They are used by repository parity tests,
 source-build experiments, and static archive audits, but they are not a
 production-supported FFI distribution artifact until the static symbol

@@ -9,11 +9,17 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.92.0
       - name: Run release benchmark gates
         run: scripts/check-bench-smoke.sh
-      - name: Upload machine-readable benchmark thresholds
+      - name: Capture benchmark environment
+        run: |
+          mkdir -p target/criterion
+          scripts/env-info.sh > target/criterion/benchmark-environment.txt
+      - name: Upload benchmark evidence
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-thresholds
-          path: target/criterion/benchmark-thresholds-smoke.csv
+          name: benchmark-evidence
+          path: |
+            target/criterion/benchmark-thresholds-smoke.csv
+            target/criterion/benchmark-environment.txt

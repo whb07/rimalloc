@@ -811,12 +811,17 @@ Validated remaining issues:
     and Valgrind tracking parity.
   - Verify: release checklist and `.github/workflows/validation.yml` agree.
 
-- [ ] Pin performance workflow toolchain consistently.
-  - [ ] Change `.github/workflows/performance.yml` from `stable` to the pinned
+- [x] Pin performance workflow toolchain consistently.
+  - [x] Change `.github/workflows/performance.yml` from `stable` to the pinned
         release toolchain or document why benchmark gates intentionally use
         floating stable.
-  - [ ] Capture `scripts/env-info.sh` output in performance artifacts.
-  - [ ] Upload benchmark CSV and environment evidence.
+  - [x] Capture `scripts/env-info.sh` output in performance artifacts.
+  - [x] Upload benchmark CSV and environment evidence.
+  - Evidence: `.github/workflows/performance.yml` now uses the same pinned
+    Rust `1.92.0` toolchain as validation, writes `scripts/env-info.sh` output
+    to `target/criterion/benchmark-environment.txt`, and uploads that file
+    together with `target/criterion/benchmark-thresholds-smoke.csv` in the
+    `benchmark-evidence` artifact.
   - Verify: performance workflow artifacts include threshold and environment
     files.
 

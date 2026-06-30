@@ -766,12 +766,18 @@ Validated remaining issues:
     `cargo fmt --all --check` and keeps `git diff --check`.
   - Verify: validation workflow runs formatting before lints.
 
-- [ ] Add feature-sensitive ABI checks to CI.
-  - [ ] Run `scripts/check-feature-abi.sh` in validation or release CI.
-  - [ ] Include default, `secure`, `guarded`, `track-valgrind`, and
+- [x] Add feature-sensitive ABI checks to CI.
+  - [x] Run `scripts/check-feature-abi.sh` in validation or release CI.
+  - [x] Include default, `secure`, `guarded`, `track-valgrind`, and
         `track-asan` symbol/layout checks as currently scripted.
-  - [ ] Add dynamic cdylib feature-mode symbol checks after dynamic manifests
+  - [x] Add dynamic cdylib feature-mode symbol checks after dynamic manifests
         exist.
+  - Evidence: `.github/workflows/validation.yml` has a separate
+    `Feature-sensitive ABI` step that runs `scripts/check-feature-abi.sh`.
+    The script reports each feature set by name, runs the existing
+    symbol/layout checks for default, `secure`, `guarded`, `track-valgrind`,
+    and `track-asan`, and then checks dynamic `c-abi` feature-mode manifests
+    for those feature-sensitive cdylibs.
   - Verify: feature ABI job reports each feature set separately.
 
 - [ ] Add C and C++ artifact consumer checks to CI.

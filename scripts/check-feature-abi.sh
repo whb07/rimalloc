@@ -27,3 +27,6 @@ for features in "${feature_sets[@]}"; do
     run env MIMALLOC_CHECK_FEATURES="${features}" scripts/check-public-symbols.py
   fi
 done
+
+echo "+ Dynamic c-abi feature-mode manifests"
+run scripts/check-public-symbols.py --dynamic-manifests

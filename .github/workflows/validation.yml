@@ -33,6 +33,8 @@ jobs:
           scripts/check-layout.sh
           scripts/check-abi-symbols.sh
           scripts/check-strict-types.py
+      - name: Feature-sensitive ABI
+        run: scripts/check-feature-abi.sh
       - name: Audit drift checks
         run: |
           scripts/check-unsafe-inventory.py

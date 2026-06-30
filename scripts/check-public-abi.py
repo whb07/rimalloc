@@ -17,6 +17,7 @@ PUBLIC_HEADERS = [
     ROOT / "mimalloc-3.3.2/include/mimalloc.h",
     ROOT / "mimalloc-3.3.2/include/mimalloc-stats.h",
 ]
+CLASSIFICATION_FILE = ROOT / "symbols/public-symbol-classification.tsv"
 
 OPTION_NAMES = [
     "mi_option_show_errors",
@@ -145,11 +146,36 @@ def facade_symbols() -> list[str]:
     return symbols
 
 
+def classified_facade_extras() -> set[str]:
+    extras: set[str] = set()
+    for lineno, raw_line in enumerate(CLASSIFICATION_FILE.read_text().splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = raw_line.split("\t")
+        if len(parts) != 5:
+            raise SystemExit(
+                f"{CLASSIFICATION_FILE}:{lineno}: expected 5 tab-separated fields"
+            )
+        match_kind, symbol, classification, _source, _rationale = parts
+        if match_kind == "exact" and classification in {
+            "rust-extension",
+            "platform-helper-extension",
+        }:
+            extras.add(symbol)
+    return extras
+
+
 def check_facade() -> None:
     expected = public_header_symbols()
     actual = facade_symbols()
     missing = [symbol for symbol in expected if symbol not in actual]
-    extra = [symbol for symbol in actual if symbol not in expected]
+    classified_extras = classified_facade_extras()
+    extra = [
+        symbol
+        for symbol in actual
+        if symbol not in expected and symbol not in classified_extras
+    ]
     if missing or extra:
         if missing:
             print("facade missing public C declarations:", file=sys.stderr)
@@ -367,24 +393,34 @@ def run(command: list[str]) -> str:
     return completed.stdout
 
 
-def feature_args() -> list[str]:
+def feature_list() -> list[str]:
     features = os.environ.get("MIMALLOC_CHECK_FEATURES", "std").split()
+    if "std" not in features:
+        features.append("std")
+    return features
+
+
+def feature_args() -> list[str]:
+    features = feature_list()
     if not features:
         return []
     return ["--features", " ".join(features)]
 
 
 def rust_rlib() -> pathlib.Path:
+    feature_key = "-".join(feature_list()) or "default"
+    feature_key = re.sub(r"[^A-Za-z0-9_.-]+", "-", feature_key)
+    target_dir = BUILD_DIR / "rust-target" / feature_key
     subprocess.run(
-        ["cargo", "build", "--lib", *feature_args()],
+        ["cargo", "build", "--lib", "--target-dir", str(target_dir), *feature_args()],
         cwd=ROOT,
         check=True,
     )
     libs = sorted(
         [
-            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.rlib"),
-            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc.rlib"),
-            *(ROOT / "target/debug").glob("libmechanical_mimalloc.rlib"),
+            *target_dir.glob("debug/deps/libmechanical_mimalloc-*.rlib"),
+            *target_dir.glob("debug/deps/libmechanical_mimalloc.rlib"),
+            *target_dir.glob("debug/libmechanical_mimalloc.rlib"),
         ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
@@ -434,7 +470,7 @@ def main() -> int:
             "--extern",
             f"mechanical_mimalloc={rlib}",
             "-L",
-            str(ROOT / "target/debug/deps"),
+            str(rlib.parent),
             "-o",
             str(rust_bin),
         ],

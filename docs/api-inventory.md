@@ -384,7 +384,8 @@ they are hidden from `c-abi` cdylibs unless a later release explicitly promotes
 one as documented extension ABI.
 `scripts/check-feature-abi.sh` repeats the ABI/layout and export checks for the
 layout- or symbol-sensitive `secure`, `guarded`, `track-valgrind`, and
-`track-asan` feature sets.
+`track-asan` feature sets. It also checks the dynamic `c-abi` manifests for
+those feature-sensitive cdylib modes.
 
 ## Hidden Internals
 

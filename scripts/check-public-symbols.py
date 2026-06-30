@@ -125,6 +125,26 @@ DYNAMIC_MANIFESTS = [
         path=MANIFEST_DIR / "c-abi-dynamic.tsv",
     ),
     DynamicManifest(
+        artifact="c-abi-secure",
+        features="c-abi secure",
+        path=MANIFEST_DIR / "c-abi-secure-dynamic.tsv",
+    ),
+    DynamicManifest(
+        artifact="c-abi-guarded",
+        features="c-abi guarded",
+        path=MANIFEST_DIR / "c-abi-guarded-dynamic.tsv",
+    ),
+    DynamicManifest(
+        artifact="c-abi-track-valgrind",
+        features="c-abi track-valgrind",
+        path=MANIFEST_DIR / "c-abi-track-valgrind-dynamic.tsv",
+    ),
+    DynamicManifest(
+        artifact="c-abi-track-asan",
+        features="c-abi track-asan",
+        path=MANIFEST_DIR / "c-abi-track-asan-dynamic.tsv",
+    ),
+    DynamicManifest(
         artifact="interpose",
         features="interpose",
         path=MANIFEST_DIR / "interpose-dynamic.tsv",
@@ -132,8 +152,13 @@ DYNAMIC_MANIFESTS = [
 ]
 
 
-def feature_args() -> list[str]:
+def feature_list() -> list[str]:
     features = os.environ.get("MIMALLOC_CHECK_FEATURES", "").split()
+    return features
+
+
+def feature_args() -> list[str]:
+    features = feature_list()
     if not features:
         return []
     return ["--features", " ".join(features)]
@@ -154,16 +179,29 @@ def public_header_symbols() -> list[str]:
 
 
 def rust_staticlib() -> pathlib.Path:
+    feature_key = "-".join(feature_list()) or "default"
+    feature_key = re.sub(r"[^A-Za-z0-9_.-]+", "-", feature_key)
+    target_dir = ROOT / "target/symbol-check-static" / feature_key
     subprocess.run(
-        ["cargo", "rustc", "--lib", *feature_args(), "--", "--crate-type", "staticlib"],
+        [
+            "cargo",
+            "rustc",
+            "--lib",
+            "--target-dir",
+            str(target_dir),
+            *feature_args(),
+            "--",
+            "--crate-type",
+            "staticlib",
+        ],
         cwd=ROOT,
         check=True,
     )
     libs = sorted(
         [
-            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc-*.a"),
-            *(ROOT / "target/debug/deps").glob("libmechanical_mimalloc.a"),
-            *(ROOT / "target/debug").glob("libmechanical_mimalloc.a"),
+            *target_dir.glob("debug/deps/libmechanical_mimalloc-*.a"),
+            *target_dir.glob("debug/deps/libmechanical_mimalloc.a"),
+            *target_dir.glob("debug/libmechanical_mimalloc.a"),
         ],
         key=lambda path: path.stat().st_mtime,
         reverse=True,

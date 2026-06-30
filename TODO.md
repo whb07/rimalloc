@@ -1311,8 +1311,14 @@ Validated remaining issues:
     `--dynamic-manifests`, and `--dynamic-manifest-self-test` so unexpected
     dynamic `mi_*`, malloc-family, C++ override, or manifest symbols fail the
     release gate.
-- [ ] Staticlib is either clean enough for production or explicitly
+- [x] Staticlib is either clean enough for production or explicitly
       preview-only.
+  - Evidence: `docs/release.md`, `docs/abi.md`, `docs/ffi-linking.md`, and
+    README classify `c-abi-static-preview` and `interpose-static-preview` as
+    preview-only artifacts until the static symbol contract, collision tests,
+    and checked static manifests are complete; `scripts/check-static-link-collisions.py`
+    remains the release audit for representative preview static archive link
+    behavior.
 - [ ] Release artifacts include headers, link metadata, checksums, symbol
       manifests, and reproducibility notes.
 - [ ] C and C++ consumers link dynamically and statically in CI or release CI.

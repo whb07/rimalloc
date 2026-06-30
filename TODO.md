@@ -1200,12 +1200,20 @@ Validated remaining issues:
     release notes.
   - Verify: release dry run includes the SBOM/dependency report.
 
-- [ ] Expand reproducible release instructions.
-  - [ ] Document clean checkout requirements.
-  - [ ] Document exact Rust toolchain and components.
-  - [ ] Document artifact build commands.
-  - [ ] Document expected checksums and symbol manifests.
-  - [ ] Document environment capture.
+- [x] Expand reproducible release instructions.
+  - [x] Document clean checkout requirements.
+  - [x] Document exact Rust toolchain and components.
+  - [x] Document artifact build commands.
+  - [x] Document expected checksums and symbol manifests.
+  - [x] Document environment capture.
+  - Evidence: `docs/reproducibility.md` now has a release artifact reproduction
+    procedure for clean tagged checkouts, the pinned `1.92.0` Rust toolchain
+    and required components, release artifact build and integrity commands,
+    checksum and ABI symbol manifest expectations, and captured environment
+    evidence. `docs/release.md` adds the reproduction gate to release
+    validation. `scripts/check-release-reproducibility.py` materializes two
+    fresh tracked-file checkouts, builds release artifacts in both, and compares
+    artifact inventory plus normalized ABI symbol manifests.
   - Verify: another checkout can reproduce artifact names and manifests.
 
 - [ ] Add supported-version policy after releases exist.

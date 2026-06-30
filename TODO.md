@@ -1283,12 +1283,19 @@ Validated remaining issues:
     unexpected symbol resolution.
   - Verify: issue template or security docs include the checklist.
 
-- [ ] Define upstream sync cadence.
-  - [ ] State how often vendored mimalloc is reviewed.
-  - [ ] State what must be re-run when upstream headers or implementation
+- [x] Define upstream sync cadence.
+  - [x] State how often vendored mimalloc is reviewed.
+  - [x] State what must be re-run when upstream headers or implementation
         change.
-  - [ ] State how `UPSTREAM_DIFF.md`, `PARITY.md`, ABI manifests, and
+  - [x] State how `UPSTREAM_DIFF.md`, `PARITY.md`, ABI manifests, and
         benchmark evidence are updated.
+  - Evidence: `docs/upstream.md` now requires quarterly and pre-release-candidate
+    upstream reviews, immediate review for security/CVE, ABI/header, platform,
+    guarded/secure, and performance-sensitive upstream changes, explicit
+    header/ABI and implementation recheck command sets, release-surface
+    validation for touched hot paths and artifact modes, and synchronized
+    updates to `UPSTREAM_DIFF.md`, `PARITY.md`, `docs/abi-manifests/`,
+    `BENCHMARK_RESULTS.md`, and affected policy docs.
   - Verify: `docs/upstream.md` includes cadence and required checks.
 
 ## Definition of done for a production-style release

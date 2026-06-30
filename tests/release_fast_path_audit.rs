@@ -2740,6 +2740,40 @@ fn memory_corruption_triage_checklist_is_concrete_in_security_policy() {
 }
 
 #[test]
+fn upstream_sync_policy_includes_cadence_and_required_evidence_updates() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let upstream = fs::read_to_string(root.join("docs/upstream.md")).expect("read upstream docs");
+
+    for required in [
+        "Review Cadence",
+        "at least quarterly and before every\nrelease candidate",
+        "upstream publishes a security\nrelease, CVE",
+        "Do not update vendored sources without updating parity,\nABI, release, and benchmark evidence",
+        "When upstream public headers or C ABI declarations change, re-run",
+        "scripts/check-public-abi.py",
+        "scripts/check-public-symbols.py --write-dynamic-manifests",
+        "scripts/check-abi-symbols.sh",
+        "scripts/check-release-artifact-consumer.py",
+        "When upstream implementation behavior changes, re-run",
+        "scripts/check-behavioral-parity.py",
+        "scripts/check-unsafe-audit-evidence.py",
+        "scripts/check-fuzz-smoke.sh",
+        "For allocator hot paths, page/arena behavior, platform primitives",
+        "Evidence Updates",
+        "`../UPSTREAM_DIFF.md`: baseline version",
+        "`PARITY.md`: supported parity matrix",
+        "ABI manifests under `docs/abi-manifests/`",
+        "`BENCHMARK_RESULTS.md`: benchmark command lines",
+        "geomean Rust/C ratios",
+    ] {
+        assert!(
+            upstream.contains(required),
+            "upstream sync policy should include marker {required}"
+        );
+    }
+}
+
+#[test]
 fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");

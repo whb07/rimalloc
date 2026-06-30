@@ -435,15 +435,23 @@ Validated remaining issues:
     so the static C smoke tests use the platform C linker.
   - Verify: new C consumer script is run by validation or release CI.
 
-- [ ] Add focused `dlopen`/`dlsym` tests.
-  - [ ] Build the documented `c-abi` cdylib.
-  - [ ] `dlopen` the artifact with `RTLD_NOW`.
-  - [ ] Resolve `mi_malloc`, `mi_free`, `mi_good_size`, and representative
+- [x] Add focused `dlopen`/`dlsym` tests.
+  - [x] Build the documented `c-abi` cdylib.
+  - [x] `dlopen` the artifact with `RTLD_NOW`.
+  - [x] Resolve `mi_malloc`, `mi_free`, `mi_good_size`, and representative
         stats/options symbols.
-  - [ ] Allocate and free through resolved function pointers.
-  - [ ] Assert plain `malloc` is not redirected by `dlopen` alone.
-  - [ ] Assert no unexpected extension symbol is resolvable in the clean
+  - [x] Allocate and free through resolved function pointers.
+  - [x] Assert plain `malloc` is not redirected by `dlopen` alone.
+  - [x] Assert no unexpected extension symbol is resolvable in the clean
         default C ABI artifact.
+  - Evidence: `scripts/check-release-dlopen.py` rebuilds staged release
+    artifacts, copies the release payload to a temporary directory outside the
+    repository, compiles a C probe, `dlopen`s the staged `c-abi` cdylib with
+    `RTLD_NOW | RTLD_LOCAL`, resolves `mi_malloc`, `mi_free`, `mi_good_size`,
+    `mi_stats_reset`, `mi_option_get`, and `mi_check_owned`, allocates/frees via
+    resolved pointers, verifies plain libc `malloc` is not owned after `dlopen`
+    alone, and verifies `mi_heap_check_owned` is absent from the clean C ABI
+    artifact.
   - Verify: focused dynamic loading script passes on Linux x86_64 GNU.
 
 - [ ] Add focused `LD_PRELOAD` interposition tests.

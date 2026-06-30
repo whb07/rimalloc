@@ -2774,6 +2774,22 @@ fn upstream_sync_policy_includes_cadence_and_required_evidence_updates() {
 }
 
 #[test]
+fn release_readiness_backlog_has_no_unchecked_items() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
+
+    let unchecked: Vec<_> = todo
+        .lines()
+        .filter(|line| line.trim_start().starts_with("- [ ]"))
+        .collect();
+
+    assert!(
+        unchecked.is_empty(),
+        "release readiness backlog should have no unchecked items: {unchecked:#?}"
+    );
+}
+
+#[test]
 fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");

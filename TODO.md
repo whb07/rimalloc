@@ -1319,18 +1319,66 @@ Validated remaining issues:
     and checked static manifests are complete; `scripts/check-static-link-collisions.py`
     remains the release audit for representative preview static archive link
     behavior.
-- [ ] Release artifacts include headers, link metadata, checksums, symbol
+- [x] Release artifacts include headers, link metadata, checksums, symbol
       manifests, and reproducibility notes.
-- [ ] C and C++ consumers link dynamically and statically in CI or release CI.
-- [ ] `LD_PRELOAD` interposition is tested for the documented artifact mode.
-- [ ] ASan, TSan, Valgrind, Miri, layout, symbol, and parity checks are release
+  - Evidence: `scripts/build-release-artifacts.py` stages public headers,
+    pkg-config/CMake metadata, `SHA256SUMS`, detached checksum signatures,
+    per-artifact ABI symbol manifests, environment notes, benchmark evidence
+    references, and dependency reports; `scripts/check-release-integrity.py`,
+    `scripts/check-release-reproducibility.py`, and `docs/reproducibility.md`
+    verify the release artifact contract.
+- [x] C and C++ consumers link dynamically and statically in CI or release CI.
+  - Evidence: `.github/workflows/validation.yml` runs release artifact consumer,
+    link metadata, `dlopen`, `LD_PRELOAD`, and C++ artifact checks; the release
+    checklist also requires `scripts/check-release-artifact-consumer.py`,
+    `scripts/check-release-link-metadata.py`, and
+    `scripts/check-release-cxx-artifacts.py` before tagging.
+- [x] `LD_PRELOAD` interposition is tested for the documented artifact mode.
+  - Evidence: `docs/ffi-linking.md` documents `interpose-cdylib` as the
+    supported `LD_PRELOAD` mode, `.github/workflows/validation.yml` runs the
+    focused consumer check, and `scripts/check-release-ld-preload.py` validates
+    malloc-family interposition from the staged release payload.
+- [x] ASan, TSan, Valgrind, Miri, layout, symbol, and parity checks are release
       gates.
-- [ ] Maintained external fuzz targets exist and have seed corpora.
-- [ ] Every unsafe audit tag maps to tests, tooling evidence, or manual proof.
-- [ ] Benchmark report shows wrapper and strict-type changes stay within
+  - Evidence: `docs/release.md` requires the hardening workflow jobs plus
+    `scripts/check-layout.sh`, `scripts/check-abi-symbols.sh`,
+    `scripts/check-behavioral-parity.py` through the parity signoff path, Miri,
+    sanitizer, and Valgrind scripts before release; `.github/workflows/validation.yml`
+    wires the corresponding jobs.
+- [x] Maintained external fuzz targets exist and have seed corpora.
+  - Evidence: `fuzz/Cargo.toml`, `fuzz/fuzz_targets/alloc_sequences.rs`, and
+    `fuzz/corpus/alloc_sequences/` provide the maintained target and seed
+    corpus; `scripts/check-fuzz-smoke.sh` builds and runs the external harness
+    over the corpus.
+- [x] Every unsafe audit tag maps to tests, tooling evidence, or manual proof.
+  - Evidence: `docs/unsafe-audit-evidence.tsv` maps audit operation IDs to
+    tests, scripts, Miri, sanitizer, benchmark, assembly, or manual evidence,
+    and `scripts/check-unsafe-audit-evidence.py` fails if a source audit ID is
+    missing evidence.
+- [x] Benchmark report shows wrapper and strict-type changes stay within
       documented budgets.
-- [ ] Docs clearly distinguish safe Rust API, unsafe raw Rust API, and C ABI
+  - Evidence: `docs/performance.md`, `BENCHMARK_RESULTS.md`,
+    `benchmarks/thresholds.json`, `scripts/check-bench-smoke.sh`,
+    `scripts/check-bench-full.sh`, and `scripts/check-bench-thresholds.py`
+    define the release benchmark budgets, artifact-mode evidence, noisy-case
+    handling, and strict-wrapper assembly escalation requirements.
+- [x] Docs clearly distinguish safe Rust API, unsafe raw Rust API, and C ABI
       artifacts.
-- [ ] Supported target claims remain narrow and evidence-backed.
-- [ ] Security reporting, signing, SBOM/dependency report, and release
+  - Evidence: README, `docs/api-inventory.md`, `docs/compatibility.md`,
+    `docs/rust-safety-model.md`, `docs/abi.md`, and `docs/ffi-linking.md`
+    separate Tier S safe Rust, Tier U unsafe Rust conveniences, Tier R raw Rust
+    facade path stability, and Tier C C ABI artifacts.
+- [x] Supported target claims remain narrow and evidence-backed.
+  - Evidence: README, `docs/release.md`, `docs/platforms.md`,
+    `docs/limitations.md`, and `docs/compatibility.md` limit maintained release
+    support to Linux x86_64 GNU and require platform promotion evidence before
+    source-present smoke targets can become marketed support claims.
+- [x] Security reporting, signing, SBOM/dependency report, and release
       reproduction process are documented.
+  - Evidence: `SECURITY.md`, `docs/security-advisories.md`,
+    `docs/release-signing.md`, `docs/dependencies.md`,
+    `docs/reproducibility.md`, `scripts/check-release-integrity.py`,
+    `scripts/check-release-reproducibility.py`, and
+    `scripts/build-release-artifacts.py` cover private reporting, advisory
+    handling, signed tags/checksums, dependency report generation, and artifact
+    reproduction.

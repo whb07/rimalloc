@@ -1151,11 +1151,19 @@ Validated remaining issues:
 
 ## P2 - Security and governance
 
-- [ ] Add a concrete private vulnerability reporting process.
-  - [ ] Add a security email address or GitHub Security Advisory instructions.
-  - [ ] State expected acknowledgement and triage timelines.
-  - [ ] State what information reporters should include.
-  - [ ] Keep unsupported-target triage policy clear.
+- [x] Add a concrete private vulnerability reporting process.
+  - [x] Add a security email address or GitHub Security Advisory instructions.
+  - [x] State expected acknowledgement and triage timelines.
+  - [x] State what information reporters should include.
+  - [x] Keep unsupported-target triage policy clear.
+  - Evidence: `SECURITY.md` now directs private reports to GitHub Security
+    Advisories, tells reporters not to publish vulnerability details in public
+    issues, defines fallback public-contact wording when private reporting is
+    unavailable, sets acknowledgement, initial triage, and severity/fix-plan
+    response targets, expands the requested report details, and clarifies
+    unsupported-target security triage. `tests/release_fast_path_audit.rs`
+    checks the private contact path, timelines, report details, and
+    unsupported-target policy.
   - Verify: `SECURITY.md` has a concrete private contact path.
 
 - [ ] Add release signing.

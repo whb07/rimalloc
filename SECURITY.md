@@ -8,14 +8,44 @@ branch unless a release branch is explicitly created.
 ## Reporting
 
 Please report suspected memory-safety, allocator-correctness, or security issues
-privately to the repository maintainers. Include:
+privately through GitHub Security Advisories:
 
+```text
+https://github.com/whb07/mechanical_mimalloc/security/advisories/new
+```
+
+Do not file a public issue with vulnerability details before the report is
+triaged. If GitHub private vulnerability reporting is unavailable, open a
+minimal public issue that says only that you need a private security contact;
+do not include a reproducer, crash details, exploit details, or private
+environment data in that public issue.
+
+Include:
+
+- affected crate version, release tag, or commit SHA,
 - target platform and Rust version,
-- enabled features,
-- a minimized reproducer,
+- target triple and whether the report uses the Rust library, `c-abi` cdylib,
+  `interpose` cdylib, preview static archive, or raw facade,
+- enabled features and relevant environment variables,
+- a minimized reproducer or private repository with reproduction steps,
 - whether the issue requires `secure`, `guarded`, `track-valgrind`, or
   `track-asan`,
-- observed crash, corruption, leak, or invariant failure.
+- observed crash, corruption, leak, invariant failure, or security impact,
+- whether C mimalloc 3.3.2 reproduces the same behavior,
+- sanitizer, Miri, Valgrind, debugger, core dump, or log output when available.
+
+## Response Timeline
+
+The maintainer response targets are:
+
+- Acknowledge receipt within 3 business days.
+- Provide initial triage within 7 calendar days after enough reproduction
+  information is available.
+- Provide a severity/fix-plan update within 14 calendar days, or explain why
+  more information is needed.
+- Coordinate public disclosure through a GitHub Security Advisory, changelog
+  entry, and release notes after a fix is available, unless the reporter and
+  maintainers agree on a different timeline.
 
 ## Scope
 
@@ -77,5 +107,13 @@ was enabled.
 ## Unsupported Targets
 
 Linux x86_64 GNU is the currently maintained target. Reports for source-present
-but unsupported targets are welcome, but they may be triaged as platform
-enablement work unless the issue also affects the maintained target.
+but unsupported targets are welcome. They are triaged as portability issues
+unless one of these conditions holds:
+
+- the issue reproduces on Linux x86_64 GNU,
+- the issue exposes a cross-platform safety or security bug,
+- the issue affects release artifact generation, symbol policy, or documented
+  compatibility claims for the maintained target.
+
+Unsupported-target reports that do not meet those conditions may still be fixed,
+but they are not release blockers for the maintained target line.

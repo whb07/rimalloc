@@ -2288,6 +2288,51 @@ fn source_present_platforms_stay_out_of_release_marketing() {
 }
 
 #[test]
+fn private_vulnerability_reporting_process_is_concrete() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let security = fs::read_to_string(root.join("SECURITY.md")).expect("read SECURITY.md");
+
+    for required in [
+        "https://github.com/whb07/mechanical_mimalloc/security/advisories/new",
+        "Do not file a public issue with vulnerability details",
+        "If GitHub private vulnerability reporting is unavailable",
+        "Acknowledge receipt within 3 business days",
+        "initial triage within 7 calendar days",
+        "severity/fix-plan update within 14 calendar days",
+        "Coordinate public disclosure through a GitHub Security Advisory",
+    ] {
+        assert!(
+            security.contains(required),
+            "SECURITY.md should define concrete private reporting process: {required}"
+        );
+    }
+    for report_detail in [
+        "affected crate version, release tag, or commit SHA",
+        "target triple",
+        "`c-abi` cdylib",
+        "`interpose` cdylib",
+        "preview static archive",
+        "enabled features",
+        "minimized reproducer",
+        "whether C mimalloc 3.3.2 reproduces",
+        "sanitizer, Miri, Valgrind",
+    ] {
+        assert!(
+            security.contains(report_detail),
+            "SECURITY.md should tell reporters to include {report_detail}"
+        );
+    }
+    assert!(
+        security.contains("Linux x86_64 GNU is the currently maintained target")
+            && security.contains("triaged as portability issues")
+            && security.contains("reproduces on Linux x86_64 GNU")
+            && security.contains("cross-platform safety or security bug")
+            && security.contains("not release blockers for the maintained target line"),
+        "SECURITY.md should keep unsupported-target security triage clear"
+    );
+}
+
+#[test]
 fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");

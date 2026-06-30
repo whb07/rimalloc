@@ -157,6 +157,15 @@ impl std::error::Error for TryAllocError {
 }
 
 /// Cause of a failed resize operation.
+///
+/// ```rust
+/// use mechanical_mimalloc::{Allocation, ResizeErrorKind};
+///
+/// let allocation = Allocation::new_bytes(8).unwrap();
+/// let err = allocation.resize_with_size_align(8, 3).unwrap_err();
+/// assert!(matches!(err.kind(), ResizeErrorKind::Layout(_)));
+/// assert_eq!(err.allocation().len(), 8);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ResizeErrorKind {
@@ -186,6 +195,16 @@ impl std::error::Error for ResizeErrorKind {
 }
 
 /// Error returned when resizing fails without consuming the original allocation.
+///
+/// ```rust
+/// use mechanical_mimalloc::{Allocation, ResizeErrorKind};
+///
+/// let allocation = Allocation::zeroed_bytes(4).unwrap();
+/// let err = allocation.resize_with_size_align(4, 3).unwrap_err();
+/// let (allocation, kind) = err.into_parts();
+/// assert!(matches!(kind, ResizeErrorKind::Layout(_)));
+/// assert_eq!(allocation.len(), 4);
+/// ```
 #[derive(Debug, PartialEq, Eq)]
 pub struct ResizeError<A> {
     pub(super) allocation: A,

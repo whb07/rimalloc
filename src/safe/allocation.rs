@@ -468,6 +468,17 @@ impl fmt::Debug for RawAllocation {
 }
 
 /// Owned allocation whose bytes are initialized and safe to view as a byte slice.
+///
+/// ```rust
+/// use mechanical_mimalloc::InitializedAllocation;
+///
+/// let mut allocation = InitializedAllocation::zeroed_bytes(4).unwrap();
+/// assert_eq!(allocation.as_bytes(), &[0, 0, 0, 0]);
+///
+/// allocation.as_mut_bytes().copy_from_slice(&[1, 2, 3, 4]);
+/// let cloned = allocation.try_clone_contents().unwrap();
+/// assert_eq!(cloned.as_bytes(), &[1, 2, 3, 4]);
+/// ```
 #[must_use]
 pub struct InitializedAllocation {
     raw: RawAllocation,

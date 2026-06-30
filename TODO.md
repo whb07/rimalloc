@@ -846,14 +846,20 @@ Validated remaining issues:
 
 ## P1 - Safe API polish without broadening the API
 
-- [ ] Add examples or doctests for every Tier S type.
-  - [ ] Cover `MiMalloc`.
-  - [ ] Cover `Allocation` and `InitializedAllocation`.
-  - [ ] Cover `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
+- [x] Add examples or doctests for every Tier S type.
+  - [x] Cover `MiMalloc`.
+  - [x] Cover `Allocation` and `InitializedAllocation`.
+  - [x] Cover `Heap`, `HeapRef`, `MainHeap`, `HeapAllocation`, and
         `InitializedHeapAllocation`.
-  - [ ] Cover `GlobalOptions` and `OptionKey`.
-  - [ ] Cover `StatsSnapshot`, `StatCount`, `StatTotal`, and `ProcessInfo`.
-  - [ ] Cover every safe error/status type.
+  - [x] Cover `GlobalOptions` and `OptionKey`.
+  - [x] Cover `StatsSnapshot`, `StatCount`, `StatTotal`, and `ProcessInfo`.
+  - [x] Cover every safe error/status type.
+  - Evidence: Tier S type docs now include runnable examples for initialized
+    owned allocations, heap references and heap-tied initialized/uninitialized
+    allocations, main-heap borrowing, global option key reads/writes, typed
+    statistics counts/totals, process information, statistics snapshots, and
+    resize/error preservation. Existing examples continue to cover `MiMalloc`,
+    `Allocation`, `AllocError`, `LayoutError`, and `TryAllocError`.
   - Verify: `cargo test --doc --features std`.
 
 - [ ] Enforce rustdoc sections for safe APIs.

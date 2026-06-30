@@ -7,6 +7,18 @@ use core::time::Duration;
 use super::HeapRef;
 
 /// Error returned by safe statistics APIs.
+///
+/// ```rust
+/// use mechanical_mimalloc::{StatsError, StatsSnapshot};
+///
+/// if let Ok(snapshot) = StatsSnapshot::capture() {
+///     let mut too_small = [0u8; 1];
+///     assert_eq!(
+///         snapshot.write_json(&mut too_small),
+///         Err(StatsError::BufferTooSmall)
+///     );
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum StatsError {
@@ -32,6 +44,13 @@ impl fmt::Display for StatsError {
 impl std::error::Error for StatsError {}
 
 /// Typed statistics count.
+///
+/// ```rust
+/// use mechanical_mimalloc::StatCount;
+///
+/// let count = StatCount::new(-2);
+/// assert_eq!(count.get(), -2);
+/// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 #[must_use]
 pub struct StatCount(i64);
@@ -52,6 +71,13 @@ impl StatCount {
 }
 
 /// Typed statistics byte total.
+///
+/// ```rust
+/// use mechanical_mimalloc::StatTotal;
+///
+/// let total = StatTotal::new(4096);
+/// assert_eq!(total.get(), 4096);
+/// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 #[must_use]
 pub struct StatTotal(usize);
@@ -83,6 +109,14 @@ impl StatTotal {
 }
 
 /// Non-printing snapshot of mimalloc statistics.
+///
+/// ```rust
+/// use mechanical_mimalloc::StatsSnapshot;
+///
+/// let snapshot = StatsSnapshot::capture().unwrap();
+/// assert!(snapshot.reserved_peak().get() >= snapshot.reserved_current().get());
+/// let _requested = snapshot.malloc_requested_total().get();
+/// ```
 #[derive(Clone, Debug)]
 #[must_use]
 pub struct StatsSnapshot {
@@ -220,6 +254,15 @@ impl StatsSnapshot {
 /// reported zero total is indistinguishable from an unavailable total through
 /// this safe facade. Page faults return a direct count because zero is a valid
 /// observed count for that field, not an unavailable sentinel.
+///
+/// ```rust
+/// use mechanical_mimalloc::ProcessInfo;
+///
+/// let info = ProcessInfo::current();
+/// assert!(info.page_size().is_none_or(|size| size.is_power_of_two()));
+/// let _elapsed = info.elapsed();
+/// let _faults = info.page_faults().get();
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[must_use]
 pub struct ProcessInfo {

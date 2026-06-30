@@ -40,6 +40,20 @@ impl std::error::Error for HeapError {}
 
 /// Owned mimalloc heap.
 ///
+/// ```rust
+/// use core::alloc::Layout;
+/// use mechanical_mimalloc::Heap;
+///
+/// let heap = Heap::new().unwrap();
+/// let heap_ref = heap.as_ref();
+///
+/// let allocation = heap.allocate(Layout::from_size_align(16, 8).unwrap()).unwrap();
+/// assert_eq!(allocation.len(), 16);
+///
+/// let zeroed = heap_ref.allocate_zeroed_bytes(4).unwrap();
+/// assert_eq!(zeroed.as_bytes(), &[0, 0, 0, 0]);
+/// ```
+///
 /// Heap-tied allocations borrow the heap, so safe code cannot move them beyond
 /// the heap lifetime:
 ///
@@ -250,6 +264,19 @@ impl fmt::Debug for HeapRef<'_> {
 /// through it use the same heap-tied allocation wrappers as owned heaps, but
 /// are tied to the process-global main heap lifetime instead of to a temporary
 /// `MainHeap` value.
+///
+/// ```rust
+/// use mechanical_mimalloc::MainHeap;
+///
+/// let main = MainHeap::get().unwrap();
+/// let main_ref = main.as_ref();
+///
+/// let allocation = main.allocate_zeroed_bytes(8).unwrap();
+/// assert_eq!(allocation.as_bytes(), &[0; 8]);
+///
+/// let stats = main_ref.stats().unwrap();
+/// assert!(stats.reserved_peak().get() >= stats.reserved_current().get());
+/// ```
 #[derive(Clone, Copy)]
 #[must_use]
 pub struct MainHeap {
@@ -344,6 +371,19 @@ impl MainHeap {
 }
 
 /// Allocation tied to the lifetime of the heap borrow that created it.
+///
+/// ```rust
+/// use core::alloc::Layout;
+/// use mechanical_mimalloc::Heap;
+///
+/// let heap = Heap::new().unwrap();
+/// let mut allocation = heap.allocate(Layout::from_size_align(3, 1).unwrap()).unwrap();
+/// for (slot, byte) in allocation.as_uninit_slice_mut().iter_mut().zip([7, 8, 9]) {
+///     slot.write(byte);
+/// }
+/// let initialized = unsafe { allocation.assume_initialized() };
+/// assert_eq!(initialized.as_bytes(), &[7, 8, 9]);
+/// ```
 ///
 /// ```rust,compile_fail
 /// use core::alloc::Layout;
@@ -700,6 +740,17 @@ impl fmt::Debug for HeapAllocation<'_> {
 }
 
 /// Heap allocation whose bytes are initialized.
+///
+/// ```rust
+/// use mechanical_mimalloc::Heap;
+///
+/// let heap = Heap::new().unwrap();
+/// let mut allocation = heap.allocate_zeroed_bytes(4).unwrap();
+/// allocation.as_mut_bytes().copy_from_slice(&[4, 3, 2, 1]);
+///
+/// let uninitialized = allocation.into_allocation();
+/// assert_eq!(uninitialized.len(), 4);
+/// ```
 #[must_use]
 pub struct InitializedHeapAllocation<'heap> {
     raw: RawHeapAllocation<'heap>,

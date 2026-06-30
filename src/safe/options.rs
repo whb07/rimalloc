@@ -2,6 +2,13 @@ use core::ffi::c_long;
 use core::fmt;
 
 /// Error returned by safe options APIs.
+///
+/// ```rust
+/// use mechanical_mimalloc::{OptionError, OptionKey};
+///
+/// assert_eq!(OptionKey::from_raw(-1), Err(OptionError::InvalidKey));
+/// assert_eq!(OptionKey::from_raw(2), Err(OptionError::Unsupported));
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum OptionError {
@@ -24,6 +31,14 @@ impl fmt::Display for OptionError {
 impl std::error::Error for OptionError {}
 
 /// Safe mimalloc option key.
+///
+/// ```rust
+/// use mechanical_mimalloc::OptionKey;
+///
+/// let key = OptionKey::MaxWarnings;
+/// assert_eq!(OptionKey::from_raw(key.as_raw()), Ok(key));
+/// assert!(OptionKey::ALL.contains(&key));
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum OptionKey {
@@ -115,6 +130,16 @@ impl TryFrom<i32> for OptionKey {
 /// through mimalloc's process-global option table, so callers that temporarily
 /// mutate an option should restore the previous value before returning control
 /// to unrelated code.
+///
+/// ```rust
+/// use mechanical_mimalloc::{GlobalOptions, OptionKey};
+///
+/// let key = OptionKey::MaxWarnings;
+/// let previous = GlobalOptions::get(key);
+/// GlobalOptions::set(key, previous.saturating_add(1)).unwrap();
+/// assert_eq!(GlobalOptions::get(key), previous.saturating_add(1));
+/// GlobalOptions::set(key, previous).unwrap();
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GlobalOptions;
 

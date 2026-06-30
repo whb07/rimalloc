@@ -7,6 +7,7 @@ owned-allocation	test	src/safe/mod.rs	Exercises safe owned Allocation constructi
 owned-allocation	test	tests/allocation_boundary_cases.rs	Covers allocation boundary cases that the owned wrapper forwards to.
 panic-boundary	test	tests/ffi_panic_audit.rs	Checks production panic-abort policy and callback panic containment documentation.
 panic-boundary	test	tests/release_fast_path_audit.rs	Checks callback and C ABI paths retain no-unwind/no-allocation boundary structure.
+panic-boundary	script	scripts/check-no-unwind-artifact.py	Builds the release c-abi cdylib and verifies artifact-level no-unwind evidence from a C consumer.
 raw-auto-trait	test	src/types/constants.rs	Unit tests assert the intentionally retained sentinel Sync impls.
 raw-auto-trait	test	tests/release_fast_path_audit.rs	Structural audit keeps raw layout and callback types bounded to documented surfaces.
 raw-macro-boundary	script	scripts/check-ffi-boundary.py	Checks raw macro boundary files retain their required audit tags.

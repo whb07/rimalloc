@@ -406,7 +406,9 @@ contract.
 
 Allocator ABI entry points must not unwind across C boundaries. Production
 Linux release cdylib builds use panic abort behavior, and audit tests check the
-no-std/panic setup.
+no-std/panic setup. `scripts/check-no-unwind-artifact.py` builds the release
+`c-abi` cdylib, rejects real unwind runtime exports, and runs a C consumer over
+representative error, callback, and OOM/null paths.
 
 ## C++ Operator New/Delete
 

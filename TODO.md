@@ -722,13 +722,20 @@ Validated remaining issues:
   - Verify: callback tests and any model tests pass under the safety-stress
     script.
 
-- [ ] Add artifact-level no-unwind tests.
-  - [ ] Build the release `c-abi` cdylib with panic abort.
-  - [ ] Trigger representative error, callback, and OOM paths from a C
+- [x] Add artifact-level no-unwind tests.
+  - [x] Build the release `c-abi` cdylib with panic abort.
+  - [x] Trigger representative error, callback, and OOM paths from a C
         consumer.
-  - [ ] Assert Rust panic/unwind does not cross the C ABI boundary.
-  - [ ] Include callback panic containment where `std` or test builds catch
+  - [x] Assert Rust panic/unwind does not cross the C ABI boundary.
+  - [x] Include callback panic containment where `std` or test builds catch
         panics.
+  - Evidence: `scripts/check-no-unwind-artifact.py` builds the release `c-abi`
+    cdylib in an isolated target directory, verifies the release profile uses
+    `panic = "abort"`, rejects real unwind runtime/personality exports while
+    requiring the aborting no-std personality shim, compiles and runs a C
+    consumer over allocation, overflow/error callback, OOM/null, and
+    deferred-free callback paths, and runs the serialized ignored callback tests
+    that cover `std`/test panic containment.
   - Verify: no-unwind artifact test passes on Linux x86_64 GNU.
 
 - [ ] Add sustained thread-stress coverage for release candidates.

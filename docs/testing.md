@@ -111,6 +111,7 @@ the scripts listed in `PARITY.md`, especially:
 
 ```sh
 scripts/check-behavioral-parity.py
+scripts/check-no-unwind-artifact.py
 scripts/check-cxx-operator-new-parity.py
 scripts/check-release-cxx-artifacts.py
 scripts/check-secure-mode-parity.py
@@ -122,6 +123,10 @@ scripts/check-valgrind-tracking-parity.py
 These checks compare null behavior, usable-size behavior, alignment, realloc
 preservation, heap APIs, options, stats, feature modes, C++ overrides, and
 platform-specific behavior where the current supported matrix claims parity.
+`scripts/check-no-unwind-artifact.py` builds the release `c-abi` cdylib,
+compiles a C consumer that exercises allocation, overflow/error, callback, and
+OOM/null paths, checks the artifact's aborting no-std personality boundary, and
+runs the serialized callback panic-containment tests for `std`/test builds.
 `scripts/check-behavioral-parity.py` prints the artifact modes it exercises at
 startup. Use `scripts/check-behavioral-parity.py --only dynamic` for the
 CI-friendly dynamic artifact-mode slice: `dlopen` loads the Rust `c-abi`

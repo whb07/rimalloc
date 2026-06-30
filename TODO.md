@@ -1303,7 +1303,14 @@ Validated remaining issues:
 - [x] Tier S/Tier U Rust API contract is frozen and diffed.
 - [x] `Options` alias decision is complete.
 - [x] `raw` release policy is explicit and tested.
-- [ ] Dynamic C ABI has no unintentional extra `mi_*` exports.
+- [x] Dynamic C ABI has no unintentional extra `mi_*` exports.
+  - Evidence: `docs/symbol-versioning.md` defines public-header `mi_*` exports
+    as the only clean `c-abi` dynamic symbol set, and
+    `scripts/check-abi-symbols.sh` runs
+    `scripts/check-public-symbols.py --dynamic-mi`, `--dynamic-groups`,
+    `--dynamic-manifests`, and `--dynamic-manifest-self-test` so unexpected
+    dynamic `mi_*`, malloc-family, C++ override, or manifest symbols fail the
+    release gate.
 - [ ] Staticlib is either clean enough for production or explicitly
       preview-only.
 - [ ] Release artifacts include headers, link metadata, checksums, symbol

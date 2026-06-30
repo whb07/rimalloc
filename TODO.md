@@ -838,10 +838,10 @@ Validated remaining issues:
     default-feature packaged Rust consumer, runs a docs.rs-style
     `RUSTDOCFLAGS="--cfg docsrs" cargo doc --no-deps --features std` build
     against the unpacked package, and invokes
-    `scripts/check-package-ffi-consumer.py`. The FFI consumer copies the staged
-    release asset tree to a temporary downloaded-assets directory and compiles
-    a C consumer using only the copied headers and `c-abi` cdylib, with no
-    repository include paths or consumer-side release scripts.
+    `python3 scripts/check-package-ffi-consumer.py`. The FFI consumer copies
+    the staged release asset tree to a temporary downloaded-assets directory
+    and compiles a C consumer using only the copied headers and `c-abi` cdylib,
+    with no repository include paths or consumer-side release scripts.
   - Verify: `scripts/check-package.sh` plus new FFI consumer check.
 
 ## P1 - Safe API polish without broadening the API

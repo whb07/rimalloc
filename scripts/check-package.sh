@@ -131,4 +131,4 @@ run env RUSTDOCFLAGS="--cfg docsrs" cargo doc \
   --no-deps \
   --features std
 
-run scripts/check-package-ffi-consumer.py
+run python3 scripts/check-package-ffi-consumer.py

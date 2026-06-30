@@ -208,7 +208,8 @@ Before publishing or tagging a release:
 11. Run `scripts/check-release-cxx-artifacts.py`.
 12. Run `scripts/check-release-integrity.py`.
 13. Run `scripts/check-layout.sh` for ABI/layout audits.
-14. Run audit drift checks: `scripts/check-unsafe-audit.py`,
+14. Run audit drift checks: `scripts/check-unsafe-inventory.py --verify-builds`,
+   `scripts/check-unsafe-audit.py`,
    `scripts/check-unsafe-audit-evidence.py`,
    `scripts/check-atomic-ordering-audit.py`,
    `scripts/check-pointer-provenance-audit.py`,

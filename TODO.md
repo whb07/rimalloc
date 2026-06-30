@@ -643,13 +643,19 @@ Validated remaining issues:
     not exist; CI, release docs, and `scripts/check-local.sh` now run it.
   - Verify: new audit-evidence check plus `scripts/check-unsafe-audit.py`.
 
-- [ ] Add an advisory unsafe inventory report.
-  - [ ] Choose `cargo geiger` or a local equivalent.
-  - [ ] Generate a report for normal, `c-abi`, `interpose`, `secure`,
+- [x] Add an advisory unsafe inventory report.
+  - [x] Choose `cargo geiger` or a local equivalent.
+  - [x] Generate a report for normal, `c-abi`, `interpose`, `secure`,
         `guarded`, `track-valgrind`, and `track-asan` builds.
-  - [ ] Store the release report as advisory evidence, not as the sole safety
+  - [x] Store the release report as advisory evidence, not as the sole safety
         proof.
-  - [ ] Document how new unsafe count changes are reviewed.
+  - [x] Document how new unsafe count changes are reviewed.
+  - Evidence: `scripts/check-unsafe-inventory.py` provides the local equivalent
+    to `cargo geiger`, generating `docs/unsafe-inventory.md` with advisory
+    unsafe counts and the required build-mode commands. The report states that
+    it is not the sole safety proof and documents the review policy for count
+    changes. CI and `scripts/check-local.sh` reject stale reports; the release
+    checklist runs the script with `--verify-builds`.
   - Verify: release checklist includes the unsafe inventory report command.
 
 ## P1 - Add real fuzzing and failure injection

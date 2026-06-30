@@ -33,6 +33,7 @@ jobs:
           scripts/check-strict-types.py
       - name: Audit drift checks
         run: |
+          scripts/check-unsafe-inventory.py
           scripts/check-unsafe-audit.py
           scripts/check-unsafe-audit-evidence.py
           scripts/check-atomic-ordering-audit.py

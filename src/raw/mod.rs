@@ -64,7 +64,9 @@ pub mod abi {
 #[deprecated(
     note = "raw implementation module path; not public API; use root raw::mi_* or raw::abi for C-header surface"
 )]
-pub mod alloc;
+pub mod alloc {
+    pub use crate::alloc::*;
+}
 
 #[cfg(feature = "unstable-raw-internals")]
 #[deprecated(
@@ -100,7 +102,9 @@ pub mod alloc_posix {
 #[deprecated(
     note = "raw implementation module path; not public API; use root raw::mi_* or raw::abi for C-header surface"
 )]
-pub mod arena;
+pub mod arena {
+    pub use crate::arena::*;
+}
 
 #[cfg(feature = "unstable-raw-internals")]
 #[deprecated(
@@ -150,7 +154,9 @@ pub mod headers {
 #[deprecated(
     note = "raw implementation module path; not public API; use root raw::mi_* or raw::abi for C-header surface"
 )]
-pub mod heap;
+pub mod heap {
+    pub use crate::heap::*;
+}
 
 #[cfg(feature = "unstable-raw-internals")]
 #[deprecated(
@@ -192,7 +198,9 @@ pub mod mimalloc {
 #[deprecated(
     note = "raw implementation module path; not public API; use root raw::mi_* or raw::abi for C-header surface"
 )]
-pub mod options;
+pub mod options {
+    pub use crate::options::*;
+}
 
 #[cfg(feature = "unstable-raw-internals")]
 #[deprecated(
@@ -271,7 +279,9 @@ pub mod static_c {
 #[deprecated(
     note = "raw implementation module path; not public API; use root raw::mi_* or raw::abi for C-header surface"
 )]
-pub mod stats;
+pub mod stats {
+    pub use crate::stats::*;
+}
 
 #[cfg(feature = "unstable-raw-internals")]
 #[deprecated(

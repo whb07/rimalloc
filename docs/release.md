@@ -25,6 +25,15 @@ Release signoff must confirm that no new crate-root public item was added
 without inventory classification, compatibility review, and corresponding
 source-shape check updates.
 
+## Raw Facade Release Policy
+
+The current release policy keeps the public `raw` module available as Tier R.
+It is explicitly unsafe and Rust-path unstable. It exists for C-header parity,
+repository tests, benchmarks, and low-level integrations that can uphold the
+same pointer ownership, lifetime, layout, alignment, threading, and callback
+contracts as the C API. Keeping `raw` available does not stabilize translated
+implementation module paths or Rust layouts.
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.

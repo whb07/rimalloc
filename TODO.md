@@ -103,15 +103,19 @@ Validated remaining issues:
   - Verify: `cargo test --doc --features std` and
     `scripts/check-api-inventory.py`.
 
-- [ ] Confirm the long-term shape of `raw`.
-  - [ ] Decide whether the current Option A is the release policy: public
+- [x] Confirm the long-term shape of `raw`.
+  - [x] Decide whether the current Option A is the release policy: public
         `raw`, explicitly unsafe, explicitly unstable as a Rust path surface.
-  - [ ] If Option A is kept, add a release note that `raw` remains available for
+  - [x] If Option A is kept, add a release note that `raw` remains available for
         C-header parity, tests, benchmarks, and low-level integrations only.
-  - [ ] If Option B is chosen, gate `raw` behind an explicit feature before
+  - [x] If Option B is chosen, gate `raw` behind an explicit feature before
         the stable release and update examples, tests, docs, and inventory.
-  - [ ] If Option C is chosen, create a split-crate design for a safe Rust crate
+        Not applicable: Option A is the release policy.
+  - [x] If Option C is chosen, create a split-crate design for a safe Rust crate
         plus a `-sys` or FFI artifact crate before implementation.
+        Not applicable: Option A is the release policy.
+  - Evidence: `docs/release.md` now records the Tier R raw facade release
+    policy, and `CHANGELOG.md` records the release-note text.
   - Verify: `scripts/check-raw-facade.sh` and `scripts/check-docs.sh`.
 
 - [ ] Add a release API diff artifact for Tier S and Tier U.
@@ -814,7 +818,7 @@ Validated remaining issues:
 
 - [ ] Tier S/Tier U Rust API contract is frozen and diffed.
 - [x] `Options` alias decision is complete.
-- [ ] `raw` release policy is explicit and tested.
+- [x] `raw` release policy is explicit and tested.
 - [ ] Dynamic C ABI has no unintentional extra `mi_*` exports.
 - [ ] Staticlib is either clean enough for production or explicitly
       preview-only.

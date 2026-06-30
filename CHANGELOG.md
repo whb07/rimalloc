@@ -19,6 +19,8 @@ All notable changes to this repository should be recorded here.
   structure does not become accidental Rust API.
 - Narrow the default `raw` facade to public C-header-compatible paths:
   `raw::mi_*`, `raw::abi`, `raw::mimalloc`, and `raw::headers`.
+- Keep the public `raw` module as an unsafe, Rust-path-unstable Tier R facade
+  for C-header parity, repository tests, benchmarks, and low-level integrations.
 
 ### Deprecated
 

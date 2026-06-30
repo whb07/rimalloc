@@ -1096,12 +1096,19 @@ Validated remaining issues:
     compatibility, ABI, FFI linking, feature, and safe API docs.
   - Verify: guide links to compatibility and ABI docs.
 
-- [ ] Update production status text.
-  - [ ] State exactly what is supported.
-  - [ ] State exactly what is preview-only.
-  - [ ] State exactly what is unstable.
-  - [ ] Keep Linux x86_64 GNU as the only maintained target until more evidence
+- [x] Update production status text.
+  - [x] State exactly what is supported.
+  - [x] State exactly what is preview-only.
+  - [x] State exactly what is unstable.
+  - [x] Keep Linux x86_64 GNU as the only maintained target until more evidence
         exists.
+  - Evidence: README, `docs/limitations.md`, `docs/platforms.md`, and
+    `docs/release.md` now share a production status summary that identifies the
+    supported Tier S/Tier U/Tier C dynamic surfaces, preview-only static
+    artifacts, unstable raw/internal/extension/static-internal surfaces,
+    unsupported source-present non-maintained platforms, and Linux x86_64 GNU
+    as the only maintained target. `tests/release_fast_path_audit.rs` checks
+    that these status phrases agree across the four documents.
   - Verify: README, `docs/limitations.md`, `docs/platforms.md`, and
     `docs/release.md` agree.
 

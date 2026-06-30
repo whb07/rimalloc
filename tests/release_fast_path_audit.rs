@@ -2156,6 +2156,44 @@ fn c_mimalloc_migration_guide_maps_headers_apis_callbacks_and_platforms() {
 }
 
 #[test]
+fn production_status_text_agrees_across_public_docs() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let readme = fs::read_to_string(root.join("README.md")).expect("read README.md");
+    let limitations =
+        fs::read_to_string(root.join("docs/limitations.md")).expect("read limitations");
+    let platforms = fs::read_to_string(root.join("docs/platforms.md")).expect("read platforms");
+    let release = fs::read_to_string(root.join("docs/release.md")).expect("read release");
+
+    for doc in [&readme, &limitations, &platforms, &release] {
+        for required in [
+            "Production status:",
+            "Supported: Tier S safe Rust facade, Tier U unsafe callback guards, and Tier C",
+            "dynamic C ABI release artifacts `c-abi-cdylib` and `interpose-cdylib`.",
+            "Preview-only: staticlib release artifacts `c-abi-static-preview` and",
+            "`interpose-static-preview`.",
+            "Unstable: Tier R raw Rust facade path stability, translated implementation",
+            "modules, internal strict types, extension ABI, and static archive internal",
+            "symbols.",
+            "Unsupported: source-present non-maintained platforms are not release artifact",
+            "targets.",
+            "Maintained target: Linux x86_64 GNU only.",
+        ] {
+            assert!(
+                doc.contains(required),
+                "production status docs should agree on: {required}"
+            );
+        }
+    }
+    assert!(
+        readme.contains("The raw Rust facade is unstable as a Rust path surface")
+            && limitations.contains("The `raw` facade exposes C-shaped unsafe APIs")
+            && platforms.contains("CI may run smoke validation")
+            && release.contains("Tier R is the unsafe raw Rust facade"),
+        "production status text should keep raw instability and smoke-target caveats visible"
+    );
+}
+
+#[test]
 fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");

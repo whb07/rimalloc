@@ -135,12 +135,23 @@ This crate is pre-release at version `0.1.0` and is configured for packaging.
 The crate root exposes only the intended safe Rust facade, the explicit
 `unsafe_callbacks` namespace, and the `raw` facade; implementation modules are
 private so translation structure does not become an accidental SemVer contract.
+
+Production status:
+
+- Supported: Tier S safe Rust facade, Tier U unsafe callback guards, and Tier C
+  dynamic C ABI release artifacts `c-abi-cdylib` and `interpose-cdylib`.
+- Preview-only: staticlib release artifacts `c-abi-static-preview` and
+  `interpose-static-preview`.
+- Unstable: Tier R raw Rust facade path stability, translated implementation
+  modules, internal strict types, extension ABI, and static archive internal
+  symbols.
+- Unsupported: source-present non-maintained platforms are not release artifact
+  targets.
+- Maintained target: Linux x86_64 GNU only.
+
 The raw Rust facade is unstable as a Rust path surface; use it only behind an
 explicit unsafe boundary and expect inventory or migration notes before treating
 paths as stable.
-Maintained platform support is currently Linux x86_64 GNU. Other upstream
-mimalloc platform code may be present in the translation but is not claimed as a
-maintained Rust target without parity and CI evidence.
 
 ## Features
 

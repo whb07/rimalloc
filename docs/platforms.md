@@ -2,6 +2,19 @@
 
 The maintained target for this port is currently Linux x86_64 GNU.
 
+Production status:
+
+- Supported: Tier S safe Rust facade, Tier U unsafe callback guards, and Tier C
+  dynamic C ABI release artifacts `c-abi-cdylib` and `interpose-cdylib`.
+- Preview-only: staticlib release artifacts `c-abi-static-preview` and
+  `interpose-static-preview`.
+- Unstable: Tier R raw Rust facade path stability, translated implementation
+  modules, internal strict types, extension ABI, and static archive internal
+  symbols.
+- Unsupported: source-present non-maintained platforms are not release artifact
+  targets.
+- Maintained target: Linux x86_64 GNU only.
+
 ## Tier 1
 
 ### Linux x86_64 GNU

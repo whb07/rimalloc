@@ -46,19 +46,49 @@ trap 'rm -rf "$consumer_dir"' EXIT
 
 mkdir -p "$consumer_dir/vendor"
 tar -xzf "$crate_file" -C "$consumer_dir/vendor"
+package_root="$consumer_dir/vendor/mechanical_mimalloc-${version}"
 
-cat >"$consumer_dir/Cargo.toml" <<EOF
+run_rust_consumer() {
+  local name="$1"
+  local dependency="$2"
+  local source="$3"
+  local dir="$consumer_dir/$name"
+
+  mkdir -p "$dir/src"
+  cat >"$dir/Cargo.toml" <<EOF
 [package]
-name = "mechanical_mimalloc_package_consumer"
+name = "$name"
 version = "0.0.0"
 edition = "2024"
 
 [dependencies]
-mechanical_mimalloc = { path = "vendor/mechanical_mimalloc-${version}", features = ["std"] }
+mechanical_mimalloc = { path = "../vendor/mechanical_mimalloc-${version}"${dependency} }
 EOF
+  printf '%s\n' "$source" >"$dir/src/main.rs"
+  run cargo run --quiet --manifest-path "$dir/Cargo.toml"
+}
 
-mkdir -p "$consumer_dir/src"
-cat >"$consumer_dir/src/main.rs" <<'EOF'
+check_rust_library_consumer() {
+  local name="$1"
+  local dependency="$2"
+  local source="$3"
+  local dir="$consumer_dir/$name"
+
+  mkdir -p "$dir/src"
+  cat >"$dir/Cargo.toml" <<EOF
+[package]
+name = "$name"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+mechanical_mimalloc = { path = "../vendor/mechanical_mimalloc-${version}"${dependency} }
+EOF
+  printf '%s\n' "$source" >"$dir/src/lib.rs"
+  run cargo check --quiet --manifest-path "$dir/Cargo.toml"
+}
+
+std_consumer='
 use core::alloc::Layout;
 use mechanical_mimalloc::{Allocation, MiMalloc};
 
@@ -72,6 +102,33 @@ fn main() {
     let value = Box::new(42usize);
     assert_eq!(*value, 42);
 }
-EOF
+'
 
-run cargo run --quiet --manifest-path "$consumer_dir/Cargo.toml"
+default_consumer='
+#![no_std]
+
+use core::alloc::Layout;
+use mechanical_mimalloc::Allocation;
+
+pub fn allocate_len() -> Option<usize> {
+    let layout = Layout::from_size_align(32, 8).ok()?;
+    Allocation::zeroed(layout).ok().map(|allocation| allocation.len())
+}
+'
+
+run_rust_consumer \
+  mechanical_mimalloc_package_consumer_std \
+  ', features = ["std"]' \
+  "$std_consumer"
+check_rust_library_consumer \
+  mechanical_mimalloc_package_consumer_default \
+  "" \
+  "$default_consumer"
+
+run env RUSTDOCFLAGS="--cfg docsrs" cargo doc \
+  --quiet \
+  --manifest-path "$package_root/Cargo.toml" \
+  --no-deps \
+  --features std
+
+run scripts/check-package-ffi-consumer.py

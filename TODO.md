@@ -796,13 +796,19 @@ Validated remaining issues:
     `scripts/check-behavioral-parity.py` remains outside per-PR validation.
   - Verify: validation or release workflow names the artifact mode under test.
 
-- [ ] Align `docs/release.md` with existing hardening workflows.
-  - [ ] Add ASan to the release checklist.
-  - [ ] Add TSan to the release checklist.
-  - [ ] Add Valgrind tracking parity to the release checklist.
-  - [ ] Add Miri core unsafe validation to the release checklist.
-  - [ ] Add safety-stress to the release checklist.
-  - [ ] State which jobs must be green before a release tag.
+- [x] Align `docs/release.md` with existing hardening workflows.
+  - [x] Add ASan to the release checklist.
+  - [x] Add TSan to the release checklist.
+  - [x] Add Valgrind tracking parity to the release checklist.
+  - [x] Add Miri core unsafe validation to the release checklist.
+  - [x] Add safety-stress to the release checklist.
+  - [x] State which jobs must be green before a release tag.
+  - Evidence: `docs/release.md` now requires the `linux-x86_64`,
+    `linux-aarch64`, `macos`, `windows`, `safety-stress`, `miri`,
+    `address-sanitizer`, `thread-sanitizer`, and `valgrind` workflow jobs to
+    be green before creating a release tag. The release checklist also names
+    the matching local hardening commands for safety-stress, Miri, ASan, TSan,
+    and Valgrind tracking parity.
   - Verify: release checklist and `.github/workflows/validation.yml` agree.
 
 - [ ] Pin performance workflow toolchain consistently.

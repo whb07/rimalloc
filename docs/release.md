@@ -190,6 +190,20 @@ Validate C++ operator new/delete release artifact behavior:
 scripts/check-release-cxx-artifacts.py
 ```
 
+The validation workflow in `.github/workflows/validation.yml` is the required
+pre-tag gate. Before creating a release tag, these jobs must be green for the
+release commit:
+
+- `linux-x86_64` (`Linux x86_64 full validation`)
+- `linux-aarch64` (`Linux aarch64 smoke validation`)
+- `macos` (`macOS smoke validation`)
+- `windows` (`Windows smoke validation`)
+- `safety-stress` (`Safety and stress tests`)
+- `miri` (`Miri core unsafe validation`)
+- `address-sanitizer` (`AddressSanitizer`)
+- `thread-sanitizer` (`ThreadSanitizer`)
+- `valgrind` (`Valgrind tracking parity`)
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.
@@ -216,10 +230,18 @@ Before publishing or tagging a release:
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
 15. Run `scripts/check-release-thread-stress.py`.
-16. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
+16. Run `scripts/check-safety-stress.sh`.
+17. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
+   toolchain.
+18. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
+   scripts/check-sanitizers.sh`.
+19. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
+   scripts/check-sanitizers.sh`.
+20. Run `scripts/check-valgrind-tracking-parity.py`.
+21. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
    using `docs/performance.md` for thresholds and noise handling.
-17. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
-18. Capture `scripts/env-info.sh` output alongside benchmark evidence.
+22. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
+23. Capture `scripts/env-info.sh` output alongside benchmark evidence.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

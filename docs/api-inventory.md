@@ -303,13 +303,18 @@ exercise the same crate-root behavior. They are compatibility exports, not a
 recommended integration surface; new internal macros should not be exported
 unless downstream expansion or translated C-header parity requires it.
 
+The forwarding macros `MI_FORWARD1!`, `MI_FORWARD3!`, and `MI_FORWARD02!`
+were unused and have been removed from the crate-root macro surface. The raw
+Darwin interpose helper `MI_INTERPOSE_FUN!` is now file-local in
+`src/raw/macros.rs`, and the unused `MI_INTERPOSE_MI!` wrapper was removed.
+The stats field/declaration helpers `MI_STAT_COUNT!`, `MI_STAT_COUNTER!`,
+`MI_STAT_FIELDS!`, and `mi_stats_t_decl!` were removed from the Rust macro
+surface; internal stats paths now initialize `mi_stats_t` through a private
+function and downstream C parity remains covered by the vendored C headers.
+
 Forwarding and interposition macros:
 
-- `MI_FORWARD1!`
-- `MI_FORWARD3!`
-- `MI_FORWARD02!`
-- `MI_INTERPOSE_FUN!`
-- `MI_INTERPOSE_MI!`
+- None remain exported.
 
 Initialization, assertion, and utility macros:
 
@@ -335,10 +340,6 @@ Initialization, assertion, and utility macros:
 
 Statistics and once/guard macros:
 
-- `MI_STAT_COUNT!`
-- `MI_STAT_COUNTER!`
-- `MI_STAT_FIELDS!`
-- `mi_stats_t_decl!`
 - `mi_theap_stat_counter_increase!`
 - `mi_theap_stat_decrease!`
 - `mi_theap_stat_adjust_decrease!`

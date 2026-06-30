@@ -537,17 +537,23 @@ Validated remaining issues:
     stable release. `docs/abi.md` mirrors that ABI policy.
   - Verify: `scripts/check-api-inventory.py`.
 
-- [ ] Remove or privatize internal compatibility macros where possible.
-  - [ ] Inventory each internal macro call site.
-  - [ ] Replace single-crate call sites with crate-private `macro_rules!`
+- [x] Remove or privatize internal compatibility macros where possible.
+  - [x] Inventory each internal macro call site.
+  - [x] Replace single-crate call sites with crate-private `macro_rules!`
         definitions when downstream expansion does not require
         `#[macro_export]`.
-  - [ ] Replace simple statement-like macros with functions where that does
+  - [x] Replace simple statement-like macros with functions where that does
         not affect hot-path codegen or translated parity.
-  - [ ] Keep `#[macro_export]` only where downstream expansion or C-header
+  - [x] Keep `#[macro_export]` only where downstream expansion or C-header
         parity requires it.
-  - [ ] Add release-fast-path or assembly evidence for any hot-path macro
+  - [x] Add release-fast-path or assembly evidence for any hot-path macro
         replacement.
+  - Evidence: unused `MI_FORWARD1!`, `MI_FORWARD3!`, `MI_FORWARD02!`, and
+    `MI_INTERPOSE_MI!` exports were removed; `MI_INTERPOSE_FUN!` is now a
+    file-local raw interposition helper; stats declaration macros were removed
+    from the Rust macro surface, with internal stats reporting using a private
+    initializer function instead. No allocator hot-path macro body was moved or
+    replaced; the only function replacement is in stats print/JSON setup.
   - Verify: `cargo test --workspace --all-targets --all-features` and relevant
     benchmark smoke if hot paths moved.
 

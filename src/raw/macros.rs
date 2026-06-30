@@ -283,13 +283,6 @@ mod unix_bootstrap {
     }
 }
 
-#[macro_export]
-macro_rules! MI_FORWARD1 {
-    ($fun:path, $x:expr) => {{
-        return unsafe { $fun($x) };
-    }};
-}
-
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(mi_c_malloc_fast, not(mi_cxx_shim_linked)))]
@@ -520,21 +513,6 @@ core::arch::global_asm!(
     stosb_max = sym crate::init::_mi_cpu_stosb_max,
 );
 
-#[macro_export]
-macro_rules! MI_FORWARD3 {
-    ($fun:path, $x:expr, $y:expr, $z:expr) => {{
-        return unsafe { $fun($x, $y, $z) };
-    }};
-}
-
-#[macro_export]
-macro_rules! MI_FORWARD02 {
-    ($fun:path, $x:expr, $y:expr) => {{
-        unsafe { $fun($x, $y) };
-        return;
-    }};
-}
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct mi_interpose_s {
@@ -544,50 +522,13 @@ pub struct mi_interpose_s {
 
 unsafe impl Sync for mi_interpose_s {}
 
-#[macro_export]
+#[cfg(all(target_os = "macos", mi_osx_interpose))]
 macro_rules! MI_INTERPOSE_FUN {
     ($oldfun:path, $newfun:path) => {
-        $crate::alloc_override::mi_interpose_s {
+        crate::alloc_override::mi_interpose_s {
             replacement: ($newfun as *const ()) as *const core::ffi::c_void,
             target: ($oldfun as *const ()) as *const core::ffi::c_void,
         }
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INTERPOSE_MI {
-    (malloc) => {
-        $crate::MI_INTERPOSE_FUN!(malloc, $crate::mimalloc::mi_malloc)
-    };
-    (calloc) => {
-        $crate::MI_INTERPOSE_FUN!(calloc, $crate::mimalloc::mi_calloc)
-    };
-    (realloc) => {
-        $crate::MI_INTERPOSE_FUN!(realloc, $crate::mimalloc::mi_realloc)
-    };
-    (strdup) => {
-        $crate::MI_INTERPOSE_FUN!(strdup, $crate::mimalloc::mi_strdup)
-    };
-    (realpath) => {
-        $crate::MI_INTERPOSE_FUN!(realpath, $crate::mimalloc::mi_realpath)
-    };
-    (posix_memalign) => {
-        $crate::MI_INTERPOSE_FUN!(posix_memalign, $crate::mimalloc::mi_posix_memalign)
-    };
-    (reallocf) => {
-        $crate::MI_INTERPOSE_FUN!(reallocf, $crate::mimalloc::mi_reallocf)
-    };
-    (valloc) => {
-        $crate::MI_INTERPOSE_FUN!(valloc, $crate::mimalloc::mi_valloc)
-    };
-    (malloc_good_size) => {
-        $crate::MI_INTERPOSE_FUN!(malloc_good_size, $crate::mimalloc::mi_malloc_good_size)
-    };
-    (strndup) => {
-        $crate::MI_INTERPOSE_FUN!(strndup, $crate::mimalloc::mi_strndup)
-    };
-    (aligned_alloc) => {
-        $crate::MI_INTERPOSE_FUN!(aligned_alloc, $crate::mimalloc::mi_aligned_alloc)
     };
 }
 

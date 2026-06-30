@@ -54,55 +54,6 @@ pub struct mi_stat_counter_t {
 }
 pub type mi_stat_counter_s = mi_stat_counter_t;
 
-#[macro_export]
-macro_rules! MI_STAT_COUNT {
-    ($name:ident) => {
-        pub $name: $crate::stats::mi_stat_count_t,
-    };
-}
-
-#[macro_export]
-macro_rules! MI_STAT_FIELDS {
-    () => {
-        $crate::MI_STAT_COUNT!(pages)
-        $crate::MI_STAT_COUNT!(reserved)
-        $crate::MI_STAT_COUNT!(committed)
-        $crate::MI_STAT_COUNTER!(reset)
-        $crate::MI_STAT_COUNTER!(purged)
-        $crate::MI_STAT_COUNT!(page_committed)
-        $crate::MI_STAT_COUNT!(pages_abandoned)
-        $crate::MI_STAT_COUNT!(threads)
-        $crate::MI_STAT_COUNT!(malloc_normal)
-        $crate::MI_STAT_COUNT!(malloc_huge)
-        $crate::MI_STAT_COUNT!(malloc_requested)
-        $crate::MI_STAT_COUNTER!(mmap_calls)
-        $crate::MI_STAT_COUNTER!(commit_calls)
-        $crate::MI_STAT_COUNTER!(reset_calls)
-        $crate::MI_STAT_COUNTER!(purge_calls)
-        $crate::MI_STAT_COUNTER!(arena_count)
-        $crate::MI_STAT_COUNTER!(malloc_normal_count)
-        $crate::MI_STAT_COUNTER!(malloc_huge_count)
-        $crate::MI_STAT_COUNTER!(malloc_guarded_count)
-        $crate::MI_STAT_COUNTER!(arena_rollback_count)
-        $crate::MI_STAT_COUNTER!(arena_purges)
-        $crate::MI_STAT_COUNTER!(pages_extended)
-        $crate::MI_STAT_COUNTER!(pages_retire)
-        $crate::MI_STAT_COUNTER!(page_searches)
-        $crate::MI_STAT_COUNTER!(page_searches_count)
-        $crate::MI_STAT_COUNT!(segments)
-        $crate::MI_STAT_COUNT!(segments_abandoned)
-        $crate::MI_STAT_COUNT!(segments_cache)
-        $crate::MI_STAT_COUNT!(_segments_reserved)
-        $crate::MI_STAT_COUNT!(heaps)
-        $crate::MI_STAT_COUNT!(theaps)
-        $crate::MI_STAT_COUNTER!(pages_reclaim_on_alloc)
-        $crate::MI_STAT_COUNTER!(pages_reclaim_on_free)
-        $crate::MI_STAT_COUNTER!(pages_reabandon_full)
-        $crate::MI_STAT_COUNTER!(pages_unabandon_busy_wait)
-        $crate::MI_STAT_COUNTER!(heaps_delete_wait)
-    };
-}
-
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum mi_chunkbin_e {
@@ -220,24 +171,6 @@ pub unsafe fn mi_stats_init(stats: *mut mi_stats_t) {
     }
 }
 
-#[macro_export]
-macro_rules! mi_stats_t_decl {
-    ($name:ident) => {
-        let mut $name = $crate::stats::mi_stats_t::default();
-        // SAFETY: the macro creates a fresh local `mi_stats_t`.
-        unsafe {
-            $crate::stats::mi_stats_init(&mut $name);
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! MI_STAT_COUNTER {
-    ($name:ident) => {
-        pub $name: $crate::stats::mi_stat_counter_t,
-    };
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
     let Some(typed_bin) = u16::try_from(bin).ok().and_then(StatsBin::new) else {
@@ -253,6 +186,13 @@ fn mi_stats_get_bin_size_from_raw(bin: usize, typed_bin: StatsBin) -> StatBinSiz
 
 fn mi_stats_get_bin_size_typed(bin: StatsBin) -> StatBinSize {
     StatBinSize(_mi_bin_size(stats_bin_as_bin(bin).as_usize()))
+}
+
+fn initialized_stats() -> mi_stats_t {
+    let mut stats = mi_stats_t::default();
+    // SAFETY: `stats` is a fresh writable `mi_stats_t`.
+    unsafe { mi_stats_init(&mut stats) };
+    stats
 }
 
 fn mi_stat_update_mt(stat: &mut mi_stat_count_t, amount: i64) {
@@ -1472,7 +1412,7 @@ pub unsafe extern "C" fn mi_subproc_stats_print_out(
     if subproc.is_null() {
         return;
     }
-    crate::mi_stats_t_decl!(stats);
+    let mut stats = initialized_stats();
     unsafe {
         if mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
             _mi_stats_print(
@@ -2018,7 +1958,7 @@ pub unsafe extern "C" fn mi_subproc_stats_get_json(
     buf_size: usize,
     buf: *mut c_char,
 ) -> *mut c_char {
-    crate::mi_stats_t_decl!(stats);
+    let mut stats = initialized_stats();
     unsafe {
         if !mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
             return ptr::null_mut();

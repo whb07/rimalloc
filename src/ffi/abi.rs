@@ -18,7 +18,6 @@ pub type c_wchar = u16;
 #[cfg(not(windows))]
 pub type c_wchar = i32;
 
-pub use crate::mi_stats_t_decl;
 pub use crate::options::{
     mi_option_abandoned_page_purge, mi_option_abandoned_reclaim_on_free,
     mi_option_decommit_extend_delay, mi_option_eager_commit, mi_option_eager_commit_delay,

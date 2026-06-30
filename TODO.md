@@ -780,13 +780,20 @@ Validated remaining issues:
     for those feature-sensitive cdylibs.
   - Verify: feature ABI job reports each feature set separately.
 
-- [ ] Add C and C++ artifact consumer checks to CI.
-  - [ ] Run the focused C static and dynamic consumer script.
-  - [ ] Run the focused `dlopen` script.
-  - [ ] Run the focused `LD_PRELOAD` script.
-  - [ ] Run the supported C++ override script.
-  - [ ] Keep broad behavioral parity available as a release-candidate job if it
+- [x] Add C and C++ artifact consumer checks to CI.
+  - [x] Run the focused C static and dynamic consumer script.
+  - [x] Run the focused `dlopen` script.
+  - [x] Run the focused `LD_PRELOAD` script.
+  - [x] Run the supported C++ override script.
+  - [x] Keep broad behavioral parity available as a release-candidate job if it
         remains too slow for every pull request.
+  - Evidence: `.github/workflows/validation.yml` builds release artifacts once,
+    then runs `scripts/check-release-artifact-consumer.py`,
+    `scripts/check-release-dlopen.py`, `scripts/check-release-ld-preload.py`,
+    and `scripts/check-release-cxx-artifacts.py` with explicit step names for
+    the `c-abi`, `interpose`, static-preview, dynamic, `dlopen`,
+    `LD_PRELOAD`, and C++ override artifact modes. The broader
+    `scripts/check-behavioral-parity.py` remains outside per-PR validation.
   - Verify: validation or release workflow names the artifact mode under test.
 
 - [ ] Align `docs/release.md` with existing hardening workflows.

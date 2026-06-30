@@ -52,6 +52,24 @@ jobs:
         run: |
           cargo check --features std
           cargo rustc --features interpose --lib --release -- --crate-type cdylib
+      - name: Build release artifacts for C/C++ consumers
+        run: scripts/build-release-artifacts.py
+      - name: C consumers for c-abi and interpose static/dynamic artifacts
+        env:
+          MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS: "1"
+        run: scripts/check-release-artifact-consumer.py
+      - name: dlopen consumer for c-abi dynamic artifact
+        env:
+          MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS: "1"
+        run: scripts/check-release-dlopen.py
+      - name: LD_PRELOAD consumer for interpose dynamic artifact
+        env:
+          MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS: "1"
+        run: scripts/check-release-ld-preload.py
+      - name: C++ consumers for interpose static/dynamic override artifacts
+        env:
+          MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS: "1"
+        run: scripts/check-release-cxx-artifacts.py
       - name: Build-tool diagnostics
         run: scripts/check-build-tools.sh
       - name: Package smoke

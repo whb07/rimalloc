@@ -16,8 +16,10 @@ RELEASE_DIR = ROOT / "target/release-artifacts"
 
 
 def build_release_artifacts() -> dict[str, object]:
-    subprocess.run(["scripts/build-release-artifacts.py"], cwd=ROOT, check=True)
-    return json.loads((RELEASE_DIR / "release-artifacts.json").read_text())
+    path = RELEASE_DIR / "release-artifacts.json"
+    if not (os.environ.get("MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS") and path.exists()):
+        subprocess.run(["scripts/build-release-artifacts.py"], cwd=ROOT, check=True)
+    return json.loads(path.read_text())
 
 
 def staged_manifest_path(staged: pathlib.Path, path: str) -> pathlib.Path:
@@ -109,7 +111,17 @@ int main(void) {
 def compile_probe(cc: str, source: pathlib.Path) -> pathlib.Path:
     binary = source.parent / "ld_preload_probe"
     subprocess.run(
-        [cc, "-std=c11", str(source), "-ldl", "-o", str(binary)],
+        [
+            cc,
+            "-std=c11",
+            str(source),
+            "-Wl,--no-as-needed",
+            "-lstdc++",
+            "-Wl,--as-needed",
+            "-ldl",
+            "-o",
+            str(binary),
+        ],
         cwd=source.parent,
         check=True,
     )

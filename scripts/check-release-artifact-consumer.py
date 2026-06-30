@@ -17,7 +17,8 @@ RELEASE_DIR = ROOT / "target/release-artifacts"
 
 def manifest() -> dict[str, object]:
     path = RELEASE_DIR / "release-artifacts.json"
-    subprocess.run(["scripts/build-release-artifacts.py"], cwd=ROOT, check=True)
+    if not (os.environ.get("MECHANICAL_MIMALLOC_REUSE_RELEASE_ARTIFACTS") and path.exists()):
+        subprocess.run(["scripts/build-release-artifacts.py"], cwd=ROOT, check=True)
     return json.loads(path.read_text())
 
 
@@ -115,6 +116,7 @@ def compile_and_run(
     source: pathlib.Path,
     binary: pathlib.Path,
     dynamic: bool,
+    cxx_runtime: bool,
 ) -> None:
     command = [
         cc,
@@ -126,6 +128,8 @@ def compile_and_run(
     ]
     if dynamic:
         command.append("-Wl,-rpath," + str(library.parent))
+    if cxx_runtime:
+        command.append("-lstdc++")
     command.extend(["-pthread", "-ldl", "-lm", "-o", str(binary)])
     subprocess.run(command, cwd=source.parent, check=True)
     env = os.environ.copy()
@@ -146,11 +150,13 @@ def run_consumers(cc: str, data: dict[str, object], staged: pathlib.Path) -> Non
             write_c_abi_consumer,
             "c-abi-dynamic",
             True,
+            False,
         ),
         (
             "c-abi-static-preview",
             write_c_abi_consumer,
             "c-abi-static",
+            False,
             False,
         ),
         (
@@ -158,15 +164,17 @@ def run_consumers(cc: str, data: dict[str, object], staged: pathlib.Path) -> Non
             write_interpose_consumer,
             "interpose-dynamic",
             True,
+            True,
         ),
         (
             "interpose-static-preview",
             write_interpose_consumer,
             "interpose-static",
             False,
+            True,
         ),
     ]
-    for artifact_name, write_source, case_name, dynamic in cases:
+    for artifact_name, write_source, case_name, dynamic, cxx_runtime in cases:
         work_dir = staged.parent / case_name
         source = write_source(work_dir)
         library = artifact_path(data, staged, artifact_name)
@@ -177,6 +185,7 @@ def run_consumers(cc: str, data: dict[str, object], staged: pathlib.Path) -> Non
             source=source,
             binary=work_dir / case_name,
             dynamic=dynamic,
+            cxx_runtime=cxx_runtime,
         )
 
 

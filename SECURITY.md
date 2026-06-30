@@ -2,8 +2,31 @@
 
 ## Supported Versions
 
-This project is pre-release. Security fixes apply to the current `master`
-branch unless a release branch is explicitly created.
+This project is currently pre-release. Until the first published release,
+security fixes apply to the current `master` branch only.
+
+After published releases exist, security fixes apply to these lines:
+
+| Release line | Security-fix status |
+| --- | --- |
+| Current `master` before a release is tagged | Receives fixes before the first release and between releases. |
+| Latest published release line, such as `0.3.x` after `0.3.0` is published | Receives security patch releases. |
+| Older release lines, such as `0.2.x` after `0.3.0` is published | Unsupported unless release notes explicitly announce extended support. |
+| Release candidate or other pre-release branches | Receive fixes only until the final release for that version is published or the candidate is abandoned. |
+
+There is no implicit long-term support line. If maintainers create one, the
+release notes and this table must name the supported line, support window, and
+security contact process.
+
+Security fixes for a supported published line should ship as patch releases
+when the fix can be backported without changing that line's documented API, ABI,
+artifact, or target-support contract. If the fix cannot be backported safely,
+maintainers must publish the advisory and release notes with the affected
+versions, the first fixed version, and the required upgrade path.
+
+Pre-release branches stop receiving security fixes when their final release is
+published, when a newer release candidate supersedes them, or when maintainers
+mark the candidate abandoned in release notes.
 
 ## Reporting
 

@@ -1216,10 +1216,17 @@ Validated remaining issues:
     artifact inventory plus normalized ABI symbol manifests.
   - Verify: another checkout can reproduce artifact names and manifests.
 
-- [ ] Add supported-version policy after releases exist.
-  - [ ] Define which release lines receive security fixes.
-  - [ ] Define patch release expectations.
-  - [ ] Define when pre-release branches stop receiving fixes.
+- [x] Add supported-version policy after releases exist.
+  - [x] Define which release lines receive security fixes.
+  - [x] Define patch release expectations.
+  - [x] Define when pre-release branches stop receiving fixes.
+  - Evidence: `SECURITY.md` now defines pre-release `master` handling, the
+    latest-published-line security-fix rule, unsupported older release lines
+    unless release notes announce extended support, patch-release expectations,
+    advisory upgrade-path requirements when a safe backport is not possible,
+    and release-candidate/pre-release branch retirement. `docs/release.md`
+    points to `SECURITY.md` as authoritative and adds a release checklist gate
+    requiring both docs to agree.
   - Verify: `SECURITY.md` and release docs agree.
 
 - [ ] Add CVE and advisory handling policy.

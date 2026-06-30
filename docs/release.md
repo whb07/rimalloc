@@ -2,6 +2,20 @@
 
 This repository is pre-release at version `0.1.0`, with packaging enabled.
 
+## Supported Version Policy
+
+`SECURITY.md` is the authoritative supported-version policy. Before the first
+published release, security fixes apply to `master`. After releases exist, the
+latest published release line receives security patch releases, older release
+lines are unsupported unless release notes explicitly announce extended support,
+and release candidate or other pre-release branches stop receiving fixes when
+the final release is published, a newer candidate supersedes them, or the
+candidate is abandoned.
+
+Release notes for every security fix must identify the affected versions, the
+first fixed version, and whether the fix shipped as a patch release on a
+supported line or requires upgrading to a newer line.
+
 ## Production Contract
 
 `docs/api-inventory.md` is the authoritative public API inventory for release
@@ -242,73 +256,76 @@ release commit:
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.
-2. Confirm no object ownership APIs such as `MiBox<T>`, `HeapBox<'heap, T>`,
+2. Confirm `SECURITY.md` and this release policy agree on the supported release
+   line, whether older lines receive fixes, and when pre-release branches stop
+   receiving fixes.
+3. Confirm no object ownership APIs such as `MiBox<T>`, `HeapBox<'heap, T>`,
    object constructors, or object destructors were added to the safe facade
    without a separate design covering construction failure, destructor and panic
    behavior, allocator/heap ownership, and threading traits.
-3. Run `scripts/check-api-inventory.py`.
-4. Run `scripts/check-ffi-boundary.py`.
-5. Run `scripts/check-local.sh`.
-6. Run `scripts/check-abi-symbols.sh` for exported C symbol inventory.
-7. Run `scripts/check-abi-diff.py --previous-ref <previous-tag>` for Tier C
+4. Run `scripts/check-api-inventory.py`.
+5. Run `scripts/check-ffi-boundary.py`.
+6. Run `scripts/check-local.sh`.
+7. Run `scripts/check-abi-symbols.sh` for exported C symbol inventory.
+8. Run `scripts/check-abi-diff.py --previous-ref <previous-tag>` for Tier C
    release-to-release ABI review.
-8. Run `scripts/check-static-link-collisions.py` for preview static archive
+9. Run `scripts/check-static-link-collisions.py` for preview static archive
    link and collision evidence.
-9. Run `scripts/check-release-artifact-consumer.py` and
+10. Run `scripts/check-release-artifact-consumer.py` and
    `scripts/check-release-link-metadata.py`.
-10. Run `scripts/check-release-dlopen.py`.
-11. Run `scripts/check-release-ld-preload.py`.
-12. Run `scripts/check-release-cxx-artifacts.py`.
-13. Run `scripts/check-release-integrity.py`.
-14. Confirm `scripts/check-release-integrity.py` produced and verified
+11. Run `scripts/check-release-dlopen.py`.
+12. Run `scripts/check-release-ld-preload.py`.
+13. Run `scripts/check-release-cxx-artifacts.py`.
+14. Run `scripts/check-release-integrity.py`.
+15. Confirm `scripts/check-release-integrity.py` produced and verified
    `SHA256SUMS.sig` with the configured release SSH Ed25519 key, and record the
    public key fingerprint from `release-artifacts.json` in the release notes.
-15. Confirm the release dry run includes
+16. Confirm the release dry run includes
    `target/release-artifacts/integrity/dependencies.md`, and attach or link that
    dependency/build-tool report from the release notes.
-16. Run `scripts/check-release-reproducibility.py` and confirm the second
+17. Run `scripts/check-release-reproducibility.py` and confirm the second
    checkout reproduces artifact names and ABI symbol manifests.
-17. Create and verify the signed annotated source tag with the release SSH
+18. Create and verify the signed annotated source tag with the release SSH
    signing key.
-18. Run `scripts/check-layout.sh` for ABI/layout audits.
-19. Run audit drift checks: `scripts/check-unsafe-inventory.py --verify-builds`,
+19. Run `scripts/check-layout.sh` for ABI/layout audits.
+20. Run audit drift checks: `scripts/check-unsafe-inventory.py --verify-builds`,
    `scripts/check-unsafe-audit.py`,
    `scripts/check-unsafe-audit-evidence.py`,
    `scripts/check-atomic-ordering-audit.py`,
    `scripts/check-pointer-provenance-audit.py`,
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
-20. Run `scripts/check-release-thread-stress.py`.
-21. Run `scripts/check-safety-stress.sh`.
-22. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
+21. Run `scripts/check-release-thread-stress.py`.
+22. Run `scripts/check-safety-stress.sh`.
+23. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
    toolchain.
-23. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
+24. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-24. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
+25. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-25. Run `scripts/check-valgrind-tracking-parity.py`.
-26. Before a release candidate, run `scripts/check-bench-full.sh`, capture
+26. Run `scripts/check-valgrind-tracking-parity.py`.
+27. Before a release candidate, run `scripts/check-bench-full.sh`, capture
    `scripts/env-info.sh`, preserve
    `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` and
    `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv`, and
    update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,
    artifact modes, Rust/C ratios, and noisy-benchmark notes for the release
    commit.
-27. For new strict internal wrappers on allocator hot paths, attach
+28. For new strict internal wrappers on allocator hot paths, attach
    `scripts/capture-release-assembly.sh` output covering free-list pop, local
    free, remote free, small page lookup, and any changed hot path; fail signoff
    unless the evidence shows no added branch, call, memory traffic, stack spill,
    formatting, allocation, panic path, bounds-check slow path, or wrapper
    constructor traffic without measured justification.
-28. Publish the per-release performance summary in `BENCHMARK_RESULTS.md` or an
+29. Publish the per-release performance summary in `BENCHMARK_RESULTS.md` or an
    attached report, summarizing geomean Rust/C ratios, hot-path deltas against
    previous release evidence, noisy watch items, release-blocking regressions,
    and links to raw Criterion summaries or threshold CSV artifacts.
-29. Update release notes with the unsupported-target triage language from
+30. Update release notes with the unsupported-target triage language from
    `docs/platforms.md`; do not market Linux aarch64, macOS, Windows, WASI,
    Emscripten, or other source-present targets as maintained unless that
    platform completed the promotion checklist.
-30. Update `CHANGELOG.md`, `README.md`, and compatibility notes, and link the
+31. Update `CHANGELOG.md`, `README.md`, and compatibility notes, and link the
    release notes to `BENCHMARK_RESULTS.md` or the attached performance report.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,

@@ -2517,6 +2517,49 @@ fn reproducible_release_instructions_are_concrete_and_checked() {
 }
 
 #[test]
+fn supported_version_policy_is_concrete_and_release_aligned() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let security = fs::read_to_string(root.join("SECURITY.md")).expect("read SECURITY.md");
+    let release = fs::read_to_string(root.join("docs/release.md")).expect("read release");
+
+    for required in [
+        "Until the first published release",
+        "current `master` branch only",
+        "Latest published release line",
+        "Receives security patch releases",
+        "Older release lines",
+        "Unsupported unless release notes explicitly announce extended support",
+        "Release candidate or other pre-release branches",
+        "Receive fixes only until the final release for that version is published",
+        "There is no implicit long-term support line",
+        "affected\nversions, the first fixed version",
+        "required upgrade path",
+        "Pre-release branches stop receiving security fixes",
+    ] {
+        assert!(
+            security.contains(required),
+            "security policy should define supported-version marker {required}"
+        );
+    }
+
+    for required in [
+        "Supported Version Policy",
+        "`SECURITY.md` is the authoritative supported-version policy",
+        "latest published release line receives security patch releases",
+        "older release\nlines are unsupported unless release notes explicitly announce extended support",
+        "release candidate or other pre-release branches stop receiving fixes",
+        "affected versions, the\nfirst fixed version",
+        "whether older lines receive fixes",
+        "when pre-release branches stop\n   receiving fixes",
+    ] {
+        assert!(
+            release.contains(required),
+            "release policy should align supported-version marker {required}"
+        );
+    }
+}
+
+#[test]
 fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("read Cargo.toml");

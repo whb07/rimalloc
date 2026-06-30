@@ -398,13 +398,21 @@ Validated remaining issues:
     the checksum file plus regenerated cdylib/staticlib symbol manifests.
   - Verify: release dry-run produces all expected files.
 
-- [ ] Fix stale C API build instructions.
-  - [ ] Update `examples/c_api.c`; `cargo build --release` no longer builds a
+- [x] Fix stale C API build instructions.
+  - [x] Update `examples/c_api.c`; `cargo build --release` no longer builds a
         linkable cdylib with the current `[lib] crate-type = ["rlib"]`.
-  - [ ] Show the correct cdylib and staticlib commands.
-  - [ ] Show the correct `cc` command for dynamic linking.
-  - [ ] Show the correct `cc` command for static linking.
-  - [ ] Keep the example aligned with the chosen artifact distribution model.
+  - [x] Show the correct cdylib and staticlib commands.
+  - [x] Show the correct `cc` command for dynamic linking.
+  - [x] Show the correct `cc` command for static linking.
+  - [x] Keep the example aligned with the chosen artifact distribution model.
+  - Evidence: `examples/c_api.c` now states that default release builds are
+    Rust `rlib` builds, shows explicit `cargo rustc --features c-abi`
+    `cdylib` and `staticlib` artifact commands, links the dynamic example
+    directly against the produced cdylib with an rpath, links the static
+    preview example directly against a native-object archive built with
+    explicit no-LTO/no-bitcode `RUSTFLAGS` plus `pthread`, `dl`, and `m`, and
+    points release users at
+    `scripts/build-release-artifacts.py`.
   - Verify: run the documented commands from a clean target directory.
 
 ## P0 - Add real C and C++ consumer tests

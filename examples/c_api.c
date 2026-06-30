@@ -1,18 +1,33 @@
 /*
-Build the Rust cdylib first:
+This crate's default release library is an rlib for Rust consumers. C consumers
+must build an explicit C ABI artifact or use scripts/build-release-artifacts.py.
 
-  cargo build --release
+Dynamic C ABI example:
 
-Then compile and link this example against the generated library:
-
+  rm -rf target/c-api-example
+  cargo rustc --features c-abi --lib --release \
+    --target-dir target/c-api-example/dynamic \
+    -- --crate-type cdylib
   cc examples/c_api.c \
     -Imimalloc-3.3.2/include \
-    -Ltarget/release \
-    -lmechanical_mimalloc \
-    -Wl,-rpath,"$PWD/target/release" \
-    -o target/c_api_example
+    target/c-api-example/dynamic/release/deps/libmechanical_mimalloc-*.so \
+    -Wl,-rpath,"$PWD/target/c-api-example/dynamic/release/deps" \
+    -pthread -ldl -lm \
+    -o target/c-api-example/c_api_dynamic
+  target/c-api-example/c_api_dynamic
 
-  target/c_api_example
+Static C ABI preview example:
+
+  RUSTFLAGS='-C lto=off -C linker-plugin-lto=no -C embed-bitcode=no' \
+  cargo rustc --features c-abi --lib --release \
+    --target-dir target/c-api-example/static \
+    -- --crate-type staticlib
+  cc examples/c_api.c \
+    -Imimalloc-3.3.2/include \
+    target/c-api-example/static/release/deps/libmechanical_mimalloc-*.a \
+    -pthread -ldl -lm \
+    -o target/c-api-example/c_api_static
+  target/c-api-example/c_api_static
 */
 
 #include <assert.h>

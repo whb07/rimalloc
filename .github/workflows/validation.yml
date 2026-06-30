@@ -13,6 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.92.0
+      - name: Formatting
+        run: scripts/check-fmt.sh
       - name: Test std surface
         run: cargo test --quiet --features std
       - name: Install cargo-hack

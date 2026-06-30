@@ -756,11 +756,14 @@ Validated remaining issues:
 
 ## P1 - Align CI and release gates
 
-- [ ] Make formatting a first-class validation workflow step.
-  - [ ] Add `scripts/check-fmt.sh` to `.github/workflows/validation.yml`.
-  - [ ] Consider changing `scripts/check-fmt.sh` to `cargo fmt --all --check`
+- [x] Make formatting a first-class validation workflow step.
+  - [x] Add `scripts/check-fmt.sh` to `.github/workflows/validation.yml`.
+  - [x] Consider changing `scripts/check-fmt.sh` to `cargo fmt --all --check`
         so it matches the project-required developer command.
-  - [ ] Keep `git diff --check` for whitespace errors.
+  - [x] Keep `git diff --check` for whitespace errors.
+  - Evidence: `.github/workflows/validation.yml` now runs
+    `scripts/check-fmt.sh` before tests and lints. The script runs
+    `cargo fmt --all --check` and keeps `git diff --check`.
   - Verify: validation workflow runs formatting before lints.
 
 - [ ] Add feature-sensitive ABI checks to CI.

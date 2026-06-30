@@ -97,6 +97,19 @@ with `ABI-CHANGE: <manifest> <symbol>`, or with
 `ABI-CHANGE: <manifest> *` for an explicitly reviewed full-manifest baseline
 or broad artifact-mode update.
 
+## Static Archive Policy
+
+The `staticlib` artifact is preview-only for the current release policy. It may
+be built for repository parity checks, local source-build experiments, and
+static archive audits, but it is not a production-supported FFI distribution
+artifact until the static symbol contract, collision tests, and checked static
+manifests are complete.
+
+Release notes and release artifact names must make this visible. If static
+archives are attached for evaluation before the production policy changes, use
+a preview-marked name such as `mechanical_mimalloc-static-preview` and state
+that the archive is not a stable static ABI.
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.
@@ -139,6 +152,7 @@ Related policy documents:
 - `docs/api-inventory.md`
 - `docs/safe-api.md`
 - `docs/abi.md`
+- `docs/ffi-linking.md`
 - `docs/raw-facade-migration.md`
 - `docs/assembly-intrinsics.md`
 - `docs/compatibility.md`

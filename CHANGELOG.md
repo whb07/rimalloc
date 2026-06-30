@@ -52,6 +52,8 @@ All notable changes to this repository should be recorded here.
 - Preserve mimalloc-compatible dynamic C ABI symbols and public C layouts.
 - Classify the raw Rust facade separately from the dynamic C ABI; raw Rust path
   cleanup is not a C ABI symbol removal.
+- Mark static archive artifacts preview-only until the static symbol contract,
+  collision behavior, and checked static manifests are completed.
 
 ### Performance
 

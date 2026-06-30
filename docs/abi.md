@@ -87,6 +87,23 @@ For static archive audits, some internal `_mi_*` helpers remain visible because
 the mechanical translation still uses C-shaped linkage internally. These are
 classified as `internal-export-required` and are not stable public API.
 
+## Static Archive Status
+
+The `staticlib` artifact is preview-only for the current release policy. It is
+used by repository parity tests, source-build experiments, and static archive
+audits, but it is not a production-supported FFI distribution artifact yet.
+
+The production-supported Tier C artifact today is the explicitly built cdylib.
+Static archive users must treat every non-header `_mi_*`, internal helper,
+malloc-family, and C++ override symbol as subject to change until the static
+symbol contract, collision tests, and checked static manifests are completed.
+
+If a release candidate includes static archive files for evaluation, the
+artifact names must include a preview marker such as
+`mechanical_mimalloc-static-preview` rather than using the production cdylib
+artifact naming. Release notes must state that those files are preview-only and
+must not be treated as a stable static ABI.
+
 Rust-only `mi_*` helpers classified as `rust-extension` or
 `platform-helper-extension` in `symbols/public-symbol-classification.tsv` are
 hidden from the default dynamic C ABI. They are retained only for internal Rust

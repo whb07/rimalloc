@@ -36,9 +36,13 @@ tracked by source-shape, layout, symbol, lint, package, and benchmark gates.
   mimalloc-compatible C symbols, layouts, callbacks, and calling conventions
   when built with the explicit interposition feature set. This is tracked
   separately from Rust SemVer.
+- Static C archive: preview-only for repository parity and source-build
+  experiments until the static archive symbol contract, collision behavior,
+  and release manifests are frozen. It is not a production-supported FFI
+  artifact in the current release policy.
 
-See `docs/safe-api.md`, `docs/abi.md`, and `docs/api-inventory.md` for the
-current boundary policy and inventory.
+See `docs/safe-api.md`, `docs/abi.md`, `docs/ffi-linking.md`, and
+`docs/api-inventory.md` for the current boundary policy and inventory.
 
 ## Quick Start
 

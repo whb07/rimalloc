@@ -233,12 +233,19 @@ Validated remaining issues:
 
 ## P0 - Decide and clean the staticlib story
 
-- [ ] Decide whether staticlib is production-supported or preview-only.
-  - [ ] If production-supported, define the exact static archive symbol
+- [x] Decide whether staticlib is production-supported or preview-only.
+  - [x] If production-supported, define the exact static archive symbol
         contract.
-  - [ ] If preview-only, state this in README, `docs/abi.md`,
+        Not applicable: the current release decision is preview-only.
+  - [x] If preview-only, state this in README, `docs/abi.md`,
         `docs/release.md`, and the FFI linking guide.
-  - [ ] Make the decision visible in release notes and artifact names.
+  - [x] Make the decision visible in release notes and artifact names.
+  - Evidence: README, `docs/abi.md`, `docs/ffi-linking.md`, `docs/release.md`,
+    `docs/compatibility.md`, and `CHANGELOG.md` now state that `staticlib` is
+    preview-only. The release policy requires preview-marked artifact names
+    such as `mechanical_mimalloc-static-preview` until the static archive
+    symbol contract, collision tests, and checked static manifests are
+    completed.
   - Verify: docs and release checklist use the same staticlib status.
 
 - [ ] If staticlib is production-supported, reduce accidental symbol leakage.

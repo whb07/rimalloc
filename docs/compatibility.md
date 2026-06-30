@@ -56,6 +56,11 @@ changes include exported symbol additions/removals, calling convention changes,
 panic/unwind behavior, errno/null behavior, callback ABI changes, and C++
 operator new/delete override behavior.
 
+`staticlib` artifacts are preview-only in the current release policy.
+Repository tests may build them for parity and audit coverage, but their exact
+archive symbol contract, link-collision behavior, and release manifests are not
+frozen as a production FFI compatibility surface yet.
+
 Use:
 
 ```sh

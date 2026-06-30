@@ -9,10 +9,9 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "UNSAFE_AUDIT.md"
+ALLOWLIST = ROOT / "docs/unsafe-migration-allowlist.tsv"
 SAFETY_ID_RE = re.compile(r"SAFETY\[AUDIT:([a-z0-9_.-]+)\]")
-MIGRATED_UNSAFE_FILES = {
-    "src/ffi/callbacks.rs",
-}
+ALLOWLIST_HEADER = "path\towner\tremove_by\treason"
 PATH_ALIASES = {
     "src/allocator/aligned.rs": ["src/alloc_aligned.rs"],
     "src/allocator/thread_heap.rs": ["src/theap.rs"],
@@ -99,13 +98,15 @@ def has_recent_safety_id(lines: list[str], index: int) -> bool:
     return any(SAFETY_ID_RE.search(lines[line]) for line in range(start, index + 1))
 
 
-def migrated_unsafe_operations(rel: str, text: str) -> list[str]:
+def unsafe_operations(rel: str, text: str) -> list[str]:
     lines = text.splitlines()
     offenders: list[str] = []
     patterns = [
         re.compile(r"\bunsafe\s*\{"),
         re.compile(r"\bunsafe\s+extern\b"),
         re.compile(r"\bunsafe\s+impl\b"),
+        re.compile(r"#\[\s*unsafe\s*\("),
+        re.compile(r"\bglobal_asm!\s*\("),
     ]
     for index, line in enumerate(lines):
         stripped = line.strip()
@@ -118,6 +119,32 @@ def migrated_unsafe_operations(rel: str, text: str) -> list[str]:
     return offenders
 
 
+def migration_allowlist() -> dict[str, tuple[str, str, str]]:
+    require(ALLOWLIST.exists(), f"missing unsafe migration allowlist: {ALLOWLIST}")
+    lines = ALLOWLIST.read_text().splitlines()
+    require(lines and lines[0] == ALLOWLIST_HEADER, f"{ALLOWLIST} must start with {ALLOWLIST_HEADER!r}")
+
+    entries: dict[str, tuple[str, str, str]] = {}
+    date_re = re.compile(r"^20[0-9]{2}-[01][0-9]-[0-3][0-9]$")
+    for line_number, line in enumerate(lines[1:], start=2):
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split("\t")
+        require(
+            len(fields) == 4,
+            f"{ALLOWLIST}:{line_number}: expected 4 tab-separated fields",
+        )
+        path, owner, remove_by, reason = fields
+        require(path.startswith("src/") and path.endswith(".rs"), f"{ALLOWLIST}:{line_number}: invalid path {path!r}")
+        require((ROOT / path).exists(), f"{ALLOWLIST}:{line_number}: missing source path {path}")
+        require(owner.strip(), f"{ALLOWLIST}:{line_number}: owner is required")
+        require(date_re.match(remove_by) is not None, f"{ALLOWLIST}:{line_number}: remove_by must be YYYY-MM-DD")
+        require(reason.strip(), f"{ALLOWLIST}:{line_number}: reason is required")
+        require(path not in entries, f"{ALLOWLIST}:{line_number}: duplicate path {path}")
+        entries[path] = (owner, remove_by, reason)
+    return entries
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
@@ -128,6 +155,7 @@ def main() -> int:
     found = unsafe_source_files()
     doc_ids = audit_id_counts(audit_text)
     ids_in_source = source_audit_ids()
+    allowlist = migration_allowlist()
 
     missing = sorted(path for path in found if not audit_mentions_path(audit_text, path))
     require(
@@ -152,21 +180,35 @@ def main() -> int:
         f"{AUDIT.name} must list each operation ID exactly once: {', '.join(duplicate_doc_ids)}",
     )
 
-    untagged_migrated: list[str] = []
-    for rel in sorted(MIGRATED_UNSAFE_FILES):
-        require(rel in found, f"migrated unsafe file has no unsafe operations: {rel}")
-        untagged_migrated.extend(migrated_unsafe_operations(rel, (ROOT / rel).read_text()))
+    untagged_by_file: dict[str, list[str]] = {}
+    for rel in sorted(found):
+        offenders = unsafe_operations(rel, (ROOT / rel).read_text())
+        if offenders:
+            untagged_by_file[rel] = offenders
+
+    stale_allowlist = sorted(path for path in allowlist if path not in untagged_by_file)
     require(
-        not untagged_migrated,
-        "migrated unsafe operations need SAFETY[AUDIT:<id>] markers: "
-        + "; ".join(untagged_migrated),
+        not stale_allowlist,
+        f"{ALLOWLIST.name} has stale entries with no untagged unsafe operations: "
+        + ", ".join(stale_allowlist),
+    )
+
+    missing_allowlist = sorted(path for path in untagged_by_file if path not in allowlist)
+    require(
+        not missing_allowlist,
+        "unsafe operations need SAFETY[AUDIT:<id>] markers or allowlist entries: "
+        + "; ".join(
+            offender
+            for path in missing_allowlist
+            for offender in untagged_by_file[path][:3]
+        ),
     )
 
     unsafe_mentions = sum(len(re.findall(r"\bunsafe\b", (ROOT / path).read_text())) for path in found)
     print(
         f"ok: unsafe audit covers {len(found)} source files and "
         f"{unsafe_mentions} unsafe mentions; {len(ids_in_source)} operation IDs checked; "
-        "legacy unsafe files remain under file-level migration coverage"
+        f"{len(allowlist)} legacy files remain under dated migration allowlist"
     )
     return 0
 

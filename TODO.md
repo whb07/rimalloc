@@ -610,16 +610,21 @@ Validated remaining issues:
 
 ## P1 - Finish unsafe audit coverage
 
-- [ ] Require `SAFETY[AUDIT:*]` markers for every unsafe operation.
-  - [ ] Expand `scripts/check-unsafe-audit.py` beyond the currently migrated
+- [x] Require `SAFETY[AUDIT:*]` markers for every unsafe operation.
+  - [x] Expand `scripts/check-unsafe-audit.py` beyond the currently migrated
         file subset.
-  - [ ] Detect untagged `unsafe { ... }` blocks.
-  - [ ] Detect untagged `unsafe impl` blocks.
-  - [ ] Detect untagged `unsafe extern` blocks and exported ABI wrappers.
-  - [ ] Detect untagged naked/assembly or export-name safety boundaries where
+  - [x] Detect untagged `unsafe { ... }` blocks.
+  - [x] Detect untagged `unsafe impl` blocks.
+  - [x] Detect untagged `unsafe extern` blocks and exported ABI wrappers.
+  - [x] Detect untagged naked/assembly or export-name safety boundaries where
         the source syntax permits it.
-  - [ ] Provide a migration allowlist only for files with explicit owner and
+  - [x] Provide a migration allowlist only for files with explicit owner and
         removal date.
+  - Evidence: `scripts/check-unsafe-audit.py` now scans every Rust source file
+    under `src/` for untagged unsafe blocks, impls, extern blocks, unsafe
+    attributes, and assembly macro boundaries. Legacy untagged files must be
+    listed in `docs/unsafe-migration-allowlist.tsv` with owner, removal date,
+    and reason; stale or malformed entries fail the check.
   - Verify: `scripts/check-unsafe-audit.py`.
 
 - [ ] Map every audit tag to tests or manual evidence.

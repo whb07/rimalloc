@@ -1,0 +1,69 @@
+path	owner	remove_by	reason
+src/allocator/aligned.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/alloc.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/arena.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/arena_meta.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/bench_diagnostics.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/free.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/heap.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/init.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/options.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/page.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/page_map.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/stats.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/thread_heap.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/threadlocal.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/allocator/tracking.rs	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
+src/ffi/abi.rs	release-readiness	2026-09-30	legacy C ABI unsafe pending per-operation SAFETY marker migration
+src/ffi/libc.rs	release-readiness	2026-09-30	legacy C compatibility unsafe pending per-operation SAFETY marker migration
+src/internal/atomic.rs	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
+src/internal/bitmap.rs	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
+src/internal/guarded.rs	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
+src/internal/mod.rs	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
+src/internal/provenance.rs	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
+src/internal/random.rs	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
+src/lib.rs	release-readiness	2026-09-30	legacy facade unsafe pending per-operation SAFETY marker migration
+src/platform/emscripten.rs	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
+src/platform/macos.rs	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
+src/platform/mod.rs	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
+src/platform/os.rs	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
+src/platform/unix.rs	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
+src/platform/wasi.rs	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
+src/platform/windows.rs	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
+src/raw/macros.rs	release-readiness	2026-09-30	legacy raw facade unsafe pending per-operation SAFETY marker migration
+src/raw/posix.rs	release-readiness	2026-09-30	legacy raw facade unsafe pending per-operation SAFETY marker migration
+src/safe/allocation.rs	release-readiness	2026-09-30	legacy safe facade unsafe pending per-operation SAFETY marker migration
+src/safe/heap.rs	release-readiness	2026-09-30	legacy safe facade unsafe pending per-operation SAFETY marker migration
+src/safe/mod.rs	release-readiness	2026-09-30	legacy safe facade unsafe pending per-operation SAFETY marker migration
+src/safe/stats.rs	release-readiness	2026-09-30	legacy safe facade unsafe pending per-operation SAFETY marker migration
+src/types/arena.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/arena/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/atomic.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/atomic/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/callbacks.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/callbacks/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/constants.rs	release-readiness	2026-09-30	legacy translated layout unsafe pending per-operation SAFETY marker migration
+src/types/freelist.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/freelist/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/freelist_wrappers.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/freelist_wrappers/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/heap.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/heap/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/layout.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/layout/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/memid.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/memid/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/padding.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/padding/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/page.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/page/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/page_queues.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/page_queues/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/page_states.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/page_states/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/ptr.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/ptr/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/scalar.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/scalar/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
+src/types/validation.rs	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
+src/types/validation/tests.rs	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration

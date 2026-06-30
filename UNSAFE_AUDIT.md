@@ -202,20 +202,23 @@ Operation IDs:
 
 Migration:
 
-- Operation-level enforcement is incremental. `scripts/check-unsafe-audit.py`
-  verifies every source `SAFETY[AUDIT:<id>]` is listed exactly once here and
-  currently requires every unsafe operation in `src/ffi/callbacks.rs` to carry a
-  nearby ID marker.
-- Legacy unsafe files remain under the per-file review above until they are
-  moved into the script's migrated-file set. Migrating a file means adding
-  stable operation IDs near unsafe blocks, documenting each ID in this section,
-  and then adding the file to `MIGRATED_UNSAFE_FILES`.
+- Operation-level enforcement now scans every Rust source file under `src/`.
+  `scripts/check-unsafe-audit.py` verifies every source
+  `SAFETY[AUDIT:<id>]` is listed exactly once here and rejects untagged unsafe
+  blocks, unsafe impls, unsafe extern blocks, unsafe attributes, and assembly
+  macro boundaries unless the owning file appears in
+  `docs/unsafe-migration-allowlist.tsv`.
+- The migration allowlist is intentionally file-level and temporary. Each entry
+  must include an owner, a concrete `remove_by` date, and a reason. Migrating a
+  file means adding stable operation IDs near unsafe operations, documenting
+  each ID in this section, and removing the file from the allowlist.
 
 Validation:
 
 - `scripts/check-unsafe-audit.py` verifies every `src/` file containing `unsafe`
-  is listed here, checks migrated operation IDs, and verifies that the audit
-  references the related atomic-ordering and tracked-mode follow-up audits.
+  is listed here, checks operation IDs, enforces the dated migration allowlist,
+  and verifies that the audit references the related atomic-ordering and
+  tracked-mode follow-up audits.
 - `cargo test` exercises the public ABI, heap/theap/subprocess lifecycle,
   cross-thread free, abandoned-page, statistics, and callback reentrancy paths.
 - `scripts/check-behavioral-parity.py` compares the same supported-matrix

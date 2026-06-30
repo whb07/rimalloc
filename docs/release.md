@@ -215,10 +215,11 @@ Before publishing or tagging a release:
    `scripts/check-pointer-provenance-audit.py`,
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
-15. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
+15. Run `scripts/check-release-thread-stress.py`.
+16. Run `scripts/check-bench-full.sh` for hot-path or allocator-wide changes,
    using `docs/performance.md` for thresholds and noise handling.
-16. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
-17. Capture `scripts/env-info.sh` output alongside benchmark evidence.
+17. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
+18. Capture `scripts/env-info.sh` output alongside benchmark evidence.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

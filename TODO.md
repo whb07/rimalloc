@@ -738,13 +738,20 @@ Validated remaining issues:
     that cover `std`/test panic containment.
   - Verify: no-unwind artifact test passes on Linux x86_64 GNU.
 
-- [ ] Add sustained thread-stress coverage for release candidates.
-  - [ ] Stress same-thread allocate/free.
-  - [ ] Stress cross-thread free.
-  - [ ] Stress abandoned page reclaim.
-  - [ ] Stress thread init/done.
-  - [ ] Stress process done and shutdown stats.
-  - [ ] Add fork/exec constraints only if they are claimed as supported.
+- [x] Add sustained thread-stress coverage for release candidates.
+  - [x] Stress same-thread allocate/free.
+  - [x] Stress cross-thread free.
+  - [x] Stress abandoned page reclaim.
+  - [x] Stress thread init/done.
+  - [x] Stress process done and shutdown stats.
+  - [x] Add fork/exec constraints only if they are claimed as supported.
+  - Evidence: `scripts/check-release-thread-stress.py` builds a release
+    `c-abi` cdylib in an isolated target directory and runs a C consumer that
+    exercises sustained same-thread churn, cross-thread frees, abandoned-page
+    visitation and reclaim, repeated `mi_thread_init`/`mi_thread_done`, final
+    stats capture/printing, and `mi_process_done`. No fork/exec behavior is
+    claimed by the supported target policy, so no fork/exec constraint was
+    added.
   - Verify: stress script is part of release-candidate validation.
 
 ## P1 - Align CI and release gates

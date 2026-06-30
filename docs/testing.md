@@ -34,6 +34,17 @@ ignored callback tests with `--test-threads=1`; they cover serialized
 registration/restoration, nested LIFO restore, allocator reentry, deferred-free
 reentry suppression, and panic containment.
 
+Release candidates must also run:
+
+```sh
+scripts/check-release-thread-stress.py
+```
+
+This builds the release `c-abi` cdylib and runs a C consumer over sustained
+same-thread allocation churn, cross-thread frees, abandoned-page visitation and
+reclaim, repeated thread init/done, final stats capture/printing, and process
+shutdown.
+
 `tests/fuzz_alloc_sequences.rs` adds a byte-stream operation interpreter over a
 fixed corpus. The maintained external fuzz harness in `fuzz/` uses the same
 operation model outside the normal test crate. It covers malloc, zalloc,

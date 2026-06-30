@@ -30,9 +30,8 @@ surface. Changes must still be reviewed because tests, examples, benchmarks,
 and low-level users may depend on it.
 
 The default raw facade is intentionally narrow: root `raw::mi_*`, `raw::abi`,
-`raw::mimalloc`, and `raw::headers`. The `unstable-raw-internals` feature
-temporarily exposes translated implementation modules for repository audits and
-parity tests. That feature is off by default and has no Rust SemVer guarantee.
+`raw::mimalloc`, and `raw::headers`. Translated implementation modules are
+crate-private and are not exposed as raw Rust module paths.
 
 Raw facade changes require updating `docs/api-inventory.md`, ABI/layout checks,
 and any affected examples or parity tests.
@@ -104,8 +103,7 @@ scripts/check-layout.sh
 Feature behavior is compatibility-sensitive. Defaults are intentionally empty.
 `std`, `bench`, `compare`, `bench-diagnostics`, `secure`, `guarded`,
 `track-valgrind`, `track-asan`, `c-header-macros`, `c-abi`, `cxx-overrides`,
-`tls-shim`, `interpose`, and `unstable-raw-internals` are documented in
-`docs/features.md`.
+`tls-shim`, and `interpose` are documented in `docs/features.md`.
 
 When `track-valgrind` and `track-asan` are both enabled, Valgrind mode takes
 precedence. New features should be additive unless a compile-time conflict is

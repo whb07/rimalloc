@@ -21,8 +21,6 @@ unless the `std` feature is enabled.
 - `tls-shim`: Linux initial-exec TLS shim; implies `c-abi`.
 - `interpose`: aggregate C ABI/interposition artifact mode; implies `c-abi`,
   `cxx-overrides`, and `tls-shim`.
-- `unstable-raw-internals`: repository-audit access to translated
-  implementation modules. This is not public API.
 
 When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
 builds, Valgrind mode takes precedence.

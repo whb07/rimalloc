@@ -12,13 +12,12 @@ run cargo check --features c-abi
 run cargo check --features cxx-overrides
 run cargo check --features tls-shim
 run cargo check --features interpose
-run cargo check --features unstable-raw-internals
 run cargo check --features track-valgrind
 run cargo check --features track-asan
 run cargo check --features "secure guarded std"
 run cargo check --benches --features bench
 run cargo check --benches --features "bench compare"
-run cargo test --quiet --features "std unstable-raw-internals"
+run cargo test --quiet --features std
 run cargo check --features "track-valgrind track-asan"
 run cargo rustc --features interpose --lib --release -- --crate-type cdylib
 

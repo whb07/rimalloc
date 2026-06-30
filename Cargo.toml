@@ -73,10 +73,6 @@ cxx-overrides = ["c-abi"]
 tls-shim = ["c-abi"]
 # Restore the full C ABI/interposition artifact build mode.
 interpose = ["c-abi", "cxx-overrides", "tls-shim"]
-# Expose translated implementation modules through `raw` for repository
-# internal audits while the facade is being narrowed. This is not a public API.
-unstable-raw-internals = []
-
 [package.metadata.docs.rs]
 features = ["std"]
 rustdoc-args = ["--cfg", "docsrs"]

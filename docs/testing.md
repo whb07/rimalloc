@@ -43,12 +43,12 @@ scripts/check-docs.sh
 ```
 
 `scripts/check-api-inventory.py` verifies the crate-root safe API, default raw
-modules, unstable raw-internals modules, and public inventory docs.
+modules, private implementation-module absence, and public inventory docs.
 `scripts/check-safe-boundary.py` verifies that safe facade unsafe blocks and
 unsafe impls are tagged and that safe APIs do not expose public unsafe items.
-`scripts/check-raw-facade.sh` verifies that default `raw` does not re-export
-implementation modules and that tests/examples/benches gate raw internals with
-`unstable-raw-internals`.
+`scripts/check-raw-facade.sh` verifies that `raw` does not re-export
+implementation modules and that tests/examples/benches do not import removed
+private raw implementation paths.
 
 ## Sanitizers
 

@@ -4,26 +4,25 @@ This inventory tracks current `mechanical_mimalloc::raw` users and classifies
 the raw modules after narrowing the default facade.
 
 The default raw facade exposes root `raw::mi_*`, `raw::abi`, `raw::mimalloc`,
-and `raw::headers`. The `unstable-raw-internals` feature exposes translated
-implementation modules for repository audits and parity tests only. It is off
-by default and carries no SemVer guarantees.
+and `raw::headers`. Translated implementation modules are crate-private and no
+longer exposed as raw Rust module paths.
 
 ## Old Path Migration Matrix
 
 | Old path | New path | Classification |
 |---|---|---|
 | crate-root implementation modules such as `mechanical_mimalloc::alloc`, `mechanical_mimalloc::heap`, `mechanical_mimalloc::page`, `mechanical_mimalloc::internal` | No public replacement; use crate-root safe APIs or `mechanical_mimalloc::raw` as appropriate | Removed from public crate root; implementation internals are private. |
-| `mechanical_mimalloc::raw::alloc::*` | root `mechanical_mimalloc::raw::mi_*` or `mechanical_mimalloc::raw::mimalloc::*` for public C allocation functions | Raw public C API for public functions; implementation module path is unstable internals. |
-| `mechanical_mimalloc::raw::alloc_aligned::*` | root `mechanical_mimalloc::raw::mi_*_aligned*` or `mechanical_mimalloc::raw::mimalloc::*` | Raw public C API for public functions; implementation module path is unstable internals. |
-| `mechanical_mimalloc::raw::free::*` | root `mechanical_mimalloc::raw::mi_free` and related public C free functions | Raw public C API for public functions; implementation module path is unstable internals. |
-| `mechanical_mimalloc::raw::heap::*` | root `mechanical_mimalloc::raw::mi_heap_*` or `mechanical_mimalloc::raw::mimalloc::*` | Raw public C API for public functions; implementation module path is unstable internals. |
-| `mechanical_mimalloc::raw::stats::*` | root `mechanical_mimalloc::raw::mi_stats_*`, `mechanical_mimalloc::raw::mi_heap_stats_*`, public stats constants/layouts, or `raw::abi` | Raw public C API/layouts for public items; implementation module path is unstable internals. |
-| `mechanical_mimalloc::raw::options::*` | root `mechanical_mimalloc::raw::mi_option_*`, `mechanical_mimalloc::raw::mi_option_t`, or `raw::abi` | Raw public C API/layouts for public items; implementation module path is unstable internals. |
-| `mechanical_mimalloc::raw::types::*` | root raw re-exports or `mechanical_mimalloc::raw::abi::*` for public C layouts and aliases | Raw public C layouts for public items; internal mixed type module is unstable internals. |
+| `mechanical_mimalloc::raw::alloc::*` | root `mechanical_mimalloc::raw::mi_*` or `mechanical_mimalloc::raw::mimalloc::*` for public C allocation functions | Removed implementation-module path; use public raw C API. |
+| `mechanical_mimalloc::raw::alloc_aligned::*` | root `mechanical_mimalloc::raw::mi_*_aligned*` or `mechanical_mimalloc::raw::mimalloc::*` | Removed implementation-module path; use public raw C API. |
+| `mechanical_mimalloc::raw::free::*` | root `mechanical_mimalloc::raw::mi_free` and related public C free functions | Removed implementation-module path; use public raw C API. |
+| `mechanical_mimalloc::raw::heap::*` | root `mechanical_mimalloc::raw::mi_heap_*` or `mechanical_mimalloc::raw::mimalloc::*` | Removed implementation-module path; use public raw C API. |
+| `mechanical_mimalloc::raw::stats::*` | root `mechanical_mimalloc::raw::mi_stats_*`, `mechanical_mimalloc::raw::mi_heap_stats_*`, public stats constants/layouts, or `raw::abi` | Removed implementation-module path; use public raw C API/layouts. |
+| `mechanical_mimalloc::raw::options::*` | root `mechanical_mimalloc::raw::mi_option_*`, `mechanical_mimalloc::raw::mi_option_t`, or `raw::abi` | Removed implementation-module path; use public raw C API/layouts. |
+| `mechanical_mimalloc::raw::types::*` | root raw re-exports or `mechanical_mimalloc::raw::abi::*` for public C layouts and aliases | Removed implementation-module path; C-public layouts/types are exposed through raw root/`raw::abi`. |
 | `mechanical_mimalloc::raw::headers::*` | `mechanical_mimalloc::raw::headers::*` | Raw public C/C++ header compatibility placeholders; retained in the default raw facade. |
 | `mechanical_mimalloc::raw::abi::*` | `mechanical_mimalloc::raw::abi::*` | Raw public C declaration/layout owner; retained in the default raw facade. |
 | `mechanical_mimalloc::raw::mimalloc::*` | root `mechanical_mimalloc::raw::mi_*` where convenient, or keep `raw::mimalloc::*` for grouped public C calls | Raw public C API alias; retained in the default raw facade. |
-| `mechanical_mimalloc::raw::{arena, bitmap, bits, init, internal, libc, memory, os, page, page_map, prim, random, static_c, theap, threadlocal, track}` | No supported integration replacement; repository audits may enable `unstable-raw-internals` | Unstable internals only. |
+| `mechanical_mimalloc::raw::{arena, bitmap, bits, init, internal, libc, memory, os, page, page_map, prim, random, static_c, theap, threadlocal, track}` | No supported integration replacement | Removed implementation-module paths; internals are crate-private. |
 
 ## Current Raw Users
 
@@ -56,7 +55,7 @@ by default and carries no SemVer guarantees.
 | `tests/original_test_api_fill.rs` | root `raw::mi_*` public C-header facade | Debug fill/tracking parity | Public C calls stay on root raw paths; debug/tracking byte constants are local test expectations. |
 | `tests/original_test_stress.rs` | root `raw::mi_*` public C-header facade | Port of upstream stress test | Migrated to public C-header facade. |
 | `tests/property_alloc_sequences.rs` | `raw::mimalloc::*` | Public C API property sequences | Keep on public C-header facade. |
-| `tests/release_fast_path_audit.rs` | `raw::atomic`, `raw::types` under `unstable-raw-internals` | Source-shape and layout audit helpers | Gated behind unstable raw internals. |
+| `tests/release_fast_path_audit.rs` | repository source/docs only | Source-shape audit helpers | Uses source inspection; raw layout checks moved to crate-private unit tests. |
 | `src/types/constants.rs` unit tests | crate-private constants | Secure feature constants/types | Migrated from `tests/secure_features.rs`; no raw facade user. |
 | `tests/stats_exports.rs` | root `raw::mi_stats_get_bin_size`, `raw::MI_BIN_HUGE` | Public stats export behavior | Migrated to public C-header facade. |
 | `tests/thread_stats_regression.rs` | root `raw::mi_*`, `raw::mi_stats_t`, `raw::MI_STAT_VERSION` | Public stats regression behavior | Migrated to public C-header facade. |
@@ -69,38 +68,38 @@ by default and carries no SemVer guarantees.
 | `raw::abi` | Public C header surface | Keep. |
 | `raw::mimalloc` | Public C header surface alias | Keep. |
 | `raw::headers` | C/C++ header macro compatibility placeholders | Keep until those placeholders are folded into `raw::abi` or removed. |
-| `raw::types` | Public C layout aliases mixed with internal implementation types | Gated; C-public layouts/types are re-exported at raw root through `raw::abi`. |
-| `raw::alloc` | Public C ABI implementation/testing convenience mixed with internals | Gated; public calls use root `raw::mi_*`/`raw::mimalloc`. |
-| `raw::alloc_aligned` | Public C ABI implementation/testing convenience mixed with internals | Gated; public calls use root `raw::mi_*`/`raw::mimalloc`. |
-| `raw::alloc_posix` | Public C ABI implementation/testing convenience | Gated; public calls use root `raw::mi_*`/`raw::mimalloc`. |
-| `raw::alloc_override` | Public C ABI override implementation/testing convenience | Gated by default; C symbols remain dynamic exports. |
-| `raw::free` | Public C ABI implementation/testing convenience mixed with internals | Gated; public calls use root `raw::mi_*`/`raw::mimalloc`. |
-| `raw::heap` | Public C heap API implementation/testing convenience mixed with internals | Gated; public calls use root `raw::mi_*`/`raw::mimalloc`. |
-| `raw::stats` | Public C stats layouts/functions mixed with internals | Gated; C-public stats types/functions are re-exported at raw root through `raw::abi`. |
-| `raw::options` | Public C option API mixed with internals | Gated; C-public option types/functions are re-exported at raw root through `raw::abi`. |
-| `raw::track` | Tracking feature constants/hooks | Gated under `unstable-raw-internals`. |
-| `raw::internal` | Internal helper required by tests only | Gated under `unstable-raw-internals`. |
-| `raw::page` | Internal allocator implementation | Gated under `unstable-raw-internals`. |
-| `raw::page_map` | Internal allocator implementation | Gated under `unstable-raw-internals`. |
-| `raw::theap` | Internal/thread-heap implementation mixed with C helper surface | Gated; public C calls use root `raw::mi_*`/`raw::mimalloc`. |
-| `raw::arena` | Internal arena implementation mixed with public arena exports | Gated; public C calls use root `raw::mi_*`/`raw::mimalloc`. |
-| `raw::arena_meta` | Internal arena metadata | Gated under `unstable-raw-internals`. |
-| `raw::os` | Internal OS facade with selected exported helpers | Gated; exported C symbols remain dynamic exports. |
-| `raw::prim` | Platform primitive internals | Gated under `unstable-raw-internals`. |
-| `raw::threadlocal` | Internal thread-local implementation | Gated under `unstable-raw-internals`. |
-| `raw::random` | Internal random/hardening implementation | Gated under `unstable-raw-internals`. |
-| `raw::memory` | Internal memory helpers | Gated under `unstable-raw-internals`. |
-| `raw::bitmap` | Internal bitmap helpers | Gated under `unstable-raw-internals`. |
-| `raw::bits` | Internal bit helpers | Gated under `unstable-raw-internals`. |
-| `raw::libc` | Internal libc compatibility helpers | Gated under `unstable-raw-internals`. |
-| `raw::init` | Internal process/thread initialization mixed with public lifecycle API | Gated; public lifecycle calls use root `raw::mi_*`/`raw::mimalloc`. |
-| `raw::static_c` | Internal static facade compatibility | Gated under `unstable-raw-internals`. |
+| `raw::types` | Removed implementation-module path | C-public layouts/types are re-exported at raw root through `raw::abi`. |
+| `raw::alloc` | Removed implementation-module path | Public calls use root `raw::mi_*`/`raw::mimalloc`. |
+| `raw::alloc_aligned` | Removed implementation-module path | Public calls use root `raw::mi_*`/`raw::mimalloc`. |
+| `raw::alloc_posix` | Removed implementation-module path | Public calls use root `raw::mi_*`/`raw::mimalloc`. |
+| `raw::alloc_override` | Removed implementation-module path | C symbols remain dynamic exports for artifact modes. |
+| `raw::free` | Removed implementation-module path | Public calls use root `raw::mi_*`/`raw::mimalloc`. |
+| `raw::heap` | Removed implementation-module path | Public calls use root `raw::mi_*`/`raw::mimalloc`. |
+| `raw::stats` | Removed implementation-module path | C-public stats types/functions are re-exported at raw root through `raw::abi`. |
+| `raw::options` | Removed implementation-module path | C-public option types/functions are re-exported at raw root through `raw::abi`. |
+| `raw::track` | Removed implementation-module path | Crate-private tracking internals. |
+| `raw::internal` | Removed implementation-module path | Crate-private helper internals. |
+| `raw::page` | Removed implementation-module path | Crate-private allocator implementation. |
+| `raw::page_map` | Removed implementation-module path | Crate-private allocator implementation. |
+| `raw::theap` | Removed implementation-module path | Public C calls use root `raw::mi_*`/`raw::mimalloc`. |
+| `raw::arena` | Removed implementation-module path | Public C calls use root `raw::mi_*`/`raw::mimalloc`. |
+| `raw::arena_meta` | Removed implementation-module path | Crate-private arena metadata. |
+| `raw::os` | Removed implementation-module path | Exported C symbols remain dynamic exports where applicable. |
+| `raw::prim` | Removed implementation-module path | Crate-private platform primitive internals. |
+| `raw::threadlocal` | Removed implementation-module path | Crate-private thread-local implementation. |
+| `raw::random` | Removed implementation-module path | Crate-private random/hardening implementation. |
+| `raw::memory` | Removed implementation-module path | Crate-private memory helpers. |
+| `raw::bitmap` | Removed implementation-module path | Crate-private bitmap helpers. |
+| `raw::bits` | Removed implementation-module path | Crate-private bit helpers. |
+| `raw::libc` | Removed implementation-module path | Crate-private libc compatibility helpers. |
+| `raw::init` | Removed implementation-module path | Public lifecycle calls use root `raw::mi_*`/`raw::mimalloc`. |
+| `raw::static_c` | Removed implementation-module path | Crate-private static facade compatibility. |
 
 ## Migration Order
 
 1. Move remaining `raw::mimalloc::*` imports to root `raw::mi_*` imports where
    that improves readability.
-2. Keep `tests/release_fast_path_audit.rs` behind `unstable-raw-internals`
-   until its source-shape checks no longer require raw internal layout aliases.
-3. Remove `unstable-raw-internals` once no integration test or repository audit
-   requires internal module paths.
+2. Keep source-shape audits on direct source inspection or crate-private unit
+   tests instead of raw implementation-module imports.
+3. Do not reintroduce raw implementation-module paths without a new public API
+   design and inventory update.

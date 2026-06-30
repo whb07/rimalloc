@@ -39,8 +39,6 @@
 //! - `cxx-overrides`: compiles and links C++ operator new/delete overrides.
 //! - `tls-shim`: compiles and links the Linux initial-exec TLS shim.
 //! - `interpose`: enables the aggregate C ABI/interposition build mode.
-//! - `unstable-raw-internals`: exposes translated implementation modules for
-//!   repository audits only.
 //!
 //! When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
 //! builds, Valgrind mode takes precedence.

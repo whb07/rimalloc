@@ -131,9 +131,7 @@ The raw Rust module path surface is unstable until explicitly versioned.
 
 By default, `raw` exposes the root C-header mirror plus `raw::abi`,
 `raw::mimalloc`, and `raw::headers`. Translated implementation modules are
-available only with the `unstable-raw-internals` feature for repository audits
-and parity tests. That feature is off by default, has no SemVer guarantees, and
-must not be used as an application integration surface.
+crate-private and must not be used as application integration paths.
 
 The source/documentation inventory is checked by:
 
@@ -166,9 +164,8 @@ Current raw users and raw module classifications are tracked in
 
 `mi_arena_t`, `mi_subproc_t`, `mi_page_t`, `mi_block_t`, and other translated
 implementation layouts are not re-exported by the default `src/ffi/abi.rs` public
-header mirror. They are reachable only through private implementation code or
-the `unstable-raw-internals` audit feature, except where an exposed callback
-or handle uses an opaque pointer token.
+header mirror. They are reachable only through private implementation code,
+except where an exposed callback or handle uses an opaque pointer token.
 
 ### Raw `repr(C)` Field Inventory
 
@@ -184,8 +181,8 @@ exposure is intentionally narrower than the full file:
 | `mi_padding_s` / `mi_padding_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain debug/secure padding layout. |
 | `mi_heap_area_t` | Re-exported by `src/ffi/abi.rs` | Public fields are required for heap/block visitor metadata compatibility. |
 | `mi_arena_pages_s` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated arena metadata layout. |
-| `mi_subproc_s` / `mi_subproc_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields are implementation layout, available only through unstable raw internals. |
-| `mi_tld_s` / `mi_tld_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields are implementation layout, available only through unstable raw internals. |
+| `mi_subproc_s` / `mi_subproc_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields are private implementation layout. |
+| `mi_tld_s` / `mi_tld_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields are private implementation layout. |
 | `mi_arena_s` / `mi_arena_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields are implementation layout; the default API uses opaque `mi_arena_id_t`. |
 | `mi_heap_s` / `mi_heap_t` | `mi_heap_t` is re-exported by `src/ffi/abi.rs` | Layout alias is retained for raw heap handle compatibility; safe heap APIs stay opaque. |
 | `mi_page_s` / `mi_page_t` | Not re-exported by `src/ffi/abi.rs` today | Public fields retain translated page layout for internal layout tests. |

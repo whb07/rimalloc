@@ -45,52 +45,27 @@ impl_only = {
     "types",
 }
 
-pending_unstable = False
-pending_attr = False
-unstable_depth = 0
 default_modules = set()
-unstable_modules = set()
 bad_pub_uses = []
+bad_impl_modules = []
 
 for line_number, line in enumerate(raw.splitlines(), start=1):
     stripped = line.strip()
-    if unstable_depth > 0:
-        unstable_depth += line.count("{") - line.count("}")
-        continue
-    if stripped == '#[cfg(feature = "unstable-raw-internals")]':
-        pending_unstable = True
-        pending_attr = False
-        continue
-    if pending_attr:
-        if stripped.endswith("]"):
-            pending_attr = False
-        continue
-    if stripped.startswith("#["):
-        if not stripped.endswith("]"):
-            pending_attr = True
-        continue
     module = re.match(r"pub mod\s+([A-Za-z0-9_]+)\s*\{", line)
     if module:
         name = module.group(1)
-        if pending_unstable:
-            unstable_modules.add(name)
-            unstable_depth = line.count("{") - line.count("}")
-        else:
-            default_modules.add(name)
-        pending_unstable = False
+        default_modules.add(name)
+        if name in impl_only:
+            bad_impl_modules.append(f"src/raw/mod.rs:{line_number}: pub mod {name}")
         continue
     pub_use = re.match(r"pub use crate::([A-Za-z0-9_]+)::\*;", stripped)
-    if pub_use and not pending_unstable:
+    if pub_use:
         name = pub_use.group(1)
         if name in impl_only:
-            bad_pub_uses.append(f"src/raw/mod.rs:{line_number}: default pub use crate::{name}::*")
-    if stripped:
-        pending_unstable = False
+            bad_pub_uses.append(f"src/raw/mod.rs:{line_number}: pub use crate::{name}::*")
 
 missing_default = default_allowed - default_modules
 extra_default = default_modules - default_allowed
-missing_unstable = impl_only - unstable_modules
-extra_unstable = unstable_modules - impl_only
 
 errors = []
 if missing_default or extra_default:
@@ -98,20 +73,17 @@ if missing_default or extra_default:
         "default raw modules drift: "
         f"missing={sorted(missing_default)} extra={sorted(extra_default)}"
     )
-if missing_unstable or extra_unstable:
-    errors.append(
-        "unstable raw-internals modules drift: "
-        f"missing={sorted(missing_unstable)} extra={sorted(extra_unstable)}"
-    )
+if bad_impl_modules:
+    errors.append("raw implementation modules found:\n" + "\n".join(bad_impl_modules))
 if bad_pub_uses:
-    errors.append("default raw implementation re-exports found:\n" + "\n".join(bad_pub_uses))
+    errors.append("raw implementation re-exports found:\n" + "\n".join(bad_pub_uses))
 
 if errors:
     raise SystemExit("\n".join(errors))
 
 print(
     "ok: default raw facade exposes "
-    f"{sorted(default_modules)}; {len(unstable_modules)} implementation modules are feature-gated"
+    f"{sorted(default_modules)}; implementation modules are private"
 )
 PY
 
@@ -153,9 +125,12 @@ impl_only = {
 }
 path_roots = [root / "tests", root / "benches", root / "examples"]
 direct = re.compile(
-    r"(?:mechanical_mimalloc::)?raw::(" + "|".join(sorted(impl_only)) + r")\b"
+    r"^\s*use\s+(?:mechanical_mimalloc::)?raw::("
+    + "|".join(sorted(impl_only))
+    + r")\b",
+    flags=re.M,
 )
-group = re.compile(r"(?:mechanical_mimalloc::)?raw::\{([^}]*)\}", flags=re.S)
+group = re.compile(r"^\s*use\s+(?:mechanical_mimalloc::)?raw::\{([^}]*)\}", flags=re.M | re.S)
 
 errors: list[str] = []
 for path_root in path_roots:
@@ -174,16 +149,13 @@ for path_root in path_roots:
             if any(name in impl_only for name in names):
                 uses_impl_raw = True
                 break
-        if not uses_impl_raw:
-            continue
-        if '#![cfg(feature = "unstable-raw-internals")]' not in text:
+        if uses_impl_raw:
             errors.append(
-                f"{path.relative_to(root)} uses gated raw internals without "
-                'feature-level cfg(feature = "unstable-raw-internals")'
+                f"{path.relative_to(root)} imports removed private raw implementation modules"
             )
 
 if errors:
     raise SystemExit("\n".join(errors))
 
-print("ok: tests, benches, and examples do not use raw internals without unstable gating")
+print("ok: tests, benches, and examples do not import private raw implementation modules")
 PY

@@ -121,8 +121,6 @@ Default features are empty.
   `c-abi`.
 - `interpose`: aggregate C ABI/interposition build mode; implies `c-abi`,
   `cxx-overrides`, and `tls-shim`.
-- `unstable-raw-internals`: expose translated implementation modules for
-  repository audits only; not public API.
 
 When `track-valgrind` and `track-asan` are both enabled by aggregate tooling
 builds, Valgrind mode takes precedence.

@@ -1,17 +1,6 @@
-#![cfg(feature = "unstable-raw-internals")]
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-#[cfg(all(target_os = "linux", not(debug_assertions)))]
-use std::mem::align_of;
-use std::mem::{offset_of, size_of};
 use std::path::Path;
-
-#[cfg(all(target_os = "linux", not(debug_assertions)))]
-use mechanical_mimalloc::raw::atomic::mi_lock_t;
-use mechanical_mimalloc::raw::types::mi_page_t;
-#[cfg(not(feature = "guarded"))]
-use mechanical_mimalloc::raw::types::mi_theap_t;
 
 fn assert_not_no_mangle_item(source_name: &str, source: &str, internal_name: &str) {
     let Some(start) = source.find(internal_name) else {
@@ -443,19 +432,6 @@ fn options_state_uses_internal_locks_like_c() {
             && options_rs.contains("#[link_name = \"abort\"]"),
         "options state should use typed mimalloc lock guards and C abort primitives"
     );
-    #[cfg(all(target_os = "linux", not(debug_assertions)))]
-    {
-        assert_eq!(
-            size_of::<mi_lock_t>(),
-            40,
-            "Linux mi_lock_t should match the pthread_mutex_t-backed C layout"
-        );
-        assert_eq!(
-            align_of::<mi_lock_t>(),
-            align_of::<usize>(),
-            "Linux mi_lock_t should keep pthread mutex alignment"
-        );
-    }
     assert!(
         atomic_rs.contains(
             "#[cfg(all(target_os = \"linux\", not(debug_assertions)))]\n#[link(name = \"pthread\")]"
@@ -537,8 +513,14 @@ fn crate_root_exposes_only_curated_rust_facade() {
         "crate root should expose the raw facade, unsafe-adjacent callbacks, and finalized safe Rust allocator facade"
     );
 
+    for module in ["abi", "headers", "mimalloc"] {
+        assert!(
+            raw_rs.contains(&format!("pub mod {module}")),
+            "raw facade should intentionally expose `{module}` compatibility items"
+        );
+    }
+
     for module in [
-        "abi",
         "alloc",
         "alloc_aligned",
         "alloc_override",
@@ -549,13 +531,11 @@ fn crate_root_exposes_only_curated_rust_facade() {
         "bitmap",
         "bits",
         "free",
-        "headers",
         "heap",
         "init",
         "internal",
         "libc",
         "memory",
-        "mimalloc",
         "options",
         "os",
         "page",
@@ -573,8 +553,8 @@ fn crate_root_exposes_only_curated_rust_facade() {
             "implementation module `{module}` should not be public at the crate root"
         );
         assert!(
-            raw_rs.contains(&format!("pub mod {module}")),
-            "raw facade should intentionally expose `{module}` compatibility items"
+            !raw_rs.contains(&format!("pub mod {module}")),
+            "raw facade should not expose implementation module `{module}`"
         );
     }
 }
@@ -814,13 +794,13 @@ fn public_c_layout_exposure_uses_raw_abi_facade() {
         "public C layouts and aliases should be exposed through raw::abi, raw::mimalloc, and root raw C-header re-exports"
     );
     assert!(
-        raw_rs.contains("#[cfg(feature = \"unstable-raw-internals\")]\n#[deprecated(\n    note = \"raw implementation module path; not public API; use root raw::mi_* or raw::abi for C-header surface\"\n)]\npub mod types")
+        !raw_rs.contains("pub mod types")
             && api_doc.contains("By default, `raw` exposes the root C-header mirror plus `raw::abi`,\n`raw::mimalloc`, and `raw::headers`.")
             && !lib_rs.contains("pub mod types;")
             && !lib_rs.contains("pub mod core_types;")
             && !raw_rs.contains("pub use crate::core_types")
             && !abi_rs.contains("core_types"),
-        "raw::types should remain unstable internals and core_types must not be a public C layout route"
+        "raw::types should remain unavailable and core_types must not be a public C layout route"
     );
 }
 
@@ -868,10 +848,9 @@ fn raw_facade_remains_c_shaped_without_strict_type_exports() {
         "types",
     ] {
         assert!(
-            raw_rs.contains(&format!(
-                "#[cfg(feature = \"unstable-raw-internals\")]\n#[deprecated(\n    note = \"raw implementation module path; not public API; use root raw::mi_* or raw::abi for C-header surface\"\n)]\npub mod {module}"
-            )),
-            "raw::{module} should remain an explicitly unstable implementation-module facade"
+            !raw_rs.contains(&format!("pub mod {module}"))
+                && !raw_rs.contains(&format!("pub use crate::{module}::*")),
+            "raw::{module} should not expose implementation modules"
         );
     }
 
@@ -945,7 +924,7 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
 }
 
 #[test]
-fn translated_raw_internal_test_access_requires_unstable_feature() {
+fn repository_tests_do_not_import_private_raw_modules() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = root.join("tests");
     let internal_modules = [
@@ -986,18 +965,19 @@ fn translated_raw_internal_test_access_requires_unstable_feature() {
 
         let source = fs::read_to_string(&path).expect("read test source");
         let uses_raw_internal = internal_modules.iter().any(|module| {
-            source.contains(&format!("mechanical_mimalloc::raw::{module}"))
-                || source.contains(&format!("mechanical_mimalloc::raw::{{{module}"))
-                || source.contains(&format!("mechanical_mimalloc::raw::{{\n    {module}"))
+            let direct = format!("use mechanical_mimalloc::raw::{module}");
+            let group_inline = format!("use mechanical_mimalloc::raw::{{{module}");
+            let group_multiline = format!("use mechanical_mimalloc::raw::{{\n    {module}");
+            source.contains(&direct)
+                || source.contains(&group_inline)
+                || source.contains(&group_multiline)
         });
 
-        if uses_raw_internal {
-            assert!(
-                source.starts_with("#![cfg(feature = \"unstable-raw-internals\")]\n"),
-                "{} imports translated raw internals without the unstable feature gate",
-                path.display()
-            );
-        }
+        assert!(
+            !uses_raw_internal,
+            "{} imports removed private raw implementation modules",
+            path.display()
+        );
     }
 }
 
@@ -1185,7 +1165,7 @@ fn public_callback_abi_inventory_stays_documented() {
             && arena_rs.contains("pub unsafe extern \"C\" fn mi_manage_memory")
             && abi_doc.contains("mi_claim_fun_t")
             && abi_doc.contains("mi_forall_set_fun_t")
-            && abi_doc.contains("unstable-raw-internals"),
+            && abi_doc.contains("crate-private implementation modules"),
         "callback registrations and internal callback families should be inventoried at their public boundary"
     );
 }
@@ -1415,7 +1395,6 @@ fn public_docs_match_current_build_mode_and_layout() {
         "`cxx-overrides`",
         "`tls-shim`",
         "`interpose`",
-        "`unstable-raw-internals`",
     ] {
         assert!(
             readme.contains(feature)
@@ -1711,37 +1690,6 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
                 >= 4,
         "release free-size/aligned public variants should remain C-shaped forwarding stubs in the fast build"
     );
-    assert_eq!(offset_of!(mi_page_t, free), 0x08);
-    assert_eq!(offset_of!(mi_page_t, used), 0x10);
-    assert_eq!(offset_of!(mi_page_t, local_free), 0x18);
-    assert_eq!(offset_of!(mi_page_t, xthread_free), 0x20);
-    assert_eq!(offset_of!(mi_page_t, block_size), 0x28);
-    assert_eq!(offset_of!(mi_page_t, page_start), 0x30);
-    #[cfg(any(
-        feature = "secure",
-        debug_assertions,
-        feature = "track-valgrind",
-        feature = "track-asan"
-    ))]
-    {
-        assert_eq!(size_of::<mi_page_t>(), 0x88);
-        assert_eq!(offset_of!(mi_page_t, keys), 0x38);
-        assert_eq!(offset_of!(mi_page_t, theap), 0x48);
-        assert_eq!(offset_of!(mi_page_t, memid), 0x70);
-    }
-    #[cfg(not(any(
-        feature = "secure",
-        debug_assertions,
-        feature = "track-valgrind",
-        feature = "track-asan"
-    )))]
-    {
-        assert_eq!(size_of::<mi_page_t>(), 0x78);
-        assert_eq!(offset_of!(mi_page_t, theap), 0x38);
-        assert_eq!(offset_of!(mi_page_t, memid), 0x60);
-    }
-    #[cfg(not(feature = "guarded"))]
-    assert_eq!(offset_of!(mi_theap_t, pages_free_direct), 0x110);
 }
 
 #[test]
@@ -3378,6 +3326,7 @@ fn phase6_clippy_allowances_stay_intentional() {
         (("src/raw/macros.rs", "must_use_candidate"), 1),
         (("src/platform/os.rs", "absurd_extreme_comparisons"), 3),
         (("src/platform/os.rs", "too_many_arguments"), 1),
+        (("src/platform/unix.rs", "struct_field_names"), 1),
         (("src/allocator/page.rs", "absurd_extreme_comparisons"), 1),
         (("src/internal/random.rs", "many_single_char_names"), 1),
     ]);

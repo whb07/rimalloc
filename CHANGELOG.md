@@ -22,16 +22,11 @@ All notable changes to this repository should be recorded here.
 - Keep the public `raw` module as an unsafe, Rust-path-unstable Tier R facade
   for C-header parity, repository tests, benchmarks, and low-level integrations.
 
-### Deprecated
-
-- Treat broad implementation-module raw paths such as `raw::alloc`,
-  `raw::heap`, `raw::internal`, `raw::page`, and `raw::types` as unstable
-  migration paths, not supported integration paths.
-
 ### Removed
 
-- Remove broad implementation-module exposure from the default `raw` facade by
-  gating those modules behind `unstable-raw-internals`.
+- Remove broad implementation-module exposure from the `raw` facade. Use root
+  `raw::mi_*`, `raw::abi`, `raw::mimalloc`, or `raw::headers` for supported raw
+  C-header compatibility paths.
 - Remove the pre-release `Options` compatibility alias. Use `GlobalOptions` for
   supported process-global allocator option access.
 - Remove the pre-release `Allocation::into_initialized` and

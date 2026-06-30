@@ -16,6 +16,8 @@ Reviewed workstream history:
   declarations into the dedicated ABI owner.
 - `5094e9d Gate raw internals behind unstable feature`: stopped default raw
   from exposing implementation modules.
+- Later release-readiness work removed that temporary feature entirely after
+  repository tests stopped importing raw implementation modules.
 - `fc790aa Record final signoff checks`: recorded the full local signoff pass
   before this final review artifact.
 
@@ -70,8 +72,9 @@ Intentional API changes reviewed:
   unstable as a Rust path surface unless explicitly versioned later.
 - Kept default `raw` narrow: root `mi_*` C-header mirror plus `raw::abi`,
   `raw::mimalloc`, and `raw::headers`.
-- Moved translated implementation modules behind `unstable-raw-internals`.
-  This is raw facade cleanup, not C ABI removal.
+- Removed translated implementation modules from the raw facade after migrating
+  repository coverage to public raw paths, source inspection, or crate-private
+  unit tests. This is raw facade cleanup, not C ABI removal.
 - Kept C ABI declarations and raw layouts owned by `src/ffi/abi.rs`, exposed
   through `raw::abi` and `raw::mimalloc`.
 

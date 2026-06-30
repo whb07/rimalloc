@@ -152,13 +152,11 @@ layouts, and functions. It is intentionally separate from the crate root:
   low-level Rust callers that intentionally want the mimalloc C shape
 - `raw::headers`: translated public-header macros and compatibility items that
   do not belong in the ABI declaration owner
-- `unstable-raw-internals`: gated translated implementation modules for
-  repository audits and migration checks only
 
 Most raw functions are unsafe because pointer validity, allocation origin,
 alignment, lifetime, nullability, and threading are caller obligations.
-The `unstable-raw-internals` module paths are not public API and must not be
-used by downstream users as normal library paths.
+Crate-private implementation modules are not public API and must not be used by
+downstream users as normal library paths.
 
 ## Raw Pointer Nullability
 
@@ -197,7 +195,7 @@ Current ownership is the final layout for this migration phase:
 | --- | --- | --- |
 | Safe Rust facade | `src/lib.rs`, `src/safe/mod.rs` | `MiMalloc`, `Allocation`, and Rust error/status types. |
 | C header declarations and layouts | `src/ffi/abi.rs` exposed through `raw::abi` and `raw::mimalloc` | Public `mi_*` declarations, `repr(C)` layouts, C-compatible aliases, constants, and callback type aliases mirrored from public headers. |
-| Raw C-shaped Rust facade | `src/raw/mod.rs` | Default root `mi_*` re-exports plus `raw::abi`, `raw::mimalloc`, and `raw::headers`; translated internals are gated by `unstable-raw-internals`. |
+| Raw C-shaped Rust facade | `src/raw/mod.rs` | Default root `mi_*` re-exports plus `raw::abi`, `raw::mimalloc`, and `raw::headers`; translated internals remain crate-private. |
 | Exported C ABI implementations | existing implementation files approved by `scripts/check-ffi-boundary.py` | `#[unsafe(no_mangle)]`, `#[unsafe(export_name = ...)]`, naked ABI shims, and public assembly aliases. |
 | Strict internal types | `src/types/` | Private invariant-carrying wrappers and witness types used inside allocator internals; never part of the raw C facade or C ABI declaration owner. |
 | Internal compatibility aliases | `src/ffi/mimalloc.rs` and selected translated helpers | C-shaped helper paths used by the mechanical translation but not a public Rust API. |
@@ -218,14 +216,13 @@ C ABI exports
   -> classified src/*.rs files checked by scripts/check-ffi-boundary.py
   -> private allocator internals
 
-unstable raw internals
-  -> feature-gated src/raw/mod.rs modules
+crate-private implementation modules
   -> private translated modules
 ```
 
-`src/raw/mod.rs` must remain a structured facade, not an unbounded re-export bucket.
-`scripts/check-api-inventory.py` enforces the default raw module set and the
-feature-gated `unstable-raw-internals` module set.
+`src/raw/mod.rs` must remain a structured facade, not an unbounded re-export
+bucket. `scripts/check-api-inventory.py` enforces the default raw module set
+and rejects implementation-module exposure.
 
 ## Current File Layout
 
@@ -370,11 +367,10 @@ Default public callback families:
 
 Translated internal callback helpers such as `mi_claim_fun_t`,
 `mi_forall_set_fun_t`, `theap_page_visitor_fun`, `mi_theap_area_visit_fun`, and
-bitmap visitor helpers are implementation-internal or exposed only through the
-`unstable-raw-internals` audit surface. They are not part of the default public
-raw facade and must not be stabilized without adding them to this inventory and
-documenting the same nullability, lifetime, threading, reentrancy, and unwind
-contract.
+bitmap visitor helpers are crate-private implementation modules. They are not
+part of the default public raw facade and must not be stabilized without adding
+them to this inventory and documenting the same nullability, lifetime,
+threading, reentrancy, and unwind contract.
 
 Raw callback registration remains unsafe. `unsafe_callbacks::ErrorCallbackGuard`
 and `unsafe_callbacks::DeferredFreeCallbackGuard` wrappers are available for

@@ -167,6 +167,7 @@ pub struct timespec {
 }
 
 #[repr(C)]
+#[allow(clippy::struct_field_names)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct rusage {
     pub ru_utime: mi_timeval,

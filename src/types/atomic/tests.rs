@@ -7,6 +7,21 @@ use core::{
     sync::atomic::{AtomicI64, AtomicPtr, AtomicUsize},
 };
 
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+#[test]
+fn linux_mi_lock_matches_pthread_mutex_layout() {
+    assert_eq!(
+        core::mem::size_of::<mi_lock_t>(),
+        40,
+        "Linux mi_lock_t should match the pthread_mutex_t-backed C layout"
+    );
+    assert_eq!(
+        core::mem::align_of::<mi_lock_t>(),
+        core::mem::align_of::<usize>(),
+        "Linux mi_lock_t should keep pthread mutex alignment"
+    );
+}
+
 #[test]
 fn atomic_usize_field_updates_stack_atomic_word() {
     let atomic = AtomicUsize::new(4);

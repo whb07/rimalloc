@@ -34,8 +34,8 @@ repeated as TODO work:
   `docs/api-inventory.md` and `docs/compatibility.md`.
 - `unsafe_callbacks` is already separate from the crate-root Tier S facade.
 - `raw` is already documented as unsafe and unstable as a Rust path surface.
-- `unstable-raw-internals` is already off by default and gates translated
-  implementation modules.
+- Translated implementation modules are private and no longer exposed through
+  the raw facade.
 - `Cargo.toml` currently declares `[lib] crate-type = ["rlib"]`; cdylib and
   staticlib artifacts are selected explicitly with `cargo rustc`.
 - C++ override and TLS shims are already feature-gated in `build.rs`.
@@ -588,18 +588,23 @@ Validated remaining issues:
     constants, page bin characterization, and `_mi_assert_fail` abort coverage
     moved into crate-private unit tests. `tests/original_main_override_static.rs`,
     `tests/original_test_api_fill.rs`, and `tests/ffi_panic_audit.rs` no longer
-    require `unstable-raw-internals`; the remaining gated
-    `tests/release_fast_path_audit.rs` is a source-shape audit that still needs
-    raw internal layout aliases.
+    require private raw implementation module imports; the remaining
+    source-shape checks in `tests/release_fast_path_audit.rs` read source files
+    instead of importing private raw modules.
   - Verify: `scripts/check-raw-facade.sh`.
 
-- [ ] Remove the `unstable-raw-internals` feature after no repository tests
+- [x] Remove the `unstable-raw-internals` feature after no repository tests
       require it.
-  - [ ] Delete gated module re-exports from `src/raw/mod.rs`.
-  - [ ] Remove feature references from `Cargo.toml`.
-  - [ ] Update `docs/raw-facade-migration.md`, `docs/api-inventory.md`,
+  - [x] Delete gated module re-exports from `src/raw/mod.rs`.
+  - [x] Remove feature references from `Cargo.toml`.
+  - [x] Update `docs/raw-facade-migration.md`, `docs/api-inventory.md`,
         `docs/features.md`, and `docs/limitations.md`.
-  - [ ] Update scripts that currently expect unstable raw-internals modules.
+  - [x] Update scripts that currently expect unstable raw-internals modules.
+  - Evidence: `unstable-raw-internals` was removed from `Cargo.toml`; raw
+    implementation modules were removed from `src/raw/mod.rs`; release audit
+    layout checks moved into crate-private unit tests; docs now describe
+    implementation modules as private; and validation scripts reject raw
+    implementation-module imports instead of looking for an unstable gate.
   - Verify: `scripts/check-api-inventory.py`, `scripts/check-raw-facade.sh`,
     and the full Rust test suite.
 

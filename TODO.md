@@ -174,18 +174,28 @@ Validated remaining issues:
   - Verify: `readelf -Ws` or `nm -D` checks for `c-abi`, `cxx-overrides`, and
     `interpose` cdylibs.
 
-- [ ] Decide the Rust-extension symbol policy.
-  - [ ] Review each `rust-extension` and `platform-helper-extension` entry in
+- [x] Decide the Rust-extension symbol policy.
+  - [x] Review each `rust-extension` and `platform-helper-extension` entry in
         `symbols/public-symbol-classification.tsv`.
-  - [ ] For each extra `mi_*` symbol, choose one outcome: hide, rename with a
+  - [x] For each extra `mi_*` symbol, choose one outcome: hide, rename with a
         `mechanical_mimalloc_*` prefix, or document as intentional extension
         ABI.
-  - [ ] If hidden, remove it from the dynamic export allowlist and keep only
+  - [x] If hidden, remove it from the dynamic export allowlist and keep only
         internal Rust reachability.
-  - [ ] If renamed, provide compatibility only if the old symbol was already
+  - [x] If renamed, provide compatibility only if the old symbol was already
         part of a promised release.
-  - [ ] If documented, add ownership, nullability, threading, and stability
+        Not applicable: no current Rust-extension `mi_*` symbol was renamed for
+        this release.
+  - [x] If documented, add ownership, nullability, threading, and stability
         text to `docs/abi.md`.
+        Not applicable: no current Rust-extension `mi_*` symbol is promoted to
+        intentional extension ABI for this release.
+  - Evidence: `docs/abi.md`, `docs/api-inventory.md`, and
+    `symbols/public-symbol-classification.tsv` now state that current
+    `rust-extension` and `platform-helper-extension` `mi_*` symbols are hidden
+    from default dynamic C ABI artifacts and remain only static/no-`c-abi`
+    compatibility classifications unless a future release explicitly promotes
+    one as extension ABI.
   - Verify: dynamic symbol manifest shows no unintentional extra `mi_*`
     symbols.
 

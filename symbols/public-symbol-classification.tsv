@@ -1,4 +1,8 @@
 # match	symbol	classification	source	rationale
+# Exact rust-extension and platform-helper-extension `mi_*` entries are classified
+# for static archive and no-`c-abi` compatibility audits only. They are hidden
+# from default dynamic C ABI artifacts and are not documented extension ABI for
+# the release contract unless a later entry explicitly says otherwise.
 prefix	_mi_	internal-export-required	Rust translation internals	Temporary C-linkage surface used by translated modules that still call internal helpers by symbol name; compatibility impact is a broader static archive symbol surface than C mimalloc and these should not be treated as stable public API.
 exact	mi_arena_from_index	rust-extension	arena facade	Rust-only arena inspection helper already exported by the translation; compatibility impact is an additional mi_* symbol outside C mimalloc 3.3.2 public headers.
 exact	mi_arena_id_from_arena	rust-extension	arena facade	Rust-only arena id helper already exported by the translation; compatibility impact is an additional mi_* symbol outside C mimalloc 3.3.2 public headers.

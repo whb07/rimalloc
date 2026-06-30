@@ -363,6 +363,9 @@ scripts/check-feature-abi.sh
 
 Extra exported symbols outside the public C headers must be classified in
 `symbols/public-symbol-classification.tsv`; otherwise the symbol check fails.
+Rust-only `mi_*` helpers classified there are not default dynamic C ABI exports;
+they are hidden from `c-abi` cdylibs unless a later release explicitly promotes
+one as documented extension ABI.
 `scripts/check-feature-abi.sh` repeats the ABI/layout and export checks for the
 layout- or symbol-sensitive `secure`, `guarded`, `track-valgrind`, and
 `track-asan` feature sets.

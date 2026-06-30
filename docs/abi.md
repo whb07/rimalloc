@@ -28,9 +28,11 @@ The expected exported C surface is derived from:
 
 - `mimalloc-3.3.2/include/mimalloc.h`
 - `mimalloc-3.3.2/include/mimalloc-stats.h`
-- malloc-family override symbols used by upstream mimalloc on Linux
-- Itanium C++ operator new/delete override symbols
-- classified Rust translation extensions in
+- malloc-family override symbols used by upstream mimalloc on Linux, only for
+  interposition artifacts
+- Itanium C++ operator new/delete override symbols, only for artifacts that
+  link the C++ shim
+- static archive and no-`c-abi` compatibility classifications in
   `symbols/public-symbol-classification.tsv`
 
 Run:
@@ -40,13 +42,14 @@ scripts/check-abi-symbols.sh
 scripts/check-ffi-boundary.py
 ```
 
-This check fails if a public-header symbol is missing or if an extra relevant
-`mi_*`, `_mi_*`, malloc-family, or C++ operator symbol is exported without a
-classification.
+This check fails if a public-header symbol is missing, if a default dynamic
+`c-abi` artifact exports a non-header `mi_*` symbol, or if an extra relevant
+`mi_*`, `_mi_*`, malloc-family, or C++ operator symbol is exported in the static
+archive without a classification.
 The FFI boundary check classifies source files containing export attributes as
 C ABI, malloc/C++ override, runtime boundary, or internal-classified exception,
 and verifies that the Linux linker version script keeps the expected public
-symbol patterns global.
+symbol patterns available to the matching artifact mode.
 
 ## Hidden Symbols
 
@@ -58,6 +61,15 @@ deliberately classified.
 For static archive audits, some internal `_mi_*` helpers remain visible because
 the mechanical translation still uses C-shaped linkage internally. These are
 classified as `internal-export-required` and are not stable public API.
+
+Rust-only `mi_*` helpers classified as `rust-extension` or
+`platform-helper-extension` in `symbols/public-symbol-classification.tsv` are
+hidden from the default dynamic C ABI. They are retained only for internal Rust
+reachability, repository audits, static/no-`c-abi` compatibility checks, and
+pre-release migration visibility. They are not supported extension ABI: callers
+must not rely on their dynamic presence, Rust path, ownership model,
+nullability, threading behavior, or symbol spelling unless a future release
+explicitly documents one of them here as an intentional extension ABI.
 
 `tests/release_fast_path_audit.rs` also guards known internal helpers against
 regaining `#[unsafe(no_mangle)]`.

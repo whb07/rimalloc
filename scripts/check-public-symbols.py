@@ -128,15 +128,15 @@ def rust_staticlib() -> pathlib.Path:
     return libs[0]
 
 
-def rust_cdylib() -> pathlib.Path:
-    target_dir = ROOT / "target/symbol-check/c-abi"
+def rust_cdylib(features: str, artifact_name: str) -> pathlib.Path:
+    target_dir = ROOT / f"target/symbol-check/{artifact_name}"
     subprocess.run(
         [
             "cargo",
             "rustc",
             "--lib",
             "--features",
-            "c-abi",
+            features,
             "--target-dir",
             str(target_dir),
             "--",
@@ -214,7 +214,11 @@ def dynamic_symbols(cdylib: pathlib.Path) -> set[str]:
 
 def check_dynamic_mi_exports() -> int:
     expected = set(public_header_symbols())
-    exported = {symbol for symbol in dynamic_symbols(rust_cdylib()) if symbol.startswith("mi_")}
+    exported = {
+        symbol
+        for symbol in dynamic_symbols(rust_cdylib("c-abi", "c-abi"))
+        if symbol.startswith("mi_")
+    }
     missing = sorted(expected - exported)
     extra = sorted(exported - expected)
     if missing:
@@ -228,6 +232,53 @@ def check_dynamic_mi_exports() -> int:
     if missing or extra:
         return 1
     print(f"ok: c-abi cdylib exports exactly {len(expected)} public header mi_* symbols")
+    return 0
+
+
+def report_symbols(message: str, symbols: list[str]) -> None:
+    print(message, file=sys.stderr)
+    for symbol in symbols:
+        print(symbol, file=sys.stderr)
+
+
+def check_dynamic_export_groups() -> int:
+    c_abi = dynamic_symbols(rust_cdylib("c-abi", "c-abi"))
+    cxx = dynamic_symbols(rust_cdylib("cxx-overrides", "cxx-overrides"))
+    interpose = dynamic_symbols(rust_cdylib("interpose", "interpose"))
+
+    failed = False
+    c_abi_extra = sorted((MALLOC_FAMILY_SYMBOLS | CXX_OPERATOR_OVERRIDE_SYMBOLS) & c_abi)
+    if c_abi_extra:
+        report_symbols("c-abi cdylib unexpectedly exports override symbols:", c_abi_extra)
+        failed = True
+
+    cxx_malloc_extra = sorted(MALLOC_FAMILY_SYMBOLS & cxx)
+    if cxx_malloc_extra:
+        report_symbols(
+            "cxx-overrides cdylib unexpectedly exports malloc-family symbols:",
+            cxx_malloc_extra,
+        )
+        failed = True
+
+    cxx_missing = sorted(CXX_OPERATOR_OVERRIDE_SYMBOLS - cxx)
+    if cxx_missing:
+        report_symbols("cxx-overrides cdylib is missing C++ operator symbols:", cxx_missing)
+        failed = True
+
+    interpose_missing = sorted((MALLOC_OVERRIDE_SYMBOLS | CXX_OPERATOR_OVERRIDE_SYMBOLS) - interpose)
+    if interpose_missing:
+        report_symbols(
+            "interpose cdylib is missing allocator override symbols:",
+            interpose_missing,
+        )
+        failed = True
+
+    if failed:
+        return 1
+
+    print("ok: c-abi cdylib excludes malloc-family and C++ override symbols")
+    print("ok: cxx-overrides cdylib exports C++ overrides without malloc-family symbols")
+    print("ok: interpose cdylib exports malloc-family and C++ override symbols")
     return 0
 
 
@@ -287,10 +338,17 @@ def main() -> int:
         action="store_true",
         help="check c-abi cdylib dynamic mi_* exports against public headers",
     )
+    parser.add_argument(
+        "--dynamic-groups",
+        action="store_true",
+        help="check dynamic cdylib export groups for c-abi, cxx-overrides, and interpose",
+    )
     args = parser.parse_args()
 
     if args.dynamic_mi:
         return check_dynamic_mi_exports()
+    if args.dynamic_groups:
+        return check_dynamic_export_groups()
 
     expected = public_header_symbols()
     exported = exported_symbols(rust_staticlib())

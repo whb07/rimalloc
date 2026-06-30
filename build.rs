@@ -6,6 +6,22 @@ const PUBLIC_HEADERS: [&str; 2] = [
     "mimalloc-3.3.2/include/mimalloc.h",
     "mimalloc-3.3.2/include/mimalloc-stats.h",
 ];
+const CXX_EXPORT_PATTERNS: [&str; 4] = ["_Zda*", "_Zdl*", "_Zna*", "_Znw*"];
+const MALLOC_EXPORT_PATTERNS: [&str; 13] = [
+    "__libc_*",
+    "__posix_memalign*",
+    "_aligned_malloc*",
+    "aligned_alloc*",
+    "calloc*",
+    "cfree*",
+    "free*",
+    "malloc*",
+    "memalign*",
+    "posix_memalign*",
+    "pvalloc*",
+    "realloc*",
+    "valloc*",
+];
 
 fn required_env(name: &str) -> String {
     env::var(name).unwrap_or_else(|err| {
@@ -191,31 +207,28 @@ fn public_mi_symbols_from_headers() -> Vec<String> {
     symbols
 }
 
-fn link_linux_cdylib_exports() {
+fn append_export_patterns(exports: &mut String, patterns: &[&str]) {
+    for pattern in patterns {
+        exports.push_str("    ");
+        exports.push_str(pattern);
+        exports.push_str(";\n");
+    }
+}
+
+fn link_linux_cdylib_exports(interpose: bool, cxx_shim_linked: bool) {
     let out_dir = PathBuf::from(required_env_os("OUT_DIR"));
     let version_script = out_dir.join("mimalloc.exports");
     let mut exports = String::from(
         r"{
   global:
-    _Zda*;
-    _Zdl*;
-    _Zna*;
-    _Znw*;
-    __libc_*;
-    __posix_memalign*;
-    _aligned_malloc*;
-    aligned_alloc*;
-    calloc*;
-    cfree*;
-    free*;
-    malloc*;
-    memalign*;
-    posix_memalign*;
-    pvalloc*;
-    realloc*;
-    valloc*;
 ",
     );
+    if cxx_shim_linked {
+        append_export_patterns(&mut exports, &CXX_EXPORT_PATTERNS);
+    }
+    if interpose {
+        append_export_patterns(&mut exports, &MALLOC_EXPORT_PATTERNS);
+    }
     for symbol in public_mi_symbols_from_headers() {
         exports.push_str("    ");
         exports.push_str(&symbol);
@@ -281,14 +294,16 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(mi_internal_c_probe)");
     println!("cargo:rustc-check-cfg=cfg(mi_sanitizer_runtime)");
 
-    if cxx_overrides && target_os != "windows" && target_supports_cxx_shim(&target_os) {
+    let cxx_shim_linked =
+        cxx_overrides && target_os != "windows" && target_supports_cxx_shim(&target_os);
+    if cxx_shim_linked {
         compile_cxx_new_shim();
     } else if cxx_overrides && target_os != "windows" {
         println!("cargo:warning=skipping C++ new/delete shim on unsupported target_os={target_os}");
     }
     if target_os == "linux" {
         if c_abi {
-            link_linux_cdylib_exports();
+            link_linux_cdylib_exports(interpose, cxx_shim_linked);
         }
         let default_fast_override = profile == "release"
             && target_arch == "x86_64"

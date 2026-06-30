@@ -154,17 +154,23 @@ Validated remaining issues:
     `mi_*` export outside the public headers.
   - Verify: new dynamic symbol check plus `scripts/check-abi-symbols.sh`.
 
-- [ ] Split dynamic export groups by artifact mode.
-  - [ ] For `--features c-abi --crate-type cdylib`, export public mimalloc
+- [x] Split dynamic export groups by artifact mode.
+  - [x] For `--features c-abi --crate-type cdylib`, export public mimalloc
         `mi_*` symbols and required public layouts/callbacks only.
-  - [ ] For `--features interpose --crate-type cdylib`, add malloc-family
+  - [x] For `--features interpose --crate-type cdylib`, add malloc-family
         override symbols.
-  - [ ] For `--features cxx-overrides` or `interpose`, add Itanium C++
+  - [x] For `--features cxx-overrides` or `interpose`, add Itanium C++
         operator new/delete override symbols only when the C++ shim is linked.
-  - [ ] Ensure `c-abi` alone does not export malloc-family or C++ operator
+  - [x] Ensure `c-abi` alone does not export malloc-family or C++ operator
         symbols by version-script pattern.
-  - [ ] Add negative tests proving those symbols are absent from the wrong
+  - [x] Add negative tests proving those symbols are absent from the wrong
         artifact modes.
+  - Evidence: `build.rs` now appends C++ and malloc-family export groups only
+    for the matching artifact modes, `src/raw/macros.rs` gates the corresponding
+    `export_name` attributes in `c-abi` builds, and
+    `scripts/check-public-symbols.py --dynamic-groups` verifies the negative
+    and positive dynamic export cases for `c-abi`, `cxx-overrides`, and
+    `interpose`.
   - Verify: `readelf -Ws` or `nm -D` checks for `c-abi`, `cxx-overrides`, and
     `interpose` cdylibs.
 

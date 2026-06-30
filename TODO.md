@@ -1132,12 +1132,21 @@ Validated remaining issues:
     checklist and named validation evidence.
   - Verify: `docs/platforms.md` contains the checklist.
 
-- [ ] Keep source-present platforms out of release marketing.
-  - [ ] Ensure macOS, Windows, WASI, Emscripten, aarch64, and other source
+- [x] Keep source-present platforms out of release marketing.
+  - [x] Ensure macOS, Windows, WASI, Emscripten, aarch64, and other source
         present targets are described as smoke/source-present only unless
         promoted.
-  - [ ] Ensure CI smoke jobs do not imply maintained support.
-  - [ ] Add release-note language for unsupported target reports and triage.
+  - [x] Ensure CI smoke jobs do not imply maintained support.
+  - [x] Add release-note language for unsupported target reports and triage.
+  - Evidence: README now states Linux x86_64 GNU is the only maintained target
+    and calls Linux aarch64, macOS, and Windows CI jobs smoke-only while
+    keeping WASI, Emscripten, and other translated platform code
+    source-present only unless promoted. `docs/platforms.md` names the same
+    source-present/smoke-only targets and adds release-note triage language for
+    unsupported target reports. `docs/release.md` requires that language before
+    publishing release notes, and `tests/release_fast_path_audit.rs` checks the
+    README, platform docs, release policy, and validation workflow do not
+    overclaim smoke jobs as maintained support.
   - Verify: README and platform docs do not overclaim.
 
 ## P2 - Security and governance

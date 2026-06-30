@@ -180,9 +180,12 @@ builds, Valgrind mode takes precedence.
 
 ## Supported Targets
 
-The maintained target for the current port is Linux x86_64 GNU. Other upstream
-mimalloc platforms remain part of the source translation, but they are not yet
-claimed as maintained Rust targets until parity and CI evidence exists.
+The maintained target for the current port is Linux x86_64 GNU only. Linux
+aarch64, macOS, and Windows may have CI smoke jobs, but those jobs check source
+health and basic allocator behavior only; they do not imply maintained target
+support. WASI, Emscripten, and other translated platform code are
+source-present only unless `docs/platforms.md` promotes them with the required
+evidence.
 See `docs/platforms.md` and `docs/limitations.md` for the current support
 matrix and caveats.
 

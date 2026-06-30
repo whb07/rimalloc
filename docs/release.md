@@ -272,7 +272,11 @@ Before publishing or tagging a release:
    attached report, summarizing geomean Rust/C ratios, hot-path deltas against
    previous release evidence, noisy watch items, release-blocking regressions,
    and links to raw Criterion summaries or threshold CSV artifacts.
-25. Update `CHANGELOG.md`, `README.md`, and compatibility notes, and link the
+25. Update release notes with the unsupported-target triage language from
+   `docs/platforms.md`; do not market Linux aarch64, macOS, Windows, WASI,
+   Emscripten, or other source-present targets as maintained unless that
+   platform completed the promotion checklist.
+26. Update `CHANGELOG.md`, `README.md`, and compatibility notes, and link the
    release notes to `BENCHMARK_RESULTS.md` or the attached performance report.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,

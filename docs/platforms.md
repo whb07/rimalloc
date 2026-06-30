@@ -31,15 +31,36 @@ Assumptions:
 
 ## Source-Present But Not Maintained Yet
 
-The source tree still contains translated platform code for macOS, Windows,
-WASI, Emscripten, and other Unix-like targets. Those targets are not claimed as
-maintained Rust targets until they have parity tests, ABI/layout evidence,
-platform-specific CI or local verification, and documented benchmark/security
-coverage.
+The source tree still contains translated platform code for Linux aarch64,
+macOS, Windows, WASI, Emscripten, and other Unix-like targets. Those targets
+are source-present only unless this document explicitly promotes them. They are
+not claimed as maintained Rust targets until they have parity tests, ABI/layout
+evidence, platform-specific CI or local verification, and documented
+benchmark/security coverage.
 
 CI may run smoke validation for Linux aarch64, macOS, and Windows. Those jobs
 check that the source keeps compiling and basic allocator tests run, but they do
 not by themselves promote those platforms to maintained targets.
+The current workflow labels those jobs as:
+
+- `Linux aarch64 smoke validation`
+- `macOS smoke validation`
+- `Windows smoke validation`
+
+## Unsupported Target Reports
+
+Release notes must not market source-present or smoke-only targets as
+maintained. Use this language unless a platform has completed the promotion
+checklist:
+
+```text
+Linux x86_64 GNU is the only maintained target. Linux aarch64, macOS, Windows,
+WASI, Emscripten, and other source-present targets are smoke-tested or
+source-present only unless promoted in docs/platforms.md. Reports on those
+targets are triaged as portability issues and are not release blockers unless
+they reproduce on Linux x86_64 GNU or expose a cross-platform safety/security
+bug.
+```
 
 ## Platform Promotion Checklist
 

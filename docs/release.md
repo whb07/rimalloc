@@ -134,10 +134,18 @@ scripts/build-release-artifacts.py
 The script builds the Rust `rlib`, `c-abi` cdylib, `c-abi` staticlib preview,
 `interpose` cdylib, and `interpose` staticlib preview using separate
 `CARGO_TARGET_DIR` values. It copies outputs under
-`target/release-artifacts/artifacts/` and writes
+`target/release-artifacts/artifacts/`, stages `mimalloc.h`,
+`mimalloc-stats.h`, `mimalloc-override.h`, and `mimalloc-new-delete.h` under
+`target/release-artifacts/include/`, and writes
 `target/release-artifacts/release-artifacts.json` with each artifact path,
-feature set, target triple, release profile, rustc version, and SHA-256
-checksum.
+header path, feature set, target triple, release profile, rustc version, and
+SHA-256 checksum.
+
+Validate a staged C consumer without repository include paths:
+
+```sh
+scripts/check-release-artifact-consumer.py
+```
 
 Before publishing or tagging a release:
 

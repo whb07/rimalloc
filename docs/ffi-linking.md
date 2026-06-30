@@ -23,9 +23,18 @@ scripts/build-release-artifacts.py
 ```
 
 The script builds each artifact mode with an isolated `CARGO_TARGET_DIR`, copies
-the outputs under `target/release-artifacts/artifacts/`, and writes
-`target/release-artifacts/release-artifacts.json` with the artifact path,
-feature set, target triple, profile, rustc version, and SHA-256 checksum.
+the outputs under `target/release-artifacts/artifacts/`, stages public headers
+under `target/release-artifacts/include/`, and writes
+`target/release-artifacts/release-artifacts.json` with artifact paths, header
+paths, feature sets, target triple, profile, rustc version, and SHA-256
+checksums.
+
+The staged headers are:
+
+- `mimalloc.h` for the core C API.
+- `mimalloc-stats.h` for stats APIs.
+- `mimalloc-override.h` for C interposition users.
+- `mimalloc-new-delete.h` for C++ operator new/delete users.
 
 Static archives are preview-only. They are used by repository parity tests,
 source-build experiments, and static archive audits, but they are not a

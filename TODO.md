@@ -341,14 +341,23 @@ Validated remaining issues:
     build command, and SHA-256 checksum.
   - Verify: artifact build script exits cleanly from a fresh checkout.
 
-- [ ] Ship C headers with release artifacts.
-  - [ ] Include `mimalloc.h`.
-  - [ ] Include `mimalloc-stats.h`.
-  - [ ] Decide whether to include `mimalloc-override.h` for interposition
+- [x] Ship C headers with release artifacts.
+  - [x] Include `mimalloc.h`.
+  - [x] Include `mimalloc-stats.h`.
+  - [x] Decide whether to include `mimalloc-override.h` for interposition
         users.
-  - [ ] Decide whether to include `mimalloc-new-delete.h` for C++ users.
-  - [ ] Record the header hashes from `PARITY.md` or regenerate them in the
+        Decision: include it with release artifacts for C interposition users.
+  - [x] Decide whether to include `mimalloc-new-delete.h` for C++ users.
+        Decision: include it with release artifacts for C++ override users.
+  - [x] Record the header hashes from `PARITY.md` or regenerate them in the
         artifact manifest.
+  - Evidence: `scripts/build-release-artifacts.py` stages `mimalloc.h`,
+    `mimalloc-stats.h`, `mimalloc-override.h`, and
+    `mimalloc-new-delete.h` under `target/release-artifacts/include/` and
+    records each header path, source path, byte length, role, and SHA-256 in
+    `target/release-artifacts/release-artifacts.json`.
+    `scripts/check-release-artifact-consumer.py` builds and runs a C consumer
+    with only the staged include directory and staged `c-abi` cdylib.
   - Verify: a C consumer builds using only the staged release artifact
     directory, not the repository source tree.
 

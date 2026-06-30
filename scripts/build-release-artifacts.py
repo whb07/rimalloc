@@ -15,6 +15,15 @@ import subprocess
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_OUT_DIR = ROOT / "target/release-artifacts"
 CRATE_NAME = "mechanical_mimalloc"
+HEADER_DIR = ROOT / "mimalloc-3.3.2/include"
+
+
+HEADER_SPECS = [
+    ("mimalloc.h", "c-api"),
+    ("mimalloc-stats.h", "stats"),
+    ("mimalloc-override.h", "interpose"),
+    ("mimalloc-new-delete.h", "cxx-overrides"),
+]
 
 
 def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
@@ -107,6 +116,28 @@ def copy_artifact(
     destination = artifacts_dir / f"{output_name}{source.suffix}"
     shutil.copy2(source, destination)
     return destination
+
+
+def copy_headers(include_dir: pathlib.Path) -> list[dict[str, object]]:
+    include_dir.mkdir(parents=True, exist_ok=True)
+    headers: list[dict[str, object]] = []
+    for filename, role in HEADER_SPECS:
+        source = HEADER_DIR / filename
+        if not source.exists():
+            raise SystemExit(f"missing release header: {source}")
+        destination = include_dir / filename
+        shutil.copy2(source, destination)
+        headers.append(
+            {
+                "name": filename,
+                "role": role,
+                "path": display_path(destination),
+                "source_path": display_path(source),
+                "bytes": destination.stat().st_size,
+                "sha256": sha256(destination),
+            }
+        )
+    return headers
 
 
 def display_path(path: pathlib.Path) -> str:
@@ -205,7 +236,9 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
     rustc_version, target_triple = rustc_info()
     artifacts_dir = out_dir / "artifacts"
     build_root = out_dir / "build"
+    include_dir = out_dir / "include"
     artifacts: list[dict[str, object]] = []
+    headers: list[dict[str, object]] = []
     manifest: dict[str, object] = {
         "schema_version": 1,
         "package": CRATE_NAME,
@@ -214,12 +247,14 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
         "target_triple": target_triple,
         "rustc": rustc_version,
         "artifacts": artifacts,
+        "headers": headers,
     }
 
     if out_dir.exists():
         shutil.rmtree(out_dir)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     build_root.mkdir(parents=True, exist_ok=True)
+    headers.extend(copy_headers(include_dir))
 
     for spec in artifact_specs():
         name = str(spec["name"])

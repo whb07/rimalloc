@@ -16,6 +16,17 @@ Build the dynamic C ABI/interposition artifact with:
 cargo rustc --features interpose --lib --release -- --crate-type cdylib
 ```
 
+For release asset staging, use:
+
+```sh
+scripts/build-release-artifacts.py
+```
+
+The script builds each artifact mode with an isolated `CARGO_TARGET_DIR`, copies
+the outputs under `target/release-artifacts/artifacts/`, and writes
+`target/release-artifacts/release-artifacts.json` with the artifact path,
+feature set, target triple, profile, rustc version, and SHA-256 checksum.
+
 Static archives are preview-only. They are used by repository parity tests,
 source-build experiments, and static archive audits, but they are not a
 production-supported FFI distribution artifact until the static symbol

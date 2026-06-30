@@ -125,6 +125,20 @@ FFI asset production therefore uses the full release checkout, not the
 published crate tarball. A split Rust/FFI crate is deferred until there is a
 separate supported FFI package contract.
 
+Build release library artifacts with:
+
+```sh
+scripts/build-release-artifacts.py
+```
+
+The script builds the Rust `rlib`, `c-abi` cdylib, `c-abi` staticlib preview,
+`interpose` cdylib, and `interpose` staticlib preview using separate
+`CARGO_TARGET_DIR` values. It copies outputs under
+`target/release-artifacts/artifacts/` and writes
+`target/release-artifacts/release-artifacts.json` with each artifact path,
+feature set, target triple, release profile, rustc version, and SHA-256
+checksum.
+
 Before publishing or tagging a release:
 
 1. Confirm public Rust API inventory.

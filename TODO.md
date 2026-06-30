@@ -313,25 +313,32 @@ Validated remaining issues:
     Rust/FFI crate is deferred until there is a separate FFI package contract.
   - Verify: `scripts/check-package.sh` and a release dry-run artifact build.
 
-- [ ] Add an explicit release artifact build script.
-  - [ ] Build the Rust library artifact:
+- [x] Add an explicit release artifact build script.
+  - [x] Build the Rust library artifact:
         `cargo build --release --lib`.
-  - [ ] Build C ABI cdylib:
+  - [x] Build C ABI cdylib:
         `cargo rustc --release --features c-abi --lib --
         --crate-type cdylib`.
-  - [ ] Build C ABI staticlib:
+  - [x] Build C ABI staticlib:
         `cargo rustc --release --features c-abi --lib --
         --crate-type staticlib`.
-  - [ ] Build interpose cdylib:
+  - [x] Build interpose cdylib:
         `cargo rustc --release --features interpose --lib --
         --crate-type cdylib`.
-  - [ ] Build interpose staticlib:
+  - [x] Build interpose staticlib:
         `cargo rustc --release --features interpose --lib --
         --crate-type staticlib`.
-  - [ ] Use isolated `CARGO_TARGET_DIR` values so artifacts from different
+  - [x] Use isolated `CARGO_TARGET_DIR` values so artifacts from different
         modes cannot be confused.
-  - [ ] Emit a machine-readable manifest containing artifact path, feature set,
+  - [x] Emit a machine-readable manifest containing artifact path, feature set,
         target triple, profile, rustc version, and checksum.
+  - Evidence: `scripts/build-release-artifacts.py` builds the Rust `rlib`,
+    `c-abi` cdylib, `c-abi` staticlib preview, `interpose` cdylib, and
+    `interpose` staticlib preview with separate `CARGO_TARGET_DIR` values,
+    copies outputs under `target/release-artifacts/artifacts/`, and writes
+    `target/release-artifacts/release-artifacts.json` with artifact path,
+    feature set, crate type, target triple, release profile, rustc version,
+    build command, and SHA-256 checksum.
   - Verify: artifact build script exits cleanly from a fresh checkout.
 
 - [ ] Ship C headers with release artifacts.

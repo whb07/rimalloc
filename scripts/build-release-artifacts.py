@@ -524,6 +524,14 @@ def artifact_specs() -> list[dict[str, object]]:
         {
             "name": "c-abi-static-preview",
             "features": ["c-abi"],
+            "rustflags": [
+                "-C",
+                "lto=off",
+                "-C",
+                "linker-plugin-lto=no",
+                "-C",
+                "embed-bitcode=no",
+            ],
             "crate_type": "staticlib",
             "command": [
                 "cargo",
@@ -560,6 +568,14 @@ def artifact_specs() -> list[dict[str, object]]:
         {
             "name": "interpose-static-preview",
             "features": ["interpose"],
+            "rustflags": [
+                "-C",
+                "lto=off",
+                "-C",
+                "linker-plugin-lto=no",
+                "-C",
+                "embed-bitcode=no",
+            ],
             "crate_type": "staticlib",
             "command": [
                 "cargo",
@@ -613,6 +629,10 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
         target_dir = build_root / name
         env = os.environ.copy()
         env["CARGO_TARGET_DIR"] = str(target_dir)
+        rustflags = list(spec.get("rustflags", []))
+        if rustflags:
+            existing = env.get("RUSTFLAGS")
+            env["RUSTFLAGS"] = " ".join([*([] if existing is None else [existing]), *rustflags])
         command = list(spec["command"])
         run(command, env=env)
 
@@ -627,6 +647,7 @@ def build_artifacts(out_dir: pathlib.Path) -> dict[str, object]:
             "build_command": command,
             "cargo_target_dir": display_path(target_dir),
             "path": display_path(copied),
+            "rustflags": rustflags,
             "source_path": display_path(source),
             "sha256": sha256(copied),
         }

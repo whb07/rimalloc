@@ -66,6 +66,9 @@ Static archives are preview-only. They are used by repository parity tests,
 source-build experiments, and static archive audits, but they are not a
 production-supported FFI distribution artifact until the static symbol
 contract, collision tests, and checked static manifests are complete.
+The release artifact script builds preview static archives as native-object
+archives so the focused C consumer smoke tests can link them with the platform
+C linker.
 
 If a release candidate includes static archives for evaluation, the artifact
 name must include a preview marker such as

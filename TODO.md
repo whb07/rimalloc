@@ -417,15 +417,22 @@ Validated remaining issues:
 
 ## P0 - Add real C and C++ consumer tests
 
-- [ ] Extend C public API link tests to cover release artifact modes.
-  - [ ] Keep the existing static public API smoke coverage.
-  - [ ] Add a dynamic C smoke test against the `c-abi` cdylib.
-  - [ ] Add a static C smoke test against the `c-abi` staticlib.
-  - [ ] Add a dynamic C smoke test against the `interpose` cdylib when
+- [x] Extend C public API link tests to cover release artifact modes.
+  - [x] Keep the existing static public API smoke coverage.
+  - [x] Add a dynamic C smoke test against the `c-abi` cdylib.
+  - [x] Add a static C smoke test against the `c-abi` staticlib.
+  - [x] Add a dynamic C smoke test against the `interpose` cdylib when
         interposition symbols are expected.
-  - [ ] Add a static C smoke test against the `interpose` staticlib.
-  - [ ] Build consumers from a temporary directory using staged headers and
+  - [x] Add a static C smoke test against the `interpose` staticlib.
+  - [x] Build consumers from a temporary directory using staged headers and
         libraries.
+  - Evidence: `scripts/check-release-artifact-consumer.py` now rebuilds the
+    staged release artifacts, copies them to a temporary directory outside the
+    repository, verifies staged headers, and builds/runs C consumers against
+    the `c-abi` cdylib, `c-abi` static preview archive, `interpose` cdylib, and
+    `interpose` static preview archive. `scripts/build-release-artifacts.py`
+    records static preview `rustflags` and builds native-object static archives
+    so the static C smoke tests use the platform C linker.
   - Verify: new C consumer script is run by validation or release CI.
 
 - [ ] Add focused `dlopen`/`dlsym` tests.

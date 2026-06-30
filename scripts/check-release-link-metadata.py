@@ -169,7 +169,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="mechanical-mimalloc-link-metadata-") as tmp:
         tmp_dir = pathlib.Path(tmp)
         staged = tmp_dir / RELEASE_DIR.name
-        shutil.copytree(RELEASE_DIR, staged)
+        shutil.copytree(RELEASE_DIR, staged, ignore=shutil.ignore_patterns("build"))
         verify_metadata_manifest(data, staged)
         run_pkg_config_consumer(staged, tmp_dir / "pkg-config-consumer")
         run_cmake_consumer(staged, tmp_dir / "cmake-consumer")

@@ -133,7 +133,9 @@ scripts/build-release-artifacts.py
 
 The script builds the Rust `rlib`, `c-abi` cdylib, `c-abi` staticlib preview,
 `interpose` cdylib, and `interpose` staticlib preview using separate
-`CARGO_TARGET_DIR` values. It copies outputs under
+`CARGO_TARGET_DIR` values. Static preview artifacts are built with native-object
+rustflags so C linker smoke tests do not depend on LLVM bitcode support. It
+copies outputs under
 `target/release-artifacts/artifacts/`, stages `mimalloc.h`,
 `mimalloc-stats.h`, `mimalloc-override.h`, and `mimalloc-new-delete.h` under
 `target/release-artifacts/include/`, generates
@@ -155,7 +157,8 @@ The dry run also writes release integrity files:
   `docs/performance.md`, `BENCHMARK_RESULTS.md`, and the required benchmark
   commands.
 
-Validate a staged C consumer without repository include paths:
+Validate staged C consumers for dynamic and static `c-abi` and `interpose`
+artifact modes without repository include paths:
 
 ```sh
 scripts/check-release-artifact-consumer.py

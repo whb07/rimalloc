@@ -2,10 +2,14 @@
 
 Mechanical Rust translation foundation for mimalloc 3.3.2.
 
-This crate provides safe Rust allocation, heap, options, statistics, and
-process-info facades over a translated mimalloc allocator. It can also build an
-explicit mimalloc-compatible C ABI/interposition artifact. Borrowed callback
-guards live under the explicit `unsafe_callbacks` namespace.
+Use this crate in one of three ways:
+
+1. as a Rust global allocator,
+2. through safe Rust-owned byte, heap, stats, and options wrappers,
+3. as an explicit mimalloc-compatible C ABI/interposition artifact.
+
+The crate also exposes a raw C-shaped Rust facade for low-level integration, but
+that surface is unsafe and unstable as a Rust path API.
 
 The default library build produces:
 
@@ -15,6 +19,75 @@ The dynamic C ABI/interposition artifact is opt-in:
 
 ```sh
 cargo rustc --features interpose --lib --release -- --crate-type cdylib
+```
+
+## Choose a Path
+
+### 1. Rust Global Allocator
+
+Use `MiMalloc` when you want Rust standard-library allocations in the process to
+go through this allocator:
+
+```rust
+use mechanical_mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+```
+
+### 2. Safe Rust Owned Bytes, Heaps, Stats, and Options
+
+Use the safe facade when you want Rust-native ownership and typed errors instead
+of C null/error conventions:
+
+```rust
+use core::alloc::Layout;
+use mechanical_mimalloc::{Allocation, GlobalOptions, Heap, OptionKey, StatsSnapshot};
+
+let layout = Layout::from_size_align(128, 16).unwrap();
+let allocation = Allocation::zeroed(layout).unwrap();
+assert_eq!(allocation.len(), 128);
+
+let heap = Heap::new().unwrap();
+let heap_allocation = heap.allocate_zeroed(Layout::from_size_align(64, 16).unwrap()).unwrap();
+assert_eq!(heap_allocation.len(), 64);
+
+let _max_warnings = GlobalOptions::get(OptionKey::MaxWarnings);
+let _stats = StatsSnapshot::capture().unwrap();
+```
+
+The safe API intentionally owns bytes, not arbitrary Rust objects. Object
+ownership APIs such as `MiBox<T>` are deferred until construction failure,
+destructor behavior, panic behavior, heap ownership, and threading traits have a
+separate design.
+
+### 3. C ABI Artifact and Interposition
+
+Use the opt-in C ABI artifact when you need mimalloc-compatible dynamic symbols
+or `LD_PRELOAD`/malloc-family interposition:
+
+```sh
+cargo rustc --features interpose --lib --release -- --crate-type cdylib
+```
+
+Production C ABI libraries, C headers, link metadata, checksums, and ABI
+manifests are shipped as GitHub release assets built from the tagged repository
+checkout. The crates.io package is the Rust library distribution.
+
+See `docs/ffi-linking.md`, `docs/abi.md`, and `docs/release.md` for artifact
+modes, headers, link metadata, and release validation.
+
+### Unsafe Raw Facade
+
+Use `mechanical_mimalloc::raw` only when you can uphold mimalloc's pointer,
+layout, alignment, allocation-origin, lifetime, nullability, and threading
+rules. The raw Rust path surface is not stabilized as a Rust SemVer API.
+
+```rust
+unsafe {
+    let p = mechanical_mimalloc::raw::mi_malloc(64);
+    mechanical_mimalloc::raw::mi_free(p);
+}
 ```
 
 ## Distribution Model
@@ -53,39 +126,6 @@ tracked by source-shape, layout, symbol, lint, package, and benchmark gates.
 
 See `docs/safe-api.md`, `docs/abi.md`, `docs/ffi-linking.md`, and
 `docs/api-inventory.md` for the current boundary policy and inventory.
-
-## Quick Start
-
-Use the Rust `GlobalAlloc` facade:
-
-```rust
-use mechanical_mimalloc::MiMalloc;
-
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
-```
-
-Use the owned byte allocation wrapper when you want Rust-native errors instead
-of C null/error conventions:
-
-```rust
-use core::alloc::Layout;
-use mechanical_mimalloc::Allocation;
-
-let layout = Layout::from_size_align(128, 16).unwrap();
-let allocation = Allocation::zeroed(layout).unwrap();
-assert_eq!(allocation.len(), 128);
-```
-
-Use the raw C-shaped facade only when you can uphold mimalloc's pointer,
-layout, alignment, and threading rules:
-
-```rust
-unsafe {
-    let p = mechanical_mimalloc::raw::mi_malloc(64);
-    mechanical_mimalloc::raw::mi_free(p);
-}
-```
 
 ## Status
 

@@ -1603,6 +1603,35 @@ fn public_docs_match_current_build_mode_and_layout() {
             && abi_doc.contains("Default Cargo library builds produce an `rlib`"),
         "public docs should describe the rlib-first default build mode"
     );
+    for required in [
+        "## Choose a Path",
+        "### 1. Rust Global Allocator",
+        "### 2. Safe Rust Owned Bytes, Heaps, Stats, and Options",
+        "### 3. C ABI Artifact and Interposition",
+        "### Unsafe Raw Facade",
+        "Use `MiMalloc` when you want Rust standard-library allocations",
+        "Use the safe facade when you want Rust-native ownership and typed errors",
+        "Use the opt-in C ABI artifact when you need mimalloc-compatible dynamic symbols",
+        "Use `mechanical_mimalloc::raw` only when you can uphold mimalloc's pointer",
+        "The raw Rust path surface is not stabilized as a Rust SemVer API.",
+    ] {
+        assert!(
+            readme.contains(required),
+            "README should be organized around the intended user stories: {required}"
+        );
+    }
+    let global_allocator = readme.find("### 1. Rust Global Allocator").unwrap();
+    let safe_facade = readme
+        .find("### 2. Safe Rust Owned Bytes, Heaps, Stats, and Options")
+        .unwrap();
+    let c_abi = readme
+        .find("### 3. C ABI Artifact and Interposition")
+        .unwrap();
+    let raw_facade = readme.find("### Unsafe Raw Facade").unwrap();
+    assert!(
+        global_allocator < safe_facade && safe_facade < c_abi && c_abi < raw_facade,
+        "README should introduce safe Rust and C ABI user stories before the unsafe raw facade"
+    );
     assert!(
         mimalloc_bench_rs
             .contains("cargo rustc --features interpose --lib --release -- --crate-type cdylib")

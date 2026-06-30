@@ -1017,12 +1017,17 @@ Validated remaining issues:
 
 ## P2 - Documentation polish
 
-- [ ] Rewrite README around three user stories.
-  - [ ] Rust global allocator.
-  - [ ] Safe Rust owned bytes, heaps, stats, and options.
-  - [ ] C ABI artifact and interposition.
-  - [ ] Keep raw API examples below the safe facade and label them unsafe and
+- [x] Rewrite README around three user stories.
+  - [x] Rust global allocator.
+  - [x] Safe Rust owned bytes, heaps, stats, and options.
+  - [x] C ABI artifact and interposition.
+  - [x] Keep raw API examples below the safe facade and label them unsafe and
         unstable.
+  - Evidence: `README.md` now starts with `Choose a Path` and separate sections
+    for `Rust Global Allocator`, `Safe Rust Owned Bytes, Heaps, Stats, and
+    Options`, and `C ABI Artifact and Interposition`. The raw facade example is
+    moved below those user stories under `Unsafe Raw Facade`, and the text
+    labels it unsafe and not stabilized as a Rust SemVer path API.
   - Verify: README examples match current commands and features.
 
 - [ ] Add a dedicated Rust safety model page.

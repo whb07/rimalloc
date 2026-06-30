@@ -1045,13 +1045,21 @@ Validated remaining issues:
     the Safety Model section and the docs index paragraph.
   - Verify: README links to the page and `scripts/check-docs.sh` passes.
 
-- [ ] Add an FFI linking guide.
-  - [ ] Document dynamic C ABI linking.
-  - [ ] Document static C ABI linking.
-  - [ ] Document interposition with `LD_PRELOAD`.
-  - [ ] Document C++ operator override modes.
-  - [ ] Document headers and link metadata.
-  - [ ] Document supported target and unsupported platform caveats.
+- [x] Add an FFI linking guide.
+  - [x] Document dynamic C ABI linking.
+  - [x] Document static C ABI linking.
+  - [x] Document interposition with `LD_PRELOAD`.
+  - [x] Document C++ operator override modes.
+  - [x] Document headers and link metadata.
+  - [x] Document supported target and unsupported platform caveats.
+  - Evidence: `docs/ffi-linking.md` now has explicit sections for release
+    artifact layout, dynamic C ABI linking, preview static C ABI linking,
+    `LD_PRELOAD` interposition, C++ operator override modes, staged headers,
+    pkg-config/CMake metadata, maintained Linux x86_64 GNU support, and
+    unsupported-platform caveats. The guide names the consumer validation
+    scripts that exercise the documented commands and artifact modes, and
+    `tests/release_fast_path_audit.rs` checks the guide against the artifact
+    names, headers, metadata targets, and consumer scripts.
   - Verify: guide commands are exercised by consumer tests.
 
 - [ ] Add a symbol and versioning policy page or section.

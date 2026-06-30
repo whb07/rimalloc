@@ -1001,11 +1001,18 @@ Validated remaining issues:
   - Verify: `scripts/capture-release-assembly.sh` output or benchmark evidence
     is attached to the change.
 
-- [ ] Publish per-release performance summaries.
-  - [ ] Summarize geomean Rust/C ratios.
-  - [ ] Summarize hot-path deltas against previous release evidence.
-  - [ ] Separate noisy watch items from release-blocking regressions.
-  - [ ] Link raw Criterion summaries or CSV artifacts.
+- [x] Publish per-release performance summaries.
+  - [x] Summarize geomean Rust/C ratios.
+  - [x] Summarize hot-path deltas against previous release evidence.
+  - [x] Separate noisy watch items from release-blocking regressions.
+  - [x] Link raw Criterion summaries or CSV artifacts.
+  - Evidence: `BENCHMARK_RESULTS.md` now includes a per-release performance
+    summary template requiring release tag/commit, environment artifact,
+    geomean Rust/C ratios, hot-path deltas, release-blocking regressions, noisy
+    watch items, and raw Criterion or threshold CSV links. `docs/performance.md`
+    and `docs/release.md` require the same fields, and `CHANGELOG.md` requires
+    release notes to link to `BENCHMARK_RESULTS.md` or an attached performance
+    report.
   - Verify: release notes link to `BENCHMARK_RESULTS.md` or an attached report.
 
 ## P2 - Documentation polish

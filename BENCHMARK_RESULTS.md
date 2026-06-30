@@ -24,6 +24,22 @@ Rust-vs-C ratios emitted by `scripts/summarize-criterion.py`; the `interpose`
 section must remain separate and must not be compared against default-mode saved
 baselines.
 
+## Per-Release Performance Summary Template
+
+Each release entry must include:
+
+- release tag or candidate commit,
+- benchmark host and `scripts/env-info.sh` artifact,
+- native scenario geomean Rust/C median ratio,
+- hot-path deltas against previous release evidence,
+- release-blocking regressions, if any,
+- noisy watch items separated from release-blocking regressions,
+- links to raw Criterion summaries and threshold CSV artifacts for each measured
+  artifact mode.
+
+Release notes must link to the matching `BENCHMARK_RESULTS.md` section or to an
+attached report that preserves the same fields and raw artifacts.
+
 ## Strict-Type Assembly Comparison Checklist
 
 Use `scripts/capture-release-assembly.sh` before and after each strict-type

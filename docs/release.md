@@ -255,7 +255,12 @@ Before publishing or tagging a release:
    unless the evidence shows no added branch, call, memory traffic, stack spill,
    formatting, allocation, panic path, bounds-check slow path, or wrapper
    constructor traffic without measured justification.
-24. Update `CHANGELOG.md`, `README.md`, and compatibility notes.
+24. Publish the per-release performance summary in `BENCHMARK_RESULTS.md` or an
+   attached report, summarizing geomean Rust/C ratios, hot-path deltas against
+   previous release evidence, noisy watch items, release-blocking regressions,
+   and links to raw Criterion summaries or threshold CSV artifacts.
+25. Update `CHANGELOG.md`, `README.md`, and compatibility notes, and link the
+   release notes to `BENCHMARK_RESULTS.md` or the attached performance report.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,
 feature behavior, MSRV, and supported target tiers.

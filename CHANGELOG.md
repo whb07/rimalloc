@@ -56,6 +56,10 @@ All notable changes to this repository should be recorded here.
   facade split.
 - Benchmark and profiling policy is documented in `docs/performance.md` and
   `BENCHMARK_RESULTS.md`.
+- Release notes must link to `BENCHMARK_RESULTS.md` or an attached performance
+  report that summarizes geomean Rust/C ratios, hot-path deltas, noisy watch
+  items, release-blocking regressions, and raw Criterion or threshold CSV
+  artifacts.
 
 ### Documentation
 

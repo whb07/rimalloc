@@ -209,6 +209,14 @@ def missing_unsafe_sections(rel: str, lines: list[str]) -> list[str]:
     return missing
 
 
+def missing_required_snippets(rel: str, text: str, snippets: list[str]) -> list[str]:
+    return [
+        f"{rel}: missing misuse-boundary snippet: {snippet}"
+        for snippet in snippets
+        if snippet not in text
+    ]
+
+
 def main() -> int:
     missing: list[str] = []
     synthetic_item = ["pub struct Undocumented;"]
@@ -246,6 +254,9 @@ def main() -> int:
     synthetic_unsafe = ["/// Docs.", "pub unsafe fn raw() {}"]
     if not missing_unsafe_sections("synthetic.rs", synthetic_unsafe):
         print("safe-docs regression failed to flag a missing unsafe method section")
+        return 1
+    if not missing_required_snippets("synthetic.rs", "", ["compile_fail"]):
+        print("safe-docs regression failed to flag missing misuse-boundary snippets")
         return 1
 
     for path in PUBLIC_DOC_FILES:
@@ -316,6 +327,39 @@ def main() -> int:
         missing.append("README.md: safe Rust examples must appear before raw facade examples")
     if not appears_before(crate_docs, "Use the Rust `GlobalAlloc` facade", "Use the raw C-shaped facade"):
         missing.append("src/lib.rs: safe Rust examples must appear before raw facade examples")
+
+    misuse_boundaries = {
+        "src/lib.rs": [
+            "let p = mechanical_mimalloc::raw::mi_malloc(64);",
+            "mechanical_mimalloc::raw::mi_free(p);",
+            "let _ = mechanical_mimalloc::alloc::mi_malloc(64);",
+            "use mechanical_mimalloc::types::ValidatedFree;",
+        ],
+        "src/safe/allocation.rs": [
+            "let _bytes = allocation.as_bytes();",
+            "let _use_after_move = allocation.len();",
+            "let _ = mechanical_mimalloc::Allocation { raw: unreachable!() };",
+            "let _initialized = allocation.assume_initialized();",
+        ],
+        "src/safe/heap.rs": [
+            "let leaked: HeapAllocation<'static>;",
+            "let leaked: InitializedHeapAllocation<'static>;",
+            "drop(heap);\n/// drop(allocation);",
+            "MustBeSend::<Heap>",
+            "MustBeSync::<InitializedHeapAllocation<'static>>",
+            "let _ = mechanical_mimalloc::HeapAllocation { raw: unreachable!() };",
+            "let _ = mechanical_mimalloc::InitializedHeapAllocation { raw: unreachable!() };",
+        ],
+        "src/safe/stats.rs": [
+            "let _ = mechanical_mimalloc::StatsSnapshot { raw: unreachable!() };",
+        ],
+        "src/ffi/callbacks.rs": [
+            "guard = unsafe { ErrorCallbackGuard::new(&mut callback) };",
+            "guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };",
+        ],
+    }
+    for rel, snippets in misuse_boundaries.items():
+        missing.extend(missing_required_snippets(rel, (ROOT / rel).read_text(), snippets))
 
     if missing:
         print("Public API docs missing required rustdoc coverage:")

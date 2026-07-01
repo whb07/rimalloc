@@ -2827,7 +2827,8 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
                 "- [x] For any new hot-path wrapper, measure type size and generated assembly"
             )
             && todo.contains("rejects\n    dynamic dispatch")
-            && todo.contains("- [ ] Keep or add compile-fail tests for raw APIs requiring unsafe.")
+            && todo.contains("- [x] Keep or add compile-fail tests for raw APIs requiring unsafe.")
+            && todo.contains("misuse-boundary compile-fail snippets")
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

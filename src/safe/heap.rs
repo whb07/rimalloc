@@ -631,6 +631,12 @@ impl MainHeap {
 ///     heap.allocate(Layout::from_size_align(32, 8).unwrap()).unwrap()
 /// }
 /// ```
+///
+/// External code cannot construct a heap allocation from representation fields:
+///
+/// ```rust,compile_fail
+/// let _ = mechanical_mimalloc::HeapAllocation { raw: unreachable!() };
+/// ```
 #[must_use]
 pub struct HeapAllocation<'heap> {
     raw: RawHeapAllocation<'heap>,
@@ -1007,6 +1013,13 @@ impl fmt::Debug for HeapAllocation<'_> {
 ///
 /// let uninitialized = allocation.into_allocation();
 /// assert_eq!(uninitialized.len(), 4);
+/// ```
+///
+/// External code cannot construct an initialized heap allocation from
+/// representation fields:
+///
+/// ```rust,compile_fail
+/// let _ = mechanical_mimalloc::InitializedHeapAllocation { raw: unreachable!() };
 /// ```
 #[must_use]
 pub struct InitializedHeapAllocation<'heap> {

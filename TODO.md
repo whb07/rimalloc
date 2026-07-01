@@ -489,47 +489,57 @@ compatibility surfaces.
 > unsafe requirements, heap lifetimes, privacy, and typestate invariants remain
 > enforced by the type system.
 
-- [ ] Keep or add compile-fail tests for raw APIs requiring unsafe.
-- [ ] Keep or add compile-fail tests for heap allocation lifetime misuse.
-- [ ] Add compile-fail tests when private representation prevents external
+- [x] Keep or add compile-fail tests for raw APIs requiring unsafe.
+- [x] Keep or add compile-fail tests for heap allocation lifetime misuse.
+- [x] Add compile-fail tests when private representation prevents external
       construction.
-- [ ] Add trait/static assertion tests for expected `Send`, `Sync`, `Copy`,
+- [x] Add trait/static assertion tests for expected `Send`, `Sync`, `Copy`,
       `Clone`, and `Debug` behavior.
-- [ ] Prefer public-behavior integration tests for Tier S and unit tests for
+- [x] Prefer public-behavior integration tests for Tier S and unit tests for
       private invariants.
+  - Evidence: `src/lib.rs`, `src/safe/allocation.rs`, `src/safe/heap.rs`,
+    `src/safe/stats.rs`, and `src/ffi/callbacks.rs` include compile-fail
+    examples for raw unsafe calls, hidden implementation modules, internal
+    typestate witnesses, uninitialized safe reads, move-only allocations,
+    unsafe initialization, heap lifetimes, heap move/drop misuse, private
+    representation construction, callback guard lifetimes, and negative
+    `Send`/`Sync` heap behavior. Trait/static assertion tests cover the
+    allocator facade traits, safe allocation `Send`/`Sync`, and error
+    `Copy`/`Clone`/`Debug` behavior. `scripts/check-safe-docs.py` now protects
+    the misuse-boundary compile-fail snippets from being removed.
 - Verify: doctests, full Rust tests, and any trybuild-equivalent checks.
 
 ## Suggested implementation order
 
 1. [x] Add the Rust style guide and link it from contributor docs.
-2. [ ] Add inventory checks for the safe/raw naming firewall.
-3. [ ] Audit public enums for `#[non_exhaustive]` decisions.
-4. [ ] Audit public structs for accidental public fields.
-5. [ ] Standardize constructor/accessor naming in safe and strict-type code.
-6. [ ] Audit errors and fallible APIs for consistent typed `Result` usage.
-7. [ ] Audit borrowing/clone patterns in `src/safe` first.
-8. [ ] Extend compile-fail tests for privacy, unsafe boundaries, and lifetimes.
-9. [ ] Gradually reduce clippy allowances in `src/safe` and `src/types` only
+2. [x] Add inventory checks for the safe/raw naming firewall.
+3. [x] Audit public enums for `#[non_exhaustive]` decisions.
+4. [x] Audit public structs for accidental public fields.
+5. [x] Standardize constructor/accessor naming in safe and strict-type code.
+6. [x] Audit errors and fallible APIs for consistent typed `Result` usage.
+7. [x] Audit borrowing/clone patterns in `src/safe` first.
+8. [x] Extend compile-fail tests for privacy, unsafe boundaries, and lifetimes.
+9. [x] Gradually reduce clippy allowances in `src/safe` and `src/types` only
        where the signal is high and hot-path evidence supports the change.
-10. [ ] Use public API and ABI diffs for every cleanup that touches exported
+10. [x] Use public API and ABI diffs for every cleanup that touches exported
         surfaces.
 
 ## Definition of done for Rust idiom standardization
 
-- [ ] A crate-specific Rust style guide exists and is linked from contributor
+- [x] A crate-specific Rust style guide exists and is linked from contributor
       and safety docs.
-- [ ] Safe Rust APIs use Rust naming, typed errors, RAII ownership, private
+- [x] Safe Rust APIs use Rust naming, typed errors, RAII ownership, private
       representation, and documented constructors/accessors.
-- [ ] Raw/C ABI APIs remain explicitly unsafe, C-shaped, and compatibility
+- [x] Raw/C ABI APIs remain explicitly unsafe, C-shaped, and compatibility
       classified.
-- [ ] Public enums have deliberate exhaustive or `#[non_exhaustive]` policy.
-- [ ] Public structs expose fields only when literal construction or ABI layout
+- [x] Public enums have deliberate exhaustive or `#[non_exhaustive]` policy.
+- [x] Public structs expose fields only when literal construction or ABI layout
       is intentionally part of the contract.
-- [ ] New internal strict wrappers have hot-path performance evidence where
+- [x] New internal strict wrappers have hot-path performance evidence where
       required.
-- [ ] Unsafe blocks and public unsafe functions follow one documented comment
+- [x] Unsafe blocks and public unsafe functions follow one documented comment
       and audit-tag style.
-- [ ] Compile-fail and trait tests enforce ownership, lifetime, unsafe, and
+- [x] Compile-fail and trait tests enforce ownership, lifetime, unsafe, and
       privacy boundaries.
-- [ ] Public API snapshots, ABI manifests, docs, changelog, and release
+- [x] Public API snapshots, ABI manifests, docs, changelog, and release
       checklist stay aligned after idiom-polish changes.

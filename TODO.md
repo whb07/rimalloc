@@ -436,11 +436,20 @@ compatibility surfaces.
 > items. Public API snapshots should be reviewed even when a change is described
 > as cleanup.
 
-- [ ] Require public API snapshot review for any change touching `src/lib.rs`,
+- [x] Require public API snapshot review for any change touching `src/lib.rs`,
       `src/safe`, `src/ffi/callbacks.rs`, `src/raw`, or public macros.
-- [ ] Classify changes as Tier S, Tier U, Tier R, or Tier C before merge.
-- [ ] Add changelog entries for any intentional compatibility-sensitive change.
-- [ ] Run SemVer tooling before publishing a release.
+- [x] Classify changes as Tier S, Tier U, Tier R, or Tier C before merge.
+- [x] Add changelog entries for any intentional compatibility-sensitive change.
+- [x] Run SemVer tooling before publishing a release.
+  - Evidence: `docs/api-inventory.md` now requires Tier S/U snapshot review
+    for style refactors touching `src/lib.rs`, `src/safe`,
+    `src/ffi/callbacks.rs`, `src/raw`, or exported macros, with public changes
+    classified as Tier S, Tier U, Tier R, or Tier C. `docs/compatibility.md`
+    adds the same checkpoint requirements and changelog rule.
+    `docs/release.md` documents the release API diff command, the style-only
+    refactor trigger, and `cargo semver-checks check-release` as the
+    publishing SemVer tool gate. `scripts/check-api-inventory.py` now enforces
+    those policy phrases.
 - Verify: `scripts/check-api-inventory.py` and release API diff command.
 
 ### Issue: Performance-sensitive type changes need layout and codegen evidence

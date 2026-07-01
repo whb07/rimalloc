@@ -436,6 +436,7 @@ def main() -> int:
     mimalloc_rs = (ROOT / "src/ffi/mimalloc.rs").read_text()
     api_doc = (ROOT / "docs/api-inventory.md").read_text()
     abi_doc = (ROOT / "docs/abi.md").read_text()
+    compatibility_doc = (ROOT / "docs/compatibility.md").read_text()
 
     actual_root = root_public_items(lib_rs)
     require(
@@ -527,10 +528,22 @@ def main() -> int:
         "There are no current Tier S or Tier U public traits.",
         "`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`",
         "`unsafe_callbacks`: Tier U unsafe Rust callback guard namespace.",
+        "API diff review is required for style refactors",
+        "classify any public change as Tier S,",
+        "`cargo semver-checks check-release`",
         "The raw Rust module path surface is unstable until explicitly versioned.",
         "symbols/public-symbol-classification.tsv",
     ]:
         require(phrase in api_doc, f"docs/api-inventory.md missing policy phrase: {phrase}")
+    for phrase in [
+        "For style refactors touching `src/lib.rs`, `src/safe`,",
+        "Classify every public change as Tier S, Tier U, Tier R, or Tier C.",
+        "`cargo semver-checks check-release`",
+    ]:
+        require(
+            phrase in compatibility_doc,
+            f"docs/compatibility.md missing API diff policy phrase: {phrase}",
+        )
     for macro_tier, macros in EXPECTED_EXPORTED_MACROS_BY_TIER.items():
         require(
             f"Macro tier: `{macro_tier}`" in api_doc,

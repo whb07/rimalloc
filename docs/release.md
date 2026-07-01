@@ -88,6 +88,23 @@ diff -u /tmp/previous-tier-s-u.txt docs/api-snapshots/tier-s-u.txt
 Any diff must be classified in `CHANGELOG.md` and reviewed against
 `docs/compatibility.md`.
 
+This snapshot review also applies to style-only refactors that touch
+`src/lib.rs`, `src/safe`, `src/ffi/callbacks.rs`, `src/raw`, or exported
+macros. Those changes can accidentally move, rename, or expose Rust items even
+when the intent is cleanup. Before merge, classify any public change as Tier S,
+Tier U, Tier R, or Tier C and add a changelog entry for intentional
+compatibility-sensitive changes.
+
+Before publishing a release, also run SemVer tooling against the previous
+published Rust API baseline, for example:
+
+```sh
+cargo semver-checks check-release
+```
+
+The SemVer tool result supplements the checked Tier S/U snapshot; it does not
+replace the Tier R raw-facade, Tier C ABI, layout, symbol, and feature checks.
+
 ## Dynamic ABI Manifests
 
 Tier C dynamic exports are tracked with checked manifests under
@@ -274,59 +291,62 @@ Before publishing or tagging a release:
 8. Run `scripts/check-abi-symbols.sh` for exported C symbol inventory.
 9. Run `scripts/check-abi-diff.py --previous-ref <previous-tag>` for Tier C
    release-to-release ABI review.
-10. Run `scripts/check-static-link-collisions.py` for preview static archive
+10. Run `cargo semver-checks check-release` or equivalent Rust SemVer tooling
+   against the previous published crate baseline, and keep the result with the
+   release evidence.
+11. Run `scripts/check-static-link-collisions.py` for preview static archive
    link and collision evidence.
-11. Run `scripts/check-release-artifact-consumer.py` and
+12. Run `scripts/check-release-artifact-consumer.py` and
    `scripts/check-release-link-metadata.py`.
-12. Run `scripts/check-release-dlopen.py`.
-13. Run `scripts/check-release-ld-preload.py`.
-14. Run `scripts/check-release-cxx-artifacts.py`.
-15. Run `scripts/check-release-integrity.py`.
-16. Confirm `scripts/check-release-integrity.py` produced and verified
+13. Run `scripts/check-release-dlopen.py`.
+14. Run `scripts/check-release-ld-preload.py`.
+15. Run `scripts/check-release-cxx-artifacts.py`.
+16. Run `scripts/check-release-integrity.py`.
+17. Confirm `scripts/check-release-integrity.py` produced and verified
    `SHA256SUMS.sig` with the configured release SSH Ed25519 key, and record the
    public key fingerprint from `release-artifacts.json` in the release notes.
-17. Confirm the release dry run includes
+18. Confirm the release dry run includes
    `target/release-artifacts/integrity/dependencies.md`, and attach or link that
    dependency/build-tool report from the release notes.
-18. Run `scripts/check-release-reproducibility.py` and confirm the second
+19. Run `scripts/check-release-reproducibility.py` and confirm the second
    checkout reproduces artifact names and ABI symbol manifests.
-19. Create and verify the signed annotated source tag with the release SSH
+20. Create and verify the signed annotated source tag with the release SSH
    signing key.
-20. Run `scripts/check-layout.sh` for ABI/layout audits.
-21. Run audit drift checks: `scripts/check-unsafe-inventory.py --verify-builds`,
+21. Run `scripts/check-layout.sh` for ABI/layout audits.
+22. Run audit drift checks: `scripts/check-unsafe-inventory.py --verify-builds`,
    `scripts/check-unsafe-audit.py`,
    `scripts/check-unsafe-audit-evidence.py`,
    `scripts/check-atomic-ordering-audit.py`,
    `scripts/check-pointer-provenance-audit.py`,
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
-22. Run `scripts/check-release-thread-stress.py`.
-23. Run `scripts/check-safety-stress.sh`.
-24. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
+23. Run `scripts/check-release-thread-stress.py`.
+24. Run `scripts/check-safety-stress.sh`.
+25. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
    toolchain.
-25. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
+26. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-26. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
+27. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-27. Run `scripts/check-valgrind-tracking-parity.py`.
-28. Before a release candidate, run `scripts/check-bench-full.sh`, capture
+28. Run `scripts/check-valgrind-tracking-parity.py`.
+29. Before a release candidate, run `scripts/check-bench-full.sh`, capture
    `scripts/env-info.sh`, preserve
    `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` and
    `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv`, and
    update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,
    artifact modes, Rust/C ratios, and noisy-benchmark notes for the release
    commit.
-29. For new strict internal wrappers on allocator hot paths, attach
+30. For new strict internal wrappers on allocator hot paths, attach
    `scripts/capture-release-assembly.sh` output covering free-list pop, local
    free, remote free, small page lookup, and any changed hot path; fail signoff
    unless the evidence shows no added branch, call, memory traffic, stack spill,
    formatting, allocation, panic path, bounds-check slow path, or wrapper
    constructor traffic without measured justification.
-30. Publish the per-release performance summary in `BENCHMARK_RESULTS.md` or an
+31. Publish the per-release performance summary in `BENCHMARK_RESULTS.md` or an
    attached report, summarizing geomean Rust/C ratios, hot-path deltas against
    previous release evidence, noisy watch items, release-blocking regressions,
    and links to raw Criterion summaries or threshold CSV artifacts.
-31. Update release notes with the unsupported-target triage language from
+32. Update release notes with the unsupported-target triage language from
    `docs/platforms.md`; do not market Linux aarch64, macOS, Windows, WASI,
    Emscripten, or other source-present targets as maintained unless that
    platform completed the promotion checklist.

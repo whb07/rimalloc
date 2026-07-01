@@ -2819,7 +2819,11 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
             && todo.contains("- [x] Audit feature combinations for additive behavior.")
             && todo.contains("128 additive combinations")
             && todo.contains(
-                "- [ ] Require public API snapshot review for any change touching `src/lib.rs`,"
+                "- [x] Require public API snapshot review for any change touching `src/lib.rs`,"
+            )
+            && todo.contains("`cargo semver-checks check-release`")
+            && todo.contains(
+                "- [ ] For any new hot-path wrapper, measure type size and generated assembly"
             )
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"

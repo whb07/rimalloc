@@ -140,12 +140,20 @@ release contract. Hot-path and allocator-wide changes must follow
 Before claiming a compatibility checkpoint:
 
 1. Run `scripts/check-api-inventory.py`.
-2. Run `scripts/check-features.sh`.
-3. Run `scripts/check-layout.sh`.
-4. Run `scripts/check-abi-symbols.sh`.
-5. Run `scripts/check-package.sh`.
-6. Run benchmark checks required by `docs/performance.md`.
-7. Update `CHANGELOG.md` and affected policy docs.
+2. For style refactors touching `src/lib.rs`, `src/safe`,
+   `src/ffi/callbacks.rs`, `src/raw`, or exported macros, review the Tier S/U
+   snapshot diff even when the intended classification is internal.
+3. Classify every public change as Tier S, Tier U, Tier R, or Tier C.
+4. Add `CHANGELOG.md` entries for intentional compatibility-sensitive changes.
+5. Before publishing, run SemVer tooling such as
+   `cargo semver-checks check-release` against the previous published crate
+   baseline.
+6. Run `scripts/check-features.sh`.
+7. Run `scripts/check-layout.sh`.
+8. Run `scripts/check-abi-symbols.sh`.
+9. Run `scripts/check-package.sh`.
+10. Run benchmark checks required by `docs/performance.md`.
+11. Update affected policy docs.
 
 ## Classification
 

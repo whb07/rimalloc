@@ -44,6 +44,14 @@ contracts documented in this inventory; the current Tier S/Tier U Rust-facing
 structs expose invariants through constructors and accessors instead of public
 fields.
 
+API diff review is required for style refactors that touch `src/lib.rs`,
+`src/safe`, `src/ffi/callbacks.rs`, `src/raw`, or exported macros. Before
+merge, run the Tier S/U snapshot check, classify any public change as Tier S,
+Tier U, Tier R, or Tier C, and add a `CHANGELOG.md` entry for intentional
+compatibility-sensitive changes. Before publishing, run SemVer tooling such as
+`cargo semver-checks check-release` in addition to the checked snapshot and
+Tier C ABI diff.
+
 ## Safe Rust API
 
 `MiMalloc` implements `core::alloc::GlobalAlloc`. `Allocation` owns one byte

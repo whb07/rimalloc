@@ -388,11 +388,21 @@ compatibility surfaces.
 > functions. They are appropriate for C-header compatibility, but new Rusty APIs
 > should usually be functions, methods, or typed wrappers.
 
-- [ ] Keep `#[macro_export]` limited to documented Tier R C-header parity.
-- [ ] Prefer private `macro_rules!` or functions for internal single-crate use.
-- [ ] Reject new public macros unless API inventory and compatibility review
+- [x] Keep `#[macro_export]` limited to documented Tier R C-header parity.
+- [x] Prefer private `macro_rules!` or functions for internal single-crate use.
+- [x] Reject new public macros unless API inventory and compatibility review
       classify them.
-- [ ] Keep feature-gated macro docs and compile-fail unsafe tests current.
+- [x] Keep feature-gated macro docs and compile-fail unsafe tests current.
+  - Evidence: `#[macro_export]` remains limited to the documented Tier R
+    C-header compatibility macros plus the existing internal-compatibility
+    macros retained for translated code. Other single-crate helper macros stay
+    private `macro_rules!` definitions in their implementation modules.
+    `docs/api-inventory.md` classifies macro tiers, and
+    `scripts/check-api-inventory.py` rejects macro inventory drift, verifies
+    `c-header-macros` gating for C-header macros, and requires every exported
+    macro to be documented in the inventory. `tests/header_macro_expansion.rs`
+    verifies the public macro inventory, downstream expansion, feature gating,
+    and compile-fail unsafe boundary behavior.
 - Verify: macro inventory checks and doctests.
 
 ### Issue: Feature flags should stay additive and predictable

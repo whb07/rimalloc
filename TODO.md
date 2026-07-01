@@ -308,13 +308,25 @@ compatibility surfaces.
 > is consistency: small unsafe blocks, local invariant comments, and explicit
 > safe wrappers around unsafe primitives.
 
-- [ ] Update the Rust style guide with the required safety-comment format.
-- [ ] Prefer small unsafe blocks around the exact unsafe operation.
-- [ ] Avoid broad unsafe regions that mix pointer operations with ordinary
+- [x] Update the Rust style guide with the required safety-comment format.
+- [x] Prefer small unsafe blocks around the exact unsafe operation.
+- [x] Avoid broad unsafe regions that mix pointer operations with ordinary
       control flow.
-- [ ] Ensure public unsafe functions include caller obligations, pointer
+- [x] Ensure public unsafe functions include caller obligations, pointer
       validity, aliasing, lifetime, threading, and ownership requirements.
-- [ ] Keep `SAFETY[AUDIT:*]` tags mapped to tests or manual proof.
+- [x] Keep `SAFETY[AUDIT:*]` tags mapped to tests or manual proof.
+  - Evidence: `docs/rust-style.md` already defines the
+    `SAFETY[AUDIT:<operation-id>]` comment format, requires small unsafe
+    blocks around exact operations, rejects broad unsafe regions that mix
+    pointer operations with ordinary control flow, and requires public unsafe
+    functions to document caller obligations in `# Safety` sections.
+    `scripts/check-safe-docs.py` now keeps those style-guide phrases present
+    and continues to require `# Safety` docs on public unsafe functions.
+    `scripts/check-unsafe-audit.py` verified unsafe source coverage, operation
+    ID documentation, and the dated migration allowlist; it reported 72 unsafe
+    source files, 5,967 unsafe mentions, 10 checked operation IDs, and 68
+    legacy allowlist files. `scripts/check-unsafe-audit-evidence.py` verified
+    21 evidence entries covering all 10 operation IDs.
 - Verify: `scripts/check-unsafe-audit.py` and
   `scripts/check-unsafe-audit-evidence.py`.
 

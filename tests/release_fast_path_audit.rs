@@ -2805,8 +2805,10 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
             )
             && todo.contains("no current Tier S or Tier U public traits")
             && todo.contains(
-                "- [ ] Update the Rust style guide with the required safety-comment format."
+                "- [x] Update the Rust style guide with the required safety-comment format."
             )
+            && todo.contains("21 evidence entries covering all 10 operation IDs")
+            && todo.contains("- [ ] Audit each top-level module for accidental public items.")
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

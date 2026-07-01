@@ -287,6 +287,11 @@ def main() -> int:
         "return internal sequences as `&[T]`, not `&Vec<T>`",
         "Take ownership only when the API stores, consumes, or transfers ownership",
         "Store owned text, paths, and bytes as `String`, `PathBuf`, `Vec<T>`, or",
+        "Keep unsafe blocks as small as practical",
+        "Avoid broad unsafe regions",
+        "Every unsafe block, unsafe impl, unsafe extern boundary, or unsafe attribute",
+        "document caller obligations in a `# Safety` rustdoc section",
+        "Every `SAFETY[AUDIT:*]` operation ID must be mapped",
     ]:
         if phrase not in rust_style:
             missing.append(f"docs/rust-style.md: missing safe style phrase: {phrase}")

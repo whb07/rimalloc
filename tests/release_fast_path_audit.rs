@@ -2792,7 +2792,9 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
                 "- [x] Audit Tier S fallible functions for consistent `Result<T, E>` usage."
             )
             && todo.contains("the safe error API policy")
-            && todo.contains("- [ ] Audit strict scalar, pointer, and typestate wrappers")
+            && todo.contains("- [x] Audit strict scalar, pointer, and typestate wrappers")
+            && todo.contains("the constructor table")
+            && todo.contains("- [ ] Audit `src/types`, `src/allocator`, and `src/safe`")
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

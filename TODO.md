@@ -174,18 +174,27 @@ compatibility surfaces.
 > constructor names make invariants easier to review and unsafe boundaries
 > easier to recognize.
 
-- [ ] Audit strict scalar, pointer, and typestate wrappers for constructor
+- [x] Audit strict scalar, pointer, and typestate wrappers for constructor
       naming consistency.
-- [ ] Prefer:
+- [x] Prefer:
   - `new(...) -> Option<Self>` or `Result<Self, E>` for checked construction;
   - `try_new(...) -> Result<Self, E>` when an error type is useful;
   - `unsafe fn new_unchecked(...) -> Self` for unchecked invariant-bearing
     construction;
   - `from_raw`/`from_non_null` for pointer wrappers;
   - `as_ptr`/`as_non_null` for pointer access.
-- [ ] Avoid adding more ambiguous names such as `make`, `create`, `init`, or
+- [x] Avoid adding more ambiguous names such as `make`, `create`, `init`, or
       `get` unless they match existing domain vocabulary.
-- [ ] Add a small table of constructor conventions to the Rust style guide.
+- [x] Add a small table of constructor conventions to the Rust style guide.
+  - Evidence: the audit covered `src/types` and `src/safe` constructor and
+    accessor names. Strict scalar, pointer, heap/page typestate, arena,
+    freelist, padding, callback, and safe allocation wrappers already use the
+    intended `new`, `new_unchecked`, `from_raw`, `from_non_null`, `as_ptr`, and
+    `as_non_null` patterns. The only broad `get()` usage is the established
+    crate-private scalar/counter accessor pattern and safe domain reads such as
+    `GlobalOptions::get` and `MainHeap::get`; the style guide now documents
+    that distinction. `scripts/check-safe-docs.py` keeps the constructor table
+    and scalar `get()` exception present.
 - Verify: targeted source audit and full Rust tests.
 
 ### Issue: Boolean and nullable state clusters should become typed states where practical

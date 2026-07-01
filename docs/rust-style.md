@@ -25,17 +25,20 @@ malloc-family, or C++ operator names.
 
 Use these conventions for Rust-facing APIs:
 
-- `new` for infallible construction or conventional constructors that return a
-  crate-specific result for resource acquisition already established by the
-  type.
-- `try_new` when construction validates input and callers need a typed error.
-- `from_raw` or `from_non_null` for unsafe conversions from raw handles.
-- `as_ptr` or `as_non_null` for borrowed raw pointer views.
-- `into_raw` when ownership is deliberately transferred across an unsafe
-  boundary.
-- `len` and `is_empty` for byte or collection-like views.
-- `layout` for allocation layout accessors.
-- `with_*` for scoped callback or temporary-state helpers.
+| Pattern | Use |
+| --- | --- |
+| `new(...) -> Self` | Infallible construction that preserves invariants. |
+| `new(...) -> Option<Self>` | Checked construction where absence is the only useful failure detail. |
+| `new(...) -> Result<Self, E>` | Conventional resource acquisition already established by the type. |
+| `try_new(...) -> Result<Self, E>` | Checked construction where callers need a typed error. |
+| `unsafe fn new_unchecked(...) -> Self` | Unchecked construction for invariant-bearing wrappers. |
+| `from_raw(...)` | Conversion from a raw C value or nullable raw pointer domain. |
+| `from_non_null(...)` | Conversion from a known non-null pointer handle. |
+| `as_ptr(...)` or `as_non_null(...)` | Borrowed raw pointer views at unsafe/raw boundaries. |
+| `into_raw(...)` | Deliberate ownership transfer across an unsafe boundary. |
+| `len(...)` and `is_empty(...)` | Byte or collection-like views. |
+| `layout(...)` | Allocation layout accessors. |
+| `with_*` | Scoped callback or temporary-state helpers. |
 
 Unchecked invariant constructors must be named:
 
@@ -46,6 +49,12 @@ unsafe fn new_unchecked(...)
 Avoid ambiguous constructor names such as `make`, `create`, `init`, or `get`
 unless they are established domain vocabulary for the translated allocator
 operation being modeled.
+
+Internal scalar wrappers may use `get()` to expose the raw scalar value when
+the wrapper is crate-private, `Copy`, and used in allocator hot paths. Public
+safe value wrappers should prefer a domain-specific accessor name when one
+reads clearly; keep `get()` only for plain numeric counters where it is the
+least surprising Rust API.
 
 ## Errors
 

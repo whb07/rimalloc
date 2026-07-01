@@ -202,6 +202,19 @@ def main() -> int:
         if phrase not in api_inventory:
             missing.append(f"docs/api-inventory.md: missing safe error policy phrase: {phrase}")
 
+    rust_style = (ROOT / "docs/rust-style.md").read_text()
+    for phrase in [
+        "| `new(...) -> Self` |",
+        "| `unsafe fn new_unchecked(...) -> Self` |",
+        "| `from_raw(...)` |",
+        "| `from_non_null(...)` |",
+        "| `as_ptr(...)` or `as_non_null(...)` |",
+        "Internal scalar wrappers may use `get()`",
+        "safe value wrappers should prefer a domain-specific accessor name",
+    ]:
+        if phrase not in rust_style:
+            missing.append(f"docs/rust-style.md: missing constructor convention phrase: {phrase}")
+
     if missing:
         print("Public API docs missing required rustdoc coverage:")
         print("\n".join(missing))

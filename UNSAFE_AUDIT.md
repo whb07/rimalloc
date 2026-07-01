@@ -216,9 +216,12 @@ Migration:
   macro boundaries unless the owning file appears in
   `docs/unsafe-migration-allowlist.tsv`.
 - The migration allowlist is intentionally file-level and temporary. Each entry
-  must include an owner, a concrete `remove_by` date, and a reason. Migrating a
-  file means adding stable operation IDs near unsafe operations, documenting
-  each ID in this section, and removing the file from the allowlist.
+  must include a `production`, `test`, or `translation` category, an owner, a
+  concrete `remove_by` date, and a reason. The checker caps the current
+  allowlist at 64 entries; removing entries requires lowering that cap in the
+  same change. Migrating a file means adding stable operation IDs near unsafe
+  operations, documenting each ID in this section, and removing the file from
+  the allowlist.
 
 Validation:
 

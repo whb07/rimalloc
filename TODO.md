@@ -6,7 +6,7 @@ visible in source, docs, and validation scripts.
 
 Review evidence:
 
-- `scripts/check-unsafe-audit.py` passes, but reports 68 legacy source/test
+- `scripts/check-unsafe-audit.py` passes, but reports 64 legacy source/test
   files still on the dated unsafe migration allowlist.
 - `Cargo.toml` keeps broad package-level clippy allowances to support translated
   code while local modules slowly become idiomatic.
@@ -27,18 +27,28 @@ Review evidence:
 > legacy translated code. The next step is shrinking that exception surface by
 > subsystem, starting with safe-facing and typed-wrapper modules.
 
-- [ ] Split `docs/unsafe-migration-allowlist.tsv` into production, test, and
+- [x] Split `docs/unsafe-migration-allowlist.tsv` into production, test, and
       generated/translation categories, or add an equivalent category column.
-- [ ] Remove `src/safe/allocation.rs`, `src/safe/heap.rs`, `src/safe/mod.rs`,
+- [x] Remove `src/safe/allocation.rs`, `src/safe/heap.rs`, `src/safe/mod.rs`,
       `src/safe/stats.rs`, and `src/ffi/callbacks.rs` from the allowlist by
       tagging remaining unsafe operations with specific `SAFETY[AUDIT:*]`
       evidence.
-- [ ] Burn down typed-wrapper test files separately from production typed
+- [x] Burn down typed-wrapper test files separately from production typed
       wrappers so test scaffolding does not hide production unsafe debt.
-- [ ] Add an audit test that caps the allowlist count and requires the cap to
+- [x] Add an audit test that caps the allowlist count and requires the cap to
       decrease when entries are removed.
-- [ ] Keep hot allocator files allowlisted only with explicit performance and
+- [x] Keep hot allocator files allowlisted only with explicit performance and
       parity rationale until they can be migrated safely.
+  - Evidence: `docs/unsafe-migration-allowlist.tsv` now has a required
+    `category` column with `production`, `test`, and `translation` entries.
+    The safe-facing files `src/safe/allocation.rs`, `src/safe/heap.rs`,
+    `src/safe/mod.rs`, and `src/safe/stats.rs` were removed after their unsafe
+    operations were covered by nearby `SAFETY[AUDIT:*]` comments;
+    `src/ffi/callbacks.rs` was already fully tagged and absent from the
+    allowlist. `scripts/check-unsafe-audit.py` enforces the category set,
+    requires all categories to be present, and caps the remaining allowlist at
+    64 entries so future removals must lower the cap. Hot allocator allowlist
+    reasons now call out parity plus assembly/benchmark or behavior evidence.
 - Verify: `scripts/check-unsafe-audit.py`, `scripts/check-unsafe-audit-evidence.py`,
   full clippy, and full tests.
 
@@ -157,7 +167,7 @@ Review evidence:
 
 ## Suggested implementation order
 
-1. [ ] Add the unsafe allowlist category/cap and remove safe-facing allowlist
+1. [x] Add the unsafe allowlist category/cap and remove safe-facing allowlist
        entries first.
 2. [ ] Inventory root-exported macros and prevent new internal macro leaks.
 3. [ ] Localize the highest-signal clippy allowances.
@@ -168,8 +178,8 @@ Review evidence:
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is categorized, capped, and smaller than
-      the current 68-entry baseline.
+- [x] The unsafe migration allowlist is categorized, capped, and smaller than
+      the original 68-entry baseline.
 - [ ] Root-exported macros are limited to documented public compatibility
       surfaces.
 - [ ] Package-level clippy allowances are reduced or explicitly justified by

@@ -2781,9 +2781,10 @@ fn rust_idiom_backlog_tracks_current_work() {
 
     assert!(
         todo.contains("# TODO: Fresh Rust Idiom and Release-Readiness Backlog")
-            && todo.contains("68 legacy source/test")
+            && todo.contains("64 legacy source/test")
             && todo.contains("## Issue: Unsafe migration allowlist is still too broad")
             && todo.contains("Remove `src/safe/allocation.rs`, `src/safe/heap.rs`")
+            && todo.contains("caps the remaining allowlist at\n    64 entries")
             && todo.contains("## Issue: Internal macro exports leak implementation details")
             && todo.contains("documented Tier R allowlist")
             && todo.contains("## Issue: Clippy allowances should move from crate policy")

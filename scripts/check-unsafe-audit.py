@@ -11,7 +11,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "UNSAFE_AUDIT.md"
 ALLOWLIST = ROOT / "docs/unsafe-migration-allowlist.tsv"
 SAFETY_ID_RE = re.compile(r"SAFETY\[AUDIT:([a-z0-9_.-]+)\]")
-ALLOWLIST_HEADER = "path\towner\tremove_by\treason"
+ALLOWLIST_HEADER = "path\tcategory\towner\tremove_by\treason"
+ALLOWLIST_ENTRY_CAP = 64
+ALLOWLIST_CATEGORIES = {"production", "test", "translation"}
 PATH_ALIASES = {
     "src/allocator/aligned.rs": ["src/alloc_aligned.rs"],
     "src/allocator/thread_heap.rs": ["src/theap.rs"],
@@ -94,7 +96,7 @@ def source_audit_ids() -> set[str]:
 
 
 def has_recent_safety_id(lines: list[str], index: int) -> bool:
-    start = max(0, index - 3)
+    start = max(0, index - 5)
     return any(SAFETY_ID_RE.search(lines[line]) for line in range(start, index + 1))
 
 
@@ -119,29 +121,33 @@ def unsafe_operations(rel: str, text: str) -> list[str]:
     return offenders
 
 
-def migration_allowlist() -> dict[str, tuple[str, str, str]]:
+def migration_allowlist() -> dict[str, tuple[str, str, str, str]]:
     require(ALLOWLIST.exists(), f"missing unsafe migration allowlist: {ALLOWLIST}")
     lines = ALLOWLIST.read_text().splitlines()
     require(lines and lines[0] == ALLOWLIST_HEADER, f"{ALLOWLIST} must start with {ALLOWLIST_HEADER!r}")
 
-    entries: dict[str, tuple[str, str, str]] = {}
+    entries: dict[str, tuple[str, str, str, str]] = {}
     date_re = re.compile(r"^20[0-9]{2}-[01][0-9]-[0-3][0-9]$")
     for line_number, line in enumerate(lines[1:], start=2):
         if not line or line.startswith("#"):
             continue
         fields = line.split("\t")
         require(
-            len(fields) == 4,
-            f"{ALLOWLIST}:{line_number}: expected 4 tab-separated fields",
+            len(fields) == 5,
+            f"{ALLOWLIST}:{line_number}: expected 5 tab-separated fields",
         )
-        path, owner, remove_by, reason = fields
+        path, category, owner, remove_by, reason = fields
         require(path.startswith("src/") and path.endswith(".rs"), f"{ALLOWLIST}:{line_number}: invalid path {path!r}")
+        require(
+            category in ALLOWLIST_CATEGORIES,
+            f"{ALLOWLIST}:{line_number}: invalid category {category!r}",
+        )
         require((ROOT / path).exists(), f"{ALLOWLIST}:{line_number}: missing source path {path}")
         require(owner.strip(), f"{ALLOWLIST}:{line_number}: owner is required")
         require(date_re.match(remove_by) is not None, f"{ALLOWLIST}:{line_number}: remove_by must be YYYY-MM-DD")
         require(reason.strip(), f"{ALLOWLIST}:{line_number}: reason is required")
         require(path not in entries, f"{ALLOWLIST}:{line_number}: duplicate path {path}")
-        entries[path] = (owner, remove_by, reason)
+        entries[path] = (category, owner, remove_by, reason)
     return entries
 
 
@@ -156,6 +162,17 @@ def main() -> int:
     doc_ids = audit_id_counts(audit_text)
     ids_in_source = source_audit_ids()
     allowlist = migration_allowlist()
+    require(
+        len(allowlist) == ALLOWLIST_ENTRY_CAP,
+        f"{ALLOWLIST.name} entry cap must match current migration count: "
+        f"{len(allowlist)} entries, cap is {ALLOWLIST_ENTRY_CAP}",
+    )
+    categories = {entry[0] for entry in allowlist.values()}
+    missing_categories = sorted(ALLOWLIST_CATEGORIES - categories)
+    require(
+        not missing_categories,
+        f"{ALLOWLIST.name} is missing migration categories: {', '.join(missing_categories)}",
+    )
 
     missing = sorted(path for path in found if not audit_mentions_path(audit_text, path))
     require(

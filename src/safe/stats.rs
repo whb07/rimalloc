@@ -339,6 +339,8 @@ impl ProcessInfo {
                 &mut page_faults,
             );
         }
+        // SAFETY[AUDIT:safe-process-info]: querying the platform page size
+        // reads allocator primitive state and does not dereference caller data.
         let page_size = unsafe { crate::os::_mi_os_page_size() };
         Self {
             elapsed_msecs,

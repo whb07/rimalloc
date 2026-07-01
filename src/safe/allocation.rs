@@ -417,6 +417,8 @@ impl RawAllocation {
             return Err(AllocError { layout });
         }
 
+        // SAFETY[AUDIT:owned-allocation]: `layout` is non-zero here and the
+        // returned pointer is checked for null before ownership is recorded.
         let ptr = unsafe {
             if zeroed {
                 MiMalloc.alloc_zeroed(layout)

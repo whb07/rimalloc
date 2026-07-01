@@ -99,6 +99,8 @@ mod tests {
     #[test]
     fn zeroed_allocation_returns_zeroed_bytes() {
         let allocation = Allocation::zeroed_with_size_align(32, 8).expect("allocation");
+        // SAFETY[AUDIT:owned-allocation]: the zeroed allocation is live for
+        // its stored length and is only read during this test.
         let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
         assert!(bytes.iter().all(|byte| *byte == 0));
     }
@@ -117,6 +119,8 @@ mod tests {
                 assert_eq!(allocation.layout().align(), align);
                 assert_eq!(allocation.as_ptr() as usize % align, 0);
 
+                // SAFETY[AUDIT:owned-allocation]: each zeroed allocation is
+                // live for its stored length and is only read during this test.
                 let bytes =
                     unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
                 assert!(bytes.iter().all(|byte| *byte == 0));
@@ -133,9 +137,13 @@ mod tests {
         );
 
         for i in 0..allocation.len() {
+            // SAFETY[AUDIT:owned-allocation]: `i` stays within the allocation
+            // length and the test owns unique mutable access.
             unsafe { allocation.as_mut_ptr().add(i).write((i % 251) as u8) };
         }
 
+        // SAFETY[AUDIT:owned-allocation]: every byte was initialized by the
+        // loop above and the allocation remains live for its stored length.
         let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
         assert_eq!(bytes[0], 0);
         assert_eq!(bytes[31], 31);
@@ -149,6 +157,8 @@ mod tests {
             slot.write((idx + 1) as u8);
         }
 
+        // SAFETY[AUDIT:owned-allocation]: the loop above initializes every
+        // byte in the allocation before the initialized transition.
         let initialized = unsafe { allocation.assume_initialized() };
         assert_eq!(initialized.as_bytes(), &[1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -200,10 +210,14 @@ mod tests {
     fn allocation_is_move_only_and_drops_once() {
         let mut allocation = Allocation::with_size_align(64, 16).expect("allocation");
         let ptr = allocation.as_mut_ptr();
+        // SAFETY[AUDIT:owned-allocation]: the allocation is live, uniquely
+        // owned, and large enough for one byte.
         unsafe { ptr.write(42) };
 
         let moved = allocation;
         assert_eq!(moved.as_ptr(), ptr.cast_const());
+        // SAFETY[AUDIT:owned-allocation]: `moved` still owns the live
+        // allocation and the first byte was initialized above.
         assert_eq!(unsafe { moved.as_ptr().read() }, 42);
     }
 
@@ -288,16 +302,22 @@ mod tests {
         let layout = Layout::from_size_align(16, 8).expect("layout");
         let mut allocation = Allocation::new(layout).expect("allocation");
         for idx in 0..allocation.len() {
+            // SAFETY[AUDIT:owned-allocation]: `idx` stays within the live
+            // allocation and the test owns unique mutable access.
             unsafe { allocation.as_mut_ptr().add(idx).write(idx as u8) };
         }
 
         let grown_layout = Layout::from_size_align(64, 8).expect("layout");
         let grown = allocation.resize(grown_layout).expect("grow");
+        // SAFETY[AUDIT:owned-allocation]: the grown allocation is live and the
+        // prefix length is the initialized prefix written above.
         let grown_bytes = unsafe { core::slice::from_raw_parts(grown.as_ptr(), 16) };
         assert_eq!(grown_bytes, (0u8..16).collect::<Vec<_>>().as_slice());
 
         let shrunk_layout = Layout::from_size_align(8, 8).expect("layout");
         let shrunk = grown.resize(shrunk_layout).expect("shrink");
+        // SAFETY[AUDIT:owned-allocation]: the shrunk allocation is live and
+        // the requested prefix is within the new layout.
         let shrunk_bytes = unsafe { core::slice::from_raw_parts(shrunk.as_ptr(), 8) };
         assert_eq!(shrunk_bytes, (0u8..8).collect::<Vec<_>>().as_slice());
 
@@ -361,8 +381,12 @@ mod tests {
     fn uninitialized_allocation_requires_explicit_initialization() {
         let mut allocation = Allocation::with_size_align(8, 8).expect("allocation");
         for idx in 0..allocation.len() {
+            // SAFETY[AUDIT:owned-allocation]: `idx` stays within the live
+            // allocation and the test owns unique mutable access.
             unsafe { allocation.as_mut_ptr().add(idx).write((idx + 1) as u8) };
         }
+        // SAFETY[AUDIT:owned-allocation]: the loop above initializes every
+        // byte before the initialized transition.
         let initialized = unsafe { allocation.assume_initialized() };
         assert_eq!(initialized.as_bytes(), &[1, 2, 3, 4, 5, 6, 7, 8]);
     }
@@ -407,6 +431,8 @@ mod tests {
         assert!(matches!(err.kind(), ResizeErrorKind::Alloc(_)));
         assert_eq!(err.allocation().layout(), old_layout);
         let allocation = err.into_allocation();
+        // SAFETY[AUDIT:owned-allocation]: failed resize preserves the original
+        // live allocation and all bytes were initialized before the failure.
         let bytes = unsafe { core::slice::from_raw_parts(allocation.as_ptr(), allocation.len()) };
         assert_eq!(bytes, &[1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -458,11 +484,15 @@ mod tests {
 
         let mut allocation = zeroed.into_allocation();
         for idx in 0..allocation.len() {
+            // SAFETY[AUDIT:safe-heap]: `idx` stays within the live heap
+            // allocation and the test owns unique mutable access.
             unsafe { allocation.as_mut_ptr().add(idx).write(idx as u8) };
         }
         let grown = allocation
             .resize(Layout::from_size_align(32, 8).expect("layout"))
             .expect("grow");
+        // SAFETY[AUDIT:safe-heap]: the grown heap allocation is live and the
+        // prefix length is the initialized prefix written above.
         let bytes = unsafe { core::slice::from_raw_parts(grown.as_ptr(), 16) };
         assert_eq!(bytes, (0u8..16).collect::<Vec<_>>().as_slice());
 
@@ -517,6 +547,9 @@ mod tests {
     #[test]
     fn raw_product_allocation_failure_is_deterministic_and_null_returning() {
         let _quiet_expected_errors = ShowErrorsGuard::disabled();
+        // SAFETY[AUDIT:owned-allocation]: this test calls raw allocation
+        // entrypoints with overflow requests and asserts their null-return
+        // failure contract without dereferencing returned pointers.
         unsafe {
             assert!(crate::mimalloc::mi_mallocn(usize::MAX, 2).is_null());
             assert!(crate::mimalloc::mi_calloc(usize::MAX, 2).is_null());
@@ -571,6 +604,8 @@ mod tests {
             slot.write((idx + 10) as u8);
         }
 
+        // SAFETY[AUDIT:safe-heap]: the loop above initializes every byte in
+        // the heap allocation before the initialized transition.
         let initialized = unsafe { allocation.assume_initialized() };
         assert_eq!(initialized.as_bytes(), &[10, 11, 12, 13, 14, 15]);
 
@@ -612,6 +647,8 @@ mod tests {
         }
 
         allocation.as_uninit_slice_mut()[0].write(42);
+        // SAFETY[AUDIT:safe-heap]: the single live byte was initialized before
+        // the initialized transition.
         let initialized = unsafe { allocation.assume_initialized() };
         assert_eq!(initialized.as_bytes()[0], 42);
         assert_eq!(zeroed.as_bytes(), &[0, 0, 0]);
@@ -706,10 +743,15 @@ mod tests {
         assert_eq!(info.system_time().as_millis(), info.system_msecs() as u128);
         assert!(info.page_size().is_some_and(|page_size| page_size > 0));
         assert!(info.page_faults().get() >= 0);
+        // SAFETY[AUDIT:safe-process-info]: querying the platform page size
+        // reads allocator primitive state and does not dereference caller data.
         let raw_page_size = unsafe { crate::os::_mi_os_page_size() };
         assert_eq!(info.page_size(), Some(raw_page_size));
 
         let mut raw_page_faults = 0usize;
+        // SAFETY[AUDIT:safe-process-info]: null out-pointers are accepted by
+        // the raw process-info API, and `raw_page_faults` is valid writable
+        // local storage for the only non-null out-pointer.
         unsafe {
             crate::stats::mi_process_info(
                 ptr::null_mut(),
@@ -731,10 +773,15 @@ mod tests {
     static PREVIOUS_ERROR_CALLBACK_HITS: AtomicUsize = AtomicUsize::new(0);
     static PREVIOUS_DEFERRED_CALLBACK_HITS: AtomicUsize = AtomicUsize::new(0);
 
+    // SAFETY[AUDIT:unsafe-callback]: test-only C ABI callback used as a
+    // previous error registration fixture; it only updates an atomic counter.
     unsafe extern "C" fn previous_error_callback(_err: i32, _arg: *mut c_void) {
         PREVIOUS_ERROR_CALLBACK_HITS.fetch_add(1, Ordering::SeqCst);
     }
 
+    // SAFETY[AUDIT:unsafe-callback]: test-only C ABI callback used as a
+    // previous deferred-free registration fixture; it only updates an atomic
+    // counter.
     unsafe extern "C" fn previous_deferred_free_callback(
         _force: bool,
         _heartbeat: u64,
@@ -768,6 +815,9 @@ mod tests {
     impl DeferredFreeCallbackRestoreGuard {
         fn new() -> Self {
             Self {
+                // SAFETY[AUDIT:unsafe-callback]: tests snapshot the current
+                // process-global callback state while holding the callback
+                // serialization lock.
                 snapshot: unsafe { crate::page::registered_deferred_free_callback() },
             }
         }
@@ -775,6 +825,8 @@ mod tests {
 
     impl Drop for DeferredFreeCallbackRestoreGuard {
         fn drop(&mut self) {
+            // SAFETY[AUDIT:unsafe-callback]: tests restore the exact callback
+            // snapshot captured under the callback serialization lock.
             unsafe { crate::page::restore_deferred_free_callback(self.snapshot) };
         }
     }
@@ -787,6 +839,9 @@ mod tests {
     }
 
     fn with_test_thread_heap<R>(f: impl FnOnce(*mut crate::types::mi_theap_t) -> R) -> R {
+        // SAFETY[AUDIT:unsafe-callback]: the zeroed values are local callback
+        // test fixtures and are initialized only enough for deferred-free
+        // reentry suppression through the `tld` field.
         let mut tld = unsafe { MaybeUninit::<crate::types::mi_tld_t>::zeroed().assume_init() };
         let mut theap = unsafe { MaybeUninit::<crate::types::mi_theap_t>::zeroed().assume_init() };
         theap.tld = ptr::from_mut(&mut tld);
@@ -795,6 +850,9 @@ mod tests {
 
     fn trigger_deferred_free_callback(theap: *mut crate::types::mi_theap_t, force: bool) {
         assert!(!theap.is_null());
+        // SAFETY[AUDIT:unsafe-callback]: `theap` comes from
+        // `with_test_thread_heap` and stays live for this synchronous callback
+        // trigger.
         unsafe { crate::page::_mi_deferred_free(theap, force) };
     }
 
@@ -812,7 +870,7 @@ mod tests {
             let mut callback = |_err: i32| {
                 hits += 1;
             };
-            // SAFETY: this test holds the process-wide callback test lock,
+            // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback test lock,
             // triggers the callback synchronously, and restores the original
             // registration before releasing the lock.
             let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
@@ -842,14 +900,14 @@ mod tests {
             inner_hits.fetch_add(1, Ordering::SeqCst);
         };
 
-        // SAFETY: this test serializes process-global callback registration,
+        // SAFETY[AUDIT:unsafe-callback]: this test serializes process-global callback registration,
         // invokes callbacks synchronously, and drops nested guards in LIFO
         // order before the borrowed callbacks go out of scope.
         let outer_guard = unsafe { ErrorCallbackGuard::new(&mut outer_callback) };
         trigger_error_callback();
 
         {
-            // SAFETY: same synchronization and LIFO nesting contract as above.
+            // SAFETY[AUDIT:unsafe-callback]: same synchronization and LIFO nesting contract as above.
             let _inner_guard = unsafe { ErrorCallbackGuard::new(&mut inner_callback) };
             trigger_error_callback();
         }
@@ -876,7 +934,7 @@ mod tests {
             let mut callback = |_err: i32| {
                 panic!("callback panic should be caught");
             };
-            // SAFETY: this test holds the process-wide callback test lock,
+            // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback test lock,
             // triggers the callback synchronously, and restores the original
             // registration before releasing the lock.
             let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
@@ -893,13 +951,15 @@ mod tests {
         let restore = DeferredFreeCallbackRestoreGuard::new();
         {
             let mut callback = |_force: bool, _heartbeat: u64| {};
-            // SAFETY: this test holds the process-wide callback test lock and
+            // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback test lock and
             // only observes registration state without concurrent allocator
             // callback entry.
             let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
             let current = unsafe { crate::page::registered_deferred_free_callback() };
             assert!(current.0.is_some());
         }
+        // SAFETY[AUDIT:unsafe-callback]: the callback test lock is still held
+        // and the guard has restored the previous registration.
         let restored = unsafe { crate::page::registered_deferred_free_callback() };
         assert_eq!(callback_addr(restored.0), callback_addr(restore.snapshot.0));
         assert_eq!(restored.1, restore.snapshot.1);
@@ -911,6 +971,8 @@ mod tests {
         let _lock = CALLBACK_TEST_LOCK.lock().expect("callback test lock");
         let _restore = DeferredFreeCallbackRestoreGuard::new();
         PREVIOUS_DEFERRED_CALLBACK_HITS.store(0, Ordering::SeqCst);
+        // SAFETY[AUDIT:unsafe-callback]: this test holds the callback
+        // serialization lock and installs a test-only previous callback.
         unsafe {
             crate::page::mi_register_deferred_free(
                 Some(previous_deferred_free_callback),
@@ -927,7 +989,7 @@ mod tests {
             inner_hits.fetch_add(1, Ordering::SeqCst);
         };
 
-        // SAFETY: this test serializes process-global callback registration,
+        // SAFETY[AUDIT:unsafe-callback]: this test serializes process-global callback registration,
         // invokes callbacks synchronously on a local thread-heap fixture, and drops
         // nested guards in LIFO order before borrowed callbacks go out of scope.
         with_test_thread_heap(|theap| {
@@ -935,7 +997,7 @@ mod tests {
             trigger_deferred_free_callback(theap, false);
 
             {
-                // SAFETY: same synchronization and LIFO nesting contract as above.
+                // SAFETY[AUDIT:unsafe-callback]: same synchronization and LIFO nesting contract as above.
                 let _inner_guard = unsafe { DeferredFreeCallbackGuard::new(&mut inner_callback) };
                 trigger_deferred_free_callback(theap, true);
             }
@@ -971,7 +1033,7 @@ mod tests {
             }
         };
 
-        // SAFETY: this test holds the process-wide callback lock, invokes the
+        // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback lock, invokes the
         // callback synchronously, and records any callback allocation failure
         // instead of panicking inside the panic-catching trampoline.
         let _guard = unsafe { ErrorCallbackGuard::new(&mut callback) };
@@ -1008,7 +1070,7 @@ mod tests {
                 }
             };
 
-            // SAFETY: this test holds the process-wide callback lock and
+            // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback lock and
             // invokes the deferred-free callback synchronously on a local
             // thread-heap fixture. The recursive trigger exercises the
             // allocator's per-thread reentry suppression before the borrowed
@@ -1034,7 +1096,7 @@ mod tests {
             let mut callback = |_force: bool, _heartbeat: u64| {
                 panic!("deferred-free callback panic should be caught");
             };
-            // SAFETY: this test holds the process-wide callback test lock,
+            // SAFETY[AUDIT:unsafe-callback]: this test holds the process-wide callback test lock,
             // triggers the callback synchronously, and restores the original
             // registration before releasing the lock.
             let _guard = unsafe { DeferredFreeCallbackGuard::new(&mut callback) };
@@ -1093,6 +1155,8 @@ mod tests {
     where
         T: Copy,
     {
+        // SAFETY[AUDIT:unsafe-callback]: callback function pointer options are
+        // copied to an integer address only for equality checks in tests.
         callback.map_or(0, |callback| unsafe {
             core::mem::transmute_copy::<T, usize>(&callback)
         })

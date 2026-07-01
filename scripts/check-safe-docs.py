@@ -76,6 +76,12 @@ def has_section(docs: list[str], section: str) -> bool:
     return any(line == section for line in docs)
 
 
+def appears_before(text: str, before: str, after: str) -> bool:
+    before_index = text.find(before)
+    after_index = text.find(after)
+    return before_index != -1 and after_index != -1 and before_index < after_index
+
+
 def function_signature(lines: list[str], index: int) -> str:
     signature = lines[index].strip()
     cursor = index
@@ -295,6 +301,21 @@ def main() -> int:
     ]:
         if phrase not in rust_style:
             missing.append(f"docs/rust-style.md: missing safe style phrase: {phrase}")
+
+    readme = (ROOT / "README.md").read_text()
+    crate_docs = (ROOT / "src/lib.rs").read_text()
+    for phrase in [
+        "Rust Global Allocator",
+        "Safe Rust Owned Bytes, Heaps, Stats, and Options",
+        "use mechanical_mimalloc::{Allocation, GlobalOptions, Heap, OptionKey, StatsSnapshot};",
+        "unsafe {\n    let p = mechanical_mimalloc::raw::mi_malloc(64);",
+    ]:
+        if phrase not in readme:
+            missing.append(f"README.md: missing safe-first example phrase: {phrase}")
+    if not appears_before(readme, "### 2. Safe Rust Owned Bytes", "### Unsafe Raw Facade"):
+        missing.append("README.md: safe Rust examples must appear before raw facade examples")
+    if not appears_before(crate_docs, "Use the Rust `GlobalAlloc` facade", "Use the raw C-shaped facade"):
+        missing.append("src/lib.rs: safe Rust examples must appear before raw facade examples")
 
     if missing:
         print("Public API docs missing required rustdoc coverage:")

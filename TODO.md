@@ -364,11 +364,22 @@ compatibility surfaces.
 > `GlobalOptions`, and `StatsSnapshot` before raw `mi_*` calls. Raw examples
 > should be lower in docs and visibly unsafe.
 
-- [ ] Audit README and rustdoc example order.
-- [ ] Ensure each Tier S type has a short safe example.
-- [ ] Keep raw examples behind explicit `unsafe` blocks.
-- [ ] Keep compile-fail examples proving raw APIs and macros require unsafe.
-- [ ] Avoid showing raw/C examples in places meant for safe Rust onboarding.
+- [x] Audit README and rustdoc example order.
+- [x] Ensure each Tier S type has a short safe example.
+- [x] Keep raw examples behind explicit `unsafe` blocks.
+- [x] Keep compile-fail examples proving raw APIs and macros require unsafe.
+- [x] Avoid showing raw/C examples in places meant for safe Rust onboarding.
+  - Evidence: README and crate rustdoc both lead with `MiMalloc`,
+    `Allocation`, `Heap`, `GlobalOptions`, and `StatsSnapshot` before showing
+    raw C-shaped calls. Tier S types have short safe examples in rustdoc,
+    including allocation, initialized allocation, heap, heap-tied allocation,
+    main heap, options, stats, process info, and typed errors. Raw examples in
+    README and crate rustdoc are behind explicit `unsafe` blocks, and crate
+    rustdoc keeps compile-fail examples proving raw calls, typed raw allocation
+    macros, header override macros, implementation modules, and internal
+    typestate witnesses are not safe public API. `scripts/check-safe-docs.py`
+    now checks that README and crate rustdoc keep safe examples before raw
+    facade examples and that the README keeps the safe facade example present.
 - Verify: `cargo test --doc --features std` and `scripts/check-docs.sh`.
 
 ### Issue: Macro surface should remain exceptional, not ordinary API style

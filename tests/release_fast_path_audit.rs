@@ -2810,7 +2810,11 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
             && todo.contains("21 evidence entries covering all 10 operation IDs")
             && todo.contains("- [x] Audit each top-level module for accidental public items.")
             && todo.contains("default raw-facade modules")
-            && todo.contains("- [ ] Audit README and rustdoc example order.")
+            && todo.contains("- [x] Audit README and rustdoc example order.")
+            && todo.contains("safe examples before raw")
+            && todo.contains(
+                "- [ ] Keep `#[macro_export]` limited to documented Tier R C-header parity."
+            )
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

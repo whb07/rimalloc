@@ -81,6 +81,10 @@ and `docs/rust-style.md`.
 
 ## Safe API Trait Inventory
 
+There are no current Tier S or Tier U public traits. New public Rust-facing
+traits require explicit inventory entries covering downstream implementation
+expectations, sealing, blanket impl coherence, and object-safety decisions.
+
 - `MiMalloc`: implements `core::alloc::GlobalAlloc`; derives `Copy`, `Clone`,
   `Debug`, and `Default`; has auto `Send`/`Sync`; no manual unsafe `Send`/`Sync`
   impls.

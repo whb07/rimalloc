@@ -193,6 +193,7 @@ def root_public_items(lib_rs: str) -> set[str]:
     items = set(re.findall(r"^pub mod\s+([A-Za-z0-9_]+)\s*;", lib_rs, flags=re.M))
     items.update(re.findall(r"^pub struct\s+([A-Za-z0-9_]+)\b", lib_rs, flags=re.M))
     items.update(re.findall(r"^pub enum\s+([A-Za-z0-9_]+)\b", lib_rs, flags=re.M))
+    items.update(re.findall(r"^pub trait\s+([A-Za-z0-9_]+)\b", lib_rs, flags=re.M))
     items.update(re.findall(r"^pub fn\s+([A-Za-z0-9_]+)\b", lib_rs, flags=re.M))
     items.update(re.findall(r"^pub type\s+([A-Za-z0-9_]+)\b", lib_rs, flags=re.M))
 
@@ -274,6 +275,18 @@ def public_safe_methods() -> dict[str, pathlib.Path]:
         ):
             methods[match.group(1)] = path.relative_to(ROOT)
     return methods
+
+
+def public_safe_traits() -> dict[str, pathlib.Path]:
+    traits = {}
+    for path in sorted((ROOT / "src/safe").glob("*.rs")):
+        for match in re.finditer(
+            r"^\s*pub\s+(?:unsafe\s+)?trait\s+([A-Za-z0-9_]+)\b",
+            path.read_text(),
+            flags=re.M,
+        ):
+            traits[match.group(1)] = path.relative_to(ROOT)
+    return traits
 
 
 def public_struct_field_leaks() -> list[str]:
@@ -368,6 +381,16 @@ def check_enum_exhaustiveness() -> None:
     )
 
 
+def check_public_trait_policy() -> None:
+    traits = public_safe_traits()
+    require(
+        not traits,
+        "Tier S/Tier U public traits require explicit inventory, sealing, "
+        "object-safety, and blanket-impl review before exposure:\n"
+        + "\n".join(f"{path}:{name}" for name, path in sorted(traits.items())),
+    )
+
+
 def tier_s_u_snapshot(actual_root: set[str]) -> str:
     require(
         TIER_S_ROOT_ITEMS | TIER_U_ROOT_ITEMS <= actual_root,
@@ -423,6 +446,7 @@ def main() -> int:
     check_naming_firewall(actual_root)
     check_representation_firewall()
     check_enum_exhaustiveness()
+    check_public_trait_policy()
     for unsafe_callback_item in [
         "CallbackError",
         "DeferredFreeCallbackGuard",
@@ -499,6 +523,7 @@ def main() -> int:
         "Representation firewall: Tier S and Tier U structs keep fields private",
         "All current Tier S enums are growable and marked `#[non_exhaustive]`",
         "There are no current Tier U enums.",
+        "There are no current Tier S or Tier U public traits.",
         "`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`",
         "`unsafe_callbacks`: Tier U unsafe Rust callback guard namespace.",
         "The raw Rust module path surface is unstable until explicitly versioned.",

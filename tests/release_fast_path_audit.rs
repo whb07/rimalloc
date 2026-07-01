@@ -2801,7 +2801,11 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
             && todo.contains("- [x] Audit safe-layer and internal helper clones.")
             && todo.contains("The only public safe")
             && todo.contains(
-                "- [ ] Audit public traits, if any, for downstream implementation expectations."
+                "- [x] Audit public traits, if any, for downstream implementation expectations."
+            )
+            && todo.contains("no current Tier S or Tier U public traits")
+            && todo.contains(
+                "- [ ] Update the Rust style guide with the required safety-comment format."
             )
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"

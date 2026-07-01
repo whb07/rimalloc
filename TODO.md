@@ -285,12 +285,21 @@ compatibility surfaces.
 > downstream compatibility and optimization harder. Prefer inherent methods for
 > types owned by this crate.
 
-- [ ] Audit public traits, if any, for downstream implementation expectations.
-- [ ] Seal traits that external users should not implement.
-- [ ] Keep traits one to three methods where practical.
-- [ ] Avoid adding blanket impls without explicit coherence and inference
+- [x] Audit public traits, if any, for downstream implementation expectations.
+- [x] Seal traits that external users should not implement.
+- [x] Keep traits one to three methods where practical.
+- [x] Avoid adding blanket impls without explicit coherence and inference
       review.
-- [ ] Decide and test object-safety if `dyn Trait` is part of a public API.
+- [x] Decide and test object-safety if `dyn Trait` is part of a public API.
+  - Evidence: the Tier S/Tier U audit found no public Rust-facing traits to
+    seal, size, make object-safe, or review for blanket impl coherence. The
+    only crate-root public trait implementation is `MiMalloc`'s expected
+    `core::alloc::GlobalAlloc` impl. `docs/api-inventory.md` now records that
+    there are no current Tier S or Tier U public traits and requires explicit
+    downstream-implementation, sealing, blanket-impl, and object-safety review
+    before adding one. `scripts/check-api-inventory.py` now includes public
+    traits in crate-root drift detection and rejects public traits in the safe
+    facade until they are deliberately inventoried.
 - Verify: API inventory and compile-fail/object-safety tests where applicable.
 
 ### Issue: Unsafe style should be standardized beyond mechanical correctness

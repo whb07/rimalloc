@@ -276,6 +276,36 @@ def public_safe_methods() -> dict[str, pathlib.Path]:
     return methods
 
 
+def public_struct_field_leaks() -> list[str]:
+    leaks = []
+    for path in [
+        *sorted((ROOT / "src/safe").glob("*.rs")),
+        ROOT / "src/ffi/callbacks.rs",
+    ]:
+        lines = path.read_text().splitlines()
+        line_index = 0
+        while line_index < len(lines):
+            line = lines[line_index]
+            match = re.match(r"^pub struct\s+([A-Za-z0-9_]+)(.*)", line)
+            if not match:
+                line_index += 1
+                continue
+            name = match.group(1)
+            tail = match.group(2)
+            if "(" in tail and re.search(r"\(\s*pub\s+", tail):
+                leaks.append(f"{path.relative_to(ROOT)}:{line_index + 1}:{name}")
+            if "{" not in tail:
+                line_index += 1
+                continue
+            line_index += 1
+            while line_index < len(lines) and not lines[line_index].startswith("}"):
+                if re.match(r"^\s+pub\s+[A-Za-z_]", lines[line_index]):
+                    leaks.append(f"{path.relative_to(ROOT)}:{line_index + 1}:{name}")
+                line_index += 1
+            line_index += 1
+    return leaks
+
+
 def check_naming_firewall(actual_root: set[str]) -> None:
     bad_tier_s = sorted(item for item in TIER_S_ROOT_ITEMS if C_SHAPED_NAME.match(item))
     require(
@@ -302,6 +332,15 @@ def check_naming_firewall(actual_root: set[str]) -> None:
         not bad_root,
         "crate-root C-shaped public items must be classified as Tier R/Tier C: "
         f"{bad_root}",
+    )
+
+
+def check_representation_firewall() -> None:
+    leaks = public_struct_field_leaks()
+    require(
+        not leaks,
+        "Tier S/Tier U public structs must not expose representation fields "
+        "without an explicit inventory exception:\n" + "\n".join(leaks),
     )
 
 
@@ -358,6 +397,7 @@ def main() -> int:
         f"extra={sorted(actual_root - EXPECTED_ROOT_ITEMS)}",
     )
     check_naming_firewall(actual_root)
+    check_representation_firewall()
     for unsafe_callback_item in [
         "CallbackError",
         "DeferredFreeCallbackGuard",
@@ -431,6 +471,7 @@ def main() -> int:
         "Tier I: internal implementation surface, not public API.",
         "Naming firewall: Tier S crate-root items and public safe-facade methods use",
         "`mi_*`, `_mi_*`, malloc-family, and C++ operator spellings",
+        "Representation firewall: Tier S and Tier U structs keep fields private",
         "`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`",
         "`unsafe_callbacks`: Tier U unsafe Rust callback guard namespace.",
         "The raw Rust module path surface is unstable until explicitly versioned.",

@@ -38,6 +38,12 @@ Rust-facing names. `mi_*`, `_mi_*`, malloc-family, and C++ operator spellings
 belong only to Tier R raw compatibility macros/functions or Tier C ABI symbols,
 where they must be classified by this inventory and the symbol manifests.
 
+Representation firewall: Tier S and Tier U structs keep fields private by
+default. Public fields are allowed only for deliberate C ABI/layout or DTO-like
+contracts documented in this inventory; the current Tier S/Tier U Rust-facing
+structs expose invariants through constructors and accessors instead of public
+fields.
+
 ## Safe Rust API
 
 `MiMalloc` implements `core::alloc::GlobalAlloc`. `Allocation` owns one byte

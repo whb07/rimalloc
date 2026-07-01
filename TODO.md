@@ -103,16 +103,23 @@ compatibility surfaces.
 > constructors and accessors unless literal construction is intentionally part
 > of the contract.
 
-- [ ] Audit all Tier S and Tier U public structs for public fields.
-- [ ] For each public field, classify it as one of:
+- [x] Audit all Tier S and Tier U public structs for public fields.
+- [x] For each public field, classify it as one of:
   - intentionally stable DTO-like field;
   - C ABI layout field;
   - accidental representation leak.
-- [ ] Convert accidental public fields to private fields with accessors before
+- [x] Convert accidental public fields to private fields with accessors before
       a stable release.
-- [ ] Add compile-fail examples where external construction must remain
+- [x] Add compile-fail examples where external construction must remain
       impossible.
-- [ ] Document intentionally public fields in `docs/api-inventory.md`.
+- [x] Document intentionally public fields in `docs/api-inventory.md`.
+  - Evidence: the audit found no Tier S/Tier U public representation fields to
+    convert; unit structs and private-field wrappers remain intentional.
+    `scripts/check-api-inventory.py` now fails public fields in `src/safe` and
+    Tier U callback guards unless a future inventory exception is deliberately
+    added. `Allocation` and `StatsSnapshot` include compile-fail examples
+    proving external representation construction remains impossible.
+    `docs/api-inventory.md` documents the representation firewall.
 - Verify: public API snapshot diff plus `cargo test --doc --features std`.
 
 ### Issue: Public enums need deliberate exhaustiveness policy

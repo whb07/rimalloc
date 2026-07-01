@@ -117,6 +117,12 @@ impl StatTotal {
 /// assert!(snapshot.reserved_peak().get() >= snapshot.reserved_current().get());
 /// let _requested = snapshot.requested_bytes_total().get();
 /// ```
+///
+/// External code cannot construct a snapshot from representation fields:
+///
+/// ```rust,compile_fail
+/// let _ = mechanical_mimalloc::StatsSnapshot { raw: unreachable!() };
+/// ```
 #[derive(Clone, Debug)]
 #[must_use]
 pub struct StatsSnapshot {

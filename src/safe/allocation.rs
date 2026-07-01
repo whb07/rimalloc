@@ -64,6 +64,13 @@ use super::{AllocError, LayoutError, ResizeError, ResizeErrorKind, TryAllocError
 /// drop(moved);
 /// ```
 ///
+/// External code cannot construct an owned allocation from representation
+/// fields:
+///
+/// ```rust,compile_fail
+/// let _ = mechanical_mimalloc::Allocation { raw: unreachable!() };
+/// ```
+///
 /// Initialize an uninitialized allocation by writing through
 /// `MaybeUninit<u8>`, then make the initialized transition explicit:
 ///

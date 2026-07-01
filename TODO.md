@@ -150,14 +150,22 @@ compatibility surfaces.
 > string errors, integer status codes, null return conventions, and panics in
 > the safe facade.
 
-- [ ] Audit Tier S fallible functions for consistent `Result<T, E>` usage.
-- [ ] Ensure expected absence uses `Option<T>` or `Option<&T>`.
-- [ ] Ensure safe APIs do not expose C-style error/status integers unless they
+- [x] Audit Tier S fallible functions for consistent `Result<T, E>` usage.
+- [x] Ensure expected absence uses `Option<T>` or `Option<&T>`.
+- [x] Ensure safe APIs do not expose C-style error/status integers unless they
       are wrapped in typed Rust errors.
-- [ ] Ensure fallible constructors are named `try_new`, `parse`, or implemented
+- [x] Ensure fallible constructors are named `try_new`, `parse`, or implemented
       as `TryFrom` where appropriate.
-- [ ] Add `# Errors` rustdoc sections for any missing fallible methods.
-- [ ] Add tests that assert safe failure preserves ownership where applicable.
+- [x] Add `# Errors` rustdoc sections for any missing fallible methods.
+- [x] Add tests that assert safe failure preserves ownership where applicable.
+  - Evidence: the audit found safe fallible APIs consistently return typed
+    `Result<T, E>` values, expected absence uses `Option`, and ordinary safe
+    failure does not use null pointers, integer status codes, or panics.
+    Existing allocation and heap resize tests assert failed resizes preserve
+    ownership. `docs/api-inventory.md` now records the safe error API policy,
+    and `scripts/check-safe-docs.py` checks that policy text in addition to
+    requiring `# Errors` and `# Panics` sections on public safe `Result`
+    methods.
 - Verify: `scripts/check-safe-docs.py` and full Rust tests.
 
 ### Issue: Constructor and conversion patterns should be standardized

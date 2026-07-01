@@ -2789,8 +2789,10 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
             && todo.contains("- [x] Audit every public Tier S/Tier U enum.")
             && todo.contains("all current Tier S enums are growable")
             && todo.contains(
-                "- [ ] Audit Tier S fallible functions for consistent `Result<T, E>` usage."
+                "- [x] Audit Tier S fallible functions for consistent `Result<T, E>` usage."
             )
+            && todo.contains("the safe error API policy")
+            && todo.contains("- [ ] Audit strict scalar, pointer, and typestate wrappers")
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

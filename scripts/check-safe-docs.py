@@ -191,6 +191,17 @@ def main() -> int:
         lines = path.read_text().splitlines()
         missing.extend(missing_unsafe_sections(rel, lines))
 
+    api_inventory = (ROOT / "docs/api-inventory.md").read_text()
+    for phrase in [
+        "## Safe Error API Policy",
+        "Tier S fallible operations return `Result<T, E>`",
+        "Expected absence returns `Option<T>` or `Option<&T>`",
+        "Resize failures preserve ownership through",
+        "Public fallible methods document",
+    ]:
+        if phrase not in api_inventory:
+            missing.append(f"docs/api-inventory.md: missing safe error policy phrase: {phrase}")
+
     if missing:
         print("Public API docs missing required rustdoc coverage:")
         print("\n".join(missing))

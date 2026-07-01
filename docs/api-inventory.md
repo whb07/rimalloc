@@ -130,6 +130,21 @@ There are no current Tier U enums. A future exhaustive public enum requires an
 explicit inventory entry explaining why downstream exhaustive matching is part
 of the contract.
 
+## Safe Error API Policy
+
+Tier S fallible operations return `Result<T, E>` with typed, inspectable error
+types. Expected absence returns `Option<T>` or `Option<&T>` rather than raw
+sentinels. The safe facade does not use null pointers, integer status codes, or
+panics for ordinary failure flow. Resize failures preserve ownership through
+`ResizeError<A>`, which exposes the failure kind and returns the original
+allocation through accessors or `into_parts`.
+
+Fallible constructors use established Rust names: `new`, `zeroed`, and
+`with_*` return `Result` when allocation can fail; raw-code conversion is
+available through `from_raw` and `TryFrom`. Public fallible methods document
+`# Errors` and `# Panics`, and `scripts/check-safe-docs.py` verifies that
+coverage for public safe `Result` methods.
+
 ## Tier U Unsafe Rust Callbacks
 
 Tier U is public unsafe Rust API with Rust SemVer review, but it is not Tier S

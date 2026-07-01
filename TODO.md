@@ -337,13 +337,25 @@ compatibility surfaces.
 > important for a translated allocator where internal module names may look
 > public-worthy but are not stable contracts.
 
-- [ ] Audit each top-level module for accidental public items.
-- [ ] Keep `pub use` only for intended API items.
-- [ ] Prefer `pub(crate)` or private modules for translated implementation
+- [x] Audit each top-level module for accidental public items.
+- [x] Keep `pub use` only for intended API items.
+- [x] Prefer `pub(crate)` or private modules for translated implementation
       details.
-- [ ] Avoid adding crate-root compatibility aliases except where translated
+- [x] Avoid adding crate-root compatibility aliases except where translated
       code requires them.
-- [ ] Document any necessary crate-root aliases as internal compatibility only.
+- [x] Document any necessary crate-root aliases as internal compatibility only.
+  - Evidence: the module audit found the crate root exposing only the intended
+    `raw` Tier R module, `unsafe_callbacks` Tier U namespace, `MiMalloc`, and
+    curated Tier S safe re-exports. `allocator`, `ffi`, `internal`, `platform`,
+    and `safe` remain private modules; `types` remains `pub(crate)`.
+    `src/safe/mod.rs` re-exports only the intended safe facade types, while
+    translated implementation modules stay private or `pub(crate)`. The
+    necessary crate-root compatibility aliases remain documented in `src/lib.rs`
+    as crate-private aliases for translated mimalloc code. `docs/api-inventory.md`
+    classifies implementation modules as Tier I, and `scripts/check-api-inventory.py`
+    now keeps that policy text present while enforcing crate-root inventory,
+    default raw-facade modules, private raw implementation modules, and the
+    Tier S/U API snapshot.
 - Verify: `scripts/check-api-inventory.py` and public API snapshot diff.
 
 ### Issue: Safe API docs should use Rust examples first

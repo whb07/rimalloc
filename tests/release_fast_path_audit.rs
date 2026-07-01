@@ -2808,7 +2808,9 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
                 "- [x] Update the Rust style guide with the required safety-comment format."
             )
             && todo.contains("21 evidence entries covering all 10 operation IDs")
-            && todo.contains("- [ ] Audit each top-level module for accidental public items.")
+            && todo.contains("- [x] Audit each top-level module for accidental public items.")
+            && todo.contains("default raw-facade modules")
+            && todo.contains("- [ ] Audit README and rustdoc example order.")
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

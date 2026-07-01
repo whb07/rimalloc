@@ -518,6 +518,7 @@ def main() -> int:
         "Tier R: raw Rust facade, unsafe and unstable unless explicitly versioned.",
         "Tier C: exported C ABI and raw layout compatibility surface.",
         "Tier I: internal implementation surface, not public API.",
+        "Implementation modules such as allocation, page, heap, arena, OS, primitive,",
         "Naming firewall: Tier S crate-root items and public safe-facade methods use",
         "`mi_*`, `_mi_*`, malloc-family, and C++ operator spellings",
         "Representation firewall: Tier S and Tier U structs keep fields private",

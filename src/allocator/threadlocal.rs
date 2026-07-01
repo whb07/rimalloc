@@ -218,10 +218,10 @@ fn mi_key_version(key: usize) -> usize {
 
 #[inline]
 fn mi_key_create(index: usize, version: usize) -> mi_thread_local_t {
-    crate::mi_debug_assert!(version != 0 && version <= MI_TLS_VERSION_MAX);
-    crate::mi_debug_assert!(index <= MI_TLS_IDX_MAX);
+    crate::internal::mi_debug_assert!(version != 0 && version <= MI_TLS_VERSION_MAX);
+    crate::internal::mi_debug_assert!(index <= MI_TLS_IDX_MAX);
     let key = (version << MI_TLS_IDX_BITS) | index;
-    crate::mi_debug_assert!(key != 0);
+    crate::internal::mi_debug_assert!(key != 0);
     key
 }
 
@@ -271,8 +271,8 @@ fn mi_thread_local_set_expand(key: mi_thread_local_t, val: *mut core::ffi::c_voi
         Some(tls) => tls,
         None => return false,
     };
-    crate::mi_debug_assert!(tls == thread_locals_ptr());
-    crate::mi_debug_assert!(idx < unsafe { (*tls).count });
+    crate::internal::mi_debug_assert!(tls == thread_locals_ptr());
+    crate::internal::mi_debug_assert!(idx < unsafe { (*tls).count });
     unsafe {
         let slots = tls_slots(tls);
         (*slots.add(idx)).value = val;
@@ -288,7 +288,7 @@ impl ThreadLocalKeepSet {
     /// `keep_set` must be valid for a `bool` write.
     #[inline(always)]
     unsafe fn from_raw(keep_set: *mut bool) -> Self {
-        crate::mi_assert_internal!(!keep_set.is_null());
+        crate::internal::mi_assert_internal!(!keep_set.is_null());
         Self(unsafe { ptr::NonNull::new_unchecked(keep_set) })
     }
 
@@ -428,8 +428,8 @@ pub extern "C" fn _mi_thread_local_set(
     val: *mut core::ffi::c_void,
 ) -> bool {
     let tls = thread_locals_ptr();
-    crate::mi_debug_assert!(!tls.is_null());
-    crate::mi_debug_assert!(key != 0);
+    crate::internal::mi_debug_assert!(!tls.is_null());
+    crate::internal::mi_debug_assert!(key != 0);
     let idx = mi_key_index(key);
     unsafe {
         if idx < (*tls).count {
@@ -450,8 +450,8 @@ static MI_THREAD_LOCAL_SET_KEEP: extern "C" fn(mi_thread_local_t, *mut core::ffi
 #[inline(never)]
 pub extern "C" fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut core::ffi::c_void {
     let tls = thread_locals_ptr();
-    crate::mi_debug_assert!(!tls.is_null());
-    crate::mi_debug_assert!(key != 0);
+    crate::internal::mi_debug_assert!(!tls.is_null());
+    crate::internal::mi_debug_assert!(key != 0);
     let idx = mi_key_index(key);
     unsafe {
         if idx < (*tls).count {

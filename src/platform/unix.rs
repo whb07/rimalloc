@@ -652,9 +652,11 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc(
     addr: *mut *mut c_void,
 ) -> c_int {
     unsafe {
-        crate::mi_assert_internal!(size > 0 && size.is_multiple_of(_mi_os_page_size_typed().get()));
-        crate::mi_assert_internal!(commit || !allow_large);
-        crate::mi_assert_internal!(try_alignment > 0);
+        crate::internal::mi_assert_internal!(
+            size > 0 && size.is_multiple_of(_mi_os_page_size_typed().get())
+        );
+        crate::internal::mi_assert_internal!(commit || !allow_large);
+        crate::internal::mi_assert_internal!(try_alignment > 0);
         if !is_zero.is_null() {
             *is_zero = true;
         }
@@ -1264,7 +1266,7 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     unsafe {
-        crate::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
+        crate::internal::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
         let _ = pthread_key_create(&raw mut _mi_heap_default_key, Some(mi_pthread_done));
     }
 }

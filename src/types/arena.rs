@@ -71,7 +71,7 @@ impl SliceRange {
 
     #[inline(always)]
     pub(crate) fn start_u32(self) -> u32 {
-        crate::mi_assert_internal!(u32::try_from(self.start_usize()).is_ok());
+        crate::internal::mi_assert_internal!(u32::try_from(self.start_usize()).is_ok());
         self.start_usize() as u32
     }
 
@@ -97,7 +97,7 @@ impl SliceRange {
     pub(crate) fn end(self) -> SliceIndex {
         self.checked_add_offset(self.count_usize())
             .unwrap_or_else(|_| {
-                crate::mi_assert_internal!(false);
+                crate::internal::mi_assert_internal!(false);
                 SliceIndex(0)
             })
     }

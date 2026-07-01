@@ -93,7 +93,7 @@ impl RequestedSize {
     /// A `debug_assert!` catches violations in debug builds.
     #[inline(always)]
     pub(crate) fn padded_unchecked(self) -> PaddedSize {
-        crate::mi_debug_assert!(
+        crate::internal::mi_debug_assert!(
             self.0.checked_add(crate::types::MI_PADDING_SIZE).is_some(),
             "requested size + padding must not overflow"
         );
@@ -264,7 +264,7 @@ impl BlockSize {
     /// call site, the caller must validate before constructing the `BlockSize`.
     #[inline(always)]
     pub(crate) fn usable(self) -> UsableSize {
-        crate::mi_debug_assert!(
+        crate::internal::mi_debug_assert!(
             self.get() >= crate::types::MI_PADDING_SIZE,
             "Block size must be at least as large as padding size"
         );
@@ -416,7 +416,7 @@ impl PageQueueCount {
 
     #[inline(always)]
     pub(crate) fn decrement(self) -> Self {
-        crate::mi_debug_assert!(self.0 > 0);
+        crate::internal::mi_debug_assert!(self.0 > 0);
         Self(self.0 - 1)
     }
 
@@ -517,13 +517,13 @@ impl UsedBlockCount {
 
     #[inline(always)]
     pub(crate) fn decrement(self) -> Self {
-        crate::mi_debug_assert!(self.0 > 0);
+        crate::internal::mi_debug_assert!(self.0 > 0);
         Self(self.0 - 1)
     }
 
     #[inline(always)]
     pub(crate) fn subtract(self, count: u16) -> Self {
-        crate::mi_debug_assert!(self.0 >= count);
+        crate::internal::mi_debug_assert!(self.0 >= count);
         Self(self.0 - count)
     }
 }
@@ -626,7 +626,7 @@ impl RetireExpire {
 
     #[inline(always)]
     pub(crate) fn decrement(self) -> Self {
-        crate::mi_debug_assert!(self.0 > 0);
+        crate::internal::mi_debug_assert!(self.0 > 0);
         Self(self.0 - 1)
     }
 }

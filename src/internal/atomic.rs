@@ -170,7 +170,6 @@ pub unsafe fn mi_atomic_do_once_enter(
         .map(|_once| mi_atomic_once_scope_t { _once })
 }
 
-#[macro_export]
 macro_rules! mi_atomic_guard {
     ($guard:expr, $body:block) => {{
         let _mi_guard_ptr: *mut $crate::atomic::mi_atomic_guard_t = $guard;
@@ -182,20 +181,7 @@ macro_rules! mi_atomic_guard {
         }
     }};
 }
-
-#[macro_export]
-macro_rules! mi_atomic_do_once {
-    ($body:block) => {{
-        static _MI_ONCE: $crate::atomic::mi_atomic_once_t = $crate::atomic::mi_atomic_once_s::new();
-        let _mi_once_ptr = core::ptr::addr_of!(_MI_ONCE).cast_mut();
-        if let Some(_mi_once_scope) =
-            unsafe { $crate::atomic::mi_atomic_do_once_enter(_mi_once_ptr) }
-        {
-            let _mi_once_scope = _mi_once_scope;
-            $body
-        }
-    }};
-}
+pub(crate) use mi_atomic_guard;
 
 #[inline]
 // ORDERING[AUDIT:atomic-memory-order-map]: preserve the C mi_memory_order_e

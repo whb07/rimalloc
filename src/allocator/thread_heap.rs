@@ -160,7 +160,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_area_init(
 
 unsafe fn mi_heap_area_init_typed(area: *mut mi_heap_area_t, heap: HeapPtr, page: PagePtr) {
     unsafe {
-        crate::MI_UNUSED!(heap);
+        crate::internal::MI_UNUSED(&heap);
         let page = page.as_ptr();
         let full_bsize =
             crate::core_types::FullBlockSize::from_block_size(mi_page_block_size_typed(page));
@@ -181,7 +181,7 @@ unsafe fn mi_heap_area_init_typed(area: *mut mi_heap_area_t, heap: HeapPtr, page
 
 unsafe fn mi_get_fast_divisor(divisor: usize, magic: *mut u64, shift: *mut usize) {
     unsafe {
-        crate::mi_assert_internal!(divisor > 0 && u32::try_from(divisor).is_ok());
+        crate::internal::mi_assert_internal!(divisor > 0 && u32::try_from(divisor).is_ok());
         *shift = MI_SIZE_BITS - mi_clz(divisor - 1);
         *magic = (((1u64 << 32) * ((1u64 << *shift) - divisor as u64)) / divisor as u64) + 1;
     }
@@ -193,7 +193,7 @@ unsafe fn mi_get_fast_divisor(divisor: usize, magic: *mut u64, shift: *mut usize
 /// used to derive `n`'s quotient.
 #[inline]
 pub unsafe fn mi_fast_divide(n: usize, magic: u64, shift: usize) -> usize {
-    crate::mi_assert_internal!(u32::try_from(n).is_ok());
+    crate::internal::mi_assert_internal!(u32::try_from(n).is_ok());
     let hi = ((n as u64) * magic) >> 32;
     ((hi + n as u64) >> shift) as usize
 }
@@ -225,15 +225,15 @@ unsafe fn mi_theap_area_visit_blocks_typed(
     arg: BlockVisitCallbackArg,
 ) -> bool {
     unsafe {
-        crate::mi_assert_internal!(!area.is_null());
+        crate::internal::mi_assert_internal!(!area.is_null());
         if area.is_null() {
             return true;
         }
         let page = page.as_ptr();
-        crate::mi_assert_internal!(mi_page_theap(page) == theap.as_ptr());
+        crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.as_ptr());
 
         _mi_page_free_collect(page, true);
-        crate::mi_assert_internal!((*page).local_free.is_null());
+        crate::internal::mi_assert_internal!((*page).local_free.is_null());
         let used = crate::page::mi_page_used_count(page);
         if used.get() == 0 {
             return true;
@@ -247,10 +247,10 @@ unsafe fn mi_theap_area_visit_blocks_typed(
 
         let capacity = crate::page::mi_page_capacity_count(page);
         if capacity.get() == 1 {
-            crate::mi_assert_internal!(used.get() == 1 && (*page).free.is_null());
+            crate::internal::mi_assert_internal!(used.get() == 1 && (*page).free.is_null());
             return visitor.invoke(heap, area, pstart.cast::<c_void>(), ubsize.get(), arg);
         }
-        crate::mi_assert_internal!(u32::try_from(bsize).is_ok());
+        crate::internal::mi_assert_internal!(u32::try_from(bsize).is_ok());
 
         if used.get() == capacity.get() {
             let mut block = pstart;
@@ -279,21 +279,21 @@ unsafe fn mi_theap_area_visit_blocks_typed(
         while !free.is_null() {
             free_count += 1;
             let block = free;
-            crate::mi_assert_internal!(
+            crate::internal::mi_assert_internal!(
                 block.cast::<u8>() >= pstart && block.cast::<u8>() < pstart.add(psize)
             );
             let offset = block.cast::<u8>() as usize - pstart as usize;
-            crate::mi_assert_internal!(offset.is_multiple_of(bsize));
-            crate::mi_assert_internal!(u32::try_from(offset).is_ok());
+            crate::internal::mi_assert_internal!(offset.is_multiple_of(bsize));
+            crate::internal::mi_assert_internal!(u32::try_from(offset).is_ok());
             let blockidx = mi_fast_divide(offset, magic, shift);
-            crate::mi_assert_internal!(blockidx == offset / bsize);
-            crate::mi_assert_internal!(blockidx < MI_MAX_BLOCKS);
+            crate::internal::mi_assert_internal!(blockidx == offset / bsize);
+            crate::internal::mi_assert_internal!(blockidx < MI_MAX_BLOCKS);
             let bitidx = blockidx / MI_INTPTR_BITS;
             let bit = blockidx - (bitidx * MI_INTPTR_BITS);
             free_map[bitidx] |= 1usize << bit;
             free = crate::internal::mi_block_next(page, block);
         }
-        crate::mi_assert_internal!(capacity.as_usize() == free_count + used.as_usize());
+        crate::internal::mi_assert_internal!(capacity.as_usize() == free_count + used.as_usize());
 
         let mut block = pstart;
         for mask in free_map.iter().take(bmapsize) {
@@ -342,7 +342,7 @@ unsafe extern "C" fn mi_theap_visit_areas_page(
     arg: *mut c_void,
 ) -> bool {
     unsafe {
-        crate::MI_UNUSED!(pq);
+        crate::internal::MI_UNUSED(&pq);
         let theap = ThreadHeapPtr::new_unchecked(theap);
         let page = PagePtr::new_unchecked(page);
         let visitor = TheapAreaVisitCallback::from_raw_slot(vfun);
@@ -357,7 +357,7 @@ unsafe fn mi_theap_visit_areas_page_typed(
     arg: *mut c_void,
 ) -> bool {
     unsafe {
-        crate::mi_assert_internal!(mi_page_theap(page.as_ptr()) == theap.as_ptr());
+        crate::internal::mi_assert_internal!(mi_page_theap(page.as_ptr()) == theap.as_ptr());
         let page = page.as_ptr();
         let mut xarea = mi_theap_area_ex_t {
             page,
@@ -498,7 +498,7 @@ unsafe fn mi_theap_visit_pages_typed(
             while let Some(current) = page {
                 let current_ptr = current.as_ptr();
                 let next = PagePtr::new((*current_ptr).next);
-                crate::mi_assert_internal!(mi_page_theap(current_ptr) == theap_ptr);
+                crate::internal::mi_assert_internal!(mi_page_theap(current_ptr) == theap_ptr);
                 if crate::internal::MI_DEBUG > 1 {
                     count += 1;
                 }
@@ -511,7 +511,7 @@ unsafe fn mi_theap_visit_pages_typed(
             }
         }
 
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             !include_full || crate::internal::MI_DEBUG <= 1 || count == total
         );
         true
@@ -530,9 +530,9 @@ pub unsafe extern "C" fn mi_theap_page_is_valid(
     arg2: *mut c_void,
 ) -> bool {
     unsafe {
-        crate::MI_UNUSED!(arg1);
-        crate::MI_UNUSED!(arg2);
-        crate::MI_UNUSED!(pq);
+        crate::internal::MI_UNUSED(&arg1);
+        crate::internal::MI_UNUSED(&arg2);
+        crate::internal::MI_UNUSED(&pq);
         let theap = ThreadHeapPtr::new_unchecked(theap);
         let page = PagePtr::new_unchecked(page);
         mi_theap_page_is_valid_typed(theap, page)
@@ -542,8 +542,8 @@ pub unsafe extern "C" fn mi_theap_page_is_valid(
 unsafe fn mi_theap_page_is_valid_typed(theap: ThreadHeapPtr, page: PagePtr) -> bool {
     unsafe {
         let page = page.as_ptr();
-        crate::mi_assert_internal!(mi_page_theap(page) == theap.as_ptr());
-        crate::mi_assert_expensive!(_mi_page_is_valid(page));
+        crate::internal::mi_assert_internal!(mi_page_theap(page) == theap.as_ptr());
+        crate::internal::mi_assert_expensive!(_mi_page_is_valid(page));
         true
     }
 }
@@ -560,7 +560,7 @@ pub unsafe extern "C" fn mi_theap_page_collect(
     arg2: *mut c_void,
 ) -> bool {
     unsafe {
-        crate::MI_UNUSED!(arg2);
+        crate::internal::MI_UNUSED(&arg2);
         let theap = ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap));
         let queue = PageQueuePtr::new_unchecked(pq);
         let page = PagePtr::new_unchecked(page);
@@ -576,7 +576,7 @@ unsafe fn mi_theap_page_collect_typed(
     collect: mi_collect_t,
 ) -> bool {
     unsafe {
-        crate::mi_assert_internal!(mi_theap_page_is_valid_typed(theap.ptr(), page));
+        crate::internal::mi_assert_internal!(mi_theap_page_is_valid_typed(theap.ptr(), page));
 
         let local_page = crate::core_types::LocalPage::new_unchecked(page);
         let page = local_page.page().as_ptr();
@@ -586,10 +586,10 @@ unsafe fn mi_theap_page_collect_typed(
         if mi_page_all_free(page) {
             if crate::page::mi_page_is_in_full(page) {
                 let full_page = crate::core_types::FullPage::new_unchecked(local_page.page());
-                crate::mi_assert_internal!(full_page.mark_all_free().is_some());
+                crate::internal::mi_assert_internal!(full_page.mark_all_free().is_some());
             } else {
                 let active_page = crate::core_types::ActivePage::new_unchecked(local_page.page());
-                crate::mi_assert_internal!(active_page.mark_all_free().is_some());
+                crate::internal::mi_assert_internal!(active_page.mark_all_free().is_some());
             }
             if collect as i32 >= mi_collect_t::MI_FORCE as i32
                 || crate::page::mi_page_retire_expire(page).is_zero()
@@ -615,7 +615,7 @@ unsafe fn mi_theap_page_collect_typed(
 pub unsafe fn mi_theap_is_valid(theap: *mut mi_theap_t) -> bool {
     unsafe {
         let Some(theap) = ThreadHeapPtr::new(theap) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             return false;
         };
         mi_theap_is_valid_typed(theap)
@@ -650,7 +650,7 @@ unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
                     crate::core_types::NormalPageQueue::new_unchecked(queue),
                 )
             };
-            crate::mi_assert_internal!(is_valid);
+            crate::internal::mi_assert_internal!(is_valid);
         }
         true
     }
@@ -663,7 +663,7 @@ unsafe fn mi_theap_is_valid_typed(theap: ThreadHeapPtr) -> bool {
 pub unsafe fn mi_theap_merge_stats(theap: *mut mi_theap_t) {
     unsafe {
         let Some(theap) = ThreadHeapPtr::new(theap) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             return;
         };
         mi_theap_merge_stats_typed(theap);
@@ -673,7 +673,7 @@ pub unsafe fn mi_theap_merge_stats(theap: *mut mi_theap_t) {
 unsafe fn mi_theap_merge_stats_typed(theap: ThreadHeapPtr) {
     unsafe {
         let theap_raw = theap.as_ptr();
-        crate::mi_assert_internal!(mi_theap_is_initialized(theap_raw));
+        crate::internal::mi_assert_internal!(mi_theap_is_initialized(theap_raw));
         let heap = HeapPtr::new_unchecked(_mi_theap_heap(theap_raw).cast::<mi_heap_t>());
         _mi_stats_merge_into(heap.stats(), theap.stats());
     }
@@ -695,7 +695,7 @@ unsafe fn mi_theap_collect_ex_typed(theap: ThreadHeapLocal, mut collect: mi_coll
     unsafe {
         let theap_ptr = theap.ptr();
         let theap = theap_ptr.as_ptr();
-        crate::mi_assert_expensive!(mi_theap_is_valid(theap));
+        crate::internal::mi_assert_expensive!(mi_theap_is_valid(theap));
 
         let force = collect as i32 >= mi_collect_t::MI_FORCE as i32;
         _mi_deferred_free(theap, force);
@@ -806,7 +806,7 @@ pub unsafe extern "C" fn mi_theap_get_default() -> *mut mi_theap_t {
         if !mi_theap_is_initialized(theap) {
             crate::init::mi_thread_init();
             theap = _mi_theap_default();
-            crate::mi_assert_internal!(mi_theap_is_initialized(theap));
+            crate::internal::mi_assert_internal!(mi_theap_is_initialized(theap));
         }
         theap
     }
@@ -844,9 +844,9 @@ pub(crate) unsafe extern "C" fn _mi_theap_init(
     heap: *mut mi_heap_t,
     tld: *mut mi_tld_t,
 ) {
-    crate::mi_assert_internal!(!theap.is_null());
-    crate::mi_assert_internal!(!heap.is_null());
-    crate::mi_assert_internal!(!tld.is_null());
+    crate::internal::mi_assert_internal!(!theap.is_null());
+    crate::internal::mi_assert_internal!(!heap.is_null());
+    crate::internal::mi_assert_internal!(!tld.is_null());
 
     let Some(theap) = ThreadHeapPtr::new(theap) else {
         return;
@@ -878,7 +878,7 @@ unsafe fn _mi_theap_init_typed(theap: ThreadHeapPtr, heap: HeapPtr, tld: TldPtr)
         theap.refcount_cell().store_seq_cst(1);
         theap.set_tld(Some(tld));
         theap.set_heap(Some(heap));
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             (*theap_raw).stats.size == size_of::<crate::stats::mi_stats_t>()
         );
 
@@ -933,8 +933,8 @@ pub(crate) unsafe extern "C" fn _mi_theap_create(
     heap: *mut mi_heap_t,
     tld: *mut mi_tld_t,
 ) -> *mut mi_theap_t {
-    crate::mi_assert_internal!(!tld.is_null());
-    crate::mi_assert_internal!(!heap.is_null());
+    crate::internal::mi_assert_internal!(!tld.is_null());
+    crate::internal::mi_assert_internal!(!heap.is_null());
 
     let Some(heap) = HeapPtr::new(heap) else {
         return ptr::null_mut();
@@ -979,7 +979,7 @@ unsafe fn _mi_theap_create_typed(heap: HeapPtr, tld: TldPtr) -> Option<ThreadHea
                     crate::core_types::MemIdView::External(external) => external.size.get(),
                     _ => 0,
                 };
-                crate::mi_assert_internal!(allocated_size >= size);
+                crate::internal::mi_assert_internal!(allocated_size >= size);
             }
             theap
         };
@@ -1059,7 +1059,9 @@ unsafe fn mi_theap_free_mem_typed(
         match memid {
             crate::core_types::MemIdView::HeapMain(_) => {
                 let theap = raw;
-                crate::mi_assert_internal!(_mi_is_heap_main(_mi_theap_heap(theap).cast_const()));
+                crate::internal::mi_assert_internal!(_mi_is_heap_main(
+                    _mi_theap_heap(theap).cast_const()
+                ));
                 mi_free(theap.cast());
             }
             crate::core_types::MemIdView::Meta(_) => {
@@ -1142,7 +1144,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_free(
     acquire_heap_theaps_lock: bool,
     acquire_tld_theaps_lock: bool,
 ) -> bool {
-    crate::mi_assert!(!theap.is_null());
+    crate::internal::mi_assert!(!theap.is_null());
     let Some(theap) = ThreadHeapPtr::new(theap) else {
         return true;
     };
@@ -1183,7 +1185,7 @@ unsafe fn _mi_theap_free_typed(
         if !(*theap).hprev.is_null() {
             (*(*theap).hprev).hnext = (*theap).hnext;
         } else {
-            crate::mi_assert_internal!((*heap).theaps == theap);
+            crate::internal::mi_assert_internal!((*heap).theaps == theap);
             (*heap).theaps = (*theap).hnext;
         }
         (*theap).hnext = ptr::null_mut();
@@ -1201,7 +1203,7 @@ unsafe fn _mi_theap_free_typed(
         if !(*theap).tprev.is_null() {
             (*(*theap).tprev).tnext = (*theap).tnext;
         } else {
-            crate::mi_assert_internal!((*(*theap).tld).theaps == theap);
+            crate::internal::mi_assert_internal!((*(*theap).tld).theaps == theap);
             (*(*theap).tld).theaps = (*theap).tnext;
         }
         (*theap).tnext = ptr::null_mut();
@@ -1242,15 +1244,15 @@ unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: 
             ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return,
         };
 
-        crate::mi_assert!(!theap_raw.is_null());
-        crate::mi_assert!(mi_theap_is_initialized(theap_raw));
-        crate::mi_assert_expensive!(mi_theap_is_valid(theap_raw));
+        crate::internal::mi_assert!(!theap_raw.is_null());
+        crate::internal::mi_assert!(mi_theap_is_initialized(theap_raw));
+        crate::internal::mi_assert_expensive!(mi_theap_is_valid(theap_raw));
         if !mi_theap_is_initialized(theap_raw) {
             return;
         }
 
         _mi_theap_collect_abandon(theap_raw);
-        crate::mi_assert_internal!((*theap_raw).page_count == 0);
+        crate::internal::mi_assert_internal!((*theap_raw).page_count == 0);
         _mi_theap_free(theap_raw, true, acquire_tld_theaps_lock);
     }
 }

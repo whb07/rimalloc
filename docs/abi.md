@@ -308,13 +308,13 @@ not safe Rust wrappers.
 
 Macro production policy is intentionally conservative. Typed allocation macros
 and header override macros are retained as opt-in Tier R compatibility surface
-for this release through `c-header-macros`. Internal compatibility macros are
-not a stable ABI or recommended integration surface; they are scheduled for
-privatization/removal unless a specific macro needs to remain exported for
-downstream expansion, translated C parity, or measured hot-path codegen.
+for this release through `c-header-macros`. Internal helper macros are not
+root-exported; they stay crate-local unless a future macro is deliberately
+classified as Tier R C-header compatibility surface.
 
 `scripts/check-api-inventory.py` discovers every `#[macro_export] macro_rules!`
-item and fails if it is not classified in `docs/api-inventory.md`.
+item and fails if it is not one of the documented Tier R C-header compatibility
+macros from the expected FFI source files.
 
 ## Naming Rules
 

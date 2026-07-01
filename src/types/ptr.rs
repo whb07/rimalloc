@@ -133,7 +133,7 @@ impl PagePtr {
     pub(crate) unsafe fn block_size(self) -> BlockSize {
         let raw = self.as_ptr();
         let block_size = unsafe { ptr::read(ptr::addr_of!((*raw).block_size)) };
-        crate::mi_assert_internal!(block_size > 0);
+        crate::internal::mi_assert_internal!(block_size > 0);
         // SAFETY: asserted above; initialized pages keep block_size non-zero.
         unsafe { BlockSize::new_unchecked(block_size) }
     }
@@ -171,8 +171,8 @@ impl PagePtr {
         let used = unsafe { self.used() };
         let reserved = unsafe { self.reserved() };
         let capacity = unsafe { ptr::read(ptr::addr_of!((*raw).capacity)) };
-        crate::mi_assert_internal!(used.get() <= capacity);
-        crate::mi_assert_internal!(capacity <= reserved.get());
+        crate::internal::mi_assert_internal!(used.get() <= capacity);
+        crate::internal::mi_assert_internal!(capacity <= reserved.get());
         PageCapacity::new(used, capacity, reserved)
             .unwrap_or_else(|| unsafe { PageCapacity::new_unchecked(capacity) })
     }
@@ -624,7 +624,7 @@ impl ThreadHeapPtr {
         let raw = self.as_ptr();
         let start = start.as_usize();
         let end = end.as_usize();
-        crate::mi_assert_internal!(start <= end);
+        crate::internal::mi_assert_internal!(start <= end);
         let page = page.map(PagePtr::as_ptr).unwrap_or(ptr::null_mut());
         unsafe {
             let pages = ptr::addr_of_mut!((*raw).pages_free_direct).cast::<*mut mi_page_t>();
@@ -850,7 +850,7 @@ impl ArenaPtr {
     pub(crate) unsafe fn index(self) -> ArenaIndex {
         let raw = self.as_ptr();
         let index = unsafe { ptr::read(ptr::addr_of!((*raw).arena_idx)) };
-        crate::mi_assert_internal!(index < crate::types::MI_MAX_ARENAS);
+        crate::internal::mi_assert_internal!(index < crate::types::MI_MAX_ARENAS);
         unsafe { ArenaIndex::new_unchecked(index as u16) }
     }
 
@@ -869,9 +869,9 @@ impl ArenaPtr {
     pub(crate) unsafe fn slice_count(self) -> SliceCount {
         let raw = self.as_ptr();
         let count = unsafe { ptr::read(ptr::addr_of!((*raw).slice_count)) };
-        crate::mi_assert_internal!(count != 0);
+        crate::internal::mi_assert_internal!(count != 0);
         SliceCount::from_usize(count).unwrap_or_else(|| {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             unsafe { SliceCount::new_unchecked(1) }
         })
     }

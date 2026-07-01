@@ -343,7 +343,7 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     unsafe {
-        crate::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
+        crate::internal::mi_assert_internal!(_mi_heap_default_key == PTHREAD_KEY_INVALID);
         #[cfg(target_os = "emscripten")]
         {
             let mut key = PTHREAD_KEY_INVALID;

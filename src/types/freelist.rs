@@ -86,7 +86,7 @@ impl ThreadFreeWord {
                 // PROVENANCE[AUDIT:packed-thread-free-word]: expose only the
                 // block address bits needed for the xthread_free packed word.
                 let val = ptr_exposed_addr(ptr.as_ptr());
-                crate::mi_assert_internal!((val & Self::OWNED_BIT) == 0);
+                crate::internal::mi_assert_internal!((val & Self::OWNED_BIT) == 0);
                 crate::provenance::remember_address(val, ptr.as_ptr());
                 val
             }

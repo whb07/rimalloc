@@ -828,8 +828,8 @@ pub unsafe extern "C" fn _aligned_msize(
     alignment: usize,
     offset: usize,
 ) -> usize {
-    crate::MI_UNUSED!(alignment);
-    crate::MI_UNUSED!(offset);
+    crate::internal::MI_UNUSED(&alignment);
+    crate::internal::MI_UNUSED(&offset);
     unsafe { crate::mimalloc::mi_malloc_size(block) }
 }
 
@@ -981,7 +981,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array_sized_aligned(p: *mut c_void, n: us
     unsafe(export_name = "_ZdlPvRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_nothrow(p: *mut c_void, tag: mi_nothrow_t) {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
@@ -993,7 +993,7 @@ pub unsafe extern "C" fn mi_cxx_delete_nothrow(p: *mut c_void, tag: mi_nothrow_t
     unsafe(export_name = "_ZdaPvRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_delete_array_nothrow(p: *mut c_void, tag: mi_nothrow_t) {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_free(p) }
 }
 
@@ -1009,7 +1009,7 @@ pub unsafe extern "C" fn mi_cxx_delete_aligned_nothrow(
     al: usize,
     tag: mi_nothrow_t,
 ) {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
@@ -1025,7 +1025,7 @@ pub unsafe extern "C" fn mi_cxx_delete_array_aligned_nothrow(
     al: usize,
     tag: mi_nothrow_t,
 ) {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
@@ -1082,7 +1082,7 @@ pub unsafe extern "C" fn mi_cxx_new_array_64(n: usize) -> *mut c_void {
     unsafe(export_name = "_ZnwmRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
@@ -1101,7 +1101,7 @@ pub unsafe extern "C" fn mi_cxx_new_64_nothrow(n: usize, tag: mi_nothrow_t) -> *
     unsafe(export_name = "_ZnamRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_array_64_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
@@ -1160,7 +1160,7 @@ pub unsafe extern "C" fn mi_cxx_new_64_aligned_nothrow(
     al: usize,
     tag: mi_nothrow_t,
 ) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
@@ -1183,7 +1183,7 @@ pub unsafe extern "C" fn mi_cxx_new_array_64_aligned_nothrow(
     al: usize,
     tag: mi_nothrow_t,
 ) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
@@ -1229,7 +1229,7 @@ pub unsafe extern "C" fn mi_cxx_new_array_32(n: usize) -> *mut c_void {
     unsafe(export_name = "_ZnwjRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_32_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
@@ -1245,7 +1245,7 @@ pub unsafe extern "C" fn mi_cxx_new_32_nothrow(n: usize, tag: mi_nothrow_t) -> *
     unsafe(export_name = "_ZnajRKSt9nothrow_t")
 )]
 pub unsafe extern "C" fn mi_cxx_new_array_32_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
@@ -1295,7 +1295,7 @@ pub unsafe extern "C" fn mi_cxx_new_32_aligned_nothrow(
     al: usize,
     tag: mi_nothrow_t,
 ) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
@@ -1315,7 +1315,7 @@ pub unsafe extern "C" fn mi_cxx_new_array_32_aligned_nothrow(
     al: usize,
     tag: mi_nothrow_t,
 ) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
@@ -1323,7 +1323,7 @@ pub unsafe extern "C" fn mi_cxx_new_array_32_aligned_nothrow(
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_new_array_nothrow(n: usize, tag: mi_nothrow_t) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_nothrow(n) }
 }
 
@@ -1366,7 +1366,7 @@ pub unsafe fn mi_operator_delete_array_sized_aligned(p: *mut c_void, n: usize, a
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[inline]
 pub unsafe fn mi_operator_delete_aligned_nothrow(p: *mut c_void, al: usize, tag: mi_nothrow_t) {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
@@ -1378,7 +1378,7 @@ pub unsafe fn mi_operator_delete_array_aligned_nothrow(
     al: usize,
     tag: mi_nothrow_t,
 ) {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_free_aligned(p, al) }
 }
 
@@ -1404,7 +1404,7 @@ pub unsafe fn mi_operator_new_aligned_nothrow(
     al: usize,
     tag: mi_nothrow_t,
 ) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 
@@ -1416,7 +1416,7 @@ pub unsafe fn mi_operator_new_array_aligned_nothrow(
     al: usize,
     tag: mi_nothrow_t,
 ) -> *mut c_void {
-    crate::MI_UNUSED!(tag);
+    crate::internal::MI_UNUSED(&tag);
     unsafe { crate::mimalloc::mi_new_aligned_nothrow(n, al) }
 }
 

@@ -256,11 +256,9 @@ Exported macros are not Tier S safe Rust API. The production decision is:
   unsafe raw-facade conveniences, not recommended safe Rust allocation APIs.
 - Keep `tier-r-header-override` macros as Tier R C/C++ header compatibility
   macros for this release behind the `c-header-macros` feature.
-- Treat `internal-compatibility` macros as temporary compatibility exports.
-  Before a stable release, each macro in that bucket must be made
-  crate-private, removed, or explicitly retained with downstream expansion,
-  translated parity, or hot-path evidence. New internal macros must not use
-  `#[macro_export]` unless they are first classified here.
+- Keep allocator-internal helper macros crate-local. New root-exported macros
+  must be documented Tier R C-header compatibility macros and must be added to
+  the inventory check before they can use `#[macro_export]`.
 
 ### Typed Allocation Macros
 
@@ -344,66 +342,16 @@ C++ operator shim macros:
 - `operatordelete_aligned_nothrow!`
 - `operatordelete_array_aligned_nothrow!`
 
-### Internal Compatibility Macro Exports
+### Internal Helper Macros
 
-Macro tier: `internal-compatibility`
-
-These `#[macro_export]` macros remain crate-root public because translated code
-uses upstream-style macro expansion and some downstream macro expansion tests
-exercise the same crate-root behavior. They are compatibility exports, not a
-recommended integration surface; new internal macros should not be exported
-unless downstream expansion or translated C-header parity requires it.
-
-The forwarding macros `MI_FORWARD1!`, `MI_FORWARD3!`, and `MI_FORWARD02!`
-were unused and have been removed from the crate-root macro surface. The raw
-Darwin interpose helper `MI_INTERPOSE_FUN!` is now file-local in
-`src/raw/macros.rs`, and the unused `MI_INTERPOSE_MI!` wrapper was removed.
-The stats field/declaration helpers `MI_STAT_COUNT!`, `MI_STAT_COUNTER!`,
-`MI_STAT_FIELDS!`, and `mi_stats_t_decl!` were removed from the Rust macro
-surface; internal stats paths now initialize `mi_stats_t` through a private
-function and downstream C parity remains covered by the vendored C headers.
-
-Forwarding and interposition macros:
-
-- None remain exported.
-
-Initialization, assertion, and utility macros:
-
-- `MI_INIT4!`
-- `MI_INIT5!`
-- `MI_INIT6!`
-- `MI_INIT8!`
-- `MI_INIT16!`
-- `MI_INIT32!`
-- `MI_INIT64!`
-- `MI_INIT74!`
-- `MI_INIT128!`
-- `MI_INIT256!`
-- `MI_UNUSED!`
-- `MI_UNUSED_RELEASE!`
-- `_mi_memzero_var!`
-- `mi_assert!`
-- `mi_assert_internal!`
-- `mi_assert_expensive!`
-- `mi_debug_assert!`
-- `mi_debug_assert_eq!`
-- `mi_trace_message!`
-
-Statistics and once/guard macros:
-
-- `mi_theap_stat_counter_increase!`
-- `mi_theap_stat_decrease!`
-- `mi_theap_stat_adjust_decrease!`
-- `mi_heap_stat_counter_increase!`
-- `mi_heap_stat_decrease!`
-- `mi_heap_stat_adjust_decrease!`
-- `mi_subproc_stat_counter_increase!`
-- `mi_subproc_stat_decrease!`
-- `mi_subproc_stat_adjust_decrease!`
-- `mi_os_stat_counter_increase!`
-- `mi_os_stat_decrease!`
-- `mi_atomic_guard!`
-- `mi_atomic_do_once!`
+No allocator-internal helper macros remain root-exported. Assertion helpers
+such as `mi_assert_internal!`, `mi_debug_assert!`, and
+`mi_assert_expensive!` are crate-local macros under `crate::internal`; the
+atomic guard helper is crate-local under `crate::atomic`. Unused translated
+helper macros such as the `MI_INIT*!`, stats update, `_mi_memzero_var!`,
+`mi_trace_message!`, and `mi_atomic_do_once!` macro shims were removed from the
+Rust macro surface. Internal no-op markers use the private `MI_UNUSED` and
+`MI_UNUSED_RELEASE` functions instead of root-exported macros.
 
 ## docs.rs Behavior
 

@@ -200,7 +200,7 @@ unsafe fn mi_heap_free_theaps_in(heap: HeapPtr) {
             mi_lock_release(ptr::addr_of_mut!((*heap).theaps_lock));
 
             if all_freed {
-                crate::mi_assert_internal!((*heap).theaps.is_null());
+                crate::internal::mi_assert_internal!((*heap).theaps.is_null());
                 break;
             }
 
@@ -218,7 +218,7 @@ unsafe fn mi_heap_free(heap: OwnedHeap) {
     let heap = heap.ptr().as_ptr();
     // SAFETY: callers pass a non-main heap that is no longer reachable by mutators.
     unsafe {
-        crate::mi_assert_internal!(!heap.is_null() && !_mi_is_heap_main(heap));
+        crate::internal::mi_assert_internal!(!heap.is_null() && !_mi_is_heap_main(heap));
 
         mi_lock_acquire(ptr::addr_of_mut!((*heap).arena_pages_lock));
         for arena_pages in &mut (*heap).arena_pages {
@@ -513,19 +513,19 @@ unsafe fn mi_unsafe_heap_page_is_under_utilized_typed(
 #[inline(never)]
 unsafe extern "C" fn mi_heap_init_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
     let heap = heap.cast_mut();
-    crate::mi_assert_internal!(!heap.is_null());
+    crate::internal::mi_assert_internal!(!heap.is_null());
 
     // SAFETY: caller passes a live heap pointer with initialized heap-local metadata.
     unsafe {
         if _mi_is_heap_main(heap) {
             let theap = crate::init::_mi_theap_main_safe();
-            crate::mi_assert_internal!(
+            crate::internal::mi_assert_internal!(
                 !theap.is_null() && _mi_is_heap_main(crate::internal::_mi_theap_heap(theap))
             );
             return theap;
         }
 
-        crate::mi_assert_internal!((*heap).theap != 0);
+        crate::internal::mi_assert_internal!((*heap).theap != 0);
         if (*heap).theap == 0 {
             _mi_error_message_fmt(
                 Errno::EFAULT,

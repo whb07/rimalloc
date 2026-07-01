@@ -59,15 +59,26 @@ Review evidence:
 > many helper macros in `src/internal/mod.rs` are mechanical implementation
 > details.
 
-- [ ] Inventory all `#[macro_export]` macros and classify them as Tier R public
+- [x] Inventory all `#[macro_export]` macros and classify them as Tier R public
       compatibility macros or crate-internal helpers.
-- [ ] Replace internal-only exported helper macros with crate-local macros or
+- [x] Replace internal-only exported helper macros with crate-local macros or
       small functions where that preserves hot-path codegen.
-- [ ] Keep documented C-header parity macros feature-gated behind
+- [x] Keep documented C-header parity macros feature-gated behind
       `c-header-macros`.
-- [ ] Add an audit test that rejects new root-exported macros unless they appear
+- [x] Add an audit test that rejects new root-exported macros unless they appear
       in the documented Tier R allowlist.
-- [ ] Run API and ABI inventory checks after each macro visibility change.
+- [x] Run API and ABI inventory checks after each macro visibility change.
+  - Evidence: `scripts/check-api-inventory.py` now classifies only the two
+    documented Tier R macro groups as root-exported macros, verifies each
+    macro is gated by `c-header-macros`, and rejects exports from any source
+    file other than `src/ffi/abi.rs` or `src/ffi/headers.rs`. Internal
+    assertion helpers are crate-local under `crate::internal`, the atomic guard
+    helper is crate-local under `crate::atomic`, unused translated macro shims
+    were removed, and `MI_UNUSED`/`MI_UNUSED_RELEASE` call sites now use the
+    private no-op functions. `scripts/check-feature-abi.sh`,
+    `cargo test --test header_macro_expansion --all-features`, and the focused
+    release audit passed. `cargo semver-checks` was not installed in this
+    environment, so the explicit public API diff command could not be run.
 - Verify: `scripts/check-api-inventory.py`, macro expansion tests, public API
   diff, full clippy, and full tests.
 
@@ -169,7 +180,7 @@ Review evidence:
 
 1. [x] Add the unsafe allowlist category/cap and remove safe-facing allowlist
        entries first.
-2. [ ] Inventory root-exported macros and prevent new internal macro leaks.
+2. [x] Inventory root-exported macros and prevent new internal macro leaks.
 3. [ ] Localize the highest-signal clippy allowances.
 4. [ ] Centralize generated artifact hygiene.
 5. [ ] Document or implement the safe object ownership decision.
@@ -180,7 +191,7 @@ Review evidence:
 
 - [x] The unsafe migration allowlist is categorized, capped, and smaller than
       the original 68-entry baseline.
-- [ ] Root-exported macros are limited to documented public compatibility
+- [x] Root-exported macros are limited to documented public compatibility
       surfaces.
 - [ ] Package-level clippy allowances are reduced or explicitly justified by
       local exceptions.

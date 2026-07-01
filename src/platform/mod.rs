@@ -379,8 +379,8 @@ pub fn __mi_prim_thread_id() -> mi_threadid_t {
 #[inline]
 pub fn _mi_prim_thread_id() -> mi_threadid_t {
     let tid = __mi_prim_thread_id();
-    crate::mi_debug_assert!(tid > 1);
-    crate::mi_debug_assert_eq!(tid & 0x03, 0);
+    crate::internal::mi_debug_assert!(tid > 1);
+    crate::internal::mi_debug_assert_eq!(tid & 0x03, 0);
     tid
 }
 
@@ -694,7 +694,7 @@ pub(crate) unsafe fn _mi_page_associated_theap_peek(page: PagePtr) -> Option<Thr
     } else {
         unsafe { _mi_heap_theap_peek(heap) }
     };
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         theap.is_null() || crate::init::_mi_thread_id() == unsafe { (*(*theap).tld).thread_id }
     );
     ThreadHeapPtr::new(theap)

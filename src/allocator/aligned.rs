@@ -65,7 +65,7 @@ unsafe fn mi_padding_shrink_call(
 /// # Safety
 /// `alignment` must be a non-zero power of two.
 pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> bool {
-    crate::mi_assert_internal!(_mi_is_power_of_two(alignment) && alignment > 0);
+    crate::internal::mi_assert_internal!(_mi_is_power_of_two(alignment) && alignment > 0);
     if alignment > size {
         return false;
     }
@@ -74,7 +74,7 @@ pub unsafe fn mi_malloc_is_naturally_aligned(size: usize, alignment: usize) -> b
         || (alignment == MI_PAGE_OSPAGE_BLOCK_ALIGN2
             && bsize.is_multiple_of(MI_PAGE_OSPAGE_BLOCK_ALIGN2));
     if ok {
-        crate::mi_assert_internal!((bsize & (alignment - 1)) == 0);
+        crate::internal::mi_assert_internal!((bsize & (alignment - 1)) == 0);
     }
     ok
 }
@@ -135,8 +135,8 @@ unsafe fn mi_theap_malloc_guarded_aligned(
     let offset = offset.get();
     let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
     let theap = theap.ptr().as_ptr();
-    crate::mi_assert_internal!(alignment > 0 && alignment < MI_PAGE_MAX_OVERALLOC_ALIGN);
-    crate::mi_assert_internal!(offset == 0);
+    crate::internal::mi_assert_internal!(alignment > 0 && alignment < MI_PAGE_MAX_OVERALLOC_ALIGN);
+    crate::internal::mi_assert_internal!(offset == 0);
     if mi_unlikely(
         alignment >= MI_PAGE_MAX_OVERALLOC_ALIGN
             || size > (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE - alignment),
@@ -158,8 +158,8 @@ unsafe fn mi_theap_malloc_guarded_aligned(
     unsafe {
         mi_track_align(base, p, p as usize - base as usize, size);
     }
-    crate::mi_assert_internal!(unsafe { crate::mimalloc::mi_usable_size(p) } >= size);
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(p, alignment));
+    crate::internal::mi_assert_internal!(unsafe { crate::mimalloc::mi_usable_size(p) } >= size);
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(p, alignment));
     p
 }
 
@@ -176,8 +176,8 @@ pub(crate) unsafe fn mi_theap_malloc_zero_no_guarded(
 ) -> *mut c_void {
     let size = layout.requested().get();
     let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
-    crate::mi_assert_internal!(alignment.get() > 0);
-    crate::mi_assert_internal!(offset.get() < alignment.get());
+    crate::internal::mi_assert_internal!(alignment.get() > 0);
+    crate::internal::mi_assert_internal!(offset.get() < alignment.get());
     unsafe { _mi_theap_malloc_zero(theap.ptr().as_ptr(), size, zero, usable) }
 }
 
@@ -195,8 +195,8 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
     let alignment_raw = alignment.get();
     let offset_raw = offset.get();
     let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
-    crate::mi_assert_internal!(size <= (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE));
-    crate::mi_assert_internal!(alignment_raw != 0 && _mi_is_power_of_two(alignment_raw));
+    crate::internal::mi_assert_internal!(size <= (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE));
+    crate::internal::mi_assert_internal!(alignment_raw != 0 && _mi_is_power_of_two(alignment_raw));
 
     let p: *mut c_void;
     let oversize: usize;
@@ -223,11 +223,11 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
             return core::ptr::null_mut();
         }
     } else {
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             size <= (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE)
                 && alignment_raw <= MI_PAGE_MAX_OVERALLOC_ALIGN
         );
-        crate::mi_assert_internal!(size < usize::MAX - alignment_raw);
+        crate::internal::mi_assert_internal!(size < usize::MAX - alignment_raw);
         oversize = usize::max(size, MI_MAX_ALIGN_SIZE) + alignment_raw - 1;
         let no_guarded_layout = if zero {
             crate::core_types::LayoutRequest::zalloc(oversize)
@@ -235,7 +235,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
             crate::core_types::LayoutRequest::malloc(oversize)
         };
         let Ok(no_guarded_layout) = no_guarded_layout else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             return core::ptr::null_mut();
         };
         p = if let Some(theap) = theap {
@@ -257,7 +257,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
     } else {
         alignment_raw - poffset
     };
-    crate::mi_assert_internal!(adjust < alignment_raw);
+    crate::internal::mi_assert_internal!(adjust < alignment_raw);
     let aligned_p = (p as usize + adjust) as *mut c_void;
 
     let page = unsafe { _mi_ptr_page(p) };
@@ -275,10 +275,16 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
         unsafe { mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size) };
     }
 
-    crate::mi_assert_internal!(unsafe { mi_page_usable_block_size(page) }.get() >= adjust + size);
-    crate::mi_assert_internal!(((aligned_p as usize) + offset_raw).is_multiple_of(alignment_raw));
-    crate::mi_assert_internal!(unsafe { crate::mimalloc::mi_usable_size(aligned_p) } >= size);
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
+        unsafe { mi_page_usable_block_size(page) }.get() >= adjust + size
+    );
+    crate::internal::mi_assert_internal!(
+        ((aligned_p as usize) + offset_raw).is_multiple_of(alignment_raw)
+    );
+    crate::internal::mi_assert_internal!(
+        unsafe { crate::mimalloc::mi_usable_size(aligned_p) } >= size
+    );
+    crate::internal::mi_assert_internal!(
         unsafe { crate::mimalloc::mi_usable_size(p) }
             == unsafe { crate::mimalloc::mi_usable_size(aligned_p) } + adjust
     );
@@ -303,7 +309,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_generic(
     let size = layout.requested().get();
     let alignment_raw = alignment.get();
     let offset_raw = offset.get();
-    crate::mi_assert_internal!(alignment_raw != 0 && _mi_is_power_of_two(alignment_raw));
+    crate::internal::mi_assert_internal!(alignment_raw != 0 && _mi_is_power_of_two(alignment_raw));
     if mi_unlikely(size > (MI_MAX_ALLOC_SIZE - MI_PADDING_SIZE)) {
         _mi_error_message_fmt(
             Errno::EOVERFLOW,
@@ -321,11 +327,13 @@ unsafe fn mi_theap_malloc_zero_aligned_at_generic(
         let p = unsafe {
             mi_theap_malloc_zero_no_guarded(local_theap, layout, alignment, offset, usable)
         };
-        crate::mi_assert_internal!(p.is_null() || (p as usize).is_multiple_of(alignment_raw));
+        crate::internal::mi_assert_internal!(
+            p.is_null() || (p as usize).is_multiple_of(alignment_raw)
+        );
         if mi_likely(((p as usize) & (alignment_raw - 1)) == 0) {
             return p;
         }
-        crate::mi_assert!(false);
+        crate::internal::mi_assert!(false);
         unsafe { crate::mimalloc::mi_free(p) };
     }
 
@@ -413,8 +421,8 @@ unsafe fn mi_theap_malloc_zero_aligned_at_req(
                         core::ptr::null_mut(),
                     )
                 };
-                crate::mi_assert_internal!(!p.is_null());
-                crate::mi_assert_internal!(
+                crate::internal::mi_assert_internal!(!p.is_null());
+                crate::internal::mi_assert_internal!(
                     ((p as usize) + offset_raw).is_multiple_of(alignment_raw)
                 );
                 unsafe { mi_track_malloc(p, size, zero) };
@@ -1007,7 +1015,7 @@ unsafe fn mi_theap_realloc_zero_aligned_at_req(
         .map(|ptr| ptr.as_ptr())
         .unwrap_or(core::ptr::null_mut());
 
-    crate::mi_assert!(alignment_raw > 0);
+    crate::internal::mi_assert!(alignment_raw > 0);
     if alignment_raw <= size_of::<usize>() && offset_raw == 0 {
         return unsafe { crate::alloc::mi_theap_realloc_req(theap, request) };
     }
@@ -1357,7 +1365,7 @@ unsafe fn mi_theap_recalloc_aligned_at_req(
     alignment: crate::core_types::Alignment,
     offset: crate::core_types::AlignmentOffset,
 ) -> *mut c_void {
-    crate::mi_debug_assert!(
+    crate::internal::mi_debug_assert!(
         request.total().get() == realloc_request.new_layout().requested().get()
     );
     unsafe { mi_theap_realloc_zero_aligned_at_req(theap, realloc_request, alignment, offset) }

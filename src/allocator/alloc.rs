@@ -163,30 +163,32 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
         let page = page_ptr.as_ptr();
         let size = padded.get();
         if (*page).block_size != 0 {
-            crate::mi_assert_internal!(crate::internal::mi_page_block_size(page) >= size);
-            crate::mi_assert_internal!(_mi_is_aligned(
+            crate::internal::mi_assert_internal!(crate::internal::mi_page_block_size(page) >= size);
+            crate::internal::mi_assert_internal!(_mi_is_aligned(
                 mi_page_slice_start(page).cast(),
                 crate::page::MI_OS_PAGE_SIZE
             ));
-            crate::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
+            crate::internal::mi_assert_internal!(_mi_ptr_page(mi_page_start(page).cast()) == page);
         }
 
         let block = (*page).free;
-        crate::mi_assert_internal!(!block.is_null() && _mi_ptr_page(block.cast()) == page);
+        crate::internal::mi_assert_internal!(
+            !block.is_null() && _mi_ptr_page(block.cast()) == page
+        );
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
 
         let (allocated, _) = available.pop_free_block();
         let block = allocated.block().as_ptr();
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             (*page).free.is_null() || _mi_ptr_page((*page).free.cast()) == page
         );
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             (*page).block_size < MI_MAX_ALIGN_SIZE
                 || _mi_is_aligned(block.cast(), MI_MAX_ALIGN_SIZE)
         );
 
         if cfg!(debug_assertions) && (*page).free_is_zero && size > size_of::<mi_block_t>() {
-            crate::mi_assert_expensive!(crate::internal::mi_mem_is_zero(
+            crate::internal::mi_assert_expensive!(crate::internal::mi_mem_is_zero(
                 block.add(1).cast(),
                 size - size_of::<mi_block_t>()
             ));
@@ -239,7 +241,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
             let delta =
                 (padding_ptr as usize).wrapping_sub(block as usize) - (size - MI_PADDING_SIZE);
             if cfg!(debug_assertions) {
-                crate::mi_assert_internal!(
+                crate::internal::mi_assert_internal!(
                     delta <= bsize && bsize >= (size - MI_PADDING_SIZE + delta)
                 );
             }
@@ -253,7 +255,7 @@ pub(crate) unsafe fn _mi_page_malloc_zero_typed(
                 ),
                 crate::core_types::PaddingDelta::for_usable(delta, usable_size).unwrap_or_else(
                     || {
-                        crate::mi_assert_internal!(false);
+                        crate::internal::mi_assert_internal!(false);
                         crate::core_types::PaddingDelta::new_unchecked(delta as u32)
                     },
                 ),
@@ -314,11 +316,13 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
         let local_theap = theap;
         let theap = local_theap.ptr().as_ptr();
         let mut size = size.get();
-        crate::mi_assert!(!theap.is_null());
-        crate::mi_assert!(size <= MI_SMALL_SIZE_MAX);
+        crate::internal::mi_assert!(!theap.is_null());
+        crate::internal::mi_assert!(size <= MI_SMALL_SIZE_MAX);
         if cfg!(debug_assertions) {
             let tid = _mi_thread_id();
-            crate::mi_assert!((*(*theap).tld).thread_id == 0 || (*(*theap).tld).thread_id == tid);
+            crate::internal::mi_assert!(
+                (*(*theap).tld).thread_id == 0 || (*(*theap).tld).thread_id == tid
+            );
         }
         let requested_size = size;
         if mi_unlikely(size == 0) {
@@ -352,7 +356,10 @@ unsafe fn mi_theap_malloc_small_zero_nonnull(
         mi_track_malloc(p, requested_size, zero);
 
         if cfg!(debug_assertions) && !p.is_null() && zero && requested_size != 0 {
-            crate::mi_assert_expensive!(crate::internal::mi_mem_is_zero(p, requested_size));
+            crate::internal::mi_assert_expensive!(crate::internal::mi_mem_is_zero(
+                p,
+                requested_size
+            ));
         }
         p
     }
@@ -368,7 +375,7 @@ unsafe fn mi_theap_malloc_generic(
         let raw_theap = theap.ptr().as_ptr();
         let size = layout.requested().get();
         let zero = flags.zeroed() == crate::core_types::Zeroed::Yes;
-        crate::mi_assert!(
+        crate::internal::mi_assert!(
             (*(*raw_theap).tld).thread_id == 0 || (*(*raw_theap).tld).thread_id == _mi_thread_id()
         );
 
@@ -382,7 +389,7 @@ unsafe fn mi_theap_malloc_generic(
         let p = _mi_malloc_generic_typed(theap.ptr(), layout, flags, usable);
         mi_track_malloc(p, size, zero);
         if cfg!(debug_assertions) && !p.is_null() && zero {
-            crate::mi_assert_expensive!(crate::internal::mi_mem_is_zero(p, size));
+            crate::internal::mi_assert_expensive!(crate::internal::mi_mem_is_zero(p, size));
         }
         p
     }
@@ -448,7 +455,7 @@ unsafe fn mi_theap_malloc_zero_req(
         let requested = layout.requested();
         let size = requested.get();
         if size <= MI_SMALL_SIZE_MAX {
-            crate::mi_assert_internal!(huge_alignment.get() == 0);
+            crate::internal::mi_assert_internal!(huge_alignment.get() == 0);
             let Some(theap) = _mi_theap_or_default_typed(theap) else {
                 return ptr::null_mut();
             };
@@ -612,7 +619,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     usable: *mut usize,
 ) -> *mut c_void {
     unsafe {
-        crate::mi_assert!((huge_alignment & 1) == 0);
+        crate::internal::mi_assert!((huge_alignment & 1) == 0);
         let Some(huge_alignment) = maybe_alignment_or_report(huge_alignment) else {
             return ptr::null_mut();
         };
@@ -652,7 +659,7 @@ unsafe fn _mi_theap_malloc_zero_ex_typed(
         let requested = layout.requested();
         let size = requested.get();
         if size <= MI_SMALL_SIZE_MAX {
-            crate::mi_assert_internal!(huge_alignment.get() == 0);
+            crate::internal::mi_assert_internal!(huge_alignment.get() == 0);
             mi_theap_malloc_small_zero_nonnull(theap, requested, layout.zeroed(), usable)
         } else {
             let flags = crate::core_types::MallocGenericFlags::new(
@@ -1278,7 +1285,7 @@ unsafe fn mi_theap_realloc_validated_core(
                 && newsize > 0
                 && mi_page_heap(page) == _mi_theap_heap(theap.ptr().as_ptr()),
         ) {
-            crate::mi_assert_internal!(!p.is_null());
+            crate::internal::mi_assert_internal!(!p.is_null());
             if !usable_post.is_null() {
                 *usable_post = mi_page_usable_block_size(page).get();
             }
@@ -1302,7 +1309,7 @@ unsafe fn mi_theap_realloc_validated_core(
             }
             if mi_likely(!p.is_null()) {
                 let Some(preserve) = preserve else {
-                    crate::mi_assert_internal!(false);
+                    crate::internal::mi_assert_internal!(false);
                     return ptr::null_mut();
                 };
                 let copysize = preserve.get();
@@ -1506,7 +1513,7 @@ unsafe fn mi_theap_reallocn_req(
     product: crate::core_types::AllocProduct,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    crate::mi_debug_assert!(
+    crate::internal::mi_debug_assert!(
         product.layout().requested().get() == req.new_layout().requested().get()
     );
     unsafe { mi_theap_realloc_typed(theap, req) }
@@ -1595,7 +1602,7 @@ unsafe fn mi_theap_recalloc_req(
     realloc_req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
     unsafe {
-        crate::mi_debug_assert!(
+        crate::internal::mi_debug_assert!(
             req.layout().requested().get() == realloc_req.new_layout().requested().get()
         );
         mi_theap_realloc_typed(theap, realloc_req)
@@ -2414,15 +2421,17 @@ unsafe fn mi_block_ptr_set_guarded(
 
         let block_size = mi_page_block_size(page);
         let os_page_size = _mi_os_page_size_typed().get();
-        crate::mi_assert_internal!(block_size >= obj_size + os_page_size + size_of::<mi_block_t>());
+        crate::internal::mi_assert_internal!(
+            block_size >= obj_size + os_page_size + size_of::<mi_block_t>()
+        );
         if block_size < obj_size + os_page_size + size_of::<mi_block_t>() {
             mi_free(block.cast());
             return None;
         }
 
         let guard_page = block.cast::<u8>().add(block_size - os_page_size);
-        crate::mi_assert_internal!(_mi_is_aligned(block.cast(), os_page_size));
-        crate::mi_assert_internal!(_mi_is_aligned(guard_page.cast(), os_page_size));
+        crate::internal::mi_assert_internal!(_mi_is_aligned(block.cast(), os_page_size));
+        crate::internal::mi_assert_internal!(_mi_is_aligned(guard_page.cast(), os_page_size));
         if !(*page).memid.is_pinned && _mi_is_aligned(guard_page.cast(), os_page_size) {
             let ok = crate::os::_mi_os_protect(guard_page.cast(), os_page_size);
             if mi_unlikely(!ok) {
@@ -2437,12 +2446,12 @@ unsafe fn mi_block_ptr_set_guarded(
         }
 
         let mut offset = block_size - os_page_size - obj_size;
-        crate::mi_assert_internal!(offset > size_of::<mi_block_t>());
+        crate::internal::mi_assert_internal!(offset > size_of::<mi_block_t>());
         if offset > crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN {
             offset = crate::types::MI_PAGE_MAX_OVERALLOC_ALIGN;
         }
         let p = block.cast::<u8>().add(offset).cast::<c_void>();
-        crate::mi_assert_internal!(p.cast::<u8>() == guard_page.sub(obj_size));
+        crate::internal::mi_assert_internal!(p.cast::<u8>() == guard_page.sub(obj_size));
         mi_track_align(block.cast(), p, offset, obj_size);
         mi_track_mem_defined(block.cast(), size_of::<mi_block_t>());
         Some(UserPtr::new_unchecked(p))

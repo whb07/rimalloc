@@ -87,7 +87,7 @@ pub unsafe extern "C" fn mi_posix_memalign(
     if q.is_null() && size != 0 {
         return ENOMEM;
     }
-    crate::mi_assert_internal!(_mi_is_aligned(q, alignment));
+    crate::internal::mi_assert_internal!(_mi_is_aligned(q, alignment));
     unsafe { *p = q };
     0
 }
@@ -99,7 +99,7 @@ pub unsafe extern "C" fn mi_posix_memalign(
 /// mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_memalign(alignment: usize, size: usize) -> *mut c_void {
     let p = unsafe { mi_malloc_aligned(size, alignment) };
-    crate::mi_assert_internal!(_mi_is_aligned(p, alignment));
+    crate::internal::mi_assert_internal!(_mi_is_aligned(p, alignment));
     p
 }
 
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn mi_pvalloc(size: usize) -> *mut c_void {
 /// mimalloc-compatible free APIs.
 pub unsafe extern "C" fn mi_aligned_alloc(alignment: usize, size: usize) -> *mut c_void {
     let p = unsafe { mi_malloc_aligned(size, alignment) };
-    crate::mi_assert_internal!(_mi_is_aligned(p, alignment));
+    crate::internal::mi_assert_internal!(_mi_is_aligned(p, alignment));
     p
 }
 
@@ -162,8 +162,8 @@ pub unsafe extern "C" fn mi_reallocarray(p: *mut c_void, count: usize, size: usi
 /// `ptrp` must be valid for reading and writing one pointer. `*ptrp` may be
 /// null or must be a mimalloc-compatible allocation pointer.
 pub unsafe extern "C" fn mi_reallocarr(ptrp: *mut *mut c_void, count: usize, size: usize) -> c_int {
-    crate::mi_assert!(size != 0);
-    crate::mi_assert!(!ptrp.is_null());
+    crate::internal::mi_assert!(size != 0);
+    crate::internal::mi_assert!(!ptrp.is_null());
     if ptrp.is_null() || size == 0 {
         unsafe { mi_set_errno(EINVAL) };
         return EINVAL;

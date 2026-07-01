@@ -156,13 +156,6 @@ pub(crate) fn _mi_rust_assert_fail(assertion: *const c_char, fname: *const c_cha
     unsafe { crate::options::_mi_assert_fail(assertion, fname, line, ptr::null()) }
 }
 
-macro_rules! __has_builtin {
-    ($x:expr) => {
-        false
-    };
-}
-
-#[macro_export]
 macro_rules! mi_debug_assert {
     ($expr:expr $(,)?) => {{
         if $crate::internal::MI_DEBUG > 0 && !$expr {
@@ -174,11 +167,11 @@ macro_rules! mi_debug_assert {
         }
     }};
     ($expr:expr, $($arg:tt)+) => {{
-        $crate::mi_debug_assert!($expr);
+        $crate::internal::mi_debug_assert!($expr);
     }};
 }
+pub(crate) use mi_debug_assert;
 
-#[macro_export]
 macro_rules! mi_debug_assert_eq {
     ($left:expr, $right:expr $(,)?) => {{
         if $crate::internal::MI_DEBUG > 0 {
@@ -196,247 +189,42 @@ macro_rules! mi_debug_assert_eq {
         }
     }};
     ($left:expr, $right:expr, $($arg:tt)+) => {{
-        $crate::mi_debug_assert_eq!($left, $right);
+        $crate::internal::mi_debug_assert_eq!($left, $right);
     }};
 }
+pub(crate) use mi_debug_assert_eq;
 
-#[macro_export]
-macro_rules! mi_trace_message {
-    ($($arg:tt)*) => {{
-        if $crate::internal::MI_DEBUG > 0 {
-            $crate::internal::_mi_trace_message(format_args!($($arg)*))
-        }
-    }};
-}
-
-#[macro_export]
 macro_rules! mi_assert {
     ($expr:expr $(,)?) => {{
         if $crate::internal::MI_DEBUG > 0 {
-            $crate::mi_debug_assert!($expr);
+            $crate::internal::mi_debug_assert!($expr);
         }
     }};
     ($expr:expr, $($arg:tt)+) => {{
         if $crate::internal::MI_DEBUG > 0 {
-            $crate::mi_debug_assert!($expr, $($arg)+);
+            $crate::internal::mi_debug_assert!($expr, $($arg)+);
         }
     }};
 }
+pub(crate) use mi_assert;
 
-#[macro_export]
 macro_rules! mi_assert_internal {
     ($($arg:tt)*) => {{
         if $crate::internal::MI_DEBUG > 1 {
-            $crate::mi_assert!($($arg)*);
+            $crate::internal::mi_assert!($($arg)*);
         }
     }};
 }
+pub(crate) use mi_assert_internal;
 
-#[macro_export]
 macro_rules! mi_assert_expensive {
     ($($arg:tt)*) => {{
         if $crate::internal::MI_DEBUG > 2 {
-            $crate::mi_assert!($($arg)*);
+            $crate::internal::mi_assert!($($arg)*);
         }
     }};
 }
-
-#[macro_export]
-macro_rules! MI_UNUSED {
-    ($x:expr) => {{
-        let _ = &$x;
-    }};
-}
-
-#[macro_export]
-macro_rules! MI_UNUSED_RELEASE {
-    ($x:expr) => {{
-        if $crate::internal::MI_DEBUG <= 1 {
-            $crate::MI_UNUSED!($x);
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! MI_INIT4 {
-    ($x:expr) => {
-        $x, $x, $x, $x
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INIT8 {
-    ($x:expr) => {
-        $crate::MI_INIT4!($x), $crate::MI_INIT4!($x)
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INIT16 {
-    ($x:expr) => {
-        $crate::MI_INIT8!($x), $crate::MI_INIT8!($x)
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INIT32 {
-    ($x:expr) => {
-        $crate::MI_INIT16!($x), $crate::MI_INIT16!($x)
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INIT64 {
-    ($x:expr) => {
-        $crate::MI_INIT32!($x), $crate::MI_INIT32!($x)
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INIT128 {
-    ($x:expr) => {
-        $crate::MI_INIT64!($x), $crate::MI_INIT64!($x)
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INIT256 {
-    ($x:expr) => {
-        $crate::MI_INIT128!($x), $crate::MI_INIT128!($x)
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INIT74 {
-    ($x:expr) => {
-        $crate::MI_INIT64!($x), $crate::MI_INIT8!($x), $x, $x
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INIT5 {
-    ($x:expr) => {
-        $crate::MI_INIT4!($x), $x
-    };
-}
-
-#[macro_export]
-macro_rules! MI_INIT6 {
-    ($x:expr) => {
-        $crate::MI_INIT4!($x), $x, $x
-    };
-}
-
-#[macro_export]
-macro_rules! _mi_memzero_var {
-    ($x:expr) => {{
-        unsafe { core::ptr::write_bytes(core::ptr::addr_of_mut!($x), 0, 1) };
-    }};
-}
-
-#[macro_export]
-macro_rules! mi_theap_stat_counter_increase {
-    ($theap:expr, $stat:ident, $amount:expr) => {{
-        unsafe {
-            $crate::internal::__mi_stat_counter_increase(
-                core::ptr::addr_of_mut!((*$theap).stats.$stat),
-                $amount,
-            )
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! mi_theap_stat_decrease {
-    ($theap:expr, $stat:ident, $amount:expr) => {{
-        unsafe {
-            $crate::internal::__mi_stat_decrease(
-                core::ptr::addr_of_mut!((*$theap).stats.$stat),
-                $amount,
-            )
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! mi_theap_stat_adjust_decrease {
-    ($theap:expr, $stat:ident, $amount:expr) => {{
-        unsafe {
-            $crate::internal::__mi_stat_adjust_decrease(
-                core::ptr::addr_of_mut!((*$theap).stats.$stat),
-                $amount,
-            )
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! mi_heap_stat_decrease {
-    ($heap:expr, $stat:ident, $amount:expr) => {{ unsafe { $crate::internal::__mi_stat_decrease_mt(&mut (*$heap).stats.$stat, $amount) } }};
-}
-
-#[macro_export]
-macro_rules! mi_subproc_stat_decrease {
-    ($subproc:expr, $stat:ident, $amount:expr) => {{ unsafe { $crate::internal::__mi_stat_decrease_mt(&mut (*$subproc).stats.$stat, $amount) } }};
-}
-
-#[macro_export]
-macro_rules! mi_heap_stat_adjust_decrease {
-    ($heap:expr, $stat:ident, $amount:expr) => {{
-        unsafe {
-            $crate::internal::__mi_stat_adjust_decrease_mt(
-                core::ptr::addr_of_mut!((*$heap).stats.$stat),
-                $amount,
-            )
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! mi_subproc_stat_adjust_decrease {
-    ($subproc:expr, $stat:ident, $amount:expr) => {{
-        unsafe {
-            $crate::internal::__mi_stat_adjust_decrease_mt(
-                core::ptr::addr_of_mut!((*$subproc).stats.$stat),
-                $amount,
-            )
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! mi_heap_stat_counter_increase {
-    ($heap:expr, $stat:ident, $amount:expr) => {{
-        unsafe {
-            $crate::internal::__mi_stat_counter_increase_mt(
-                core::ptr::addr_of_mut!((*$heap).stats.$stat),
-                $amount,
-            )
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! mi_subproc_stat_counter_increase {
-    ($subproc:expr, $stat:ident, $amount:expr) => {{
-        unsafe {
-            $crate::internal::__mi_stat_counter_increase_mt(
-                core::ptr::addr_of_mut!((*$subproc).stats.$stat),
-                $amount,
-            )
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! mi_os_stat_counter_increase {
-    ($stat:ident, $amount:expr) => {{ $crate::mi_subproc_stat_counter_increase!($crate::internal::_mi_subproc(), $stat, $amount) }};
-}
-
-#[macro_export]
-macro_rules! mi_os_stat_decrease {
-    ($stat:ident, $amount:expr) => {{ $crate::mi_subproc_stat_decrease!($crate::internal::_mi_subproc(), $stat, $amount) }};
-}
+pub(crate) use mi_assert_expensive;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -674,8 +462,8 @@ pub const fn _mi_wsize_from_size(size: usize) -> usize {
 #[inline(always)]
 pub(crate) fn mi_direct_bin_from_size(size: usize) -> crate::core_types::DirectBin {
     let idx = crate::core_types::WordCount::from_size(size).get();
-    crate::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
-    crate::mi_debug_assert!(u16::try_from(idx).is_ok());
+    crate::internal::mi_debug_assert!(idx < crate::types::MI_PAGES_DIRECT);
+    crate::internal::mi_debug_assert!(u16::try_from(idx).is_ok());
     unsafe { crate::core_types::DirectBin::new_unchecked(idx as u16) }
 }
 
@@ -843,7 +631,9 @@ pub unsafe fn _mi_checked_ptr_page(p: *const c_void) -> *mut mi_page_t {
 #[inline]
 pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
     unsafe {
-        crate::mi_assert_internal!(p.is_null() || crate::mimalloc::mi_is_in_heap_region(p));
+        crate::internal::mi_assert_internal!(
+            p.is_null() || crate::mimalloc::mi_is_in_heap_region(p)
+        );
         if MI_DEBUG != 0 || MI_SECURE != 0 || cfg!(target_vendor = "apple") {
             _mi_checked_ptr_page(p)
         } else {
@@ -857,7 +647,7 @@ pub(crate) unsafe fn mi_page_block_size_typed(
     page: *const mi_page_t,
 ) -> crate::core_types::BlockSize {
     unsafe {
-        crate::mi_assert_internal!((*page).block_size > 0);
+        crate::internal::mi_assert_internal!((*page).block_size > 0);
         crate::core_types::BlockSize::new_unchecked((*page).block_size)
     }
 }
@@ -874,8 +664,8 @@ pub unsafe fn mi_page_block_size(page: *const mi_page_t) -> usize {
 #[inline]
 pub unsafe fn mi_page_tld(page: *const mi_page_t) -> *mut mi_tld_t {
     unsafe {
-        crate::mi_assert_internal!(!crate::page::mi_page_is_abandoned(page));
-        crate::mi_assert_internal!(!(*page).theap.is_null());
+        crate::internal::mi_assert_internal!(!crate::page::mi_page_is_abandoned(page));
+        crate::internal::mi_assert_internal!(!(*page).theap.is_null());
         (*(*page).theap).tld
     }
 }
@@ -889,7 +679,7 @@ pub unsafe fn mi_page_heap(page: *const mi_page_t) -> *mut mi_heap_t {
         if mi_likely(heap.is_null()) {
             heap = crate::mimalloc::mi_heap_main();
         }
-        crate::mi_assert_internal!(!heap.is_null());
+        crate::internal::mi_assert_internal!(!heap.is_null());
         heap
     }
 }
@@ -1034,7 +824,7 @@ pub unsafe fn mi_page_committed(page: *const mi_page_t) -> usize {
 #[inline]
 pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
     unsafe {
-        crate::mi_assert_internal!(!page.is_null());
+        crate::internal::mi_assert_internal!(!page.is_null());
         crate::page::mi_page_used_count(page).get() == 0
     }
 }
@@ -1044,7 +834,7 @@ pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
 #[inline]
 pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
     unsafe {
-        crate::mi_assert_internal!(!page.is_null());
+        crate::internal::mi_assert_internal!(!page.is_null());
         !(*page).free.is_null()
     }
 }
@@ -1054,10 +844,10 @@ pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
 #[inline]
 pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
     unsafe {
-        crate::mi_assert_internal!(!page.is_null());
+        crate::internal::mi_assert_internal!(!page.is_null());
         let capacity = crate::page::mi_page_capacity_count(page);
         let reserved = crate::page::mi_page_reserved_count(page);
-        crate::mi_assert_internal!(capacity.get() <= reserved.get());
+        crate::internal::mi_assert_internal!(capacity.get() <= reserved.get());
         capacity.get() < reserved.get()
     }
 }
@@ -1069,7 +859,7 @@ pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
     unsafe {
         let full = crate::page::mi_page_reserved_count(page).get()
             == crate::page::mi_page_used_count(page).get();
-        crate::mi_assert_internal!(!full || (*page).free.is_null());
+        crate::internal::mi_assert_internal!(!full || (*page).free.is_null());
         full
     }
 }
@@ -1118,7 +908,7 @@ pub(crate) unsafe fn mi_page_queue(
         .cast_mut();
         if size <= MI_LARGE_MAX_OBJ_SIZE {
             let queue = PageQueuePtr::new_unchecked(pq);
-            crate::mi_assert_internal!(
+            crate::internal::mi_assert_internal!(
                 queue
                     .block_size()
                     .is_some_and(|block_size| block_size.get() <= MI_LARGE_MAX_OBJ_SIZE)
@@ -1192,7 +982,7 @@ pub unsafe fn mi_page_is_abandoned_mapped(page: *const mi_page_t) -> bool {
 #[inline]
 pub(crate) unsafe fn mi_page_set_abandoned_mapped(page: crate::core_types::PagePtr) {
     unsafe {
-        crate::mi_assert_internal!(crate::page::mi_page_is_abandoned(page.as_ptr()));
+        crate::internal::mi_assert_internal!(crate::page::mi_page_is_abandoned(page.as_ptr()));
         let atomic_tid = page.thread_id_cell();
         let mut old = atomic_tid.load();
         loop {
@@ -1211,7 +1001,7 @@ const _: unsafe fn(crate::core_types::PagePtr) = mi_page_set_abandoned_mapped;
 #[inline]
 pub(crate) unsafe fn mi_page_clear_abandoned_mapped(page: crate::core_types::PagePtr) {
     unsafe {
-        crate::mi_assert_internal!(mi_page_is_abandoned_mapped(page.as_ptr()));
+        crate::internal::mi_assert_internal!(mi_page_is_abandoned_mapped(page.as_ptr()));
         let atomic_tid = crate::core_types::AtomicPageThreadId(
             crate::core_types::AtomicUsizeField(ptr::addr_of_mut!((*page.as_ptr()).xthread_id)),
         );
@@ -1272,9 +1062,9 @@ pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t {
 #[inline]
 pub unsafe fn mi_page_has_any_available(page: *const mi_page_t) -> bool {
     unsafe {
-        crate::mi_assert_internal!(!page.is_null());
+        crate::internal::mi_assert_internal!(!page.is_null());
         let reserved = crate::page::mi_page_reserved_count(page);
-        crate::mi_assert_internal!(reserved.get() > 0);
+        crate::internal::mi_assert_internal!(reserved.get() > 0);
         crate::page::mi_page_used_count(page).get() < reserved.get()
             || !mi_page_thread_free(page).is_null()
     }

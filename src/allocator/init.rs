@@ -1015,7 +1015,7 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
         default_theap = mi_theap_main_tls_peek();
         if default_theap.is_null() {
             default_theap = unsafe { crate::prim::_mi_theap_default() };
-            crate::mi_assert_internal!(
+            crate::internal::mi_assert_internal!(
                 default_theap.is_null() || unsafe { _mi_is_theap_main(default_theap) }
             );
         }
@@ -1448,14 +1448,14 @@ unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
 
 #[cfg(windows)]
 unsafe fn mi_win_tls_slot_set(slot: usize, extended_slot: usize, value: *mut c_void) {
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         (slot >= MI_TLS_DIRECT_FIRST && slot < MI_TLS_DIRECT_FIRST + MI_TLS_DIRECT_SLOTS)
             || slot == MI_TLS_EXPANSION_SLOT
     );
     if slot < MI_TLS_DIRECT_FIRST + MI_TLS_DIRECT_SLOTS {
         crate::prim::mi_prim_tls_slot_set(slot, value);
     } else {
-        crate::mi_assert_internal!(extended_slot < MI_TLS_EXPANSION_SLOTS);
+        crate::internal::mi_assert_internal!(extended_slot < MI_TLS_EXPANSION_SLOTS);
         let _ = unsafe { TlsSetValue((extended_slot + MI_TLS_DIRECT_SLOTS) as u32, value) };
     }
 }
@@ -1645,8 +1645,8 @@ static MI_SUBPROC_MAIN_KEEP: unsafe extern "C" fn() -> *mut mi_subproc_t = _mi_s
 /// `theap` must be a valid default theap for the current thread.
 pub(crate) unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
     let theap_old = unsafe { crate::prim::_mi_theap_default() };
-    crate::mi_assert_internal!(!theap.is_null());
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(!theap.is_null());
+    crate::internal::mi_assert_internal!(
         unsafe { (*(*theap).tld).thread_id } == 0
             || unsafe { (*(*theap).tld).thread_id } == _mi_thread_id()
     );
@@ -1781,7 +1781,9 @@ pub(crate) unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
     }
     unsafe { crate::mimalloc::mi_thread_init() };
     let theap = unsafe { crate::prim::_mi_theap_default() };
-    crate::mi_assert_internal!(unsafe { crate::internal::mi_theap_is_initialized(theap) });
+    crate::internal::mi_assert_internal!(unsafe {
+        crate::internal::mi_theap_is_initialized(theap)
+    });
     theap
 }
 
@@ -1797,14 +1799,14 @@ pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     if theap.is_null() {
         unsafe { crate::mimalloc::mi_thread_init() };
         theap = unsafe { crate::prim::_mi_theap_default() };
-        crate::mi_assert_internal!(!theap.is_null());
+        crate::internal::mi_assert_internal!(!theap.is_null());
         if unsafe { crate::internal::mi_theap_is_initialized(theap) }
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
         {
             mi_theap_main_tls_set(ThreadHeapPtr::new(theap));
         }
     }
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         !theap.is_null()
             && unsafe { crate::internal::mi_theap_is_initialized(theap) }
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
@@ -1894,7 +1896,7 @@ unsafe fn _mi_subproc_heap_main_typed(subproc: BorrowedSubproc) -> MainHeap {
     }
     mi_heap_main_init();
     let heap = unsafe { mi_subproc_heap_main_typed(subproc) };
-    crate::mi_assert_internal!(heap.is_some());
+    crate::internal::mi_assert_internal!(heap.is_some());
     let Some(heap) = heap else {
         return unsafe { MainHeap::new_unchecked(HeapPtr::new_unchecked(mi_heap_main())) };
     };
@@ -1920,7 +1922,7 @@ pub unsafe extern "C" fn mi_heap_main() -> *mut mi_heap_t {
     if heap.is_null() {
         mi_heap_main_init();
         heap = unsafe { mi_subproc_heap_main_raw(subproc) };
-        crate::mi_assert_internal!(!heap.is_null());
+        crate::internal::mi_assert_internal!(!heap.is_null());
     }
     heap
 }
@@ -1995,7 +1997,7 @@ unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
     while !theap.is_null() {
         let next = unsafe { (*theap).tnext };
         unsafe { _mi_theap_collect_abandon(theap) };
-        crate::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
+        crate::internal::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
         theap = next;
     }
     unsafe { mi_lock_release(ptr::addr_of_mut!((*tld).theaps_lock)) };
@@ -2006,7 +2008,7 @@ unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
         let mut theap = unsafe { (*tld).theaps };
         while !theap.is_null() {
             let next = unsafe { (*theap).tnext };
-            crate::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
+            crate::internal::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
             if !unsafe { _mi_theap_free(theap, true, false) } {
                 all_freed = false;
             }
@@ -2024,13 +2026,15 @@ unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
             };
             unsafe { crate::prim::_mi_prim_thread_yield() };
         } else {
-            crate::mi_assert_internal!(unsafe { (*tld).theaps }.is_null());
+            crate::internal::mi_assert_internal!(unsafe { (*tld).theaps }.is_null());
             break;
         }
     }
 
-    crate::mi_assert_internal!(unsafe { crate::prim::_mi_theap_default() } == empty);
-    crate::mi_assert_internal!(!unsafe { crate::internal::mi_theap_is_initialized(empty) });
+    crate::internal::mi_assert_internal!(unsafe { crate::prim::_mi_theap_default() } == empty);
+    crate::internal::mi_assert_internal!(!unsafe {
+        crate::internal::mi_theap_is_initialized(empty)
+    });
 }
 
 #[unsafe(no_mangle)]

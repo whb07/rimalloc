@@ -584,7 +584,7 @@ pub fn mi_to_msecs(t: LARGE_INTEGER) -> mi_msecs_t {
 
 #[inline]
 pub unsafe fn filetime_msecs(ftime: *const FILETIME) -> mi_msecs_t {
-    crate::mi_assert_internal!(!ftime.is_null());
+    crate::internal::mi_assert_internal!(!ftime.is_null());
     let ftime = unsafe { &*ftime };
     ((((ftime.dwHighDateTime as u64) << 32) | (ftime.dwLowDateTime as u64)) / 10_000) as mi_msecs_t
 }
@@ -869,7 +869,7 @@ pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
     if MI_WIN_INIT_USE_FLS != 0 {
-        crate::mi_assert_internal!(unsafe { mi_fls_key } != FLS_OUT_OF_INDEXES);
+        crate::internal::mi_assert_internal!(unsafe { mi_fls_key } != FLS_OUT_OF_INDEXES);
         unsafe {
             FlsSetValue(mi_fls_key, theap.cast::<c_void>());
         }
@@ -996,7 +996,7 @@ pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, _size: usize) -> i32 {
 #[inline]
 pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> i32 {
     let p = unsafe { VirtualAlloc(addr, size, MEM_RESET, PAGE_READWRITE) };
-    crate::mi_assert_internal!(p == addr);
+    crate::internal::mi_assert_internal!(p == addr);
     if !p.is_null() {
         0
     } else {
@@ -1301,7 +1301,7 @@ unsafe fn win_virtual_alloc(
     allow_large: bool,
     is_large: *mut bool,
 ) -> *mut c_void {
-    crate::mi_assert_internal!(!large_only || allow_large);
+    crate::internal::mi_assert_internal!(!large_only || allow_large);
     static LARGE_PAGE_TRY_OK: AtomicUsize = AtomicUsize::new(0);
 
     let mut p = null_mut();
@@ -1455,11 +1455,11 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     is_zero: *mut bool,
     addr: *mut *mut c_void,
 ) -> i32 {
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         size > 0 && size.is_multiple_of(unsafe { _mi_os_page_size_typed().get() })
     );
-    crate::mi_assert_internal!(commit || !allow_large);
-    crate::mi_assert_internal!(try_alignment > 0);
+    crate::internal::mi_assert_internal!(commit || !allow_large);
+    crate::internal::mi_assert_internal!(try_alignment > 0);
     if !is_zero.is_null() {
         unsafe {
             *is_zero = true;

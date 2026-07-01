@@ -135,40 +135,6 @@ EXPECTED_EXPORTED_MACROS_BY_TIER = {
         "strdup",
         "valloc",
     },
-    "internal-compatibility": {
-        "MI_INIT128",
-        "MI_INIT16",
-        "MI_INIT256",
-        "MI_INIT32",
-        "MI_INIT4",
-        "MI_INIT5",
-        "MI_INIT6",
-        "MI_INIT64",
-        "MI_INIT74",
-        "MI_INIT8",
-        "MI_UNUSED",
-        "MI_UNUSED_RELEASE",
-        "_mi_memzero_var",
-        "mi_assert",
-        "mi_assert_expensive",
-        "mi_assert_internal",
-        "mi_atomic_do_once",
-        "mi_atomic_guard",
-        "mi_debug_assert",
-        "mi_debug_assert_eq",
-        "mi_heap_stat_adjust_decrease",
-        "mi_heap_stat_counter_increase",
-        "mi_heap_stat_decrease",
-        "mi_os_stat_counter_increase",
-        "mi_os_stat_decrease",
-        "mi_subproc_stat_adjust_decrease",
-        "mi_subproc_stat_counter_increase",
-        "mi_subproc_stat_decrease",
-        "mi_theap_stat_adjust_decrease",
-        "mi_theap_stat_counter_increase",
-        "mi_theap_stat_decrease",
-        "mi_trace_message",
-    },
 }
 
 C_HEADER_MACRO_TIERS = {
@@ -178,6 +144,10 @@ C_HEADER_MACRO_TIERS = {
 C_HEADER_MACROS = set().union(
     *(EXPECTED_EXPORTED_MACROS_BY_TIER[tier] for tier in C_HEADER_MACRO_TIERS)
 )
+EXPECTED_MACRO_SOURCE_BY_TIER = {
+    "tier-r-typed-allocation": pathlib.Path("src/ffi/abi.rs"),
+    "tier-r-header-override": pathlib.Path("src/ffi/headers.rs"),
+}
 C_SHAPED_NAME = re.compile(
     r"^(?:_?mi_|malloc|calloc|realloc|free|operator)",
     flags=re.IGNORECASE,
@@ -494,6 +464,14 @@ def main() -> int:
             macro_inventory[macro_name][1],
             f"c-header macro {macro_name}! must be gated by feature c-header-macros",
         )
+    for macro_tier, expected_path in EXPECTED_MACRO_SOURCE_BY_TIER.items():
+        for macro_name in sorted(EXPECTED_EXPORTED_MACROS_BY_TIER[macro_tier]):
+            actual_path = macro_inventory[macro_name][0]
+            require(
+                actual_path == expected_path,
+                f"{macro_tier} macro {macro_name}! must be exported from "
+                f"{expected_path}, found {actual_path}",
+            )
     for macro_name in sorted(expected_default_macros):
         require(
             not macro_inventory[macro_name][1],
@@ -599,7 +577,7 @@ def main() -> int:
         f"ok: public API inventory covers {len(actual_root)} crate-root items "
         f"{len(actual_raw)} default raw facade modules, and "
         f"{len(actual_default_macros)} default macros / "
-        f"{len(actual_macros)} c-header-macros feature macros"
+        f"{len(actual_macros)} Tier R c-header-macros feature macros"
     )
     return 0
 

@@ -198,7 +198,7 @@ unsafe fn mi_heap_abandoned_count(
 
 unsafe fn mi_arena_index(arena: *mut mi_arena_t) -> crate::core_types::ArenaIndex {
     let arena_idx = unsafe { (*arena.cast::<MiArenaPrefix>()).arena_idx };
-    crate::mi_assert!(arena_idx < MI_MAX_ARENAS);
+    crate::internal::mi_assert!(arena_idx < MI_MAX_ARENAS);
     unsafe { crate::core_types::ArenaIndex::new_unchecked(arena_idx as u16) }
 }
 
@@ -311,7 +311,7 @@ unsafe fn mi_heap_visit_page(page: PagePtr, vinfo: *mut mi_heap_visit_info_t) ->
     let page = page.as_ptr();
     let mut area = mi_heap_area_t::default();
     unsafe { _mi_heap_area_init(ptr::addr_of_mut!(area), page) };
-    crate::mi_assert_internal!(unsafe { (*vinfo).heap.as_ptr() == mi_page_heap(page) });
+    crate::internal::mi_assert_internal!(unsafe { (*vinfo).heap.as_ptr() == mi_page_heap(page) });
     if !unsafe {
         (*vinfo).visitor.invoke(
             (*vinfo).heap,
@@ -365,7 +365,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_visit_blocks(
     }
 
     let Some(heap_ptr) = HeapPtr::new(heap) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return false;
     };
     unsafe {
@@ -410,7 +410,7 @@ unsafe fn _mi_heap_visit_blocks_internal(
                                 break;
                             }
                             let Some(typed_bin) = crate::core_types::Bin::new(bin as u16) else {
-                                crate::mi_assert_internal!(false);
+                                crate::internal::mi_assert_internal!(false);
                                 break;
                             };
                             if mi_heap_abandoned_count(heap, typed_bin).load_relaxed() > 0 {
@@ -541,8 +541,8 @@ unsafe extern "C" fn mi_heap_delete_page(
             mi_page_set_theap(page, ptr::null_mut());
         }
     }
-    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
-    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
 
     if unsafe { crate::page::mi_page_used_count(page).get() == 0 } {
         unsafe { _mi_arenas_page_free(page, theap) };
@@ -564,7 +564,9 @@ unsafe extern "C" fn mi_heap_delete_page(
                 &mut arena_pages,
             )
         };
-        crate::mi_assert_internal!(unsafe { mi_bitmap_is_set((*arena_pages).pages, slice_index) });
+        crate::internal::mi_assert_internal!(unsafe {
+            mi_bitmap_is_set((*arena_pages).pages, slice_index)
+        });
         unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
         if !theap.is_null() {
             unsafe {
@@ -587,9 +589,9 @@ unsafe extern "C" fn mi_heap_delete_page(
             theap_target = unsafe { mi_heap_theap(heap_target) };
             arena_pages_target =
                 unsafe { mi_heap_ensure_arena_pages_from_raw(heap_target, arena_id) };
-            crate::mi_assert_internal!(!arena_pages_target.is_null());
+            crate::internal::mi_assert_internal!(!arena_pages_target.is_null());
         }
-        crate::mi_assert_internal!(unsafe {
+        crate::internal::mi_assert_internal!(unsafe {
             !mi_bitmap_is_set((*arena_pages_target).pages, slice_index)
         });
         unsafe { mi_bitmap_set((*arena_pages_target).pages, slice_index) };
@@ -631,7 +633,9 @@ unsafe fn mi_heap_delete_pages(heap: OwnedHeap, heap_target: *mut mi_heap_t) {
             let arena_pages =
                 unsafe { mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire() };
             if !arena_pages.is_null() {
-                crate::mi_assert_internal!(unsafe { mi_bitmap_is_all_clear((*arena_pages).pages) });
+                crate::internal::mi_assert_internal!(unsafe {
+                    mi_bitmap_is_all_clear((*arena_pages).pages)
+                });
             }
         }
         unsafe {
@@ -639,7 +643,7 @@ unsafe fn mi_heap_delete_pages(heap: OwnedHeap, heap_target: *mut mi_heap_t) {
                 (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
             ))
         };
-        crate::mi_assert_internal!(unsafe {
+        crate::internal::mi_assert_internal!(unsafe {
             (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages.is_null()
         });
         unsafe {
@@ -649,10 +653,10 @@ unsafe fn mi_heap_delete_pages(heap: OwnedHeap, heap_target: *mut mi_heap_t) {
         };
         for i in 0..MI_BIN_COUNT {
             let Some(bin) = crate::core_types::Bin::new(i as u16) else {
-                crate::mi_assert_internal!(false);
+                crate::internal::mi_assert_internal!(false);
                 continue;
             };
-            crate::mi_assert_internal!(unsafe {
+            crate::internal::mi_assert_internal!(unsafe {
                 mi_heap_abandoned_count(heap, bin).load_relaxed() == 0
             });
         }
@@ -667,7 +671,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_move_pages(
     mut heap_to: *mut mi_heap_t,
 ) {
     let Some(heap_from) = HeapPtr::new(heap_from) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     let Some(heap_from) = (unsafe { OwnedHeap::new(heap_from) }) else {
@@ -677,7 +681,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_move_pages(
         heap_to = unsafe { mi_heap_main() };
     }
     let Some(heap_to) = HeapPtr::new(heap_to) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     unsafe {
@@ -697,7 +701,7 @@ pub(crate) unsafe extern "C" fn _mi_heap_destroy_pages(heap_from: *mut mi_heap_t
         return;
     }
     let Some(heap_from) = HeapPtr::new(heap_from) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     let Some(heap_from) = (unsafe { OwnedHeap::new(heap_from) }) else {
@@ -732,7 +736,7 @@ pub(crate) unsafe extern "C" fn _mi_arena_id_none() -> mi_arena_id_t {
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t {
     let arena = id.cast::<mi_arena_t>();
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         arena.is_null() || unsafe { (*arena.cast::<MiArenaPrefix>()).parent.is_null() }
     );
     arena
@@ -756,7 +760,7 @@ pub unsafe extern "C" fn mi_arena_id_from_arena(arena: *mut mi_arena_t) -> mi_ar
 }
 
 unsafe fn mi_arena_id_from_arena_typed(arena: ArenaPtr) -> mi_arena_id_t {
-    crate::mi_assert_internal!(unsafe { arena.parent().is_none() });
+    crate::internal::mi_assert_internal!(unsafe { arena.parent().is_none() });
     arena.as_ptr().cast::<c_void>()
 }
 
@@ -802,7 +806,7 @@ pub(crate) unsafe extern "C" fn _mi_arena_memid_is_suitable(
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usize {
     let Some(subproc) = SubprocPtr::new(subproc) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return 0;
     };
     unsafe { mi_arenas_get_count_typed(subproc) }
@@ -841,9 +845,9 @@ unsafe fn mi_page_arena_pages(
     parena_pages: *mut *mut mi_arena_pages_t,
 ) -> *mut mi_arena_t {
     let page = page.as_ptr();
-    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     let arena = unsafe { mi_arena_from_memid((*page).memid, slice_index, slice_count) };
-    crate::mi_assert_internal!(!arena.is_null());
+    crate::internal::mi_assert_internal!(!arena.is_null());
     if !parena_pages.is_null() {
         let arena_pages = unsafe {
             mi_heap_arena_pages(
@@ -851,8 +855,8 @@ unsafe fn mi_page_arena_pages(
                 ArenaPtr::new_unchecked(arena),
             )
         };
-        crate::mi_assert_internal!(!arena_pages.is_null());
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(!arena_pages.is_null());
+        crate::internal::mi_assert_internal!(
             slice_index.is_null()
                 || unsafe { mi_bitmap_is_setN((*arena_pages).pages, *slice_index, 1) }
         );
@@ -970,7 +974,7 @@ unsafe fn mi_arena_slice_start(
 ) -> crate::core_types::SliceStart {
     let arena_raw = arena.as_ptr();
     let slice_index = slice_index.get();
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         slice_index < unsafe { (*arena_raw.cast::<MiArenaPrefix>()).slice_count }
     );
     let start = unsafe {
@@ -988,7 +992,7 @@ unsafe fn mi_arena_page_at_slice(
 ) -> PagePtr {
     let arena = arena.as_ptr();
     let slice_index_usize = slice_index.get();
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         slice_index_usize < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
     let pages_meta = unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta };
@@ -1015,7 +1019,7 @@ pub unsafe extern "C" fn mi_arena_area(arena_id: mi_arena_id_t, size: *mut usize
         return ptr::null_mut();
     }
     if !size.is_null() {
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             mi_size_of_slices(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count })
                 <= unsafe { (*arena.cast::<MiArenaPrefix>()).total_size }
         );
@@ -1049,7 +1053,7 @@ unsafe fn mi_arenas_contain_ex(p: Option<InteriorUserPtr>, parent: Option<ArenaP
     let parent_raw = parent.map(ArenaPtr::as_ptr);
     for i in 0..max_arena {
         let Some(arena_idx) = ArenaIndex::from_usize(i) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             continue;
         };
         let arena = unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) };
@@ -1109,8 +1113,8 @@ unsafe fn mi_memid_create_arena(
 ) -> mi_memid_t {
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
-    crate::mi_assert_internal!(slice_count > 0);
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(slice_count > 0);
+    crate::internal::mi_assert_internal!(
         slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
     crate::core_types::MemId::<crate::core_types::ArenaMem>::arena(
@@ -1146,7 +1150,7 @@ unsafe fn mi_arena_range_from_memid(
     match crate::core_types::MemId::view(memid) {
         crate::core_types::MemIdView::Arena(a) => Some((a.arena, a.range)),
         _ => {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             None
         }
     }
@@ -1176,9 +1180,9 @@ unsafe fn mi_page_full_size(page: PagePtr) -> crate::core_types::ReservedBytes {
             let os_size = os.size;
 
             let page_ptr = page_raw.cast::<u8>();
-            crate::mi_assert_internal!(base <= page_ptr);
+            crate::internal::mi_assert_internal!(base <= page_ptr);
             let presize = unsafe { page_ptr.offset_from(base) };
-            crate::mi_assert_internal!(os_size.get() as isize >= presize);
+            crate::internal::mi_assert_internal!(os_size.get() as isize >= presize);
             if presize > os_size.get() as isize {
                 crate::core_types::ReservedBytes::new(0)
             } else {
@@ -1194,9 +1198,9 @@ unsafe fn mi_page_full_size(page: PagePtr) -> crate::core_types::ReservedBytes {
             let os_size = external.size.get();
 
             let page_ptr = page_raw.cast::<u8>();
-            crate::mi_assert_internal!(base <= page_ptr);
+            crate::internal::mi_assert_internal!(base <= page_ptr);
             let presize = unsafe { page_ptr.offset_from(base) };
-            crate::mi_assert_internal!(os_size as isize >= presize);
+            crate::internal::mi_assert_internal!(os_size as isize >= presize);
             if presize > os_size as isize {
                 crate::core_types::ReservedBytes::new(0)
             } else {
@@ -1235,7 +1239,7 @@ unsafe fn mi_arena_try_alloc_at(
     };
     let Some(range) = crate::core_types::SliceRange::new(slice_index, slice_count, arena_ptr).ok()
     else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         unsafe {
             mi_bbitmap_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -1262,7 +1266,7 @@ unsafe fn mi_arena_try_alloc_at(
                 &mut already_dirty,
             )
         };
-        crate::mi_assert_internal!(already_dirty <= touched_slices);
+        crate::internal::mi_assert_internal!(already_dirty <= touched_slices);
         touched_slices -= already_dirty;
     }
 
@@ -1330,7 +1334,7 @@ unsafe fn mi_arena_try_alloc_at(
             }
         }
 
-        crate::mi_assert_internal!(unsafe {
+        crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
                 slice_index,
@@ -1378,7 +1382,7 @@ unsafe fn mi_arena_try_alloc_at(
         }
     }
 
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         mi_bbitmap_is_clearN(
             (*allocation.arena.as_ptr().cast::<MiArenaPrefix>()).slices_free,
             allocation.range.start_usize(),
@@ -1386,16 +1390,16 @@ unsafe fn mi_arena_try_alloc_at(
         )
     });
     if commit {
-        crate::mi_assert_internal!(unsafe {
+        crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN(
                 (*allocation.arena.as_ptr().cast::<MiArenaPrefix>()).slices_committed,
                 allocation.range.start_usize(),
                 allocation.range.count_usize(),
             )
         });
-        crate::mi_assert_internal!(allocation.memid.initially_committed);
+        crate::internal::mi_assert_internal!(allocation.memid.initially_committed);
     }
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         mi_bitmap_is_setN(
             (*allocation.arena.as_ptr().cast::<MiArenaPrefix>()).slices_dirty,
             allocation.range.start_usize(),
@@ -1414,14 +1418,14 @@ pub unsafe extern "C" fn mi_arena_from_index(
     idx: usize,
 ) -> *mut mi_arena_t {
     let Some(subproc_ptr) = SubprocPtr::new(subproc) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return ptr::null_mut();
     };
     let Some(arena_idx) = ArenaIndex::from_usize(idx) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return ptr::null_mut();
     };
-    crate::mi_assert_internal!(idx < unsafe { mi_arenas_get_count_typed(subproc_ptr) });
+    crate::internal::mi_assert_internal!(idx < unsafe { mi_arenas_get_count_typed(subproc_ptr) });
     unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) }
 }
 
@@ -1451,7 +1455,7 @@ unsafe fn mi_arena_start_idx(
         return unsafe { ArenaIndex::new_unchecked((tseq.get() % arena_cycle) as u16) };
     }
 
-    crate::mi_assert_internal!(arena_cycle <= 0x8FF);
+    crate::internal::mi_assert_internal!(arena_cycle <= 0x8FF);
     let frac = (arena_cycle * 256) / hcount;
     let start = if frac == 0 {
         hseq.get() % arena_cycle
@@ -1463,7 +1467,7 @@ unsafe fn mi_arena_start_idx(
         }
         start
     };
-    crate::mi_assert_internal!(start < arena_cycle);
+    crate::internal::mi_assert_internal!(start < arena_cycle);
     unsafe { ArenaIndex::new_unchecked(start as u16) }
 }
 
@@ -1515,13 +1519,13 @@ unsafe fn mi_forall_arenas<F>(
 {
     let heap = heap.ptr();
     let Some(subproc) = (unsafe { heap.subproc() }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc) };
     let arena_cycle = arena_count.saturating_sub(1);
     let Some(arena_cycle_idx) = ArenaIndex::from_usize(arena_cycle) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     let start = unsafe {
@@ -1544,7 +1548,7 @@ unsafe fn mi_forall_arenas<F>(
                 i
             };
             let Some(arena_idx) = ArenaIndex::from_usize(idx) else {
-                crate::mi_assert_internal!(false);
+                crate::internal::mi_assert_internal!(false);
                 continue;
             };
             let Some(arena) = (unsafe { subproc.arena(arena_idx) }) else {
@@ -1594,7 +1598,7 @@ unsafe fn mi_arenas_try_find_free(
     numa_node: crate::core_types::NumaNode,
     allocation: *mut crate::core_types::ArenaAllocation,
 ) -> *mut c_void {
-    crate::mi_assert!(alignment <= MI_ARENA_SLICE_ALIGN);
+    crate::internal::mi_assert!(alignment <= MI_ARENA_SLICE_ALIGN);
     if alignment > MI_ARENA_SLICE_ALIGN {
         return ptr::null_mut();
     }
@@ -1656,7 +1660,7 @@ unsafe fn mi_arena_pages_size(
     crate::core_types::ReservedBytes,
 ) {
     let slice_count = slice_count.get() as usize;
-    crate::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
+    crate::internal::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
     let base_size = _mi_align_up(size_of::<mi_arena_pages_t>(), MI_BCHUNK_SIZE);
     let bitmaps_count = 1 + MI_ARENA_BIN_COUNT;
     let bitmaps_size = bitmaps_count * unsafe { mi_bitmap_size(slice_count, ptr::null_mut()) };
@@ -1672,7 +1676,7 @@ unsafe fn mi_arena_info_slices_needed(
     bitmap_base: *mut usize,
 ) -> usize {
     let slice_count = slice_count.get() as usize;
-    crate::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
+    crate::internal::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
     let base_size = _mi_align_up(size_of::<mi_arena_t>(), MI_BCHUNK_SIZE);
     let bitmaps_count = 4 + MI_ARENA_BIN_COUNT;
     let bitmaps_size = (bitmaps_count * unsafe { mi_bitmap_size(slice_count, ptr::null_mut()) })
@@ -1718,8 +1722,10 @@ unsafe fn mi_arena_pages_alloc(
     alloc_size: crate::core_types::ReservedBytes,
     bitmap_base: crate::core_types::ReservedBytes,
 ) -> *mut mi_arena_pages_t {
-    crate::mi_assert_internal!(range.start_usize() == 0);
-    crate::mi_assert_internal!(range.end_usize() <= unsafe { arena.slice_count() }.get() as usize);
+    crate::internal::mi_assert_internal!(range.start_usize() == 0);
+    crate::internal::mi_assert_internal!(
+        range.end_usize() <= unsafe { arena.slice_count() }.get() as usize
+    );
     let slice_count = range.count();
     let arena_pages =
         unsafe { mi_heap_zalloc_aligned(mi_heap_main(), alloc_size.get(), MI_BCHUNK_SIZE) }
@@ -1728,7 +1734,7 @@ unsafe fn mi_arena_pages_alloc(
         return ptr::null_mut();
     }
     let mut base = unsafe { arena_pages.cast::<u8>().add(bitmap_base.get()) };
-    crate::mi_assert_internal!((base as usize).is_multiple_of(MI_BCHUNK_SIZE));
+    crate::internal::mi_assert_internal!((base as usize).is_multiple_of(MI_BCHUNK_SIZE));
     unsafe { (*arena_pages).pages = mi_arena_bitmap_init(slice_count, &mut base) };
     for i in 0..MI_ARENA_BIN_COUNT {
         unsafe { (*arena_pages).pages_abandoned[i] = mi_arena_bitmap_init(slice_count, &mut base) };
@@ -1742,7 +1748,7 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
     for i in 0..arena_count {
         let Some(arena_idx) = ArenaIndex::from_usize(i) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             continue;
         };
         let arena = unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) };
@@ -1781,7 +1787,7 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t) {
     let Some(subproc) = SubprocPtr::new(subproc) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     unsafe { mi_arenas_unsafe_destroy(subproc) };
@@ -1794,7 +1800,7 @@ unsafe fn mi_arenas_add(
 ) -> bool {
     let subproc = subproc.as_ptr();
     let arena = arena_ptr.as_ptr();
-    crate::mi_assert_internal!(unsafe { arena_ptr.slice_count() }.get() > 0);
+    crate::internal::mi_assert_internal!(unsafe { arena_ptr.slice_count() }.get() > 0);
     if !arena_id.is_null() {
         unsafe { *arena_id = _mi_arena_id_none() };
     }
@@ -1802,7 +1808,7 @@ unsafe fn mi_arenas_add(
     let mut count = unsafe { mi_arenas_get_count_typed(SubprocPtr::new_unchecked(subproc)) };
     for i in 0..count {
         let Some(arena_idx) = ArenaIndex::from_usize(i) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             continue;
         };
         if unsafe { mi_arena_from_index_typed(SubprocPtr::new_unchecked(subproc), arena_idx) }
@@ -1831,7 +1837,7 @@ unsafe fn mi_arenas_add(
             .compare_exchange_acq_rel(&mut count, next_count)
         } {
             let Some(arena_idx) = ArenaIndex::from_usize(count) else {
-                crate::mi_assert_internal!(false);
+                crate::internal::mi_assert_internal!(false);
                 continue;
             };
             unsafe { arena_ptr.set_index(arena_idx) };
@@ -1882,8 +1888,8 @@ unsafe fn mi_arena_initialize(
     let subproc_raw = subproc.as_ptr();
     let start = start.as_ptr();
     let slice_count_usize = slice_count.get() as usize;
-    crate::mi_assert_internal!((start as usize).is_multiple_of(MI_ARENA_SLICE_ALIGN));
-    crate::mi_assert_internal!(mi_size_of_slices(slice_count_usize) >= MI_ARENA_MIN_SIZE);
+    crate::internal::mi_assert_internal!((start as usize).is_multiple_of(MI_ARENA_SLICE_ALIGN));
+    crate::internal::mi_assert_internal!(mi_size_of_slices(slice_count_usize) >= MI_ARENA_MIN_SIZE);
 
     if slice_count_usize > MI_BITMAP_MAX_BIT_COUNT {
         crate::options::_mi_warning_message_fmt(format_args!(
@@ -2017,7 +2023,7 @@ unsafe fn mi_arena_initialize(
     } else {
         unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta = ptr::null_mut() };
     }
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         mi_size_of_slices(info_slices)
             >= unsafe {
                 base.offset_from(
@@ -2072,7 +2078,7 @@ unsafe fn mi_arenas_try_alloc(
     numa_node: crate::core_types::NumaNode,
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
-    crate::mi_assert!(alignment.get() <= MI_ARENA_SLICE_ALIGN);
+    crate::internal::mi_assert!(alignment.get() <= MI_ARENA_SLICE_ALIGN);
     if (slice_count.get() as usize).saturating_mul(MI_ARENA_SLICE_SIZE) > MI_ARENA_MAX_SIZE {
         return ptr::null_mut();
     }
@@ -2103,7 +2109,7 @@ unsafe fn mi_arenas_try_alloc(
     }
 
     let Some(subproc) = (unsafe { heap.ptr().subproc() }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return ptr::null_mut();
     };
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc) };
@@ -2395,8 +2401,8 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
     numa_node: c_int,
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
-    crate::mi_assert_internal!(!memid.is_null());
-    crate::mi_assert_internal!(size > 0);
+    crate::internal::mi_assert_internal!(!memid.is_null());
+    crate::internal::mi_assert_internal!(size > 0);
 
     match crate::core_types::LayoutRequest::aligned_at(
         size,
@@ -2503,8 +2509,8 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
     numa_node: c_int,
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
-    crate::mi_assert_internal!(!memid.is_null());
-    crate::mi_assert_internal!(size > 0);
+    crate::internal::mi_assert_internal!(!memid.is_null());
+    crate::internal::mi_assert_internal!(size > 0);
     let size = crate::core_types::RequestedSize::new(size);
 
     unsafe {
@@ -2529,9 +2535,11 @@ unsafe fn mi_abandoned_page_unown(
     let page_ptr = page.page();
     let page = page_ptr.as_ptr();
     let current_theap = current_theap.ptr().as_ptr();
-    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
-    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
-    crate::mi_assert_internal!(unsafe { _mi_thread_id() == (*(*current_theap).tld).thread_id });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::internal::mi_assert_internal!(unsafe {
+        _mi_thread_id() == (*(*current_theap).tld).thread_id
+    });
     let owned_page = unsafe { crate::core_types::OwnedAbandonedPage::new_unchecked(page_ptr) };
 
     let atomic_tf =
@@ -2540,7 +2548,7 @@ unsafe fn mi_abandoned_page_unown(
         }));
     let mut tf_old = atomic_tf.load_relaxed();
     loop {
-        crate::mi_assert_internal!(tf_old.is_owned());
+        crate::internal::mi_assert_internal!(tf_old.is_owned());
         while tf_old.head().is_some() {
             let local_free = unsafe { page_ptr.local_free() };
             let local_free = unsafe {
@@ -2561,7 +2569,7 @@ unsafe fn mi_abandoned_page_unown(
             }
             tf_old = atomic_tf.load_relaxed();
         }
-        crate::mi_assert_internal!(tf_old.head().is_none());
+        crate::internal::mi_assert_internal!(tf_old.head().is_none());
         if unsafe { atomic_tf.release_acq_rel(&mut tf_old) } {
             return false;
         }
@@ -2574,7 +2582,7 @@ unsafe fn mi_arena_try_claim_abandoned_at(
     keep_abandoned: *mut bool,
 ) -> bool {
     let slice_index = slice_index.get();
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -2641,8 +2649,8 @@ unsafe fn mi_heap_ensure_arena_pages_from_raw(
     heap: *mut mi_heap_t,
     arena: *mut mi_arena_t,
 ) -> *mut mi_arena_pages_t {
-    crate::mi_assert_internal!(!arena.is_null());
-    crate::mi_assert_internal!(!heap.is_null());
+    crate::internal::mi_assert_internal!(!arena.is_null());
+    crate::internal::mi_assert_internal!(!heap.is_null());
     let arena_idx = unsafe { mi_arena_index(arena) };
     unsafe {
         mi_heap_ensure_arena_pages(
@@ -2674,7 +2682,7 @@ unsafe fn mi_heap_ensure_arena_pages(
                 let Ok(range) =
                     crate::core_types::SliceRange::new(0, slice_count.get() as usize, arena)
                 else {
-                    crate::mi_assert_internal!(false);
+                    crate::internal::mi_assert_internal!(false);
                     unsafe { mi_lock_release(heap.ptr().arena_pages_lock()) };
                     return ptr::null_mut();
                 };
@@ -2687,7 +2695,7 @@ unsafe fn mi_heap_ensure_arena_pages(
         unsafe { mi_lock_release(heap.ptr().arena_pages_lock()) };
     }
     if unsafe { _mi_is_heap_main(heap_raw) } {
-        crate::mi_assert!(!arena_pages.is_null());
+        crate::internal::mi_assert!(!arena_pages.is_null());
     }
     arena_pages
 }
@@ -2698,7 +2706,7 @@ unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
         crate::page::mi_page_reserved_count(page).get()
             == crate::page::mi_page_used_count(page).get()
     };
-    crate::mi_assert_internal!(!full || unsafe { (*page).free.is_null() });
+    crate::internal::mi_assert_internal!(!full || unsafe { (*page).free.is_null() });
     full
 }
 
@@ -2713,7 +2721,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
     let slice_count_usize = slice_count.get() as usize;
 
     let bin = mi_bin_from_block_size(block_size);
-    crate::mi_assert_internal!(bin.as_usize() < MI_BIN_COUNT);
+    crate::internal::mi_assert_internal!(bin.as_usize() < MI_BIN_COUNT);
     if unsafe { mi_heap_abandoned_count(heap, bin).load_relaxed() } == 0 {
         return ptr::null_mut();
     }
@@ -2723,7 +2731,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
     let claim_fun = ThreadLocalClaimCallback::new(mi_arena_try_claim_abandoned);
     unsafe {
         let Some(heap_ptr) = HeapPtr::new(heap) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             return ptr::null_mut();
         };
         let borrowed_heap = BorrowedHeap::new_unchecked(heap_ptr);
@@ -2751,9 +2759,9 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                 ) {
                     let page = mi_arena_page_at_slice(arena, slice_index);
                     let page_raw = page.as_ptr();
-                    crate::mi_assert_internal!(mi_page_is_owned(page_raw));
-                    crate::mi_assert_internal!(mi_page_is_abandoned(page_raw));
-                    crate::mi_assert_internal!(mi_heap_has_page(
+                    crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
+                    crate::internal::mi_assert_internal!(mi_page_is_abandoned(page_raw));
+                    crate::internal::mi_assert_internal!(mi_heap_has_page(
                         BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(heap)),
                         arena,
                         page,
@@ -2765,13 +2773,13 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                         1,
                     );
                     _mi_page_free_collect(page_raw, false);
-                    crate::mi_assert_internal!(mi_bbitmap_is_clearN(
+                    crate::internal::mi_assert_internal!(mi_bbitmap_is_clearN(
                         (*arena_raw.cast::<MiArenaPrefix>()).slices_free,
                         slice_index.get(),
                         slice_count_usize,
                     ));
                     let committed = crate::page::mi_page_slice_committed(page_raw);
-                    crate::mi_assert_internal!(
+                    crate::internal::mi_assert_internal!(
                         !committed.is_zero()
                             || mi_bitmap_is_setN(
                                 (*arena_raw.cast::<MiArenaPrefix>()).slices_committed,
@@ -2779,20 +2787,22 @@ unsafe fn mi_arenas_page_try_find_abandoned(
                                 slice_count_usize,
                             )
                     );
-                    crate::mi_assert_internal!(mi_bitmap_is_setN(
+                    crate::internal::mi_assert_internal!(mi_bitmap_is_setN(
                         (*arena_raw.cast::<MiArenaPrefix>()).slices_dirty,
                         slice_index.get(),
                         slice_count_usize,
                     ));
-                    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+                    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
                         mi_page_slice_start(page_raw).cast(),
                         MI_PAGE_ALIGN
                     ));
-                    crate::mi_assert_internal!(
+                    crate::internal::mi_assert_internal!(
                         crate::internal::_mi_ptr_page(mi_page_start(page_raw).cast()) == page_raw
                     );
-                    crate::mi_assert_internal!(mi_page_block_size(page_raw) == block_size.get());
-                    crate::mi_assert_internal!(!mi_page_is_full_local(page_raw));
+                    crate::internal::mi_assert_internal!(
+                        mi_page_block_size(page_raw) == block_size.get()
+                    );
+                    crate::internal::mi_assert_internal!(!mi_page_is_full_local(page_raw));
                     result = page_raw;
                     false
                 } else {
@@ -2837,7 +2847,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
         && slice_count_usize <= unsafe { mi_arena_max_object_size() } / MI_ARENA_SLICE_SIZE
     {
         let Some(heap_ptr) = HeapPtr::new(heap) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             return ptr::null_mut();
         };
         let page_alignment = unsafe { crate::core_types::Alignment::new_unchecked(page_alignment) };
@@ -2865,7 +2875,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
                         start = ptr::null_mut();
                     } else {
                         let slice_idx = a.range.start().0;
-                        crate::mi_assert_internal!(unsafe {
+                        crate::internal::mi_assert_internal!(unsafe {
                             !mi_bitmap_is_setN((*arena_pages).pages, slice_idx, 1)
                         });
                         unsafe { mi_bitmap_set((*arena_pages).pages, slice_idx) };
@@ -2911,8 +2921,11 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     if start.is_null() {
         return ptr::null_mut();
     }
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(start.cast(), MI_PAGE_ALIGN));
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        start.cast(),
+        MI_PAGE_ALIGN
+    ));
+    crate::internal::mi_assert_internal!(
         !os_align
             || crate::internal::_mi_is_aligned(
                 unsafe { start.add(page_alignment) }.cast(),
@@ -2981,7 +2994,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
                     .pages_meta
                     .add(a.range.start().0)
             };
-            crate::mi_assert_internal!(unsafe { (*page_meta).block_size == 0 });
+            crate::internal::mi_assert_internal!(unsafe { (*page_meta).block_size == 0 });
             if block_size_raw > MI_SMALL_SIZE_MAX || MI_PAGE_META_ALIGNED_FREE_SMALL == 0 {
                 page = page_meta;
                 page_meta_is_separate = true;
@@ -3016,7 +3029,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
             let (arena_ptr, range) = match crate::core_types::MemId::view(memid) {
                 crate::core_types::MemIdView::Arena(a) => (a.arena, a.range),
                 _ => {
-                    crate::mi_assert_internal!(false);
+                    crate::internal::mi_assert_internal!(false);
                     _mi_arenas_free(slice_start.cast(), alloc_size, memid);
                     return ptr::null_mut();
                 }
@@ -3067,7 +3080,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     } else {
         (page_noguard_size - block_start) / block_size_raw
     };
-    crate::mi_assert_internal!(reserved > 0 && u16::try_from(reserved).is_ok());
+    crate::internal::mi_assert_internal!(reserved > 0 && u16::try_from(reserved).is_ok());
 
     unsafe {
         crate::page::mi_page_set_reserved_count(
@@ -3080,9 +3093,11 @@ unsafe fn mi_arenas_page_alloc_fresh(
     unsafe { crate::page::mi_page_set_slice_committed(page, commit_size) };
     unsafe { (*page).memid = memid };
     unsafe { (*page).free_is_zero = memid.initially_zero };
-    crate::mi_assert_internal!(unsafe { (*page).free.is_null() });
-    crate::mi_assert_internal!(page_meta_is_separate == unsafe { mi_page_meta_is_separated(page) });
-    crate::mi_assert_internal!(unsafe { mi_page_slice_start(page) } == slice_start);
+    crate::internal::mi_assert_internal!(unsafe { (*page).free.is_null() });
+    crate::internal::mi_assert_internal!(
+        page_meta_is_separate == unsafe { mi_page_meta_is_separated(page) }
+    );
+    crate::internal::mi_assert_internal!(unsafe { mi_page_slice_start(page) } == slice_start);
 
     unsafe {
         (*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(
@@ -3093,7 +3108,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     };
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
     let claimed = unsafe { page_ptr.thread_free_cell().claim_acq_rel() };
-    crate::mi_assert_internal!(claimed);
+    crate::internal::mi_assert_internal!(claimed);
     if !unsafe { _mi_page_map_register(page) } {
         unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
         return ptr::null_mut();
@@ -3103,16 +3118,16 @@ unsafe fn mi_arenas_page_alloc_fresh(
     let stats_bin = unsafe { _mi_page_stats_bin(page) };
     unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.page_bins[stats_bin]), 1) };
 
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
-    crate::mi_assert_internal!(unsafe { mi_page_block_size(page) } == block_size_raw);
-    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
-    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_block_size(page) } == block_size_raw);
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
 
     page
 }
@@ -3145,12 +3160,12 @@ unsafe fn mi_arenas_page_regular_alloc(
     if page.is_null() {
         return ptr::null_mut();
     }
-    crate::mi_assert_internal!(
-        match crate::core_types::MemId::view(unsafe { (*page).memid }) {
-            crate::core_types::MemIdView::Arena(a) => a.range.count() == slice_count,
-            _ => true, // Non-arena allocations trivially pass this slice_count assert
-        }
-    );
+    crate::internal::mi_assert_internal!(match crate::core_types::MemId::view(unsafe {
+        (*page).memid
+    }) {
+        crate::core_types::MemIdView::Arena(a) => a.range.count() == slice_count,
+        _ => true, // Non-arena allocations trivially pass this slice_count assert
+    });
     if !unsafe { crate::page::_mi_page_init(theap, page) } {
         unsafe {
             _mi_arenas_free(
@@ -3189,7 +3204,9 @@ unsafe fn mi_arenas_page_singleton_alloc(
     if page.is_null() {
         return ptr::null_mut();
     }
-    crate::mi_assert_internal!(unsafe { crate::page::mi_page_reserved_count(page).get() == 1 });
+    crate::internal::mi_assert_internal!(unsafe {
+        crate::page::mi_page_reserved_count(page).get() == 1
+    });
     if !unsafe { crate::page::_mi_page_init(theap, page) } {
         unsafe {
             _mi_arenas_free(
@@ -3215,7 +3232,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
     let block_alignment_typed =
         unsafe { crate::core_types::MaybeAlignment::new_unchecked(block_alignment) };
     let page = if block_alignment > MI_PAGE_MAX_OVERALLOC_ALIGN {
-        crate::mi_assert_internal!(crate::internal::_mi_is_power_of_two(block_alignment));
+        crate::internal::mi_assert_internal!(crate::internal::_mi_is_power_of_two(block_alignment));
         unsafe { mi_arenas_page_singleton_alloc(theap, block_size_typed, block_alignment_typed) }
     } else if block_size <= MI_SMALL_MAX_OBJ_SIZE {
         unsafe { mi_arenas_page_regular_alloc(theap, MI_SMALL_PAGE_SLICE_COUNT, block_size_typed) }
@@ -3229,14 +3246,14 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
     if page.is_null() {
         return ptr::null_mut();
     }
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(
         block_alignment <= MI_PAGE_MAX_OVERALLOC_ALIGN
             || crate::internal::_mi_is_aligned(
                 unsafe { mi_page_start(page) }.cast(),
@@ -3275,17 +3292,19 @@ unsafe fn _mi_arenas_page_free_internal<S>(
     let current_theapx = current_theap
         .map(|theap| theap.ptr().as_ptr())
         .unwrap_or(ptr::null_mut());
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
-    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
-    crate::mi_assert_internal!(unsafe { mi_page_all_free(page) });
-    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
-    crate::mi_assert_internal!(unsafe { (*page).next.is_null() && (*page).prev.is_null() });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_all_free(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::internal::mi_assert_internal!(unsafe {
+        (*page).next.is_null() && (*page).prev.is_null()
+    });
 
     let stats_bin = unsafe { _mi_page_stats_bin(page) };
     if !current_theapx.is_null() {
@@ -3322,7 +3341,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 &mut arena_pages,
             )
         };
-        crate::mi_assert_internal!(unsafe {
+        crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
                 slice_index,
@@ -3330,7 +3349,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
             )
         });
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             !committed.is_zero()
                 || unsafe {
                     mi_bitmap_is_setN(
@@ -3340,14 +3359,14 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                     )
                 }
         );
-        crate::mi_assert_internal!(!unsafe {
+        crate::internal::mi_assert_internal!(!unsafe {
             mi_bitmap_is_setN(
                 (*arena_pages).pages_abandoned[bin.as_usize()],
                 slice_index,
                 1,
             )
         });
-        crate::mi_assert_internal!(unsafe {
+        crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN((*arena_pages).pages, slice_index, 1)
         });
     }
@@ -3365,12 +3384,12 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 &mut arena_pages,
             )
         };
-        crate::mi_assert_internal!(!arena_pages.is_null());
+        crate::internal::mi_assert_internal!(!arena_pages.is_null());
         unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
         if !committed.is_zero() {
             let total_slices = committed.get() / MI_ARENA_SLICE_SIZE;
-            crate::mi_assert_internal!(slice_count >= total_slices);
+            crate::internal::mi_assert_internal!(slice_count >= total_slices);
             if total_slices > 0 {
                 unsafe {
                     mi_bitmap_setN(
@@ -3391,7 +3410,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 };
             }
         } else {
-            crate::mi_assert_internal!(unsafe {
+            crate::internal::mi_assert_internal!(unsafe {
                 mi_bitmap_is_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
                     slice_index,
@@ -3452,20 +3471,22 @@ unsafe fn _mi_arenas_page_abandon_internal(
         crate::core_types::PageForAbandon::Full(page) => page.page().as_ptr(),
     };
     let current_theap = current_theap.ptr().as_ptr();
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
-    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
-    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
-    crate::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
-    crate::mi_assert_internal!(unsafe { (*page).next.is_null() && (*page).prev.is_null() });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
+    crate::internal::mi_assert_internal!(unsafe {
+        (*page).next.is_null() && (*page).prev.is_null()
+    });
 
     let heap = unsafe { mi_page_heap(page) };
-    crate::mi_assert_internal!(heap == unsafe { _mi_theap_heap(current_theap) });
+    crate::internal::mi_assert_internal!(heap == unsafe { _mi_theap_heap(current_theap) });
     if unsafe { mi_page_memid_is_arena(page) } && !unsafe { mi_page_is_full_local(page) } {
         let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) });
         let mut slice_index = 0usize;
@@ -3480,8 +3501,8 @@ unsafe fn _mi_arenas_page_abandon_internal(
             )
         };
         let _ = arena;
-        crate::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
-        crate::mi_assert_internal!(unsafe {
+        crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
+        crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
                 slice_index,
@@ -3489,7 +3510,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
             )
         });
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             !committed.is_zero()
                 || unsafe {
                     mi_bitmap_is_setN(
@@ -3499,7 +3520,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
                     )
                 }
         );
-        crate::mi_assert_internal!(unsafe {
+        crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_dirty,
                 slice_index,
@@ -3514,8 +3535,8 @@ unsafe fn _mi_arenas_page_abandon_internal(
         unsafe { atomic_tid.store_owner(crate::core_types::PageOwnerId::AbandonedMapped) };
         let was_clear =
             unsafe { mi_bitmap_set((*arena_pages).pages_abandoned[bin.as_usize()], slice_index) };
-        crate::MI_UNUSED!(was_clear);
-        crate::mi_assert_internal!(was_clear);
+        crate::internal::MI_UNUSED(&was_clear);
+        crate::internal::mi_assert_internal!(was_clear);
         unsafe { mi_heap_abandoned_count(heap, bin).fetch_add_relaxed(1) };
         unsafe { __mi_stat_increase(ptr::addr_of_mut!((*current_theap).stats.pages_abandoned), 1) };
     } else {
@@ -3576,19 +3597,19 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
     _arena_memid: crate::core_types::ArenaMemId,
 ) -> bool {
     let page = page.page().as_ptr();
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
-    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
-    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
-    crate::mi_assert_internal!(!unsafe { mi_page_is_abandoned_mapped(page) });
-    crate::mi_assert_internal!(!unsafe { mi_page_is_full_local(page) });
-    crate::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
-    crate::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_abandoned_mapped(page) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_full_local(page) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
+    crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
 
     if unsafe { mi_page_is_full_local(page) } || unsafe { mi_page_is_abandoned_mapped(page) } {
         return false;
@@ -3639,23 +3660,23 @@ unsafe fn _mi_arenas_page_unabandon_internal(
         .map(|theap| theap.ptr().as_ptr())
         .unwrap_or(ptr::null_mut());
 
-    crate::mi_assert_internal!(crate::internal::_mi_is_aligned(
+    crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
-    crate::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
-    crate::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
-    crate::mi_assert_internal!(
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
+    crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
+    crate::internal::mi_assert_internal!(
         current_theapx.is_null()
             || unsafe { _mi_thread_id() == (*(*current_theapx).tld).thread_id }
     );
 
     let heap = unsafe { mi_page_heap(page) };
     if unsafe { mi_page_is_abandoned_mapped(page) } {
-        crate::mi_assert_internal!(unsafe { mi_page_memid_is_arena(page) });
+        crate::internal::mi_assert_internal!(unsafe { mi_page_memid_is_arena(page) });
         let bin = mi_bin_from_block_size(unsafe { mi_page_block_size_typed(page) });
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
@@ -3669,7 +3690,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             )
         };
         let _ = arena;
-        crate::mi_assert_internal!(unsafe {
+        crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
                 slice_index,
@@ -3677,7 +3698,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             )
         });
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             !committed.is_zero()
                 || unsafe {
                     mi_bitmap_is_setN(
@@ -3742,7 +3763,7 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
     {
         return;
     }
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         mi_bbitmap_is_clearN(
             (*arena.cast::<MiArenaPrefix>()).slices_free,
             slice_index,
@@ -3762,7 +3783,7 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
         )
         .compare_exchange_acq_rel(&mut expire0, expire)
     } {
-        crate::mi_assert_internal!(expire0 == 0);
+        crate::internal::mi_assert_internal!(expire0 == 0);
         let subproc = unsafe { (*arena.cast::<MiArenaPrefix>()).subproc };
         unsafe {
             crate::core_types::AtomicI64Field(
@@ -3800,12 +3821,12 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
             let slice_index = range.start_usize();
             let slice_count = range.count_usize();
             let slice_end = range.end_usize();
-            crate::mi_assert_internal!(size.is_multiple_of(MI_ARENA_SLICE_SIZE));
-            crate::mi_assert_internal!(slice_count * MI_ARENA_SLICE_SIZE == size);
-            crate::mi_assert_internal!(
+            crate::internal::mi_assert_internal!(size.is_multiple_of(MI_ARENA_SLICE_SIZE));
+            crate::internal::mi_assert_internal!(slice_count * MI_ARENA_SLICE_SIZE == size);
+            crate::internal::mi_assert_internal!(
                 slice_end <= unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
             );
-            crate::mi_assert_internal!(unsafe {
+            crate::internal::mi_assert_internal!(unsafe {
                 mi_arena_range_is_after_info_slices(arena_ptr, range)
             });
             if !unsafe { mi_arena_range_is_after_info_slices(arena_ptr, range) }
@@ -3849,7 +3870,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
         | crate::core_types::MemIdView::External(_)
         | crate::core_types::MemIdView::Static(_) => {}
         crate::core_types::MemIdView::HeapMain(_) | crate::core_types::MemIdView::Unknown(_) => {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
         }
     }
 }
@@ -3864,8 +3885,10 @@ unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) 
     let arena = arena.as_ptr();
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
-    crate::mi_assert_internal!(!unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned });
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(!unsafe {
+        (*arena.cast::<MiArenaPrefix>()).memid.is_pinned
+    });
+    crate::internal::mi_assert_internal!(unsafe {
         mi_bbitmap_is_clearN(
             (*arena.cast::<MiArenaPrefix>()).slices_free,
             slice_index,
@@ -3917,7 +3940,7 @@ unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::Sl
     let arena = arena.as_ptr();
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
-    crate::mi_assert!(slice_count < MI_BCHUNK_BITS);
+    crate::internal::mi_assert!(slice_count < MI_BCHUNK_BITS);
     if unsafe {
         mi_bbitmap_try_clearNC(
             (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -3926,7 +3949,7 @@ unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::Sl
         )
     } {
         let decommitted = unsafe { mi_arena_purge(ArenaPtr::new_unchecked(arena), range) };
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             !decommitted
                 || unsafe {
                     mi_bitmap_is_clearN(
@@ -3960,7 +3983,7 @@ unsafe fn mi_arena_try_purge_visit(
     } else if range.count_usize() > 1 {
         for i in 0..range.count_usize() {
             let Ok(single) = range.single_at_offset(i) else {
-                crate::mi_assert_internal!(false);
+                crate::internal::mi_assert_internal!(false);
                 vinfo.all_purged = false;
                 continue;
             };
@@ -3979,16 +4002,16 @@ unsafe extern "C" fn mi_arena_try_purge_visitor(
     arg: *mut c_void,
 ) -> bool {
     let Some(arena_ptr) = ArenaPtr::new(arena) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return true;
     };
     let Some(range) = crate::core_types::SliceRange::new(slice_index, slice_count, arena_ptr).ok()
     else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return true;
     };
     let Some(vinfo) = (unsafe { arg.cast::<mi_purge_visit_info_t>().as_mut() }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return true;
     };
 
@@ -4084,7 +4107,7 @@ unsafe fn mi_arenas_try_purge(
     }
 
     static PURGE_GUARD: mi_atomic_guard_t = AtomicUsize::new(0);
-    crate::mi_atomic_guard!(ptr::addr_of!(PURGE_GUARD).cast_mut(), {
+    crate::atomic::mi_atomic_guard!(ptr::addr_of!(PURGE_GUARD).cast_mut(), {
         if arenas_expire > now {
             unsafe {
                 crate::core_types::AtomicI64Field(
@@ -4111,7 +4134,7 @@ unsafe fn mi_arenas_try_purge(
                 i -= max_arena;
             }
             let Some(arena_idx) = ArenaIndex::from_usize(i) else {
-                crate::mi_assert_internal!(false);
+                crate::internal::mi_assert_internal!(false);
                 continue;
             };
             let arena = unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) };
@@ -4328,7 +4351,7 @@ unsafe fn mi_manage_os_memory_ex2(
             slice_count = MI_BITMAP_MAX_BIT_COUNT;
         }
         let Some(typed_slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             return false;
         };
 
@@ -4359,7 +4382,7 @@ unsafe fn mi_manage_os_memory_ex2(
             if parent.is_null() {
                 return false;
             }
-            crate::mi_assert!(
+            crate::internal::mi_assert!(
                 mi_size_of_slices(total_slice_count)
                     <= unsafe { (*parent.cast::<MiArenaPrefix>()).total_size }
             );
@@ -4374,7 +4397,7 @@ unsafe fn mi_manage_os_memory_ex2(
             parent = arena;
             memid = crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw();
         }
-        crate::mi_assert!(slice_count <= total_slice_count);
+        crate::internal::mi_assert!(slice_count <= total_slice_count);
         total_slice_count -= slice_count;
         start = unsafe {
             start
@@ -4531,7 +4554,7 @@ unsafe fn mi_debug_show_page_bfield(
     let mut prev_color = MI_GRAY;
     for bit in 0..MI_BFIELD_BITS {
         let Some(slice) = slice_index.checked_add(bit) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             break;
         };
         let slice_index_usize = slice.get();
@@ -4542,7 +4565,7 @@ unsafe fn mi_debug_show_page_bfield(
         };
         let page = unsafe { _mi_safe_ptr_page(start) };
         if !page.is_null() && start == unsafe { mi_page_slice_start(page) }.cast::<c_void>() {
-            crate::mi_assert_internal!(bit_of_page <= 0);
+            crate::internal::mi_assert_internal!(bit_of_page <= 0);
             bit_set_count += 1;
             let mut c = b'p';
             if unsafe { mi_page_is_singleton(page) } {
@@ -4568,7 +4591,7 @@ unsafe fn mi_debug_show_page_bfield(
             bit_of_page = match crate::core_types::MemId::view(unsafe { (*page).memid }) {
                 crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize,
                 _ => {
-                    crate::mi_assert_internal!(false);
+                    crate::internal::mi_assert_internal!(false);
                     0
                 }
             };
@@ -4766,7 +4789,7 @@ unsafe fn mi_debug_show_chunks(
 
 unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: bool) {
     let Some(subproc) = (unsafe { heap.ptr().subproc() }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     let subproc_ptr = subproc;
@@ -4775,7 +4798,7 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
     let mut page_total = 0usize;
     for i in 0..max_arenas {
         let Some(arena_idx) = ArenaIndex::from_usize(i) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             continue;
         };
         let arena =
@@ -4783,7 +4806,7 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
         if arena.is_null() {
             break;
         }
-        crate::mi_assert!(unsafe { (*arena.cast::<MiArenaPrefix>()).subproc == subproc });
+        crate::internal::mi_assert!(unsafe { (*arena.cast::<MiArenaPrefix>()).subproc == subproc });
         crate::options::_mi_raw_message(format_args!(
             "{}arena {} at {:p}: {} slices ({} MiB){}{}, subproc: {:p}, numa: {}\n",
             if unsafe { (*arena.cast::<MiArenaPrefix>()).parent.is_null() } {
@@ -4816,7 +4839,7 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
             let Some(slice_count) =
                 SliceCount::from_usize(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count })
             else {
-                crate::mi_assert_internal!(false);
+                crate::internal::mi_assert_internal!(false);
                 continue;
             };
             page_total += unsafe {
@@ -4845,7 +4868,7 @@ unsafe fn mi_debug_show_arenas_ex(heap: BorrowedHeap, show_pages: bool, narrow: 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_debug_show_arenas() {
     let Some(heap) = HeapPtr::new(unsafe { mi_heap_main() }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     unsafe { mi_debug_show_arenas_ex(BorrowedHeap::new_unchecked(heap), true, true) }

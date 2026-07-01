@@ -102,7 +102,7 @@ fn mi_memid_os_base_size(memid: mi_memid_t) -> (*mut c_void, usize) {
             external.size.get(),
         ),
         _ => {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             (ptr::null_mut(), 0)
         }
     }
@@ -189,7 +189,7 @@ unsafe fn mi_page_map_get_idx(page: PagePtr) -> Option<PageMapGetIndex> {
 fn mi_page_map_is_committed(idx: crate::core_types::PageMapIndex, pbit_idx: *mut usize) -> bool {
     let commit = mi_page_map_commit.load(Ordering::Relaxed);
     let bit_idx = idx.get() / MI_PAGE_MAP_ENTRIES_PER_CBIT;
-    crate::mi_assert_internal!(bit_idx < MI_BFIELD_BITS);
+    crate::internal::mi_assert_internal!(bit_idx < MI_BFIELD_BITS);
     if !pbit_idx.is_null() {
         unsafe { *pbit_idx = bit_idx };
     }
@@ -316,7 +316,9 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
     unsafe {
         *_mi_page_map.add(0) = 1;
     }
-    crate::mi_assert_internal!(unsafe { crate::internal::_mi_ptr_page(ptr::null()) }.is_null());
+    crate::internal::mi_assert_internal!(
+        unsafe { crate::internal::_mi_ptr_page(ptr::null()) }.is_null()
+    );
     true
 }
 
@@ -327,8 +329,8 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
 #[cfg(target_pointer_width = "32")]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t) {
-    crate::mi_assert_internal!(!subproc.is_null());
-    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    crate::internal::mi_assert_internal!(!subproc.is_null());
+    crate::internal::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
     if unsafe { _mi_page_map }.is_null() {
         return;
     }
@@ -349,9 +351,9 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
 #[cfg(target_pointer_width = "32")]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
-    crate::mi_assert_internal!(!page.is_null());
+    crate::internal::mi_assert_internal!(!page.is_null());
     let Some(page) = PagePtr::new(page) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return false;
     };
     unsafe { mi_page_map_register_typed(page) }
@@ -360,7 +362,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
 #[cfg(target_pointer_width = "32")]
 unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
     let page_raw = page.as_ptr();
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         _mi_is_aligned(
             mi_page_slice_start(page_raw).cast::<c_void>(),
             MI_PAGE_ALIGN,
@@ -369,18 +371,18 @@ unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
     if unsafe { _mi_page_map }.is_null() && !unsafe { _mi_page_map_init() } {
         return false;
     }
-    crate::mi_assert!(!(unsafe { _mi_page_map }).is_null());
+    crate::internal::mi_assert!(!(unsafe { _mi_page_map }).is_null());
     let Some((idx, _page_start, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return false;
     };
     let Some(registered) = (unsafe { mi_page_map_register_range_typed(page, idx, slice_count) })
     else {
         return false;
     };
-    crate::mi_debug_assert!(registered.page().as_ptr() == page.as_ptr());
-    crate::mi_debug_assert!(registered.index() == idx);
-    crate::mi_debug_assert!(registered.slice_count() == slice_count);
+    crate::internal::mi_debug_assert!(registered.page().as_ptr() == page.as_ptr());
+    crate::internal::mi_debug_assert!(registered.index() == idx);
+    crate::internal::mi_debug_assert!(registered.slice_count() == slice_count);
     true
 }
 
@@ -394,7 +396,7 @@ unsafe fn mi_page_map_register_range_typed(
         return None;
     }
     for i in 0..slice_count.get() as usize {
-        crate::mi_assert_internal!(i < 128);
+        crate::internal::mi_assert_internal!(i < 128);
         unsafe { *_mi_page_map.add(idx.get() + i) = (i + 1) as u8 };
     }
     let sub_idx = unsafe { crate::core_types::PageMapSubIndex::new_unchecked(0) };
@@ -409,7 +411,7 @@ unsafe fn mi_page_map_register_range_typed(
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
     let Some(page) = PagePtr::new(page) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     unsafe { mi_page_map_unregister_typed(page) };
@@ -417,9 +419,9 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
 
 #[cfg(target_pointer_width = "32")]
 unsafe fn mi_page_map_unregister_typed(page: PagePtr) {
-    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    crate::internal::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
     let Some((idx, _page_start, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     let sub_idx = unsafe { crate::core_types::PageMapSubIndex::new_unchecked(0) };
@@ -446,12 +448,12 @@ unsafe fn mi_page_map_unregister_range_typed(registered: RegisteredPageRange) {
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
     let slice_count = _mi_divide_up(size, MI_ARENA_SLICE_SIZE);
     let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
-        crate::mi_assert_internal!(size == 0);
+        crate::internal::mi_assert_internal!(size == 0);
         return;
     };
     let index = _mi_page_map_index(start.cast_const());
     let Some(index) = mi_page_map_index(index) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     if !unsafe { mi_page_map_ensure_committed(index, slice_count) } {
@@ -489,7 +491,7 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
     }
     let idx = _mi_page_map_index(p);
     let Some(idx) = mi_page_map_index(idx) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return None;
     };
     if unsafe { !mi_page_map_commit.is_null() }
@@ -529,7 +531,7 @@ unsafe fn mi_page_map_ensure_committed(
     idx: crate::core_types::PageMapIndex,
     submap: *mut mi_submap_t,
 ) -> bool {
-    crate::mi_assert_internal!(!submap.is_null() && unsafe { (*submap).is_null() });
+    crate::internal::mi_assert_internal!(!submap.is_null() && unsafe { (*submap).is_null() });
     let mut bit_idx = 0usize;
     if !mi_page_map_is_committed(idx, &mut bit_idx) {
         let start = unsafe {
@@ -588,7 +590,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         };
         mi_page_map_count = 1usize << (vbits - MI_PAGE_MAP_SUB_SHIFT - MI_ARENA_SLICE_SHIFT);
     }
-    crate::mi_assert!(unsafe { mi_page_map_count } <= MI_PAGE_MAP_COUNT);
+    crate::internal::mi_assert!(unsafe { mi_page_map_count } <= MI_PAGE_MAP_COUNT);
 
     let os_page_size = unsafe { crate::os::_mi_os_page_size_typed().get() };
     let page_map_size = _mi_align_up(
@@ -652,7 +654,9 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
         *_mi_page_map.add(0) = sub0;
         mi_lock_init(&raw mut mi_page_map_lock);
     }
-    crate::mi_assert_internal!(unsafe { crate::internal::_mi_ptr_page(ptr::null()) }.is_null());
+    crate::internal::mi_assert_internal!(
+        unsafe { crate::internal::_mi_ptr_page(ptr::null()) }.is_null()
+    );
     true
 }
 
@@ -663,8 +667,8 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t) {
-    crate::mi_assert_internal!(!subproc.is_null());
-    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    crate::internal::mi_assert_internal!(!subproc.is_null());
+    crate::internal::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
     if unsafe { _mi_page_map }.is_null() {
         return;
     }
@@ -672,7 +676,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
     unsafe { mi_lock_done(&raw mut mi_page_map_lock) };
     for idx in 1..unsafe { mi_page_map_count } {
         let Some(map_idx) = mi_page_map_index(idx) else {
-            crate::mi_assert_internal!(false);
+            crate::internal::mi_assert_internal!(false);
             continue;
         };
         if mi_page_map_is_committed(map_idx, ptr::null_mut()) {
@@ -722,7 +726,7 @@ unsafe fn mi_page_map_ensure_submap_at(
     idx: crate::core_types::PageMapIndex,
     submap: *mut mi_submap_t,
 ) -> bool {
-    crate::mi_assert_internal!(!submap.is_null() && unsafe { (*submap).is_null() });
+    crate::internal::mi_assert_internal!(!submap.is_null() && unsafe { (*submap).is_null() });
     let mut sub = ptr::null_mut();
     if !unsafe { mi_page_map_ensure_committed(idx, &mut sub) } {
         return false;
@@ -774,7 +778,7 @@ unsafe fn mi_page_map_set_range_prim(
         if !unsafe { mi_page_map_ensure_submap_at(idx, &mut sub) } {
             return false;
         }
-        crate::mi_assert_internal!(!sub.is_null());
+        crate::internal::mi_assert_internal!(!sub.is_null());
         while slice_count > 0 && map_sub_idx.get() < MI_PAGE_MAP_SUB_COUNT {
             unsafe { *sub.add(map_sub_idx.get()) = page };
             slice_count -= 1;
@@ -785,7 +789,7 @@ unsafe fn mi_page_map_set_range_prim(
         }
         if slice_count > 0 {
             let Some(next_idx) = mi_page_map_index(idx.get() + 1) else {
-                crate::mi_assert_internal!(false);
+                crate::internal::mi_assert_internal!(false);
                 return false;
             };
             idx = next_idx;
@@ -808,7 +812,7 @@ unsafe fn mi_page_map_clear_range_prim(
         if !unsafe { mi_page_map_ensure_submap_at(idx, &mut sub) } {
             return false;
         }
-        crate::mi_assert_internal!(!sub.is_null());
+        crate::internal::mi_assert_internal!(!sub.is_null());
         while slice_count > 0 && map_sub_idx.get() < MI_PAGE_MAP_SUB_COUNT {
             unsafe { *sub.add(map_sub_idx.get()) = ptr::null_mut() };
             slice_count -= 1;
@@ -819,7 +823,7 @@ unsafe fn mi_page_map_clear_range_prim(
         }
         if slice_count > 0 {
             let Some(next_idx) = mi_page_map_index(idx.get() + 1) else {
-                crate::mi_assert_internal!(false);
+                crate::internal::mi_assert_internal!(false);
                 return false;
             };
             idx = next_idx;
@@ -859,9 +863,9 @@ unsafe fn mi_page_map_clear_range(
 #[cfg(not(target_pointer_width = "32"))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
-    crate::mi_assert_internal!(!page.is_null());
+    crate::internal::mi_assert_internal!(!page.is_null());
     let Some(page) = PagePtr::new(page) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return false;
     };
     unsafe { mi_page_map_register_typed(page) }
@@ -870,7 +874,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
 #[cfg(not(target_pointer_width = "32"))]
 unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
     let page_raw = page.as_ptr();
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         _mi_is_aligned(
             mi_page_slice_start(page_raw).cast::<c_void>(),
             MI_PAGE_ALIGN,
@@ -879,9 +883,9 @@ unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
     if unsafe { _mi_page_map }.is_null() && !unsafe { _mi_page_map_init() } {
         return false;
     }
-    crate::mi_assert!(!(unsafe { _mi_page_map }).is_null());
+    crate::internal::mi_assert!(!(unsafe { _mi_page_map }).is_null());
     let Some((idx, sub_idx, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return false;
     };
     let Some(registered) =
@@ -889,10 +893,10 @@ unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
     else {
         return false;
     };
-    crate::mi_debug_assert!(registered.page().as_ptr() == page.as_ptr());
-    crate::mi_debug_assert!(registered.index() == idx);
-    crate::mi_debug_assert!(registered.sub_index() == sub_idx);
-    crate::mi_debug_assert!(registered.slice_count() == slice_count);
+    crate::internal::mi_debug_assert!(registered.page().as_ptr() == page.as_ptr());
+    crate::internal::mi_debug_assert!(registered.index() == idx);
+    crate::internal::mi_debug_assert!(registered.sub_index() == sub_idx);
+    crate::internal::mi_debug_assert!(registered.slice_count() == slice_count);
     true
 }
 
@@ -920,7 +924,7 @@ unsafe fn mi_page_map_register_range_typed(
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
     let Some(page) = PagePtr::new(page) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     unsafe { mi_page_map_unregister_typed(page) };
@@ -928,9 +932,9 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
 
 #[cfg(not(target_pointer_width = "32"))]
 unsafe fn mi_page_map_unregister_typed(page: PagePtr) {
-    crate::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
+    crate::internal::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
     let page_raw = page.as_ptr();
-    crate::mi_assert_internal!(unsafe {
+    crate::internal::mi_assert_internal!(unsafe {
         _mi_is_aligned(
             mi_page_slice_start(page_raw).cast::<c_void>(),
             MI_PAGE_ALIGN,
@@ -940,7 +944,7 @@ unsafe fn mi_page_map_unregister_typed(page: PagePtr) {
         return;
     }
     let Some((idx, sub_idx, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     let registered = unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) };
@@ -970,17 +974,17 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
     }
     let slice_count = _mi_divide_up(size, MI_ARENA_SLICE_SIZE);
     let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
-        crate::mi_assert_internal!(size == 0);
+        crate::internal::mi_assert_internal!(size == 0);
         return;
     };
     let mut sub_idx = 0usize;
     let idx = unsafe { _mi_page_map_index(start.cast_const(), &mut sub_idx) };
     let Some(idx) = mi_page_map_index(idx) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     let Some(sub_idx) = mi_page_map_sub_index(sub_idx) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     unsafe { mi_page_map_clear_range(idx, sub_idx, slice_count) };
@@ -1018,11 +1022,11 @@ pub(crate) unsafe fn _mi_safe_ptr_page_registered(p: *const c_void) -> Option<Re
     let mut sub_idx = 0usize;
     let idx = unsafe { _mi_page_map_index(p, &mut sub_idx) };
     let Some(idx) = mi_page_map_index(idx) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return None;
     };
     let Some(sub_idx) = mi_page_map_sub_index(sub_idx) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return None;
     };
     if !mi_page_map_is_committed(idx, ptr::null_mut()) {

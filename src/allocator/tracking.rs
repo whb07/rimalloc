@@ -164,7 +164,7 @@ pub unsafe fn mi_track_malloc(p: *mut c_void, reqsize: usize, zero: bool) {
     }
     if crate::types::MI_PADDING != 0 {
         let usable = unsafe { crate::mimalloc::mi_usable_size(p.cast_const()) };
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             usable == reqsize
                 || (reqsize == 0 && usable >= crate::core_types::RequestedSize::MIN_ZERO_SIZE)
         );
@@ -172,7 +172,7 @@ pub unsafe fn mi_track_malloc(p: *mut c_void, reqsize: usize, zero: bool) {
             unsafe { mi_track_malloc_size(p, reqsize, usable, zero) };
         }
     } else {
-        crate::mi_assert_internal!(
+        crate::internal::mi_assert_internal!(
             unsafe { crate::mimalloc::mi_usable_size(p.cast_const()) } >= reqsize
         );
         if MI_TRACK_ENABLED != 0 {

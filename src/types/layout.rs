@@ -40,7 +40,7 @@ impl MaybeHugeAlignment {
 
     #[inline(always)]
     pub(crate) fn new(alignment: usize) -> Self {
-        crate::mi_debug_assert!(
+        crate::internal::mi_debug_assert!(
             (alignment & MallocGenericFlags::ZERO_BIT) == 0,
             "huge alignment must not collide with the zeroing flag"
         );
@@ -177,7 +177,7 @@ impl LayoutRequest {
     /// `padded` must be the result of adding `MI_PADDING_SIZE` to the logical
     /// requested size for this allocation path.
     pub(crate) unsafe fn from_padded_unchecked(padded: PaddedSize, zeroed: Zeroed) -> Self {
-        crate::mi_debug_assert!(
+        crate::internal::mi_debug_assert!(
             padded.get() >= crate::types::MI_PADDING_SIZE,
             "padded allocation size must include padding"
         );
@@ -416,7 +416,7 @@ impl MallocGenericFlags {
         } else {
             0
         };
-        crate::mi_debug_assert!(
+        crate::internal::mi_debug_assert!(
             (huge_alignment.get() & Self::ZERO_BIT) == 0,
             "huge alignment must not collide with the zeroing flag"
         );

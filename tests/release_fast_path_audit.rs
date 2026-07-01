@@ -3966,7 +3966,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && freelist_rs.contains(
                 "pub(crate) fn from_parts(head: Option<BlockPtr>, owned: ThreadFreeOwner) -> Self"
             )
-            && freelist_rs.contains("crate::mi_assert_internal!((val & Self::OWNED_BIT) == 0);")
+            && freelist_rs
+                .contains("crate::internal::mi_assert_internal!((val & Self::OWNED_BIT) == 0);")
             && freelist_rs.contains("Self(ptr_val | bit)")
             && atomic_rs
                 .contains("pub(crate) struct AtomicThreadFree(pub(crate) AtomicUsizeField);")
@@ -5200,7 +5201,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && heap_rs.contains("} else if let Some(heap) = OwnedHeap::new(heap)")
             && page_rs.contains("(*page).heap = if _mi_is_heap_main(heap) {")
             && arena_rs.contains("if unsafe { _mi_is_heap_main(heap_from) }")
-            && theap_rs.contains("_mi_is_heap_main(_mi_theap_heap(theap).cast_const())"),
+            && theap_rs.contains(
+                "crate::internal::mi_assert_internal!(_mi_is_heap_main(\n                    _mi_theap_heap(theap).cast_const()\n                ));"
+            ),
         "main heap/theap predicates should keep C's local helper boundaries and major callers"
     );
     assert!(
@@ -6455,8 +6458,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && options_rs.contains(
                 "static MI_VERBOSE_MESSAGE_KEEP: for<'a> fn(fmt::Arguments<'a>) = _mi_verbose_message;"
             )
-            && internal.contains("crate::internal::_mi_trace_message(format_args!($($arg)*))"),
-        "_mi_trace_message and _mi_verbose_message should keep C's local message helper boundaries without stale extern declarations"
+            && !internal.contains("macro_rules! mi_trace_message"),
+        "_mi_trace_message and _mi_verbose_message should keep C's local message helper boundaries without stale extern declarations or macro exports"
     );
     assert!(
         options_rs.contains(
@@ -6703,7 +6706,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !free_rs.contains("(*block).next == MI_BLOCK_TAG_GUARDED")
             && !internal.contains("(*block.cast_mut()).next == MI_BLOCK_TAG_GUARDED")
             && page_rs
-                .contains("crate::mi_assert_internal!(!force || (*page).local_free.is_null());")
+                .contains("crate::internal::mi_assert_internal!(!force || (*page).local_free.is_null());")
             && page_rs.contains("unsafe fn mi_page_move_to_full_typed(")
             && page_rs.contains("unsafe fn mi_page_unfull_typed(")
             && page_rs.contains(
@@ -6854,7 +6857,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         bitmap_rs.contains(
             "pub(crate) unsafe fn mi_bitmap_forall_setc_rangesn_typed(\n    bitmap: *mut mi_bitmap_t,\n    rngslices: SliceCount,"
         ) && bitmap_rs.contains("let rngslices_raw = if rngslices > MI_BFIELD_BITS {")
-            && bitmap_rs.contains("crate::mi_assert_internal!(rngslices_raw > 0);")
+            && bitmap_rs.contains("crate::internal::mi_assert_internal!(rngslices_raw > 0);")
             && bitmap_rs.contains("let rngslices = SliceCount::new_unchecked(rngslices_raw as u32);")
             && bitmap_rs.contains("mi_bitmap_forall_setc_rangesn_typed(bitmap, rngslices, visit, ArenaPtr::new(arena), arg)")
             && bitmap_rs.contains("let rngslices_count = rngslices;")
@@ -7260,10 +7263,10 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_types.contains("pub(crate) fn sub_index(self) -> PageMapSubIndex")
             && page_types.contains("pub(crate) fn slice_count(self) -> SliceCount")
             && page_map.contains("crate::core_types::RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count)\n    };")
-            && page_map.contains("crate::mi_debug_assert!(registered.page().as_ptr() == page.as_ptr());")
-            && page_map.contains("crate::mi_debug_assert!(registered.index() == idx);")
-            && page_map.contains("crate::mi_debug_assert!(registered.sub_index() == sub_idx);")
-            && page_map.contains("crate::mi_debug_assert!(registered.slice_count() == slice_count);")
+            && page_map.contains("crate::internal::mi_debug_assert!(registered.page().as_ptr() == page.as_ptr());")
+            && page_map.contains("crate::internal::mi_debug_assert!(registered.index() == idx);")
+            && page_map.contains("crate::internal::mi_debug_assert!(registered.sub_index() == sub_idx);")
+            && page_map.contains("crate::internal::mi_debug_assert!(registered.slice_count() == slice_count);")
             && page_map.contains("Some(unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) })"),
         "RegisteredPageRange should be an opaque page-map registration witness over PagePtr, PageMapIndex, PageMapSubIndex, and SliceCount"
     );
@@ -7476,7 +7479,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && arena_rs.contains("abandoned_count[bin.as_usize()]")
             && arena_rs.contains("let Some(typed_bin) = crate::core_types::Bin::new(bin as u16) else")
-            && arena_rs.contains("crate::mi_assert_internal!(false);\n                                break;")
+            && arena_rs.contains("crate::internal::mi_assert_internal!(false);\n                                break;")
             && arena_rs.contains("mi_heap_abandoned_count(heap, typed_bin).load_relaxed() > 0")
             && arena_rs.contains("mi_heap_abandoned_count(heap, bin).load_relaxed() == 0")
             && arena_rs.contains("mi_heap_abandoned_count(heap, bin).fetch_add_relaxed(1)")
@@ -7562,7 +7565,7 @@ fn free_path_internals_are_not_dynamic_exports() {
         free_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign")
             && free_rs.contains(
-                "crate::mi_assert!(_mi_page_ptr_unalign(page_raw, user_raw) == user_raw.cast());"
+                "crate::internal::mi_assert!(\n                _mi_page_ptr_unalign(page_raw, user_raw) == user_raw.cast()\n            );"
             )
             && free_rs.contains(
                 "pub(crate) unsafe fn mi_validate_block_from_ptr(\n    page: crate::core_types::PagePtr,\n    user: crate::core_types::UserPtr,\n) -> crate::core_types::PointerLookup"
@@ -8016,7 +8019,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && mi_heap_main_body
                 .contains("let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };")
             && mi_heap_main_body.contains("mi_heap_main_init();")
-            && mi_heap_main_body.contains("crate::mi_assert_internal!(!heap.is_null());")
+            && mi_heap_main_body.contains("crate::internal::mi_assert_internal!(!heap.is_null());")
             && !mi_heap_main_body.contains("_mi_subproc()")
             && !mi_heap_main_body.contains("_mi_subproc_heap_main"),
         "mi_heap_main should match C's direct raw-default-theap and subproc->heap_main fast path"
@@ -8310,8 +8313,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("if !mi_page_extend_free(theap, page)")
             && page_rs.contains("let block_size = mi_page_queue_block_size_raw(pq);")
             && page_rs.contains("let page = mi_page_fresh_alloc(theap, pq, block_size, 0);")
-            && page_rs
-                .contains("crate::mi_assert_internal!(block_size == mi_page_block_size(page));")
+            && page_rs.contains(
+                "crate::internal::mi_assert_internal!(block_size == mi_page_block_size(page));"
+            )
             && page_rs
                 .contains("let page = mi_page_fresh_alloc(theap, pq, block_size, page_alignment);"),
         "fresh-page allocation and page free-list extension should keep C's local helper boundaries"

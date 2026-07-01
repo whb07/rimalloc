@@ -49,9 +49,9 @@ unsafe fn mi_meta_memid(
     block_count: usize,
 ) -> mi_memid_t {
     unsafe {
-        crate::mi_assert_internal!(!mpage.is_null());
-        crate::mi_assert_internal!(block_idx <= u32::MAX as usize);
-        crate::mi_assert_internal!(block_count <= u32::MAX as usize);
+        crate::internal::mi_assert_internal!(!mpage.is_null());
+        crate::internal::mi_assert_internal!(block_idx <= u32::MAX as usize);
+        crate::internal::mi_assert_internal!(block_count <= u32::MAX as usize);
         MemId::<MetaMem>::meta(
             core::ptr::NonNull::new_unchecked(mpage.cast()),
             BlockIndex(block_idx as u32),
@@ -98,11 +98,11 @@ pub unsafe fn mi_meta_page_next(mpage: *mut mi_meta_page_t) -> *mut mi_meta_page
 #[inline]
 pub unsafe fn mi_meta_block_start(mpage: *mut mi_meta_page_t, block_idx: usize) -> *mut c_void {
     let guard_size = unsafe { _mi_os_secure_guard_page_size() };
-    crate::mi_assert_internal!(_mi_is_aligned(
+    crate::internal::mi_assert_internal!(_mi_is_aligned(
         unsafe { mpage.cast::<u8>().sub(guard_size).cast() },
         MI_ARENA_SLICE_ALIGN
     ));
-    crate::mi_assert_internal!(block_idx < MI_META_BLOCKS_PER_PAGE);
+    crate::internal::mi_assert_internal!(block_idx < MI_META_BLOCKS_PER_PAGE);
     let p = unsafe {
         mpage
             .cast::<u8>()
@@ -110,7 +110,9 @@ pub unsafe fn mi_meta_block_start(mpage: *mut mi_meta_page_t, block_idx: usize) 
             .add(block_idx * MI_META_BLOCK_SIZE)
             .cast::<c_void>()
     };
-    crate::mi_assert_internal!(mpage == unsafe { mi_meta_page_of_ptr(p, ptr::null_mut()) });
+    crate::internal::mi_assert_internal!(
+        mpage == unsafe { mi_meta_page_of_ptr(p, ptr::null_mut()) }
+    );
     p
 }
 
@@ -133,7 +135,7 @@ unsafe fn mi_meta_page_zalloc() -> *mut mi_meta_page_t {
         if base.is_null() {
             return ptr::null_mut();
         }
-        crate::mi_assert_internal!(_mi_is_aligned(base.cast(), MI_ARENA_SLICE_ALIGN));
+        crate::internal::mi_assert_internal!(_mi_is_aligned(base.cast(), MI_ARENA_SLICE_ALIGN));
         if !memid.initially_zero {
             _mi_memzero_aligned(base.cast(), MI_ARENA_SLICE_SIZE);
         }
@@ -156,7 +158,9 @@ unsafe fn mi_meta_page_zalloc() -> *mut mi_meta_page_t {
             + mi_bbitmap_size(MI_META_BLOCKS_PER_PAGE, ptr::null_mut());
         let info_blocks = _mi_divide_up(mpage_size, MI_META_BLOCK_SIZE);
         let guard_blocks = _mi_divide_up(_mi_os_secure_guard_page_size(), MI_META_BLOCK_SIZE);
-        crate::mi_assert_internal!(info_blocks + 2 * guard_blocks < MI_META_BLOCKS_PER_PAGE);
+        crate::internal::mi_assert_internal!(
+            info_blocks + 2 * guard_blocks < MI_META_BLOCKS_PER_PAGE
+        );
         mi_bbitmap_unsafe_setN(
             ptr::addr_of_mut!((*mpage).blocks_free),
             info_blocks + guard_blocks,
@@ -188,13 +192,13 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
     pmemid: *mut mi_memid_t,
 ) -> *mut c_void {
     unsafe {
-        crate::mi_assert_internal!(!pmemid.is_null());
+        crate::internal::mi_assert_internal!(!pmemid.is_null());
         let size = _mi_align_up(size, MI_META_BLOCK_SIZE);
         if size == 0 || size > MI_META_MAX_SIZE {
             return ptr::null_mut();
         }
         let block_count = _mi_divide_up(size, MI_META_BLOCK_SIZE);
-        crate::mi_assert_internal!(block_count > 0 && block_count < MI_BCHUNK_BITS);
+        crate::internal::mi_assert_internal!(block_count > 0 && block_count < MI_BCHUNK_BITS);
 
         let mpage0 = mi_meta_pages.load(Ordering::Acquire);
         let mut mpage = mpage0;
@@ -247,10 +251,14 @@ pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid
             let block_count = meta.block_count.get() as usize;
             let block_idx = meta.block_index.0 as usize;
             let mpage = meta.meta_page.as_ptr().cast::<mi_meta_page_t>();
-            crate::mi_assert_internal!(_mi_divide_up(size, MI_META_BLOCK_SIZE) == block_count);
-            crate::mi_assert_internal!(mi_meta_page_of_ptr(p, ptr::null_mut()) == mpage);
-            crate::mi_assert_internal!(block_idx + block_count <= MI_META_BLOCKS_PER_PAGE);
-            crate::mi_assert_internal!(mi_bbitmap_is_clearN(
+            crate::internal::mi_assert_internal!(
+                _mi_divide_up(size, MI_META_BLOCK_SIZE) == block_count
+            );
+            crate::internal::mi_assert_internal!(mi_meta_page_of_ptr(p, ptr::null_mut()) == mpage);
+            crate::internal::mi_assert_internal!(
+                block_idx + block_count <= MI_META_BLOCKS_PER_PAGE
+            );
+            crate::internal::mi_assert_internal!(mi_bbitmap_is_clearN(
                 ptr::addr_of_mut!((*mpage).blocks_free),
                 block_idx,
                 block_count

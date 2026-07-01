@@ -180,7 +180,7 @@ pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
 }
 
 fn mi_stats_get_bin_size_from_raw(bin: usize, typed_bin: StatsBin) -> StatBinSize {
-    crate::mi_debug_assert!(bin == typed_bin.as_usize());
+    crate::internal::mi_debug_assert!(bin == typed_bin.as_usize());
     StatBinSize(_mi_bin_size(bin))
 }
 
@@ -710,7 +710,7 @@ impl StatBinSize {
 #[inline(always)]
 fn stats_bin_iter() -> impl Iterator<Item = StatsBin> {
     (0..=MI_BIN_HUGE).map(|index| {
-        crate::mi_debug_assert!(u16::try_from(index).is_ok());
+        crate::internal::mi_debug_assert!(u16::try_from(index).is_ok());
         // SAFETY: the range is bounded by `MI_BIN_HUGE`.
         unsafe { StatsBin::new_unchecked(index as u16) }
     })
@@ -1134,7 +1134,7 @@ unsafe fn _mi_stats_print(
 unsafe fn mi_stats_merge_theap_to_heap(theap: *mut mi_theap_t) -> *const mi_stats_t {
     let theap = unsafe { ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap)) };
     let Some(heap) = (unsafe { theap.ptr().heap() }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return core::ptr::null();
     };
     unsafe { mi_stats_merge_theap_to_heap_typed(theap, heap) }
@@ -1182,7 +1182,7 @@ pub unsafe extern "C" fn mi_heap_stats_merge_to_subproc(heap: *mut mi_heap_t) {
         unsafe { HeapPtr::new_unchecked(heap) }
     };
     let Some(subproc) = (unsafe { heap.subproc() }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     unsafe { mi_heap_stats_merge_to_subproc_typed(BorrowedHeap::new_unchecked(heap), subproc) };
@@ -1456,7 +1456,7 @@ pub unsafe extern "C" fn mi_thread_stats_print_out(out: Option<mi_output_fun>, a
     }
     let theap_ptr = unsafe { ThreadHeapPtr::new_unchecked(theap) };
     let Some(heap) = (unsafe { theap_ptr.heap() }) else {
-        crate::mi_assert_internal!(false);
+        crate::internal::mi_assert_internal!(false);
         return;
     };
     let heap_seq = crate::core_types::HeapSeq::new(unsafe {
@@ -1650,12 +1650,12 @@ fn mi_json_buf_print(hbuf: &mut mi_json_buf_t, msg: &str) {
         if hbuf.used + 1 >= hbuf.size && !mi_json_buf_expand(hbuf) {
             return;
         }
-        crate::mi_debug_assert!(hbuf.used < hbuf.size);
+        crate::internal::mi_debug_assert!(hbuf.used < hbuf.size);
         // SAFETY: capacity is ensured just above and `used < size`.
         unsafe { *hbuf.buf.add(hbuf.used) = byte as c_char };
         hbuf.used += 1;
     }
-    crate::mi_debug_assert!(hbuf.used < hbuf.size);
+    crate::internal::mi_debug_assert!(hbuf.used < hbuf.size);
     // SAFETY: capacity is ensured above and the trailing NUL fits.
     unsafe { *hbuf.buf.add(hbuf.used) = 0 };
 }

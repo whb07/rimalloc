@@ -141,7 +141,7 @@ pub(crate) unsafe extern "C" fn _mi_os_page_size() -> usize {
 #[inline]
 pub(crate) unsafe fn _mi_os_page_size_typed() -> crate::core_types::OsPageSize {
     let page_size = unsafe { _mi_os_page_size() };
-    crate::mi_assert_internal!(page_size > 0);
+    crate::internal::mi_assert_internal!(page_size > 0);
     unsafe { crate::core_types::OsPageSize::new_unchecked(page_size) }
 }
 
@@ -178,7 +178,7 @@ pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
     let gsize = unsafe { _mi_os_page_size_typed().get() };
-    crate::mi_debug_assert!(gsize <= (MI_ARENA_SLICE_SIZE / 4));
+    crate::internal::mi_debug_assert!(gsize <= (MI_ARENA_SLICE_SIZE / 4));
     gsize
 }
 
@@ -187,7 +187,7 @@ pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
     let vbits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
-    crate::mi_debug_assert!(vbits <= MI_MAX_VABITS);
+    crate::internal::mi_debug_assert!(vbits <= MI_MAX_VABITS);
     vbits
 }
 
@@ -280,7 +280,7 @@ fn mi_os_page_align_areax(
     size: usize,
     newsize: *mut usize,
 ) -> *mut c_void {
-    crate::mi_assert!(!addr.is_null() && size > 0);
+    crate::internal::mi_assert!(!addr.is_null() && size > 0);
     if !newsize.is_null() {
         unsafe { *newsize = 0 };
     }
@@ -306,7 +306,9 @@ fn mi_os_page_align_areax(
         return core::ptr::null_mut();
     }
 
-    crate::mi_assert_internal!((conservative && diff <= size) || (!conservative && diff >= size));
+    crate::internal::mi_assert_internal!(
+        (conservative && diff <= size) || (!conservative && diff >= size)
+    );
     if !newsize.is_null() {
         unsafe { *newsize = diff };
     }
@@ -505,7 +507,7 @@ unsafe fn mi_os_decommit_ex(
     stat_size: CommittedBytes,
 ) -> bool {
     unsafe {
-        crate::mi_assert_internal!(!needs_recommit.is_null());
+        crate::internal::mi_assert_internal!(!needs_recommit.is_null());
 
         let mut csize = 0;
         let start = mi_os_page_align_area_conservative(addr, size, &mut csize);
@@ -527,7 +529,7 @@ unsafe fn mi_os_decommit_ex(
                 __mi_stat_decrease_mt(ptr::addr_of_mut!(stats.committed), stat_size.get());
             }
         }
-        crate::mi_assert_internal!(err == 0);
+        crate::internal::mi_assert_internal!(err == 0);
         err == 0
     }
 }
@@ -677,7 +679,9 @@ unsafe fn mi_os_prim_free(
 ) {
     unsafe {
         let size = memid.size;
-        crate::mi_assert_internal!(size.get().is_multiple_of(_mi_os_page_size_typed().get()));
+        crate::internal::mi_assert_internal!(
+            size.get().is_multiple_of(_mi_os_page_size_typed().get())
+        );
         let Some(addr) = memid.base else {
             return;
         };
@@ -738,11 +742,11 @@ unsafe fn _mi_os_free_ex_typed(
     if csize == 0 {
         csize = unsafe { _mi_os_good_alloc_size(size.get()) };
     }
-    crate::mi_assert_internal!(csize >= size.get());
+    crate::internal::mi_assert_internal!(csize >= size.get());
 
     let commit_size = if still_committed { csize } else { 0 };
     if base != addr {
-        crate::mi_assert_internal!(base <= addr);
+        crate::internal::mi_assert_internal!(base <= addr);
         let diff = addr as usize - base as usize;
         if csize == 0 {
             csize += diff;
@@ -752,7 +756,7 @@ unsafe fn _mi_os_free_ex_typed(
         }
     }
     if matches!(&os.kind, OsMemKind::Huge) {
-        crate::mi_assert!(os.pinned.0);
+        crate::internal::mi_assert!(os.pinned.0);
         unsafe {
             mi_os_free_huge_os_pages(OsMemPtr::new(base), ReservedBytes::new(csize), subproc)
         };
@@ -791,9 +795,11 @@ unsafe fn mi_os_prim_alloc_at(
     is_zero: *mut bool,
 ) -> *mut c_void {
     unsafe {
-        crate::mi_assert_internal!(size > 0 && size.is_multiple_of(_mi_os_page_size_typed().get()));
-        crate::mi_assert_internal!(!is_zero.is_null());
-        crate::mi_assert_internal!(!is_large.is_null());
+        crate::internal::mi_assert_internal!(
+            size > 0 && size.is_multiple_of(_mi_os_page_size_typed().get())
+        );
+        crate::internal::mi_assert_internal!(!is_zero.is_null());
+        crate::internal::mi_assert_internal!(!is_large.is_null());
         if size == 0 {
             return core::ptr::null_mut();
         }
@@ -1159,7 +1165,7 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned_at_offset(
     }
 
     let p = unsafe { start.cast::<u8>().add(extra) }.cast::<c_void>();
-    crate::mi_assert!(unsafe {
+    crate::internal::mi_assert!(unsafe {
         crate::internal::_mi_is_aligned(p.cast::<u8>().add(offset).cast(), alignment)
     });
     if commit && extra >= unsafe { _mi_os_page_size_typed().get() } {
@@ -1284,7 +1290,7 @@ pub unsafe extern "C" fn _mi_os_numa_node_count() -> i32 {
             _mi_verbose_message(format_args!("using {} numa regions\n", count));
         }
     }
-    crate::mi_assert_internal!(count > 0 && count <= i32::MAX as usize);
+    crate::internal::mi_assert_internal!(count > 0 && count <= i32::MAX as usize);
     count as i32
 }
 
@@ -1422,7 +1428,7 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
         }
 
         let allocated = page * MI_HUGE_OS_PAGE_SIZE;
-        crate::mi_assert_internal!(allocated <= size);
+        crate::internal::mi_assert_internal!(allocated <= size);
         if !pages_reserved.is_null() {
             *pages_reserved = page;
         }
@@ -1430,7 +1436,7 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
             *psize = allocated;
         }
         if page != 0 {
-            crate::mi_assert_internal!(!start.is_null());
+            crate::internal::mi_assert_internal!(!start.is_null());
             if !memid.is_null() {
                 *memid = crate::core_types::MemId::<crate::core_types::OsMem>::os_huge(
                     crate::core_types::OsMemPtr::new(start.cast::<c_void>()),
@@ -1440,7 +1446,7 @@ pub unsafe extern "C" fn _mi_os_alloc_huge_os_pages(
                     crate::core_types::Pinned(true),
                 )
                 .into_raw();
-                crate::mi_assert!((*memid).is_pinned);
+                crate::internal::mi_assert!((*memid).is_pinned);
             }
         }
         if page == 0 {

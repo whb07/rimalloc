@@ -116,14 +116,29 @@ Review evidence:
 > them by invariant or ownership boundary will make safety review easier without
 > changing public behavior.
 
-- [ ] Identify the largest translated modules and record intended submodule
+- [x] Identify the largest translated modules and record intended submodule
       boundaries before moving code.
-- [ ] Split `src/internal/mod.rs` helper clusters into focused modules without
+- [x] Split `src/internal/mod.rs` helper clusters into focused modules without
       changing public crate-root exports.
-- [ ] Split allocator/platform modules only when the move preserves hot-path
+- [x] Split allocator/platform modules only when the move preserves hot-path
       inlining and does not obscure C parity.
-- [ ] Add module-level docs for new modules that state the invariant they own.
-- [ ] Update audit scripts and path aliases when files move.
+- [x] Add module-level docs for new modules that state the invariant they own.
+- [x] Update audit scripts and path aliases when files move.
+  - Evidence: the largest translated files remain `src/allocator/arena.rs`,
+    `src/allocator/page.rs`, `src/internal/bitmap.rs`,
+    `src/allocator/alloc.rs`, `src/allocator/init.rs`,
+    `src/platform/windows.rs`, and `src/internal/mod.rs`. The smallest
+    high-value split was the raw memory-origin identifier cluster:
+    `src/internal/memid.rs` now owns the C-compatible `mi_memid_t` layout,
+    `mi_memkind_t`, and construction/classification helpers, while
+    `src/internal/mod.rs` re-exports the module so existing translated call
+    paths keep using `crate::internal::*`. No allocator/platform hot-path file
+    was moved in this step; `#[inline]` helper attributes and call paths were
+    preserved. `free_path_internals_are_not_dynamic_exports` now verifies the
+    new module doc boundary and the `mod.rs` re-export. Unsafe inventory and
+    audit docs were refreshed for the moved source path, and
+    `scripts/capture-release-assembly.sh` captured the fixed release hot-path
+    symbol set after the split.
 - Verify: module inventory tests, API inventory checks, release assembly capture,
   full clippy, and full tests.
 
@@ -213,7 +228,7 @@ Review evidence:
 3. [x] Localize the highest-signal clippy allowances.
 4. [x] Centralize generated artifact hygiene.
 5. [x] Document or implement the safe object ownership decision.
-6. [ ] Split the smallest high-value translated module cluster.
+6. [x] Split the smallest high-value translated module cluster.
 7. [ ] Expand feature/no-std validation around safe-facing examples.
 
 ## Definition of done for this backlog
@@ -224,7 +239,7 @@ Review evidence:
       surfaces.
 - [x] Package-level clippy allowances are reduced or explicitly justified by
       local exceptions.
-- [ ] At least one translated module boundary is improved without API or ABI
+- [x] At least one translated module boundary is improved without API or ABI
       drift.
 - [x] Safe typed object ownership has either a tested implementation or a clear
       release-scoped design decision.

@@ -25,8 +25,8 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5965 |
-| `unsafe_blocks` | 3571 |
+| `unsafe_mentions` | 5975 |
+| `unsafe_blocks` | 3562 |
 | `unsafe_fns` | 1990 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
@@ -56,10 +56,11 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/ffi/callbacks.rs` | 19 | 7 | 4 | 0 | 0 | 0 | 0 |
 | `src/ffi/headers.rs` | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `src/ffi/libc.rs` | 46 | 26 | 19 | 1 | 0 | 0 | 0 |
-| `src/internal/atomic.rs` | 136 | 73 | 62 | 1 | 0 | 0 | 0 |
+| `src/internal/atomic.rs` | 135 | 72 | 62 | 1 | 0 | 0 | 0 |
 | `src/internal/bitmap.rs` | 141 | 62 | 79 | 0 | 0 | 0 | 0 |
 | `src/internal/guarded.rs` | 2 | 1 | 1 | 0 | 0 | 0 | 0 |
-| `src/internal/mod.rs` | 175 | 98 | 76 | 1 | 0 | 0 | 0 |
+| `src/internal/memid.rs` | 2 | 0 | 2 | 0 | 0 | 0 | 0 |
+| `src/internal/mod.rs` | 163 | 88 | 74 | 1 | 0 | 0 | 0 |
 | `src/internal/provenance.rs` | 2 | 0 | 0 | 0 | 2 | 0 | 0 |
 | `src/internal/random.rs` | 14 | 9 | 5 | 0 | 0 | 0 | 0 |
 | `src/lib.rs` | 21 | 8 | 4 | 1 | 1 | 1 | 0 |
@@ -73,9 +74,9 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/raw/macros.rs` | 383 | 147 | 145 | 3 | 1 | 30 | 3 |
 | `src/raw/mod.rs` | 4 | 3 | 0 | 0 | 0 | 0 | 0 |
 | `src/raw/posix.rs` | 81 | 41 | 20 | 3 | 0 | 17 | 0 |
-| `src/safe/allocation.rs` | 20 | 11 | 1 | 0 | 6 | 0 | 0 |
-| `src/safe/heap.rs` | 14 | 13 | 1 | 0 | 0 | 0 | 0 |
-| `src/safe/mod.rs` | 41 | 39 | 2 | 0 | 0 | 0 | 0 |
+| `src/safe/allocation.rs` | 21 | 12 | 1 | 0 | 6 | 0 | 0 |
+| `src/safe/heap.rs` | 15 | 14 | 1 | 0 | 0 | 0 | 0 |
+| `src/safe/mod.rs` | 60 | 39 | 2 | 0 | 0 | 0 | 0 |
 | `src/safe/stats.rs` | 10 | 10 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/arena/tests.rs` | 11 | 11 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/arena.rs` | 13 | 7 | 6 | 0 | 0 | 0 | 0 |

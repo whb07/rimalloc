@@ -4993,6 +4993,7 @@ fn phase6_c_compat_allowances_stay_intentional() {
         (("src/allocator/init.rs", "non_snake_case"), 7),
         (("src/allocator/init.rs", "non_upper_case_globals"), 1),
         (("src/internal/mod.rs", "non_camel_case_types"), 1),
+        (("src/internal/memid.rs", "non_camel_case_types"), 1),
         (("src/internal/mod.rs", "non_snake_case"), 1),
         (("src/internal/mod.rs", "non_upper_case_globals"), 1),
         (("src/internal/mod.rs", "unused_imports"), 1),
@@ -5147,6 +5148,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/page_map.rs");
     let internal =
         fs::read_to_string(root.join("src/internal/mod.rs")).expect("read src/internal/mod.rs");
+    let internal_memid =
+        fs::read_to_string(root.join("src/internal/memid.rs")).expect("read src/internal/memid.rs");
     let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
         .expect("read src/allocator/alloc.rs");
     let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
@@ -7222,7 +7225,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && os_rs.contains("let MemIdView::Os(memid) = MemId::view(memid) else")
             && memid_rs.contains("pub(crate) fn os_huge(")
             && memid_rs.contains("fn os_with_kind(")
-            && internal.contains("crate::core_types::MemId::<crate::core_types::OsMem>::os(")
+            && internal_memid.contains("crate::core_types::MemId::<crate::core_types::OsMem>::os(")
             && os_rs.contains("crate::core_types::MemId::<crate::core_types::OsMem>::os_huge(")
             && !os_rs.contains("mi_memkind_is_os(memid.memkind)")
             && !os_rs.contains("(*memid).memkind = crate::internal::mi_memkind_t::MI_MEM_OS_HUGE")
@@ -7233,6 +7236,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !os_rs.contains("memid.mem.os.")
             && !internal.contains("memid.mem.os.base = base")
             && !internal.contains("memid.mem.os.size = size")
+            && !internal_memid.contains("memid.mem.os.base = base")
+            && !internal_memid.contains("memid.mem.os.size = size")
             && page_map.contains("fn mi_memid_os_base_size(memid: mi_memid_t)")
             && page_map.contains("crate::core_types::MemIdView::Os(os)")
             && page_map.contains("crate::core_types::MemIdView::External(external)")
@@ -7276,14 +7281,20 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && !init_rs.contains("(*main_prefix).memid.memkind != mi_memkind_t::MI_MEM_STATIC")
             && !init_rs.contains("theap_main.memid.memkind != mi_memkind_t::MI_MEM_STATIC")
-            && internal.contains("pub fn mi_memid_is_os(memid: mi_memid_t) -> bool")
-            && internal.contains("pub fn mi_memid_needs_no_free(memid: mi_memid_t) -> bool")
+            && internal.contains("pub(crate) mod memid;")
+            && internal.contains("pub use memid::*;")
+            && !internal.contains("pub enum mi_memkind_t")
+            && internal_memid.contains("//! Raw memory-origin identifiers from mimalloc's internal header.")
+            && internal_memid.contains("pub enum mi_memkind_t")
+            && internal_memid.contains("pub fn mi_memid_is_os(memid: mi_memid_t) -> bool")
+            && internal_memid.contains("pub fn mi_memid_needs_no_free(memid: mi_memid_t) -> bool")
             && internal.contains("pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool")
-            && internal.contains("crate::core_types::MemIdView::None(_)")
-            && internal.contains("crate::core_types::MemIdView::External(_)")
-            && internal.contains("crate::core_types::MemIdView::Static(_)")
+            && internal_memid.contains("crate::core_types::MemIdView::None(_)")
+            && internal_memid.contains("crate::core_types::MemIdView::External(_)")
+            && internal_memid.contains("crate::core_types::MemIdView::Static(_)")
             && internal.contains("crate::core_types::MemIdView::Arena(_)")
             && !internal.contains("pub unsafe fn _mi_memid_create(")
+            && !internal_memid.contains("pub unsafe fn _mi_memid_create(")
             && !internal.contains("raw.memkind = memkind")
             && internal.contains("mi_page_is_in_arena(page)")
             && arena_meta_rs.contains("MemId::<MetaMem>::meta(")
@@ -7298,6 +7309,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !internal.contains("memid.mem.meta.meta_page = mpage")
             && !internal.contains("memid.mem.meta.block_index = block_idx as u32")
             && !internal.contains("memid.mem.meta.block_count = block_count as u32")
+            && !internal_memid.contains("memid.mem.meta.meta_page = mpage")
+            && !internal_memid.contains("memid.mem.meta.block_index = block_idx as u32")
+            && !internal_memid.contains("memid.mem.meta.block_count = block_count as u32")
             && arena_meta_rs.contains(
                 "if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid)"
             )

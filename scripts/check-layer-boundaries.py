@@ -62,7 +62,37 @@ def require(condition: bool, message: str) -> None:
 
 
 def production_source(text: str) -> str:
-    return text.split("#[cfg(test)]", maxsplit=1)[0]
+    output: list[str] = []
+    lines = text.splitlines()
+    index = 0
+    pending_cfg_test = False
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+        if stripped == "#[cfg(test)]":
+            pending_cfg_test = True
+            index += 1
+            continue
+
+        if pending_cfg_test and re.match(r"(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*(?:;|\{)", stripped):
+            if stripped.endswith(";"):
+                pending_cfg_test = False
+                index += 1
+                continue
+
+            depth = line.count("{") - line.count("}")
+            index += 1
+            while index < len(lines) and depth > 0:
+                depth += lines[index].count("{") - lines[index].count("}")
+                index += 1
+            pending_cfg_test = False
+            continue
+
+        pending_cfg_test = False
+        output.append(line)
+        index += 1
+
+    return "\n".join(output)
 
 
 def backend_modules_used(text: str) -> set[str]:

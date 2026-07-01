@@ -121,6 +121,15 @@ and `docs/rust-style.md`.
 - `TryAllocError`: `Copy`, `Clone`, `Debug`, `PartialEq`, `Eq`, `Display`, and
   `std::error::Error` when `std` is enabled.
 
+## Public Enum Exhaustiveness
+
+All current Tier S enums are growable and marked `#[non_exhaustive]`:
+`OptionError`, `OptionKey`, `TryAllocError`, `ResizeErrorKind`, `HeapError`,
+and `StatsError`. Downstream matches must include a wildcard or fallback arm.
+There are no current Tier U enums. A future exhaustive public enum requires an
+explicit inventory entry explaining why downstream exhaustive matching is part
+of the contract.
+
 ## Tier U Unsafe Rust Callbacks
 
 Tier U is public unsafe Rust API with Rust SemVer review, but it is not Tier S

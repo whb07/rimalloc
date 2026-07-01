@@ -2786,7 +2786,11 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
                 .contains("`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`")
             && todo.contains("- [x] Audit all Tier S and Tier U public structs for public fields.")
             && todo.contains("documents the representation firewall")
-            && todo.contains("- [ ] Audit every public Tier S/Tier U enum.")
+            && todo.contains("- [x] Audit every public Tier S/Tier U enum.")
+            && todo.contains("all current Tier S enums are growable")
+            && todo.contains(
+                "- [ ] Audit Tier S fallible functions for consistent `Result<T, E>` usage."
+            )
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

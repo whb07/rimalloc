@@ -126,7 +126,12 @@ impl std::error::Error for LayoutError {}
 ///     Err(err) => err,
 ///     Ok(_) => unreachable!("invalid alignment should not allocate"),
 /// };
-/// assert!(matches!(err, TryAllocError::Layout(_)));
+/// let label = match err {
+///     TryAllocError::Layout(_) => "layout",
+///     TryAllocError::Alloc(_) => "allocation",
+///     _ => "future",
+/// };
+/// assert_eq!(label, "layout");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]

@@ -38,6 +38,12 @@ impl std::error::Error for OptionError {}
 /// let key = OptionKey::MaxWarnings;
 /// assert_eq!(OptionKey::from_raw(key.as_raw()), Ok(key));
 /// assert!(OptionKey::ALL.contains(&key));
+///
+/// let label = match key {
+///     OptionKey::MaxWarnings => "warnings",
+///     _ => "other supported option",
+/// };
+/// assert_eq!(label, "warnings");
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]

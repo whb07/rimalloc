@@ -128,13 +128,20 @@ compatibility surfaces.
 > change. Error kinds, option keys, event categories, and classifications that
 > may grow should be `#[non_exhaustive]` before release.
 
-- [ ] Audit every public Tier S/Tier U enum.
-- [ ] Decide whether each enum is closed/exhaustive or growable.
-- [ ] Add `#[non_exhaustive]` to growable public enums before stabilization.
-- [ ] Keep exhaustive enums only where downstream exhaustive matching is a
+- [x] Audit every public Tier S/Tier U enum.
+- [x] Decide whether each enum is closed/exhaustive or growable.
+- [x] Add `#[non_exhaustive]` to growable public enums before stabilization.
+- [x] Keep exhaustive enums only where downstream exhaustive matching is a
       deliberate part of the API.
-- [ ] Add doctests showing intended match style for growable enums.
-- [ ] Update API inventory with exhaustiveness decisions.
+- [x] Add doctests showing intended match style for growable enums.
+- [x] Update API inventory with exhaustiveness decisions.
+  - Evidence: all current Tier S enums are growable and already marked
+    `#[non_exhaustive]`; there are no current Tier U enums. `OptionKey` and
+    `TryAllocError` docs now show downstream wildcard match style.
+    `docs/api-inventory.md` records the enum exhaustiveness policy and current
+    decisions. `scripts/check-api-inventory.py` now fails any public enum in
+    `src/safe` that lacks `#[non_exhaustive]` unless a future inventory
+    exception is deliberately added.
 - Verify: `scripts/check-api-inventory.py` and public API snapshot diff.
 
 ### Issue: Error APIs should be uniformly typed and inspectable

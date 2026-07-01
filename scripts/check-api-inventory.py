@@ -306,6 +306,20 @@ def public_struct_field_leaks() -> list[str]:
     return leaks
 
 
+def public_enum_exhaustiveness_errors() -> list[str]:
+    errors = []
+    for path in sorted((ROOT / "src/safe").glob("*.rs")):
+        lines = path.read_text().splitlines()
+        for index, line in enumerate(lines):
+            match = re.match(r"^pub enum\s+([A-Za-z0-9_]+)\b", line)
+            if not match:
+                continue
+            previous = lines[index - 1].strip() if index > 0 else ""
+            if previous != "#[non_exhaustive]":
+                errors.append(f"{path.relative_to(ROOT)}:{index + 1}:{match.group(1)}")
+    return errors
+
+
 def check_naming_firewall(actual_root: set[str]) -> None:
     bad_tier_s = sorted(item for item in TIER_S_ROOT_ITEMS if C_SHAPED_NAME.match(item))
     require(
@@ -341,6 +355,16 @@ def check_representation_firewall() -> None:
         not leaks,
         "Tier S/Tier U public structs must not expose representation fields "
         "without an explicit inventory exception:\n" + "\n".join(leaks),
+    )
+
+
+def check_enum_exhaustiveness() -> None:
+    errors = public_enum_exhaustiveness_errors()
+    require(
+        not errors,
+        "public Tier S/Tier U enums must be marked #[non_exhaustive] unless "
+        "docs/api-inventory.md records an exhaustive-enum exception:\n"
+        + "\n".join(errors),
     )
 
 
@@ -398,6 +422,7 @@ def main() -> int:
     )
     check_naming_firewall(actual_root)
     check_representation_firewall()
+    check_enum_exhaustiveness()
     for unsafe_callback_item in [
         "CallbackError",
         "DeferredFreeCallbackGuard",
@@ -472,6 +497,8 @@ def main() -> int:
         "Naming firewall: Tier S crate-root items and public safe-facade methods use",
         "`mi_*`, `_mi_*`, malloc-family, and C++ operator spellings",
         "Representation firewall: Tier S and Tier U structs keep fields private",
+        "All current Tier S enums are growable and marked `#[non_exhaustive]`",
+        "There are no current Tier U enums.",
         "`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`",
         "`unsafe_callbacks`: Tier U unsafe Rust callback guard namespace.",
         "The raw Rust module path surface is unstable until explicitly versioned.",

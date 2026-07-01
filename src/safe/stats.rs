@@ -123,6 +123,9 @@ impl StatTotal {
 /// ```rust,compile_fail
 /// let _ = mechanical_mimalloc::StatsSnapshot { raw: unreachable!() };
 /// ```
+///
+/// Cloning a `StatsSnapshot` duplicates the captured raw counters only; it
+/// does not call mimalloc or refresh statistics.
 #[derive(Clone, Debug)]
 #[must_use]
 pub struct StatsSnapshot {

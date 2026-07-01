@@ -262,12 +262,21 @@ compatibility surfaces.
 > ownership mistakes. In allocator code, accidental cloning is also a signal to
 > re-check ownership design.
 
-- [ ] Audit safe-layer and internal helper clones.
-- [ ] Remove clones that can be replaced by borrowing or moving.
-- [ ] For intentional non-trivial clones, add a short comment or name such as
+- [x] Audit safe-layer and internal helper clones.
+- [x] Remove clones that can be replaced by borrowing or moving.
+- [x] For intentional non-trivial clones, add a short comment or name such as
       `snapshot` to explain the reason.
-- [ ] Keep `Copy` only on small scalar/pointer wrappers where duplication is
+- [x] Keep `Copy` only on small scalar/pointer wrappers where duplication is
       cheap and semantically invisible.
+  - Evidence: the safe/internal/allocator helper scan found no `.clone()` or
+    `clone_from()` calls to remove. The only non-test owned string conversions
+    found are Windows platform environment-string boundary conversions outside
+    the safe/internal helper layer. Current `Copy` derives remain on small
+    scalar, pointer, handle, enum, or witness types. The only public safe
+    non-`Copy` `Clone` type is `StatsSnapshot`; its docs now state that cloning
+    duplicates the captured counters without calling mimalloc or refreshing
+    statistics. `scripts/check-safe-docs.py` now rejects future public safe
+    non-`Copy` `Clone` structs unless their rustdoc documents clone semantics.
 - Verify: full Rust tests and benchmarks if hot code changes.
 
 ### Issue: Trait use should stay minimal and capability-focused

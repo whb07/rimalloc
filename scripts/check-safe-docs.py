@@ -32,6 +32,7 @@ PUBLIC_ITEM = re.compile(
     r"(?:struct|enum|trait|type|fn|const)\s+[A-Za-z_][A-Za-z0-9_]*\b"
 )
 PUBLIC_ENUM = re.compile(r"^\s*pub\s+enum\s+[A-Za-z_][A-Za-z0-9_]*\b")
+PUBLIC_STRUCT = re.compile(r"^\s*pub\s+struct\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b")
 ENUM_VARIANT = re.compile(r"^\s*([A-Z][A-Za-z0-9_]*)\s*(?:[,({=]|$)")
 PUBLIC_FN = re.compile(
     r"^\s*pub\s+"
@@ -164,6 +165,32 @@ def safe_signature_borrowing_violations(rel: str, lines: list[str]) -> list[str]
     return violations
 
 
+def safe_non_copy_clone_violations(rel: str, lines: list[str]) -> list[str]:
+    violations: list[str] = []
+    pending_non_copy_clone = False
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("#[derive("):
+            pending_non_copy_clone = "Clone" in stripped and "Copy" not in stripped
+            continue
+
+        if not stripped or stripped.startswith("#["):
+            continue
+
+        match = PUBLIC_STRUCT.match(line)
+        if pending_non_copy_clone and match:
+            docs = "\n".join(doc_block(lines, index))
+            if "Cloning" not in docs:
+                violations.append(
+                    f"{rel}:{index + 1}: public non-Copy Clone {match.group('name')}"
+                    " must document clone semantics"
+                )
+        pending_non_copy_clone = False
+
+    return violations
+
+
 def missing_unsafe_sections(rel: str, lines: list[str]) -> list[str]:
     missing: list[str] = []
     for index, line in enumerate(lines):
@@ -202,6 +229,14 @@ def main() -> int:
     if not safe_signature_borrowing_violations("synthetic.rs", synthetic_cow):
         print("safe-docs regression failed to flag Cow in a public safe signature")
         return 1
+    synthetic_clone = [
+        "/// Docs.",
+        "#[derive(Clone, Debug)]",
+        "pub struct Snapshot;",
+    ]
+    if not safe_non_copy_clone_violations("synthetic.rs", synthetic_clone):
+        print("safe-docs regression failed to flag undocumented non-Copy Clone")
+        return 1
     synthetic_unsafe = ["/// Docs.", "pub unsafe fn raw() {}"]
     if not missing_unsafe_sections("synthetic.rs", synthetic_unsafe):
         print("safe-docs regression failed to flag a missing unsafe method section")
@@ -218,6 +253,7 @@ def main() -> int:
         lines = path.read_text().splitlines()
         missing.extend(missing_safe_result_sections(rel, lines))
         missing.extend(safe_signature_borrowing_violations(rel, lines))
+        missing.extend(safe_non_copy_clone_violations(rel, lines))
 
     for path in UNSAFE_SECTION_FILES:
         rel = path.relative_to(ROOT).as_posix()

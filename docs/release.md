@@ -283,8 +283,11 @@ Before publishing or tagging a release:
    changelog `Security` entry requirements.
 4. Confirm no object ownership APIs such as `MiBox<T>`, `HeapBox<'heap, T>`,
    object constructors, or object destructors were added to the safe facade
-   without a separate design covering construction failure, destructor and panic
-   behavior, allocator/heap ownership, and threading traits.
+   without completing `docs/object-ownership.md`, including construction
+   failure, initialization cleanup, destructor and panic behavior, zero-sized
+   and unsized value scope, allocator/heap ownership, heap lifetime behavior,
+   threading traits, and compile-fail tests for private representation and heap
+   lifetime misuse.
 5. Run `scripts/check-api-inventory.py`.
 6. Run `scripts/check-ffi-boundary.py`.
 7. Run `scripts/check-local.sh`.

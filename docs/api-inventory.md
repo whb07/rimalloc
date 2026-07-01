@@ -80,6 +80,11 @@ process-global callback synchronization, lifetime, reentrancy, and allocator
 entry obligations can use `unsafe_callbacks::ErrorCallbackGuard` and
 `unsafe_callbacks::DeferredFreeCallbackGuard`.
 
+Object ownership APIs such as `MiBox<T>` and `HeapBox<'heap, T>` are not part
+of the current public API. `docs/object-ownership.md` records the release-scoped
+deferral and the required design before those names, object constructors, or
+object destructors may be exported.
+
 Adding a safe wrapper requires documenting how it enforces ownership, lifetime,
 aliasing, nullability, alignment, threading, and unwind requirements without
 caller discipline.

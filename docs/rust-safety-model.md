@@ -25,6 +25,14 @@ heap allocations borrow the heap witness, so safe code cannot delete an owned
 heap while heap-tied allocations are live. `MainHeap` is a borrowed witness for
 the process-global main heap; dropping the handle does not delete that heap.
 
+The safe facade currently owns byte storage only, not initialized Rust objects.
+Object ownership APIs such as `MiBox<T>` and `HeapBox<'heap, T>` are not part
+of the current public API.
+`MiBox<T>` and `HeapBox<'heap, T>` are deferred for the current release line in
+`docs/object-ownership.md`; they require a separate object lifetime design for
+allocation failure, initialization, `Drop`, destructor panic behavior,
+zero-sized values, unsized values, and heap-tied ownership.
+
 ## Initialization
 
 Uninitialized memory is never exposed as `&[u8]` or `&mut [u8]`. `Allocation`

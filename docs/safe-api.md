@@ -87,18 +87,27 @@ every byte has been initialized.
 
 ## Future Object Ownership APIs
 
-The current allocation wrappers own bytes, not Rust objects. They must not grow
-constructors that initialize `T`, run `Drop`, or otherwise act like `Box<T>`.
-Object-level ownership needs separate types, such as `MiBox<T>` for the main
-allocator and `HeapBox<'heap, T>` for heap-tied ownership, so byte allocation
-layout, initialization, and resize APIs stay distinct from object lifetime
-semantics.
+The current allocation wrappers own bytes, not Rust objects. Object ownership
+APIs are explicitly out of scope for the current release line and are tracked
+in `docs/object-ownership.md`.
 
-Before adding object ownership APIs, the design must specify construction
-failure behavior, destructor and panic behavior, allocator/heap ownership, and
-threading traits. It must also add tests for successful construction and drop,
-constructor panic cleanup, destructor panic behavior, heap-tied lifetime
-enforcement, and deallocation through the owning allocator or heap.
+`Allocation` and `HeapAllocation<'heap>` must not grow constructors that
+initialize `T`, run `Drop`, or otherwise act like `Box<T>`. Object-level
+ownership needs separate types, such as `MiBox<T>` for the process allocator
+and `HeapBox<'heap, T>` for heap-tied ownership, so byte allocation layout,
+initialization, and resize APIs stay distinct from object lifetime semantics.
+
+Before adding object ownership APIs, the design must specify allocation failure
+behavior, initialization and constructor panic cleanup, destructor panic
+behavior, zero-sized value handling, unsized-value scope, allocator/heap
+ownership, heap lifetime behavior, and threading traits. It must also add tests
+for successful construction and drop, constructor panic cleanup, destructor
+panic behavior, zero-sized values, heap-tied lifetime enforcement, private
+representation construction, and deallocation through the owning allocator or
+heap. Deallocation through the owning allocator or heap is part of the object
+ownership contract, not a byte allocation convenience; deallocation through the
+owning allocator or heap must be tested before object ownership APIs are
+exported.
 
 ## Naming Conventions
 

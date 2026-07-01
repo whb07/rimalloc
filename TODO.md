@@ -134,16 +134,28 @@ Review evidence:
 > either implemented with `Drop` correctness or explicitly postponed with a
 > stable design note.
 
-- [ ] Write the `MiBox<T>` and `HeapBox<'heap, T>` design, including allocation
+- [x] Write the `MiBox<T>` and `HeapBox<'heap, T>` design, including allocation
       failure, initialization, `Drop`, zero-sized types, unsized values, and
       heap lifetime behavior.
-- [ ] Decide whether typed object ownership is in scope before the next release.
-- [ ] If in scope, implement fallible constructors without exposing raw
+- [x] Decide whether typed object ownership is in scope before the next release.
+- [x] If in scope, implement fallible constructors without exposing raw
       ownership invariants.
-- [ ] If out of scope, document the reason and add release checks that keep the
+- [x] If out of scope, document the reason and add release checks that keep the
       deferred status explicit.
-- [ ] Add compile-fail tests for heap lifetime misuse and private representation
+- [x] Add compile-fail tests for heap lifetime misuse and private representation
       construction for any new object ownership types.
+  - Evidence: `docs/object-ownership.md` now records the release-scoped
+    decision: `MiBox<T>` and `HeapBox<'heap, T>` are out of scope before the
+    next release. It still specifies the future API shape for allocation
+    failure, initialization, constructor panic cleanup, `Drop`, destructor
+    panic behavior, zero-sized values, unsized-value deferral, and heap
+    lifetimes. `docs/safe-api.md`, `docs/rust-safety-model.md`, and
+    `docs/api-inventory.md` now link that decision. The release checklist and
+    `safe_byte_allocations_keep_object_ownership_separate` audit test reject
+    object ownership names or constructors unless the design is completed with
+    the required compile-fail coverage. No new object ownership types were
+    added, so the compile-fail item is enforced by the existing absence guard
+    rather than type-specific tests.
 - Verify: safe API docs, compile-fail doctests, full clippy, full tests, and API
   snapshot review.
 
@@ -200,7 +212,7 @@ Review evidence:
 2. [x] Inventory root-exported macros and prevent new internal macro leaks.
 3. [x] Localize the highest-signal clippy allowances.
 4. [x] Centralize generated artifact hygiene.
-5. [ ] Document or implement the safe object ownership decision.
+5. [x] Document or implement the safe object ownership decision.
 6. [ ] Split the smallest high-value translated module cluster.
 7. [ ] Expand feature/no-std validation around safe-facing examples.
 
@@ -214,7 +226,7 @@ Review evidence:
       local exceptions.
 - [ ] At least one translated module boundary is improved without API or ABI
       drift.
-- [ ] Safe typed object ownership has either a tested implementation or a clear
+- [x] Safe typed object ownership has either a tested implementation or a clear
       release-scoped design decision.
 - [x] Generated artifact ownership is documented and unexpected local artifacts
       are detectable.

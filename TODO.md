@@ -203,15 +203,29 @@ compatibility surfaces.
 > Where a state has mutually exclusive cases, enums or typestate witnesses make
 > invalid states harder to represent and review.
 
-- [ ] Audit `src/types`, `src/allocator`, and `src/safe` for clusters such as
+- [x] Audit `src/types`, `src/allocator`, and `src/safe` for clusters such as
       `bool + Option<T>` or multiple booleans representing allocator state.
-- [ ] Convert reviewable non-hot-path clusters to enums.
-- [ ] For hot paths, require assembly or benchmark evidence before and after
+- [x] Convert reviewable non-hot-path clusters to enums.
+- [x] For hot paths, require assembly or benchmark evidence before and after
       any typestate conversion.
-- [ ] Prefer state-specific data inside enum variants rather than parallel
+- [x] Prefer state-specific data inside enum variants rather than parallel
       optional fields.
-- [ ] Avoid wildcard `_` matches inside defining modules when exhaustive
+- [x] Avoid wildcard `_` matches inside defining modules when exhaustive
       handling should catch future variants.
+  - Evidence: the audit found no reviewable non-hot-path cluster that should
+    be converted now; raw C layout fields and callback ABI option slots should
+    remain compatibility-shaped, and heap/page ownership, validation, free
+    paths, memory IDs, and callback wrappers already use typed states. The
+    practical cleanup was `LocalFreeMode`: the former `track_stats`/`check_full`
+    boolean pair is now a small enum with named variants and an inline
+    accessor, removing boolean literal clusters from free call sites while
+    keeping the mode crate-private and `Copy`. The defining module uses
+    exhaustive matches over `FreePathKind`; no wildcard arm hides future
+    free-path variants. Focused unit coverage checks the valid mode states.
+    Because this touches the free path, release `mi_free` assembly was captured
+    under `target/strict-type-assembly/`, and `scripts/check-bench-smoke.sh`
+    passed threshold validation with
+    `target/criterion/benchmark-thresholds-smoke.csv`.
 - Verify: relevant unit tests plus benchmark/assembly evidence for hot paths.
 
 ### Issue: Borrowing conventions should be documented and enforced in new code

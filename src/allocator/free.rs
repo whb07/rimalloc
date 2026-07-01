@@ -371,23 +371,18 @@ pub(crate) unsafe fn mi_free_block_local(
         let page = page_wrapper.page().as_ptr();
         let block = block_wrapper.block().as_ptr();
         let was_guarded = block_wrapper.is_guarded();
-        let track_stats = mode.track_stats;
-        let check_full = mode.check_full;
+        let check_full = mode.check_full();
         if mi_check_is_double_free(page, block) {
             return;
         }
         if !was_guarded {
             mi_check_padding(page, block);
         }
-        if track_stats {
-            mi_stat_free(page, block);
-        }
-        if track_stats {
-            mi_track_free_size(
-                block.cast::<c_void>(),
-                mi_page_usable_size_of(page, block, was_guarded),
-            );
-        }
+        mi_stat_free(page, block);
+        mi_track_free_size(
+            block.cast::<c_void>(),
+            mi_page_usable_size_of(page, block, was_guarded),
+        );
         if MI_DEBUG > 0 && MI_TRACK_ENABLED == 0 && !was_guarded {
             _mi_memset_aligned(
                 block.cast::<c_void>(),
@@ -643,10 +638,7 @@ pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *
         mi_free_block_local(
             page_wrapper,
             validated.block(),
-            crate::core_types::LocalFreeMode {
-                track_stats: true,
-                check_full: true,
-            },
+            crate::core_types::LocalFreeMode::TrackAndCheckFull,
         );
     }
 }
@@ -770,10 +762,7 @@ unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable:
                 mi_free_block_local(
                     local_page,
                     validated.block(),
-                    crate::core_types::LocalFreeMode {
-                        track_stats: true,
-                        check_full: false,
-                    },
+                    crate::core_types::LocalFreeMode::TrackOnly,
                 );
             }
             (_, owner) => mi_free_ex_slow(validated, owner, path),
@@ -813,10 +802,7 @@ unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
                 mi_free_block_local(
                     crate::core_types::LocalPage::new_unchecked(page_ptr),
                     block,
-                    crate::core_types::LocalFreeMode {
-                        track_stats: true,
-                        check_full: false,
-                    },
+                    crate::core_types::LocalFreeMode::TrackOnly,
                 );
                 true
             }
@@ -853,10 +839,7 @@ pub(crate) unsafe fn mi_free_ex_slow(
                 mi_free_block_local(
                     local_page,
                     validated.block(),
-                    crate::core_types::LocalFreeMode {
-                        track_stats: true,
-                        check_full: path != crate::core_types::FreePathKind::LocalFast,
-                    },
+                    crate::core_types::LocalFreeMode::for_free_path(path),
                 );
             }
             crate::core_types::PageFreeOwner::Foreign(foreign_page) => {

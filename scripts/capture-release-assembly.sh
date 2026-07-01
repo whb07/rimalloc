@@ -8,22 +8,35 @@ source "$SCRIPT_DIR/common.sh"
 cd_repo_root
 
 out_dir="${MIMALLOC_ASM_OUT_DIR:-target/strict-type-assembly}"
+build_dir="$out_dir/build"
 objdump_tool="${MIMALLOC_OBJDUMP:-objdump}"
 nm_tool="${MIMALLOC_NM:-nm}"
 
-run cargo build --release --lib
+run cargo rustc --target-dir "$build_dir" --release --features c-abi --lib -- --crate-type cdylib
 
 artifact=""
 for candidate in \
-  target/release/libmechanical_mimalloc.so \
-  target/release/libmechanical_mimalloc.dylib \
-  target/release/mechanical_mimalloc.dll
+  "$build_dir/release/libmechanical_mimalloc.so" \
+  "$build_dir/release/libmechanical_mimalloc.dylib" \
+  "$build_dir/release/mechanical_mimalloc.dll"
 do
   if [[ -f "$candidate" ]]; then
     artifact="$candidate"
     break
   fi
 done
+
+if [[ -z "$artifact" ]]; then
+  artifact="$(
+    find "$build_dir/release/deps" -maxdepth 1 -type f \
+      \( -name 'libmechanical_mimalloc*.so' \
+      -o -name 'libmechanical_mimalloc*.dylib' \
+      -o -name 'mechanical_mimalloc*.dll' \) \
+      -printf '%T@ %p\n' 2>/dev/null \
+      | sort -nr \
+      | sed -n '1s/^[^ ]* //p'
+  )"
+fi
 
 if [[ -z "$artifact" ]]; then
   printf 'error: release dynamic library artifact not found\n' >&2

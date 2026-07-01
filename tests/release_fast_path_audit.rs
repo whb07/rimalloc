@@ -703,6 +703,7 @@ fn strict_wrapper_hot_path_changes_require_assembly_evidence() {
         "Run `scripts/capture-release-assembly.sh`",
         "free-list pop, local free, remote free, small\n  page lookup, and any changed hot path",
         "no added hot-path branch, call, load, store,\n  atomic memory operation, lock prefix, stack spill, formatting, allocation,\n  panic path, bounds-check slow path, or wrapper-constructor traffic",
+        "rejects\n  dynamic dispatch in allocator, internal, platform, and strict-type modules",
     ] {
         assert!(
             strict_types_md.contains(required),
@@ -2823,8 +2824,10 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
             )
             && todo.contains("`cargo semver-checks check-release`")
             && todo.contains(
-                "- [ ] For any new hot-path wrapper, measure type size and generated assembly"
+                "- [x] For any new hot-path wrapper, measure type size and generated assembly"
             )
+            && todo.contains("rejects\n    dynamic dispatch")
+            && todo.contains("- [ ] Keep or add compile-fail tests for raw APIs requiring unsafe.")
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

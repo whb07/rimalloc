@@ -186,7 +186,9 @@ boundary.
 - Optimized allocator internals remain covered by `no_std`/no-allocation audit
   tests: strict-type modules and allocation/free hot-path helpers reject `std`,
   `alloc`, formatting allocation, synchronization primitives, and Rust
-  heap-allocating library types.
+  heap-allocating library types. The strict-type source check also rejects
+  dynamic dispatch in allocator, internal, platform, and strict-type modules
+  unless an explicit allowlist entry records measured justification.
 - New strict internal wrappers on allocator hot paths require release assembly
   evidence before signoff. Run `scripts/capture-release-assembly.sh` and attach
   the generated `target/strict-type-assembly/` files or preserved artifact

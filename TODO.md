@@ -458,12 +458,28 @@ compatibility surfaces.
 > allocator's hot-path expectations. Rusty design should not introduce hidden
 > branches, formatting, allocation, stack spills, or panic paths.
 
-- [ ] For any new hot-path wrapper, measure type size and generated assembly
+- [x] For any new hot-path wrapper, measure type size and generated assembly
       where required.
-- [ ] Keep `Copy` wrappers small and pointer/scalar-like.
-- [ ] Box rare large enum variants if enum size matters.
-- [ ] Avoid dynamic dispatch in allocator hot loops unless measured.
-- [ ] Avoid allocation in no-allocation critical paths.
+- [x] Keep `Copy` wrappers small and pointer/scalar-like.
+- [x] Box rare large enum variants if enum size matters.
+- [x] Avoid dynamic dispatch in allocator hot loops unless measured.
+- [x] Avoid allocation in no-allocation critical paths.
+  - Evidence: `docs/strict-types.md`, `docs/performance.md`, and
+    `docs/release.md` already require size/layout, assembly, and benchmark
+    evidence for new strict wrappers on allocator hot paths. The current
+    pointer/scalar and typestate wrappers are covered by
+    `src/types/layout_tests.rs`, `scripts/check-layout.sh`, and the release
+    fast-path audit. `scripts/check-strict-types.py` now skips non-production
+    fuzz harnesses, recognizes moved module allowlist aliases, and rejects
+    dynamic dispatch in allocator, internal, platform, and strict-type modules
+    unless an explicit allowlist entry records measured justification.
+    `scripts/capture-release-assembly.sh` now builds the `c-abi` cdylib
+    artifact it inspects and captures the tracked hot symbols. Validation ran
+    `scripts/check-strict-types.py`, `scripts/check-layout.sh`,
+    `scripts/check-no-allocation-audit.py`,
+    `scripts/capture-release-assembly.sh`, and `scripts/check-bench-smoke.sh`.
+    Full benchmark runs remain the release-candidate gate for actual hot-path
+    behavior changes.
 - Verify: `scripts/capture-release-assembly.sh`, benchmark smoke/full checks,
   and no-allocation audit scripts.
 

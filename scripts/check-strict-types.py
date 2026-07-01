@@ -42,6 +42,7 @@ PTR_USIZE_RE = re.compile(
     r"(?:ptr|page|block|base|start|aligned_p|padding_ptr|p)\s+as\s+usize\b"
 )
 HEAP_TYPES_RE = re.compile(r"\b(Vec|String|Box|Arc|Mutex|OnceLock)\b")
+DYNAMIC_DISPATCH_RE = re.compile(r"\bdyn\s+[A-Za-z_]")
 BARE_DOMAIN_PARAM_RE = re.compile(
     r"\bfn\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*?"
     r"(?P<param>\b(?:size|newsize|oldsize|reqsize|block_size|bsize|alignment|"
@@ -56,9 +57,15 @@ SKIP_DIRS = {
     "target",
     "benches",
     "examples",
+    "fuzz",
     "mimalloc-3.3.2",
     "mimalloc-bench",
     "tests",
+}
+
+PATH_ALIASES = {
+    "src/internal/bitmap.rs": {"src/bitmap.rs"},
+    "src/internal/guarded.rs": {"src/types/guarded.rs"},
 }
 
 ALLOWED_DIRECT_MEMID = {
@@ -202,10 +209,11 @@ def is_allowed(
     symbol: str,
     domain: str,
 ) -> bool:
+    rel_candidates = {rel, *PATH_ALIASES.get(rel, set())}
     for entry in entries:
         if entry.kind != kind:
             continue
-        if not fnmatch.fnmatch(rel, entry.path):
+        if not any(fnmatch.fnmatch(candidate, entry.path) for candidate in rel_candidates):
             continue
         if entry.symbol not in {"*", symbol}:
             continue
@@ -391,6 +399,18 @@ def main() -> int:
             domain="heap-type",
             message="heap-allocating Rust type in allocator internals",
         )
+        if rel.startswith(("src/allocator/", "src/internal/", "src/platform/", "src/types/")):
+            require_no_pattern(
+                offenders,
+                kind="dynamic-dispatch",
+                rel=rel,
+                text=text,
+                allowed_files=set(),
+                pattern=DYNAMIC_DISPATCH_RE,
+                entries=entries,
+                domain="dyn",
+                message="dynamic dispatch in allocator internals",
+            )
 
     if offenders:
         raise AssertionError(

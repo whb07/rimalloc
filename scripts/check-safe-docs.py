@@ -140,6 +140,30 @@ def missing_safe_result_sections(rel: str, lines: list[str]) -> list[str]:
     return missing
 
 
+def safe_signature_borrowing_violations(rel: str, lines: list[str]) -> list[str]:
+    violations: list[str] = []
+    forbidden_patterns = [
+        (re.compile(r"&\s*(?:'[_A-Za-z0-9]+\s+)?Vec\s*<"), "&Vec<T>"),
+        (re.compile(r"&\s*(?:'[_A-Za-z0-9]+\s+)?String\b"), "&String"),
+        (re.compile(r"&\s*(?:'[_A-Za-z0-9]+\s+)?PathBuf\b"), "&PathBuf"),
+        (re.compile(r"\bCow\s*<"), "Cow"),
+    ]
+
+    for index, line in enumerate(lines):
+        match = PUBLIC_FN.match(line)
+        if not match or "unsafe" in match.group("qualifiers").split():
+            continue
+
+        signature = function_signature(lines, index)
+        for pattern, type_name in forbidden_patterns:
+            if pattern.search(signature):
+                violations.append(
+                    f"{rel}:{index + 1}: public safe signature {match.group('name')} uses {type_name}"
+                )
+
+    return violations
+
+
 def missing_unsafe_sections(rel: str, lines: list[str]) -> list[str]:
     missing: list[str] = []
     for index, line in enumerate(lines):
@@ -170,6 +194,14 @@ def main() -> int:
     if len(missing_safe_result_sections("synthetic.rs", synthetic_result)) != 2:
         print("safe-docs regression failed to flag missing fallible method sections")
         return 1
+    synthetic_borrowed_vec = ["/// Docs.", "pub fn borrowed(items: &Vec<u8>) {}"]
+    if not safe_signature_borrowing_violations("synthetic.rs", synthetic_borrowed_vec):
+        print("safe-docs regression failed to flag borrowed concrete collection")
+        return 1
+    synthetic_cow = ["/// Docs.", "pub fn maybe_owned(value: Cow<'_, str>) {}"]
+    if not safe_signature_borrowing_violations("synthetic.rs", synthetic_cow):
+        print("safe-docs regression failed to flag Cow in a public safe signature")
+        return 1
     synthetic_unsafe = ["/// Docs.", "pub unsafe fn raw() {}"]
     if not missing_unsafe_sections("synthetic.rs", synthetic_unsafe):
         print("safe-docs regression failed to flag a missing unsafe method section")
@@ -185,6 +217,7 @@ def main() -> int:
         rel = path.relative_to(ROOT).as_posix()
         lines = path.read_text().splitlines()
         missing.extend(missing_safe_result_sections(rel, lines))
+        missing.extend(safe_signature_borrowing_violations(rel, lines))
 
     for path in UNSAFE_SECTION_FILES:
         rel = path.relative_to(ROOT).as_posix()
@@ -211,9 +244,16 @@ def main() -> int:
         "| `as_ptr(...)` or `as_non_null(...)` |",
         "Internal scalar wrappers may use `get()`",
         "safe value wrappers should prefer a domain-specific accessor name",
+        "read text as `&str`",
+        "read bytes as `&[u8]`",
+        "read paths as `&Path`",
+        "read sequences as `&[T]` or iterators",
+        "return internal sequences as `&[T]`, not `&Vec<T>`",
+        "Take ownership only when the API stores, consumes, or transfers ownership",
+        "Store owned text, paths, and bytes as `String`, `PathBuf`, `Vec<T>`, or",
     ]:
         if phrase not in rust_style:
-            missing.append(f"docs/rust-style.md: missing constructor convention phrase: {phrase}")
+            missing.append(f"docs/rust-style.md: missing safe style phrase: {phrase}")
 
     if missing:
         print("Public API docs missing required rustdoc coverage:")

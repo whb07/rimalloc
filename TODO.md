@@ -234,17 +234,26 @@ compatibility surfaces.
 > when they store or consume. This matters for allocation-free safe helpers and
 > no-std compatibility.
 
-- [ ] Document default parameter choices:
+- [x] Document default parameter choices:
   - read text: `&str`;
   - read bytes: `&[u8]`;
   - read path: `&Path`;
   - read sequence: `&[T]`;
   - store text/path/bytes: owned `String`, `PathBuf`, `Vec<T>`, or `Box<[T]>`.
-- [ ] Audit Tier S methods for owned parameters used only for read-only work.
-- [ ] Audit return types for `&Vec<T>` or concrete collection leaks; prefer
+- [x] Audit Tier S methods for owned parameters used only for read-only work.
+- [x] Audit return types for `&Vec<T>` or concrete collection leaks; prefer
       `&[T]` or iterators.
-- [ ] Avoid spreading `Cow` unless it avoids meaningful allocation and keeps
+- [x] Avoid spreading `Cow` unless it avoids meaningful allocation and keeps
       the API clear.
+  - Evidence: `docs/rust-style.md` now records the borrowed-input defaults for
+    text, bytes, paths, and sequences, plus the ownership rule for stored
+    text/path/bytes. The Tier S safe facade audit found no owned `String`,
+    `Vec<T>`, `PathBuf`, or `Cow` parameters used only for read-only work, and
+    no public `&Vec<T>`, `&String`, or `&PathBuf` return or parameter leaks.
+    Allocation and heap APIs expose slices (`&[u8]`, `&mut [u8]`, and
+    `&[MaybeUninit<u8>]`) or typed ownership values instead. `scripts/check-safe-docs.py`
+    now keeps the style-guide borrowing phrases present and rejects borrowed
+    concrete collections or `Cow` in public safe signatures.
 - Verify: clippy plus targeted API review.
 
 ### Issue: Clones should be intentional and visible

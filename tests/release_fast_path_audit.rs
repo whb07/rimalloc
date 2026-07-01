@@ -2796,7 +2796,9 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
             && todo.contains("the constructor table")
             && todo.contains("- [x] Audit `src/types`, `src/allocator`, and `src/safe`")
             && todo.contains("`LocalFreeMode`")
-            && todo.contains("- [ ] Document default parameter choices:")
+            && todo.contains("- [x] Document default parameter choices:")
+            && todo.contains("rejects borrowed")
+            && todo.contains("- [ ] Audit safe-layer and internal helper clones.")
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

@@ -411,12 +411,23 @@ compatibility surfaces.
 > remove Rust APIs or change artifact meaning except where explicitly documented
 > as an artifact mode.
 
-- [ ] Audit feature combinations for additive behavior.
-- [ ] Document invalid feature combinations with `compile_error!` if any exist.
-- [ ] Avoid adding heavy default features.
-- [ ] Use `cargo hack` or existing equivalent scripts for feature powerset
+- [x] Audit feature combinations for additive behavior.
+- [x] Document invalid feature combinations with `compile_error!` if any exist.
+- [x] Avoid adding heavy default features.
+- [x] Use `cargo hack` or existing equivalent scripts for feature powerset
       checks where feasible.
-- [ ] Keep feature-specific ABI checks aligned with release artifacts.
+- [x] Keep feature-specific ABI checks aligned with release artifacts.
+  - Evidence: the feature audit found additive behavior across the current
+    feature surface. `default = []` remains intentionally empty, and heavy or
+    artifact-oriented modes such as `bench`, `compare`, `bench-diagnostics`,
+    `c-abi`, `cxx-overrides`, `tls-shim`, and `interpose` remain opt-in. No
+    invalid feature combination was found, so no `compile_error!` gate is
+    currently warranted. `scripts/check-features.sh` completed the explicit
+    feature matrix, the interpose cdylib build, and a `cargo hack` powerset of
+    128 additive combinations for non-artifact features. The safe API feature
+    matrix passed via `scripts/check-safe-api-features.sh`, and
+    `scripts/check-feature-abi.sh` passed default, `secure`, `guarded`,
+    `track-valgrind`, `track-asan` export checks, plus dynamic ABI manifests.
 - Verify: `scripts/check-feature-abi.sh` and feature matrix checks.
 
 ### Issue: Public API diffing should be used for style refactors too

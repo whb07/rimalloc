@@ -218,8 +218,8 @@ include fresh results for the changed benchmark set and a full report when hot
 paths or allocator-wide behavior can move.
 
 Additional policy documents live under `docs/`, including API inventory, ABI,
-safe API policy, assembly and platform intrinsics, compatibility, features,
-memory ordering, performance, release, Rust safety model, testing and
+safe API policy, Rust style, assembly and platform intrinsics, compatibility,
+features, memory ordering, performance, release, Rust safety model, testing and
 hardening, strict types, unsafe audit, reproducibility, governance, upstream
 synchronization, and dependency policy.
 Concrete local differences from upstream mimalloc are tracked in

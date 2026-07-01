@@ -7,6 +7,9 @@ rewrites.
 ## Expectations
 
 - State the upstream behavior or invariant being changed.
+- Follow the crate-specific Rust style guide in `docs/rust-style.md` for
+  Rust-facing naming, constructors, errors, accessors, `Copy`/`Clone`, unsafe
+  comments, and hot-path wrapper changes.
 - Keep public Rust API changes behind the crate facade, not new crate-root
   implementation modules.
 - Add or update tests for allocator behavior, ABI/layout behavior, and hot-path

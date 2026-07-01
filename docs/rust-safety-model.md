@@ -5,6 +5,8 @@ The safe facade is intentionally narrow: it exposes only APIs whose ownership,
 initialization, lifetime, and error behavior can be enforced without caller
 discipline. Raw C compatibility stays under `mechanical_mimalloc::raw`, and
 borrowed callback guards stay under the Tier U `unsafe_callbacks` namespace.
+Rust-facing naming, constructor, accessor, `Copy`/`Clone`, unsafe-comment, and
+hot-path wrapper conventions are defined in `docs/rust-style.md`.
 
 ## Safe Ownership And Lifetimes
 

@@ -296,6 +296,38 @@ fn find_mimalloc_shared_lib(build_dir: &Path) -> Option<PathBuf> {
     None
 }
 
+fn find_rust_mimalloc_shared_lib(root: &Path) -> Option<PathBuf> {
+    let release_dir = root.join("target/release");
+    let root_artifact = release_dir.join("libmechanical_mimalloc.so");
+    if root_artifact.exists() {
+        return Some(root_artifact);
+    }
+
+    let deps_dir = release_dir.join("deps");
+    let entries = std::fs::read_dir(deps_dir).ok()?;
+    let mut candidates: Vec<_> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| {
+                    name.starts_with("libmechanical_mimalloc-")
+                        && Path::new(name)
+                            .extension()
+                            .is_some_and(|extension| extension.eq_ignore_ascii_case("so"))
+                })
+        })
+        .collect();
+
+    candidates.sort_by_key(|path| {
+        std::fs::metadata(path)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+    });
+    candidates.pop()
+}
+
 fn ensure_rust_mimalloc(root: &Path) -> PathBuf {
     if let Some(path) = env::var_os("MIMALLOC_RUST_LIB") {
         let path = PathBuf::from(path);
@@ -325,12 +357,12 @@ fn ensure_rust_mimalloc(root: &Path) -> PathBuf {
             "cargo rustc --features interpose --lib --release -- --crate-type cdylib",
         );
     }
-    assert!(
-        lib.exists(),
-        "missing Rust mimalloc cdylib at {}; run `cargo rustc --features interpose --lib --release -- --crate-type cdylib` or set MIMALLOC_RUST_LIB",
-        lib.display()
-    );
-    lib
+    find_rust_mimalloc_shared_lib(root).unwrap_or_else(|| {
+        panic!(
+            "missing Rust mimalloc cdylib at {} or target/release/deps/libmechanical_mimalloc-*.so; run `cargo rustc --features interpose --lib --release -- --crate-type cdylib` or set MIMALLOC_RUST_LIB",
+            lib.display()
+        )
+    })
 }
 
 fn ensure_c_mimalloc(root: &Path) -> PathBuf {
@@ -393,6 +425,7 @@ mod dylib {
 
     const RTLD_NOW: c_int = 2;
     const RTLD_LOCAL: c_int = 0;
+    const RTLD_GLOBAL: c_int = 0x100;
 
     unsafe extern "C" {
         fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
@@ -429,6 +462,15 @@ mod dylib {
         if ptr.is_null() { None } else { Some(ptr) }
     }
 
+    fn preload_cxx_runtime() {
+        for runtime in [c"libstdc++.so.6", c"libstdc++.so"] {
+            let handle = unsafe { dlopen(runtime.as_ptr(), RTLD_NOW | RTLD_GLOBAL) };
+            if !handle.is_null() {
+                return;
+            }
+        }
+    }
+
     pub fn load_allocator(path: &Path) -> DylibAllocator {
         let path = CString::new(path.as_os_str().as_encoded_bytes()).unwrap_or_else(|_| {
             panic!(
@@ -436,11 +478,12 @@ mod dylib {
                 path.display()
             )
         });
+        preload_cxx_runtime();
         unsafe {
             let handle = dlopen(path.as_ptr(), RTLD_NOW | RTLD_LOCAL);
             assert!(
                 !handle.is_null(),
-                "failed to dlopen C mimalloc: {}",
+                "failed to dlopen allocator library: {}",
                 last_error()
             );
 

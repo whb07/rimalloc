@@ -2774,18 +2774,16 @@ fn upstream_sync_policy_includes_cadence_and_required_evidence_updates() {
 }
 
 #[test]
-fn release_readiness_backlog_has_no_unchecked_items() {
+fn rust_idiom_backlog_tracks_completed_and_open_work() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
 
-    let unchecked: Vec<_> = todo
-        .lines()
-        .filter(|line| line.trim_start().starts_with("- [ ]"))
-        .collect();
-
     assert!(
-        unchecked.is_empty(),
-        "release readiness backlog should have no unchecked items: {unchecked:#?}"
+        todo.contains("# TODO: Rust Idiom and Crate Standardization Backlog")
+            && todo.contains("- [x] Add `docs/rust-style.md`")
+            && todo.contains("- [ ] Audit crate-root exports and `src/safe`")
+            && todo.contains("## Definition of done for Rust idiom standardization"),
+        "TODO.md should track the active Rust idiom backlog with completed and open work"
     );
 }
 

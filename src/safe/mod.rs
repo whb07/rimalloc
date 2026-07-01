@@ -681,7 +681,7 @@ mod tests {
         let allocation = Allocation::with_size_align(1024, 16).expect("allocation");
         drop(allocation);
         let after = StatsSnapshot::capture().expect("stats after");
-        assert!(after.malloc_requested_total().get() >= before.malloc_requested_total().get());
+        assert!(after.requested_bytes_total().get() >= before.requested_bytes_total().get());
 
         let mut tiny = [0u8; 1];
         assert_eq!(after.write_json(&mut tiny), Err(StatsError::BufferTooSmall));

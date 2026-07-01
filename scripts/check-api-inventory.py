@@ -178,6 +178,10 @@ C_HEADER_MACRO_TIERS = {
 C_HEADER_MACROS = set().union(
     *(EXPECTED_EXPORTED_MACROS_BY_TIER[tier] for tier in C_HEADER_MACRO_TIERS)
 )
+C_SHAPED_NAME = re.compile(
+    r"^(?:_?mi_|malloc|calloc|realloc|free|operator)",
+    flags=re.IGNORECASE,
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -260,6 +264,47 @@ def exported_macros() -> dict[str, tuple[pathlib.Path, bool]]:
     return macros
 
 
+def public_safe_methods() -> dict[str, pathlib.Path]:
+    methods = {}
+    for path in sorted((ROOT / "src/safe").glob("*.rs")):
+        for match in re.finditer(
+            r"^\s+pub\s+(?:const\s+)?(?:unsafe\s+)?fn\s+([A-Za-z0-9_]+)\b",
+            path.read_text(),
+            flags=re.M,
+        ):
+            methods[match.group(1)] = path.relative_to(ROOT)
+    return methods
+
+
+def check_naming_firewall(actual_root: set[str]) -> None:
+    bad_tier_s = sorted(item for item in TIER_S_ROOT_ITEMS if C_SHAPED_NAME.match(item))
+    require(
+        not bad_tier_s,
+        "Tier S crate-root items must use Rust-facing names; C-shaped names "
+        f"belong in Tier R/Tier C: {bad_tier_s}",
+    )
+    bad_safe_methods = sorted(
+        f"{path}:{name}"
+        for name, path in public_safe_methods().items()
+        if C_SHAPED_NAME.match(name)
+    )
+    require(
+        not bad_safe_methods,
+        "public safe-facade methods must use Rust-facing names; C-shaped names "
+        "belong in Tier R/Tier C:\n" + "\n".join(bad_safe_methods),
+    )
+    bad_root = sorted(
+        item
+        for item in actual_root
+        if C_SHAPED_NAME.match(item) and item not in TIER_R_ROOT_ITEMS
+    )
+    require(
+        not bad_root,
+        "crate-root C-shaped public items must be classified as Tier R/Tier C: "
+        f"{bad_root}",
+    )
+
+
 def tier_s_u_snapshot(actual_root: set[str]) -> str:
     require(
         TIER_S_ROOT_ITEMS | TIER_U_ROOT_ITEMS <= actual_root,
@@ -312,6 +357,7 @@ def main() -> int:
         f"crate-root public inventory drift: missing={sorted(EXPECTED_ROOT_ITEMS - actual_root)} "
         f"extra={sorted(actual_root - EXPECTED_ROOT_ITEMS)}",
     )
+    check_naming_firewall(actual_root)
     for unsafe_callback_item in [
         "CallbackError",
         "DeferredFreeCallbackGuard",
@@ -383,6 +429,9 @@ def main() -> int:
         "Tier R: raw Rust facade, unsafe and unstable unless explicitly versioned.",
         "Tier C: exported C ABI and raw layout compatibility surface.",
         "Tier I: internal implementation surface, not public API.",
+        "Naming firewall: Tier S crate-root items and public safe-facade methods use",
+        "`mi_*`, `_mi_*`, malloc-family, and C++ operator spellings",
+        "`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`",
         "`unsafe_callbacks`: Tier U unsafe Rust callback guard namespace.",
         "The raw Rust module path surface is unstable until explicitly versioned.",
         "symbols/public-symbol-classification.tsv",

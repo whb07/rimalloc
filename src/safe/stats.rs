@@ -115,7 +115,7 @@ impl StatTotal {
 ///
 /// let snapshot = StatsSnapshot::capture().unwrap();
 /// assert!(snapshot.reserved_peak().get() >= snapshot.reserved_current().get());
-/// let _requested = snapshot.malloc_requested_total().get();
+/// let _requested = snapshot.requested_bytes_total().get();
 /// ```
 #[derive(Clone, Debug)]
 #[must_use]
@@ -177,9 +177,9 @@ impl StatsSnapshot {
         }
     }
 
-    /// Returns total requested malloc bytes from the snapshot.
+    /// Returns total requested allocation bytes from the snapshot.
     #[inline]
-    pub fn malloc_requested_total(&self) -> StatTotal {
+    pub fn requested_bytes_total(&self) -> StatTotal {
         StatTotal::from_i64(self.raw.malloc_requested.total)
     }
 
@@ -207,15 +207,15 @@ impl StatsSnapshot {
         StatTotal::from_i64(self.raw.committed.peak)
     }
 
-    /// Returns total normal malloc bytes from the snapshot.
+    /// Returns total normal allocation bytes from the snapshot.
     #[inline]
-    pub fn malloc_normal_total(&self) -> StatTotal {
+    pub fn normal_bytes_total(&self) -> StatTotal {
         StatTotal::from_i64(self.raw.malloc_normal.total)
     }
 
-    /// Returns total huge malloc bytes from the snapshot.
+    /// Returns total huge allocation bytes from the snapshot.
     #[inline]
-    pub fn malloc_huge_total(&self) -> StatTotal {
+    pub fn huge_bytes_total(&self) -> StatTotal {
         StatTotal::from_i64(self.raw.malloc_huge.total)
     }
 
@@ -472,7 +472,7 @@ mod tests {
         let snapshot = StatsSnapshot { raw };
 
         assert_eq!(
-            snapshot.malloc_requested_total().get(),
+            snapshot.requested_bytes_total().get(),
             raw.malloc_requested.total as usize
         );
         assert_eq!(
@@ -486,11 +486,11 @@ mod tests {
         );
         assert_eq!(snapshot.committed_peak().get(), raw.committed.peak as usize);
         assert_eq!(
-            snapshot.malloc_normal_total().get(),
+            snapshot.normal_bytes_total().get(),
             raw.malloc_normal.total as usize
         );
         assert_eq!(
-            snapshot.malloc_huge_total().get(),
+            snapshot.huge_bytes_total().get(),
             raw.malloc_huge.total as usize
         );
         assert_eq!(snapshot.pages_current().get(), raw.pages.current);

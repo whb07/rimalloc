@@ -79,14 +79,21 @@ compatibility surfaces.
 > `mi_malloc` belong in `raw`/ABI surfaces; safe APIs should read like ordinary
 > Rust ownership APIs.
 
-- [ ] Audit crate-root exports and `src/safe` for C-shaped names that could be
+- [x] Audit crate-root exports and `src/safe` for C-shaped names that could be
       renamed or hidden before stabilization.
-- [ ] Ensure new safe APIs use Rust verbs such as `allocate`, `resize`,
+- [x] Ensure new safe APIs use Rust verbs such as `allocate`, `resize`,
       `options`, `snapshot`, `reset`, or `with_*` instead of `mi_*` names.
-- [ ] Keep `mi_*`, `_mi_*`, malloc-family, and C++ operator names out of Tier S.
-- [ ] Add a docs check or inventory rule that flags new crate-root `mi_*`
+- [x] Keep `mi_*`, `_mi_*`, malloc-family, and C++ operator names out of Tier S.
+- [x] Add a docs check or inventory rule that flags new crate-root `mi_*`
       exports unless classified as Tier R/Tier C.
-- [ ] Update `docs/api-inventory.md` with the naming firewall policy.
+- [x] Update `docs/api-inventory.md` with the naming firewall policy.
+  - Evidence: `StatsSnapshot` safe accessors now use
+    `requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`
+    instead of malloc-family public method names. `docs/api-inventory.md`
+    documents the naming firewall and the stats counter mapping.
+    `scripts/check-api-inventory.py` now fails new Tier S crate-root items or
+    public safe-facade methods that use `mi_*`, `_mi_*`, malloc-family, or C++
+    operator spellings outside Tier R/Tier C classification.
 - Verify: `scripts/check-api-inventory.py` and `scripts/check-raw-facade.sh`.
 
 ### Issue: Public API representation should remain private by default

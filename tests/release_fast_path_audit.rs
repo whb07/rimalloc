@@ -2781,7 +2781,10 @@ fn rust_idiom_backlog_tracks_completed_and_open_work() {
     assert!(
         todo.contains("# TODO: Rust Idiom and Crate Standardization Backlog")
             && todo.contains("- [x] Add `docs/rust-style.md`")
-            && todo.contains("- [ ] Audit crate-root exports and `src/safe`")
+            && todo.contains("- [x] Audit crate-root exports and `src/safe`")
+            && todo
+                .contains("`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`")
+            && todo.contains("- [ ] Audit all Tier S and Tier U public structs for public fields.")
             && todo.contains("## Definition of done for Rust idiom standardization"),
         "TODO.md should track the active Rust idiom backlog with completed and open work"
     );

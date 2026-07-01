@@ -33,6 +33,11 @@ Implementation modules such as allocation, page, heap, arena, OS, primitive,
 thread-local, and strict-type internals are crate-private and must not be
 re-exported from the crate root.
 
+Naming firewall: Tier S crate-root items and public safe-facade methods use
+Rust-facing names. `mi_*`, `_mi_*`, malloc-family, and C++ operator spellings
+belong only to Tier R raw compatibility macros/functions or Tier C ABI symbols,
+where they must be classified by this inventory and the symbol manifests.
+
 ## Safe Rust API
 
 `MiMalloc` implements `core::alloc::GlobalAlloc`. `Allocation` owns one byte
@@ -51,6 +56,10 @@ controls and observations without requiring callers to pass raw out-pointers.
 `GlobalOptions` mutates mimalloc's process-global option table; callers that
 temporarily change options are expected to restore the previous values.
 Unsupported or unavailable cases return typed Rust errors.
+`StatsSnapshot` exposes Rust-facing accessors such as
+`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`; those map
+to the underlying mimalloc allocation counters without exposing malloc-family
+method names in Tier S.
 
 Borrowed callback guards are Tier U, not Tier S. Users who can uphold
 process-global callback synchronization, lifetime, reentrancy, and allocator
@@ -61,7 +70,8 @@ Adding a safe wrapper requires documenting how it enforces ownership, lifetime,
 aliasing, nullability, alignment, threading, and unwind requirements without
 caller discipline.
 
-Safe API design, naming, and trait rules are documented in `docs/safe-api.md`.
+Safe API design, naming, and trait rules are documented in `docs/safe-api.md`
+and `docs/rust-style.md`.
 
 ## Safe API Trait Inventory
 

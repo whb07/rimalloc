@@ -89,7 +89,7 @@ fn chacha_init(ctx: &mut mi_random_ctx_t, key: &[u8; 32], nonce: u64) {
 }
 
 #[inline]
-fn chacha_split(ctx: &mut mi_random_ctx_t, nonce: u64, ctx_new: &mut mi_random_ctx_t) {
+fn chacha_split(ctx: &mi_random_ctx_t, nonce: u64, ctx_new: &mut mi_random_ctx_t) {
     *ctx_new = mi_random_ctx_t::default();
     ctx_new.weak = ctx.weak;
     ctx_new.input.copy_from_slice(&ctx.input);

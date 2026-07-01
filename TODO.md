@@ -89,16 +89,24 @@ Review evidence:
 > non-idiomatic. High-signal lints should be re-enabled globally once localized
 > exceptions are justified.
 
-- [ ] Rank package-level clippy allowances by likely signal in safe, typed, and
+- [x] Rank package-level clippy allowances by likely signal in safe, typed, and
       platform code.
-- [ ] Move high-signal allowances from `Cargo.toml` to the smallest module or
+- [x] Move high-signal allowances from `Cargo.toml` to the smallest module or
       item that still needs them, with a short reason when the exception is
       intentional.
-- [ ] Add or tighten tests that count package-level allowances and selected
+- [x] Add or tighten tests that count package-level allowances and selected
       module-level allowances.
-- [ ] Avoid enabling lints that churn hot translated allocator paths without
+- [x] Avoid enabling lints that churn hot translated allocator paths without
       improving safety, API clarity, or generated code.
-- [ ] Re-run release fast-path audits after each lint reduction.
+- [x] Re-run release fast-path audits after each lint reduction.
+  - Evidence: `clippy::unnecessary_wraps` had no current violations and was
+    removed from the package allowance set. `clippy::needless_pass_by_ref_mut`
+    found a small high-signal cluster in bitmap/random helpers; those APIs now
+    take shared references where mutation happens through atomics or the source
+    context is read-only. `tests/release_fast_path_audit.rs` now rejects both
+    lints returning to the package allowance set. Focused clippy runs with
+    `-D clippy::needless_pass_by_ref_mut` and `-D clippy::unnecessary_wraps`
+    passed.
 - Verify: `cargo clippy --workspace --all-targets --all-features`,
   `tests/release_fast_path_audit.rs`, and full tests.
 
@@ -181,7 +189,7 @@ Review evidence:
 1. [x] Add the unsafe allowlist category/cap and remove safe-facing allowlist
        entries first.
 2. [x] Inventory root-exported macros and prevent new internal macro leaks.
-3. [ ] Localize the highest-signal clippy allowances.
+3. [x] Localize the highest-signal clippy allowances.
 4. [ ] Centralize generated artifact hygiene.
 5. [ ] Document or implement the safe object ownership decision.
 6. [ ] Split the smallest high-value translated module cluster.
@@ -193,7 +201,7 @@ Review evidence:
       the original 68-entry baseline.
 - [x] Root-exported macros are limited to documented public compatibility
       surfaces.
-- [ ] Package-level clippy allowances are reduced or explicitly justified by
+- [x] Package-level clippy allowances are reduced or explicitly justified by
       local exceptions.
 - [ ] At least one translated module boundary is improved without API or ABI
       drift.

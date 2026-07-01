@@ -469,7 +469,7 @@ fn mi_bfield_atomic_popcount_mask(b: &AtomicUsize, mask: mi_bfield_t) -> usize {
 }
 
 #[inline]
-fn mi_bchunk_set(chunk: &mut mi_bchunk_t, cidx: usize, already_set: Option<&mut usize>) -> bool {
+fn mi_bchunk_set(chunk: &mi_bchunk_t, cidx: usize, already_set: Option<&mut usize>) -> bool {
     crate::internal::mi_debug_assert!(cidx < MI_BCHUNK_BITS);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
@@ -482,7 +482,7 @@ fn mi_bchunk_set(chunk: &mut mi_bchunk_t, cidx: usize, already_set: Option<&mut 
 
 #[inline]
 fn mi_bchunk_setNX(
-    chunk: &mut mi_bchunk_t,
+    chunk: &mi_bchunk_t,
     cidx: usize,
     n: usize,
     already_set: Option<&mut usize>,
@@ -519,7 +519,7 @@ fn mi_bchunk_setNX(
 #[inline(never)]
 fn mi_bchunk_xsetNC(
     set: mi_xset_t,
-    chunk: &mut mi_bchunk_t,
+    chunk: &mi_bchunk_t,
     cidx: usize,
     mut n: usize,
     palready_set: Option<&mut usize>,
@@ -568,7 +568,7 @@ fn mi_bchunk_xsetNC(
 
 #[inline]
 fn mi_bchunk_setN(
-    chunk: &mut mi_bchunk_t,
+    chunk: &mi_bchunk_t,
     cidx: usize,
     n: usize,
     already_set: Option<&mut usize>,
@@ -584,7 +584,7 @@ fn mi_bchunk_setN(
 }
 
 #[inline]
-fn mi_bchunk_clear(chunk: &mut mi_bchunk_t, cidx: usize, all_clear: Option<&mut bool>) -> bool {
+fn mi_bchunk_clear(chunk: &mi_bchunk_t, cidx: usize, all_clear: Option<&mut bool>) -> bool {
     crate::internal::mi_debug_assert!(cidx < MI_BCHUNK_BITS);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
@@ -593,7 +593,7 @@ fn mi_bchunk_clear(chunk: &mut mi_bchunk_t, cidx: usize, all_clear: Option<&mut 
 
 #[inline]
 fn mi_bchunk_clearN(
-    chunk: &mut mi_bchunk_t,
+    chunk: &mi_bchunk_t,
     cidx: usize,
     n: usize,
     maybe_all_clear: Option<&mut bool>,
@@ -694,7 +694,7 @@ fn mi_bchunk_is_xsetN(set: mi_xset_t, chunk: &mi_bchunk_t, cidx: usize, n: usize
 
 #[inline]
 fn mi_bchunk_try_clearNX(
-    chunk: &mut mi_bchunk_t,
+    chunk: &mi_bchunk_t,
     cidx: usize,
     n: usize,
     pmaybe_all_clear: Option<&mut bool>,
@@ -828,7 +828,7 @@ fn mi_bchunk_try_clearN(
 
 #[inline]
 fn mi_bchunk_try_find_and_clear_at(
-    chunk: &mut mi_bchunk_t,
+    chunk: &mi_bchunk_t,
     chunk_idx: usize,
     pidx: &mut usize,
 ) -> bool {
@@ -851,7 +851,7 @@ fn mi_bchunk_try_find_and_clear_at(
 }
 
 #[inline]
-fn mi_bchunk_try_find_and_clear(chunk: &mut mi_bchunk_t, pidx: &mut usize) -> bool {
+fn mi_bchunk_try_find_and_clear(chunk: &mi_bchunk_t, pidx: &mut usize) -> bool {
     for i in 0..MI_BCHUNK_FIELDS {
         if mi_bchunk_try_find_and_clear_at(chunk, i, pidx) {
             return true;
@@ -862,7 +862,7 @@ fn mi_bchunk_try_find_and_clear(chunk: &mut mi_bchunk_t, pidx: &mut usize) -> bo
 
 #[inline]
 fn mi_bchunk_try_find_and_clear8_at(
-    chunk: &mut mi_bchunk_t,
+    chunk: &mi_bchunk_t,
     chunk_idx: usize,
     pidx: &mut usize,
 ) -> bool {
@@ -987,7 +987,7 @@ fn mi_bchunk_try_find_and_clearNC(chunk: &mut mi_bchunk_t, n: usize, pidx: &mut 
 }
 
 #[inline]
-fn mi_bchunk_clear_once_set(chunk: &mut mi_bchunk_t, cidx: usize) {
+fn mi_bchunk_clear_once_set(chunk: &mi_bchunk_t, cidx: usize) {
     crate::internal::mi_debug_assert!(cidx < MI_BCHUNK_BITS);
     let i = cidx / MI_BFIELD_BITS;
     let idx = cidx % MI_BFIELD_BITS;
@@ -1052,7 +1052,7 @@ fn mi_bchunk_popcount(chunk: &mi_bchunk_t) -> usize {
 #[inline]
 fn mi_bitmap_chunkmap_set(bitmap: &mut mi_bitmap_t, chunk_idx: usize) {
     crate::internal::mi_debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
-    mi_bchunk_set(&mut bitmap.chunkmap, chunk_idx, None);
+    mi_bchunk_set(&bitmap.chunkmap, chunk_idx, None);
 }
 
 #[inline(never)]
@@ -1061,9 +1061,9 @@ fn mi_bitmap_chunkmap_try_clear(bitmap: &mut mi_bitmap_t, chunk_idx: usize) -> b
     if !mi_bchunk_all_are_clear_relaxed(&bitmap.chunks[chunk_idx]) {
         return false;
     }
-    mi_bchunk_clear(&mut bitmap.chunkmap, chunk_idx, None);
+    mi_bchunk_clear(&bitmap.chunkmap, chunk_idx, None);
     if !mi_bchunk_all_are_clear_relaxed(&bitmap.chunks[chunk_idx]) {
-        mi_bchunk_set(&mut bitmap.chunkmap, chunk_idx, None);
+        mi_bchunk_set(&bitmap.chunkmap, chunk_idx, None);
         return false;
     }
     true
@@ -1075,16 +1075,16 @@ fn mi_bbitmap_set_chunk_bin(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, bin: m
     let mut ibin = MI_CBIN_SMALL;
     while (ibin as i32) < (MI_CBIN_NONE as i32) {
         if ibin == bin {
-            mi_bchunk_set(&mut bbitmap.chunkmap_bins[ibin as usize], chunk_idx, None);
+            mi_bchunk_set(&bbitmap.chunkmap_bins[ibin as usize], chunk_idx, None);
         } else {
-            mi_bchunk_clear(&mut bbitmap.chunkmap_bins[ibin as usize], chunk_idx, None);
+            mi_bchunk_clear(&bbitmap.chunkmap_bins[ibin as usize], chunk_idx, None);
         }
         ibin = mi_chunkbin_inc(ibin);
     }
 }
 
 #[inline]
-fn mi_bbitmap_chunkmap_set_max(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize) {
+fn mi_bbitmap_chunkmap_set_max(bbitmap: &mi_bbitmap_t, chunk_idx: usize) {
     let mut oldmax = bbitmap.chunk_max_accessed.load(Ordering::Relaxed);
     while chunk_idx > oldmax {
         match bbitmap.chunk_max_accessed.compare_exchange_weak(
@@ -1105,7 +1105,7 @@ fn mi_bbitmap_chunkmap_set(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, check_a
     if check_all_set && mi_bchunk_all_are_set_relaxed(&bbitmap.chunks[chunk_idx]) {
         mi_bbitmap_set_chunk_bin(bbitmap, chunk_idx, MI_CBIN_NONE);
     }
-    mi_bchunk_set(&mut bbitmap.chunkmap, chunk_idx, None);
+    mi_bchunk_set(&bbitmap.chunkmap, chunk_idx, None);
     mi_bbitmap_chunkmap_set_max(bbitmap, chunk_idx);
 }
 
@@ -1115,9 +1115,9 @@ fn mi_bbitmap_chunkmap_try_clear(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize) -
     if !mi_bchunk_all_are_clear_relaxed(&bbitmap.chunks[chunk_idx]) {
         return false;
     }
-    mi_bchunk_clear(&mut bbitmap.chunkmap, chunk_idx, None);
+    mi_bchunk_clear(&bbitmap.chunkmap, chunk_idx, None);
     if !mi_bchunk_all_are_clear_relaxed(&bbitmap.chunks[chunk_idx]) {
-        mi_bchunk_set(&mut bbitmap.chunkmap, chunk_idx, None);
+        mi_bchunk_set(&bbitmap.chunkmap, chunk_idx, None);
         return false;
     }
     mi_bbitmap_chunkmap_set_max(bbitmap, chunk_idx);
@@ -1203,7 +1203,7 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
         crate::internal::mi_debug_assert!(n == 1);
         let claim_fun = arg1 as *mut ThreadLocalClaimCallback;
         let claim_data = &mut *(arg2 as *mut mi_claim_fun_data_t);
-        let chunk = &mut (*bitmap).chunks[chunk_idx];
+        let chunk = &(*bitmap).chunks[chunk_idx];
         let mut cidx = 0usize;
         if mi_bchunk_try_find_and_clear(chunk, &mut cidx) {
             let slice_index = (chunk_idx * MI_BCHUNK_BITS) + cidx;
@@ -1437,7 +1437,7 @@ pub unsafe fn mi_bitmap_setN(
             };
             let mut _already_set = 0usize;
             were_allclear &= mi_bchunk_setN(
-                &mut (*bitmap).chunks[chunk_idx],
+                &(*bitmap).chunks[chunk_idx],
                 cidx,
                 m,
                 Some(&mut _already_set),
@@ -1480,7 +1480,7 @@ pub unsafe fn mi_bitmap_clearN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usiz
             };
             let mut maybe_all_clear = false;
             were_allset &= mi_bchunk_clearN(
-                &mut (*bitmap).chunks[chunk_idx],
+                &(*bitmap).chunks[chunk_idx],
                 cidx,
                 m,
                 Some(&mut maybe_all_clear),
@@ -1624,7 +1624,7 @@ pub unsafe fn mi_bitmap_clear_once_set(bitmap: *mut mi_bitmap_t, idx: usize) {
         let chunk_idx = idx / MI_BCHUNK_BITS;
         let cidx = idx % MI_BCHUNK_BITS;
         crate::internal::mi_debug_assert!(chunk_idx < mi_bitmap_chunk_count(bitmap));
-        mi_bchunk_clear_once_set(&mut (*bitmap).chunks[chunk_idx], cidx);
+        mi_bchunk_clear_once_set(&(*bitmap).chunks[chunk_idx], cidx);
     }
 }
 
@@ -2035,7 +2035,7 @@ pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usi
             } else {
                 n
             };
-            were_allclear &= mi_bchunk_setN(&mut (*bbitmap).chunks[chunk_idx], cidx, m, None);
+            were_allclear &= mi_bchunk_setN(&(*bbitmap).chunks[chunk_idx], cidx, m, None);
             mi_bbitmap_chunkmap_set(&mut *bbitmap, chunk_idx, true);
             n -= m;
             cidx = 0;
@@ -2548,7 +2548,7 @@ static MI_BBITMAP_TRY_FIND_AND_CLEARN_KEEP: unsafe fn(
 ) -> bool = mi_bbitmap_try_find_and_clearN_;
 
 type mi_bchunk_xsetNC_fun_t =
-    fn(mi_xset_t, &mut mi_bchunk_t, usize, usize, Option<&mut usize>, Option<&mut bool>) -> bool;
+    fn(mi_xset_t, &mi_bchunk_t, usize, usize, Option<&mut usize>, Option<&mut bool>) -> bool;
 
 #[used]
 static MI_BCHUNK_XSETNC_KEEP: mi_bchunk_xsetNC_fun_t = mi_bchunk_xsetNC;

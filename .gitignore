@@ -12,5 +12,13 @@ dump.rdb
 # Local benchmark scratch output.
 mimalloc-bench/
 
+# Local generated analysis/profiling scratch output.
+/RUST_DEPENDENCY_EDGES.csv
+/parse_bench*.py
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+
 # Local patch scratch files.
 *.patch

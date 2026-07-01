@@ -2775,6 +2775,71 @@ fn upstream_sync_policy_includes_cadence_and_required_evidence_updates() {
 }
 
 #[test]
+fn generated_artifact_hygiene_is_centralized() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let docs =
+        fs::read_to_string(root.join("docs/generated-artifacts.md")).expect("read artifact docs");
+    let script = fs::read_to_string(root.join("scripts/check-generated-artifacts.py"))
+        .expect("read artifact checker");
+    let gitignore = fs::read_to_string(root.join(".gitignore")).expect("read .gitignore");
+    let check_local =
+        fs::read_to_string(root.join("scripts/check-local.sh")).expect("read check-local");
+    let release = fs::read_to_string(root.join("docs/release.md")).expect("read release docs");
+
+    for required in [
+        "Generated Artifact Hygiene",
+        "scripts/check-public-symbols.py --write-dynamic-manifests",
+        "scripts/check-bench-full.sh",
+        "scripts/build-release-artifacts.py",
+        "scripts/check-generated-artifacts.py",
+        "target/release-artifacts/",
+        "target/criterion",
+        "RUST_DEPENDENCY_EDGES.csv",
+        "parse_bench*.py",
+    ] {
+        assert!(
+            docs.contains(required),
+            "generated artifact docs should include marker {required}"
+        );
+    }
+
+    for required in [
+        "REQUIRED_IGNORED",
+        "GENERATED_UNTRACKED_PATTERNS",
+        "DOC_MARKERS",
+        "ls-files",
+        "check-ignore",
+        "docs/generated-artifacts.md",
+    ] {
+        assert!(
+            script.contains(required),
+            "generated artifact checker should include marker {required}"
+        );
+    }
+
+    for required in [
+        "/RUST_DEPENDENCY_EDGES.csv",
+        "/parse_bench*.py",
+        "*.profraw",
+        "*.profdata",
+        "*.gcda",
+        "*.gcno",
+    ] {
+        assert!(
+            gitignore.contains(required),
+            ".gitignore should keep local generated artifact marker {required}"
+        );
+    }
+
+    assert!(
+        check_local.contains("scripts/check-generated-artifacts.py")
+            && release.contains("scripts/check-generated-artifacts.py")
+            && release.contains("docs/generated-artifacts.md"),
+        "local and release checks should run the generated artifact hygiene gate"
+    );
+}
+
+#[test]
 fn rust_idiom_backlog_tracks_current_work() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");

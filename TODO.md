@@ -153,15 +153,24 @@ Review evidence:
 > local artifacts. The repo should make it obvious which files are generated,
 > which are checked in as evidence, and which must remain ignored.
 
-- [ ] Inventory generated analysis outputs such as dependency graphs, benchmark
+- [x] Inventory generated analysis outputs such as dependency graphs, benchmark
       CSVs, Criterion output, fuzz metadata, and release artifact manifests.
-- [ ] Move reproducible generated evidence under documented paths or add it to
+- [x] Move reproducible generated evidence under documented paths or add it to
       ignore rules when it is local-only.
-- [ ] Add a script or test that reports unexpected generated artifacts outside
+- [x] Add a script or test that reports unexpected generated artifacts outside
       approved paths.
-- [ ] Document the command that regenerates each checked-in evidence file.
-- [ ] Keep untracked local scratch files out of commits unless the evidence is
+- [x] Document the command that regenerates each checked-in evidence file.
+- [x] Keep untracked local scratch files out of commits unless the evidence is
       intentionally promoted.
+  - Evidence: `docs/generated-artifacts.md` now owns the checked-in evidence
+    table, local-only generated paths, release artifact outputs, and the
+    command for each generated evidence family. `scripts/check-generated-artifacts.py`
+    verifies required ignore rules, reports generated-looking untracked files
+    outside approved paths, and checks that the policy doc still names the
+    owner commands. Local scratch files such as `RUST_DEPENDENCY_EDGES.csv` and
+    `parse_bench*.py` are ignored rather than promoted. The hygiene gate is
+    wired into `scripts/check-local.sh`, release docs, and
+    `tests/release_fast_path_audit.rs`.
 - Verify: artifact hygiene script, `git status --short`, release checklist, and
   full tests when Rust code changes.
 
@@ -190,7 +199,7 @@ Review evidence:
        entries first.
 2. [x] Inventory root-exported macros and prevent new internal macro leaks.
 3. [x] Localize the highest-signal clippy allowances.
-4. [ ] Centralize generated artifact hygiene.
+4. [x] Centralize generated artifact hygiene.
 5. [ ] Document or implement the safe object ownership decision.
 6. [ ] Split the smallest high-value translated module cluster.
 7. [ ] Expand feature/no-std validation around safe-facing examples.
@@ -207,6 +216,6 @@ Review evidence:
       drift.
 - [ ] Safe typed object ownership has either a tested implementation or a clear
       release-scoped design decision.
-- [ ] Generated artifact ownership is documented and unexpected local artifacts
+- [x] Generated artifact ownership is documented and unexpected local artifacts
       are detectable.
 - [ ] Feature/no-std docs and validation cover the safe-facing examples.

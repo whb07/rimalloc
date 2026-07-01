@@ -310,47 +310,50 @@ Before publishing or tagging a release:
    dependency/build-tool report from the release notes.
 19. Run `scripts/check-release-reproducibility.py` and confirm the second
    checkout reproduces artifact names and ABI symbol manifests.
-20. Create and verify the signed annotated source tag with the release SSH
+20. Run `scripts/check-generated-artifacts.py` and confirm generated release,
+   benchmark, fuzz, and local analysis outputs are either ignored local scratch
+   or documented checked-in evidence in `docs/generated-artifacts.md`.
+21. Create and verify the signed annotated source tag with the release SSH
    signing key.
-21. Run `scripts/check-layout.sh` for ABI/layout audits.
-22. Run audit drift checks: `scripts/check-unsafe-inventory.py --verify-builds`,
+22. Run `scripts/check-layout.sh` for ABI/layout audits.
+23. Run audit drift checks: `scripts/check-unsafe-inventory.py --verify-builds`,
    `scripts/check-unsafe-audit.py`,
    `scripts/check-unsafe-audit-evidence.py`,
    `scripts/check-atomic-ordering-audit.py`,
    `scripts/check-pointer-provenance-audit.py`,
    `scripts/check-no-allocation-audit.py`, and
    `scripts/check-safe-boundary.py`.
-23. Run `scripts/check-release-thread-stress.py`.
-24. Run `scripts/check-safety-stress.sh`.
-25. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
+24. Run `scripts/check-release-thread-stress.py`.
+25. Run `scripts/check-safety-stress.sh`.
+26. Run `bash scripts/check-miri-all.sh` with the workflow's nightly Miri
    toolchain.
-26. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
+27. Run `SANITIZER=address SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-27. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
+28. Run `SANITIZER=thread SANITIZER_TOOLCHAIN=nightly
    scripts/check-sanitizers.sh`.
-28. Run `scripts/check-valgrind-tracking-parity.py`.
-29. Before a release candidate, run `scripts/check-bench-full.sh`, capture
+29. Run `scripts/check-valgrind-tracking-parity.py`.
+30. Before a release candidate, run `scripts/check-bench-full.sh`, capture
    `scripts/env-info.sh`, preserve
    `target/bench-full/default-rust/criterion/benchmark-thresholds-full.csv` and
    `target/bench-full/interpose/criterion/benchmark-thresholds-full.csv`, and
    update `BENCHMARK_RESULTS.md` with exact command lines, feature flags,
    artifact modes, Rust/C ratios, and noisy-benchmark notes for the release
    commit.
-30. For new strict internal wrappers on allocator hot paths, attach
+31. For new strict internal wrappers on allocator hot paths, attach
    `scripts/capture-release-assembly.sh` output covering free-list pop, local
    free, remote free, small page lookup, and any changed hot path; fail signoff
    unless the evidence shows no added branch, call, memory traffic, stack spill,
    formatting, allocation, panic path, bounds-check slow path, or wrapper
    constructor traffic without measured justification.
-31. Publish the per-release performance summary in `BENCHMARK_RESULTS.md` or an
+32. Publish the per-release performance summary in `BENCHMARK_RESULTS.md` or an
    attached report, summarizing geomean Rust/C ratios, hot-path deltas against
    previous release evidence, noisy watch items, release-blocking regressions,
    and links to raw Criterion summaries or threshold CSV artifacts.
-32. Update release notes with the unsupported-target triage language from
+33. Update release notes with the unsupported-target triage language from
    `docs/platforms.md`; do not market Linux aarch64, macOS, Windows, WASI,
    Emscripten, or other source-present targets as maintained unless that
    platform completed the promotion checklist.
-32. Update `CHANGELOG.md`, `README.md`, and compatibility notes, and link the
+34. Update `CHANGELOG.md`, `README.md`, and compatibility notes, and link the
    release notes to `BENCHMARK_RESULTS.md` or the attached performance report.
 
 SemVer applies separately to safe Rust API, raw Rust facade, C ABI, raw layout,

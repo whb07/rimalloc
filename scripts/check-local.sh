@@ -14,6 +14,7 @@ run scripts/check-ffi-boundary.py
 run scripts/check-unsafe-inventory.py
 run scripts/check-unsafe-audit.py
 run scripts/check-unsafe-audit-evidence.py
+run scripts/check-generated-artifacts.py
 run scripts/check-features.sh
 run scripts/check-lints.sh
 run scripts/check-layout.sh

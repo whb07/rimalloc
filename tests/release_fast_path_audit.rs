@@ -2775,62 +2775,27 @@ fn upstream_sync_policy_includes_cadence_and_required_evidence_updates() {
 }
 
 #[test]
-fn rust_idiom_backlog_tracks_completed_and_open_work() {
+fn rust_idiom_backlog_tracks_current_work() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
 
     assert!(
-        todo.contains("# TODO: Rust Idiom and Crate Standardization Backlog")
-            && todo.contains("- [x] Add `docs/rust-style.md`")
-            && todo.contains("- [x] Audit crate-root exports and `src/safe`")
-            && todo
-                .contains("`requested_bytes_total`, `normal_bytes_total`, and `huge_bytes_total`")
-            && todo.contains("- [x] Audit all Tier S and Tier U public structs for public fields.")
-            && todo.contains("documents the representation firewall")
-            && todo.contains("- [x] Audit every public Tier S/Tier U enum.")
-            && todo.contains("all current Tier S enums are growable")
+        todo.contains("# TODO: Fresh Rust Idiom and Release-Readiness Backlog")
+            && todo.contains("68 legacy source/test")
+            && todo.contains("## Issue: Unsafe migration allowlist is still too broad")
+            && todo.contains("Remove `src/safe/allocation.rs`, `src/safe/heap.rs`")
+            && todo.contains("## Issue: Internal macro exports leak implementation details")
+            && todo.contains("documented Tier R allowlist")
+            && todo.contains("## Issue: Clippy allowances should move from crate policy")
+            && todo.contains("## Issue: Large translated modules need clearer Rust boundaries")
+            && todo.contains("## Issue: Safe object ownership APIs remain unresolved")
+            && todo.contains("`MiBox<T>` and `HeapBox<'heap, T>`")
+            && todo.contains("## Issue: Generated artifact hygiene is not centralized")
             && todo.contains(
-                "- [x] Audit Tier S fallible functions for consistent `Result<T, E>` usage."
+                "## Issue: Feature and no-std validation should cover safe-facing examples"
             )
-            && todo.contains("the safe error API policy")
-            && todo.contains("- [x] Audit strict scalar, pointer, and typestate wrappers")
-            && todo.contains("the constructor table")
-            && todo.contains("- [x] Audit `src/types`, `src/allocator`, and `src/safe`")
-            && todo.contains("`LocalFreeMode`")
-            && todo.contains("- [x] Document default parameter choices:")
-            && todo.contains("rejects borrowed")
-            && todo.contains("- [x] Audit safe-layer and internal helper clones.")
-            && todo.contains("The only public safe")
-            && todo.contains(
-                "- [x] Audit public traits, if any, for downstream implementation expectations."
-            )
-            && todo.contains("no current Tier S or Tier U public traits")
-            && todo.contains(
-                "- [x] Update the Rust style guide with the required safety-comment format."
-            )
-            && todo.contains("21 evidence entries covering all 10 operation IDs")
-            && todo.contains("- [x] Audit each top-level module for accidental public items.")
-            && todo.contains("default raw-facade modules")
-            && todo.contains("- [x] Audit README and rustdoc example order.")
-            && todo.contains("safe examples before raw")
-            && todo.contains(
-                "- [x] Keep `#[macro_export]` limited to documented Tier R C-header parity."
-            )
-            && todo.contains("downstream expansion, feature gating")
-            && todo.contains("- [x] Audit feature combinations for additive behavior.")
-            && todo.contains("128 additive combinations")
-            && todo.contains(
-                "- [x] Require public API snapshot review for any change touching `src/lib.rs`,"
-            )
-            && todo.contains("`cargo semver-checks check-release`")
-            && todo.contains(
-                "- [x] For any new hot-path wrapper, measure type size and generated assembly"
-            )
-            && todo.contains("rejects\n    dynamic dispatch")
-            && todo.contains("- [x] Keep or add compile-fail tests for raw APIs requiring unsafe.")
-            && todo.contains("misuse-boundary compile-fail snippets")
-            && todo.contains("## Definition of done for Rust idiom standardization"),
-        "TODO.md should track the active Rust idiom backlog with completed and open work"
+            && todo.contains("## Definition of done for this backlog"),
+        "TODO.md should track the fresh Rust idiom and release-readiness backlog"
     );
 }
 

@@ -1,10 +1,10 @@
 # TODO: Fresh Rust Idiom Follow-up Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`bf4b6df`. The last pass migrated `src/types/page_queues/tests.rs` and
-`src/types/padding.rs` off the unsafe migration allowlist, narrowed the bitmap
-strict-type allowance to symbol-level entries, split bitmap release-audit checks,
-and moved page validation helpers into `src/allocator/page/validation.rs`.
+`f17fc6b`. The last pass migrated heap test fixtures and tracking hooks off
+file-level unsafe migration debt, narrowed the broad `alloc` strict-type
+allowance, split thread-local release-audit assertions, and moved arena prefix
+layouts/accessors into `src/allocator/arena/prefix.rs`.
 
 The next pass should keep the same shape: make small verified reductions,
 preserve C ABI and allocator hot-path behavior, and replace broad translated
@@ -27,7 +27,7 @@ Current review evidence:
   `src/types/heap.rs` is 312 lines, and
   `src/allocator/arena_meta.rs` is 316 lines.
 - `strict-type-allowlist.txt` has 1 remaining `remove:` entry:
-  the broad `bare-domain-usize` allowance for `aligned`.
+  the broad `bare-domain-usize` allowance for `src/allocator/aligned.rs`.
   `REMOVE_ENTRY_CAP` is 1.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 4,520 lines,
@@ -36,14 +36,14 @@ Current review evidence:
   `src/internal/bitmap.rs` is 2,358 lines,
   `src/allocator/init.rs` is 2,339 lines,
   `src/raw/macros.rs` is 2,223 lines, and
-  `src/platform/windows.rs` is 2,191 lines. The new private
-  `src/allocator/arena/prefix.rs` module is 141 lines.
-- The largest unsafe audit marker clusters are still broad:
-  `SAFETY[AUDIT:arena-debug-render]` has 35 markers,
-  `SAFETY[AUDIT:owned-allocation]` has 32 markers,
-  `SAFETY[AUDIT:unsafe-callback]` has 28 markers,
-  `SAFETY[AUDIT:page-count-accessors]` has 24 markers, and
-  `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 23 markers.
+  `src/platform/windows.rs` is 2,191 lines.
+- The largest unsafe audit marker clusters are broad enough to revisit:
+  `SAFETY[AUDIT:typed-heap-test-fixtures]` has 55 markers,
+  `SAFETY[AUDIT:arena-debug-render]` has 34 markers,
+  `SAFETY[AUDIT:owned-allocation]` has 31 markers,
+  `SAFETY[AUDIT:unsafe-callback]` has 26 markers,
+  `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 22 markers, and
+  `SAFETY[AUDIT:page-count-accessors]` has 22 markers.
 - The release audit still has large review units:
   `tests/release_fast_path_audit.rs` is 2,867 lines,
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,655 lines,
@@ -54,149 +54,104 @@ Current review evidence:
   206 lines,
   `tests/release_fast_path_audit/release_policy/security.rs` is 181 lines, and
   `tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is
-  160 lines. The new
-  `tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs`
-  module is 46 lines.
+  160 lines.
 
-## Issue: Heap and metadata fixtures still hide unsafe migration debt
+## Issue: Memid test fixtures still hide unsafe migration debt
 
-> **Comment:** The remaining small test fixtures are local proof code, not
-> allocator runtime code. `src/types/heap/tests.rs` is now the smallest
-> allowlisted test file and its unsafe blocks are centered on stack-local heap
-> and thread-heap witnesses.
+> **Comment:** `src/types/memid/tests.rs` is the smallest remaining allowlisted
+> test file. It should be local proof code for memid views and constructors, not
+> a file-level unsafe exception.
 
-- [x] Migrate `src/types/heap/tests.rs` from file-level unsafe allowlisting to
-      local `SAFETY[AUDIT:typed-heap-test-fixtures]` markers.
-- [x] Keep the helper fixtures stack-local and avoid widening test-only helper
-      visibility.
-- [x] Add matching `UNSAFE_AUDIT.md` and
+- [ ] Migrate `src/types/memid/tests.rs` from file-level unsafe allowlisting to
+      local `SAFETY[AUDIT:typed-memid-test-fixtures]` markers.
+- [ ] Keep fixtures stack-local and avoid widening helper visibility.
+- [ ] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [x] Remove the migrated file from `docs/unsafe-migration-allowlist.tsv`.
-- [x] Lower `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
-  - Evidence: `src/types/heap/tests.rs` now uses
-    `SAFETY[AUDIT:typed-heap-test-fixtures]` for stack-local heap,
-    thread-heap, and TLD metadata plus real heap allocation/deletion witness
-    checks. The file was removed from
-    `docs/unsafe-migration-allowlist.tsv`, and `ALLOWLIST_ENTRY_CAP` is now 48.
+- [ ] Remove the file from `docs/unsafe-migration-allowlist.tsv`.
+- [ ] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP`.
 
-Verify: `cargo test types::heap::tests --lib --all-features`,
+Verify: `cargo test types::memid::tests --lib --all-features`,
 `scripts/check-unsafe-audit.py`, `scripts/check-unsafe-audit-evidence.py`,
 `scripts/check-unsafe-inventory.py --write && scripts/check-unsafe-inventory.py`,
 `cargo test --test release_fast_path_audit --all-features`, full clippy, and
 full tests.
 
-## Issue: Tracking hooks still rely on file-level unsafe allowlisting
+## Issue: Callback wrappers remain file-level unsafe allowlisted
 
-> **Comment:** `src/allocator/tracking.rs` is 185 lines and mostly forwards to
-> tracking shims or no-op compatibility paths. It is small enough to audit with
-> operation-level markers while preserving the feature-gated Valgrind and ASan
-> behavior.
+> **Comment:** `src/types/callbacks.rs` is 255 lines and is the smallest
+> allowlisted production module. The unsafe operations are callback invocation
+> boundaries and raw-layout wrappers, which are good candidates for
+> operation-level audit markers.
 
-- [x] Replace the file-level allowlist entry for `src/allocator/tracking.rs`
-      with operation-level `SAFETY[AUDIT:tracking-hooks]` markers.
-- [x] Keep the default no-tracking path allocation-free and keep shim calls
-      behind the existing `track-valgrind` and `track-asan` cfg gates.
-- [x] Add audit evidence that points at tracking parity scripts and release
-      audit coverage.
-- [x] Remove the file from `docs/unsafe-migration-allowlist.tsv`, update
-      generated unsafe inventory, and lower `ALLOWLIST_ENTRY_CAP` again.
-  - Evidence: `src/allocator/tracking.rs` now uses
-    `SAFETY[AUDIT:tracking-hooks]` for the tracking shim declarations,
-    feature-gated backend calls, default no-backend reporting path, and
-    allocator usable-size queries. The file was removed from
-    `docs/unsafe-migration-allowlist.tsv`, and `ALLOWLIST_ENTRY_CAP` is now 47.
+- [ ] Replace the file-level allowlist entry for `src/types/callbacks.rs` with
+      operation-level `SAFETY[AUDIT:callback-wrappers]` markers.
+- [ ] Keep callback wrappers `repr(transparent)`/layout-compatible and avoid
+      adding allocation or dynamic dispatch.
+- [ ] Add release-audit evidence for callback wrapper layout and invocation
+      boundaries.
+- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, generated
+      unsafe inventory, and lower `ALLOWLIST_ENTRY_CAP` again.
 
-Verify: unsafe audit scripts, `scripts/check-valgrind-tracking-parity.py`,
-`scripts/check-asan-tracking-parity.py`,
+Verify: callback unit tests, unsafe audit scripts,
 `cargo test --test release_fast_path_audit --all-features`, full clippy, and
 full tests.
 
-## Issue: Broad strict-type usize allowance remains in aligned after alloc narrowing
+## Issue: Aligned still has the last broad strict-type usize allowance
 
-> **Comment:** Bitmap is no longer covered by a broad removable allowance.
-> `alloc` has been narrowed to symbol-level parser entries, and `aligned` is
-> now the only remaining broad removable `usize` allowance. The completed alloc
-> pass classifies size/count/alignment parameters as raw ABI, typed request
-> constructors, product-size helpers, or migratable local helpers.
+> **Comment:** `src/allocator/aligned.rs` is now the only remaining broad
+> removable `bare-domain-usize` allowance. The file mixes raw C ABI shims,
+> parser helpers, product-size paths, alignment arithmetic, and realloc helpers.
 
-- [x] Temporarily remove
-      `bare-domain-usize|src/allocator/alloc.rs|*|usize` and run
+- [ ] Temporarily remove
+      `bare-domain-usize|src/allocator/aligned.rs|*|usize` and run
       `scripts/check-strict-types.py` to collect the live hits.
-- [x] Classify each hit as raw ABI, hot C-parity helper, typed request
-      constructor, product-size helper, or migratable local helper.
-- [x] Replace the broad `alloc` entry with symbol-level entries and typed
-      scalar wrappers where practical.
-- [x] Keep `REMOVE_ENTRY_CAP` accurate if the broad removable entry is removed.
-- [x] Preserve allocation hot-path shape and avoid adding heap allocation or
-      trait-object dispatch to allocator fast paths.
-  - Evidence: the broad `src/allocator/alloc.rs` `bare-domain-usize`
-    allowance was replaced with symbol-level entries for
-    `maybe_alignment_or_report`, `alignment_or_report`,
-    `malloc_layout_or_report`, `calloc_request_or_report`, and
-    `alloc_product_or_report`. Internal lazy malloc, recalloc, product-size,
-    and C++ aligned-new helpers now carry `RequestedSize`, `ItemCount`,
-    `CallocRequest`, or `AllocProduct` where practical. Only the broad
-    `aligned` removable entry remains, and `REMOVE_ENTRY_CAP` is now 1.
+- [ ] Classify each hit as raw ABI, alignment parser, product-size helper,
+      pointer-provenance arithmetic, or migratable local helper.
+- [ ] Replace the broad `aligned` entry with symbol-level entries and typed
+      scalar/layout wrappers where practical.
+- [ ] Lower `REMOVE_ENTRY_CAP` to 0 if the broad removable entry is eliminated.
+- [ ] Preserve allocation/reallocation hot-path shape and avoid heap allocation,
+      trait-object dispatch, or public API drift.
 
 Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
 `scripts/check-api-inventory.py`, `scripts/check-public-abi.py`,
 `cargo test --test release_fast_path_audit --all-features`, full clippy, and
 full tests.
 
-## Issue: Release audit modules still have broad assertion clusters
+## Issue: Release audit unsafe_performance.rs remains oversized
 
-> **Comment:** The bitmap split helped, but `unsafe_performance.rs` remains
-> 2,651 lines and `unsafe_performance/lifecycle_boundaries.rs` is a 703-line
-> single-test cluster. Another cohesive group should move into a child module so
-> future audit additions have room.
+> **Comment:** `unsafe_performance.rs` is still 2,655 lines after the bitmap
+> and thread-local splits. Another cohesive assertion group should move into a
+> child module so future audit additions have room.
 
-- [x] Inventory assertion sections in `unsafe_performance.rs` and
-      `unsafe_performance/lifecycle_boundaries.rs`.
-- [x] Move one cohesive cluster into a new or existing file under
+- [ ] Inventory assertion sections in `unsafe_performance.rs`, prioritizing
+      size-class/bin, atomic-wrapper, or arena-prefix assertion clusters.
+- [ ] Move one cohesive cluster into a new or existing file under
       `tests/release_fast_path_audit/unsafe_performance/`.
-- [x] Pass borrowed source strings rather than duplicating large file reads.
-- [x] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
-- [x] Preserve the release audit test count and coverage intent.
-  - Evidence: dynamic thread-local boundary assertions moved from
-    `unsafe_performance/lifecycle_boundaries.rs` into
-    `unsafe_performance/threadlocal_boundaries.rs`. The parent test still reads
-    `src/allocator/threadlocal.rs` once and passes a borrowed source string to
-    the helper. `lifecycle_boundaries.rs` dropped from 703 to 660 lines, the new
-    module is 46 lines, and `cargo test --test release_fast_path_audit
-    --all-features` still runs 67 tests.
+- [ ] Pass borrowed source strings rather than duplicating large file reads.
+- [ ] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
+- [ ] Preserve the release audit test count and coverage intent.
 
 Verify: `cargo test --test release_fast_path_audit --all-features`,
 `git diff --check`, full clippy, and full tests.
 
 ## Issue: Arena remains the largest translated production review unit
 
-> **Comment:** `src/allocator/arena.rs` was 4,628 lines after prior page and
-> bitmap splits elsewhere. The fresh scan showed several cohesive helper groups,
-> including heap-visit/delete helpers near the top of the file and arena prefix
-> accessors. The prefix accessor split reduces review size without touching ABI
-> or benchmark-critical allocation behavior.
+> **Comment:** The prefix split reduced `src/allocator/arena.rs` from 4,628 to
+> 4,520 lines, but it is still the largest production review unit. The next
+> split should target a cohesive helper group such as heap visit/delete helpers,
+> arena id/memid helpers, or purge helpers if imports stay narrow.
 
-- [x] Re-scan `src/allocator/arena.rs` for a low-risk cohesive helper group,
-      preferring heap-visit/delete helpers or prefix accessor helpers if their
-      imports stay narrow.
-- [x] Move the group into an `src/allocator/arena/` child module with explicit
-      `pub(super)` visibility only for current arena-module callers.
-- [x] Keep data layout private and avoid exposing translated prefix structs
-      outside the allocator arena module boundary.
-- [x] Update strict-type path aliases, unsafe audit evidence, release-audit
+- [ ] Re-scan `src/allocator/arena.rs` for a low-risk cohesive helper group,
+      preferring heap visit/delete, arena id/memid, or purge helpers.
+- [ ] Move the group into an `src/allocator/arena/` child module with explicit
+      visibility only for current callers.
+- [ ] Keep data layout private and avoid exposing translated prefix structs or
+      arena internals outside the allocator arena module boundary.
+- [ ] Update strict-type path aliases, unsafe audit evidence, release-audit
       source assertions, and generated unsafe inventory as needed.
-- [x] Preserve public C ABI symbols, public Rust facade shape, and hot-path
+- [ ] Preserve public C ABI symbols, public Rust facade shape, and hot-path
       inline behavior.
-  - Evidence: heap, subproc, arena, and arena-pages prefix layouts plus
-    `mi_heap_abandoned_count`, `mi_arena_index`,
-    `mi_heap_arena_page_cell`, `mi_subproc_arena_cell`, and
-    `mi_arena_from_index_typed` moved into
-    `src/allocator/arena/prefix.rs`. The child module uses
-    `SAFETY[AUDIT:arena-prefix-accessors]`, is covered by
-    `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, and
-    `docs/unsafe-inventory.md`, and remains private to `allocator::arena` with
-    `pub(super)` fields/functions. `src/allocator/arena.rs` dropped from 4,628
-    to 4,520 lines and the new prefix module is 141 lines.
 
 Verify: focused arena/page tests where applicable,
 `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
@@ -206,19 +161,18 @@ full tests.
 
 ## Suggested implementation order
 
-1. [x] Migrate `src/types/heap/tests.rs` off the unsafe migration allowlist.
-2. [x] Migrate `src/allocator/tracking.rs` off the unsafe migration allowlist.
-3. [x] Narrow the broad `alloc` strict-type `usize` allowance.
-4. [x] Split one more release-audit assertion cluster.
-5. [x] Split one cohesive helper group out of `src/allocator/arena.rs`.
+1. [ ] Migrate `src/types/memid/tests.rs` off the unsafe migration allowlist.
+2. [ ] Migrate `src/types/callbacks.rs` off the unsafe migration allowlist.
+3. [ ] Narrow or eliminate the broad `aligned` strict-type `usize` allowance.
+4. [ ] Split one more release-audit assertion cluster.
+5. [ ] Split one more cohesive helper group out of `src/allocator/arena.rs`.
 
 ## Definition of done for this backlog
 
-- [x] The unsafe migration allowlist is below 49 entries and the cap is lowered.
-- [x] One additional production allowlisted file is covered by operation-level
+- [ ] The unsafe migration allowlist is below 47 entries and the cap is lowered.
+- [ ] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.
-- [x] One remaining broad strict-type `remove:` allowance is narrowed or
-      eliminated.
-- [x] One release-audit module has more review margin.
-- [x] `src/allocator/arena.rs` is smaller without API, ABI, or hot-path
+- [ ] The final broad strict-type `remove:` allowance is narrowed or eliminated.
+- [ ] One release-audit module has more review margin.
+- [ ] `src/allocator/arena.rs` is smaller again without API, ABI, or hot-path
       performance drift.

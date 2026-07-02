@@ -639,12 +639,27 @@ fn windows_primitive_backend_stays_bounded_and_audited() {
         "Windows primitive backend should stay off the unsafe migration allowlist"
     );
     assert!(
-        windows_rs
-            .matches("SAFETY[AUDIT:windows-primitive-boundary]")
-            .count()
-            >= 110,
-        "Windows primitive backend should keep local operation-level audit markers"
+        !windows_rs.contains("SAFETY[AUDIT:windows-primitive-boundary]"),
+        "Windows primitive backend aggregate marker should stay split"
     );
+    for (marker, minimum_count) in [
+        ("windows-virtual-memory-boundary", 32),
+        ("windows-tls-fls-boundary", 27),
+        ("windows-large-page-boundary", 22),
+        ("windows-process-info-boundary", 11),
+        ("windows-numa-boundary", 8),
+        ("windows-output-env-boundary", 7),
+        ("windows-etw-boundary", 4),
+        ("windows-random-boundary", 2),
+        ("windows-dynamic-import-boundary", 1),
+    ] {
+        let needle = format!("SAFETY[AUDIT:{marker}]");
+        let count = windows_rs.matches(needle.as_str()).count();
+        assert!(
+            count >= minimum_count,
+            "Windows primitive audit marker `{marker}` should have at least {minimum_count} source markers, found {count}"
+        );
+    }
     for import in [
         "pub fn VirtualAlloc(",
         "pub fn VirtualFree(lpAddress: PVOID, dwSize: SIZE_T, dwFreeType: DWORD) -> BOOL;",

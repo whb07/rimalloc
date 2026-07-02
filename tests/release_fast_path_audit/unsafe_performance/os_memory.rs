@@ -150,12 +150,26 @@ pub(super) fn assert_os_memory_and_platform_boundaries(sources: &UnsafePerforman
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/platform/unix.rs\t"))
-            && prim_unix_rs
-                .matches("SAFETY[AUDIT:unix-primitive-backend]")
-                .count()
-                >= 85,
+            && !prim_unix_rs.contains("SAFETY[AUDIT:unix-primitive-backend]"),
         "Unix primitive backend unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    for (marker, minimum_count) in [
+        ("unix-mmap-syscall-boundary", 26),
+        ("unix-huge-page-boundary", 14),
+        ("unix-output-env-boundary", 13),
+        ("unix-process-info-boundary", 11),
+        ("unix-thread-tls-boundary", 9),
+        ("unix-random-boundary", 7),
+        ("unix-numa-boundary", 7),
+        ("unix-ffi-import-boundary", 3),
+    ] {
+        let needle = format!("SAFETY[AUDIT:{marker}]");
+        let count = prim_unix_rs.matches(needle.as_str()).count();
+        assert!(
+            count >= minimum_count,
+            "Unix primitive audit marker `{marker}` should have at least {minimum_count} source markers, found {count}"
+        );
+    }
     for marker in [
         "#[inline(never)]\npub(crate) extern \"C\" fn _mi_os_random_weak(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_split(",

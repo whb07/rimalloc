@@ -219,12 +219,41 @@ raw-macro-header-forwarding-boundary	test	tests/release_fast_path_audit/release_
 raw-macro-header-forwarding-boundary	script	scripts/check-unsafe-audit.py	Checks header-forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-posix-compat	test	tests/compat_exports.rs	Exercises POSIX out-pointer and errno-style behavior for mi_posix_memalign, mi_reallocarray, mi_reallocarr, mbsdup, dupenv_s, and related compatibility exports.
 raw-posix-compat	test	tests/release_fast_path_audit.rs	Checks src/raw/posix.rs keeps product allocation typed, raw POSIX compatibility exports present, and operation-level audit markers local.
-unix-primitive-backend	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks Unix primitive helper shape, mmap/syscall/env/random/thread boundaries, marker coverage, and migration allowlist removal.
-unix-primitive-backend	test	tests/release_fast_path_audit.rs	Checks Unix stderr/env/random primitive dependencies stay allocation-free and routed through platform helpers.
-unix-primitive-backend	script	scripts/check-unix-syscall-parity.py	Compares Unix memory primitive syscall classes against C mimalloc for representative allocation and purge paths.
-unix-primitive-backend	script	scripts/check-unsafe-audit.py	Checks Unix primitive unsafe operations retain operation-level SAFETY markers and source audit coverage.
-windows-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows primitive imports, dynamic function lookup, virtual memory paths, process info, stderr/env handling, TLS/FLS lifecycle, large/huge-page paths, ETW helpers, marker coverage, and migration allowlist removal.
-windows-primitive-boundary	script	scripts/check-unsafe-audit.py	Checks Windows primitive unsafe operations retain operation-level SAFETY markers and source audit coverage.
+unix-ffi-import-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix primitive helper declarations stay present, allocation-free, and off the migration allowlist.
+unix-ffi-import-boundary	script	scripts/check-unsafe-audit.py	Checks Unix FFI import unsafe operations retain operation-level SAFETY markers and source audit coverage.
+unix-mmap-syscall-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix mmap, commit, reset, protect, allocation, and retained memory primitive marker coverage.
+unix-mmap-syscall-boundary	script	scripts/check-unix-syscall-parity.py	Compares Unix memory primitive syscall classes against C mimalloc for representative allocation and purge paths.
+unix-mmap-syscall-boundary	script	scripts/check-unsafe-audit.py	Checks Unix mmap/syscall unsafe operations retain operation-level SAFETY markers and source audit coverage.
+unix-process-info-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix process, clock, page-size, and memory-info primitive marker coverage.
+unix-process-info-boundary	script	scripts/check-unsafe-audit.py	Checks Unix process-info unsafe operations retain operation-level SAFETY markers and source audit coverage.
+unix-output-env-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks Unix stderr/env primitive dependencies stay allocation-free and routed through platform helpers.
+unix-output-env-boundary	script	scripts/check-unsafe-audit.py	Checks Unix output/env unsafe operations retain operation-level SAFETY markers and source audit coverage.
+unix-random-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix random primitive marker coverage and retained helper shape.
+unix-random-boundary	script	scripts/check-unsafe-audit.py	Checks Unix random unsafe operations retain operation-level SAFETY markers and source audit coverage.
+unix-thread-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix pthread/TLS lifecycle primitive marker coverage and retained helper shape.
+unix-thread-tls-boundary	script	scripts/check-unsafe-audit.py	Checks Unix thread/TLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
+unix-huge-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix huge-page detection, THP, large-page allocation, and fallback marker coverage.
+unix-huge-page-boundary	script	scripts/check-unsafe-audit.py	Checks Unix huge-page unsafe operations retain operation-level SAFETY markers and source audit coverage.
+unix-numa-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix NUMA syscall/sysfs helper marker coverage and fallback behavior.
+unix-numa-boundary	script	scripts/check-unsafe-audit.py	Checks Unix NUMA unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-virtual-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows virtual memory imports, dynamic lookup, allocation, commit/free/reset/protect, marker coverage, and migration allowlist removal.
+windows-virtual-memory-boundary	script	scripts/check-unsafe-audit.py	Checks Windows virtual-memory unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-process-info-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows process/time/system-info marker coverage, dynamic PSAPI lookup, and process counters.
+windows-process-info-boundary	script	scripts/check-unsafe-audit.py	Checks Windows process-info unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-output-env-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows stderr/env marker coverage, handle probing, console/file writes, and bounded environment copying.
+windows-output-env-boundary	script	scripts/check-unsafe-audit.py	Checks Windows output/env unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-tls-fls-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows TLS/FLS lifecycle marker coverage, DLL callbacks, thread heap association, and TEB probing.
+windows-tls-fls-boundary	script	scripts/check-unsafe-audit.py	Checks Windows TLS/FLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-large-page-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows large/huge-page privilege, allocation, fallback, NUMA hint, and out-pointer marker coverage.
+windows-large-page-boundary	script	scripts/check-unsafe-audit.py	Checks Windows large-page unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-numa-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows NUMA dynamic API marker coverage, node lookup, affinity masks, and huge-page hints.
+windows-numa-boundary	script	scripts/check-unsafe-audit.py	Checks Windows NUMA unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-etw-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows ETW provider callback, enablement, descriptor, and event write marker coverage.
+windows-etw-boundary	script	scripts/check-unsafe-audit.py	Checks Windows ETW unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-random-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows random import marker coverage alongside primitive backend imports.
+windows-random-boundary	script	scripts/check-unsafe-audit.py	Checks Windows random unsafe operations retain operation-level SAFETY markers and source audit coverage.
+windows-dynamic-import-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Windows dynamic function lookup helper marker coverage and translated function-pointer copies.
+windows-dynamic-import-boundary	script	scripts/check-unsafe-audit.py	Checks Windows dynamic import unsafe operations retain operation-level SAFETY markers and source audit coverage.
 os-memory-config-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks OS memory config, page sizing, aligned hints, subproc stats projection, marker coverage, and migration allowlist removal.
 os-memory-config-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory config unsafe operations retain operation-level SAFETY markers and source audit coverage.
 os-memory-guard-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks guard-page helper shape, retained guard callbacks, marker coverage, and migration allowlist removal.
@@ -246,10 +275,16 @@ macos-zone-override	script	scripts/check-unsafe-audit.py	Checks macOS malloc-zon
 platform-tls-primitives	test	tests/release_fast_path_audit.rs	Checks Linux TLS fast-path assembly, C TLS shim shape, and empty-thread-heap symbol loads.
 platform-tls-primitives	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks primitive TLS model constants, default/cached thread-heap helpers, page-associated lookup, allocator init/done shims, and migration allowlist removal.
 platform-tls-primitives	script	scripts/check-unsafe-audit.py	Checks platform TLS primitive operations retain operation-level SAFETY markers and source audit coverage.
-internal-atomic-facade	test	tests/release_fast_path_audit.rs	Checks internal atomic facade marker coverage, migration allowlist removal, pthread/fallback lock shape, and process/option lock dependencies.
-internal-atomic-facade	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
-internal-atomic-facade	script	scripts/check-atomic-ordering-audit.py	Checks mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
-internal-atomic-facade	script	scripts/check-unsafe-audit.py	Checks internal atomic facade operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-field-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar internal atomic marker coverage, memory order mappings, migration allowlist removal, and option/process lock dependencies.
+internal-atomic-field-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
+internal-atomic-field-boundary	script	scripts/check-atomic-ordering-audit.py	Checks mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
+internal-atomic-field-boundary	script	scripts/check-unsafe-audit.py	Checks scalar internal atomic unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-pointer-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks pointer-sized internal atomic marker coverage and pointer CAS/load/store/exchange helper shape.
+internal-atomic-pointer-boundary	script	scripts/check-unsafe-audit.py	Checks pointer-sized atomic unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-guard-once-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks guard/once internal atomic marker coverage and typed guard/once entry/release helper shape.
+internal-atomic-guard-once-boundary	script	scripts/check-unsafe-audit.py	Checks guard/once unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-platform-lock-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks platform lock internal atomic marker coverage, pthread/fallback lock shape, and process/option lock dependencies.
+internal-atomic-platform-lock-boundary	script	scripts/check-unsafe-audit.py	Checks platform lock unsafe operations retain operation-level SAFETY markers and source audit coverage.
 page-map-global-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map global metadata marker coverage and migration allowlist removal.
 page-map-global-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks page-map typed page span/index helpers and process-global metadata publication.
 page-map-global-boundary	script	scripts/check-unsafe-audit.py	Checks page-map global unsafe operations retain operation-level SAFETY markers and source audit coverage.

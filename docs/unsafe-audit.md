@@ -191,11 +191,31 @@ file when such a module exists.
   page/block metadata accessors, thread-free ownership words, packed pointer
   encode/decode, tracking gates, CPU copy/fill shims, and raw C-compatible
   helper declarations.
-- `SAFETY[AUDIT:windows-primitive-boundary]`: Windows primitive backend and
-  translated ETW helper surface in `src/platform/windows.rs`. The boundary
-  covers Windows ABI imports, dynamic primitive lookup, TLS/FLS and DLL
-  lifecycle callbacks, virtual memory, process information, stderr output,
-  environment copying, large/huge pages, TEB probing, and ETW provider helpers.
+- `SAFETY[AUDIT:unix-mmap-syscall-boundary]`,
+  `SAFETY[AUDIT:unix-process-info-boundary]`,
+  `SAFETY[AUDIT:unix-output-env-boundary]`,
+  `SAFETY[AUDIT:unix-random-boundary]`,
+  `SAFETY[AUDIT:unix-thread-tls-boundary]`,
+  `SAFETY[AUDIT:unix-huge-page-boundary]`,
+  `SAFETY[AUDIT:unix-numa-boundary]`, and
+  `SAFETY[AUDIT:unix-ffi-import-boundary]`: Unix primitive backend slices in
+  `src/platform/unix.rs`.
+- `SAFETY[AUDIT:windows-virtual-memory-boundary]`,
+  `SAFETY[AUDIT:windows-process-info-boundary]`,
+  `SAFETY[AUDIT:windows-output-env-boundary]`,
+  `SAFETY[AUDIT:windows-tls-fls-boundary]`,
+  `SAFETY[AUDIT:windows-large-page-boundary]`,
+  `SAFETY[AUDIT:windows-numa-boundary]`,
+  `SAFETY[AUDIT:windows-etw-boundary]`,
+  `SAFETY[AUDIT:windows-random-boundary]`, and
+  `SAFETY[AUDIT:windows-dynamic-import-boundary]`: Windows primitive backend
+  and translated ETW helper slices in `src/platform/windows.rs`.
+- `SAFETY[AUDIT:internal-atomic-field-boundary]`,
+  `SAFETY[AUDIT:internal-atomic-pointer-boundary]`,
+  `SAFETY[AUDIT:internal-atomic-guard-once-boundary]`, and
+  `SAFETY[AUDIT:internal-atomic-platform-lock-boundary]`: internal atomic
+  scalar, pointer, guard/once, and lock facade slices in
+  `src/internal/atomic.rs`.
 - `SAFETY[AUDIT:unsafe-callback]`: unsafe-adjacent callback guards. Unsafe guard construction
   registers a trampoline with a borrowed callback context, stores the previous
   registration, restores that previous registration on drop, and catches Rust

@@ -8,9 +8,9 @@ operation IDs and release-audit modules that are still close to the module cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 145 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 145 operation IDs with
-  348 automated evidence rows.
+  mentions, and 163 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 163 operation IDs with
+  383 automated evidence rows.
 - `strict-type-allowlist.txt` still has 26 wildcard entries left: 4
   raw-pointer-parameter entries, 13 bare-domain `usize` entries, 4
   pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
@@ -21,15 +21,19 @@ Current review evidence:
   `src/platform/mod.rs`, `src/raw/macros.rs`, `src/types/layout.rs`,
   `src/safe/allocation.rs`, and `src/types/atomic.rs`.
 - The largest remaining unsafe audit marker clusters are
-  `windows-primitive-boundary` with 114 markers,
   `allocation-abi-entry-boundary` with 104 markers,
-  `internal-atomic-facade` with 103 markers,
-  `unix-primitive-backend` with 90 markers, and
   `typed-pointer-test-fixtures` with 87 markers,
   `macos-zone-override` with 83 markers,
-  `heap-lifecycle-boundary` with 80 markers, and
+  `heap-lifecycle-boundary` with 80 markers,
   `options-callback-boundary` and `internal-translation-boundary` with 76
-  markers each.
+  markers each, `stats-merge-boundary` with 75 markers,
+  `thread-heap-lifecycle` and `internal-bitmap-boundary` with 71 markers each,
+  `raw-posix-compat` with 70 markers, `free-path-boundary` with 69 markers,
+  `aligned-heap-allocation-boundary` with 68 markers,
+  `aligned-realloc-boundary` with 67 markers,
+  `page-map-register-boundary` with 66 markers, and
+  `raw-macro-libc-forwarding-boundary` and `internal-atomic-field-boundary`
+  with 65 markers each.
 - The previous `init-thread-tls-boundary` aggregate is split into
   `init-thread-heap-tls-boundary` with 56 markers,
   `init-thread-lifecycle-boundary` with 48 markers,
@@ -61,6 +65,31 @@ Current review evidence:
   `arena-page-ownership-transition-boundary` with 6 markers,
   `arena-heap-page-publication-boundary` with 3 markers, and
   `arena-page-singleton-boundary` with 2 markers.
+- The previous `internal-atomic-facade` aggregate is split into
+  `internal-atomic-field-boundary` with 65 markers,
+  `internal-atomic-platform-lock-boundary` with 20 markers,
+  `internal-atomic-guard-once-boundary` with 12 markers, and
+  `internal-atomic-pointer-boundary` with 6 markers. Remote-free/thread-free
+  typed atomic ownership remains in the existing `typed-atomic-domain` boundary
+  where the code actually lives.
+- The previous `windows-primitive-boundary` aggregate is split into
+  `windows-virtual-memory-boundary` with 32 markers,
+  `windows-tls-fls-boundary` with 27 markers,
+  `windows-large-page-boundary` with 22 markers,
+  `windows-process-info-boundary` with 11 markers,
+  `windows-numa-boundary` with 8 markers,
+  `windows-output-env-boundary` with 7 markers,
+  `windows-etw-boundary` with 4 markers,
+  `windows-random-boundary` with 2 markers, and
+  `windows-dynamic-import-boundary` with 1 marker.
+- The previous `unix-primitive-backend` aggregate is split into
+  `unix-mmap-syscall-boundary` with 26 markers,
+  `unix-huge-page-boundary` with 14 markers,
+  `unix-output-env-boundary` with 13 markers,
+  `unix-process-info-boundary` with 11 markers,
+  `unix-thread-tls-boundary` with 9 markers,
+  `unix-random-boundary` and `unix-numa-boundary` with 7 markers each, and
+  `unix-ffi-import-boundary` with 3 markers.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   module cap is still 1,000 lines; the largest modules are
   `unsafe_performance/lifecycle_boundaries.rs` at 922 lines,
@@ -121,14 +150,17 @@ clippy, and full tests.
 > TLS/thread helpers, lock/once facades, atomic field wrappers, and
 > platform-specific compatibility shims.
 
-- [ ] Split `internal-atomic-facade` into lock/once, atomic field, pointer-sized
-      atomic, remote-free/thread-free, and platform lock shim operation IDs.
-- [ ] Split `windows-primitive-boundary` into virtual memory, process info,
-      stderr/env, TLS/FLS lifecycle, large/huge-page, NUMA, and ETW operation
-      IDs.
-- [ ] Split `unix-primitive-backend` where existing helper groups already
+- [x] Split `internal-atomic-facade` into scalar atomic field, pointer-sized
+      atomic, guard/once, and platform lock shim operation IDs. Remote-free and
+      thread-free atomic ownership remains covered by the existing
+      `typed-atomic-domain` boundary because that code is not in the internal
+      raw atomic facade.
+- [x] Split `windows-primitive-boundary` into virtual memory, process info,
+      stderr/env, TLS/FLS lifecycle, large/huge-page, NUMA, ETW, random, and
+      dynamic import operation IDs.
+- [x] Split `unix-primitive-backend` where existing helper groups already
       separate mmap/syscall, process info, stderr/env, random, thread/TLS,
-      huge-page, and NUMA behavior.
+      huge-page, NUMA, and FFI import behavior.
 
 Verify: platform primitive release-audit modules, atomic ordering audit, unsafe
 audit scripts, unsafe evidence scripts, full clippy, and full tests.
@@ -154,7 +186,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 1. [x] Split init thread/TLS and subproc audit clusters.
 2. [x] Split page and arena allocation lifecycle clusters.
-3. [ ] Split platform and atomic facade audit clusters.
+3. [x] Split platform and atomic facade audit clusters.
 4. [ ] Split remaining large release-audit modules and lower the module cap.
 
 ## Definition of done for this backlog

@@ -574,21 +574,80 @@ Operation IDs:
   errno slot publication, environment lookup, raw allocation forwarding,
   POSIX-compatible out-pointer and pointer-slot writes, wide-string scanning and
   copying, environment duplication, and aligned/product allocation shims.
-- `SAFETY[AUDIT:unix-primitive-backend]`: `src/platform/unix.rs` owns the Unix
-  primitive backend. Unsafe operations are limited to libc/syscall imports,
-  proc/sys probes, `sysconf`, `mmap`/`munmap`/`madvise`/`mprotect`, huge-page
-  and NUMA syscalls, process-info writes, stderr writes, environment lookup,
-  entropy fallbacks, pthread destructor keys, and scheduler yield while keeping
-  primitive helpers allocation-free and C ABI compatible.
-- `SAFETY[AUDIT:windows-primitive-boundary]`: `src/platform/windows.rs` owns
-  the Windows primitive backend and translated ETW helper surface. Unsafe
-  operations are limited to Windows ABI imports, dynamically resolved
-  `VirtualAlloc2`/NUMA/process-info/large-page functions, TLS/FLS and DLL
-  lifecycle callbacks, `VirtualAlloc`/`VirtualFree`/`VirtualProtect`/query
-  calls, process time and memory counters, stderr output, environment copying,
-  large/huge-page privilege and allocation paths, TEB thread-pool probing, and
-  ETW provider callbacks while preserving nullable C out-pointer conventions,
-  Windows error handling, and source-present platform isolation.
+- `SAFETY[AUDIT:unix-ffi-import-boundary]`: `src/platform/unix.rs` owns Unix
+  primitive libc/syscall declarations and errno slot imports. Unsafe operations
+  are limited to source-present FFI declarations and errno reads while keeping
+  the primitive backend allocation-free and C ABI compatible.
+- `SAFETY[AUDIT:unix-mmap-syscall-boundary]`: `src/platform/unix.rs` owns Unix
+  `mmap`/`munmap`/`madvise`/`mprotect` allocation primitives and direct file or
+  syscall helper wrappers. Unsafe operations are limited to caller-proven
+  address ranges, file descriptors, alignment hints, errno propagation, and
+  nullable out-pointer writes.
+- `SAFETY[AUDIT:unix-process-info-boundary]`: `src/platform/unix.rs` owns Unix
+  process, clock, page-size, overcommit, and physical-memory probes. Unsafe
+  operations are limited to `sysconf`, proc/sys reads, `clock_gettime`,
+  `getrusage`, and process-info writes.
+- `SAFETY[AUDIT:unix-output-env-boundary]`: `src/platform/unix.rs` owns Unix
+  stderr and environment helpers. Unsafe operations are limited to C-string
+  reads, direct `write(2)` loops, `environ`/`getenv` traversal, case-folding
+  fallback buffers, and bounded caller output copies.
+- `SAFETY[AUDIT:unix-random-boundary]`: `src/platform/unix.rs` owns Unix random
+  buffer filling. Unsafe operations are limited to platform entropy imports,
+  `getrandom` syscall fallback, `/dev/urandom` open/read/close loops, and
+  caller-provided buffer writes.
+- `SAFETY[AUDIT:unix-thread-tls-boundary]`: `src/platform/unix.rs` owns Unix
+  pthread destructor-key lifecycle, default thread-heap association, threadpool
+  query fallback, and scheduler yield. Unsafe operations are limited to
+  pthread key create/delete/set calls and thread-heap destructor callbacks.
+- `SAFETY[AUDIT:unix-huge-page-boundary]`: `src/platform/unix.rs` owns Unix
+  transparent huge-page detection and huge/large page allocation fallback.
+  Unsafe operations are limited to THP proc/sys reads, `MAP_HUGETLB`/huge-size
+  `mmap` attempts, large-page out-pointer writes, and fallback warnings.
+- `SAFETY[AUDIT:unix-numa-boundary]`: `src/platform/unix.rs` owns Unix NUMA
+  helpers. Unsafe operations are limited to `mbind`/`getcpu` syscalls, sysfs
+  node-count probes, node-mask construction, and NUMA placement fallbacks.
+- `SAFETY[AUDIT:windows-virtual-memory-boundary]`: `src/platform/windows.rs`
+  owns Windows virtual-memory allocation, commit, decommit, reset, protect,
+  query, aligned reservation, retry, and error-code paths. Unsafe operations
+  are limited to `VirtualAlloc`/`VirtualFree`/`VirtualProtect`/`VirtualQuery`,
+  `VirtualAlloc2`/`NtAllocateVirtualMemoryEx` lookup and calls, nullable
+  out-pointer writes, and Windows error propagation.
+- `SAFETY[AUDIT:windows-process-info-boundary]`: `src/platform/windows.rs`
+  owns Windows process, time, version, system-info, and memory counter helpers.
+  Unsafe operations are limited to `QueryPerformanceFrequency`, `FILETIME`
+  projection, `GetSystemInfo`, `GetProcessTimes`, dynamic PSAPI lookup, and
+  process-info out-pointer writes.
+- `SAFETY[AUDIT:windows-output-env-boundary]`: `src/platform/windows.rs` owns
+  Windows stderr and environment helpers. Unsafe operations are limited to
+  C-string reads, case-insensitive environment lookup, bounded result copying,
+  standard-error handle probing, console/file writes, and std fallback output.
+- `SAFETY[AUDIT:windows-tls-fls-boundary]`: `src/platform/windows.rs` owns
+  Windows TLS/FLS, DLL lifecycle, CRT attach/detach, allocator init/done shims,
+  TEB thread-pool probing, and thread-yield helpers. Unsafe operations are
+  limited to callback dispatch, FLS key create/delete/set calls, thread-heap
+  destructor callbacks, and attach/detach forwarding.
+- `SAFETY[AUDIT:windows-large-page-boundary]`: `src/platform/windows.rs` owns
+  Windows large and huge page privilege enablement, page-size probing, large
+  allocation attempts, huge-page fallback, and large-allocation out-pointers.
+  Unsafe operations are limited to token privilege calls, dynamic large-page
+  function calls, large-page atomic fallback state, and caller-provided result
+  writes.
+- `SAFETY[AUDIT:windows-numa-boundary]`: `src/platform/windows.rs` owns Windows
+  NUMA helpers and NUMA hints used by huge allocations. Unsafe operations are
+  limited to dynamic NUMA API calls, processor-number queries, node masks,
+  highest-node probing, and NUMA extended-parameter setup.
+- `SAFETY[AUDIT:windows-etw-boundary]`: `src/platform/windows.rs` owns the
+  translated Windows ETW helper surface. Unsafe operations are limited to ETW
+  provider registration/unregistration, enable callbacks, event descriptors,
+  event-data pointer projection, bitmask mutation, and event write forwarding.
+- `SAFETY[AUDIT:windows-random-boundary]`: `src/platform/windows.rs` owns
+  Windows random primitive declarations and dynamic RNG function pointers.
+  Unsafe operations are limited to ABI declarations for system RNG entrypoints
+  and caller-provided random buffers.
+- `SAFETY[AUDIT:windows-dynamic-import-boundary]`: `src/platform/windows.rs`
+  owns the typed dynamic import helper. Unsafe operations are limited to
+  `GetProcAddress` calls and copying non-null function pointers into requested
+  function pointer types.
 - `SAFETY[AUDIT:os-memory-config-boundary]`: `src/platform/os.rs` owns OS
   memory configuration, sub-process stats projection, page-size queries, and
   aligned address hints. Unsafe operations are limited to process-global memory
@@ -636,12 +695,24 @@ Operation IDs:
   Apple fixed-slot reads, dynamic TLS key lookups, raw default/cached
   thread-heap get/set helpers, empty-thread-heap fallbacks, page-associated
   thread-heap lookup, and allocator init/done compatibility shims.
-- `SAFETY[AUDIT:internal-atomic-facade]`: `src/internal/atomic.rs` owns the
-  C-compatible atomic, once, and lock facade. Unsafe operations are limited to
-  Linux pthread mutex imports and calls, raw `Atomic*` views over
-  caller-proven storage, memory-order mapping helpers, load/store/RMW/CAS
-  wrappers, pointer-sized atomic helpers, volatile addend reads, guard/once
-  entry shims, fallback spin locks, and release Linux lock init/done behavior.
+- `SAFETY[AUDIT:internal-atomic-field-boundary]`: `src/internal/atomic.rs`
+  owns scalar C-compatible atomic field views and load/store/RMW/CAS wrappers.
+  Unsafe operations are limited to raw `AtomicUsize`/`AtomicIsize`/`AtomicI64`
+  views over caller-proven storage, memory-order mapping helpers, expected-slot
+  updates, volatile addend reads, and scalar atomic helper forwarding.
+- `SAFETY[AUDIT:internal-atomic-pointer-boundary]`: `src/internal/atomic.rs`
+  owns pointer-sized atomic helpers. Unsafe operations are limited to
+  pointer-to-`usize` atomic representation, pointer CAS expected-slot updates,
+  pointer loads/stores/exchanges, and restoring raw pointer values unchanged.
+- `SAFETY[AUDIT:internal-atomic-guard-once-boundary]`: `src/internal/atomic.rs`
+  owns raw guard and once-state entry/release shims. Unsafe operations are
+  limited to caller-proven guard/once storage, typed `AtomicGuard` and
+  `OnceGuard` construction, completion publication, and macro entry forwarding.
+- `SAFETY[AUDIT:internal-atomic-platform-lock-boundary]`:
+  `src/internal/atomic.rs` owns platform lock compatibility shims. Unsafe
+  operations are limited to Linux pthread mutex imports and calls, fallback
+  spin-lock raw storage access, lock init/done behavior, and lock
+  acquire/release forwarding.
 - `SAFETY[AUDIT:page-map-global-boundary]`: `src/allocator/page_map.rs` owns
   process-global page-map metadata, base pointers, commit bitmaps, and typed
   page span/index projection. Unsafe operations are limited to allocator

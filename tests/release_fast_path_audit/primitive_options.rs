@@ -68,10 +68,7 @@ fn options_state_uses_internal_locks_like_c() {
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/internal/atomic.rs\t"))
-            && atomic_rs
-                .matches("SAFETY[AUDIT:internal-atomic-facade]")
-                .count()
-                >= 90
+            && !atomic_rs.contains("SAFETY[AUDIT:internal-atomic-facade]")
             && atomic_rs.contains("fn load_order(order: mi_memory_order_e) -> Ordering")
             && atomic_rs.contains("fn store_order(order: mi_memory_order_e) -> Ordering")
             && atomic_rs.contains("fn rmw_order(order: mi_memory_order_e) -> Ordering")
@@ -83,6 +80,19 @@ fn options_state_uses_internal_locks_like_c() {
             && atomic_rs.contains("pub unsafe extern \"C\" fn _mi_atomic_once_release"),
         "internal atomic facade should stay covered by local operation markers without a migration allowlist entry"
     );
+    for (marker, minimum_count) in [
+        ("internal-atomic-field-boundary", 65),
+        ("internal-atomic-platform-lock-boundary", 20),
+        ("internal-atomic-guard-once-boundary", 12),
+        ("internal-atomic-pointer-boundary", 6),
+    ] {
+        let needle = format!("SAFETY[AUDIT:{marker}]");
+        let count = atomic_rs.matches(needle.as_str()).count();
+        assert!(
+            count >= minimum_count,
+            "internal atomic audit marker `{marker}` should have at least {minimum_count} source markers, found {count}"
+        );
+    }
     assert!(
         !init_rs.contains("std::sync::Once")
             && !init_rs.contains(".call_once(")

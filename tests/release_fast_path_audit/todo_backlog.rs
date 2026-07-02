@@ -1,6 +1,7 @@
 use super::*;
 
 const RELEASE_AUDIT_MODULES: &[&str] = &[
+    "datatype_acceptance.rs",
     "release_policy.rs",
     "release_policy/security.rs",
     "runtime_gates.rs",
@@ -85,12 +86,12 @@ fn rust_idiom_backlog_tracks_current_work() {
         "SAFETY[AUDIT:arena-id-memid-helpers]` has 25 markers",
         "SAFETY[AUDIT:page-count-accessors]` has 24 markers",
         "SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 23 markers",
-        "`tests/release_fast_path_audit.rs` is 2,902 lines",
+        "`tests/release_fast_path_audit.rs` is 1,832 lines",
+        "`tests/release_fast_path_audit/datatype_acceptance.rs` is 1,103 lines",
+        "borrows the pre-collected Rust source list",
         "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,374 lines",
         "`tests/release_fast_path_audit/release_policy.rs` is 2,126 lines",
         "`tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`\n  is 662 lines",
-        "`datatype_acceptance_criteria_have_cross_cutting_guards` test spans roughly",
-        "lines 1,327 through 2,420",
         "`strict-type-allowlist.txt` still has 29 path-wide raw-pointer entries",
         "`REMOVE_ENTRY_CAP` remains 0",
         "SAFETY[AUDIT:typed-arena-domain]",

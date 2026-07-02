@@ -64,14 +64,14 @@ Current review evidence:
   `src/allocator/init.rs` is 2,339 lines,
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
-- The release audit still has large review units:
-  `tests/release_fast_path_audit.rs` is 2,902 lines,
+- The release audit datatype acceptance cluster is now split out:
+  `tests/release_fast_path_audit.rs` is 1,832 lines,
+  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,103 lines and
+  borrows the pre-collected Rust source list,
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,374 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines, and
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
-  is 662 lines. The root
-  `datatype_acceptance_criteria_have_cross_cutting_guards` test spans roughly
-  lines 1,327 through 2,420, making it the next clear release-audit split.
+  is 662 lines.
 - `strict-type-allowlist.txt` still has 29 path-wide raw-pointer entries with
   `symbol = *`, even after the page cleanup. `REMOVE_ENTRY_CAP` remains 0.
 
@@ -172,16 +172,16 @@ regeneration/check, release audit, full clippy, and full tests.
 > It covers important cross-cutting guards, but the root harness is harder to
 > review than the already-split `unsafe_performance` modules.
 
-- [ ] Move the datatype acceptance assertion cluster into a new module under
+- [x] Move the datatype acceptance assertion cluster into a new module under
       `tests/release_fast_path_audit/`.
-- [ ] Pass borrowed source strings into the new assertion helper rather than
+- [x] Pass borrowed source strings into the new assertion helper rather than
       re-reading large files.
-- [ ] Keep coverage for memid views, block-link wrappers, atomic field wrappers,
+- [x] Keep coverage for memid views, block-link wrappers, atomic field wrappers,
       strict-type checker rules, pointer provenance helpers, and package-level
       lint/allowance guards.
-- [ ] Update `RELEASE_AUDIT_MODULES` and this TODO evidence with the new module
+- [x] Update `RELEASE_AUDIT_MODULES` and this TODO evidence with the new module
       and line counts.
-- [ ] Preserve release-audit behavior and avoid weakening source assertions
+- [x] Preserve release-audit behavior and avoid weakening source assertions
       while moving them.
 
 Verify: `cargo test --test release_fast_path_audit --all-features`,
@@ -194,7 +194,7 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 3. [x] Migrate `src/types/heap.rs` off the unsafe migration allowlist.
 4. [x] Migrate `src/types/freelist_wrappers.rs` off the unsafe migration
        allowlist and narrow its broad strict-type entries where possible.
-5. [ ] Split the datatype acceptance release-audit assertion cluster.
+5. [x] Split the datatype acceptance release-audit assertion cluster.
 
 ## Definition of done for this backlog
 
@@ -204,4 +204,4 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
       markers and evidence instead of file-level migration exceptions.
 - [x] Broad strict-type rows for `src/types/freelist_wrappers.rs` are narrowed
       where the current checker can express the active boundaries.
-- [ ] One more release-audit assertion cluster has a dedicated module.
+- [x] One more release-audit assertion cluster has a dedicated module.

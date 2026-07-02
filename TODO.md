@@ -1,24 +1,23 @@
-# TODO: Next Strict-Type and Audit Granularity Backlog
+# TODO: Next Audit Granularity and Harness Backlog
 
-Fresh-eyes review after splitting typed pointer accessor audit coverage on
-`master`.
-The previous backlog is complete and pushed. The next mechanical translation
-debt is in remaining strict-type wildcard allowances, broad unsafe operation
-IDs, and a root release-audit harness that is still close to its cap.
+Fresh-eyes review after completing the previous TODO backlog on `master` at
+`985da34`. The previous backlog is implemented, validated, committed, and
+pushed. The next mechanical translation debt is in remaining broad unsafe audit
+operation IDs and release-audit modules that are still close to the module cap.
 
 Current review evidence:
 
-- `scripts/check-unsafe-audit.py` still covers 82 source files, 5,893 unsafe
+- `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
   mentions, and 123 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 123 operation IDs with
   306 automated evidence rows.
-- `strict-type-allowlist.txt` has 26 wildcard entries left: 4
+- `strict-type-allowlist.txt` still has 26 wildcard entries left: 4
   raw-pointer-parameter entries, 13 bare-domain `usize` entries, 4
   pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
   entries, and 1 heap-allocating-type entry.
-- No remaining path has more than one wildcard entry; the residual path-level
-  entries are public/raw ABI, platform ABI, proof-fixture, or typed-domain
-  constructor boundaries such as `src/allocator/heap.rs`,
+- No remaining path has more than one strict-type wildcard entry. The residual
+  path-level entries are public/raw ABI, platform ABI, proof-fixture, or
+  typed-domain constructor boundaries such as `src/allocator/heap.rs`,
   `src/platform/mod.rs`, `src/raw/macros.rs`, `src/types/layout.rs`,
   `src/safe/allocation.rs`, and `src/types/atomic.rs`.
 - The largest remaining unsafe audit marker clusters are
@@ -30,180 +29,110 @@ Current review evidence:
   `internal-atomic-facade` with 103 markers,
   `page-allocation-boundary` with 102 markers, and
   `init-subproc-boundary` with 102 markers.
-- The previous raw macro aggregate is split into
-  `raw-macro-libc-forwarding-boundary` with 65 markers,
-  `raw-macro-cxx-boundary` with 46 markers,
-  `raw-macro-override-entry-boundary` with 36 markers,
-  `raw-macro-bootstrap-boundary` with 15 markers,
-  `raw-macro-allocation-query-boundary` with 10 markers, and
-  `raw-macro-header-forwarding-boundary` with 6 markers.
-- The previous allocation, aligned allocation, stats, page-map, and OS
-  aggregates are split into focused review units. The largest of those new
-  units are `allocation-abi-entry-boundary` with 104 markers,
-  `stats-merge-boundary` with 75 markers,
-  `aligned-heap-allocation-boundary` with 68 markers,
-  `aligned-realloc-boundary` with 67 markers,
-  `page-map-register-boundary` with 66 markers, and
-  `os-memory-allocation-boundary` with 59 markers.
-- The previous `typed-pointer-accessors` aggregate with 161 markers is split
-  into pointer-family review units. The largest new typed pointer units are
-  `typed-subproc-accessors` with 31 markers,
-  `typed-arena-accessors` with 27 markers,
-  `typed-page-accessors` with 25 markers,
-  `typed-tld-accessors` with 24 markers,
-  `typed-heap-accessors` with 16 markers,
-  `typed-thread-heap-accessors` with 14 markers,
-  `typed-page-queue-accessors` with 10 markers,
-  `typed-block-accessors` with 8 markers, and
-  `typed-pointer-constructor-boundary` with 6 markers.
-- Audit evidence rows for allocation, aligned allocation, split raw macro IDs,
-  OS memory, page-map, stats, and typed pointer checks point at focused
-  release-audit modules instead of the old aggregate harness paths.
-- The release-audit module cap is 1,000 lines, and the root harness is now 247
-  lines with a lowered 300-line root cap. The largest split modules are
+- The release-audit root harness is 247 lines under a 300-line root cap. The
+  module cap is still 1,000 lines; the largest modules are
   `unsafe_performance/lifecycle_boundaries.rs` at 922 lines,
   `unsafe_performance/platform_primitive_boundaries.rs` at 895 lines,
-  `unsafe_performance/raw_facade.rs` at 852 lines, and
-  `unsafe_performance/page_arena_behavior.rs` at 724 lines.
-- The root release-audit tests are split into focused child modules:
-  `allowance_inventory.rs` at 398 lines,
-  `interposition_exports.rs` at 388 lines,
-  `primitive_options.rs` at 264 lines,
-  `strict_policy.rs` at 255 lines,
-  `allocation_contracts.rs` at 195 lines,
-  `public_facade.rs` at 146 lines, and
-  `safe_api.rs` at 99 lines.
+  `unsafe_performance/raw_facade.rs` at 852 lines,
+  `unsafe_performance/page_arena_behavior.rs` at 724 lines,
+  `release_policy/docs_and_linking.rs` at 633 lines,
+  `release_policy/api_surface.rs` at 517 lines,
+  `datatype_acceptance/strict_type.rs` at 512 lines, and
+  `release_policy/release_process.rs` at 504 lines.
+- The previous raw macro, allocation/aligned/stats/page-map/OS, typed pointer,
+  and root release-audit aggregate splits are complete and guarded by focused
+  release-audit tests.
 
-## Issue 1: Refresh audit evidence paths after the release-audit split
+## Issue 1: Split init thread/TLS and subproc audit clusters
 
-> **Comment:** The release-audit assertions now live in focused modules, but
-> some evidence rows still cite the old harness files. That weakens review
-> precision and makes future evidence updates harder to trace.
+> **Comment:** `init-thread-tls-boundary` has 129 markers and
+> `init-subproc-boundary` has 102 markers. They mix thread lifecycle, default
+> and cached thread-heap TLS, platform TLS slot/key setup, TLD allocation/free,
+> subproc identity, main-subproc state, and heap/subproc association.
 
-- [x] Update `docs/unsafe-audit-evidence.tsv` rows for allocation, aligned
-      allocation, raw macro allocation, OS memory, page-map, stats, and typed
-      pointer checks to name the focused release-audit modules that now own the
-      assertions.
-- [x] Update `UNSAFE_AUDIT.md` and `docs/unsafe-audit.md` wording where it still
-      describes broad release-audit harness ownership instead of focused
-      modules.
-- [x] Add or update release-audit assertions so evidence rows cannot drift back
-      to stale root harness paths when a focused module exists.
+- [ ] Split `init-thread-tls-boundary` into thread lifecycle, thread-heap TLS,
+      platform TLS slot/key, and TLD allocation/free operation IDs.
+- [ ] Split `init-subproc-boundary` into subproc identity/registry,
+      main-subproc lifecycle, heap association, and subproc stats/count
+      operation IDs.
+- [ ] Update `UNSAFE_AUDIT.md`, evidence rows, and focused release-audit guards
+      for each new init operation ID.
 
-Verify: unsafe audit scripts, unsafe evidence scripts, release fast-path audit,
-full formatting, full clippy, and full tests.
-
-## Issue 2: Narrow the remaining allocator/init strict-type wildcards
-
-> **Comment:** The checker is item-aware now, but the highest-risk allocator
-> paths still retain path-level strict-type entries.
-
-- [x] Replace wildcard strict-type entries in `src/allocator/alloc.rs`,
-      `src/allocator/free.rs`, and `src/allocator/init.rs` with named helper or
-      documented ABI-boundary entries wherever the checker can identify the
-      responsible item.
-- [x] Narrow the remaining paired wildcard entries in `src/bitmap.rs`,
-      `src/allocator/page_map.rs`, `src/types/ptr.rs`,
-      `src/allocator/options.rs`, and `src/types/arena.rs`.
-- [x] Preserve true public ABI, platform ABI, proof-fixture, and typed-domain
-      constructor boundaries as explicit documented exceptions instead of
-      broad accidental fallbacks.
-
-Verify: strict-type checker, datatype acceptance audit, release fast-path audit,
-no-allocation audit, full clippy, and full tests.
-
-## Issue 3: Split the raw macro allocation audit cluster
-
-> **Comment:** The previous `SAFETY[AUDIT:raw-macro-allocation-boundary]`
-> cluster had 178 markers in the raw allocation override and forwarding layer.
-> It mixed bootstrap allocation, malloc/free/realloc shims, C header macro
-> behavior, and platform forwarding contracts.
-
-- [x] Split raw macro markers into narrower operation IDs for bootstrap
-      tracking, allocator override entry points, libc/posix forwarding,
-      usability/size queries, and C header macro compatibility.
-- [x] Update audit docs and evidence rows with separate invariants and tests for
-      each new raw macro operation ID.
-- [x] Preserve exported allocator symbols, no hidden Rust allocation before init,
-      downstream header macro expansion, and Unix bootstrap allocation behavior.
-
-Verify: header macro expansion tests, raw macro unit tests, release fast-path
-audit, unsafe audit scripts, unsafe evidence scripts, full clippy, and full
-tests.
-
-## Issue 4: Split allocation, aligned allocation, stats, page-map, and OS audit clusters
-
-> **Comment:** Several production clusters are still above 130 markers and each
-> mixes multiple invariants. They should be split only where the code already
-> has clear boundaries so performance-sensitive paths stay stable.
-
-- [x] Split `allocation-entry-boundary` into allocation ABI entry, heap/thread
-      heap dispatch, layout/product request, and page refill handoff IDs.
-- [x] Split `aligned-allocation-boundary` into safe alignment request
-      normalization plus padding shrink/grow, heap aligned allocation, and
-      realloc/recalloc unsafe IDs.
-- [x] Split `stats-reporting-boundary`, `page-map-boundary`, and
-      `os-memory-boundary` into review units that match their helper groups and
-      update evidence for each new operation ID.
-
-Verify: allocation boundary tests, stats/lifecycle exports, release fast-path
-audit, unsafe audit scripts, unsafe evidence scripts, full clippy, and full
-tests.
-
-## Issue 5: Split typed pointer accessor audit coverage
-
-> **Comment:** `SAFETY[AUDIT:typed-pointer-accessors]` had 161 markers in
-> `src/types/ptr.rs`. The module is doing useful work, but page, block, heap,
-> thread-heap, TLD, arena, subproc, page-queue, and provenance helpers are
-> separate invariants.
-
-- [x] Split typed pointer accessor markers by pointer family and provenance
-      helper responsibility.
-- [x] Keep layout/niche tests and strict-type allowlist coverage aligned with
-      the new operation IDs.
-- [x] Preserve transparent wrapper layout, hot-path inlining, and no allocator
-      allocation in strict-type wrappers.
-
-Verify: pointer/layout tests, datatype acceptance audit, strict-type checker,
+Verify: lifecycle stats exports, release fast-path audit lifecycle modules,
 unsafe audit scripts, unsafe evidence scripts, full clippy, and full tests.
 
-## Issue 6: Split the release fast-path root harness and lower the root cap
+## Issue 2: Split page and arena allocation lifecycle clusters
 
-> **Comment:** Module caps are now below 1,000 lines, but
-> `tests/release_fast_path_audit.rs` is still 1,935 lines and mixes shared
-> helpers with unrelated policy checks.
+> **Comment:** `arena-page-lifecycle-boundary` has 107 markers,
+> `arena-allocation-boundary` has 105 markers, and `page-allocation-boundary`
+> has 102 markers. They cover distinct allocation, page queue, arena reserve,
+> huge-page, free/abandon, and stats invariants.
 
-- [x] Move root release-audit tests into focused modules for public facade
-      shape, safe allocation API behavior, interposition/export checks,
-      strict-type/no-allocation policy, and allowance inventories.
-- [x] Keep only shared source collection helpers and module declarations in the
-      root harness.
-- [x] Lower the root line-count cap after the split while preserving the 1,000
-      line module cap.
+- [ ] Split page allocation markers by free-list refill/search, queue
+      transition, huge-page allocation, and stats/public helper responsibility.
+- [ ] Split arena allocation markers by slice allocation, arena initialization,
+      reserve growth, OS fallback, public reserve/manage API, and huge-page
+      reservation responsibility.
+- [ ] Split arena page lifecycle markers by fresh/regular/singleton page setup,
+      free/abandon/reabandon/unabandon shims, heap arena-page publication, and
+      page ownership transitions.
+
+Verify: page/arena release-audit modules, original arena/static tests,
+allocation boundary tests, unsafe audit scripts, unsafe evidence scripts, full
+clippy, and full tests.
+
+## Issue 3: Split platform and atomic facade audit clusters
+
+> **Comment:** `windows-primitive-boundary` has 114 markers,
+> `internal-atomic-facade` has 103 markers, and `unix-primitive-backend` still
+> has 90 markers. These modules mix memory primitives, process/env helpers,
+> TLS/thread helpers, lock/once facades, atomic field wrappers, and
+> platform-specific compatibility shims.
+
+- [ ] Split `internal-atomic-facade` into lock/once, atomic field, pointer-sized
+      atomic, remote-free/thread-free, and platform lock shim operation IDs.
+- [ ] Split `windows-primitive-boundary` into virtual memory, process info,
+      stderr/env, TLS/FLS lifecycle, large/huge-page, NUMA, and ETW operation
+      IDs.
+- [ ] Split `unix-primitive-backend` where existing helper groups already
+      separate mmap/syscall, process info, stderr/env, random, thread/TLS,
+      huge-page, and NUMA behavior.
+
+Verify: platform primitive release-audit modules, atomic ordering audit, unsafe
+audit scripts, unsafe evidence scripts, full clippy, and full tests.
+
+## Issue 4: Split remaining large release-audit modules and lower the module cap
+
+> **Comment:** The root harness is now small, but the largest focused modules
+> are still near the 1,000-line cap. The next cap reduction should happen only
+> after moving coherent checks into submodules.
+
+- [ ] Split `unsafe_performance/lifecycle_boundaries.rs` into process lifecycle,
+      thread/TLS, options/guarded, random/CPU, and platform hook modules.
+- [ ] Split `unsafe_performance/platform_primitive_boundaries.rs` into Windows,
+      Unix/WASI/Emscripten, macOS, and shared primitive-policy modules.
+- [ ] Split `unsafe_performance/raw_facade.rs` into raw override, libc/POSIX,
+      C++ compatibility, header forwarding, and bootstrap/query modules.
+- [ ] Lower the release-audit module cap below 1,000 after the largest modules
+      are comfortably below the new cap.
 
 Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Refresh audit evidence paths after the release-audit split.
-2. [x] Narrow the remaining allocator/init strict-type wildcards.
-3. [x] Split the raw macro allocation audit cluster.
-4. [x] Split allocation, aligned allocation, stats, page-map, and OS audit
-       clusters.
-5. [x] Split typed pointer accessor audit coverage.
-6. [x] Split the release fast-path root harness and lower the root cap.
+1. [ ] Split init thread/TLS and subproc audit clusters.
+2. [ ] Split page and arena allocation lifecycle clusters.
+3. [ ] Split platform and atomic facade audit clusters.
+4. [ ] Split remaining large release-audit modules and lower the module cap.
 
 ## Definition of done for this backlog
 
-- [x] Unsafe audit evidence rows point at the focused tests that actually guard
-      each operation ID.
-- [x] Remaining strict-type wildcard entries are either narrowed to named items
-      or documented as true ABI, public API, fixture, or typed-constructor
-      boundaries.
-- [ ] The largest unsafe audit operation IDs are split into narrower review
-      units with separate docs, evidence, and release-audit guards.
-- [x] The release fast-path root harness is split enough to lower its cap
+- [ ] Remaining unsafe audit operation IDs above 100 markers are split into
+      narrower review units with separate docs, evidence, and release-audit
+      guards.
+- [ ] Release-audit modules are split enough to lower the 1,000-line module cap
       without weakening coverage.
+- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
 - [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the

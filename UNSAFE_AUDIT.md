@@ -221,6 +221,12 @@ Operation IDs:
   zero-sized `MiMalloc` facade. Rust's allocator contract supplies the layout,
   pointer, and ownership preconditions, and each operation forwards directly to
   the matching allocator entry point.
+- `SAFETY[AUDIT:heap-lifecycle-boundary]`: `src/allocator/heap.rs` owns raw
+  heap lifecycle and ownership-inspection shims. Unsafe operations are limited
+  to heap creation/registration, NUMA affinity updates, stats merging, owned
+  heap delete/destroy teardown, allocator page ownership lookups,
+  under-utilized page inspection, and lazy per-heap thread-heap initialization
+  while preserving typed heap witnesses and lock-protected list updates.
 - `SAFETY[AUDIT:owned-allocation]`: `src/safe/allocation.rs` owns non-zero
   allocations through move-only wrappers. Slice views and copies are bounded by
   the stored layout, and `Drop` releases live blocks exactly once.

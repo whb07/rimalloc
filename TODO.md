@@ -14,8 +14,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 23 entries: 20 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 23.
+- `docs/unsafe-migration-allowlist.tsv` has 22 entries: 19 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 22.
 - The completed pass moved `src/ffi/abi.rs`, `src/allocator/arena_meta.rs`,
   `src/platform/wasi.rs`, `src/platform/emscripten.rs`, and
   `src/types/atomic.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -38,20 +38,19 @@ Current review evidence:
   x86_64 assembly, sentinel `Sync`, static lock access, slot growth, bitmap
   copy/free/publication, keep-set writes, versioned key claim/free, and helper
   tests, and is off the unsafe migration allowlist.
+- `src/allocator/heap.rs` now uses 80
+  `SAFETY[AUDIT:heap-lifecycle-boundary]` markers for raw heap shims, heap
+  creation and subproc registration, thread-heap lazy initialization, heap
+  delete/destroy, stats merge, ownership lookup, under-utilized page
+  inspection, and lock-protected teardown, and is off the unsafe migration
+  allowlist.
 - The smallest remaining allowlisted production files are
-  `src/allocator/heap.rs` at 604 lines with 94 `unsafe` hits and 0 local
-  markers,
   `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits and 0 local
-  markers, and
+  markers,
   `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits,
   `src/internal/atomic.rs` at 914 lines with 135 `unsafe` hits, and
-  `src/allocator/page_map.rs` at 1,052 lines with 182 `unsafe` hits.
-- After the current remaining TODO items, the next smallest remaining
-  allowlisted production files are
-  `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits,
-  `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits,
-  `src/internal/atomic.rs` at 914 lines with 135 `unsafe` hits,
-  `src/allocator/page_map.rs` at 1,052 lines with 182 `unsafe` hits, and
+  `src/allocator/page_map.rs` at 1,052 lines with 184 `unsafe` hits.
+- The next smallest remaining allowlisted production files after those are
   `src/types/scalar.rs` at 1,097 lines with 33 `unsafe` hits.
 - `strict-type-allowlist.txt` still has 75 path-wide entries with `symbol = *`,
   including 29 path-wide raw-pointer entries, 21 path-wide bare-domain `usize`
@@ -66,6 +65,7 @@ Current review evidence:
   `src/allocator/aligned.rs` has 19 entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
+  `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers,
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
   `SAFETY[AUDIT:typed-heap-test-fixtures]` has 55 markers,
@@ -193,20 +193,20 @@ tests.
 > uses `HeapPtr`, `BorrowedHeap`, `OwnedHeap`, `MainHeap`, `PagePtr`, and
 > `ThreadHeapPtr` witnesses in several paths, but raw heap creation,
 > registration, deletion, destruction, ownership inspection, stats merging, and
-> lazy thread-heap initialization remain covered by a blanket allowance.
+> lazy thread-heap initialization remained covered by a blanket allowance.
 
-- [ ] Add local `SAFETY[AUDIT:heap-lifecycle-boundary]` markers for raw heap
+- [x] Add local `SAFETY[AUDIT:heap-lifecycle-boundary]` markers for raw heap
       shims, heap creation and subproc list insertion, thread-heap lazy
       initialization, heap deletion/destruction, stats merge, ownership lookup,
       under-utilized page inspection, and lock-protected teardown.
-- [ ] Preserve typed heap witnesses, main-heap rejection, thread-local slot
+- [x] Preserve typed heap witnesses, main-heap rejection, thread-local slot
       lifecycle, heap/subproc list locking, stats updates, NUMA affinity
       behavior, and no new dynamic dispatch or extra allocation on lookup paths.
-- [ ] Add or extend release-audit assertions and focused tests for
+- [x] Add or extend release-audit assertions and focused tests for
       `mi_heap_new_in_arena`, `mi_heap_delete`, `mi_heap_destroy`,
       `mi_heap_check_owned`, under-utilized page inspection, and lazy thread
       heap initialization.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/allocator/heap.rs` from the unsafe migration allowlist, regenerate
       unsafe inventory, and lower the cap.
 
@@ -221,17 +221,17 @@ clippy, and full tests.
 3. [x] Migrate `src/ffi/libc.rs` off the unsafe migration allowlist.
 4. [x] Migrate `src/allocator/threadlocal.rs` off the unsafe migration
        allowlist.
-5. [ ] Migrate `src/allocator/heap.rs` off the unsafe migration allowlist.
+5. [x] Migrate `src/allocator/heap.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
-- [ ] `src/raw/posix.rs`, `src/lib.rs`, `src/ffi/libc.rs`,
+- [x] The unsafe migration allowlist cap is lowered after each migrated file.
+- [x] `src/raw/posix.rs`, `src/lib.rs`, `src/ffi/libc.rs`,
       `src/allocator/threadlocal.rs`, and `src/allocator/heap.rs` are covered by
       operation-level audit markers and evidence instead of file-level migration
       exceptions.
-- [ ] POSIX/libc compatibility behavior, crate-root public API shape,
+- [x] POSIX/libc compatibility behavior, crate-root public API shape,
       thread-local synchronization, heap lifecycle ownership, and allocator
       hot-path performance constraints remain unchanged.
-- [ ] Release-audit TODO guards track the active backlog and measurable
+- [x] Release-audit TODO guards track the active backlog and measurable
       evidence.

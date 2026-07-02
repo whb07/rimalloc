@@ -37,6 +37,10 @@ page-bin-size-classes	script	scripts/check-ffi-boundary.py	Checks the moved mi_g
 page-bin-size-classes	script	scripts/check-strict-types.py	Checks split page bin helpers remain covered by the existing page strict-type raw size boundary.
 global-alloc	test	tests/mimalloc_global_alloc.rs	Exercises GlobalAlloc alignment, reallocation preservation, and facade traits.
 global-alloc	test	tests/mimalloc_global_allocator_std.rs	Exercises MiMalloc as the process global allocator under std.
+heap-lifecycle-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw heap creation, lazy thread-heap routing, ownership checks, under-utilized page null handling, stats merge, and delete.
+heap-lifecycle-boundary	test	tests/no_allocation_critical_paths.rs	Checks heap creation/delete and heap lookup helpers do not route through Rust's global allocator.
+heap-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks heap lifecycle markers, creation registration, owned cleanup, lazy thread-heap initialization, and under-utilized page inspection shape.
+heap-lifecycle-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks heap delete/destroy/check-owned helpers retain typed heap witnesses and main-heap rejection.
 owned-allocation	test	src/safe/tests.rs	Exercises safe owned Allocation construction, resize, initialization, and drop paths.
 owned-allocation	test	tests/allocation_boundary_cases.rs	Covers allocation boundary cases that the owned wrapper forwards to.
 panic-boundary	test	tests/ffi_panic_audit.rs	Checks production panic-abort policy and callback panic containment documentation.

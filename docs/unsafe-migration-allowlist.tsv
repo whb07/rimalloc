@@ -3,7 +3,6 @@ src/allocator/aligned.rs	production	release-readiness	2026-09-30	hot aligned-all
 src/allocator/alloc.rs	production	release-readiness	2026-09-30	hot allocation parity path kept allowlisted until per-operation SAFETY marker migration has assembly and benchmark evidence
 src/allocator/arena.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
 src/allocator/free.rs	production	release-readiness	2026-09-30	hot free-path parity code kept allowlisted until per-operation SAFETY marker migration has assembly and benchmark evidence
-src/allocator/heap.rs	production	release-readiness	2026-09-30	heap lifecycle parity code kept allowlisted until per-operation SAFETY marker migration has behavior and performance evidence
 src/allocator/init.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
 src/allocator/options.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
 src/allocator/page.rs	production	release-readiness	2026-09-30	hot page-allocation parity path kept allowlisted until per-operation SAFETY marker migration has assembly and benchmark evidence

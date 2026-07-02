@@ -144,6 +144,30 @@ unsafe fn heap_lifecycle_roundtrip() -> bool {
     true
 }
 
+unsafe fn heap_lookup_roundtrip() -> bool {
+    let heap = unsafe { mi_heap_new() };
+    if heap.is_null() {
+        return false;
+    }
+    let p = unsafe { mi_heap_malloc(heap, 80) };
+    if p.is_null() {
+        unsafe { mi_heap_delete(heap) };
+        return false;
+    }
+
+    let theap = unsafe { mi_heap_theap(heap) };
+    let contains = unsafe { mi_heap_contains(heap, p) };
+    let any = unsafe { mi_any_heap_contains(p) };
+    let under_utilized = unsafe { mi_unsafe_heap_page_is_under_utilized(heap, p, 100) };
+    core::hint::black_box(under_utilized);
+
+    unsafe {
+        mi_free(p.cast::<c_void>());
+        mi_heap_delete(heap);
+    }
+    !theap.is_null() && contains && any
+}
+
 #[test]
 fn allocator_critical_paths_do_not_use_rust_global_allocator() {
     unsafe {
@@ -160,4 +184,5 @@ fn allocator_critical_paths_do_not_use_rust_global_allocator() {
     assert_no_global_allocations("mi_rezalloc/mi_free", realloc_roundtrip);
     assert_no_global_allocations("mi_zalloc_aligned/mi_free", zalloc_aligned_free_roundtrip);
     assert_no_global_allocations("mi_heap_new/mi_heap_delete", heap_lifecycle_roundtrip);
+    assert_no_global_allocations("heap lookup helpers", heap_lookup_roundtrip);
 }

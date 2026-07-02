@@ -2954,20 +2954,18 @@ fn rust_idiom_backlog_tracks_current_work() {
     let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
 
     assert!(
-        todo.contains("# TODO: Fresh Rust Idiom and Release-Readiness Backlog")
-            && todo.contains("64 legacy source/test")
-            && todo.contains("## Issue: Unsafe migration allowlist is still too broad")
-            && todo.contains("Remove `src/safe/allocation.rs`, `src/safe/heap.rs`")
-            && todo.contains("caps the remaining allowlist at\n    64 entries")
-            && todo.contains("## Issue: Internal macro exports leak implementation details")
-            && todo.contains("documented Tier R allowlist")
-            && todo.contains("## Issue: Clippy allowances should move from crate policy")
-            && todo.contains("## Issue: Large translated modules need clearer Rust boundaries")
-            && todo.contains("## Issue: Safe object ownership APIs remain unresolved")
-            && todo.contains("`MiBox<T>` and `HeapBox<'heap, T>`")
-            && todo.contains("## Issue: Generated artifact hygiene is not centralized")
+        todo.contains("# TODO: Fresh Rust Idiom Follow-up Backlog")
+            && todo.contains("64 entries: 46 production,\n  15 test, and 3 translation files")
+            && todo.contains("96 entries; 9 are still marked `remove:`")
+            && todo.contains("`tests/release_fast_path_audit.rs` is 8,845 lines")
+            && todo.contains("## Issue: Unsafe migration allowlist should keep shrinking")
+            && todo
+                .contains("## Issue: Strict-type allowlist still has removable file-level entries")
+            && todo.contains("## Issue: Production module-level allowances hide local intent")
+            && todo.contains("## Issue: Safe facade tests are mixed into the facade module")
+            && todo.contains("## Issue: Release fast-path audit is too large and brittle")
             && todo.contains(
-                "## Issue: Feature and no-std validation should cover safe-facing examples"
+                "## Issue: Large translated modules still need smaller review boundaries"
             )
             && todo.contains("## Definition of done for this backlog"),
         "TODO.md should track the fresh Rust idiom and release-readiness backlog"

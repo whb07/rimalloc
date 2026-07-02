@@ -9,6 +9,8 @@ mod lifecycle_boundaries;
 mod local_boundaries;
 #[path = "unsafe_performance/page_lifecycle.rs"]
 mod page_lifecycle;
+#[path = "unsafe_performance/platform_primitive_boundaries.rs"]
+mod platform_primitive_boundaries;
 #[path = "unsafe_performance/size_class_boundaries.rs"]
 mod size_class_boundaries;
 #[path = "unsafe_performance/tail_guards.rs"]

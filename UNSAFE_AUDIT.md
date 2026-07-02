@@ -233,6 +233,11 @@ Operation IDs:
   the allocator's C-compatible random boundary. The shims convert live context
   pointers to borrowed references once, keep ChaCha state updates in safe Rust,
   and use stack-local key buffers for primitive entropy reads.
+- `SAFETY[AUDIT:wasi-primitive-boundary]`: `src/platform/wasi.rs` owns the
+  bounded WASI primitive backend. Unsafe operations are limited to C import
+  declarations, `sbrk` memory growth, nullable primitive out-pointer conversion,
+  bounded C-string stderr and environment handling, no-op primitive range shims,
+  unsupported huge-page result publication, and thread/TLS compatibility shims.
 - `SAFETY[AUDIT:arena-debug-render]`: `src/allocator/arena/debug.rs` renders
   arena diagnostics by reading arena/page metadata discovered through the
   current sub-process registry, page map lookup, and typed memid views. The

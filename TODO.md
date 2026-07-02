@@ -13,8 +13,8 @@ ABI behavior.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 30 entries: 27 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 30.
+- `docs/unsafe-migration-allowlist.tsv` has 29 entries: 26 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 29.
 - The completed pass moved `src/types/memid.rs`, `src/types/layout.rs`,
   `src/types/page_states.rs`, and `src/allocator/bench_diagnostics.rs` to local
   `SAFETY[AUDIT:*]` operation markers with evidence rows and no migration
@@ -24,11 +24,14 @@ Current review evidence:
   page/block pointer arithmetic, meta-page stack traversal and publication,
   bitmap allocation/free, arena fallback, and meta-page debug classification,
   and is off the unsafe migration allowlist.
+- `src/platform/wasi.rs` now uses 42
+  `SAFETY[AUDIT:wasi-primitive-boundary]` markers for C imports, `sbrk` memory
+  growth, nullable primitive out-pointers, C-string stderr/env handling, no-op
+  primitive range shims, and thread/TLS compatibility shims, and is off the
+  unsafe migration allowlist.
 - The smallest remaining allowlisted production files are
   `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers,
-  `src/platform/wasi.rs` at 373 lines with 34 `unsafe` hits and 0 local
-  markers,
-  `src/lib.rs` at 398 lines with 23 `unsafe` hits and 8 local markers, and
+  `src/lib.rs` at 398 lines with 21 `unsafe` hits and 8 local markers,
   `src/platform/emscripten.rs` at 424 lines with 35 `unsafe` hits and 0 local
   markers, and
   `src/ffi/libc.rs` at 518 lines with 46 `unsafe` hits and 0 local markers.
@@ -62,7 +65,7 @@ Current review evidence:
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
 - The release audit is still split but has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,384 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,386 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
   `tests/release_fast_path_audit.rs` is 1,832 lines, and
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,103 lines.
@@ -116,14 +119,14 @@ tests.
 > `sbrk`-style memory growth, nullable out-pointer writes, C-string environment
 > lookup, stderr output, and thread-heap association shims.
 
-- [ ] Add local `SAFETY[AUDIT:wasi-primitive-boundary]` markers for WASI import
+- [x] Add local `SAFETY[AUDIT:wasi-primitive-boundary]` markers for WASI import
       declarations, memory growth/alignment, primitive allocation out-pointers,
       C-string stderr/env handling, and thread/TLS compatibility shims.
-- [ ] Preserve non-WASI fallback behavior, no-heap-allocation primitive paths,
+- [x] Preserve non-WASI fallback behavior, no-heap-allocation primitive paths,
       current errno-style return values, and existing `#[inline]` boundaries.
-- [ ] Add release-audit assertions or targeted tests for null out-pointers,
+- [x] Add release-audit assertions or targeted tests for null out-pointers,
       non-WASI fallbacks, stderr/env bounds, and thread association behavior.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -182,7 +185,7 @@ regeneration/check, release audit, full clippy, and full tests.
 
 1. [x] Migrate `src/ffi/abi.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/allocator/arena_meta.rs` off the unsafe migration allowlist.
-3. [ ] Migrate `src/platform/wasi.rs` off the unsafe migration allowlist.
+3. [x] Migrate `src/platform/wasi.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/platform/emscripten.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/types/atomic.rs` off the unsafe migration allowlist.
 

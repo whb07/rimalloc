@@ -50,15 +50,21 @@ Current review evidence:
   `init-options-guarded-boundary` with 14 markers,
   `init-random-cpu-boundary` with 13 markers, and
   `init-platform-hooks-boundary` with 9 markers.
-- The release audit is split, but the largest review units are still heavy:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,544 lines,
-  `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
+- The release audit review units are now split below the tightened module cap:
   `tests/release_fast_path_audit.rs` is 1,935 lines,
-  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,222 lines,
-  `tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs`
-  is 895 lines, and
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
-  is 922 lines.
+  is 922 lines,
+  `tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs`
+  is 895 lines,
+  `tests/release_fast_path_audit/unsafe_performance/raw_facade.rs` is
+  825 lines,
+  `tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs`
+  is 724 lines,
+  `tests/release_fast_path_audit/release_policy/docs_and_linking.rs` is
+  633 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 47 lines,
+  `tests/release_fast_path_audit/release_policy.rs` is 14 lines, and
+  `tests/release_fast_path_audit/datatype_acceptance.rs` is 43 lines.
 
 ## Issue 1: Make strict-type line-pattern checks item-aware
 
@@ -185,15 +191,15 @@ full tests.
 > large enough that future changes become hard to review. Splitting tests by
 > boundary also helps keep later audit and strict-type changes focused.
 
-- [ ] Split `tests/release_fast_path_audit/unsafe_performance.rs` into focused
+- [x] Split `tests/release_fast_path_audit/unsafe_performance.rs` into focused
       modules for allocator allocation/free, arena/page behavior, OS memory, raw
       facade checks, and shared helpers.
-- [ ] Split `tests/release_fast_path_audit/release_policy.rs` into policy
+- [x] Split `tests/release_fast_path_audit/release_policy.rs` into policy
       modules that match the documentation areas they guard.
-- [ ] Split or reorganize `tests/release_fast_path_audit/datatype_acceptance.rs`
+- [x] Split or reorganize `tests/release_fast_path_audit/datatype_acceptance.rs`
       so strict-type, layout, provenance, callbacks, and page-state acceptance
       checks can be reviewed independently.
-- [ ] Lower the release-audit line-count guard after the split so the root and
+- [x] Lower the release-audit line-count guard after the split so the root and
       module caps catch future growth before files reach the current 2,000-line
       scale.
 
@@ -206,7 +212,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 3. [x] Narrow allocator and internal strict-type wildcard allowances.
 4. [x] Split the arena audit operation cluster.
 5. [x] Split the initialization lifecycle audit cluster.
-6. [ ] Shrink release-audit review units and lower line caps.
+6. [x] Shrink release-audit review units and lower line caps.
 
 ## Definition of done for this backlog
 
@@ -217,9 +223,9 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
       documented as true ABI/module boundaries.
 - [x] The arena and initialization operation IDs are split into narrower audit
       IDs with separate docs, evidence, and release-audit guards.
-- [ ] The large release-audit modules are split enough to lower the line-count
+- [x] The large release-audit modules are split enough to lower the line-count
       caps without weakening coverage.
-- [ ] For every completed item, run `cargo fmt --all`,
+- [x] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

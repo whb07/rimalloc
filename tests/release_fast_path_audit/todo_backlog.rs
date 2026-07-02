@@ -2,20 +2,38 @@ use super::*;
 
 const RELEASE_AUDIT_MODULES: &[&str] = &[
     "datatype_acceptance.rs",
+    "datatype_acceptance/callbacks.rs",
+    "datatype_acceptance/domain_wrappers.rs",
+    "datatype_acceptance/heap_lifecycle.rs",
+    "datatype_acceptance/padding_and_page_state.rs",
+    "datatype_acceptance/page_queues.rs",
+    "datatype_acceptance/spec_reconciliation.rs",
+    "datatype_acceptance/strict_type.rs",
     "release_policy.rs",
+    "release_policy/api_surface.rs",
+    "release_policy/benchmarking.rs",
+    "release_policy/callbacks.rs",
+    "release_policy/docs_and_linking.rs",
+    "release_policy/release_process.rs",
     "release_policy/security.rs",
     "runtime_gates.rs",
     "todo_backlog.rs",
     "unsafe_performance.rs",
+    "unsafe_performance/allocation_free.rs",
     "unsafe_performance/arena_boundaries.rs",
     "unsafe_performance/bitmap_boundaries.rs",
     "unsafe_performance/heap_page_visitors.rs",
     "unsafe_performance/lifecycle_boundaries.rs",
     "unsafe_performance/local_boundaries.rs",
+    "unsafe_performance/os_memory.rs",
+    "unsafe_performance/page_arena_behavior.rs",
     "unsafe_performance/page_lifecycle.rs",
     "unsafe_performance/platform_primitive_boundaries.rs",
+    "unsafe_performance/raw_facade.rs",
+    "unsafe_performance/shared.rs",
     "unsafe_performance/size_class_boundaries.rs",
     "unsafe_performance/tail_guards.rs",
+    "unsafe_performance/thread_stats.rs",
     "unsafe_performance/threadlocal_boundaries.rs",
 ];
 
@@ -77,21 +95,26 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`init-options-guarded-boundary` with 14 markers",
         "`init-random-cpu-boundary` with 13 markers",
         "`init-platform-hooks-boundary` with 9 markers",
-        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,544 lines",
-        "`tests/release_fast_path_audit/release_policy.rs` is 2,150 lines",
         "`tests/release_fast_path_audit.rs` is 1,935 lines",
-        "`tests/release_fast_path_audit/datatype_acceptance.rs` is 1,222 lines",
-        "`tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs`\n  is 895 lines",
         "`tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`\n  is 922 lines",
+        "`tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs`\n  is 895 lines",
+        "`tests/release_fast_path_audit/unsafe_performance/raw_facade.rs` is\n  825 lines",
+        "`tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs`\n  is 724 lines",
+        "`tests/release_fast_path_audit/release_policy/docs_and_linking.rs` is\n  633 lines",
+        "`tests/release_fast_path_audit/unsafe_performance.rs` is 47 lines",
+        "`tests/release_fast_path_audit/release_policy.rs` is 14 lines",
+        "`tests/release_fast_path_audit/datatype_acceptance.rs` is 43 lines",
         "1. [x] Make strict-type line-pattern checks item-aware.",
         "2. [x] Narrow platform strict-type wildcard allowances.",
         "3. [x] Narrow allocator and internal strict-type wildcard allowances.",
         "4. [x] Split the arena audit operation cluster.",
         "5. [x] Split the initialization lifecycle audit cluster.",
-        "6. [ ] Shrink release-audit review units and lower line caps.",
+        "6. [x] Shrink release-audit review units and lower line caps.",
         "The strict-type checker can enforce symbol-level entries for line-pattern\n      findings",
         "The targeted platform, allocator, and internal strict-type wildcard\n      entries are replaced",
         "The arena and initialization operation IDs are split into narrower audit\n      IDs",
+        "The large release-audit modules are split enough to lower the line-count\n      caps",
+        "For every completed item, run `cargo fmt --all`",
     ];
 
     for evidence in required_evidence {
@@ -113,7 +136,7 @@ fn release_audit_harness_stays_split() {
         .count();
 
     assert!(
-        root_lines <= 3_500,
+        root_lines <= 2_000,
         "release fast-path audit root should stay a small harness; found {root_lines} lines"
     );
 
@@ -125,7 +148,7 @@ fn release_audit_harness_stays_split() {
             .count();
 
         assert!(
-            line_count <= 3_000,
+            line_count <= 1_000,
             "release fast-path audit module {} should stay reviewable; found {line_count} lines",
             path.display()
         );

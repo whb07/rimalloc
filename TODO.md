@@ -1,187 +1,179 @@
 # TODO: Fresh Rust Idiom Follow-up Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`eee7448`. The last pass migrated memid test fixtures and callback wrappers
-off file-level unsafe migration debt, narrowed the aligned allocation
-strict-type allowance, split the size-class release-audit assertions, and moved
-arena id/memid helpers into `src/allocator/arena/ids.rs`.
+`a6a560c`. The last pass migrated atomic test fixtures and random context
+boundaries off file-level unsafe migration debt, split arena heap
+visit/delete/move/destroy helpers into `src/allocator/arena/heap_pages.rs`,
+split the heap-page visitor release-audit assertions, and narrowed arena
+raw-pointer strict-type entries to symbol-level entries where the checker can
+support that today.
 
-The next pass should continue the same pattern: reduce one measurable exception
-at a time, preserve C ABI and allocator hot-path behavior, and replace broad
-translated-style surfaces with typed Rust wrappers or operation-level audit
-evidence.
+The next pass should keep the same discipline: retire one measurable exception
+at a time, keep allocator hot paths allocation-free and C ABI compatible, and
+replace broad translated-style allowances with local Rust proof markers,
+smaller audit modules, or symbol-level compatibility entries.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 43 entries: 38 production, 2 test,
-  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 43.
-- The smallest remaining allowlisted test fixtures are reviewable:
-  `src/types/scalar/tests.rs` is 412 lines and
-  `src/types/ptr/tests.rs` is 618 lines.
-- `src/types/atomic/tests.rs` now uses
-  `SAFETY[AUDIT:typed-atomic-test-fixtures]` markers for stack-local atomic
-  words, pointer cells, page/free-list metadata, once state, and lock storage.
-  It is 356 lines with 16 local audit markers.
-- `src/internal/random.rs` now uses
-  `SAFETY[AUDIT:random-context-boundaries]` markers for random context raw
-  pointer shims and primitive entropy/clock bridges. It is 282 lines with 12
-  local audit markers.
-- `src/allocator/arena/heap_pages.rs` now owns heap visit/delete/move/destroy
-  helpers with `SAFETY[AUDIT:arena-heap-page-visitors]` markers. It is 543
-  lines with 56 local audit markers, and `src/allocator/arena.rs` is down to
-  3,915 lines after the split.
-- The smallest remaining allowlisted production files are narrow:
-  `src/types/page.rs` is 258 lines,
-  `src/types/arena.rs` is 260 lines,
-  `src/types/page_queues.rs` is 304 lines,
-  `src/types/heap.rs` is 312 lines, and
-  `src/allocator/arena_meta.rs` is 316 lines.
-- `strict-type-allowlist.txt` has 0 remaining `remove:` entries.
-  `REMOVE_ENTRY_CAP` is 0. Arena raw-pointer entries are now symbol-level for
-  `src/allocator/arena.rs`, `src/allocator/arena/debug.rs`,
-  `src/allocator/arena/ids.rs`, and `src/allocator/arena/heap_pages.rs`. One
-  path-level `src/allocator/arena.rs` pointer/usize entry remains for arena
-  range, alignment, and huge-page interleave arithmetic because the checker
-  does not yet classify pointer/usize hits by function symbol.
+- `docs/unsafe-migration-allowlist.tsv` still has 43 entries: 38 production,
+  2 test, and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 43.
+- The only remaining allowlisted test files are
+  `src/types/scalar/tests.rs`, which is 412 lines with 31 `unsafe { ... }`
+  sites and 0 local `SAFETY[AUDIT:*]` markers, and
+  `src/types/ptr/tests.rs`, which is 618 lines with 168 `unsafe { ... }`
+  sites and 0 local `SAFETY[AUDIT:*]` markers.
+- The smallest remaining allowlisted production file is
+  `src/types/page.rs`, which is 258 lines with 5 `unsafe` hits and 0 local
+  `SAFETY[AUDIT:*]` markers. Its existing tests in `src/types/page/tests.rs`
+  already use `SAFETY[AUDIT:typed-page-test-fixtures]` for stack-local page
+  metadata and registered-range witness construction.
+- The next smallest allowlisted production files are
+  `src/types/arena.rs` at 260 lines,
+  `src/types/page_queues.rs` at 304 lines,
+  `src/types/heap.rs` at 312 lines,
+  `src/allocator/arena_meta.rs` at 316 lines, and
+  `src/raw/posix.rs` at 329 lines.
 - The largest production review units remain translated-style modules:
-  `src/allocator/arena.rs` is 3,915 lines after moving arena id/memid helpers
-  into `src/allocator/arena/ids.rs`, which is 244 lines, and heap page visitors
-  into `src/allocator/arena/heap_pages.rs`, which is 543 lines,
+  `src/allocator/arena.rs` is 3,915 lines,
   `src/allocator/page.rs` is 2,801 lines,
   `src/allocator/alloc.rs` is 2,559 lines,
   `src/internal/bitmap.rs` is 2,358 lines,
   `src/allocator/init.rs` is 2,339 lines,
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
-- The largest unsafe audit marker clusters are broad enough to revisit:
-  `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
-  `SAFETY[AUDIT:typed-heap-test-fixtures]` has 55 markers,
-  `SAFETY[AUDIT:arena-debug-render]` has 34 markers,
-  `SAFETY[AUDIT:owned-allocation]` has 31 markers,
-  `SAFETY[AUDIT:unsafe-callback]` has 26 markers,
-  `SAFETY[AUDIT:arena-id-memid-helpers]` has 24 markers,
-  `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 22 markers, and
-  `SAFETY[AUDIT:page-count-accessors]` has 22 markers.
+- The largest unsafe audit marker clusters are still broad enough to revisit:
+  `SAFETY[AUDIT:arena-heap-page-visitors]` has 59 markers,
+  `SAFETY[AUDIT:typed-heap-test-fixtures]` has 56 markers,
+  `SAFETY[AUDIT:arena-debug-render]` has 35 markers,
+  `SAFETY[AUDIT:owned-allocation]` has 32 markers,
+  `SAFETY[AUDIT:unsafe-callback]` has 28 markers,
+  `SAFETY[AUDIT:arena-id-memid-helpers]` has 25 markers,
+  `SAFETY[AUDIT:page-count-accessors]` has 24 markers, and
+  `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 23 markers.
 - The release audit still has large review units:
   `tests/release_fast_path_audit.rs` is 2,893 lines,
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,561 lines,
-  `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
+  `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines, and
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
-  is 662 lines,
-  `tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs` is
-  207 lines,
-  `tests/release_fast_path_audit/release_policy/security.rs` is 181 lines,
-  `tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is
-  162 lines,
-  `tests/release_fast_path_audit/unsafe_performance/size_class_boundaries.rs`
-  is 132 lines, and
-  `tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs` is
-  56 lines.
-- The heap visit/delete/move/destroy cluster now lives in
-  `src/allocator/arena/heap_pages.rs` around `mi_heap_visit_info_t`,
-  `mi_heap_delete_visit_info_t`, `_mi_heap_visit_blocks`,
-  `_mi_heap_move_pages`, and `_mi_heap_destroy_pages`.
+  is 662 lines.
+- `tests/release_fast_path_audit/unsafe_performance.rs` still carries a large
+  page lifecycle and page-queue assertion block around `_mi_page_free`,
+  `_mi_page_abandon`, `_mi_page_free_collect`, `_mi_page_unfull`,
+  `_mi_page_retire`, `_mi_page_queue_is_valid`, and queue transition helpers.
+- `strict-type-allowlist.txt` has 0 remaining `remove:` entries and
+  `REMOVE_ENTRY_CAP` is 0, but `src/allocator/page.rs` still has path-wide
+  raw-pointer entries for `mi_page_t`, `mi_block_t`, and `mi_theap_t`.
+  `scripts/check-strict-types.py` still aliases `src/allocator/page/bins.rs`,
+  `src/allocator/page/counts.rs`, `src/allocator/page/flags.rs`, and
+  `src/allocator/page/validation.rs` back to `src/allocator/page.rs`, even
+  though those child modules already exist.
 
-## Issue: Atomic test fixtures still hide unsafe migration debt
+## Issue: Scalar test fixtures are still file-level unsafe debt
 
-> **Comment:** `src/types/atomic/tests.rs` was the smallest remaining
-> allowlisted test file. It now uses local proof markers for stack-backed atomic
-> wrappers instead of a file-level unsafe exception.
+> **Comment:** `src/types/scalar/tests.rs` is the smaller of the two remaining
+> allowlisted test files. The unsafe sites are unchecked scalar constructor
+> fixtures with concrete values, so they should be converted to local
+> operation-level proof markers instead of a file-level exception.
 
-- [x] Migrate `src/types/atomic/tests.rs` from file-level unsafe allowlisting
-      to local `SAFETY[AUDIT:typed-atomic-test-fixtures]` markers.
-- [x] Keep fixtures stack-local and preserve the current ordering, ownership,
-      and layout proof intent.
-- [x] Add matching `UNSAFE_AUDIT.md` and
+- [ ] Add local `SAFETY[AUDIT:typed-scalar-test-fixtures]` markers to the
+      unchecked scalar constructor fixtures.
+- [ ] Keep the tests table-driven or direct; do not introduce allocations,
+      helper abstractions, or broader fixture state just to reduce comments.
+- [ ] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [x] Remove the file from `docs/unsafe-migration-allowlist.tsv`.
-- [x] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP`.
+- [ ] Remove `src/types/scalar/tests.rs` from
+      `docs/unsafe-migration-allowlist.tsv`.
+- [ ] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP`.
 
-Verify: `cargo test types::atomic::tests --lib --all-features`,
+Verify: `cargo test types::scalar::tests --lib --all-features`,
 `scripts/check-unsafe-audit.py`, `scripts/check-unsafe-audit-evidence.py`,
 `scripts/check-unsafe-inventory.py --write && scripts/check-unsafe-inventory.py`,
 `cargo test --test release_fast_path_audit --all-features`, full clippy, and
 full tests.
 
-## Issue: Random remains a small production unsafe allowlisted module
+## Issue: Pointer wrapper tests are the last allowlisted test fixture
 
-> **Comment:** `src/internal/random.rs` was the smallest remaining production
-> allowlisted file. The unsafe operations are now local random-context raw
-> pointer entry points and primitive entropy/clock bridges, while the ChaCha
-> state update logic remains ordinary safe Rust.
+> **Comment:** `src/types/ptr/tests.rs` is the other remaining test allowlist
+> entry. It exercises stack-local allocator metadata and exposed-address pointer
+> arithmetic for wrapper APIs. The fixture boundaries should be local and
+> auditable instead of hidden by the file-level migration list.
 
-- [x] Replace the file-level allowlist entry for `src/internal/random.rs` with
-      operation-level `SAFETY[AUDIT:random-context-boundaries]` markers.
-- [x] Keep ChaCha block generation allocation-free and preserve the current
-      integer operations and inlining shape.
-- [x] Keep raw C ABI shims narrow by converting pointers to references once and
-      doing ordinary borrowed work after that point.
-- [x] Add release-audit evidence for the random context entry points and the
-      primitive entropy/clock bridge.
-- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, generated
-      unsafe inventory, and lower `ALLOWLIST_ENTRY_CAP` again.
+- [ ] Add local `SAFETY[AUDIT:typed-pointer-test-fixtures]` markers around the
+      stack-local metadata, raw field writes, wrapper constructor calls, and
+      exposed-address pointer arithmetic fixtures.
+- [ ] Keep pointer arithmetic expectations explicit and avoid new heap
+      allocation, dynamic dispatch, or shared mutable fixture state.
+- [ ] Add matching `UNSAFE_AUDIT.md` and
+      `docs/unsafe-audit-evidence.tsv` entries.
+- [ ] Remove `src/types/ptr/tests.rs` from
+      `docs/unsafe-migration-allowlist.tsv`.
+- [ ] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP` again.
 
-Verify: random unit coverage if present, unsafe audit scripts,
-`cargo test --test release_fast_path_audit --all-features`, full clippy, and
-full tests.
+Verify: `cargo test types::ptr::tests --lib --all-features`,
+unsafe audit scripts, unsafe inventory regeneration/check, release audit, full
+clippy, and full tests.
 
-## Issue: Arena heap page visitors remain embedded in arena.rs
+## Issue: Page wrapper production code still uses file-level unsafe allowance
 
-> **Comment:** The heap visit/delete/move/destroy cluster now lives in
-> `src/allocator/arena/heap_pages.rs`, reducing the largest translated arena
-> file without touching purge scheduling or page allocation hot paths.
+> **Comment:** `src/types/page.rs` is the smallest remaining production
+> allowlisted file. It already has a small typed surface around page flags,
+> thread-id classification, and registered page ranges; the remaining unsafe
+> operations should be documented at the constructor/classification boundary.
 
-- [x] Move `mi_heap_visit_info_t`, `mi_heap_delete_visit_info_t`, heap
-      visit/delete helpers, `_mi_heap_visit_blocks`, `mi_heap_visit_blocks`,
-      `mi_heap_visit_abandoned_blocks`, `_mi_heap_move_pages`, and
-      `_mi_heap_destroy_pages` into a new `src/allocator/arena/` child module.
-- [x] Keep all current public C ABI symbols and internal call sites stable.
-- [x] Keep callback wrappers and page ownership transitions explicit; avoid
-      adding allocation, dynamic dispatch, or wider module visibility.
-- [x] Update strict-type path aliases, release-audit source assertions, unsafe
-      audit evidence, and generated unsafe inventory as needed.
-- [x] Re-measure `src/allocator/arena.rs` and document the new line counts.
+- [ ] Add local `SAFETY[AUDIT:typed-page-domain]` markers for
+      `ThreadId::new_unchecked`, `PageThreadId::owner`, and
+      `RegisteredPageRange::new_unchecked`.
+- [ ] Preserve the current `#[repr(transparent)]`, `Copy`, and `#[inline]`
+      shape of hot value wrappers.
+- [ ] Keep registered-range construction as a witness boundary; do not make it
+      validate global page-map state.
+- [ ] Add matching unsafe audit and evidence entries.
+- [ ] Remove `src/types/page.rs` from
+      `docs/unsafe-migration-allowlist.tsv`, regenerate unsafe inventory, and
+      lower `ALLOWLIST_ENTRY_CAP`.
 
-Verify: focused heap/arena tests where applicable,
-`scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
-`scripts/check-api-inventory.py`, `scripts/check-public-abi.py`,
-`cargo test --test release_fast_path_audit --all-features`, full clippy, and
-full tests.
+Verify: `cargo test types::page::tests --lib --all-features`,
+unsafe audit scripts, unsafe inventory regeneration/check, release audit, full
+clippy, and full tests.
 
-## Issue: Release audit unsafe_performance.rs still carries broad source assertions
+## Issue: Release audit unsafe_performance.rs still has a page lifecycle assertion wall
 
-> **Comment:** The heap-page visitor assertion cluster now lives in
-> `tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs`.
-> The root audit keeps borrowed source strings and is down to 2,561 lines.
+> **Comment:** The last release-audit split proved the pattern works. The next
+> high-signal split is the page lifecycle/page-queue assertion cluster, which is
+> cohesive and already uses borrowed source strings in `unsafe_performance.rs`.
 
-- [x] Inventory assertion sections in `unsafe_performance.rs`, prioritizing
-      arena heap-visitor assertions, atomic wrapper assertions, or OS/page-map
-      assertion clusters.
-- [x] Move one cohesive cluster into a new or existing file under
-      `tests/release_fast_path_audit/unsafe_performance/`.
-- [x] Pass borrowed source strings rather than duplicating large file reads.
-- [x] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
-- [x] Preserve the release audit test count and coverage intent.
+- [ ] Move the page lifecycle and page-queue assertion cluster into a new module
+      under `tests/release_fast_path_audit/unsafe_performance/`.
+- [ ] Pass borrowed source strings into the new assertion helper rather than
+      re-reading large files.
+- [ ] Keep coverage for `_mi_page_free`, `_mi_page_abandon`,
+      `_mi_page_free_collect`, `_mi_page_unfull`, `_mi_page_retire`,
+      `_mi_page_queue_is_valid`, page queue transition helpers, and the typed
+      page count/validation child modules.
+- [ ] Update `RELEASE_AUDIT_MODULES` and this TODO evidence with the new module
+      and line counts.
+- [ ] Preserve release-audit behavior and avoid weakening source assertions
+      while moving them.
 
 Verify: `cargo test --test release_fast_path_audit --all-features`,
 `git diff --check`, full clippy, and full tests.
 
-## Issue: Arena strict-type entries are still broad after child splits
+## Issue: Page strict-type entries remain broad after page child splits
 
-> **Comment:** Arena raw-pointer strict-type entries are now symbol-level across
-> `arena.rs`, `arena/debug.rs`, `arena/ids.rs`, and `arena/heap_pages.rs`. The
-> retained path-level pointer/usize entry documents the checker limitation and
-> the concrete arena range/alignment arithmetic boundary.
+> **Comment:** Page child modules already own bins, counts, flags, and
+> validation logic, but the strict-type checker still aliases several of those
+> files back to `src/allocator/page.rs`. The page raw-pointer compatibility
+> entries should now be narrowed to child-module or symbol-level entries where
+> possible, matching the arena strict-type cleanup.
 
-- [x] Re-run `scripts/check-strict-types.py` after the next arena child module
-      split and collect the live arena hits.
-- [x] Replace any broad arena entries made unnecessary by the split with
-      child-module or symbol-level entries.
-- [x] Keep permanent compatibility entries only where raw C-shaped signatures or
-      translated arena range arithmetic genuinely remain.
-- [x] Update allowlist comments so each retained entry identifies its concrete
-      boundary instead of only saying "translated C arena".
-- [x] Keep `REMOVE_ENTRY_CAP` at 0.
+- [ ] Re-run `scripts/check-strict-types.py` and collect live hits for
+      `src/allocator/page.rs` and the existing page child modules.
+- [ ] Remove page child path aliases that are no longer needed for current hits.
+- [ ] Replace broad page raw-pointer entries with child-module or symbol-level
+      entries for `mi_page_t`, `mi_block_t`, and `mi_theap_t` boundaries.
+- [ ] Keep permanent compatibility entries only where C-shaped hot page
+      lifecycle, queue, and free-list signatures genuinely remain.
+- [ ] Keep `REMOVE_ENTRY_CAP` at 0 and update TODO/release-audit evidence.
 
 Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
 `cargo test --test release_fast_path_audit --all-features`, full clippy, and
@@ -189,20 +181,18 @@ full tests.
 
 ## Suggested implementation order
 
-1. [x] Migrate `src/types/atomic/tests.rs` off the unsafe migration allowlist.
-2. [x] Migrate `src/internal/random.rs` off the unsafe migration allowlist.
-3. [x] Split the arena heap visit/delete/move/destroy cluster.
-4. [x] Split one more `unsafe_performance.rs` assertion cluster.
-5. [x] Narrow broad arena strict-type entries after the arena split.
+1. [ ] Migrate `src/types/scalar/tests.rs` off the unsafe migration allowlist.
+2. [ ] Migrate `src/types/ptr/tests.rs` off the unsafe migration allowlist.
+3. [ ] Migrate `src/types/page.rs` off the unsafe migration allowlist.
+4. [ ] Split the page lifecycle/page-queue release-audit assertion cluster.
+5. [ ] Narrow broad page strict-type entries after the existing child splits.
 
 ## Definition of done for this backlog
 
-- [x] The unsafe migration allowlist is below 45 entries and the cap is lowered
-      with each migrated file.
-- [x] One additional production allowlisted file is covered by operation-level
-      audit markers and evidence.
-- [x] `src/allocator/arena.rs` is smaller again without API, ABI, or hot-path
-      performance drift.
-- [x] One release-audit module has more review margin.
-- [x] Broad arena strict-type documentation is narrower where the code now has
-      child-module boundaries.
+- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
+- [ ] No test files remain in `docs/unsafe-migration-allowlist.tsv`.
+- [ ] `src/types/page.rs` is covered by operation-level audit markers and
+      evidence instead of a file-level migration exception.
+- [ ] One more release-audit assertion cluster has a dedicated module.
+- [ ] Page strict-type documentation is narrower where existing child modules
+      provide concrete boundaries.

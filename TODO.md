@@ -1,9 +1,11 @@
-# TODO: Next Audit Granularity and Harness Backlog
+# TODO: Next Audit Granularity, Strict-Type, and Harness Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`985da34`. The previous backlog is implemented, validated, committed, and
-pushed. The next mechanical translation debt is in remaining broad unsafe audit
-operation IDs and release-audit modules that are still close to the module cap.
+`0bcbd7a`. The previous backlog is implemented, validated, committed, and
+pushed. The next mechanical translation debt is concentrated in one remaining
+oversized unsafe audit operation ID, several still-broad medium clusters, the
+largest release-audit modules, and residual strict-type wildcard allowlist
+entries.
 
 Current review evidence:
 
@@ -11,85 +13,27 @@ Current review evidence:
   mentions, and 163 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 163 operation IDs with
   383 automated evidence rows.
-- `strict-type-allowlist.txt` still has 26 wildcard entries left: 4
-  raw-pointer-parameter entries, 13 bare-domain `usize` entries, 4
+- The only unsafe audit operation ID still above 100 markers is
+  `allocation-abi-entry-boundary` with 104 markers, all in
+  `src/allocator/alloc.rs`.
+- The largest remaining marker clusters after that are
+  `typed-pointer-test-fixtures` with 87 markers,
+  `macos-zone-override` with 84 markers,
+  `heap-lifecycle-boundary` with 80 markers,
+  `options-callback-boundary` and `internal-translation-boundary` with 77
+  markers each, `stats-merge-boundary` with 76 markers,
+  `thread-heap-lifecycle`, `raw-posix-compat`, and
+  `internal-bitmap-boundary` with 72 markers each, `free-path-boundary` with 70
+  markers, and `raw-macro-libc-forwarding-boundary` and
+  `aligned-heap-allocation-boundary` with 68 markers each.
+- `strict-type-allowlist.txt` has 515 active entries: 323
+  raw-pointer-parameter entries, 131 bare-domain `usize` entries, 35
+  metadata-reference entries, 22 pointer/usize round-trip entries, 2
+  atomic-cast entries, and 2 heap-allocating-type entries.
+- `strict-type-allowlist.txt` still has 26 wildcard entries: 13
+  bare-domain `usize` entries, 4 raw-pointer-parameter entries, 4
   pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
   entries, and 1 heap-allocating-type entry.
-- No remaining path has more than one strict-type wildcard entry. The residual
-  path-level entries are public/raw ABI, platform ABI, proof-fixture, or
-  typed-domain constructor boundaries such as `src/allocator/heap.rs`,
-  `src/platform/mod.rs`, `src/raw/macros.rs`, `src/types/layout.rs`,
-  `src/safe/allocation.rs`, and `src/types/atomic.rs`.
-- The largest remaining unsafe audit marker clusters are
-  `allocation-abi-entry-boundary` with 104 markers,
-  `typed-pointer-test-fixtures` with 87 markers,
-  `macos-zone-override` with 83 markers,
-  `heap-lifecycle-boundary` with 80 markers,
-  `options-callback-boundary` and `internal-translation-boundary` with 76
-  markers each, `stats-merge-boundary` with 75 markers,
-  `thread-heap-lifecycle` and `internal-bitmap-boundary` with 71 markers each,
-  `raw-posix-compat` with 70 markers, `free-path-boundary` with 69 markers,
-  `aligned-heap-allocation-boundary` with 68 markers,
-  `aligned-realloc-boundary` with 67 markers,
-  `page-map-register-boundary` with 66 markers, and
-  `raw-macro-libc-forwarding-boundary` and `internal-atomic-field-boundary`
-  with 65 markers each.
-- The previous `init-thread-tls-boundary` aggregate is split into
-  `init-thread-heap-tls-boundary` with 56 markers,
-  `init-thread-lifecycle-boundary` with 48 markers,
-  `init-platform-tls-boundary` with 17 markers, and
-  `init-tld-lifecycle-boundary` with 7 markers. The previous
-  `init-subproc-boundary` aggregate is split into
-  `init-subproc-heap-association-boundary` with 36 markers,
-  `init-subproc-registry-boundary` with 32 markers,
-  `init-subproc-identity-boundary` with 16 markers,
-  `init-subproc-stats-count-boundary` with 12 markers, and
-  `init-main-subproc-lifecycle-boundary` with 6 markers.
-- The previous `page-allocation-boundary` aggregate is split into
-  `page-queue-transition-boundary` with 49 markers,
-  `page-free-list-refill-boundary` with 30 markers,
-  `page-stats-public-boundary` with 19 markers, and
-  `page-huge-allocation-boundary` with 4 markers.
-- The previous `arena-allocation-boundary` aggregate is split into
-  `arena-slice-allocation-boundary` with 30 markers,
-  `arena-public-reserve-boundary` with 18 markers,
-  `arena-initialization-boundary` with 17 markers,
-  `arena-os-fallback-boundary` with 15 markers,
-  `arena-huge-reservation-boundary` with 14 markers, and
-  `arena-reserve-growth-boundary` with 11 markers.
-- The previous `arena-page-lifecycle-boundary` aggregate is split into
-  `arena-page-reabandon-unabandon-boundary` and `arena-page-free-boundary`
-  with 23 markers each, `arena-page-fresh-boundary` with 22 markers,
-  `arena-page-abandon-boundary` with 17 markers,
-  `arena-page-regular-boundary` with 11 markers,
-  `arena-page-ownership-transition-boundary` with 6 markers,
-  `arena-heap-page-publication-boundary` with 3 markers, and
-  `arena-page-singleton-boundary` with 2 markers.
-- The previous `internal-atomic-facade` aggregate is split into
-  `internal-atomic-field-boundary` with 65 markers,
-  `internal-atomic-platform-lock-boundary` with 20 markers,
-  `internal-atomic-guard-once-boundary` with 12 markers, and
-  `internal-atomic-pointer-boundary` with 6 markers. Remote-free/thread-free
-  typed atomic ownership remains in the existing `typed-atomic-domain` boundary
-  where the code actually lives.
-- The previous `windows-primitive-boundary` aggregate is split into
-  `windows-virtual-memory-boundary` with 32 markers,
-  `windows-tls-fls-boundary` with 27 markers,
-  `windows-large-page-boundary` with 22 markers,
-  `windows-process-info-boundary` with 11 markers,
-  `windows-numa-boundary` with 8 markers,
-  `windows-output-env-boundary` with 7 markers,
-  `windows-etw-boundary` with 4 markers,
-  `windows-random-boundary` with 2 markers, and
-  `windows-dynamic-import-boundary` with 1 marker.
-- The previous `unix-primitive-backend` aggregate is split into
-  `unix-mmap-syscall-boundary` with 26 markers,
-  `unix-huge-page-boundary` with 14 markers,
-  `unix-output-env-boundary` with 13 markers,
-  `unix-process-info-boundary` with 11 markers,
-  `unix-thread-tls-boundary` with 9 markers,
-  `unix-random-boundary` and `unix-numa-boundary` with 7 markers each, and
-  `unix-ffi-import-boundary` with 3 markers.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   module cap is now 850 lines; the largest modules are
   `unsafe_performance/raw_facade/raw_override.rs` at 754 lines,
@@ -103,103 +47,116 @@ Current review evidence:
   `unsafe_performance/os_memory.rs` at 403 lines, and
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs`
   at 400 lines.
-- The previous raw macro, allocation/aligned/stats/page-map/OS, typed pointer,
-  and root release-audit aggregate splits are complete and guarded by focused
-  release-audit tests.
+- The previous lifecycle, platform, raw facade, page/arena, atomic, and root
+  release-audit aggregate splits are complete and guarded by focused
+  release-audit tests. The full workspace validation for the last item passed:
+  `cargo fmt --all`, `cargo clippy --workspace --all-targets --all-features`,
+  `cargo test --workspace --all-targets --all-features`, focused release-audit
+  tests, unsafe audit scripts, strict-type checks, no-allocation audit, unsafe
+  inventory refresh/check, and `git diff --check`.
 
-## Issue 1: Split init thread/TLS and subproc audit clusters
+## Issue 1: Split allocation ABI entry audit cluster
 
-> **Comment:** `init-thread-tls-boundary` has 129 markers and
-> `init-subproc-boundary` has 102 markers. They mix thread lifecycle, default
-> and cached thread-heap TLS, platform TLS slot/key setup, TLD allocation/free,
-> subproc identity, main-subproc state, and heap/subproc association.
+> **Comment:** `allocation-abi-entry-boundary` has 104 markers in
+> `src/allocator/alloc.rs`. It currently mixes raw public allocation exports,
+> thread-heap entry shims, heap/default dispatch, product allocation, realloc
+> family behavior, string/realpath duplication, C++ new retry paths, guarded
+> allocation, and page allocation handoff markers.
 
-- [x] Split `init-thread-tls-boundary` into thread lifecycle, thread-heap TLS,
-      platform TLS slot/key, and TLD allocation/free operation IDs.
-- [x] Split `init-subproc-boundary` into subproc identity/registry,
-      main-subproc lifecycle, heap association, and subproc stats/count
-      operation IDs.
-- [x] Update `UNSAFE_AUDIT.md`, evidence rows, and focused release-audit guards
-      for each new init operation ID.
+- [ ] Split `allocation-abi-entry-boundary` into narrow operation IDs for raw
+      public allocation exports, thread-heap entry shims, heap/default dispatch,
+      product/calloc/mallocn allocation, realloc/reallocn/reallocf/recalloc,
+      string and realpath duplication, C++ new retry paths, guarded allocation,
+      and page-allocation handoff behavior.
+- [ ] Update `UNSAFE_AUDIT.md`, evidence rows, and release-audit guards for each
+      new allocation operation ID.
+- [ ] Keep the hot allocation path C-shaped: no added heap allocation, dynamic
+      dispatch, broad trait abstraction, or extra raw-pointer conversions beyond
+      the existing compatibility boundary.
 
-Verify: lifecycle stats exports, release fast-path audit lifecycle modules,
+Verify: allocation boundary tests, release fast-path allocation modules, unsafe
+audit scripts, unsafe evidence scripts, full formatting, full clippy, and full
+tests.
+
+## Issue 2: Split broad runtime and internal marker clusters
+
+> **Comment:** The next source-level marker clusters are below 100 but still
+> combine unrelated responsibilities: `options-callback-boundary` and
+> `internal-translation-boundary` have 77 markers each,
+> `stats-merge-boundary` has 76, `thread-heap-lifecycle` has 72, and
+> `heap-lifecycle-boundary` has 80.
+
+- [ ] Split `options-callback-boundary` into option storage/locking,
+      C-string/message output, warning/error callbacks, assertion failure, and
+      allocation failure callback operation IDs.
+- [ ] Split `internal-translation-boundary` into page metadata helpers,
+      encoded block-link helpers, CPU memcpy/memset helpers, and internal
+      allocation/thread-heap shims.
+- [ ] Split `stats-merge-boundary`, `heap-lifecycle-boundary`, and
+      `thread-heap-lifecycle` where release-audit checks already distinguish
+      public merge/export shims, process/main heap lifecycle, non-main heap
+      lifecycle, thread-heap refcounting, and thread-heap create/delete paths.
+
+Verify: primitive options tests, lifecycle stats exports, release fast-path
+runtime modules, unsafe audit scripts, unsafe evidence scripts, full clippy, and
+full tests.
+
+## Issue 3: Split raw/POSIX, bitmap, and release-audit no-export modules
+
+> **Comment:** `raw-posix-compat` has 72 markers,
+> `internal-bitmap-boundary` has 72, and `raw-macro-libc-forwarding-boundary`
+> has 68. The release-audit no-export table in
+> `unsafe_performance/raw_facade/raw_override.rs` is still the largest audit
+> module at 754 lines, blocking a lower module cap.
+
+- [ ] Split `raw-posix-compat` by errno/platform shims, malloc/free/usable-size
+      compatibility, aligned/POSIX allocation, reallocarray/reallocarr/expand,
+      string duplication, environment duplication, and Windows-compatible aligned
+      recalloc shims.
+- [ ] Split `internal-bitmap-boundary` into bitmap traversal, claim/find,
+      range/chunk iteration, bitfield, and arena callback operation IDs.
+- [ ] Split `raw_facade/raw_override.rs` into allocator/page, OS/random,
+      init/threadlocal/heap/thread-heap, options/stats, and libc/POSIX no-export
+      audit modules. After the largest modules are below 700 lines, lower the
+      release-audit module cap from 850 to 700.
+
+Verify: raw/POSIX compatibility tests, bitmap tests, release fast-path audit,
 unsafe audit scripts, unsafe evidence scripts, full clippy, and full tests.
 
-## Issue 2: Split page and arena allocation lifecycle clusters
+## Issue 4: Reduce strict-type wildcard debt
 
-> **Comment:** `arena-page-lifecycle-boundary` has 107 markers,
-> `arena-allocation-boundary` has 105 markers, and `page-allocation-boundary`
-> has 102 markers. They cover distinct allocation, page queue, arena reserve,
-> huge-page, free/abandon, and stats invariants.
+> **Comment:** The strict-type checker still has 26 wildcard entries. These are
+> intentional compatibility seams, but wildcard allowlist entries hide whether a
+> path has accumulated new untyped code since the last review.
 
-- [x] Split page allocation markers by free-list refill/search, queue
-      transition, huge-page allocation, and stats/public helper responsibility.
-- [x] Split arena allocation markers by slice allocation, arena initialization,
-      reserve growth, OS fallback, public reserve/manage API, and huge-page
-      reservation responsibility.
-- [x] Split arena page lifecycle markers by fresh/regular/singleton page setup,
-      free/abandon/reabandon/unabandon shims, heap arena-page publication, and
-      page ownership transitions.
+- [ ] Replace wildcard entries with symbol-specific entries wherever the source
+      already has named compatibility functions or typed wrappers.
+- [ ] For retained wildcard entries, add release-audit evidence that proves the
+      file is a raw ABI/platform/proof-fixture boundary and not a growing typed
+      domain.
+- [ ] Add a strict-type guard that tracks the wildcard count by category and
+      fails if the count grows without updating `TODO.md`.
 
-Verify: page/arena release-audit modules, original arena/static tests,
-allocation boundary tests, unsafe audit scripts, unsafe evidence scripts, full
-clippy, and full tests.
-
-## Issue 3: Split platform and atomic facade audit clusters
-
-> **Comment:** `windows-primitive-boundary` has 114 markers,
-> `internal-atomic-facade` has 103 markers, and `unix-primitive-backend` still
-> has 90 markers. These modules mix memory primitives, process/env helpers,
-> TLS/thread helpers, lock/once facades, atomic field wrappers, and
-> platform-specific compatibility shims.
-
-- [x] Split `internal-atomic-facade` into scalar atomic field, pointer-sized
-      atomic, guard/once, and platform lock shim operation IDs. Remote-free and
-      thread-free atomic ownership remains covered by the existing
-      `typed-atomic-domain` boundary because that code is not in the internal
-      raw atomic facade.
-- [x] Split `windows-primitive-boundary` into virtual memory, process info,
-      stderr/env, TLS/FLS lifecycle, large/huge-page, NUMA, ETW, random, and
-      dynamic import operation IDs.
-- [x] Split `unix-primitive-backend` where existing helper groups already
-      separate mmap/syscall, process info, stderr/env, random, thread/TLS,
-      huge-page, NUMA, and FFI import behavior.
-
-Verify: platform primitive release-audit modules, atomic ordering audit, unsafe
-audit scripts, unsafe evidence scripts, full clippy, and full tests.
-
-## Issue 4: Split remaining large release-audit modules and lower the module cap
-
-> **Comment:** The root harness is now small, but the largest focused modules
-> are still near the 1,000-line cap. The next cap reduction should happen only
-> after moving coherent checks into submodules.
-
-- [x] Split `unsafe_performance/lifecycle_boundaries.rs` into process lifecycle,
-      thread/TLS, options/guarded, random/CPU, and platform hook modules.
-- [x] Split `unsafe_performance/platform_primitive_boundaries.rs` into Windows,
-      Unix/WASI/Emscripten, macOS, and shared primitive-policy modules.
-- [x] Split `unsafe_performance/raw_facade.rs` into raw override, libc/POSIX,
-      C++ compatibility, header forwarding, and bootstrap/query modules.
-- [x] Lower the release-audit module cap below 1,000 after the largest modules
-      are comfortably below the new 850-line cap.
-
-Verify: release fast-path audit, full formatting, full clippy, and full tests.
+Verify: strict-type checks, datatype acceptance release-audit modules, full
+formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Split init thread/TLS and subproc audit clusters.
-2. [x] Split page and arena allocation lifecycle clusters.
-3. [x] Split platform and atomic facade audit clusters.
-4. [x] Split remaining large release-audit modules and lower the module cap.
+1. [ ] Split allocation ABI entry audit cluster.
+2. [ ] Split broad runtime and internal marker clusters.
+3. [ ] Split raw/POSIX, bitmap, and release-audit no-export modules.
+4. [ ] Reduce strict-type wildcard debt.
 
 ## Definition of done for this backlog
 
-- [ ] Remaining unsafe audit operation IDs above 100 markers are split into
-      narrower review units with separate docs, evidence, and release-audit
-      guards.
-- [x] Release-audit modules are split enough to lower the module cap to 850
+- [ ] No unsafe audit operation ID has more than 100 source markers.
+- [ ] The broad 70+ marker clusters listed above are split into narrower review
+      units with separate docs, evidence rows, and release-audit guards.
+- [ ] Release-audit modules are split enough to lower the module cap to 700
       lines without weakening coverage.
-- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [ ] Strict-type wildcard entries are reduced or guarded by category-specific
+      evidence, and the wildcard count cannot grow silently.
+- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
 - [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the

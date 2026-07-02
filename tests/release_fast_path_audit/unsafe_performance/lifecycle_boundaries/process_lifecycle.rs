@@ -9,8 +9,18 @@ fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist:
         "SAFETY[AUDIT:init-subproc-identity-boundary]",
         "SAFETY[AUDIT:init-subproc-registry-boundary]",
         "SAFETY[AUDIT:init-subproc-stats-count-boundary]",
-        "SAFETY[AUDIT:init-thread-heap-tls-boundary]",
-        "SAFETY[AUDIT:init-thread-lifecycle-boundary]",
+        "SAFETY[AUDIT:init-thread-identity-boundary]",
+        "SAFETY[AUDIT:init-thread-done-entry-boundary]",
+        "SAFETY[AUDIT:init-thread-done-dispatch-boundary]",
+        "SAFETY[AUDIT:init-thread-init-default-heap-boundary]",
+        "SAFETY[AUDIT:init-thread-done-cleanup-boundary]",
+        "SAFETY[AUDIT:init-thread-init-entry-boundary]",
+        "SAFETY[AUDIT:init-thread-heap-empty-sentinel-boundary]",
+        "SAFETY[AUDIT:init-thread-heap-main-tls-boundary]",
+        "SAFETY[AUDIT:init-thread-heap-main-static-boundary]",
+        "SAFETY[AUDIT:init-thread-default-heap-association-boundary]",
+        "SAFETY[AUDIT:init-thread-cached-heap-association-boundary]",
+        "SAFETY[AUDIT:init-thread-heap-safe-access-boundary]",
         "SAFETY[AUDIT:init-options-guarded-boundary]",
         "SAFETY[AUDIT:init-random-cpu-boundary]",
         "SAFETY[AUDIT:init-tld-lifecycle-boundary]",
@@ -26,8 +36,18 @@ fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist:
         ("init-subproc-identity-boundary", 16),
         ("init-subproc-registry-boundary", 32),
         ("init-subproc-stats-count-boundary", 12),
-        ("init-thread-heap-tls-boundary", 56),
-        ("init-thread-lifecycle-boundary", 48),
+        ("init-thread-identity-boundary", 1),
+        ("init-thread-done-entry-boundary", 6),
+        ("init-thread-done-dispatch-boundary", 10),
+        ("init-thread-init-default-heap-boundary", 4),
+        ("init-thread-done-cleanup-boundary", 21),
+        ("init-thread-init-entry-boundary", 6),
+        ("init-thread-heap-empty-sentinel-boundary", 3),
+        ("init-thread-heap-main-tls-boundary", 17),
+        ("init-thread-heap-main-static-boundary", 1),
+        ("init-thread-default-heap-association-boundary", 17),
+        ("init-thread-cached-heap-association-boundary", 11),
+        ("init-thread-heap-safe-access-boundary", 7),
         ("init-tld-lifecycle-boundary", 7),
     ];
 
@@ -38,6 +58,8 @@ fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist:
             && !init_rs.contains("SAFETY[AUDIT:init-lifecycle-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-subproc-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-thread-tls-boundary]")
+            && !init_rs.contains("SAFETY[AUDIT:init-thread-heap-tls-boundary]")
+            && !init_rs.contains("SAFETY[AUDIT:init-thread-lifecycle-boundary]")
             && marker_total >= 277,
         "init lifecycle unsafe boundaries should stay split into focused operation markers without a migration allowlist entry"
     );

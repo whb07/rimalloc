@@ -9,16 +9,17 @@ that now block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 280 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 280 operation IDs with
-  618 automated evidence rows.
+  mentions, and 300 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 300 operation IDs with
+  654 automated evidence rows.
 - No source audit operation ID is over 60 source markers. The largest remaining
-  source IDs are `init-thread-heap-tls-boundary` and
-  `arena-heap-page-visitors` with 56 markers each, `typed-atomic-domain` with
-  51 markers, `threadlocal-key-manager` and `ffi-libc-helpers` with 50 markers
-  each, `page-queue-transition-boundary` with 49 markers,
-  `init-thread-lifecycle-boundary` with 48 markers, and
-  `raw-macro-cxx-boundary` with 46 markers.
+  source ID is `arena-heap-page-visitors` with 56 markers, followed by
+  `typed-atomic-domain` with 51 markers, `ffi-libc-helpers` with 50 markers,
+  `page-queue-transition-boundary` with 49 markers, `raw-macro-cxx-boundary`
+  with 46 markers, `options-message-output-boundary` with 39 markers,
+  `arena-purge-boundary` with 38 markers, and
+  `internal-page-metadata-boundary`, `arena-registry-boundary`, and
+  `allocation-realloc-entry-boundary` with 37 markers each.
 - `strict-type-allowlist.txt` has 634 active entries: 335
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -35,10 +36,10 @@ Current review evidence:
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   release-audit module cap is 600 lines; the only modules over 500 lines are
   `datatype_acceptance/strict_type.rs` at 592 lines,
-  `release_policy/security.rs` at 584 lines,
+  `release_policy/security.rs` at 597 lines,
   `release_policy/api_surface.rs` at 523 lines, and
   `release_policy/release_process.rs` at 504 lines.
-- Full validation for Issue 5 passed: `cargo fmt --all`,
+- Full validation for Issue 2 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -49,6 +50,14 @@ Current review evidence:
   public export IDs. It split `page-map-init-boundary` into 32-bit commit
   bitmap, 32-bit bootstrap, top-level lazy commit, global bootstrap, initial
   submap, and null-sentinel IDs.
+- Issue 2 split `init-thread-heap-tls-boundary` into empty sentinel, main TLS,
+  main static metadata, default heap association, cached heap association, and
+  safe-access IDs. It split `init-thread-lifecycle-boundary` into thread
+  identity, thread-done entry, thread-done dispatch, default-heap init,
+  thread-done cleanup, and thread-init entry IDs. It split
+  `threadlocal-key-manager` into empty sentinel, TLS shim, slot block, claim
+  callback, key claim/free/create/access, free bitmap, global manager, and
+  thread-done IDs.
 
 ## Issue 1: Split OS memory and page-map initialization audit clusters
 
@@ -71,18 +80,18 @@ scripts, unsafe evidence scripts, full formatting, full clippy, and full tests.
 
 ## Issue 2: Split thread lifecycle and thread-local audit clusters
 
-> **Comment:** `init-thread-heap-tls-boundary` has 56 markers,
-> `threadlocal-key-manager` has 50 markers, and
-> `init-thread-lifecycle-boundary` has 48 markers. These still group unrelated
-> TLS storage, default-heap association, thread lifecycle, and cleanup paths.
+> **Comment:** Completed. The stale broad source IDs
+> `init-thread-heap-tls-boundary`, `init-thread-lifecycle-boundary`, and
+> `threadlocal-key-manager` are gone from allocator source and are now
+> explicitly rejected by release-audit guards.
 
-- [ ] Split `init-thread-heap-tls-boundary` into focused IDs for TLS lookup,
+- [x] Split `init-thread-heap-tls-boundary` into focused IDs for TLS lookup,
       TLS publication, default heap association, main/static heap handling, and
       thread-local teardown.
-- [ ] Split `init-thread-lifecycle-boundary` into focused IDs for thread init,
+- [x] Split `init-thread-lifecycle-boundary` into focused IDs for thread init,
       thread done, TLD initialization, TLD cleanup, abandoned-page handling, and
       process/thread ordering checks.
-- [ ] Split `threadlocal-key-manager` into focused IDs for key creation,
+- [x] Split `threadlocal-key-manager` into focused IDs for key creation,
       key deletion, get/set operations, destructor callback handling, and
       platform TLS shim behavior.
 
@@ -182,7 +191,7 @@ formatting, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Split OS memory and page-map initialization audit clusters.
-2. [ ] Split thread lifecycle and thread-local audit clusters.
+2. [x] Split thread lifecycle and thread-local audit clusters.
 3. [ ] Split arena visitor and page queue audit clusters.
 4. [ ] Split atomic, FFI libc, and raw macro facade audit clusters.
 5. [ ] Tighten strict-type allowlist hotspots.

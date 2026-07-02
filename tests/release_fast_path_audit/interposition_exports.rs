@@ -167,13 +167,27 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
             && !tls_shim.contains("static __thread void* mi_tls_thread_locals"),
         "Linux x86_64 dynamic thread-local storage should use C's mi_thread_locals TLS cell directly"
     );
+    let dynamic_tls_marker_total = [
+        "SAFETY[AUDIT:threadlocal-empty-sentinel-boundary]",
+        "SAFETY[AUDIT:threadlocal-tls-shim-boundary]",
+        "SAFETY[AUDIT:threadlocal-slot-block-boundary]",
+        "SAFETY[AUDIT:threadlocal-claim-callback-boundary]",
+        "SAFETY[AUDIT:threadlocal-key-claim-boundary]",
+        "SAFETY[AUDIT:threadlocal-free-bitmap-boundary]",
+        "SAFETY[AUDIT:threadlocal-global-manager-boundary]",
+        "SAFETY[AUDIT:threadlocal-key-access-boundary]",
+        "SAFETY[AUDIT:threadlocal-thread-done-boundary]",
+        "SAFETY[AUDIT:threadlocal-key-create-boundary]",
+        "SAFETY[AUDIT:threadlocal-key-free-boundary]",
+    ]
+    .into_iter()
+    .map(|marker| threadlocal_rs.matches(marker).count())
+    .sum::<usize>();
     assert!(
         !unsafe_allowlist.contains("src/allocator/threadlocal.rs")
-            && threadlocal_rs
-                .matches("SAFETY[AUDIT:threadlocal-key-manager]")
-                .count()
-                >= 40,
-        "dynamic thread-local unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+            && !threadlocal_rs.contains("SAFETY[AUDIT:threadlocal-key-manager]")
+            && dynamic_tls_marker_total >= 50,
+        "dynamic thread-local unsafe boundaries should stay split into focused operation markers without a migration allowlist entry"
     );
     assert!(
         threadlocal_rs.contains(

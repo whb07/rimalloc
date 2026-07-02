@@ -321,15 +321,40 @@ Operation IDs:
   process-global metadata publication, post-init option activation, stats/OS
   setup ordering, and process teardown while preserving idempotent
   initialization and no-unwind lifecycle behavior.
-- `SAFETY[AUDIT:init-thread-lifecycle-boundary]`: `src/allocator/init.rs` owns
-  public thread initialization and teardown. Unsafe operations are limited to
-  current-thread witnesses, default thread-heap initialization, local
-  thread-heap cleanup, stat updates, and C-equivalent fallback paths during
-  thread done/init.
-- `SAFETY[AUDIT:init-thread-heap-tls-boundary]`: `src/allocator/init.rs` owns
-  default, cached, empty, and process-main thread-heap TLS association. Unsafe
-  operations are limited to typed thread-heap wrappers, TLS reads and writes,
-  main-thread heap publication, and no-allocation default/cached switching.
+- `SAFETY[AUDIT:init-thread-identity-boundary]`: `src/allocator/init.rs` owns
+  current-thread identity checks used by main-thread lifecycle decisions.
+- `SAFETY[AUDIT:init-thread-done-entry-boundary]`: `src/allocator/init.rs`
+  owns the public and internal thread-done entry points, including default
+  thread-heap fallback resolution.
+- `SAFETY[AUDIT:init-thread-done-dispatch-boundary]`: `src/allocator/init.rs`
+  owns typed thread-done dispatch, local thread ownership checks, stat updates,
+  and handoff to thread-heap cleanup.
+- `SAFETY[AUDIT:init-thread-init-default-heap-boundary]`:
+  `src/allocator/init.rs` owns default thread-heap initialization for main and
+  non-main thread entry.
+- `SAFETY[AUDIT:init-thread-done-cleanup-boundary]`: `src/allocator/init.rs`
+  owns thread-local heap cleanup, abandon/free loops, cleanup waiting, and
+  default/cached/main TLS reset during thread teardown.
+- `SAFETY[AUDIT:init-thread-init-entry-boundary]`: `src/allocator/init.rs`
+  owns public thread initialization entry, process init dependency, initialized
+  checks, and thread stat increases.
+- `SAFETY[AUDIT:init-thread-heap-empty-sentinel-boundary]`:
+  `src/allocator/init.rs` owns the statically allocated empty thread-heap
+  sentinel exposed to TLS helpers.
+- `SAFETY[AUDIT:init-thread-heap-main-tls-boundary]`: `src/allocator/init.rs`
+  owns process-main thread-heap TLS lookup and publication, including Linux
+  initial-exec accessors and C TLS shim routing.
+- `SAFETY[AUDIT:init-thread-heap-main-static-boundary]`:
+  `src/allocator/init.rs` owns one-time static main thread-heap metadata
+  initialization.
+- `SAFETY[AUDIT:init-thread-default-heap-association-boundary]`:
+  `src/allocator/init.rs` owns default thread-heap association, local ownership
+  checks, TLD initialization, and cached/main TLS synchronization.
+- `SAFETY[AUDIT:init-thread-cached-heap-association-boundary]`:
+  `src/allocator/init.rs` owns cached thread-heap association and reset paths.
+- `SAFETY[AUDIT:init-thread-heap-safe-access-boundary]`:
+  `src/allocator/init.rs` owns safe exported accessors that route through
+  current-thread default/cached heap TLS cells.
 - `SAFETY[AUDIT:init-platform-tls-boundary]`: `src/allocator/init.rs` owns
   platform TLS slot/key setup and teardown. Unsafe operations are limited to
   one-time Windows TLS slot allocation/free, pthread key creation/deletion, and
@@ -1238,11 +1263,33 @@ Operation IDs:
 - `SAFETY[AUDIT:safe-stats]`: `src/safe/stats.rs` initializes stats buffers
   before use, passes valid writable output slices to JSON formatting, and
   exposes only typed totals/counts to callers.
-- `SAFETY[AUDIT:threadlocal-key-manager]`: `src/allocator/threadlocal.rs`
-  owns dynamic thread-local key bookkeeping, including Linux TLS shim access,
-  x86_64 initial-exec assembly, static lock use, slot block growth, global free
-  bitmap publication, callback keep-set writes, and versioned key claim/free
-  operations.
+- `SAFETY[AUDIT:threadlocal-empty-sentinel-boundary]`:
+  `src/allocator/threadlocal.rs` owns the static empty dynamic TLS block.
+- `SAFETY[AUDIT:threadlocal-tls-shim-boundary]`:
+  `src/allocator/threadlocal.rs` owns Linux dynamic TLS shim access and x86_64
+  initial-exec assembly for dynamic thread-local storage.
+- `SAFETY[AUDIT:threadlocal-slot-block-boundary]`:
+  `src/allocator/threadlocal.rs` owns current-thread slot block growth,
+  copying, publication, and reset.
+- `SAFETY[AUDIT:threadlocal-claim-callback-boundary]`:
+  `src/allocator/threadlocal.rs` owns bitmap claim callback keep-set writes and
+  callback witness restoration.
+- `SAFETY[AUDIT:threadlocal-key-claim-boundary]`:
+  `src/allocator/threadlocal.rs` owns versioned dynamic key claim routing.
+- `SAFETY[AUDIT:threadlocal-free-bitmap-boundary]`:
+  `src/allocator/threadlocal.rs` owns global dynamic key bitmap allocation,
+  expansion, and release publication.
+- `SAFETY[AUDIT:threadlocal-global-manager-boundary]`:
+  `src/allocator/threadlocal.rs` owns global thread-local manager
+  initialization and teardown.
+- `SAFETY[AUDIT:threadlocal-key-access-boundary]`:
+  `src/allocator/threadlocal.rs` owns dynamic key get/set slot access.
+- `SAFETY[AUDIT:threadlocal-thread-done-boundary]`:
+  `src/allocator/threadlocal.rs` owns per-thread dynamic TLS block teardown.
+- `SAFETY[AUDIT:threadlocal-key-create-boundary]`:
+  `src/allocator/threadlocal.rs` owns dynamic key creation.
+- `SAFETY[AUDIT:threadlocal-key-free-boundary]`:
+  `src/allocator/threadlocal.rs` owns dynamic key deletion and slot return.
 - `SAFETY[AUDIT:tracking-hooks]`: `src/allocator/tracking.rs` owns the
   Valgrind/ASan tracking hook boundary. Default builds keep the hooks as
   allocation-free no-ops or assertions, while tracking feature builds forward

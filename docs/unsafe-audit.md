@@ -125,11 +125,21 @@ file:
   `src/allocator/init.rs`, including one-time state, preloading gates,
   allocator init/done callbacks, post-init option activation, and teardown
   ordering.
-- `SAFETY[AUDIT:init-thread-lifecycle-boundary]`: thread initialization,
-  teardown, local thread-heap cleanup, and thread stat updates in
-  `src/allocator/init.rs`.
-- `SAFETY[AUDIT:init-thread-heap-tls-boundary]`: default, cached, empty, and
-  process-main thread-heap TLS association in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-thread-identity-boundary]`,
+  `SAFETY[AUDIT:init-thread-done-entry-boundary]`,
+  `SAFETY[AUDIT:init-thread-done-dispatch-boundary]`,
+  `SAFETY[AUDIT:init-thread-init-default-heap-boundary]`,
+  `SAFETY[AUDIT:init-thread-done-cleanup-boundary]`, and
+  `SAFETY[AUDIT:init-thread-init-entry-boundary]`: focused thread identity,
+  init, done, cleanup, and stat-update boundaries in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-thread-heap-empty-sentinel-boundary]`,
+  `SAFETY[AUDIT:init-thread-heap-main-tls-boundary]`,
+  `SAFETY[AUDIT:init-thread-heap-main-static-boundary]`,
+  `SAFETY[AUDIT:init-thread-default-heap-association-boundary]`,
+  `SAFETY[AUDIT:init-thread-cached-heap-association-boundary]`, and
+  `SAFETY[AUDIT:init-thread-heap-safe-access-boundary]`: focused default,
+  cached, empty, safe-access, and process-main thread-heap TLS association
+  boundaries in `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-platform-tls-boundary]`: Windows TLS slots, pthread keys,
   and platform TLS setup/teardown in `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-tld-lifecycle-boundary]`: TLD allocation/free, main/non-main

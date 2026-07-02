@@ -76,13 +76,30 @@ init-process-boundary	test	tests/release_fast_path_audit/unsafe_performance/life
 init-process-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks preloading state transitions, process init routing, and CPU feature setup order.
 init-process-boundary	test	src/allocator/init.rs	Exercises large-page process initialization.
 init-process-boundary	script	scripts/check-unsafe-audit.py	Checks process init unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread init/done marker coverage, default thread-heap initialization, local cleanup, and thread stat update shape.
-init-thread-lifecycle-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching, stats, allocation smoke paths, and lifecycle export calls.
-init-thread-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks thread lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-heap-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks default/cached/main thread-heap TLS association, empty sentinel exposure, safe accessors, and no-allocation TLS switching shape.
-init-thread-heap-tls-boundary	test	src/allocator/init.rs	Exercises Linux main-theap TLS locality fixtures.
-init-thread-heap-tls-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching and routed heap thread-heap lookup paths.
-init-thread-heap-tls-boundary	script	scripts/check-unsafe-audit.py	Checks thread-heap TLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-identity-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks current-thread identity marker coverage and main-thread lifecycle predicates.
+init-thread-identity-boundary	script	scripts/check-unsafe-audit.py	Checks thread identity unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-done-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-done entry marker coverage and default thread-heap fallback resolution shape.
+init-thread-done-entry-boundary	script	scripts/check-unsafe-audit.py	Checks thread-done entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-done-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks typed thread-done dispatch, local thread ownership, stat update, and cleanup handoff shape.
+init-thread-done-dispatch-boundary	script	scripts/check-unsafe-audit.py	Checks thread-done dispatch unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-init-default-heap-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks default thread-heap initialization marker coverage for main and non-main thread entry.
+init-thread-init-default-heap-boundary	script	scripts/check-unsafe-audit.py	Checks thread init default-heap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-done-cleanup-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-local heap cleanup, abandon/free loops, cleanup wait, and TLS reset marker coverage.
+init-thread-done-cleanup-boundary	script	scripts/check-unsafe-audit.py	Checks thread-done cleanup unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-init-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks public thread init entry, process init dependency, initialized checks, and stat increase shape.
+init-thread-init-entry-boundary	script	scripts/check-unsafe-audit.py	Checks thread init entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-heap-empty-sentinel-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks empty thread-heap sentinel marker coverage and hidden local symbol exposure.
+init-thread-heap-empty-sentinel-boundary	script	scripts/check-unsafe-audit.py	Checks empty thread-heap sentinel unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-heap-main-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks main thread-heap TLS marker coverage, Linux initial-exec accessors, and C TLS shim routing.
+init-thread-heap-main-tls-boundary	script	scripts/check-unsafe-audit.py	Checks main thread-heap TLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-heap-main-static-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks static main thread-heap metadata initialization marker coverage.
+init-thread-heap-main-static-boundary	script	scripts/check-unsafe-audit.py	Checks static main thread-heap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-default-heap-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks default thread-heap association, local ownership, TLD setup, and TLS synchronization shape.
+init-thread-default-heap-association-boundary	script	scripts/check-unsafe-audit.py	Checks default thread-heap association unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-cached-heap-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks cached thread-heap association and reset marker coverage.
+init-thread-cached-heap-association-boundary	script	scripts/check-unsafe-audit.py	Checks cached thread-heap association unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-heap-safe-access-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks exported safe-access marker coverage for current-thread default and cached heap TLS cells.
+init-thread-heap-safe-access-boundary	script	scripts/check-unsafe-audit.py	Checks thread-heap safe-access unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-platform-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks Windows TLS slot, pthread key, slot set/free, and TLS one-time init/done shape.
 init-platform-tls-boundary	script	scripts/check-unsafe-audit.py	Checks platform TLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-tld-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks main/non-main TLD setup, TLD allocation/free, threadpool flag mutation, and subproc thread counter updates.
@@ -512,10 +529,29 @@ scalar-domain-wrappers	test	src/types/scalar/tests.rs	Exercises scalar construct
 scalar-domain-wrappers	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks scalar marker coverage, migration allowlist removal, transparent layout, and strict type wrapper expectations.
 scalar-domain-wrappers	script	scripts/check-unsafe-audit.py	Checks scalar domain wrapper operations retain operation-level SAFETY markers and source audit coverage.
 random-context-boundaries	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks random context entry points stay no-retention direct-call C ABI shims with local audit markers.
-threadlocal-key-manager	test	src/allocator/threadlocal.rs	Exercises versioned key helper splitting and callback keep-set witness clearing.
-threadlocal-key-manager	test	tests/release_fast_path_audit.rs	Checks Linux TLS shim shape, dynamic thread-local marker coverage, and migration allowlist removal.
-threadlocal-key-manager	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks dynamic TLS helper boundaries, slot expansion, bitmap publication, key claim/free, and thread-done reset shape.
-threadlocal-key-manager	test	tests/thread_stats_regression.rs	Exercises worker thread teardown returning current thread stats to the main thread.
+threadlocal-empty-sentinel-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks static empty dynamic TLS block marker coverage.
+threadlocal-empty-sentinel-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS empty sentinel unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-tls-shim-boundary	test	tests/release_fast_path_audit/interposition_exports.rs	Checks Linux TLS shim shape, x86_64 initial-exec assembly, and migration allowlist removal.
+threadlocal-tls-shim-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS shim unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-slot-block-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks current-thread slot block growth, copying, publication, and reset shape.
+threadlocal-slot-block-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS slot block unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-claim-callback-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks bitmap claim callback keep-set writes and callback witness restoration.
+threadlocal-claim-callback-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS claim callback unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-key-claim-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks versioned dynamic key claim routing marker coverage.
+threadlocal-key-claim-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS key claim unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-free-bitmap-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks global dynamic key bitmap allocation, expansion, and release publication shape.
+threadlocal-free-bitmap-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS free bitmap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-global-manager-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks global thread-local manager init/done marker coverage.
+threadlocal-global-manager-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS global manager unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-key-access-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks dynamic key get/set slot access marker coverage.
+threadlocal-key-access-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS key access unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-thread-done-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks per-thread dynamic TLS block teardown marker coverage and reset shape.
+threadlocal-thread-done-boundary	test	tests/thread_stats_regression.rs	Exercises worker thread teardown returning current thread stats to the main thread.
+threadlocal-thread-done-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS thread-done unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-key-create-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks dynamic key creation marker coverage.
+threadlocal-key-create-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS key creation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+threadlocal-key-free-boundary	test	tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs	Checks dynamic key deletion and free-bitmap slot return marker coverage.
+threadlocal-key-free-boundary	script	scripts/check-unsafe-audit.py	Checks dynamic TLS key deletion unsafe operations retain operation-level SAFETY markers and source audit coverage.
 wasi-memory-growth-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks WASI sbrk import, checked memory growth, primitive init, allocation, nullable out-pointers, and no-op free.
 wasi-range-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks WASI commit/decommit/reset/reuse/protect, NUMA constants, and unsupported huge-page result publication.
 wasi-io-query-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs	Checks WASI process-info fallback, stderr output, getenv import, bounded uppercase fallback, and C-string copying.

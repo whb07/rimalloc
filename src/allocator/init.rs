@@ -382,7 +382,7 @@ const MI_RANDOM_CTX_EMPTY: mi_random_ctx_t = mi_random_ctx_t {
     weak: true,
 };
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-heap-empty-sentinel-boundary]: empty thread-heap sentinel stays static and typed before TLS exposure.
 #[unsafe(no_mangle)]
 pub(crate) static _mi_theap_empty: mi_theap_t = mi_theap_t {
     tld: ptr::addr_of!(tld_empty).cast_mut(),
@@ -855,7 +855,7 @@ thread_local! {
     static THEAP_MAIN: Cell<*mut mi_theap_t> = const { Cell::new(ptr::null_mut()) };
 }
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
 #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 unsafe extern "C" {
     fn _mi_tls_theap_main_get() -> *mut mi_theap_t;
@@ -870,7 +870,7 @@ unsafe fn _mi_tls_theap_main_set(theap: Option<ThreadHeapPtr>) {
         .map(ThreadHeapPtr::as_ptr)
         .unwrap_or(ptr::null_mut())
         .cast();
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
     unsafe { _mi_tls_theap_main_set_raw(theap) };
 }
 
@@ -884,7 +884,7 @@ unsafe fn _mi_tls_theap_main_set(theap: Option<ThreadHeapPtr>) {
 #[inline(always)]
 unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
     let theap: *mut mi_theap_t;
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
     unsafe {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
@@ -907,7 +907,7 @@ unsafe fn mi_linux_x64_theap_main_get() -> *mut mi_theap_t {
 #[inline(always)]
 unsafe fn mi_linux_x64_theap_main_set(theap: Option<ThreadHeapPtr>) {
     let theap = theap.map(ThreadHeapPtr::as_ptr).unwrap_or(ptr::null_mut());
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
     unsafe {
         core::arch::asm!(
             "mov {tls_offset}, qword ptr [rip + __mi_theap_main@GOTTPOFF]",
@@ -941,7 +941,7 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
         target_arch = "x86_64",
         not(target_env = "musl")
     ))]
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
     unsafe {
         mi_linux_x64_theap_main_get()
     }
@@ -951,7 +951,7 @@ pub(crate) fn mi_theap_main_tls_peek() -> *mut mi_theap_t {
         any(feature = "tls-shim", not(feature = "std")),
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
     unsafe {
         _mi_tls_theap_main_get()
     }
@@ -985,7 +985,7 @@ pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
         target_arch = "x86_64",
         not(target_env = "musl")
     ))]
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
     unsafe {
         mi_linux_x64_theap_main_set(theap);
     }
@@ -995,7 +995,7 @@ pub(crate) fn mi_theap_main_tls_set(theap: Option<ThreadHeapPtr>) {
         any(feature = "tls-shim", not(feature = "std")),
         not(all(target_arch = "x86_64", not(target_env = "musl")))
     ))]
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
     unsafe {
         _mi_tls_theap_main_set(theap);
     }
@@ -1039,7 +1039,7 @@ static MI_THREAD_ID_KEEP: extern "C" fn() -> mi_threadid_t = _mi_thread_id;
 
 #[inline(always)]
 fn mi_is_main_thread_fast() -> bool {
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-identity-boundary]: main-thread identity compares initialized thread metadata with the current thread ID.
     let main_tid = unsafe { tld_main.thread_id };
     main_tid == 0 || main_tid == current_thread_id()
 }
@@ -1049,16 +1049,16 @@ pub extern "C" fn _mi_is_main_thread() -> bool {
     mi_is_main_thread_fast()
 }
 
-// SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+// SAFETY[AUDIT:init-thread-done-entry-boundary]: thread-done entry resolves the current default thread heap before typed teardown.
 #[unsafe(no_mangle)]
 /// # Safety
 /// Delegates to the internal thread teardown routine for the current thread.
 pub unsafe extern "C" fn mi_thread_done() {
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-entry-boundary]: thread-done entry resolves the current default thread heap before typed teardown.
     unsafe { crate::internal::_mi_thread_done(ptr::null_mut()) };
 }
 
-// SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+// SAFETY[AUDIT:init-thread-done-entry-boundary]: thread-done entry resolves the current default thread heap before typed teardown.
 /// # Safety
 /// `theap` must be null or the current thread's thread-local heap.
 pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
@@ -1066,10 +1066,10 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     if default_theap.is_null() {
         default_theap = mi_theap_main_tls_peek();
         if default_theap.is_null() {
-            // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+            // SAFETY[AUDIT:init-thread-done-entry-boundary]: thread-done entry resolves the current default thread heap before typed teardown.
             default_theap = unsafe { crate::prim::_mi_theap_default() };
             crate::internal::mi_assert_internal!(
-                // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+                // SAFETY[AUDIT:init-thread-done-entry-boundary]: thread-done entry resolves the current default thread heap before typed teardown.
                 default_theap.is_null() || unsafe { _mi_is_theap_main(default_theap) }
             );
         }
@@ -1078,37 +1078,37 @@ pub(crate) unsafe extern "C" fn _mi_thread_done(theap: *mut mi_theap_t) {
     let Some(default_theap) = ThreadHeapPtr::new(default_theap) else {
         return;
     };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-entry-boundary]: thread-done entry resolves the current default thread heap before typed teardown.
     unsafe { _mi_thread_done_typed(default_theap) };
 }
 
 unsafe fn _mi_thread_done_typed(default_theap: ThreadHeapPtr) {
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let theap = match unsafe { default_theap.state() } {
         ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap) => theap,
         ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return,
     };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let Ok(default_theap) = (unsafe { theap.try_local(current) }) else {
         return;
     };
     crate::threadlocal::_mi_thread_locals_thread_done();
 
     let default_theap = default_theap.ptr().as_ptr();
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let tld = unsafe { (*default_theap).tld };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let subproc = unsafe { (*tld).subproc };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     let mut heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     if heap.is_null() {
         mi_heap_main_init();
-        // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+        // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
         heap = unsafe { mi_subproc_heap_main_raw(subproc) };
     }
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     unsafe {
         __mi_stat_decrease_mt(
             ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
@@ -1116,12 +1116,12 @@ unsafe fn _mi_thread_done_typed(default_theap: ThreadHeapPtr) {
         )
     };
 
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     if unsafe { (*tld).thread_id } != crate::prim::_mi_prim_thread_id() {
         return;
     }
 
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-dispatch-boundary]: typed thread-done dispatch checks local ownership before stats and cleanup handoff.
     unsafe { mi_thread_theaps_done(tld) };
     mi_tld_free(tld);
 }
@@ -1339,7 +1339,7 @@ fn mi_tld_main_init() {
 
 fn mi_theap_main_init() {
     // SAFETY: mutates the statically allocated main theap during one-time lazy init.
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-main-static-boundary]: main thread-heap static metadata is initialized once before publication.
     unsafe {
         if !mi_memid_is_static(theap_main.memid) {
             theap_main.memid =
@@ -1753,31 +1753,31 @@ pub(crate) unsafe extern "C" fn _mi_subproc_main() -> *mut mi_subproc_t {
 #[used]
 static MI_SUBPROC_MAIN_KEEP: unsafe extern "C" fn() -> *mut mi_subproc_t = _mi_subproc_main;
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
 /// # Safety
 /// `theap` must be a valid default theap for the current thread.
 pub(crate) unsafe extern "C" fn _mi_theap_default_set(theap: *mut mi_theap_t) {
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
     let theap_old = unsafe { crate::prim::_mi_theap_default() };
     crate::internal::mi_assert_internal!(!theap.is_null());
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
         unsafe { (*(*theap).tld).thread_id } == 0
-            // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+            // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
             || unsafe { (*(*theap).tld).thread_id } == _mi_thread_id()
     );
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
     let theap = unsafe { ThreadHeapPtr::new_unchecked(theap) };
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
     let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
     let theap = match unsafe { theap.try_local(current) } {
         Ok(theap) => theap,
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
         Err(theap) => unsafe { ThreadHeapLocal::new_unchecked(theap) },
     };
 
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
     unsafe { _mi_theap_default_set_typed(theap, ThreadHeapPtr::new(theap_old)) };
 }
 
@@ -1793,7 +1793,7 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
             theap_raw.cast(),
         );
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
         unsafe {
             mi_win_tls_slot_set(
                 _mi_theap_default_slot,
@@ -1801,20 +1801,20 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
                 theap_raw.cast(),
             );
         }
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_default_key } != 0 {
         let _ = crate::threadlocal::_mi_thread_local_set(
-            // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+            // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
             unsafe { _mi_theap_default_key },
             theap_raw.cast(),
         );
     }
 
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
     if unsafe { crate::internal::mi_theap_is_initialized(theap_raw) } {
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
         unsafe { crate::prim::_mi_prim_thread_associate_default_theap(theap_raw) };
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
         if unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_raw)) } {
             mi_theap_main_tls_set(Some(theap_ptr));
         }
@@ -1822,9 +1822,9 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
 
     if let Some(theap_old) = theap_old {
         let theap_old = theap_old.as_ptr();
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
         if unsafe { crate::internal::mi_theap_is_initialized(theap_old) }
-            // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+            // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
             && unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_old)) }
         {
             mi_theap_main_tls_set(ThreadHeapPtr::new(theap_old));
@@ -1832,28 +1832,28 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
     }
 }
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
 /// # Safety
 /// `theap` must be valid for the current thread or the empty sentinel.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_cached_set(theap: *mut mi_theap_t) {
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
     let prev = unsafe { crate::prim::_mi_theap_cached() };
     if ptr::eq(prev, theap) {
         return;
     }
     let theap = ThreadHeapPtr::new(theap).map(|theap| {
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
         let current = unsafe { ThreadId::new_unchecked(crate::prim::_mi_prim_thread_id()) };
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
         match unsafe { theap.try_local(current) } {
             Ok(theap) => theap,
-            // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+            // SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
             Err(theap) => unsafe { ThreadHeapLocal::new_unchecked(theap) },
         }
     });
 
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
     unsafe { _mi_theap_cached_set_typed(theap, ThreadHeapPtr::new(prev)) };
 }
 
@@ -1871,7 +1871,7 @@ unsafe fn _mi_theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Optio
             theap_raw.cast(),
         );
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
         unsafe {
             mi_win_tls_slot_set(
                 _mi_theap_cached_slot,
@@ -1879,16 +1879,16 @@ unsafe fn _mi_theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Optio
                 theap_raw.cast(),
             );
         }
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_cached_key } != 0 {
         let _ = crate::threadlocal::_mi_thread_local_set(
-            // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+            // SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
             unsafe { _mi_theap_cached_key },
             theap_raw.cast(),
         );
     }
 
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
     unsafe {
         crate::internal::_mi_theap_incref(theap_raw);
         crate::internal::_mi_theap_decref(
@@ -1897,7 +1897,7 @@ unsafe fn _mi_theap_cached_set_typed(theap: Option<ThreadHeapLocal>, prev: Optio
     }
 }
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-cached-heap-association-boundary]: cached thread-heap association validates local ownership before TLS publication.
 #[used]
 static MI_THEAP_CACHED_SET_KEEP: unsafe extern "C" fn(*mut mi_theap_t) = _mi_theap_cached_set;
 
@@ -1914,48 +1914,48 @@ pub unsafe extern "C" fn mi_thread_set_in_threadpool() {
     }
 }
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-heap-safe-access-boundary]: safe accessors expose current-thread heap TLS through typed witnesses.
 /// # Safety
 /// Returns the current thread default theap, initializing thread state when needed.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-safe-access-boundary]: safe accessors expose current-thread heap TLS through typed witnesses.
     let theap = unsafe { crate::prim::_mi_theap_default() };
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-safe-access-boundary]: safe accessors expose current-thread heap TLS through typed witnesses.
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
     }
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-safe-access-boundary]: safe accessors expose current-thread heap TLS through typed witnesses.
     unsafe { crate::mimalloc::mi_thread_init() };
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-safe-access-boundary]: safe accessors expose current-thread heap TLS through typed witnesses.
     let theap = unsafe { crate::prim::_mi_theap_default() };
-    // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+    // SAFETY[AUDIT:init-thread-heap-safe-access-boundary]: safe accessors expose current-thread heap TLS through typed witnesses.
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::mi_theap_is_initialized(theap)
     });
     theap
 }
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-heap-safe-access-boundary]: safe accessors expose current-thread heap TLS through typed witnesses.
 #[used]
 static MI_THEAP_DEFAULT_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t =
     _mi_theap_default_safe;
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
 /// # Safety
 /// Returns the process main theap, ensuring the default path initialized it first.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     let mut theap = mi_theap_main_tls_peek();
     if theap.is_null() {
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
         unsafe { crate::mimalloc::mi_thread_init() };
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
         theap = unsafe { crate::prim::_mi_theap_default() };
         crate::internal::mi_assert_internal!(!theap.is_null());
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
         if unsafe { crate::internal::mi_theap_is_initialized(theap) }
-            // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+            // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
         {
             mi_theap_main_tls_set(ThreadHeapPtr::new(theap));
@@ -1963,19 +1963,19 @@ pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     }
     crate::internal::mi_assert_internal!(
         !theap.is_null()
-            // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+            // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
             && unsafe { crate::internal::mi_theap_is_initialized(theap) }
-            // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+            // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
     );
     theap
 }
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
 #[used]
 static MI_THEAP_MAIN_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_theap_main_safe;
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-heap-empty-sentinel-boundary]: empty thread-heap sentinel stays static and typed before TLS exposure.
 /// # Safety
 /// Returns the process-global empty theap sentinel.
 #[inline(never)]
@@ -1983,7 +1983,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_empty_get() -> *mut mi_theap_t {
     ptr::addr_of!(_mi_theap_empty).cast_mut()
 }
 
-// SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+// SAFETY[AUDIT:init-thread-heap-empty-sentinel-boundary]: empty thread-heap sentinel stays static and typed before TLS exposure.
 #[used]
 static MI_THEAP_EMPTY_GET_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_theap_empty_get;
 
@@ -2162,9 +2162,9 @@ static MI_IS_THEAP_MAIN_KEEP: unsafe extern "C" fn(*const mi_theap_t) -> bool = 
 
 #[inline(always)]
 unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-init-default-heap-boundary]: thread init installs a default heap only after process and TLD setup.
     let mut theap = unsafe { crate::prim::_mi_theap_default() };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-init-default-heap-boundary]: thread init installs a default heap only after process and TLD setup.
     if unsafe { crate::internal::mi_theap_is_initialized(theap) } {
         return theap;
     }
@@ -2180,105 +2180,105 @@ unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
         if tld.is_null() {
             return ptr::null_mut();
         }
-        // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+        // SAFETY[AUDIT:init-thread-init-default-heap-boundary]: thread init installs a default heap only after process and TLD setup.
         theap = unsafe { _mi_theap_create(mi_heap_main(), tld) };
     }
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-init-default-heap-boundary]: thread init installs a default heap only after process and TLD setup.
     unsafe { _mi_theap_default_set(theap) };
     theap
 }
 
 unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
     let empty = unsafe { _mi_theap_empty_get() };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
     unsafe {
         _mi_theap_default_set(empty);
         _mi_theap_cached_set(empty);
         mi_theap_main_tls_set(None);
     }
 
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
     unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
     let mut theap = unsafe { (*tld).theaps };
     while !theap.is_null() {
-        // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+        // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
         let next = unsafe { (*theap).tnext };
-        // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+        // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
         unsafe { _mi_theap_collect_abandon(theap) };
-        // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+        // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
         crate::internal::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
         theap = next;
     }
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
     unsafe { mi_lock_release(ptr::addr_of_mut!((*tld).theaps_lock)) };
 
     loop {
         let mut all_freed = true;
-        // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+        // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
         unsafe { mi_lock_acquire(ptr::addr_of_mut!((*tld).theaps_lock)) };
-        // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+        // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
         let mut theap = unsafe { (*tld).theaps };
         while !theap.is_null() {
-            // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+            // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
             let next = unsafe { (*theap).tnext };
-            // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+            // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
             crate::internal::mi_assert_internal!(unsafe { (*theap).page_count } == 0);
-            // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+            // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
             if !unsafe { _mi_theap_free(theap, true, false) } {
                 all_freed = false;
             }
             theap = next;
         }
-        // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+        // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
         unsafe { mi_lock_release(ptr::addr_of_mut!((*tld).theaps_lock)) };
 
         if !all_freed {
-            // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+            // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
             let subproc = unsafe { mi_subproc_prefix((*tld).subproc) };
-            // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+            // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
             unsafe {
                 crate::internal::__mi_stat_counter_increase_mt(
                     ptr::addr_of_mut!((*subproc).stats.heaps_delete_wait),
                     1,
                 )
             };
-            // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+            // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
             unsafe { crate::prim::_mi_prim_thread_yield() };
         } else {
-            // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+            // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
             crate::internal::mi_assert_internal!(unsafe { (*tld).theaps }.is_null());
             break;
         }
     }
 
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
     crate::internal::mi_assert_internal!(unsafe { crate::prim::_mi_theap_default() } == empty);
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
     crate::internal::mi_assert_internal!(!unsafe {
         crate::internal::mi_theap_is_initialized(empty)
-    }); // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    }); // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
 }
 
 #[unsafe(no_mangle)]
 /// # Safety
 /// Initializes per-thread mimalloc state for the current thread when it is not already set up.
-// SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+// SAFETY[AUDIT:init-thread-init-entry-boundary]: thread init entry coordinates process init, initialization checks, and thread stats.
 pub unsafe extern "C" fn mi_thread_init() {
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-init-entry-boundary]: thread init entry coordinates process init, initialization checks, and thread stats.
     unsafe { mi_process_init() };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-init-entry-boundary]: thread init entry coordinates process init, initialization checks, and thread stats.
     if unsafe { crate::prim::_mi_thread_is_initialized() } {
         return;
     }
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-init-entry-boundary]: thread init entry coordinates process init, initialization checks, and thread stats.
     if unsafe { _mi_thread_init_theap_default() }.is_null() {
         return;
     }
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-init-entry-boundary]: thread init entry coordinates process init, initialization checks, and thread stats.
     let heap = unsafe { mi_heap_main() };
-    // SAFETY[AUDIT:init-thread-lifecycle-boundary]: thread initialization and teardown use current-thread witnesses and bounded thread-heap cleanup.
+    // SAFETY[AUDIT:init-thread-init-entry-boundary]: thread init entry coordinates process init, initialization checks, and thread stats.
     unsafe {
         __mi_stat_increase_mt(
             ptr::addr_of_mut!((*(heap.cast::<MiHeapMainPrefix>())).stats.threads),
@@ -2585,7 +2585,7 @@ mod tests {
     #[test]
     fn linux_theap_main_tls_is_thread_local() {
         let previous = super::mi_theap_main_tls_peek();
-        // SAFETY[AUDIT:init-thread-heap-tls-boundary]: default, cached, and main thread-heap TLS association stays within typed thread-heap witnesses.
+        // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
         let marker = unsafe { super::_mi_theap_empty_get() };
         let marker_addr = marker as usize;
 

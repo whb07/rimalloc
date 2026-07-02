@@ -1,4 +1,18 @@
 pub(super) fn assert_dynamic_threadlocal_boundaries(threadlocal_rs: &str) {
+    let split_marker_minimums = [
+        ("threadlocal-empty-sentinel-boundary", 1),
+        ("threadlocal-tls-shim-boundary", 9),
+        ("threadlocal-slot-block-boundary", 7),
+        ("threadlocal-claim-callback-boundary", 6),
+        ("threadlocal-key-claim-boundary", 1),
+        ("threadlocal-free-bitmap-boundary", 5),
+        ("threadlocal-global-manager-boundary", 6),
+        ("threadlocal-key-access-boundary", 4),
+        ("threadlocal-thread-done-boundary", 3),
+        ("threadlocal-key-create-boundary", 3),
+        ("threadlocal-key-free-boundary", 5),
+    ];
+
     assert!(
         threadlocal_rs.contains("#[inline(never)]\npub extern \"C\" fn _mi_thread_locals_init(")
             && threadlocal_rs.contains("static mut mi_thread_locals_lock: mi_lock_t")
@@ -26,10 +40,26 @@ pub(super) fn assert_dynamic_threadlocal_boundaries(threadlocal_rs: &str) {
         "dynamic thread-local helpers should keep C's local helper boundaries"
     );
     assert!(
-        threadlocal_rs
-            .matches("SAFETY[AUDIT:threadlocal-key-manager]")
-            .count()
-            >= 40,
+        !threadlocal_rs.contains("SAFETY[AUDIT:threadlocal-key-manager]"),
+        "dynamic thread-local markers should stay split instead of reusing the old broad key manager ID"
+    );
+    for (audit_id, minimum) in split_marker_minimums {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = threadlocal_rs.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "dynamic thread-local unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
+        );
+    }
+    assert!(
+        split_marker_minimums
+            .into_iter()
+            .map(|(audit_id, _)| {
+                let marker = format!("SAFETY[AUDIT:{audit_id}]");
+                threadlocal_rs.matches(&marker).count()
+            })
+            .sum::<usize>()
+            >= 50,
         "dynamic thread-local unsafe boundaries should stay covered by local operation markers"
     );
     assert!(

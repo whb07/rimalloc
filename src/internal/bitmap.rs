@@ -66,7 +66,7 @@ use bfield::{
 ))]
 #[inline]
 fn mi_mm256_zero() -> __m256i {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-simd-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { _mm256_setzero_si256() }
 }
 
@@ -76,7 +76,7 @@ fn mi_mm256_zero() -> __m256i {
 ))]
 #[inline]
 fn mi_mm256_ones() -> __m256i {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-simd-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { _mm256_set1_epi64x(!0) }
 }
 
@@ -86,7 +86,7 @@ fn mi_mm256_ones() -> __m256i {
 ))]
 #[inline]
 fn mi_mm256_is_ones(vec: __m256i) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-simd-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { _mm256_testc_si256(vec, _mm256_cmpeq_epi32(vec, vec)) != 0 }
 }
 
@@ -96,7 +96,7 @@ fn mi_mm256_is_ones(vec: __m256i) -> bool {
 ))]
 #[inline]
 fn mi_mm256_is_zero(vec: __m256i) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-simd-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { _mm256_testz_si256(vec, vec) != 0 }
 }
 
@@ -202,7 +202,7 @@ define_bitmap_types!(32);
 /// `bitmap` must point to an initialized `mi_bitmap_t`.
 #[inline]
 pub unsafe fn mi_bitmap_chunk_count(bitmap: *const mi_bitmap_t) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-metadata-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { (*bitmap).chunk_count.load(Ordering::Relaxed) }
 }
 
@@ -210,7 +210,7 @@ pub unsafe fn mi_bitmap_chunk_count(bitmap: *const mi_bitmap_t) -> usize {
 /// `bitmap` must point to an initialized `mi_bitmap_t`.
 #[inline]
 pub unsafe fn mi_bitmap_max_bits(bitmap: *const mi_bitmap_t) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-metadata-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_chunk_count(bitmap) * MI_BCHUNK_BITS }
 }
 
@@ -218,7 +218,7 @@ pub unsafe fn mi_bitmap_max_bits(bitmap: *const mi_bitmap_t) -> usize {
 /// `bbitmap` must point to an initialized `mi_bbitmap_t`.
 #[inline]
 pub unsafe fn mi_bbitmap_chunk_count(bbitmap: *const mi_bbitmap_t) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-metadata-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { (*bbitmap).chunk_count.load(Ordering::Relaxed) }
 }
 
@@ -226,7 +226,7 @@ pub unsafe fn mi_bbitmap_chunk_count(bbitmap: *const mi_bbitmap_t) -> usize {
 /// `bbitmap` must point to an initialized `mi_bbitmap_t`.
 #[inline]
 pub unsafe fn mi_bbitmap_max_bits(bbitmap: *const mi_bbitmap_t) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-metadata-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bbitmap_chunk_count(bbitmap) * MI_BCHUNK_BITS }
 }
 
@@ -813,14 +813,14 @@ fn mi_bchunk_popcount(chunk: &mi_bchunk_t) -> usize {
 
 #[inline]
 fn mi_bitmap_chunkmap_set(bitmap: &mut mi_bitmap_t, chunk_idx: usize) {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-chunkmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
     mi_bchunk_set(&bitmap.chunkmap, chunk_idx, None);
 }
 
 #[inline(never)]
 fn mi_bitmap_chunkmap_try_clear(bitmap: &mut mi_bitmap_t, chunk_idx: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-chunkmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bitmap_chunk_count(bitmap) } > chunk_idx);
     if !mi_bchunk_all_are_clear_relaxed(&bitmap.chunks[chunk_idx]) {
         return false;
@@ -835,7 +835,7 @@ fn mi_bitmap_chunkmap_try_clear(bitmap: &mut mi_bitmap_t, chunk_idx: usize) -> b
 
 #[inline(never)]
 fn mi_bbitmap_set_chunk_bin(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, bin: mi_chunkbin_t) {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-chunkmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     let mut ibin = MI_CBIN_SMALL;
     while (ibin as i32) < (MI_CBIN_NONE as i32) {
@@ -866,7 +866,7 @@ fn mi_bbitmap_chunkmap_set_max(bbitmap: &mi_bbitmap_t, chunk_idx: usize) {
 
 #[inline]
 fn mi_bbitmap_chunkmap_set(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, check_all_set: bool) {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-chunkmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     if check_all_set && mi_bchunk_all_are_set_relaxed(&bbitmap.chunks[chunk_idx]) {
         mi_bbitmap_set_chunk_bin(bbitmap, chunk_idx, MI_CBIN_NONE);
@@ -877,7 +877,7 @@ fn mi_bbitmap_chunkmap_set(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, check_a
 
 #[inline(never)]
 fn mi_bbitmap_chunkmap_try_clear(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-chunkmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     crate::internal::mi_debug_assert!(unsafe { mi_bbitmap_chunk_count(bbitmap) } > chunk_idx);
     if !mi_bchunk_all_are_clear_relaxed(&bbitmap.chunks[chunk_idx]) {
         return false;
@@ -932,7 +932,7 @@ unsafe fn mi_bitmap_find(
     arg1: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
         for i in 0..chunkmap_max {
@@ -967,7 +967,7 @@ unsafe fn mi_bitmap_try_find_and_claim_visit(
     arg1: *mut c_void,
     arg2: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n == 1);
         let claim_fun = arg1 as *mut ThreadLocalClaimCallback;
@@ -1005,7 +1005,7 @@ pub(crate) unsafe fn mi_bitmap_try_find_and_claim(
     claim: ThreadLocalClaimCallback,
     arena: Option<ArenaPtr>,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let mut claim = claim;
         let claim_data = mi_claim_fun_data_t { arena };
@@ -1065,7 +1065,7 @@ pub unsafe fn mi_bbitmap_debug_get_bin(
     chunkmap_bins: *const mi_bchunk_t,
     chunk_idx: usize,
 ) -> mi_chunkbin_t {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-metadata-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let chunkmap_bins = core::slice::from_raw_parts(chunkmap_bins, MI_CBIN_COUNT as usize - 1);
         let mut ibin = MI_CBIN_SMALL;
@@ -1083,7 +1083,7 @@ pub unsafe fn mi_bbitmap_debug_get_bin(
 /// If non-null, `pchunk_count` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-metadata-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         if bit_count == 0 {
             if !pchunk_count.is_null() {
@@ -1110,7 +1110,7 @@ pub unsafe fn mi_bitmap_init(
     bit_count: usize,
     already_zero: bool,
 ) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-metadata-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let mut chunk_count = 0usize;
         let size = mi_bitmap_size(bit_count, &mut chunk_count as *mut usize);
@@ -1136,13 +1136,13 @@ fn mi_bchunks_unsafe_setN(
     let mut chunk_idx = idx / MI_BCHUNK_BITS;
     let cidx = idx % MI_BCHUNK_BITS;
     let ccount = n.div_ceil(MI_BCHUNK_BITS);
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     mi_bchunk_setN(unsafe { &mut *cmap.add(0) }, chunk_idx, ccount, None);
     let mut m = MI_BCHUNK_BITS - cidx;
     if m > n {
         m = n;
     }
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index,
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index,
     // chunk-map, traversal, callback, or test-fixture access stays within the
     // translated bitmap invariants.
     mi_bchunk_setN(unsafe { &mut *chunks.add(chunk_idx) }, cidx, m, None);
@@ -1150,7 +1150,7 @@ fn mi_bchunks_unsafe_setN(
     n -= m;
     let mid_chunks = n / MI_BCHUNK_BITS;
     if mid_chunks > 0 {
-        // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+        // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
         unsafe {
             ptr::write_bytes(
                 chunks.add(chunk_idx).cast::<u8>(),
@@ -1163,7 +1163,7 @@ fn mi_bchunks_unsafe_setN(
     }
     if n > 0 {
         crate::internal::mi_debug_assert!(n < MI_BCHUNK_BITS);
-        // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+        // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
         mi_bchunk_setN(unsafe { &mut *chunks.add(chunk_idx) }, 0, n, None);
     }
 }
@@ -1172,7 +1172,7 @@ fn mi_bchunks_unsafe_setN(
 /// `bitmap` must point to an initialized bitmap, and `idx..idx + n` must be within its bit range.
 #[inline(never)]
 pub unsafe fn mi_bitmap_unsafe_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n > 0);
         crate::internal::mi_debug_assert!(idx + n <= mi_bitmap_max_bits(bitmap));
@@ -1195,7 +1195,7 @@ pub unsafe fn mi_bitmap_setN(
     mut n: usize,
     palready_set: *mut usize,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n > 0);
         let maxbits = mi_bitmap_max_bits(bitmap);
@@ -1240,7 +1240,7 @@ pub unsafe fn mi_bitmap_setN(
 /// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_clearN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n > 0);
         let maxbits = mi_bitmap_max_bits(bitmap);
@@ -1282,7 +1282,7 @@ pub unsafe fn mi_bitmap_clearN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usiz
 /// `bitmap` must point to an initialized bitmap, and `idx` must be a valid bit index.
 #[inline(never)]
 pub unsafe fn mi_bitmap_set(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_setN(bitmap, idx, 1, core::ptr::null_mut()) }
 }
 
@@ -1290,7 +1290,7 @@ pub unsafe fn mi_bitmap_set(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
 /// `bitmap` must point to an initialized bitmap, and `idx` must be a valid bit index.
 #[inline(never)]
 pub unsafe fn mi_bitmap_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_clearN(bitmap, idx, 1) }
 }
 
@@ -1298,7 +1298,7 @@ pub unsafe fn mi_bitmap_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
 /// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_popcountN(bitmap: *mut mi_bitmap_t, idx: usize, mut n: usize) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n > 0);
         let maxbits = mi_bitmap_max_bits(bitmap);
@@ -1336,7 +1336,7 @@ pub unsafe fn mi_bitmap_is_xsetN(
     idx: usize,
     mut n: usize,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n > 0);
         let maxbits = mi_bitmap_max_bits(bitmap);
@@ -1369,7 +1369,7 @@ pub unsafe fn mi_bitmap_is_xsetN(
 /// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_is_xsetN(MI_BIT_SET, bitmap, idx, n) }
 }
 
@@ -1377,7 +1377,7 @@ pub unsafe fn mi_bitmap_is_setN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) 
 /// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_clearN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_is_xsetN(MI_BIT_CLEAR, bitmap, idx, n) }
 }
 
@@ -1385,7 +1385,7 @@ pub unsafe fn mi_bitmap_is_clearN(bitmap: *mut mi_bitmap_t, idx: usize, n: usize
 /// `bitmap` must point to an initialized bitmap, and `idx` must be a valid bit index.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_set(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_is_setN(bitmap, idx, 1) }
 }
 
@@ -1393,7 +1393,7 @@ pub unsafe fn mi_bitmap_is_set(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
 /// `bitmap` must point to an initialized bitmap, and `idx` must be a valid bit index.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_is_clearN(bitmap, idx, 1) }
 }
 
@@ -1401,7 +1401,7 @@ pub unsafe fn mi_bitmap_is_clear(bitmap: *mut mi_bitmap_t, idx: usize) -> bool {
 /// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_is_all_clear(bitmap: *mut mi_bitmap_t) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_is_xsetN(MI_BIT_CLEAR, bitmap, 0, mi_bitmap_max_bits(bitmap)) }
 }
 
@@ -1410,7 +1410,7 @@ pub unsafe fn mi_bitmap_is_all_clear(bitmap: *mut mi_bitmap_t) -> bool {
 /// eventually become set by another thread.
 #[inline(never)]
 pub unsafe fn mi_bitmap_clear_once_set(bitmap: *mut mi_bitmap_t, idx: usize) {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(idx < mi_bitmap_max_bits(bitmap));
         let chunk_idx = idx / MI_BCHUNK_BITS;
@@ -1424,7 +1424,7 @@ pub unsafe fn mi_bitmap_clear_once_set(bitmap: *mut mi_bitmap_t, idx: usize) {
 /// `bitmap` must point to an initialized bitmap and `idx` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bitmap_bsr(bitmap: *mut mi_bitmap_t, idx: *mut usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
         for i in (0..chunkmap_max).rev() {
@@ -1447,7 +1447,7 @@ pub unsafe fn mi_bitmap_bsr(bitmap: *mut mi_bitmap_t, idx: *mut usize) -> bool {
 /// `bitmap` must point to an initialized bitmap.
 #[inline(never)]
 pub unsafe fn mi_bitmap_popcount(bitmap: *mut mi_bitmap_t) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let mut popcount = 0usize;
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
@@ -1514,7 +1514,7 @@ static MI_BITMAP_POPCOUNT_KEEP: unsafe fn(*mut mi_bitmap_t) -> usize = mi_bitmap
 
 /// # Safety
 /// `bitmap` must point to an initialized bitmap, and `visit` must be callable for each set bit.
-// SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+// SAFETY[AUDIT:internal-bitmap-traversal-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_bitmap_forall_set(
     bitmap: *mut mi_bitmap_t,
@@ -1522,7 +1522,7 @@ pub unsafe extern "C" fn _mi_bitmap_forall_set(
     arena: *mut mi_arena_t,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-traversal-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_forall_set_typed(bitmap, visit, ArenaPtr::new(arena), arg) }
 }
 
@@ -1535,7 +1535,7 @@ pub(crate) unsafe fn mi_bitmap_forall_set_typed(
     arena: Option<ArenaPtr>,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-traversal-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let arena = arena.map(ArenaPtr::as_ptr).unwrap_or(ptr::null_mut());
         let one = SliceCount::new_unchecked(1);
@@ -1565,7 +1565,7 @@ pub(crate) unsafe fn mi_bitmap_forall_set_typed(
 
 /// # Safety
 /// `bitmap` must point to an initialized bitmap, and `visit` must be callable for each set range.
-// SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+// SAFETY[AUDIT:internal-bitmap-traversal-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_bitmap_forall_setc_ranges(
     bitmap: *mut mi_bitmap_t,
@@ -1573,7 +1573,7 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_ranges(
     arena: *mut mi_arena_t,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-traversal-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bitmap_forall_setc_ranges_typed(bitmap, visit, ArenaPtr::new(arena), arg) }
 }
 
@@ -1586,7 +1586,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_ranges_typed(
     arena: Option<ArenaPtr>,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-traversal-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let arena = arena.map(ArenaPtr::as_ptr).unwrap_or(ptr::null_mut());
         let chunkmap_max = mi_bitmap_chunk_count(bitmap).div_ceil(MI_BFIELD_BITS);
@@ -1638,7 +1638,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_ranges_typed(
 
 /// # Safety
 /// `bitmap` must point to an initialized bitmap, and `visit` must be callable for each set range.
-// SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+// SAFETY[AUDIT:internal-bitmap-traversal-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_bitmap_forall_setc_rangesn(
     bitmap: *mut mi_bitmap_t,
@@ -1647,7 +1647,7 @@ pub unsafe extern "C" fn _mi_bitmap_forall_setc_rangesn(
     arena: *mut mi_arena_t,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-traversal-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         if rngslices <= 1 {
             return mi_bitmap_forall_setc_ranges_typed(bitmap, visit, ArenaPtr::new(arena), arg);
@@ -1673,7 +1673,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_rangesn_typed(
     arena: Option<ArenaPtr>,
     arg: *mut c_void,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-traversal-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let arena = arena.map(ArenaPtr::as_ptr).unwrap_or(ptr::null_mut());
         let rngslices_count = rngslices;
@@ -1729,7 +1729,7 @@ pub(crate) unsafe fn mi_bitmap_forall_setc_rangesn_typed(
 /// If non-null, `pchunk_count` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_size(bit_count: usize, pchunk_count: *mut usize) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-metadata-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         if bit_count == 0 {
             if !pchunk_count.is_null() {
@@ -1756,7 +1756,7 @@ pub unsafe fn mi_bbitmap_init(
     bit_count: usize,
     already_zero: bool,
 ) -> usize {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-metadata-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let mut chunk_count = 0usize;
         let size = mi_bbitmap_size(bit_count, &mut chunk_count as *mut usize);
@@ -1776,7 +1776,7 @@ pub unsafe fn mi_bbitmap_init(
 /// range.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_unsafe_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n > 0);
         crate::internal::mi_debug_assert!(idx + n <= mi_bbitmap_max_bits(bbitmap));
@@ -1793,7 +1793,7 @@ pub unsafe fn mi_bbitmap_unsafe_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: 
 /// `bbitmap` must point to an initialized bbitmap and `idx` must be valid for a `usize` write.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_bsr_inv(bbitmap: *mut mi_bbitmap_t, idx: *mut usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let chunk_count = mi_bbitmap_chunk_count(bbitmap);
         let chunkmap_max = chunk_count.div_ceil(MI_BFIELD_BITS);
@@ -1823,7 +1823,7 @@ pub unsafe fn mi_bbitmap_bsr_inv(bbitmap: *mut mi_bbitmap_t, idx: *mut usize) ->
 /// `bbitmap` must point to an initialized bbitmap.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n > 0);
         let maxbits = mi_bbitmap_max_bits(bbitmap);
@@ -1857,7 +1857,7 @@ pub unsafe fn mi_bbitmap_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, mut n: usi
 /// `bbitmap` must point to an initialized bbitmap, and `idx..idx + n` must fit within one chunk.
 #[inline(never)]
 pub unsafe fn mi_bbitmap_try_clearNC(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n > 0);
         crate::internal::mi_debug_assert!(n <= MI_BCHUNK_BITS);
@@ -1892,7 +1892,7 @@ pub unsafe fn mi_bbitmap_is_xsetN(
     idx: usize,
     mut n: usize,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n > 0);
         let maxbits = mi_bbitmap_max_bits(bbitmap);
@@ -1925,7 +1925,7 @@ pub unsafe fn mi_bbitmap_is_xsetN(
 /// `bbitmap` must point to an initialized bbitmap.
 #[inline]
 pub unsafe fn mi_bbitmap_is_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bbitmap_is_xsetN(MI_BIT_SET, bbitmap, idx, n) }
 }
 
@@ -1933,7 +1933,7 @@ pub unsafe fn mi_bbitmap_is_setN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usiz
 /// `bbitmap` must point to an initialized bbitmap.
 #[inline]
 pub unsafe fn mi_bbitmap_is_clearN(bbitmap: *mut mi_bbitmap_t, idx: usize, n: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe { mi_bbitmap_is_xsetN(MI_BIT_CLEAR, bbitmap, idx, n) }
 }
 
@@ -1953,7 +1953,7 @@ unsafe fn mi_bbitmap_try_find_and_clear_generic(
     pidx: *mut usize,
     on_find: mi_bchunk_try_find_and_clear_fun_t,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let chunk_count = mi_bbitmap_chunk_count(bbitmap);
         let cmap_max_count = mi_bbitmap_chunk_count(bbitmap).div_ceil(MI_BFIELD_BITS);
@@ -2039,7 +2039,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clear(
     tseq: usize,
     pidx: *mut usize,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let chunk_count = mi_bbitmap_chunk_count(bbitmap);
         let cmap_max_count = chunk_count.div_ceil(MI_BFIELD_BITS);
@@ -2132,7 +2132,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clear8(
     tseq: usize,
     pidx: *mut usize,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         mi_bbitmap_try_find_and_clear_generic(
             bbitmap,
@@ -2154,7 +2154,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearNX(
     n: usize,
     pidx: *mut usize,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n <= MI_BFIELD_BITS);
         mi_bbitmap_try_find_and_clear_generic(
@@ -2177,7 +2177,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearNC(
     n: usize,
     pidx: *mut usize,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         crate::internal::mi_debug_assert!(n <= MI_BCHUNK_BITS);
         mi_bbitmap_try_find_and_clear_generic(
@@ -2192,7 +2192,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearNC(
 
 #[inline]
 fn mi_bchunk_try_clearN_(bbitmap: &mut mi_bbitmap_t, chunk_idx: usize, n: usize) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index,
+    // SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]: bitmap raw-pointer, bit-index,
     // chunk-map, traversal, callback, or test-fixture access stays within the
     // translated bitmap invariants.
     crate::internal::mi_debug_assert!(
@@ -2234,7 +2234,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN_(
     n: usize,
     pidx: *mut usize,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         let _ = tseq;
         crate::internal::mi_debug_assert!(n > 0);
@@ -2279,7 +2279,7 @@ pub unsafe fn mi_bbitmap_try_find_and_clearN(
     n: usize,
     pidx: *mut usize,
 ) -> bool {
-    // SAFETY[AUDIT:internal-bitmap-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
+    // SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]: bitmap raw-pointer, bit-index, chunk-map, traversal, callback, or test-fixture access stays within the translated bitmap invariants.
     unsafe {
         if n == 1 {
             let found = mi_bbitmap_try_find_and_clear(bbitmap, tseq, pidx);
@@ -2424,7 +2424,7 @@ mod tests {
         }
     }
 
-    // SAFETY[AUDIT:internal-bitmap-boundary]: local traversal fixtures pass a
+    // SAFETY[AUDIT:internal-bitmap-test-fixtures]: local traversal fixtures pass a
     // stack-owned `VisitLog` through the raw C callback argument for the
     // duration of the bitmap traversal call.
     unsafe extern "C" fn record_visit(
@@ -2433,7 +2433,7 @@ mod tests {
         _arena: *mut mi_arena_t,
         arg: *mut core::ffi::c_void,
     ) -> bool {
-        // SAFETY[AUDIT:internal-bitmap-boundary]: `arg` is created from a live
+        // SAFETY[AUDIT:internal-bitmap-test-fixtures]: `arg` is created from a live
         // mutable `VisitLog` in the calling test and does not escape this call.
         let log = unsafe { &mut *(arg.cast::<VisitLog>()) };
         log.push(slice_index, slice_count);
@@ -2443,7 +2443,7 @@ mod tests {
     #[test]
     fn bitmap_set_clear_tracks_existing_bits() {
         let mut bitmap = mi_bitmap_t::default();
-        // SAFETY[AUDIT:internal-bitmap-boundary]: the test owns the stack-local
+        // SAFETY[AUDIT:internal-bitmap-test-fixtures]: the test owns the stack-local
         // bitmap storage and initializes it before exercising bitmap helpers.
         unsafe {
             mi_bitmap_init(&mut bitmap, 1024, true);
@@ -2471,7 +2471,7 @@ mod tests {
     fn bitmap_traversal_visits_bits_and_ranges() {
         let mut bitmap = mi_bitmap_t::default();
         let mut visits = VisitLog::default();
-        // SAFETY[AUDIT:internal-bitmap-boundary]: the test initializes the
+        // SAFETY[AUDIT:internal-bitmap-test-fixtures]: the test initializes the
         // stack-local bitmap and passes a live stack callback log.
         unsafe {
             mi_bitmap_init(&mut bitmap, 1024, true);
@@ -2487,7 +2487,7 @@ mod tests {
 
         let mut range_bitmap = mi_bitmap_t::default();
         let mut ranges = VisitLog::default();
-        // SAFETY[AUDIT:internal-bitmap-boundary]: the test initializes the
+        // SAFETY[AUDIT:internal-bitmap-test-fixtures]: the test initializes the
         // stack-local bitmap and passes a live stack callback log.
         unsafe {
             mi_bitmap_init(&mut range_bitmap, 1024, true);
@@ -2511,7 +2511,7 @@ mod tests {
     #[test]
     fn bbitmap_find_and_clear_claims_one_range() {
         let mut bitmap = mi_bbitmap_t::default();
-        // SAFETY[AUDIT:internal-bitmap-boundary]: the test owns the stack-local
+        // SAFETY[AUDIT:internal-bitmap-test-fixtures]: the test owns the stack-local
         // binned bitmap storage and initializes it before exercising helpers.
         unsafe {
             mi_bbitmap_init(&mut bitmap, 1024, true);
@@ -2531,7 +2531,7 @@ mod tests {
     #[test]
     fn bbitmap_find_and_clear_rejects_empty_request() {
         let mut bitmap = mi_bbitmap_t::default();
-        // SAFETY[AUDIT:internal-bitmap-boundary]: the test owns the stack-local
+        // SAFETY[AUDIT:internal-bitmap-test-fixtures]: the test owns the stack-local
         // binned bitmap storage and initializes it before exercising helpers.
         unsafe {
             mi_bbitmap_init(&mut bitmap, 1024, true);

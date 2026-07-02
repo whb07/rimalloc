@@ -39,10 +39,35 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
                 .matches("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
                 .count()
                 >= 35
+            && !override_rs.contains("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
             && override_rs
-                .matches("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
+                .matches("SAFETY[AUDIT:raw-macro-unix-core-boundary]")
                 .count()
-                >= 60
+                >= 4
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-unix-string-boundary]")
+                .count()
+                >= 4
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-unix-realloc-boundary]")
+                .count()
+                >= 2
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]")
+                .count()
+                >= 20
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]")
+                .count()
+                >= 4
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-wasi-libc-boundary]")
+                .count()
+                >= 11
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-linux-libc-boundary]")
+                .count()
+                >= 20
             && override_rs
                 .matches("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
                 .count()

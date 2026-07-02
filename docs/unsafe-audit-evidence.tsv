@@ -171,10 +171,29 @@ arena-page-ownership-transition-boundary	script	scripts/check-unsafe-audit.py	Ch
 arena-purge-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks arena purge marker coverage, purge scheduling, purge bitmap traversal, arena collection/free, OS purge/decommit handoff, and purge stats.
 arena-purge-boundary	test	tests/original_main_override_static.rs	Exercises arena purge and heap walking behavior through arena-backed paths.
 arena-purge-boundary	script	scripts/check-unsafe-audit.py	Checks arena purge unsafe operations retain operation-level SAFETY markers and source audit coverage.
-internal-bitmap-boundary	test	src/internal/bitmap.rs	Exercises bitmap set/clear accounting, binned-bitmap find/clear behavior, empty requests, and traversal callback fixtures.
-internal-bitmap-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks bitmap marker coverage, migration allowlist removal, helper shape, typed arena/range callbacks, out-of-range release branches, and binned first-fit wrappers.
-internal-bitmap-boundary	script	scripts/check-strict-types.py	Checks bitmap strict-type allowlist coverage remains explicit for translated C bitmap aliases.
-internal-bitmap-boundary	script	scripts/check-unsafe-audit.py	Checks bitmap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-bitmap-simd-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks optional SIMD helper markers stay local to the bitmap boundary.
+internal-bitmap-simd-boundary	script	scripts/check-unsafe-audit.py	Checks bitmap SIMD unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-bitmap-metadata-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks bitmap sizing, initialization, and chunk-count helper shape.
+internal-bitmap-metadata-boundary	script	scripts/check-strict-types.py	Checks bitmap metadata strict-type allowlist coverage remains explicit for translated C bitmap aliases.
+internal-bitmap-metadata-boundary	script	scripts/check-unsafe-audit.py	Checks bitmap metadata unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-bitmap-chunkmap-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks bitmap chunkmap and binned chunk-bin helper shape and marker coverage.
+internal-bitmap-chunkmap-boundary	script	scripts/check-unsafe-audit.py	Checks bitmap chunkmap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-bitmap-claim-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks regular bitmap first-fit claim and typed callback handoff shape.
+internal-bitmap-claim-boundary	script	scripts/check-unsafe-audit.py	Checks bitmap claim unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-bitmap-range-chunk-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks regular bitmap set, clear, test, popcount, and out-of-range branch shape.
+internal-bitmap-range-chunk-boundary	script	scripts/check-strict-types.py	Checks bitmap range/chunk strict-type allowlist coverage remains explicit.
+internal-bitmap-range-chunk-boundary	script	scripts/check-unsafe-audit.py	Checks bitmap range/chunk unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-bitmap-traversal-boundary	test	src/internal/bitmap.rs	Exercises bitmap traversal callbacks and range callback fixtures.
+internal-bitmap-traversal-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks bitmap traversal shims use typed arena/range wrappers and rollback unvisited bits.
+internal-bitmap-traversal-boundary	script	scripts/check-unsafe-audit.py	Checks bitmap traversal unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-bitmap-binned-boundary	test	src/internal/bitmap.rs	Exercises binned-bitmap set/clear accounting behavior.
+internal-bitmap-binned-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks binned-bitmap set, clear, test, and chunk-bin helper shape.
+internal-bitmap-binned-boundary	script	scripts/check-unsafe-audit.py	Checks binned-bitmap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-bitmap-binned-claim-boundary	test	src/internal/bitmap.rs	Exercises binned-bitmap find/clear behavior and empty requests.
+internal-bitmap-binned-claim-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks binned-bitmap first-fit and huge-range claim wrappers.
+internal-bitmap-binned-claim-boundary	script	scripts/check-unsafe-audit.py	Checks binned-bitmap claim unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-bitmap-test-fixtures	test	src/internal/bitmap.rs	Exercises stack-owned raw callback fixtures used by local bitmap tests.
+internal-bitmap-test-fixtures	script	scripts/check-unsafe-audit.py	Checks bitmap test-fixture unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-runtime-shim-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks runtime gate behavior for debug assertions through internal helper macros.
 internal-runtime-shim-boundary	script	scripts/check-unsafe-audit.py	Checks internal runtime shim unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-c-abi-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/bootstrap_query.rs	Checks internal C ABI shim marker coverage and helper declaration shape.
@@ -260,9 +279,21 @@ raw-macro-bootstrap-boundary	script	scripts/check-unsafe-audit.py	Checks bootstr
 raw-macro-override-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks override-entry markers, fast assembly aliases, macOS interpose records, Windows CRT exports, and exported allocation shim shape.
 raw-macro-override-entry-boundary	test	tests/release_fast_path_audit/release_policy/api_surface.rs	Checks raw macro override-entry policy documentation and source audit tags stay mirrored.
 raw-macro-override-entry-boundary	script	scripts/check-unsafe-audit.py	Checks override-entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
-raw-macro-libc-forwarding-boundary	test	tests/header_macro_expansion.rs	Exercises downstream header macro expansion and raw allocation call boundaries.
-raw-macro-libc-forwarding-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks libc, Linux libc, WASI, and POSIX forwarding markers and exported shim shape.
-raw-macro-libc-forwarding-boundary	script	scripts/check-unsafe-audit.py	Checks libc forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-unix-core-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks Unix malloc, calloc, realloc, and free export forwarding markers.
+raw-macro-unix-core-boundary	script	scripts/check-unsafe-audit.py	Checks Unix core libc forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-unix-string-boundary	test	tests/header_macro_expansion.rs	Exercises downstream raw allocation call boundaries that include string forwarding declarations.
+raw-macro-unix-string-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks Unix strdup and strndup forwarding marker coverage.
+raw-macro-unix-string-boundary	script	scripts/check-unsafe-audit.py	Checks Unix string forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-unix-realloc-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks Unix reallocf forwarding and cleanup marker coverage.
+raw-macro-unix-realloc-boundary	script	scripts/check-unsafe-audit.py	Checks Unix realloc forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-unix-aligned-posix-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks Unix aligned, page-aligned, cfree, and POSIX memalign forwarding markers and exported shim shape.
+raw-macro-unix-aligned-posix-boundary	script	scripts/check-unsafe-audit.py	Checks Unix aligned/POSIX forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-unix-product-realloc-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks Unix reallocarray/reallocarr forwarding and weak alias marker coverage.
+raw-macro-unix-product-realloc-boundary	script	scripts/check-unsafe-audit.py	Checks Unix product realloc forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-wasi-libc-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks WASI __libc allocation forwarding marker coverage.
+raw-macro-wasi-libc-boundary	script	scripts/check-unsafe-audit.py	Checks WASI libc forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-linux-libc-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks Linux __libc and __posix_memalign forwarding marker coverage.
+raw-macro-linux-libc-boundary	script	scripts/check-unsafe-audit.py	Checks Linux libc forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-macro-allocation-query-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks malloc size, usable-size, and good-size query markers and forwarding shape.
 raw-macro-allocation-query-boundary	script	scripts/check-unsafe-audit.py	Checks allocation query unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-macro-cxx-boundary	test	tests/header_macro_expansion.rs	Exercises downstream raw allocation call boundaries that keep caller-side unsafe at macro expansion sites.
@@ -271,8 +302,27 @@ raw-macro-cxx-boundary	script	scripts/check-unsafe-audit.py	Checks C++ compatibi
 raw-macro-header-forwarding-boundary	test	tests/header_macro_expansion.rs	Exercises downstream header macro expansion and caller-side unsafe boundaries.
 raw-macro-header-forwarding-boundary	test	tests/release_fast_path_audit/release_policy/api_surface.rs	Checks header-shaped raw forwarding policy documentation and source audit tags stay mirrored.
 raw-macro-header-forwarding-boundary	script	scripts/check-unsafe-audit.py	Checks header-forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
-raw-posix-compat	test	tests/compat_exports.rs	Exercises POSIX out-pointer and errno-style behavior for mi_posix_memalign, mi_reallocarray, mi_reallocarr, mbsdup, dupenv_s, and related compatibility exports.
-raw-posix-compat	test	tests/release_fast_path_audit.rs	Checks src/raw/posix.rs keeps product allocation typed, raw POSIX compatibility exports present, and operation-level audit markers local.
+raw-posix-errno-boundary	test	tests/compat_exports.rs	Exercises POSIX errno-style error behavior for invalid out-pointers and product overflows.
+raw-posix-errno-boundary	test	tests/release_fast_path_audit/allocation_contracts.rs	Checks POSIX errno marker coverage stays separate from allocation forwarding.
+raw-posix-errno-boundary	script	scripts/check-unsafe-audit.py	Checks POSIX errno unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-posix-query-free-boundary	test	tests/compat_exports.rs	Exercises usable-size and cfree-compatible pointer behavior.
+raw-posix-query-free-boundary	test	tests/release_fast_path_audit/allocation_contracts.rs	Checks POSIX query/free marker coverage stays local to raw compatibility exports.
+raw-posix-query-free-boundary	script	scripts/check-unsafe-audit.py	Checks POSIX query/free unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-posix-aligned-allocation-boundary	test	tests/compat_exports.rs	Exercises mi_posix_memalign and aligned allocation compatibility exports.
+raw-posix-aligned-allocation-boundary	test	tests/release_fast_path_audit/allocation_contracts.rs	Checks POSIX aligned allocation marker coverage and typed product boundaries.
+raw-posix-aligned-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks POSIX aligned allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-posix-realloc-boundary	test	tests/compat_exports.rs	Exercises mi_reallocarray and mi_reallocarr out-pointer contracts.
+raw-posix-realloc-boundary	test	tests/release_fast_path_audit/allocation_contracts.rs	Checks POSIX realloc marker coverage uses typed CallocRequest validation.
+raw-posix-realloc-boundary	script	scripts/check-unsafe-audit.py	Checks POSIX realloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-posix-string-dup-boundary	test	tests/compat_exports.rs	Exercises mbsdup and string duplication compatibility behavior.
+raw-posix-string-dup-boundary	test	tests/release_fast_path_audit/allocation_contracts.rs	Checks POSIX string duplication marker coverage stays local to raw compatibility exports.
+raw-posix-string-dup-boundary	script	scripts/check-unsafe-audit.py	Checks POSIX string duplication unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-posix-environment-boundary	test	tests/compat_exports.rs	Exercises dupenv_s and environment out-pointer behavior.
+raw-posix-environment-boundary	test	tests/release_fast_path_audit/allocation_contracts.rs	Checks POSIX environment duplication marker coverage stays local to raw compatibility exports.
+raw-posix-environment-boundary	script	scripts/check-unsafe-audit.py	Checks POSIX environment unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-posix-aligned-recalloc-boundary	test	tests/compat_exports.rs	Exercises aligned recalloc compatibility exports.
+raw-posix-aligned-recalloc-boundary	test	tests/release_fast_path_audit/allocation_contracts.rs	Checks POSIX aligned recalloc forwarding marker coverage.
+raw-posix-aligned-recalloc-boundary	script	scripts/check-unsafe-audit.py	Checks POSIX aligned recalloc unsafe operations retain operation-level SAFETY markers and source audit coverage.
 unix-ffi-import-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix primitive helper declarations stay present, allocation-free, and off the migration allowlist.
 unix-ffi-import-boundary	script	scripts/check-unsafe-audit.py	Checks Unix FFI import unsafe operations retain operation-level SAFETY markers and source audit coverage.
 unix-mmap-syscall-boundary	test	tests/release_fast_path_audit/unsafe_performance/os_memory.rs	Checks Unix mmap, commit, reset, protect, allocation, and retained memory primitive marker coverage.

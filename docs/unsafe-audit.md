@@ -65,8 +65,20 @@ file when such a module exists.
 - `SAFETY[AUDIT:raw-macro-override-entry-boundary]`: allocator override entry
   points in `src/raw/macros.rs`, including fast assembly aliases, macOS
   interpose records, and Windows CRT override exports.
-- `SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]`: libc, Linux libc, WASI,
-  POSIX, and libc-adjacent allocation forwarding shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-unix-core-boundary]`: Unix malloc/calloc/realloc/free
+  export shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-unix-string-boundary]`: Unix strdup/strndup forwarding
+  shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-unix-realloc-boundary]`: Unix reallocf forwarding in
+  `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]`: Unix aligned,
+  page-aligned, cfree, and POSIX memalign forwarding in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]`: Unix
+  reallocarray/reallocarr forwarding in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-wasi-libc-boundary]`: WASI `__libc_*` allocation
+  forwarding shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-linux-libc-boundary]`: Linux `__libc_*` and
+  `__posix_memalign` forwarding shims in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-allocation-query-boundary]`: malloc size,
   usable-size, and good-size compatibility queries in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-cxx-boundary]`: C++ operator new/delete compatibility
@@ -189,10 +201,24 @@ file when such a module exists.
 - `SAFETY[AUDIT:arena-purge-boundary]`: arena purge and collection in
   `src/allocator/arena.rs`. The boundary covers purge scheduling, purge bitmap
   traversal, arena collection/free, OS purge/decommit handoff, and purge stats.
-- `SAFETY[AUDIT:internal-bitmap-boundary]`: internal bitmap and binned-bitmap
-  operations in `src/internal/bitmap.rs`. The boundary covers chunk/field
-  projection, bit set/clear/search loops, arena traversal callbacks, typed
-  slice wrappers, and allocation-free bitmap search paths.
+- `SAFETY[AUDIT:internal-bitmap-simd-boundary]`: optional AVX2 bitmap helper
+  intrinsics in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-metadata-boundary]`: bitmap sizing,
+  initialization, and chunk-count metadata in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-chunkmap-boundary]`: chunkmap and chunk-bin
+  bookkeeping in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-claim-boundary]`: regular bitmap first-fit
+  claim traversal and typed claim callback handoff in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]`: regular bitmap
+  set/clear/test/popcount chunk-range operations in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-traversal-boundary]`: set/range traversal
+  callback shims in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-binned-boundary]`: binned-bitmap
+  set/clear/test operations in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]`: binned-bitmap
+  find-and-clear claim paths in `src/internal/bitmap.rs`.
+- `SAFETY[AUDIT:internal-bitmap-test-fixtures]`: local bitmap unit-test raw
+  callback fixtures in `src/internal/bitmap.rs`.
 - `SAFETY[AUDIT:internal-runtime-shim-boundary]`: assertion shims in
   `src/internal/mod.rs`.
 - `SAFETY[AUDIT:internal-c-abi-shim-boundary]`: translated internal helper

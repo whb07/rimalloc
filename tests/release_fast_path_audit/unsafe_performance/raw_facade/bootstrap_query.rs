@@ -20,7 +20,13 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
     let raw_macro_marker_minimums = [
         ("raw-macro-bootstrap-boundary", 15),
         ("raw-macro-override-entry-boundary", 35),
-        ("raw-macro-libc-forwarding-boundary", 60),
+        ("raw-macro-unix-core-boundary", 4),
+        ("raw-macro-unix-string-boundary", 4),
+        ("raw-macro-unix-realloc-boundary", 2),
+        ("raw-macro-unix-aligned-posix-boundary", 20),
+        ("raw-macro-unix-product-realloc-boundary", 4),
+        ("raw-macro-wasi-libc-boundary", 11),
+        ("raw-macro-linux-libc-boundary", 20),
         ("raw-macro-allocation-query-boundary", 10),
         ("raw-macro-cxx-boundary", 45),
         ("raw-macro-header-forwarding-boundary", 6),
@@ -87,9 +93,16 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             .lines()
             .any(|line| line.starts_with("src/raw/macros.rs\t"))
             && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
+            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-bootstrap-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-core-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-string-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-realloc-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-wasi-libc-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-linux-libc-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")

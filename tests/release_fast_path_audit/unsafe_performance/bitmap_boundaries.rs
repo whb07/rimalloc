@@ -10,12 +10,27 @@ pub(super) fn assert_bitmap_traversal_and_regular_boundaries(
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/internal/bitmap.rs\t"))
-            && bitmap_rs
-                .matches("SAFETY[AUDIT:internal-bitmap-boundary]")
-                .count()
-                >= 60,
-        "internal bitmap unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+            && !bitmap_rs.contains("SAFETY[AUDIT:internal-bitmap-boundary]"),
+        "internal bitmap unsafe boundaries should stay split without a migration allowlist entry"
     );
+    for (audit_id, minimum) in [
+        ("internal-bitmap-simd-boundary", 4),
+        ("internal-bitmap-metadata-boundary", 9),
+        ("internal-bitmap-chunkmap-boundary", 5),
+        ("internal-bitmap-claim-boundary", 3),
+        ("internal-bitmap-range-chunk-boundary", 19),
+        ("internal-bitmap-traversal-boundary", 9),
+        ("internal-bitmap-binned-boundary", 7),
+        ("internal-bitmap-binned-claim-boundary", 8),
+        ("internal-bitmap-test-fixtures", 7),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = bitmap_rs.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "internal bitmap boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
+        );
+    }
     assert!(
         bitmap_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_bitmap_forall_set(")
             && bitmap_rs.contains(

@@ -67,8 +67,32 @@ fn allocation_product_paths_use_typed_requests() {
             && aligned_rs.contains("calloc_request_or_report(count, size)")
             && aligned_rs.contains("calloc_request_or_report(newcount, size)")
             && posix_rs.contains("crate::core_types::CallocRequest::new(count, size)")
-            && posix_rs.contains("SAFETY[AUDIT:raw-posix-compat]")
-            && posix_rs.matches("SAFETY[AUDIT:raw-posix-compat]").count() >= 60
+            && !posix_rs.contains("SAFETY[AUDIT:raw-posix-compat]")
+            && posix_rs.matches("SAFETY[AUDIT:raw-posix-errno-boundary]").count() >= 5
+            && posix_rs
+                .matches("SAFETY[AUDIT:raw-posix-query-free-boundary]")
+                .count()
+                >= 7
+            && posix_rs
+                .matches("SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]")
+                .count()
+                >= 13
+            && posix_rs
+                .matches("SAFETY[AUDIT:raw-posix-realloc-boundary]")
+                .count()
+                >= 19
+            && posix_rs
+                .matches("SAFETY[AUDIT:raw-posix-string-dup-boundary]")
+                .count()
+                >= 7
+            && posix_rs
+                .matches("SAFETY[AUDIT:raw-posix-environment-boundary]")
+                .count()
+                >= 13
+            && posix_rs
+                .matches("SAFETY[AUDIT:raw-posix-aligned-recalloc-boundary]")
+                .count()
+                >= 6
             && posix_rs.contains("pub unsafe extern \"C\" fn mi_posix_memalign")
             && posix_rs.contains("pub unsafe extern \"C\" fn mi_reallocarray")
             && posix_rs.contains("pub unsafe extern \"C\" fn mi_reallocarr")

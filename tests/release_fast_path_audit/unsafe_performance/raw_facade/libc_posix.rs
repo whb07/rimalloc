@@ -5,12 +5,25 @@ pub(super) fn assert_libc_and_posix_boundaries(sources: &UnsafePerformanceSource
     let raw_macros_rs = sources.raw_macros_rs.as_str();
 
     assert!(
-        raw_macros_rs
-            .matches("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
-            .count()
-            >= 60,
-        "libc/POSIX raw facade forwarding should keep operation-level audit markers"
+        !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]"),
+        "libc/POSIX raw facade forwarding should remain split into focused operation markers"
     );
+    for (audit_id, minimum) in [
+        ("raw-macro-unix-core-boundary", 4),
+        ("raw-macro-unix-string-boundary", 4),
+        ("raw-macro-unix-realloc-boundary", 2),
+        ("raw-macro-unix-aligned-posix-boundary", 20),
+        ("raw-macro-unix-product-realloc-boundary", 4),
+        ("raw-macro-wasi-libc-boundary", 11),
+        ("raw-macro-linux-libc-boundary", 20),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = raw_macros_rs.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "libc/POSIX raw facade boundary {audit_id} should retain at least {minimum} operation markers; found {count}"
+        );
+    }
     for symbol in [
         "pub unsafe extern \"C\" fn mi_unix_malloc_export",
         "pub unsafe extern \"C\" fn mi_unix_calloc_export",

@@ -9,9 +9,9 @@ strict-type wildcard allowlist entries.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 196 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 196 operation IDs with
-  437 automated evidence rows.
+  mentions, and 216 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 216 operation IDs with
+  487 automated evidence rows.
 - No unsafe audit operation ID is above 100 source markers after splitting
   `allocation-abi-entry-boundary` into `allocation-realloc-entry-boundary` with
   37 markers, `allocation-cxx-new-boundary` with 30 markers,
@@ -26,16 +26,25 @@ Current review evidence:
   `internal-page-metadata-boundary` with 37 markers,
   `thread-heap-visit-boundary` with 28 markers, and
   `heap-ownership-query-boundary` with 23 markers.
+- The Issue 3 raw/POSIX and bitmap split removed the broad
+  `internal-bitmap-boundary`, `raw-posix-compat`, and
+  `raw-macro-libc-forwarding-boundary` source markers. The largest replacement
+  clusters are `raw-macro-unix-aligned-posix-boundary` and
+  `raw-macro-linux-libc-boundary` with 20 markers each,
+  `raw-posix-realloc-boundary` and `internal-bitmap-range-chunk-boundary` with
+  19 markers each, and `raw-posix-environment-boundary` and
+  `raw-posix-aligned-allocation-boundary` with 13 markers each.
 - The largest remaining marker clusters are
   `typed-pointer-test-fixtures` with 87 markers,
   `macos-zone-override` with 83 markers,
-  `internal-bitmap-boundary` with 71 markers,
-  `raw-posix-compat` with 70 markers, `free-path-boundary` with 69 markers,
+  `free-path-boundary` with 69 markers,
   `aligned-heap-allocation-boundary` with 68 markers,
   `aligned-realloc-boundary` with 67 markers,
-  `page-map-register-boundary` with 66 markers, and
-  `raw-macro-libc-forwarding-boundary` and `internal-atomic-field-boundary`
-  with 65 markers each.
+  `page-map-register-boundary` with 66 markers,
+  `internal-atomic-field-boundary` with 65 markers,
+  `os-memory-allocation-boundary` with 59 markers, and
+  `init-thread-heap-tls-boundary` and `arena-heap-page-visitors` with 56
+  markers each.
 - `strict-type-allowlist.txt` has 515 active entries: 323
   raw-pointer-parameter entries, 131 bare-domain `usize` entries, 35
   metadata-reference entries, 22 pointer/usize round-trip entries, 2
@@ -45,15 +54,15 @@ Current review evidence:
   pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
   entries, and 1 heap-allocating-type entry.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  module cap is now 850 lines; the largest modules are
-  `unsafe_performance/raw_facade/raw_override.rs` at 754 lines,
-  `unsafe_performance/page_arena_behavior.rs` at 724 lines,
+  module cap is now 700 lines; the largest modules are
+  `unsafe_performance/page_arena_behavior.rs` at 656 lines,
   `release_policy/docs_and_linking.rs` at 633 lines,
-  `release_policy/api_surface.rs` at 517 lines,
+  `release_policy/security.rs` at 526 lines,
+  `release_policy/api_surface.rs` at 523 lines,
   `datatype_acceptance/strict_type.rs` at 512 lines,
   `release_policy/release_process.rs` at 504 lines,
-  `release_policy/security.rs` at 471 lines,
-  `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 404 lines,
+  `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 426 lines,
+  `interposition_exports.rs` at 413 lines,
   `unsafe_performance/os_memory.rs` at 403 lines, and
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs`
   at 400 lines.
@@ -119,13 +128,13 @@ full tests.
 > `unsafe_performance/raw_facade/raw_override.rs` is still the largest audit
 > module at 754 lines, blocking a lower module cap.
 
-- [ ] Split `raw-posix-compat` by errno/platform shims, malloc/free/usable-size
+- [x] Split `raw-posix-compat` by errno/platform shims, malloc/free/usable-size
       compatibility, aligned/POSIX allocation, reallocarray/reallocarr/expand,
       string duplication, environment duplication, and Windows-compatible aligned
       recalloc shims.
-- [ ] Split `internal-bitmap-boundary` into bitmap traversal, claim/find,
+- [x] Split `internal-bitmap-boundary` into bitmap traversal, claim/find,
       range/chunk iteration, bitfield, and arena callback operation IDs.
-- [ ] Split `raw_facade/raw_override.rs` into allocator/page, OS/random,
+- [x] Split `raw_facade/raw_override.rs` into allocator/page, OS/random,
       init/threadlocal/heap/thread-heap, options/stats, and libc/POSIX no-export
       audit modules. After the largest modules are below 700 lines, lower the
       release-audit module cap from 850 to 700.
@@ -154,7 +163,7 @@ formatting, full clippy, and full tests.
 
 1. [x] Split allocation ABI entry audit cluster.
 2. [x] Split broad runtime and internal marker clusters.
-3. [ ] Split raw/POSIX, bitmap, and release-audit no-export modules.
+3. [x] Split raw/POSIX, bitmap, and release-audit no-export modules.
 4. [ ] Reduce strict-type wildcard debt.
 
 ## Definition of done for this backlog
@@ -162,7 +171,7 @@ formatting, full clippy, and full tests.
 - [x] No unsafe audit operation ID has more than 100 source markers.
 - [ ] The broad 70+ marker clusters listed above are split into narrower review
       units with separate docs, evidence rows, and release-audit guards.
-- [ ] Release-audit modules are split enough to lower the module cap to 700
+- [x] Release-audit modules are split enough to lower the module cap to 700
       lines without weakening coverage.
 - [ ] Strict-type wildcard entries are reduced or guarded by category-specific
       evidence, and the wildcard count cannot grow silently.

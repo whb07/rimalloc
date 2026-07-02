@@ -177,7 +177,31 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
             "tests/release_fast_path_audit/release_policy/api_surface.rs",
         ),
         (
-            "raw-macro-libc-forwarding-boundary",
+            "raw-macro-unix-core-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-unix-string-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-unix-realloc-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-unix-aligned-posix-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-unix-product-realloc-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-wasi-libc-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
+        ),
+        (
+            "raw-macro-linux-libc-boundary",
             "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
         ),
         (
@@ -358,7 +382,13 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         "aligned-realloc-boundary",
         "raw-macro-bootstrap-boundary",
         "raw-macro-override-entry-boundary",
-        "raw-macro-libc-forwarding-boundary",
+        "raw-macro-unix-core-boundary",
+        "raw-macro-unix-string-boundary",
+        "raw-macro-unix-realloc-boundary",
+        "raw-macro-unix-aligned-posix-boundary",
+        "raw-macro-unix-product-realloc-boundary",
+        "raw-macro-wasi-libc-boundary",
+        "raw-macro-linux-libc-boundary",
         "raw-macro-allocation-query-boundary",
         "raw-macro-cxx-boundary",
         "raw-macro-header-forwarding-boundary",

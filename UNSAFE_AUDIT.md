@@ -520,13 +520,43 @@ Operation IDs:
   traversal, elapsed-time decisions, typed arena/slice witnesses, OS purge
   primitives, and C ABI collection shims while preserving purge ordering,
   stats accounting, and lock discipline.
-- `SAFETY[AUDIT:internal-bitmap-boundary]`: `src/internal/bitmap.rs` owns
-  bitmap and binned-bitmap chunk maps, bit scanning, set/clear mutation,
-  first-fit claim loops, arena traversal callbacks, and AVX2 bitmap helper
-  shims. Unsafe operations are limited to caller-proven bitmap storage,
-  bounded chunk and field projection, raw callback invocation, typed
-  arena/slice wrapper handoff, and local test fixtures while preserving bit
-  ordering, field width, empty/full handling, and allocation-free search paths.
+- `SAFETY[AUDIT:internal-bitmap-simd-boundary]`: `src/internal/bitmap.rs`
+  owns optional AVX2 bitmap helper shims. Unsafe operations are limited to
+  target-feature-gated intrinsic calls for zero/ones vector setup and bitmap
+  all-set/all-clear probes.
+- `SAFETY[AUDIT:internal-bitmap-metadata-boundary]`: `src/internal/bitmap.rs`
+  owns bitmap and binned-bitmap sizing, initialization, and chunk-count
+  metadata projection. Unsafe operations are limited to caller-proven bitmap
+  storage, nullable chunk-count out-pointers, and zeroing initialized storage.
+- `SAFETY[AUDIT:internal-bitmap-chunkmap-boundary]`: `src/internal/bitmap.rs`
+  owns bitmap chunkmap and binned chunk-bin bookkeeping. Unsafe operations are
+  limited to chunk-count assertions, empty/full chunk probes, and bin map
+  updates that preserve chunkmap consistency.
+- `SAFETY[AUDIT:internal-bitmap-claim-boundary]`: `src/internal/bitmap.rs`
+  owns regular bitmap first-fit claim traversal and typed thread-local claim
+  callback handoff. Unsafe operations are limited to caller-proven bitmap
+  storage, callback data projection, and restoring bits when claim callbacks
+  decline ownership.
+- `SAFETY[AUDIT:internal-bitmap-range-chunk-boundary]`:
+  `src/internal/bitmap.rs` owns regular bitmap set/clear/test/popcount
+  operations over chunk ranges. Unsafe operations are limited to bounded
+  chunk/field projection, caller-proven out-pointers, and release-mode
+  clipping of out-of-range requests.
+- `SAFETY[AUDIT:internal-bitmap-traversal-boundary]`:
+  `src/internal/bitmap.rs` owns regular bitmap set/range traversal callbacks.
+  Unsafe operations are limited to raw C callback invocation, typed arena and
+  slice wrapper handoff, range formation, and rollback of unvisited bits.
+- `SAFETY[AUDIT:internal-bitmap-binned-boundary]`: `src/internal/bitmap.rs`
+  owns binned-bitmap set/clear/test and chunk-bin operations. Unsafe operations
+  are limited to caller-proven binned-bitmap storage, bounded chunk projection,
+  and bin metadata updates for small/medium/large/huge ranges.
+- `SAFETY[AUDIT:internal-bitmap-binned-claim-boundary]`:
+  `src/internal/bitmap.rs` owns binned-bitmap find-and-clear claim paths.
+  Unsafe operations are limited to allocation-free first-fit search, cyclic
+  chunk/bin scans, huge-range rollback, and caller-proven result out-pointers.
+- `SAFETY[AUDIT:internal-bitmap-test-fixtures]`: `src/internal/bitmap.rs`
+  owns local bitmap unit-test fixtures that pass stack-owned callback state
+  through raw C callback arguments without escaping the call.
 - `SAFETY[AUDIT:internal-runtime-shim-boundary]`: `src/internal/mod.rs` owns
   Rust-side assertion shims that forward static caller-proven C strings into the
   audited options abort path.
@@ -671,11 +701,33 @@ Operation IDs:
   override exports, and fast assembly aliases. Unsafe operations are limited to
   exported ABI attributes, global/naked assembly, interpose records, foreign
   target declarations, and raw forwarding to allocator entry points.
-- `SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]`: `src/raw/macros.rs` owns
-  Unix, Linux libc, WASI libc, POSIX, and libc-adjacent allocation forwarding
-  shims. Unsafe operations are limited to C-shaped malloc/free/realloc/calloc,
-  strdup/strndup, valloc/pvalloc, memalign/posix_memalign, reallocarray, and
-  symbol alias forwarding while preserving raw libc ownership contracts.
+- `SAFETY[AUDIT:raw-macro-unix-core-boundary]`: `src/raw/macros.rs` owns Unix
+  malloc/calloc/realloc/free export shims. Unsafe operations are limited to
+  exported C ABI wrappers that forward into the audited Unix bootstrap-aware
+  helpers.
+- `SAFETY[AUDIT:raw-macro-unix-string-boundary]`: `src/raw/macros.rs` owns Unix
+  strdup/strndup forwarding shims. Unsafe operations are limited to raw
+  nullable C string forwarding and exported libc symbol wrappers.
+- `SAFETY[AUDIT:raw-macro-unix-realloc-boundary]`: `src/raw/macros.rs` owns
+  Unix reallocf compatibility forwarding. Unsafe operations are limited to
+  realloc failure cleanup through the same Unix free boundary.
+- `SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]`:
+  `src/raw/macros.rs` owns Unix valloc/vfree/pvalloc, memalign/aligned_alloc,
+  cfree, `_aligned_malloc`, and POSIX memalign forwarding. Unsafe operations
+  are limited to raw aligned allocation/free contracts and exported POSIX/libc
+  symbol wrappers.
+- `SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]`:
+  `src/raw/macros.rs` owns Unix reallocarray/reallocarr forwarding. Unsafe
+  operations are limited to product-size checked realloc forwarding and Linux
+  weak alias publication.
+- `SAFETY[AUDIT:raw-macro-wasi-libc-boundary]`: `src/raw/macros.rs` owns WASI
+  libc malloc/calloc/realloc/free/memalign forwarding. Unsafe operations are
+  limited to `__libc_*` export wrappers that preserve raw WASI libc ownership
+  contracts.
+- `SAFETY[AUDIT:raw-macro-linux-libc-boundary]`: `src/raw/macros.rs` owns
+  Linux `__libc_*` and `__posix_memalign` forwarding shims. Unsafe operations
+  are limited to Linux libc symbol wrappers that forward to the corresponding
+  Unix or POSIX compatibility helpers.
 - `SAFETY[AUDIT:raw-macro-allocation-query-boundary]`: `src/raw/macros.rs`
   owns malloc size, usable-size, and good-size compatibility queries. Unsafe
   operations are limited to checked heap-region probes and raw forwarding to
@@ -689,11 +741,32 @@ Operation IDs:
   Unsafe operations are limited to calling caller-supplied raw C function
   pointers or forwarding to raw allocator exports without adding Rust ownership
   guarantees.
-- `SAFETY[AUDIT:raw-posix-compat]`: `src/raw/posix.rs` owns POSIX and
-  libc-adjacent raw compatibility helpers. Unsafe operations are limited to
-  errno slot publication, environment lookup, raw allocation forwarding,
-  POSIX-compatible out-pointer and pointer-slot writes, wide-string scanning and
-  copying, environment duplication, and aligned/product allocation shims.
+- `SAFETY[AUDIT:raw-posix-errno-boundary]`: `src/raw/posix.rs` owns platform
+  errno publication. Unsafe operations are limited to thread-local errno slot
+  lookup and writes on supported libc targets.
+- `SAFETY[AUDIT:raw-posix-query-free-boundary]`: `src/raw/posix.rs` owns
+  usable-size/malloc-size query aliases and `cfree`. Unsafe operations are
+  limited to raw pointer query forwarding and heap-region-gated free.
+- `SAFETY[AUDIT:raw-posix-aligned-allocation-boundary]`: `src/raw/posix.rs`
+  owns POSIX and libc-aligned allocation exports. Unsafe operations are limited
+  to alignment validation, nullable out-pointer writes, page-size rounding, and
+  forwarding to mimalloc aligned allocation.
+- `SAFETY[AUDIT:raw-posix-realloc-boundary]`: `src/raw/posix.rs` owns
+  reallocarray, reallocarr, and expand compatibility. Unsafe operations are
+  limited to checked product sizing, pointer-slot reads/writes, raw realloc
+  forwarding, and POSIX errno publication.
+- `SAFETY[AUDIT:raw-posix-string-dup-boundary]`: `src/raw/posix.rs` owns
+  multibyte and wide-string duplication. Unsafe operations are limited to
+  nullable C string forwarding, wide-string scanning, byte-size overflow
+  checks, allocation, and bounded copy.
+- `SAFETY[AUDIT:raw-posix-environment-boundary]`: `src/raw/posix.rs` owns
+  environment lookup and duplication helpers. Unsafe operations are limited to
+  process-owned environment pointers, validated nullable out-pointer writes,
+  mimalloc-owned duplication, and unsupported wide-environment fallback state.
+- `SAFETY[AUDIT:raw-posix-aligned-recalloc-boundary]`: `src/raw/posix.rs`
+  owns Windows-compatible aligned recalloc forwarding. Unsafe operations are
+  limited to raw aligned recalloc argument forwarding into the audited aligned
+  allocation boundary.
 - `SAFETY[AUDIT:unix-ffi-import-boundary]`: `src/platform/unix.rs` owns Unix
   primitive libc/syscall declarations and errno slot imports. Unsafe operations
   are limited to source-present FFI declarations and errno reads while keeping

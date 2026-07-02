@@ -721,7 +721,16 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
             && allowlist_rs
                 .contains("pointer-usize-roundtrip|src/types/freelist.rs|*|packed-thread-free|")
             && allowlist_rs.contains("pointer-usize-roundtrip|src/allocator/free.rs|*|validation|")
-            && allowlist_rs.contains("pointer-usize-roundtrip|src/platform/os.rs|*|os-memory|"),
+            && !allowlist_rs.contains("pointer-usize-roundtrip|src/platform/os.rs|*|")
+            && allowlist_rs.contains(
+                "pointer-usize-roundtrip|src/platform/os.rs|mi_os_page_align_areax|os-memory|"
+            )
+            && allowlist_rs.contains(
+                "pointer-usize-roundtrip|src/platform/os.rs|_mi_os_free_ex_typed|os-memory|"
+            )
+            && allowlist_rs.contains(
+                "pointer-usize-roundtrip|src/platform/os.rs|mi_os_alloc_aligned_memid|os-memory|"
+            ),
         "pointer-to-integer round trips should stay behind typed packed-pointer/provenance helpers or explicit strict-type allowlist boundaries"
     );
     assert!(
@@ -774,6 +783,44 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
             && strict_check_rs.contains("strict-type self-test failed"),
         "strict-type line-pattern checks should use item-aware symbols and self-test symbol-level line-pattern allowlist entries"
     );
+    for platform_path in [
+        "src/platform/windows.rs",
+        "src/platform/unix.rs",
+        "src/platform/wasi.rs",
+        "src/platform/os.rs",
+    ] {
+        assert!(
+            !allowlist_rs.lines().any(|line| {
+                let mut fields = line.split('|');
+                let _kind = fields.next();
+                let path = fields.next();
+                let symbol = fields.next();
+                path == Some(platform_path) && symbol == Some("*")
+            }),
+            "{platform_path} should not retain path-wide strict-type allowlist entries"
+        );
+    }
+    for required in [
+        "raw-pointer-parameter|src/platform/windows.rs|_mi_prim_thread_associate_default_theap|mi_theap_t|",
+        "raw-pointer-parameter|src/platform/unix.rs|_mi_prim_thread_associate_default_theap|mi_theap_t|",
+        "raw-pointer-parameter|src/platform/wasi.rs|_mi_prim_thread_associate_default_theap|mi_theap_t|",
+        "raw-pointer-parameter|src/platform/os.rs|_mi_os_free_ex|mi_subproc_t|",
+        "metadata-reference|src/platform/unix.rs|_mi_prim_getenv|platform|",
+        "metadata-reference|src/platform/windows.rs|McGenControlCallbackV2|platform|",
+        "pointer-usize-roundtrip|src/platform/os.rs|mi_os_alloc_aligned_memid|os-memory|",
+        "pointer-usize-roundtrip|src/platform/unix.rs|unix_mmap_prim_aligned|platform|",
+        "pointer-usize-roundtrip|src/platform/wasi.rs|mi_prim_mem_grow|platform|",
+        "heap-allocating-type|src/platform/windows.rs|mi_getenv_value|String|",
+        "bare-domain-usize|src/platform/windows.rs|win_virtual_alloc|usize|",
+        "bare-domain-usize|src/platform/unix.rs|unix_mmap_prim_aligned|usize|",
+        "bare-domain-usize|src/platform/wasi.rs|mi_wasi_try_alloc|usize|",
+        "bare-domain-usize|src/platform/os.rs|mi_os_alloc_aligned_ex|usize|",
+    ] {
+        assert!(
+            allowlist_rs.contains(required),
+            "platform strict-type allowlist should retain symbol-level entry {required}"
+        );
+    }
     let callbacks_rs = audit_sources.source("src/types/callbacks.rs");
     let types_rs = audit_sources.source("src/types/constants.rs");
     let abi_rs = audit_sources.source("src/ffi/abi.rs");

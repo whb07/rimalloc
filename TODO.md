@@ -11,25 +11,24 @@ Current review evidence:
   production entries. `ALLOWLIST_ENTRY_CAP` is 0.
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe mentions,
   and 81 operation IDs.
-- `strict-type-allowlist.txt` has 280 entries: 150 raw-pointer-parameter
-  entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
-  entries, 8 metadata-reference entries, 2 atomic-cast entries, and
+- `strict-type-allowlist.txt` has 304 entries: 150 raw-pointer-parameter
+  entries, 123 bare-domain `usize` entries, 15 pointer/usize round-trip
+  entries, 12 metadata-reference entries, 2 atomic-cast entries, and
   2 heap-allocating-type entries. `REMOVE_ENTRY_CAP` remains 0.
-- 75 strict-type entries still use symbol `*`: 29 raw-pointer-parameter
-  entries, 21 bare-domain `usize` entries, 13 pointer/usize round-trip entries,
-  8 metadata-reference entries, 2 heap-allocating-type entries, and
-  2 atomic-cast entries.
+- 61 strict-type entries still use symbol `*`: 25 raw-pointer-parameter
+  entries, 17 bare-domain `usize` entries, 10 pointer/usize round-trip entries,
+  6 metadata-reference entries, 2 atomic-cast entries, and
+  1 heap-allocating-type entry.
 - `scripts/check-strict-types.py` now checks line-pattern findings with an
   item-aware context for free functions, impl methods, associated consts,
   statics, and extern declarations. It still allows deliberate wildcard
   fallback entries for module-level or true ABI boundaries.
-- The broadest path-wide strict-type clusters are `src/platform/windows.rs`,
-  `src/platform/unix.rs`, `src/internal/mod.rs`,
+- The broadest path-wide strict-type clusters are `src/internal/mod.rs`,
   `src/allocator/thread_heap.rs`, `src/allocator/stats.rs`, and
   `src/allocator/aligned.rs`, each with 4 path-wide entries.
-  `src/platform/wasi.rs`, `src/platform/os.rs`, `src/allocator/init.rs`,
-  `src/allocator/free.rs`, and `src/allocator/alloc.rs` each still have
-  3 path-wide entries.
+  `src/allocator/init.rs`, `src/allocator/free.rs`, and
+  `src/allocator/alloc.rs` each still have 3 path-wide entries. The targeted
+  platform files no longer have strict-type wildcard entries.
 - The largest source unsafe audit marker clusters are still too broad:
   `SAFETY[AUDIT:arena-region-boundary]` has 340 markers,
   `SAFETY[AUDIT:init-lifecycle-boundary]` has 277 markers,
@@ -45,7 +44,7 @@ Current review evidence:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,567 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
   `tests/release_fast_path_audit.rs` is 1,935 lines,
-  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,151 lines,
+  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,197 lines,
   `tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs`
   is 895 lines, and
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
@@ -83,17 +82,17 @@ tests, full formatting, full clippy, and full tests.
 > pointer, metadata-reference, pointer/integer, byte-count, and heap-allocating
 > allowances.
 
-- [ ] Replace broad strict-type entries for `src/platform/windows.rs` with
+- [x] Replace broad strict-type entries for `src/platform/windows.rs` with
       symbol/domain entries for TLS/FLS association, virtual-memory byte counts,
       ETW/metadata callbacks, environment string conversion, and dynamic import
       helpers.
-- [ ] Replace broad strict-type entries for `src/platform/unix.rs` with
+- [x] Replace broad strict-type entries for `src/platform/unix.rs` with
       symbol/domain entries for TLS association, mmap/madvise byte counts,
       metadata scanning, and alignment/provenance checks.
-- [ ] Narrow the matching platform entries in `src/platform/wasi.rs` and
+- [x] Narrow the matching platform entries in `src/platform/wasi.rs` and
       `src/platform/os.rs` where the checker can now name the responsible
       function or item.
-- [ ] Add release-audit guards that reject accidental new platform wildcard
+- [x] Add release-audit guards that reject accidental new platform wildcard
       strict-type entries unless they are explicitly documented ABI shims.
 
 Verify: strict-type checker, platform primitive release-audit tests,
@@ -193,7 +192,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Make strict-type line-pattern checks item-aware.
-2. [ ] Narrow platform strict-type wildcard allowances.
+2. [x] Narrow platform strict-type wildcard allowances.
 3. [ ] Narrow allocator and internal strict-type wildcard allowances.
 4. [ ] Split the arena audit operation cluster.
 5. [ ] Split the initialization lifecycle audit cluster.

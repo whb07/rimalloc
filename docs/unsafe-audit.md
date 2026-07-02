@@ -103,8 +103,18 @@ file:
   `__posix_memalign` forwarding shims in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-allocation-query-boundary]`: malloc size,
   usable-size, and good-size compatibility queries in `src/raw/macros.rs`.
-- `SAFETY[AUDIT:raw-macro-cxx-boundary]`: C++ operator new/delete compatibility
-  symbols and nothrow/aligned/sized variants in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-cxx-delete-boundary]`: scalar C++ delete
+  compatibility symbols and sized helper shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-cxx-array-delete-boundary]`: array C++ delete
+  compatibility symbols and sized array helper shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]`: aligned C++ new/delete
+  compatibility symbols, including aligned nothrow and operator helper variants
+  in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]`: non-aligned nothrow C++
+  compatibility shims in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-cxx-new-boundary]`: scalar and array C++ new
+  compatibility symbols for pointer-width-specific Itanium ABI variants in
+  `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-header-forwarding-boundary]`: header-shaped raw
   forwarding helpers in `src/raw/macros.rs` that call raw function pointers or
   allocator exports without adding Rust ownership guarantees.

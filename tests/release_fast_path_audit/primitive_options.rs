@@ -136,9 +136,22 @@ fn options_state_uses_internal_locks_like_c() {
     );
     assert!(
         !unsafe_allowlist.contains("src/ffi/libc.rs")
-            && libc_rs.matches("SAFETY[AUDIT:ffi-libc-helpers]").count() >= 35,
+            && !libc_rs.contains("SAFETY[AUDIT:ffi-libc-helpers]"),
         "libc helper unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    for (audit_id, min_count) in [
+        ("ffi-libc-string-boundary", 27),
+        ("ffi-libc-env-boundary", 2),
+        ("ffi-libc-output-boundary", 5),
+        ("ffi-libc-format-boundary", 8),
+        ("ffi-libc-retention-boundary", 8),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            libc_rs.matches(&marker).count() >= min_count,
+            "libc helper boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     assert!(
         !stats_rs.contains("fn format_amount(mut n: i64, unit: i64) -> String")
             && !stats_rs.contains("format!(\"{n}   \"")

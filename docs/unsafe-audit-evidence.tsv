@@ -2,9 +2,16 @@ audit_id	type	path	detail
 c-header-macro-reentry	script	scripts/check-ffi-boundary.py	Checks C header macro boundary files retain the required audit tags.
 c-header-macro-reentry	test	tests/header_macro_expansion.rs	Exercises downstream C header macro expansion and feature gating.
 ffi-abi-declarations	test	tests/release_fast_path_audit/release_policy.rs	Checks src/ffi/abi.rs owns raw C header declarations and keeps upstream nullable raw pointer shape.
-ffi-libc-helpers	test	src/ffi/libc.rs	Exercises null, truncating, bounded scan, substring, and fixed-buffer formatting behavior for libc-like helper routines.
-ffi-libc-helpers	test	tests/release_fast_path_audit.rs	Checks src/ffi/libc.rs keeps direct fixed-buffer formatting, Unix/non-Unix formatting branches, and local operation-level audit markers.
-ffi-libc-helpers	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks libc helper ABI boundaries, environment forwarding, noinline retention shims, and local formatting helper shape.
+ffi-libc-string-boundary	test	src/ffi/libc.rs	Exercises null, truncating, bounded scan, substring, and C-string copy/concat behavior for libc-like string helpers.
+ffi-libc-string-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks libc string helper markers stay split and off the unsafe migration allowlist.
+ffi-libc-env-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks environment lookup forwarding stays covered by focused libc helper markers.
+ffi-libc-env-boundary	script	scripts/check-unsafe-audit.py	Checks libc environment unsafe operations retain operation-level SAFETY markers and source audit coverage.
+ffi-libc-output-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks local numeric output helpers stay covered by focused libc helper markers.
+ffi-libc-output-boundary	script	scripts/check-unsafe-audit.py	Checks libc output unsafe operations retain operation-level SAFETY markers and source audit coverage.
+ffi-libc-format-boundary	test	src/ffi/libc.rs	Exercises fixed-buffer formatting truncation and nul termination behavior.
+ffi-libc-format-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks fixed-buffer formatting keeps direct caller-buffer writes and Unix/non-Unix formatting branches.
+ffi-libc-retention-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks no-call libc retention shims stay covered by focused markers.
+ffi-libc-retention-boundary	script	scripts/check-unsafe-audit.py	Checks libc retention unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-debug-render	test	tests/release_fast_path_audit.rs	Checks arena diagnostics stay in src/allocator/arena/debug.rs and retain typed arena/page/memid boundary markers.
 arena-debug-render	script	scripts/check-ffi-boundary.py	Checks moved arena diagnostic C exports remain in a classified ABI boundary file.
 arena-meta-allocator	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena metadata allocation shims, typed MetaMem memid construction, and no raw meta memid field poking.
@@ -33,8 +40,24 @@ arena-heap-destroy-boundary	script	scripts/check-unsafe-audit.py	Checks arena he
 arena-prefix-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena prefix accessors stay in src/allocator/arena/prefix.rs and preserve typed Bin, ArenaIndex, AtomicAbandonedCount, AtomicArenaPage, and AtomicPtrField routing.
 arena-prefix-accessors	script	scripts/check-unsafe-audit.py	Checks arena prefix accessor unsafe operations retain operation-level SAFETY markers and source audit coverage.
 typed-arena-domain	test	src/types/arena/tests.rs	Exercises slice-range bounds and shared, exclusive, and parent arena-role witness construction.
-typed-atomic-domain	test	src/types/atomic/tests.rs	Exercises atomic field wrappers, page/thread-free typed words, once guards, lock guards, refcounts, abandoned counts, and arena page atomics.
-typed-atomic-domain	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks atomic wrappers centralize raw Atomic* field casts, preserve typed page/thread-free domains, and keep strict-type enforcement pointed at src/types/atomic.rs.
+typed-atomic-usize-field	test	src/types/atomic/tests.rs	Exercises AtomicUsizeField load, store, arithmetic, bit, and CAS wrappers.
+typed-atomic-usize-field	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks usize atomic field markers stay split and centralize raw AtomicUsize casts.
+typed-atomic-i64-field	test	src/types/atomic/tests.rs	Exercises AtomicI64Field load, store, and CAS wrappers.
+typed-atomic-i64-field	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks i64 atomic field markers stay split and centralize raw AtomicI64 casts.
+typed-atomic-pointer-field	test	src/types/atomic/tests.rs	Exercises AtomicPtrField load, store, swap, and CAS wrappers.
+typed-atomic-pointer-field	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks pointer atomic field markers stay split and centralize raw AtomicPtr casts.
+typed-atomic-page-thread-id	test	src/types/atomic/tests.rs	Exercises page thread-id load, flag update, owner store, and owner CAS wrappers.
+typed-atomic-page-thread-id	script	scripts/check-strict-types.py	Checks xthread_id bit operations remain isolated to typed page-thread-id helpers.
+typed-atomic-thread-free	test	src/types/atomic/tests.rs	Exercises thread-free ownership, remote push, release, collect, and lint reachability helpers.
+typed-atomic-thread-free	script	scripts/check-strict-types.py	Checks xthread_free bit operations remain isolated to typed thread-free helpers.
+typed-atomic-abandoned-count	test	src/types/atomic/tests.rs	Exercises abandoned-count load and arithmetic wrappers.
+typed-atomic-abandoned-count	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks abandoned-count markers stay split from other atomic helper families.
+typed-atomic-thread-heap-refcount	test	src/types/atomic/tests.rs	Exercises thread-heap refcount store, increment, and decrement wrappers.
+typed-atomic-thread-heap-refcount	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks thread-heap refcount markers stay split from other atomic helper families.
+typed-atomic-arena-page	test	src/types/atomic/tests.rs	Exercises arena page-table pointer atomic load/store wrappers.
+typed-atomic-arena-page	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks arena page-table atomic markers stay split and metadata-reference allowlist entries remain symbol-level.
+typed-atomic-guard-once-lock	test	src/types/atomic/tests.rs	Exercises atomic guard, once guard, and mimalloc lock guard RAII wrappers.
+typed-atomic-guard-once-lock	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks guard, once, and lock markers stay split from scalar/pointer atomic field wrappers.
 callback-wrappers	test	src/types/callbacks/tests.rs	Exercises callback wrapper layout, storage round trips, and local C ABI invoke fixtures.
 callback-wrappers	test	tests/release_fast_path_audit.rs	Checks raw callback typedefs stay at ABI edges while internals use typed callback wrappers and audit markers.
 callback-wrappers	test	tests/release_fast_path_audit/release_policy.rs	Checks callback invocation wrappers remain no-allocation and no-unwind C ABI boundaries.
@@ -388,9 +411,16 @@ raw-macro-linux-libc-boundary	test	tests/release_fast_path_audit/unsafe_performa
 raw-macro-linux-libc-boundary	script	scripts/check-unsafe-audit.py	Checks Linux libc forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-macro-allocation-query-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks malloc size, usable-size, and good-size query markers and forwarding shape.
 raw-macro-allocation-query-boundary	script	scripts/check-unsafe-audit.py	Checks allocation query unsafe operations retain operation-level SAFETY markers and source audit coverage.
-raw-macro-cxx-boundary	test	tests/header_macro_expansion.rs	Exercises downstream raw allocation call boundaries that keep caller-side unsafe at macro expansion sites.
-raw-macro-cxx-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade.rs	Checks C++ operator new/delete marker coverage and exported shim shape.
-raw-macro-cxx-boundary	script	scripts/check-unsafe-audit.py	Checks C++ compatibility unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-cxx-delete-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs	Checks scalar C++ delete marker coverage and exported shim shape.
+raw-macro-cxx-delete-boundary	script	scripts/check-unsafe-audit.py	Checks scalar C++ delete unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-cxx-array-delete-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs	Checks array C++ delete marker coverage and exported shim shape.
+raw-macro-cxx-array-delete-boundary	script	scripts/check-unsafe-audit.py	Checks array C++ delete unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-cxx-aligned-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs	Checks aligned C++ new/delete marker coverage and exported shim shape.
+raw-macro-cxx-aligned-boundary	script	scripts/check-unsafe-audit.py	Checks aligned C++ compatibility unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-cxx-nothrow-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs	Checks nothrow C++ marker coverage and tag-preserving shim shape.
+raw-macro-cxx-nothrow-boundary	script	scripts/check-unsafe-audit.py	Checks nothrow C++ compatibility unsafe operations retain operation-level SAFETY markers and source audit coverage.
+raw-macro-cxx-new-boundary	test	tests/header_macro_expansion.rs	Exercises downstream raw C++ new call boundaries that keep caller-side unsafe at macro expansion sites.
+raw-macro-cxx-new-boundary	test	tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs	Checks scalar and array C++ new marker coverage and exported shim shape.
 raw-macro-header-forwarding-boundary	test	tests/header_macro_expansion.rs	Exercises downstream header macro expansion and caller-side unsafe boundaries.
 raw-macro-header-forwarding-boundary	test	tests/release_fast_path_audit/release_policy/api_surface.rs	Checks header-shaped raw forwarding policy documentation and source audit tags stay mirrored.
 raw-macro-header-forwarding-boundary	script	scripts/check-unsafe-audit.py	Checks header-forwarding unsafe operations retain operation-level SAFETY markers and source audit coverage.

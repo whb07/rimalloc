@@ -168,6 +168,8 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs";
     const OS_MEMORY_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/unsafe_performance/os_memory.rs";
+    const RAW_CXX_FOCUSED_PATH: &str =
+        "tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs";
     for audit_id in [
         "page-map-global-boundary",
         "page-map-32bit-commit-bitmap-boundary",
@@ -191,10 +193,6 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
     }
 
     for (audit_id, focused_path) in [
-        (
-            "raw-macro-bootstrap-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
         (
             "raw-macro-bootstrap-boundary",
             "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
@@ -239,10 +237,11 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
             "raw-macro-allocation-query-boundary",
             "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
         ),
-        (
-            "raw-macro-cxx-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
+        ("raw-macro-cxx-delete-boundary", RAW_CXX_FOCUSED_PATH),
+        ("raw-macro-cxx-array-delete-boundary", RAW_CXX_FOCUSED_PATH),
+        ("raw-macro-cxx-aligned-boundary", RAW_CXX_FOCUSED_PATH),
+        ("raw-macro-cxx-nothrow-boundary", RAW_CXX_FOCUSED_PATH),
+        ("raw-macro-cxx-new-boundary", RAW_CXX_FOCUSED_PATH),
         (
             "raw-macro-header-forwarding-boundary",
             "tests/release_fast_path_audit/release_policy/api_surface.rs",
@@ -434,7 +433,11 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         "raw-macro-wasi-libc-boundary",
         "raw-macro-linux-libc-boundary",
         "raw-macro-allocation-query-boundary",
-        "raw-macro-cxx-boundary",
+        "raw-macro-cxx-delete-boundary",
+        "raw-macro-cxx-array-delete-boundary",
+        "raw-macro-cxx-aligned-boundary",
+        "raw-macro-cxx-nothrow-boundary",
+        "raw-macro-cxx-new-boundary",
         "raw-macro-header-forwarding-boundary",
         "os-memory-config-boundary",
         "os-memory-guard-boundary",

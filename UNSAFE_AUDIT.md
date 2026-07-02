@@ -217,11 +217,24 @@ Operation IDs:
   dereference pointers; it preserves upstream nullable raw pointer signatures so
   each unsafe call site inherits the documented C ABI ownership and lifetime
   obligations.
-- `SAFETY[AUDIT:ffi-libc-helpers]`: `src/ffi/libc.rs` owns libc-like helper
-  routines for bounded C-string scans, destination writes, fixed-buffer
-  formatting, Unix `vsnprintf` forwarding, numeric output reversal, and
-  environment lookup forwarding. Callers provide C-compatible readable strings,
-  writable output buffers, and valid varargs objects where required.
+- `SAFETY[AUDIT:ffi-libc-string-boundary]`: `src/ffi/libc.rs` owns libc-like
+  C-string helpers for bounded scans, comparisons, copies, concatenation, and
+  substring lookup. Callers provide readable nul-terminated strings and writable
+  destination ranges where required.
+- `SAFETY[AUDIT:ffi-libc-env-boundary]`: `src/ffi/libc.rs` owns environment
+  lookup forwarding. Unsafe operations are limited to validating nullable
+  C-string and output-buffer arguments before calling the platform primitive.
+- `SAFETY[AUDIT:ffi-libc-output-boundary]`: `src/ffi/libc.rs` owns the local
+  numeric output helper used by fixed-buffer formatting. Unsafe operations are
+  limited to one-byte writes and pointer advancement inside the caller-provided
+  output range.
+- `SAFETY[AUDIT:ffi-libc-format-boundary]`: `src/ffi/libc.rs` owns
+  fixed-buffer formatting, Unix `vsnprintf` forwarding, and the non-Unix
+  fallback formatter. Callers provide writable output buffers and valid varargs
+  objects where platform forwarding is used.
+- `SAFETY[AUDIT:ffi-libc-retention-boundary]`: `src/ffi/libc.rs` owns no-call
+  retention pointers that preserve C ABI helper symbols and function pointer
+  shapes without invoking the helpers.
 - `SAFETY[AUDIT:global-alloc]`: `src/lib.rs` implements `GlobalAlloc` for the
   zero-sized `MiMalloc` facade. Rust's allocator contract supplies the layout,
   pointer, and ownership preconditions, and each operation forwards directly to
@@ -863,10 +876,25 @@ Operation IDs:
   owns malloc size, usable-size, and good-size compatibility queries. Unsafe
   operations are limited to checked heap-region probes and raw forwarding to
   allocator query exports, including bootstrap allocation size queries.
-- `SAFETY[AUDIT:raw-macro-cxx-boundary]`: `src/raw/macros.rs` owns C++ operator
-  new/delete compatibility symbols and nothrow/aligned/sized variants. Unsafe
-  operations are limited to exported C++ ABI symbol shims and direct forwarding
-  to the corresponding allocator allocation or free entry points.
+- `SAFETY[AUDIT:raw-macro-cxx-delete-boundary]`: `src/raw/macros.rs` owns
+  scalar C++ delete compatibility symbols and sized operator helper shims.
+  Unsafe operations are limited to forwarding Itanium delete symbols to the
+  matching allocator free path.
+- `SAFETY[AUDIT:raw-macro-cxx-array-delete-boundary]`: `src/raw/macros.rs` owns
+  array C++ delete compatibility symbols and sized array helper shims. Unsafe
+  operations are limited to forwarding Itanium array-delete symbols to the
+  matching allocator free path.
+- `SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]`: `src/raw/macros.rs` owns
+  aligned C++ new/delete compatibility symbols, including aligned nothrow and
+  operator helper variants. Unsafe operations are limited to preserving
+  `align_val_t` ABI signatures while forwarding to aligned allocator exports.
+- `SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]`: `src/raw/macros.rs` owns
+  non-aligned nothrow C++ compatibility shims. Unsafe operations are limited to
+  consuming the nothrow tag ABI and forwarding through null-returning allocation
+  paths or free paths.
+- `SAFETY[AUDIT:raw-macro-cxx-new-boundary]`: `src/raw/macros.rs` owns scalar
+  and array C++ new compatibility symbols for pointer-width-specific Itanium
+  ABI variants. Unsafe operations are limited to forwarding to `mi_new`.
 - `SAFETY[AUDIT:raw-macro-header-forwarding-boundary]`: `src/raw/macros.rs`
   owns header-shaped forwarding helpers used by raw macro compatibility layers.
   Unsafe operations are limited to calling caller-supplied raw C function
@@ -1371,13 +1399,25 @@ Operation IDs:
   limited to reading initialized arena metadata, constructing non-zero
   `SliceCount` values after checked bounds, and packaging shared, exclusive, or
   parent arena role proofs into transparent wrappers.
-- `SAFETY[AUDIT:typed-atomic-domain]`: `src/types/atomic.rs` owns typed
-  atomic field wrappers for allocator metadata. Unsafe operations are limited
-  to temporary `AtomicUsize`/`AtomicI64`/`AtomicPtr` views over caller-proven raw
-  fields, typed page thread-id and thread-free word RMW/CAS protocols,
-  abandoned-count and thread-heap refcount atomics, arena page-table pointer
-  atomics, once/guard/lock RAII boundaries, and lint-only non-dereferenced
-  identity fixtures.
+- `SAFETY[AUDIT:typed-atomic-usize-field]`: `src/types/atomic.rs` owns
+  temporary `AtomicUsize` views over caller-proven raw `usize` fields.
+- `SAFETY[AUDIT:typed-atomic-i64-field]`: `src/types/atomic.rs` owns
+  temporary `AtomicI64` views over caller-proven raw `i64` fields.
+- `SAFETY[AUDIT:typed-atomic-pointer-field]`: `src/types/atomic.rs` owns
+  temporary `AtomicPtr` views over caller-proven raw pointer fields.
+- `SAFETY[AUDIT:typed-atomic-page-thread-id]`: `src/types/atomic.rs` owns typed
+  page `xthread_id` load, flag, owner-store, and owner-CAS protocols.
+- `SAFETY[AUDIT:typed-atomic-thread-free]`: `src/types/atomic.rs` owns typed
+  `xthread_free` remote-list head and ownership bit protocols, including
+  remote-list collection handoff fixtures.
+- `SAFETY[AUDIT:typed-atomic-abandoned-count]`: `src/types/atomic.rs` owns
+  abandoned-count atomic load/increment/decrement helpers.
+- `SAFETY[AUDIT:typed-atomic-thread-heap-refcount]`: `src/types/atomic.rs` owns
+  thread-heap refcount store/increment/decrement helpers.
+- `SAFETY[AUDIT:typed-atomic-arena-page]`: `src/types/atomic.rs` owns arena
+  page-table pointer atomic load/store helpers.
+- `SAFETY[AUDIT:typed-atomic-guard-once-lock]`: `src/types/atomic.rs` owns
+  RAII guard wrappers for atomic guards, once state, and mimalloc locks.
 - `SAFETY[AUDIT:typed-arena-test-fixtures]`: `src/types/arena/tests.rs`
   builds stack-local arena metadata to exercise slice-range and arena-role
   constructors. The fixtures do not register with allocator globals and are

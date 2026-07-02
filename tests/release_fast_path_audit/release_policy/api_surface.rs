@@ -342,7 +342,11 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
         "raw-macro-wasi-libc-boundary",
         "raw-macro-linux-libc-boundary",
         "raw-macro-allocation-query-boundary",
-        "raw-macro-cxx-boundary",
+        "raw-macro-cxx-delete-boundary",
+        "raw-macro-cxx-array-delete-boundary",
+        "raw-macro-cxx-aligned-boundary",
+        "raw-macro-cxx-nothrow-boundary",
+        "raw-macro-cxx-new-boundary",
         "raw-macro-header-forwarding-boundary",
     ];
 

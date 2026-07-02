@@ -9,17 +9,18 @@ that now block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 321 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 321 operation IDs with
-  695 automated evidence rows.
-- No source audit operation ID is over 51 source markers. The largest remaining
-  source IDs are `typed-atomic-domain` with 51 markers, `ffi-libc-helpers` with
-  50 markers, `raw-macro-cxx-boundary` with 46 markers,
-  `options-message-output-boundary` with 39 markers, `arena-purge-boundary`
-  with 38 markers, `arena-registry-boundary` and
-  `allocation-realloc-entry-boundary` with 37 markers each, and
+  mentions, and 337 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 337 operation IDs with
+  725 automated evidence rows.
+- No source audit operation ID is over 39 source markers. The largest remaining
+  source IDs are `options-message-output-boundary` with 39 markers,
+  `arena-purge-boundary` with 38 markers, `arena-registry-boundary` and
+  `allocation-realloc-entry-boundary` with 37 markers each,
   `typed-page-state-domain`, `raw-macro-override-entry-boundary`, and
-  `init-subproc-heap-association-boundary` with 36 markers each.
+  `init-subproc-heap-association-boundary` with 36 markers each,
+  `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers, and
+  `arena-debug-render` and `allocation-heap-dispatch-boundary` with 34 markers
+  each.
 - `strict-type-allowlist.txt` has 634 active entries: 335
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -35,11 +36,11 @@ Current review evidence:
   `src/types/atomic/concurrency_models.rs`. Strict-type wildcard guard: total=1; heap-allocating-type=1.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   release-audit module cap is 600 lines; the only modules over 500 lines are
-  `datatype_acceptance/strict_type.rs` at 592 lines,
-  `release_policy/security.rs` at 597 lines,
+  `release_policy/security.rs` at 600 lines,
+  `datatype_acceptance/strict_type.rs` at 598 lines,
   `release_policy/api_surface.rs` at 523 lines, and
   `release_policy/release_process.rs` at 504 lines.
-- Full validation for Issue 3 passed: `cargo fmt --all`,
+- Full validation for Issue 4 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -65,6 +66,12 @@ Current review evidence:
   mutation, and append IDs. It split `internal-page-metadata-boundary` into
   direct-bin, page-map lookup, size/count, owner/heap, location, and flag/owner
   IDs while retaining free-list link helpers under `internal-block-link-boundary`.
+- Issue 4 split `typed-atomic-domain` into usize field, i64 field, pointer
+  field, page thread-id, thread-free, abandoned count, thread-heap refcount,
+  arena-page, and guard/once/lock IDs. It split `ffi-libc-helpers` into string,
+  environment, output, format, and retention IDs. It split
+  `raw-macro-cxx-boundary` into delete, array delete, aligned, nothrow, and new
+  IDs.
 
 ## Issue 1: Split OS memory and page-map initialization audit clusters
 
@@ -129,18 +136,17 @@ scripts, full formatting, full clippy, and full tests.
 
 ## Issue 4: Split atomic, FFI libc, and raw macro facade audit clusters
 
-> **Comment:** `typed-atomic-domain` has 51 markers,
-> `ffi-libc-helpers` has 50 markers, and `raw-macro-cxx-boundary` has 46
-> markers. Each now covers multiple helper families that reviewers need to audit
-> independently.
+> **Comment:** Completed. The stale broad source IDs `typed-atomic-domain`,
+> `ffi-libc-helpers`, and `raw-macro-cxx-boundary` are gone from allocator
+> source and are now explicitly rejected by release-audit guards.
 
-- [ ] Split `typed-atomic-domain` by wrapper family: usize/isize/i64 fields,
+- [x] Split `typed-atomic-domain` by wrapper family: usize/isize/i64 fields,
       pointer fields, page/thread-free atomics, arena-page atomics,
       guard/once/lock wrappers, and volatile/ordering helpers.
-- [ ] Split `ffi-libc-helpers` by helper family: byte/string operations,
+- [x] Split `ffi-libc-helpers` by helper family: byte/string operations,
       fixed-buffer formatting, output callback routing, environment/path helpers,
       and no-allocation/no-unwind critical helpers.
-- [ ] Split `raw-macro-cxx-boundary` by C++ facade family: scalar new/delete,
+- [x] Split `raw-macro-cxx-boundary` by C++ facade family: scalar new/delete,
       array new/delete, nothrow variants, aligned variants, and heap-specific
       wrappers.
 
@@ -174,8 +180,8 @@ no-allocation audit, full formatting, full clippy, and full tests.
 
 > **Comment:** Issue 5 lowered the cap to 600. The next release-audit bottleneck
 > is now four files over 500 lines:
-> `datatype_acceptance/strict_type.rs` at 592,
-> `release_policy/security.rs` at 597,
+> `release_policy/security.rs` at 600,
+> `datatype_acceptance/strict_type.rs` at 598,
 > `release_policy/api_surface.rs` at 523, and
 > `release_policy/release_process.rs` at 504.
 
@@ -200,13 +206,13 @@ formatting, full clippy, and full tests.
 1. [x] Split OS memory and page-map initialization audit clusters.
 2. [x] Split thread lifecycle and thread-local audit clusters.
 3. [x] Split arena visitor and page queue audit clusters.
-4. [ ] Split atomic, FFI libc, and raw macro facade audit clusters.
+4. [x] Split atomic, FFI libc, and raw macro facade audit clusters.
 5. [ ] Tighten strict-type allowlist hotspots.
 6. [ ] Split release-audit modules over 500 lines and lower the cap.
 
 ## Definition of done for this backlog
 
-- [ ] No source audit operation ID has more than 40 source markers.
+- [x] No source audit operation ID has more than 40 source markers.
 - [ ] The largest source audit clusters listed above are split into narrower
       review units with separate docs, evidence rows, and release-audit guards.
 - [ ] Strict-type allowlist hotspots are measured in release-audit coverage, and

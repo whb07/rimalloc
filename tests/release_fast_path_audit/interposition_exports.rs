@@ -72,10 +72,27 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
                 .matches("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
                 .count()
                 >= 10
+            && !override_rs.contains("SAFETY[AUDIT:raw-macro-cxx-boundary]")
             && override_rs
-                .matches("SAFETY[AUDIT:raw-macro-cxx-boundary]")
+                .matches("SAFETY[AUDIT:raw-macro-cxx-delete-boundary]")
                 .count()
-                >= 45
+                >= 3
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-cxx-array-delete-boundary]")
+                .count()
+                >= 3
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]")
+                .count()
+                >= 29
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]")
+                .count()
+                >= 7
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-cxx-new-boundary]")
+                .count()
+                >= 4
             && override_rs
                 .matches("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")
                 .count()

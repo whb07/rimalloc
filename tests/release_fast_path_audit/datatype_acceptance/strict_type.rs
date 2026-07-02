@@ -116,6 +116,8 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
         !ptr_core_rs.contains("SAFETY[AUDIT:typed-pointer-accessors]"),
         "typed pointer unsafe markers should stay split by pointer family"
     );
+    let from_raw_allowlist_entry =
+        "raw-pointer-parameter|src/types/freelist_wrappers.rs|from_raw|mi_block_t|";
     assert!(
         freelist_wrappers_rs.contains("pub(crate) struct EncodedPtr<T> {")
             && freelist_wrappers_rs.contains("word: EncodedWord,")
@@ -190,11 +192,10 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
             && allowlist_rs.contains(
                 "raw-pointer-parameter|src/types/freelist_wrappers.rs|is_guarded_raw|mi_block_t|"
             )
-            && allowlist_rs.contains(
-                "raw-pointer-parameter|src/types/freelist_wrappers.rs|from_raw|mi_block_t|"
-            ),
+            && allowlist_rs.contains(from_raw_allowlist_entry),
         "mi_block_s.next reads/writes should stay behind EncodedPtr, BlockLink, BlockPtr, or free-list wrappers and strict checker coverage"
     );
+    let atomic_marker_count = |marker| atomic_rs.matches(marker).count();
     assert!(
         atomic_rs.contains("pub(crate) struct AtomicUsizeField(pub(crate) *mut usize);")
             && atomic_rs.contains("pub(crate) struct AtomicI64Field(pub(crate) *mut i64);")
@@ -211,11 +212,16 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
             && atomic_rs.contains("pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T")
             && atomic_rs
                 .contains("pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder)")
-            && atomic_rs.contains("SAFETY[AUDIT:typed-atomic-domain]")
-            && atomic_rs
-                .matches("SAFETY[AUDIT:typed-atomic-domain]")
-                .count()
-                >= 50
+            && !atomic_rs.contains("SAFETY[AUDIT:typed-atomic-domain]")
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-usize-field]") >= 8
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-i64-field]") >= 3
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-pointer-field]") >= 5
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-page-thread-id]") >= 8
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-thread-free]") >= 13
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-abandoned-count]") >= 3
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-thread-heap-refcount]") >= 3
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-arena-page]") >= 2
+            && atomic_marker_count("SAFETY[AUDIT:typed-atomic-guard-once-lock]") >= 6
             && strict_check_rs.contains("ALLOWED_ATOMIC_CAST = {")
             && strict_check_rs.contains("\"src/types/atomic.rs\"")
             && strict_check_rs.contains("kind=\"atomic-cast\"")

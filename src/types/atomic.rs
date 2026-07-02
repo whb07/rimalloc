@@ -29,7 +29,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn load(self, order: MemoryOrder) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-usize-field]: callers uphold this wrapper's
         // atomic usize field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.load(order)
@@ -39,7 +39,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn store(self, value: usize, order: MemoryOrder) {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-usize-field]: callers uphold this wrapper's
         // atomic usize field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.store(value, order);
@@ -49,7 +49,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn fetch_add(self, value: usize, order: MemoryOrder) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-usize-field]: callers uphold this wrapper's
         // atomic usize field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.fetch_add(value, order)
@@ -59,7 +59,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn fetch_sub(self, value: usize, order: MemoryOrder) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-usize-field]: callers uphold this wrapper's
         // atomic usize field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.fetch_sub(value, order)
@@ -69,7 +69,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn fetch_or(self, bits: usize, order: MemoryOrder) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-usize-field]: callers uphold this wrapper's
         // atomic usize field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.fetch_or(bits, order)
@@ -79,7 +79,7 @@ impl AtomicUsizeField {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn fetch_and(self, bits: usize, order: MemoryOrder) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-usize-field]: callers uphold this wrapper's
         // atomic usize field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         atomic.fetch_and(bits, order)
@@ -93,7 +93,7 @@ impl AtomicUsizeField {
         expected: &mut usize,
         desired: usize,
     ) -> bool {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-usize-field]: callers uphold this wrapper's
         // atomic usize field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         match atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire) {
@@ -115,7 +115,7 @@ impl AtomicUsizeField {
         success: MemoryOrder,
         failure: MemoryOrder,
     ) -> bool {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-usize-field]: callers uphold this wrapper's
         // atomic usize field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicUsize::from_ptr(self.0) };
         match atomic.compare_exchange_weak(*expected, desired, success, failure) {
@@ -144,7 +144,7 @@ impl AtomicI64Field {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn load(self, order: MemoryOrder) -> i64 {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-i64-field]: callers uphold this wrapper's
         // atomic i64 field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicI64::from_ptr(self.0) };
         atomic.load(order)
@@ -154,7 +154,7 @@ impl AtomicI64Field {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn store(self, value: i64, order: MemoryOrder) {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-i64-field]: callers uphold this wrapper's
         // atomic i64 field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicI64::from_ptr(self.0) };
         atomic.store(value, order);
@@ -164,7 +164,7 @@ impl AtomicI64Field {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn compare_exchange_acq_rel(self, expected: &mut i64, desired: i64) -> bool {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-i64-field]: callers uphold this wrapper's
         // atomic i64 field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicI64::from_ptr(self.0) };
         match atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire) {
@@ -193,7 +193,7 @@ impl<T> AtomicPtrField<T> {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn load(self, order: MemoryOrder) -> *mut T {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-pointer-field]: callers uphold this wrapper's
         // atomic pointer field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         atomic.load(order)
@@ -203,7 +203,7 @@ impl<T> AtomicPtrField<T> {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn store(self, value: *mut T, order: MemoryOrder) {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-pointer-field]: callers uphold this wrapper's
         // atomic pointer field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         atomic.store(value, order);
@@ -213,7 +213,7 @@ impl<T> AtomicPtrField<T> {
     /// See the type-level safety contract.
     #[inline(always)]
     pub(crate) unsafe fn exchange_acq_rel(self, value: *mut T) -> *mut T {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-pointer-field]: callers uphold this wrapper's
         // atomic pointer field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         atomic.swap(value, Ordering::AcqRel)
@@ -227,7 +227,7 @@ impl<T> AtomicPtrField<T> {
         expected: &mut *mut T,
         desired: *mut T,
     ) -> bool {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-pointer-field]: callers uphold this wrapper's
         // atomic pointer field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         match atomic.compare_exchange(*expected, desired, Ordering::Release, Ordering::Relaxed) {
@@ -247,7 +247,7 @@ impl<T> AtomicPtrField<T> {
         expected: &mut *mut T,
         desired: *mut T,
     ) -> bool {
-        // SAFETY[AUDIT:typed-atomic-domain]: callers uphold this wrapper's
+        // SAFETY[AUDIT:typed-atomic-pointer-field]: callers uphold this wrapper's
         // atomic pointer field contract before creating the temporary atomic view.
         let atomic = unsafe { AtomicPtr::from_ptr(self.0) };
         match atomic.compare_exchange(*expected, desired, Ordering::AcqRel, Ordering::Acquire) {
@@ -272,7 +272,7 @@ impl AtomicPageThreadId {
     /// `self.0` must point to a valid page's `xthread_id` field.
     #[inline(always)]
     pub(crate) unsafe fn load(self) -> PageThreadId {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid page
+        // SAFETY[AUDIT:typed-atomic-page-thread-id]: the caller provides a valid page
         // `xthread_id` atomic field and this wrapper preserves relaxed loading.
         PageThreadId::new(unsafe { self.0.load(Ordering::Relaxed) })
     }
@@ -283,7 +283,7 @@ impl AtomicPageThreadId {
     /// `self.0` must point to a valid page's `xthread_id` field.
     #[inline(always)]
     pub(crate) unsafe fn load_relaxed(self) -> PageThreadId {
-        // SAFETY[AUDIT:typed-atomic-domain]: compatibility shim forwards to the
+        // SAFETY[AUDIT:typed-atomic-page-thread-id]: compatibility shim forwards to the
         // typed relaxed page-thread-id loader with the same caller contract.
         unsafe { self.load() }
     }
@@ -297,7 +297,7 @@ impl AtomicPageThreadId {
     /// `self.0` must point to a valid page's `xthread_id` field.
     #[inline(always)]
     pub(crate) unsafe fn set_flags(self, flags: PageFlags, set: bool) -> PageThreadId {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid page
+        // SAFETY[AUDIT:typed-atomic-page-thread-id]: the caller provides a valid page
         // `xthread_id` atomic field; the RMW keeps C's relaxed flag update.
         let old = if set {
             unsafe { self.0.fetch_or(flags.bits(), Ordering::Relaxed) }
@@ -317,13 +317,13 @@ impl AtomicPageThreadId {
     /// concurrent free-path readers that require Acq/Rel ordering).
     #[inline(always)]
     pub(crate) unsafe fn store_owner(self, owner: PageOwnerId) {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid page
+        // SAFETY[AUDIT:typed-atomic-page-thread-id]: the caller provides a valid page
         // `xthread_id` field and page state that permits relaxed owner updates.
         let current = unsafe { self.0.load(Ordering::Relaxed) };
         // `with_owner` preserves the existing flag bits, so no separate
         // `.with_flags(...)` is needed.
         let new = PageThreadId::new(current).with_owner(owner);
-        // SAFETY[AUDIT:typed-atomic-domain]: the new typed word preserves the
+        // SAFETY[AUDIT:typed-atomic-page-thread-id]: the new typed word preserves the
         // existing flag bits and writes only the page owner encoding.
         unsafe { self.0.store(new.raw(), Ordering::Relaxed) };
     }
@@ -336,7 +336,7 @@ impl AtomicPageThreadId {
     /// must hold the page in a state where a relaxed store is safe.
     #[inline(always)]
     pub(crate) unsafe fn set_owner_release(self, owner: PageOwnerId) {
-        // SAFETY[AUDIT:typed-atomic-domain]: compatibility shim forwards to the
+        // SAFETY[AUDIT:typed-atomic-page-thread-id]: compatibility shim forwards to the
         // typed owner store with the same page-state contract.
         unsafe { self.store_owner(owner) };
     }
@@ -353,7 +353,7 @@ impl AtomicPageThreadId {
         new: PageThreadId,
     ) -> bool {
         let mut raw_expected = expected.raw();
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid page
+        // SAFETY[AUDIT:typed-atomic-page-thread-id]: the caller provides a valid page
         // `xthread_id` field; failure writes the observed raw word back to a typed
         // `PageThreadId`.
         let exchanged = unsafe {
@@ -381,7 +381,7 @@ impl AtomicPageThreadId {
         expected: &mut PageThreadId,
         new: PageThreadId,
     ) -> bool {
-        // SAFETY[AUDIT:typed-atomic-domain]: compatibility shim forwards to the
+        // SAFETY[AUDIT:typed-atomic-page-thread-id]: compatibility shim forwards to the
         // typed owner CAS with the same page-thread-id contract.
         unsafe { self.compare_exchange_owner(expected, new) }
     }
@@ -437,7 +437,7 @@ impl RemoteFreeList {
         page: OwnedAbandonedPage,
         local: LocalFreeList,
     ) -> LocalFreeList {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller supplies the owned
+        // SAFETY[AUDIT:typed-atomic-thread-free]: the caller supplies the owned
         // abandoned page and remote-list head produced by the xthread_free CAS
         // protocol.
         unsafe { crate::page::mi_page_thread_collect_to_local_typed(page, self, local) }
@@ -455,7 +455,7 @@ impl AtomicThreadFree {
     }
 
     pub(crate) fn load_relaxed(self) -> ThreadFreeWord {
-        // SAFETY[AUDIT:typed-atomic-domain]: `AtomicThreadFree` is constructed
+        // SAFETY[AUDIT:typed-atomic-thread-free]: `AtomicThreadFree` is constructed
         // only for valid `xthread_free` atomic fields and preserves relaxed load.
         ThreadFreeWord(unsafe { self.field().load(Ordering::Relaxed) })
     }
@@ -468,7 +468,7 @@ impl AtomicThreadFree {
         let new_tf =
             ThreadFreeWord::from_parts(Some(block), crate::core_types::ThreadFreeOwner::Owned);
         let mut expected = old.raw();
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid
+        // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
         // `xthread_free` field; failure updates the typed expected word.
         if unsafe {
             self.field().compare_exchange_weak(
@@ -507,7 +507,7 @@ impl AtomicThreadFree {
         }
         let new = expected.with_owner(ThreadFreeOwner::Unowned);
         let mut raw_expected = expected.raw();
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid
+        // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
         // `xthread_free` field; the CAS clears only the ownership bit.
         if unsafe {
             self.field().compare_exchange_weak(
@@ -528,7 +528,7 @@ impl AtomicThreadFree {
         self,
         expected: &mut ThreadFreeWord,
     ) -> bool {
-        // SAFETY[AUDIT:typed-atomic-domain]: compatibility shim forwards to the
+        // SAFETY[AUDIT:typed-atomic-thread-free]: compatibility shim forwards to the
         // typed ownership-release CAS with the same xthread_free contract.
         unsafe { self.release_acq_rel(expected) }
     }
@@ -544,7 +544,7 @@ impl AtomicThreadFree {
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]
     pub(crate) unsafe fn collect_acq_rel(self) -> RemoteFreeList {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid
+        // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
         // `xthread_free` field; relaxed load mirrors the C collect loop pre-read.
         let mut old = ThreadFreeWord(unsafe { self.field().load(Ordering::Relaxed) });
         loop {
@@ -554,7 +554,7 @@ impl AtomicThreadFree {
             }
             let new = old.without_head();
             let mut raw_old = old.raw();
-            // SAFETY[AUDIT:typed-atomic-domain]: the CAS detaches only the
+            // SAFETY[AUDIT:typed-atomic-thread-free]: the CAS detaches only the
             // remote-list head while preserving the owner bit in the typed word.
             if unsafe {
                 self.field().compare_exchange_weak(
@@ -571,7 +571,7 @@ impl AtomicThreadFree {
     }
 
     pub(crate) unsafe fn take_head_preserving_owner(self) -> RemoteFreeList {
-        // SAFETY[AUDIT:typed-atomic-domain]: compatibility shim forwards to the
+        // SAFETY[AUDIT:typed-atomic-thread-free]: compatibility shim forwards to the
         // typed remote-head detach operation with the same xthread_free contract.
         unsafe { self.collect_acq_rel() }
     }
@@ -587,14 +587,14 @@ impl AtomicThreadFree {
     /// `self` must point to a valid page's `xthread_free` field.
     #[inline]
     pub(crate) unsafe fn claim_acq_rel(self) -> bool {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid
+        // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
         // `xthread_free` field and this RMW sets only the owner bit.
         let old = unsafe { self.field().fetch_or(1, Ordering::AcqRel) };
         (old & 1) == 0
     }
 
     pub(crate) unsafe fn claim_ownership(self) -> bool {
-        // SAFETY[AUDIT:typed-atomic-domain]: compatibility shim forwards to the
+        // SAFETY[AUDIT:typed-atomic-thread-free]: compatibility shim forwards to the
         // typed ownership-claim RMW with the same xthread_free contract.
         unsafe { self.claim_acq_rel() }
     }
@@ -615,13 +615,13 @@ impl AtomicThreadFree {
     #[inline]
     pub(crate) unsafe fn release_ownership(self, _expected_head: Option<BlockPtr>) -> bool {
         loop {
-            // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid
+            // SAFETY[AUDIT:typed-atomic-thread-free]: the caller provides a valid
             // `xthread_free` field; acquire load observes concurrent list updates.
             let current = unsafe { self.field().load(Ordering::Acquire) };
             let current_word = ThreadFreeWord(current);
             let new = current_word.with_owner(ThreadFreeOwner::Unowned).raw();
             let mut expected = current;
-            // SAFETY[AUDIT:typed-atomic-domain]: the CAS clears only the
+            // SAFETY[AUDIT:typed-atomic-thread-free]: the CAS clears only the
             // ownership bit while preserving the observed remote-list head.
             if unsafe {
                 self.field().compare_exchange_weak(
@@ -648,19 +648,19 @@ impl AtomicAbandonedCount {
     }
 
     pub(crate) unsafe fn load_relaxed(self) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: `AtomicAbandonedCount` points to an
+        // SAFETY[AUDIT:typed-atomic-abandoned-count]: `AtomicAbandonedCount` points to an
         // allocator-owned abandoned-count atomic and preserves relaxed loading.
         unsafe { self.field().load(Ordering::Relaxed) }
     }
 
     pub(crate) unsafe fn fetch_add_relaxed(self, value: usize) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: `AtomicAbandonedCount` points to an
+        // SAFETY[AUDIT:typed-atomic-abandoned-count]: `AtomicAbandonedCount` points to an
         // allocator-owned abandoned-count atomic and preserves relaxed increment.
         unsafe { self.field().fetch_add(value, Ordering::Relaxed) }
     }
 
     pub(crate) unsafe fn fetch_sub_relaxed(self, value: usize) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: `AtomicAbandonedCount` points to an
+        // SAFETY[AUDIT:typed-atomic-abandoned-count]: `AtomicAbandonedCount` points to an
         // allocator-owned abandoned-count atomic and preserves relaxed decrement.
         unsafe { self.field().fetch_sub(value, Ordering::Relaxed) }
     }
@@ -672,19 +672,19 @@ pub(crate) struct AtomicThreadHeapRefcount(pub(crate) AtomicUsizeField);
 
 impl AtomicThreadHeapRefcount {
     pub(crate) unsafe fn store_seq_cst(self, value: usize) {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid thread
+        // SAFETY[AUDIT:typed-atomic-thread-heap-refcount]: the caller provides a valid thread
         // heap refcount field and preserves the existing SeqCst store.
         unsafe { self.0.store(value, Ordering::SeqCst) }
     }
 
     pub(crate) unsafe fn incref_acq_rel(self) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid thread
+        // SAFETY[AUDIT:typed-atomic-thread-heap-refcount]: the caller provides a valid thread
         // heap refcount field and preserves the existing AcqRel increment.
         unsafe { self.0.fetch_add(1, Ordering::AcqRel) }
     }
 
     pub(crate) unsafe fn decref_acq_rel(self) -> usize {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid thread
+        // SAFETY[AUDIT:typed-atomic-thread-heap-refcount]: the caller provides a valid thread
         // heap refcount field and preserves the existing AcqRel decrement.
         unsafe { self.0.fetch_sub(1, Ordering::AcqRel) }
     }
@@ -696,7 +696,7 @@ pub(crate) struct AtomicArenaPage(pub(crate) *const AtomicPtr<c_void>);
 
 impl AtomicArenaPage {
     pub(crate) unsafe fn load_acquire(self) -> *mut crate::types::mi_arena_pages_t {
-        // SAFETY[AUDIT:typed-atomic-domain]: `AtomicArenaPage` points to an
+        // SAFETY[AUDIT:typed-atomic-arena-page]: `AtomicArenaPage` points to an
         // allocator-owned page-table pointer atomic and preserves acquire load.
         let atomic = unsafe { &*self.0 };
         atomic
@@ -705,7 +705,7 @@ impl AtomicArenaPage {
     }
 
     pub(crate) unsafe fn store_release(self, value: *mut crate::types::mi_arena_pages_t) {
-        // SAFETY[AUDIT:typed-atomic-domain]: `AtomicArenaPage` points to an
+        // SAFETY[AUDIT:typed-atomic-arena-page]: `AtomicArenaPage` points to an
         // allocator-owned page-table pointer atomic and preserves release store.
         let atomic = unsafe { &*self.0 };
         atomic.store(value.cast::<c_void>(), Ordering::Release);
@@ -723,7 +723,7 @@ impl<'a> AtomicGuard<'a> {
     #[inline(always)]
     pub(crate) unsafe fn try_acquire(field: AtomicUsizeField) -> Option<Self> {
         let mut expected = 0;
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid guard
+        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: the caller provides a valid guard
         // word and acquisition uses the existing AcqRel/Acquire CAS contract.
         if unsafe { field.compare_exchange_acq_rel(&mut expected, 1) } {
             Some(Self {
@@ -739,7 +739,7 @@ impl<'a> AtomicGuard<'a> {
 impl Drop for AtomicGuard<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY[AUDIT:typed-atomic-domain]: `AtomicGuard` is constructed only
+        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: `AtomicGuard` is constructed only
         // after acquiring this guard word.
         unsafe { self.field.store(0, Ordering::Release) };
     }
@@ -759,7 +759,7 @@ impl<'a> OnceGuard<'a> {
     /// `once` must refer to a valid allocator once-state.
     #[inline(always)]
     pub(crate) unsafe fn try_enter(once: OnceStatePtr) -> Option<Self> {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid
+        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: the caller provides a valid
         // allocator once-state and the guard releases it in Drop.
         if unsafe {
             crate::atomic::_mi_atomic_once_enter(once.0.cast::<crate::atomic::mi_atomic_once_t>())
@@ -777,7 +777,7 @@ impl<'a> OnceGuard<'a> {
 impl Drop for OnceGuard<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY[AUDIT:typed-atomic-domain]: `OnceGuard` is constructed only
+        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: `OnceGuard` is constructed only
         // after entering this once-state.
         unsafe {
             crate::atomic::_mi_atomic_once_release(
@@ -801,7 +801,7 @@ impl<'a> MiLockGuard<'a> {
     /// `lock` must refer to a valid allocator lock.
     #[inline(always)]
     pub(crate) unsafe fn acquire(lock: MiLockPtr) -> Self {
-        // SAFETY[AUDIT:typed-atomic-domain]: the caller provides a valid
+        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: the caller provides a valid
         // allocator lock and the guard releases it in Drop.
         unsafe { crate::atomic::mi_lock_acquire(lock.0.as_ptr()) };
         Self {
@@ -814,7 +814,7 @@ impl<'a> MiLockGuard<'a> {
 impl Drop for MiLockGuard<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY[AUDIT:typed-atomic-domain]: `MiLockGuard` is constructed only
+        // SAFETY[AUDIT:typed-atomic-guard-once-lock]: `MiLockGuard` is constructed only
         // after acquiring this lock.
         unsafe { crate::atomic::mi_lock_release(self.lock.0.as_ptr()) };
     }
@@ -827,7 +827,7 @@ pub(super) fn __lint_touch() {
         as unsafe fn(AtomicPageThreadId, &mut PageThreadId, PageThreadId) -> bool;
     let _ = core::mem::size_of::<RemotePushOutcome>();
     if let RemotePushOutcome::Failed(block) =
-        // SAFETY[AUDIT:typed-atomic-domain]: lint-only fixture uses a dangling
+        // SAFETY[AUDIT:typed-atomic-thread-free]: lint-only fixture uses a dangling
         // non-dereferenced block identity to keep enum field reachability checked.
         RemotePushOutcome::Failed(unsafe {
             BlockPtr::new_unchecked(core::ptr::dangling_mut())

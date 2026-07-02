@@ -5,12 +5,22 @@ pub(super) fn assert_cxx_compatibility_boundaries(sources: &UnsafePerformanceSou
     let raw_macros_rs = sources.raw_macros_rs.as_str();
 
     assert!(
-        raw_macros_rs
-            .matches("SAFETY[AUDIT:raw-macro-cxx-boundary]")
-            .count()
-            >= 45,
-        "C++ raw facade compatibility should keep operation-level audit markers"
+        !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-boundary]"),
+        "C++ raw facade compatibility should stay split instead of reusing the old broad marker"
     );
+    for (audit_id, min_count) in [
+        ("raw-macro-cxx-delete-boundary", 3),
+        ("raw-macro-cxx-array-delete-boundary", 3),
+        ("raw-macro-cxx-aligned-boundary", 29),
+        ("raw-macro-cxx-nothrow-boundary", 7),
+        ("raw-macro-cxx-new-boundary", 4),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            raw_macros_rs.matches(&marker).count() >= min_count,
+            "C++ raw facade boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
     for symbol in [
         "pub static _mi_cxx_interposes: [mi_interpose_s; 8]",
         "unsafe(export_name = \"_ZdlPv\")",

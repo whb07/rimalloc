@@ -9,8 +9,9 @@ and full validation.
 
 This follow-up pass has now also moved `src/allocator/init.rs`,
 `src/internal/bitmap.rs`, `src/allocator/alloc.rs`, and
-`src/allocator/page.rs` off the unsafe migration allowlist with local operation
-markers, audit evidence, release-audit guards, and focused behavior tests.
+`src/allocator/page.rs`, and `src/allocator/arena.rs` off the unsafe migration
+allowlist with local operation markers, audit evidence, release-audit guards,
+and focused behavior tests.
 
 The next pass should finish the same class of work: retire every remaining
 file-level unsafe migration allowance, one file at a time, while preserving raw
@@ -20,8 +21,8 @@ test exposes a concrete bug.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 3 entries: 1 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 3.
+- `docs/unsafe-migration-allowlist.tsv` has 2 translation entries and no
+  production entries. `ALLOWLIST_ENTRY_CAP` is 2.
 - The just-completed pass moved `src/allocator/free.rs` to 69
   `SAFETY[AUDIT:free-path-boundary]` markers, `src/allocator/options.rs` to 76
   `SAFETY[AUDIT:options-callback-boundary]` markers,
@@ -38,9 +39,10 @@ Current review evidence:
   `src/allocator/alloc.rs` to 166
   `SAFETY[AUDIT:allocation-entry-boundary]` markers, and
   `src/allocator/page.rs` to 102
-  `SAFETY[AUDIT:page-allocation-boundary]` markers.
-- The remaining production allowlist entry with no local markers is
-  `src/allocator/arena.rs` at 3,915 lines with 607 `unsafe` hits.
+  `SAFETY[AUDIT:page-allocation-boundary]` markers. It also moved
+  `src/allocator/arena.rs` to 340
+  `SAFETY[AUDIT:arena-region-boundary]` markers.
+- No production allowlist entries remain without local markers.
 - Remaining translation allowlist entries with no local markers are
   `src/internal/mod.rs` at 1,533 lines with 163 `unsafe` hits, and
   `src/platform/windows.rs` at 2,191 lines with 214 `unsafe` hits.
@@ -55,6 +57,7 @@ Current review evidence:
   `src/allocator/init.rs` each still have 3 path-wide entries; both are no
   longer on the unsafe migration allowlist.
 - The largest unsafe audit marker clusters remain broad enough to split later:
+  `SAFETY[AUDIT:arena-region-boundary]` has 340 markers,
   `SAFETY[AUDIT:init-lifecycle-boundary]` has 277 markers,
   `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers,
   `SAFETY[AUDIT:allocation-entry-boundary]` has 166 markers,
@@ -75,7 +78,7 @@ Current review evidence:
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers, and
   `SAFETY[AUDIT:free-path-boundary]` has 69 markers.
 - The release audit is split but still has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,504 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,533 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
   `tests/release_fast_path_audit.rs` is 1,935 lines,
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines, and
@@ -194,27 +197,27 @@ Verify: page/bin unit tests, runtime-gate tests, release fast-path audit,
 no-allocation critical-path tests, unsafe audit scripts, unsafe inventory
 regeneration/check, full clippy, and full tests.
 
-## Issue: Arena region boundary still uses a file-level unsafe allowance
+## Completed: Arena region boundary moved off the file-level unsafe allowance
 
 > **Comment:** `src/allocator/arena.rs` is the largest remaining production
 > allowlist entry. It owns arena registry state, abandoned page claims, slice
 > mapping, arena allocation/free, purge traversal, page alloc/free/abandon
-> shims, and subproc arena tables. It should be migrated after the smaller hot
-> alloc/page boundaries are classified.
+> shims, and subproc arena tables. It now has local operation markers, evidence
+> rows, and release-audit guards instead of a file-level migration allowance.
 
-- [ ] Add local `SAFETY[AUDIT:arena-region-boundary]` markers for arena table
+- [x] Add local `SAFETY[AUDIT:arena-region-boundary]` markers for arena table
       access, arena metadata initialization, slice index/range projection,
       abandoned-page bitmap traversal, purge visitors, arena alloc/free,
       page alloc/free/abandon/unabandon/reabandon shims, and raw arena exports.
-- [ ] Preserve arena index bounds, NUMA fields, memid ownership, abandoned-page
+- [x] Preserve arena index bounds, NUMA fields, memid ownership, abandoned-page
       claim/reclaim semantics, purge ordering, subproc arena table locking,
       page ownership transfer, OS memory interaction, and C ABI callback
       signatures.
-- [ ] Add or extend release-audit assertions and focused tests for marker
+- [x] Add or extend release-audit assertions and focused tests for marker
       coverage, no migration allowlist entry, arena id/memid helpers, bitmap
       visitor shape, heap page visitor integration, page lifecycle shims, and
       arena purge/allocation behavior.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/allocator/arena.rs` from the unsafe migration allowlist, regenerate
       unsafe inventory, and lower the cap.
 
@@ -281,7 +284,7 @@ and full tests.
 2. [x] Migrate `src/internal/bitmap.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/allocator/alloc.rs` off the unsafe migration allowlist.
 4. [x] Migrate `src/allocator/page.rs` off the unsafe migration allowlist.
-5. [ ] Migrate `src/allocator/arena.rs` off the unsafe migration allowlist.
+5. [x] Migrate `src/allocator/arena.rs` off the unsafe migration allowlist.
 6. [ ] Migrate `src/internal/mod.rs` off the unsafe migration allowlist.
 7. [ ] Migrate `src/platform/windows.rs` off the unsafe migration allowlist.
 
@@ -289,10 +292,10 @@ and full tests.
 
 - [ ] The unsafe migration allowlist cap is lowered after each migrated file and
       reaches zero when the final entry is removed.
-- [ ] The completed init, bitmap, allocation, and page migrations plus all
-      3 remaining allowlisted files are covered by operation-level audit markers, source
-      audit entries, evidence rows, release-audit guards, and focused behavior
-      tests instead of file-level migration exceptions.
+- [ ] The completed init, bitmap, allocation, page, and arena migrations plus
+      both remaining allowlisted files are covered by operation-level audit
+      markers, source audit entries, evidence rows, release-audit guards, and
+      focused behavior tests instead of file-level migration exceptions.
 - [ ] Allocator initialization, bitmap traversal, allocation hot paths, page
       allocation, arena ownership, internal translation helpers, and Windows
       platform primitives preserve their raw ABI contracts and performance

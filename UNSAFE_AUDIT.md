@@ -257,6 +257,14 @@ Operation IDs:
   state witnesses; arena page allocation/free handoff; and C ABI helper shims
   while preserving queue ownership, used/capacity counters, stats gates, and
   no-allocation hot-path constraints.
+- `SAFETY[AUDIT:arena-region-boundary]`: `src/allocator/arena.rs` owns arena
+  registry state, slice maps, abandoned-page bitmap claims, arena allocation
+  and free, purge scheduling/traversal, page alloc/free/abandon/unabandon
+  shims, subproc arena tables, and raw arena exports. Unsafe operations are
+  limited to caller-proven arena, heap, page, slice, and OS-memory pointers;
+  typed arena/slice/memid witnesses; bitmap visitor callbacks; page lifecycle
+  handoff; and C ABI helper shims while preserving arena ownership,
+  subproc table synchronization, memid provenance, and purge semantics.
 - `SAFETY[AUDIT:internal-bitmap-boundary]`: `src/internal/bitmap.rs` owns
   bitmap and binned-bitmap chunk maps, bit scanning, set/clear mutation,
   first-fit claim loops, arena traversal callbacks, and AVX2 bitmap helper

@@ -1,4 +1,3 @@
 path	category	owner	remove_by	reason
-src/allocator/arena.rs	production	release-readiness	2026-09-30	legacy translated allocator unsafe pending per-operation SAFETY marker migration
 src/internal/mod.rs	translation	release-readiness	2026-09-30	legacy translated internal macros and layout helpers pending per-operation SAFETY marker migration
 src/platform/windows.rs	translation	release-readiness	2026-09-30	legacy translated Windows ABI and platform unsafe pending per-operation SAFETY marker migration

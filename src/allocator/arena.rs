@@ -137,11 +137,13 @@ struct mi_purge_visit_info_t {
     any_purged: bool,
 }
 
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_arena_min_alignment() -> usize {
     MI_ARENA_SLICE_ALIGN
 }
 
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_arena_min_size() -> usize {
     MI_ARENA_MIN_SIZE
@@ -149,12 +151,14 @@ pub extern "C" fn mi_arena_min_size() -> usize {
 
 /// # Safety
 /// `subproc` must point to a valid `mi_subproc_t`.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usize {
     let Some(subproc) = SubprocPtr::new(subproc) else {
         crate::internal::mi_assert_internal!(false);
         return 0;
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { mi_arenas_get_count_typed(subproc) }
 }
 
@@ -168,6 +172,7 @@ unsafe fn mi_arenas_get_count_typed(subproc: SubprocPtr) -> usize {
 
 unsafe fn mi_arena_info_slices(arena: ArenaPtr) -> usize {
     let arena = arena.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { (*arena.cast::<MiArenaPrefix>()).info_slices }
 }
 
@@ -175,11 +180,13 @@ unsafe fn mi_arena_range_is_after_info_slices(
     arena: ArenaPtr,
     range: crate::core_types::SliceRange,
 ) -> bool {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     range.start_usize() >= unsafe { mi_arena_info_slices(arena) }
 }
 
 unsafe fn mi_heap_arena_pages(heap: BorrowedHeap, arena: ArenaPtr) -> *mut mi_arena_pages_t {
     let arena = arena.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let arena_idx = unsafe { mi_arena_index(arena) };
     unsafe { mi_heap_arena_page_cell(heap, arena_idx).load_acquire() }.cast::<mi_arena_pages_t>()
 }
@@ -191,6 +198,7 @@ unsafe fn mi_page_arena_pages(
     parena_pages: *mut *mut mi_arena_pages_t,
 ) -> *mut mi_arena_t {
     let page = page.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     let arena = unsafe { mi_arena_from_memid((*page).memid, slice_index, slice_count) };
     crate::internal::mi_assert_internal!(!arena.is_null());
@@ -204,6 +212,7 @@ unsafe fn mi_page_arena_pages(
         crate::internal::mi_assert_internal!(!arena_pages.is_null());
         crate::internal::mi_assert_internal!(
             slice_index.is_null()
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 || unsafe { mi_bitmap_is_setN((*arena_pages).pages, *slice_index, 1) }
         );
         unsafe { *parena_pages = arena_pages };
@@ -215,6 +224,7 @@ unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page: PagePtr) -
     let borrowed_heap = heap;
     let arena = arena.as_ptr();
     let page = page.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let arena_idx = unsafe { mi_arena_index(arena) };
     let arena_pages = unsafe { mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire() }
         .cast::<MiArenaPagesPrefix>();
@@ -222,6 +232,7 @@ unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page: PagePtr) -
         crate::core_types::MemIdView::Arena(a) => {
             a.arena.as_ptr() == arena
                 && !arena_pages.is_null()
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 && unsafe { mi_bitmap_is_setN((*arena_pages).pages, a.range.start().0, 1) }
         }
         _ => false,
@@ -230,6 +241,7 @@ unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page: PagePtr) -
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 unsafe fn mi_set_errno(err: c_int) {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe extern "C" {
         fn __errno_location() -> *mut c_int;
     }
@@ -238,6 +250,7 @@ unsafe fn mi_set_errno(err: c_int) {
 
 #[cfg(target_vendor = "apple")]
 unsafe fn mi_set_errno(err: c_int) {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe extern "C" {
         fn __error() -> *mut c_int;
     }
@@ -269,12 +282,14 @@ unsafe fn mi_arena_commit(
     already_committed: crate::core_types::CommittedBytes,
 ) -> bool {
     let arena_raw = arena.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let start = unsafe {
         mi_arena_slice_start(arena, range.start())
             .as_ptr()
             .cast::<c_void>()
     };
     let size = commit_size.get();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let commit_fun = unsafe { (*arena_raw.cast::<MiArenaPrefix>()).commit_fun };
     if let Some(commit_fun) = commit_fun {
         return unsafe {
@@ -288,6 +303,7 @@ unsafe fn mi_arena_commit(
         };
     }
     if !already_committed.is_zero() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { _mi_os_commit_ex(start, size, is_zero, already_committed) }
     } else {
         unsafe { _mi_os_commit(start, size, is_zero) }
@@ -296,12 +312,14 @@ unsafe fn mi_arena_commit(
 
 unsafe fn mi_arena_size(arena: ArenaPtr) -> crate::core_types::ReservedBytes {
     let arena = arena.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::core_types::ReservedBytes::new(mi_size_of_slices(unsafe {
         (*arena.cast::<MiArenaPrefix>()).slice_count
     }))
 }
 
 unsafe fn mi_arena_start(arena: ArenaPtr) -> crate::core_types::SliceStart {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { crate::core_types::SliceStart::new_unchecked(arena.as_ptr().cast::<u8>()) }
 }
 
@@ -313,6 +331,7 @@ unsafe fn mi_arena_slice_start(
     let arena_raw = arena.as_ptr();
     let slice_index = slice_index.get();
     crate::internal::mi_assert_internal!(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         slice_index < unsafe { (*arena_raw.cast::<MiArenaPrefix>()).slice_count }
     );
     let start = unsafe {
@@ -320,6 +339,7 @@ unsafe fn mi_arena_slice_start(
             .as_ptr()
             .add(mi_size_of_slices(slice_index))
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { crate::core_types::SliceStart::new_unchecked(start) }
 }
 
@@ -331,38 +351,45 @@ unsafe fn mi_arena_page_at_slice(
     let arena = arena.as_ptr();
     let slice_index_usize = slice_index.get();
     crate::internal::mi_assert_internal!(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         slice_index_usize < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
     let pages_meta = unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta };
     if !pages_meta.is_null() {
         return unsafe { PagePtr::new_unchecked(pages_meta.add(slice_index_usize)) };
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let page = unsafe {
         mi_arena_slice_start(ArenaPtr::new_unchecked(arena), slice_index)
             .as_ptr()
             .cast::<mi_page_t>()
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { PagePtr::new_unchecked(page) }
 }
 
 /// # Safety
 /// `arena_id` must be null or a valid top-level arena id; `size` may be null.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_arena_area(arena_id: mi_arena_id_t, size: *mut usize) -> *mut c_void {
     if !size.is_null() {
         unsafe { *size = 0 };
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let arena = unsafe { _mi_arena_from_id(arena_id) };
     if arena.is_null() {
         return ptr::null_mut();
     }
     if !size.is_null() {
         crate::internal::mi_assert_internal!(
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             mi_size_of_slices(unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count })
                 <= unsafe { (*arena.cast::<MiArenaPrefix>()).total_size }
         );
         unsafe { *size = (*arena.cast::<MiArenaPrefix>()).total_size };
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_arena_start(ArenaPtr::new_unchecked(arena))
             .as_ptr()
@@ -379,12 +406,14 @@ unsafe fn mi_arena_strictly_contains(
         return false;
     };
     let p = p.as_u8_ptr().cast_const();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let start = unsafe { mi_arena_start(arena).as_ptr().cast_const() };
     let end = unsafe { start.add(size.get()) };
     start <= p && end > p
 }
 
 unsafe fn mi_arenas_contain_ex(p: Option<InteriorUserPtr>, parent: Option<ArenaPtr>) -> bool {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let subproc = unsafe { _mi_subproc() };
     let subproc_ptr = unsafe { SubprocPtr::new_unchecked(subproc) };
     let max_arena = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
@@ -394,6 +423,7 @@ unsafe fn mi_arenas_contain_ex(p: Option<InteriorUserPtr>, parent: Option<ArenaP
             crate::internal::mi_assert_internal!(false);
             continue;
         };
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let arena = unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) };
         let Some(arena_ptr) = ArenaPtr::new(arena) else {
             continue;
@@ -401,6 +431,7 @@ unsafe fn mi_arenas_contain_ex(p: Option<InteriorUserPtr>, parent: Option<ArenaP
         if !arena.is_null()
             && (parent_raw.is_none()
                 || Some(arena) == parent_raw
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 || unsafe { Some((*arena.cast::<MiArenaPrefix>()).parent) == parent_raw })
             && unsafe { mi_arena_strictly_contains(arena_ptr, p, mi_arena_size(arena_ptr)) }
         {
@@ -412,21 +443,25 @@ unsafe fn mi_arenas_contain_ex(p: Option<InteriorUserPtr>, parent: Option<ArenaP
 
 /// # Safety
 /// `p` may be any pointer value.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_contain(p: *const c_void) -> bool {
     unsafe { mi_arenas_contain_ex(InteriorUserPtr::new(p.cast_mut()), None) }
 }
 
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[used]
 static MI_ARENAS_CONTAIN_KEEP: unsafe extern "C" fn(*const c_void) -> bool = _mi_arenas_contain;
 
 /// # Safety
 /// `arena_id` must be null or a valid top-level arena id; `p` may be any pointer value.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_void) -> bool {
     let arena = unsafe { _mi_arena_from_id(arena_id) };
     if arena.is_null() {
         false
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     } else if unsafe {
         mi_arena_strictly_contains(
             ArenaPtr::new_unchecked(arena),
@@ -436,6 +471,7 @@ pub unsafe extern "C" fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_
     } {
         true
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             mi_arenas_contain_ex(
                 InteriorUserPtr::new(p.cast_mut()),
@@ -455,6 +491,7 @@ unsafe fn mi_arena_try_alloc_at(
     let arena = arena.as_ptr();
     let slice_count = slice_count.get() as usize;
     let mut slice_index = 0usize;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if !unsafe {
         mi_bbitmap_try_find_and_clearN(
             (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -466,6 +503,7 @@ unsafe fn mi_arena_try_alloc_at(
         return None;
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let p = unsafe {
         mi_arena_slice_start(arena_ptr, crate::core_types::SliceIndex::new(slice_index))
             .as_ptr()
@@ -474,6 +512,7 @@ unsafe fn mi_arena_try_alloc_at(
     let Some(range) = crate::core_types::SliceRange::new(slice_index, slice_count, arena_ptr).ok()
     else {
         crate::internal::mi_assert_internal!(false);
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             mi_bbitmap_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -486,12 +525,14 @@ unsafe fn mi_arena_try_alloc_at(
     let mut allocation = crate::core_types::ArenaAllocation {
         arena: arena_ptr,
         range,
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         memid: unsafe { mi_memid_create_arena(arena, range) },
     };
 
     let mut touched_slices = slice_count;
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.initially_zero } {
         let mut already_dirty = 0usize;
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         allocation.memid.initially_zero = unsafe {
             mi_bitmap_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_dirty,
@@ -505,6 +546,7 @@ unsafe fn mi_arena_try_alloc_at(
     }
 
     if commit {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let already_committed = unsafe {
             mi_bitmap_popcountN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -514,6 +556,7 @@ unsafe fn mi_arena_try_alloc_at(
         };
         if already_committed < slice_count {
             let mut commit_zero = false;
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             if !unsafe {
                 mi_arena_commit(
                     arena_ptr,
@@ -523,6 +566,7 @@ unsafe fn mi_arena_try_alloc_at(
                     crate::internal::mi_committed_bytes_of_slices(slice_count - already_committed),
                 )
             } {
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe {
                     mi_bbitmap_setN(
                         (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -535,6 +579,7 @@ unsafe fn mi_arena_try_alloc_at(
             if commit_zero {
                 allocation.memid.initially_zero = true;
             }
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 mi_bitmap_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -545,6 +590,7 @@ unsafe fn mi_arena_try_alloc_at(
             };
             if MI_DEBUG > 1
                 && allocation.memid.initially_zero
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 && !unsafe { mi_mem_is_zero(p, mi_size_of_slices(slice_count)) }
             {
                 crate::options::_mi_error_message_fmt(
@@ -554,11 +600,13 @@ unsafe fn mi_arena_try_alloc_at(
                 allocation.memid.initially_zero = false;
             }
         } else {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe { _mi_os_reuse(p, mi_size_of_slices(slice_count)) };
             if unsafe { _mi_os_has_overcommit() }
                 && touched_slices > 0
                 && !unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned }
             {
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe {
                     __mi_stat_increase_mt(
                         &mut (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed,
@@ -568,6 +616,7 @@ unsafe fn mi_arena_try_alloc_at(
             }
         }
 
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -578,11 +627,13 @@ unsafe fn mi_arena_try_alloc_at(
         allocation.memid.initially_committed = true;
 
         if allocation.memid.initially_zero {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe { mi_track_mem_defined(p, slice_count * MI_ARENA_SLICE_SIZE) };
         } else {
             unsafe { mi_track_mem_undefined(p, slice_count * MI_ARENA_SLICE_SIZE) };
         }
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         allocation.memid.initially_committed = unsafe {
             mi_bitmap_is_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -592,6 +643,7 @@ unsafe fn mi_arena_try_alloc_at(
         };
         if !allocation.memid.initially_committed {
             let mut already_committed_count = 0usize;
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 mi_bitmap_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -600,6 +652,7 @@ unsafe fn mi_arena_try_alloc_at(
                     &mut already_committed_count,
                 )
             };
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 mi_bitmap_clearN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -607,6 +660,7 @@ unsafe fn mi_arena_try_alloc_at(
                     slice_count,
                 )
             };
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 __mi_stat_adjust_decrease_mt(
                     ptr::addr_of_mut!((*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed),
@@ -616,6 +670,7 @@ unsafe fn mi_arena_try_alloc_at(
         }
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe {
         mi_bbitmap_is_clearN(
             (*allocation.arena.as_ptr().cast::<MiArenaPrefix>()).slices_free,
@@ -624,6 +679,7 @@ unsafe fn mi_arena_try_alloc_at(
         )
     });
     if commit {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN(
                 (*allocation.arena.as_ptr().cast::<MiArenaPrefix>()).slices_committed,
@@ -633,6 +689,7 @@ unsafe fn mi_arena_try_alloc_at(
         });
         crate::internal::mi_assert_internal!(allocation.memid.initially_committed);
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe {
         mi_bitmap_is_setN(
             (*allocation.arena.as_ptr().cast::<MiArenaPrefix>()).slices_dirty,
@@ -646,6 +703,7 @@ unsafe fn mi_arena_try_alloc_at(
 
 /// # Safety
 /// `subproc` must point to a valid `mi_subproc_t`, and `idx` must be in range.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arena_from_index(
     subproc: *mut mi_subproc_t,
@@ -659,16 +717,19 @@ pub unsafe extern "C" fn mi_arena_from_index(
         crate::internal::mi_assert_internal!(false);
         return ptr::null_mut();
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(idx < unsafe { mi_arenas_get_count_typed(subproc_ptr) });
     unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) }
 }
 
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_arena_t) -> mi_arena_id_t = ids::mi_arena_id_from_arena;
 
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_subproc_t) -> usize = mi_arenas_get_count;
 
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_subproc_t, usize) -> *mut mi_arena_t = mi_arena_from_index;
 
@@ -679,6 +740,7 @@ unsafe fn mi_arena_start_idx(
 ) -> ArenaIndex {
     let arena_cycle = arena_cycle.get() as usize;
     let heap = heap.ptr().as_ptr().cast::<MiHeapPrefix>();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let subproc = unsafe { (*heap).subproc.cast::<MiSubprocPrefix>() };
     let hseq = crate::core_types::HeapSeq::new(unsafe { (*heap).heap_seq });
     let hcount = unsafe { (*subproc).heap_count.load(Ordering::Relaxed) };
@@ -686,6 +748,7 @@ unsafe fn mi_arena_start_idx(
         return unsafe { ArenaIndex::new_unchecked(0) };
     }
     if hseq.get() == 0 || hcount <= 1 || arena_cycle > 0x8FF {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         return unsafe { ArenaIndex::new_unchecked((tseq.get() % arena_cycle) as u16) };
     }
 
@@ -702,6 +765,7 @@ unsafe fn mi_arena_start_idx(
         start
     };
     crate::internal::mi_assert_internal!(start < arena_cycle);
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { ArenaIndex::new_unchecked(start as u16) }
 }
 
@@ -710,6 +774,7 @@ unsafe fn mi_arena_numa_node(arena: *const mi_arena_t) -> crate::core_types::Num
 }
 
 unsafe fn mi_arena_set_numa_node(arena: *mut mi_arena_t, numa_node: crate::core_types::NumaNode) {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).numa_node = numa_node.get();
     }
@@ -723,6 +788,7 @@ unsafe fn mi_arena_is_suitable_ex(
     allow_pinned: crate::core_types::AllowPinned,
 ) -> bool {
     let arena_raw = arena.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if !allow_pinned.get() && unsafe { (*arena_raw.cast::<MiArenaPrefix>()).memid.is_pinned } {
         return false;
     }
@@ -730,6 +796,7 @@ unsafe fn mi_arena_is_suitable_ex(
         return false;
     }
     if req_arena.is_none() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let arena_numa = unsafe { mi_arena_numa_node(arena_raw) };
         let numa_suitable = arena_numa.is_suitable_for(numa_node);
         if match_numa.get() {
@@ -752,6 +819,7 @@ unsafe fn mi_forall_arenas<F>(
     F: FnMut(ArenaPtr) -> bool,
 {
     let heap = heap.ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let Some(subproc) = (unsafe { heap.subproc() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
@@ -762,6 +830,7 @@ unsafe fn mi_forall_arenas<F>(
         crate::internal::mi_assert_internal!(false);
         return;
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let start = unsafe {
         mi_arena_start_idx(BorrowedHeap::new_unchecked(heap), tseq, arena_cycle_idx).get() as usize
     };
@@ -785,6 +854,7 @@ unsafe fn mi_forall_arenas<F>(
                 crate::internal::mi_assert_internal!(false);
                 continue;
             };
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             let Some(arena) = (unsafe { subproc.arena(arena_idx) }) else {
                 continue;
             };
@@ -807,6 +877,7 @@ unsafe fn mi_forall_suitable_arenas<F>(
 ) where
     F: FnMut(ArenaPtr) -> bool,
 {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_forall_arenas(heap, req_arena, tseq, |arena| {
             !mi_arena_is_suitable_ex(
@@ -838,6 +909,7 @@ unsafe fn mi_arenas_try_find_free(
     }
 
     let mut found = ptr::null_mut();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_forall_suitable_arenas(
             heap,
@@ -863,6 +935,7 @@ unsafe fn mi_arenas_try_find_free(
         return found;
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_forall_suitable_arenas(
             heap,
@@ -897,6 +970,7 @@ unsafe fn mi_arena_pages_size(
     crate::internal::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
     let base_size = _mi_align_up(size_of::<mi_arena_pages_t>(), MI_BCHUNK_SIZE);
     let bitmaps_count = 1 + MI_ARENA_BIN_COUNT;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let bitmaps_size = bitmaps_count * unsafe { mi_bitmap_size(slice_count, ptr::null_mut()) };
     let size = base_size + bitmaps_size;
     (
@@ -913,6 +987,7 @@ unsafe fn mi_arena_info_slices_needed(
     crate::internal::mi_assert_internal!(slice_count.is_multiple_of(MI_ARENA_BCHUNK_BITS));
     let base_size = _mi_align_up(size_of::<mi_arena_t>(), MI_BCHUNK_SIZE);
     let bitmaps_count = 4 + MI_ARENA_BIN_COUNT;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let bitmaps_size = (bitmaps_count * unsafe { mi_bitmap_size(slice_count, ptr::null_mut()) })
         + unsafe { mi_bbitmap_size(slice_count, ptr::null_mut()) };
     let pages_size = if crate::internal::MI_PAGE_META_IS_SEPARATED != 0 {
@@ -921,6 +996,7 @@ unsafe fn mi_arena_info_slices_needed(
         0
     };
     let size = base_size + bitmaps_size + pages_size;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let info_size = _mi_align_up(size, unsafe { crate::os::_mi_os_page_size_typed().get() })
         + unsafe { crate::os::_mi_os_secure_guard_page_size() };
     let info_slices = mi_slice_count_of_size(info_size);
@@ -934,6 +1010,7 @@ unsafe fn mi_arena_bitmap_init(
     slice_count: crate::core_types::SliceCount,
     base: *mut *mut u8,
 ) -> *mut mi_bitmap_t {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let bitmap = unsafe { *base }.cast::<mi_bitmap_t>();
     let size = unsafe { mi_bitmap_init(bitmap, slice_count.get() as usize, true) };
     unsafe { *base = (*base).add(size) };
@@ -944,6 +1021,7 @@ unsafe fn mi_arena_bbitmap_init(
     slice_count: crate::core_types::SliceCount,
     base: *mut *mut u8,
 ) -> *mut mi_bbitmap_t {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let bbitmap = unsafe { *base }.cast::<mi_bbitmap_t>();
     let size = unsafe { mi_bbitmap_init(bbitmap, slice_count.get() as usize, true) };
     unsafe { *base = (*base).add(size) };
@@ -958,6 +1036,7 @@ unsafe fn mi_arena_pages_alloc(
 ) -> *mut mi_arena_pages_t {
     crate::internal::mi_assert_internal!(range.start_usize() == 0);
     crate::internal::mi_assert_internal!(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         range.end_usize() <= unsafe { arena.slice_count() }.get() as usize
     );
     let slice_count = range.count();
@@ -967,6 +1046,7 @@ unsafe fn mi_arena_pages_alloc(
     if arena_pages.is_null() {
         return ptr::null_mut();
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let mut base = unsafe { arena_pages.cast::<u8>().add(bitmap_base.get()) };
     crate::internal::mi_assert_internal!((base as usize).is_multiple_of(MI_BCHUNK_SIZE));
     unsafe { (*arena_pages).pages = mi_arena_bitmap_init(slice_count, &mut base) };
@@ -979,18 +1059,21 @@ unsafe fn mi_arena_pages_alloc(
 unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
     let subproc_ptr = subproc;
     let subproc = subproc.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
     for i in 0..arena_count {
         let Some(arena_idx) = ArenaIndex::from_usize(i) else {
             crate::internal::mi_assert_internal!(false);
             continue;
         };
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let arena = unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) };
         if !arena.is_null() {
             unsafe {
                 mi_subproc_arena_cell(subproc, arena_idx)
                     .store(ptr::null_mut(), crate::core_types::MemoryOrder::Release);
             }
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             if mi_memid_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid }) {
                 unsafe {
                     crate::internal::_mi_os_free_ex(
@@ -1007,6 +1090,7 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
         }
     }
     let mut expected = arena_count;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let _ = unsafe {
         crate::core_types::AtomicUsizeField(
             ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
@@ -1018,12 +1102,14 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
 /// # Safety
 /// Caller must ensure `subproc` is valid and destruction is only used in the same narrow cases
 /// as the original C implementation.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t) {
     let Some(subproc) = SubprocPtr::new(subproc) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { mi_arenas_unsafe_destroy(subproc) };
 }
 
@@ -1034,27 +1120,32 @@ unsafe fn mi_arenas_add(
 ) -> bool {
     let subproc = subproc.as_ptr();
     let arena = arena_ptr.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe { arena_ptr.slice_count() }.get() > 0);
     if !arena_id.is_null() {
         unsafe { *arena_id = _mi_arena_id_none() };
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let mut count = unsafe { mi_arenas_get_count_typed(SubprocPtr::new_unchecked(subproc)) };
     for i in 0..count {
         let Some(arena_idx) = ArenaIndex::from_usize(i) else {
             crate::internal::mi_assert_internal!(false);
             continue;
         };
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         if unsafe { mi_arena_from_index_typed(SubprocPtr::new_unchecked(subproc), arena_idx) }
             .is_null()
         {
             unsafe { arena_ptr.set_index(arena_idx) };
             let mut expected = ptr::null_mut::<mi_arena_t>();
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             if unsafe {
                 mi_subproc_arena_cell(subproc, arena_idx)
                     .compare_exchange_release(&mut expected, arena)
             } {
                 if !arena_id.is_null() {
+                    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                     unsafe { *arena_id = mi_arena_id_from_arena_typed(arena_ptr) };
                 }
                 return true;
@@ -1064,6 +1155,7 @@ unsafe fn mi_arenas_add(
 
     while count < MI_MAX_ARENAS {
         let next_count = count + 1;
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         if unsafe {
             crate::core_types::AtomicUsizeField(
                 ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
@@ -1074,12 +1166,14 @@ unsafe fn mi_arenas_add(
                 crate::internal::mi_assert_internal!(false);
                 continue;
             };
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe { arena_ptr.set_index(arena_idx) };
             let mut expected = ptr::null_mut::<mi_arena_t>();
             if unsafe {
                 mi_subproc_arena_cell(subproc, arena_idx)
                     .compare_exchange_release(&mut expected, arena)
             } {
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe {
                     __mi_stat_counter_increase(
                         ptr::addr_of_mut!(
@@ -1091,6 +1185,7 @@ unsafe fn mi_arenas_add(
                     )
                 };
                 if !arena_id.is_null() {
+                    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                     unsafe { *arena_id = mi_arena_id_from_arena_typed(arena_ptr) };
                 }
                 return true;
@@ -1098,6 +1193,7 @@ unsafe fn mi_arenas_add(
         }
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).arena_idx = 0;
         (*arena.cast::<MiArenaPrefix>()).subproc = ptr::null_mut();
@@ -1135,6 +1231,7 @@ unsafe fn mi_arena_initialize(
     }
 
     let mut bitmap_base = 0usize;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let info_slices = unsafe { mi_arena_info_slices_needed(slice_count, &mut bitmap_base) };
     if slice_count_usize < info_slices + 1 {
         crate::options::_mi_warning_message_fmt(format_args!(
@@ -1157,6 +1254,7 @@ unsafe fn mi_arena_initialize(
     if !memid.initially_committed {
         let mut commit_size = mi_size_of_slices(info_slices);
         if !memid.is_pinned {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             commit_size -= unsafe { crate::os::_mi_os_secure_guard_page_size() };
         }
         let ok = if let Some(commit_fun) = commit_fun {
@@ -1170,6 +1268,7 @@ unsafe fn mi_arena_initialize(
                 )
             }
         } else {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe { _mi_os_commit(arena.cast::<c_void>(), commit_size, ptr::null_mut()) }
         };
         if !ok {
@@ -1179,6 +1278,7 @@ unsafe fn mi_arena_initialize(
             return ptr::null_mut();
         }
     } else if !memid.is_pinned {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             crate::os::_mi_os_secure_guard_page_set_before(
                 arena
@@ -1190,6 +1290,7 @@ unsafe fn mi_arena_initialize(
         };
     }
     if !memid.initially_zero {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             crate::internal::_mi_memzero(
                 arena.cast::<c_void>(),
@@ -1198,6 +1299,7 @@ unsafe fn mi_arena_initialize(
         };
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).subproc = subproc_raw;
         (*arena.cast::<MiArenaPrefix>()).memid = memid;
@@ -1221,11 +1323,13 @@ unsafe fn mi_arena_initialize(
         (*arena.cast::<MiArenaPrefix>()).total_size = total_size.get();
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let mut base = unsafe {
         mi_arena_start(ArenaPtr::new_unchecked(arena))
             .as_ptr()
             .add(bitmap_base)
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).slices_free = mi_arena_bbitmap_init(slice_count, &mut base)
     };
@@ -1233,28 +1337,33 @@ unsafe fn mi_arena_initialize(
         (*arena.cast::<MiArenaPrefix>()).slices_committed =
             mi_arena_bitmap_init(slice_count, &mut base)
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).slices_dirty = mi_arena_bitmap_init(slice_count, &mut base)
     };
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).slices_purge = mi_arena_bitmap_init(slice_count, &mut base)
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).pages_main.pages =
             mi_arena_bitmap_init(slice_count, &mut base)
     };
     for i in 0..MI_ARENA_BIN_COUNT {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             (*arena.cast::<MiArenaPrefix>()).pages_main.pages_abandoned[i] =
                 mi_arena_bitmap_init(slice_count, &mut base)
         };
     }
     if crate::internal::MI_PAGE_META_IS_SEPARATED != 0 {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             (*arena.cast::<MiArenaPrefix>()).pages_meta = base.cast::<mi_page_t>();
             base = base.add(slice_count_usize * size_of::<mi_page_t>());
         }
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta = ptr::null_mut() };
     }
     crate::internal::mi_assert_internal!(
@@ -1268,6 +1377,7 @@ unsafe fn mi_arena_initialize(
             }
     );
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_bbitmap_unsafe_setN(
             (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -1276,6 +1386,7 @@ unsafe fn mi_arena_initialize(
         )
     };
     if memid.initially_committed {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             mi_bitmap_unsafe_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -1285,6 +1396,7 @@ unsafe fn mi_arena_initialize(
         };
     }
     if !memid.initially_zero {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             mi_bitmap_unsafe_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_dirty,
@@ -1294,6 +1406,7 @@ unsafe fn mi_arena_initialize(
         };
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if !unsafe { mi_arenas_add(subproc, ArenaPtr::new_unchecked(arena), arena_id) } {
         return ptr::null_mut();
     }
@@ -1318,6 +1431,7 @@ unsafe fn mi_arenas_try_alloc(
     }
     let mut allocation = MaybeUninit::<crate::core_types::ArenaAllocation>::uninit();
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let mut p = unsafe {
         mi_arenas_try_find_free(
             heap,
@@ -1332,6 +1446,7 @@ unsafe fn mi_arenas_try_alloc(
         )
     };
     if !p.is_null() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { *memid = allocation.assume_init().memid };
         return p;
     }
@@ -1342,12 +1457,14 @@ unsafe fn mi_arenas_try_alloc(
         return ptr::null_mut();
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let Some(subproc) = (unsafe { heap.ptr().subproc() }) else {
         crate::internal::mi_assert_internal!(false);
         return ptr::null_mut();
     };
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc) };
     {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let _lock = unsafe { MiLockGuard::acquire(subproc.arena_reserve_lock()) };
         if arena_count == unsafe { mi_arenas_get_count_typed(subproc) } {
             let mut arena_id = unsafe { _mi_arena_id_none() };
@@ -1365,6 +1482,7 @@ unsafe fn mi_arenas_try_alloc(
         }
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     p = unsafe {
         mi_arenas_try_find_free(
             heap,
@@ -1379,6 +1497,7 @@ unsafe fn mi_arenas_try_alloc(
         )
     };
     if !p.is_null() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { *memid = allocation.assume_init().memid };
     }
     p
@@ -1394,6 +1513,7 @@ unsafe fn mi_arena_reserve(
     let subproc_ptr = subproc;
     let subproc = subproc.as_ptr();
     let req_size = req_size.get();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
     if arena_count > (MI_MAX_ARENAS - 4) {
         return false;
@@ -1404,6 +1524,7 @@ unsafe fn mi_arena_reserve(
         return false;
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if !unsafe { _mi_os_has_virtual_reserve() } {
         arena_reserve /= 4;
     }
@@ -1436,6 +1557,7 @@ unsafe fn mi_arena_reserve(
         return false;
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let overcommit = unsafe { _mi_os_has_overcommit() };
     let mut arena_commit = false;
     if mi_option_get(mi_option_t::mi_option_arena_eager_commit) == 2 {
@@ -1447,6 +1569,7 @@ unsafe fn mi_arena_reserve(
 
     let adjust = overcommit && arena_commit;
     if adjust {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             __mi_stat_adjust_decrease_mt(
                 ptr::addr_of_mut!((*subproc).stats.committed),
@@ -1455,6 +1578,7 @@ unsafe fn mi_arena_reserve(
         }
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let mut err = unsafe {
         mi_reserve_os_memory_ex2(
             subproc_ptr,
@@ -1468,6 +1592,7 @@ unsafe fn mi_arena_reserve(
     };
     if err != 0 {
         if adjust {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 __mi_stat_adjust_increase_mt(
                     ptr::addr_of_mut!((*subproc).stats.committed),
@@ -1478,6 +1603,7 @@ unsafe fn mi_arena_reserve(
         let small_arena_reserve = 4 * MI_ARENA_MIN_SIZE;
         if arena_reserve > small_arena_reserve && small_arena_reserve > req_size {
             if adjust {
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe {
                     __mi_stat_adjust_decrease_mt(
                         ptr::addr_of_mut!((*subproc).stats.committed),
@@ -1485,6 +1611,7 @@ unsafe fn mi_arena_reserve(
                     );
                 }
             }
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             err = unsafe {
                 mi_reserve_os_memory_ex2(
                     subproc_ptr,
@@ -1497,6 +1624,7 @@ unsafe fn mi_arena_reserve(
                 )
             };
             if err != 0 && adjust {
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe {
                     __mi_stat_adjust_increase_mt(
                         ptr::addr_of_mut!((*subproc).stats.committed),
@@ -1524,6 +1652,7 @@ unsafe fn mi_arena_os_alloc_aligned(
     memid: *mut mi_memid_t,
 ) -> *mut c_void {
     if mi_option_is_enabled(mi_option_t::mi_option_disallow_os_alloc)
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         || req_arena_id != unsafe { _mi_arena_id_none() }
     {
         unsafe { mi_set_errno(ENOMEM) };
@@ -1531,6 +1660,7 @@ unsafe fn mi_arena_os_alloc_aligned(
     }
 
     if request.align_offset > 0 {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             _mi_os_alloc_aligned_at_offset(
                 request.size,
@@ -1542,6 +1672,7 @@ unsafe fn mi_arena_os_alloc_aligned(
             )
         }
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { _mi_os_alloc_aligned(request.size, request.alignment, commit, allow_large, memid) }
     }
 }
@@ -1584,12 +1715,14 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
 
     if !mi_option_is_enabled(mi_option_t::mi_option_disallow_arena_alloc)
         && size.get() >= MI_ARENA_MIN_OBJ_SIZE
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         && size.get() <= unsafe { mi_arena_max_object_size() }
         && alignment.get() <= MI_ARENA_SLICE_ALIGN
         && align_offset.get() == 0
         && let (Some(slice_count), Some(heap)) = (arena_slice_count, heap)
     {
         let arena_alignment = crate::core_types::Alignment::new(alignment.get())
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             .unwrap_or_else(|| unsafe { crate::core_types::Alignment::new_unchecked(1) });
         let p = unsafe {
             mi_arenas_try_alloc(
@@ -1609,6 +1742,7 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
         }
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_arena_os_alloc_aligned(
             ArenaOsAllocRequest {
@@ -1629,6 +1763,7 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
 
 /// # Safety
 /// Internal arena allocator wrapper following the C ABI.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
     heap: *mut mi_heap_t,
@@ -1651,6 +1786,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
         crate::core_types::AlignmentOffset::new(align_offset),
         crate::core_types::Zeroed::No,
     ) {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         Ok(layout) => unsafe {
             mi_arenas_alloc_aligned_typed(ArenaAllocTypedArgs {
                 heap: HeapPtr::new(heap),
@@ -1665,6 +1801,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
                 memid,
             })
         },
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         Err(_) => unsafe {
             mi_arena_os_alloc_aligned(
                 ArenaOsAllocRequest {
@@ -1708,6 +1845,7 @@ unsafe fn mi_arenas_alloc_typed(args: ArenaAllocArgs) -> *mut c_void {
     let alignment = MI_ARENA_SLICE_SIZE;
 
     match crate::core_types::LayoutRequest::aligned(size.get(), alignment) {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         Ok(layout) => unsafe {
             mi_arenas_alloc_aligned_typed(ArenaAllocTypedArgs {
                 heap,
@@ -1722,6 +1860,7 @@ unsafe fn mi_arenas_alloc_typed(args: ArenaAllocArgs) -> *mut c_void {
                 memid,
             })
         },
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         Err(_) => unsafe {
             mi_arena_os_alloc_aligned(
                 ArenaOsAllocRequest {
@@ -1743,6 +1882,7 @@ unsafe fn mi_arenas_alloc_typed(args: ArenaAllocArgs) -> *mut c_void {
 
 /// # Safety
 /// Internal arena allocator wrapper following the C ABI.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
     heap: *mut mi_heap_t,
@@ -1758,6 +1898,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc(
     crate::internal::mi_assert_internal!(size > 0);
     let size = crate::core_types::RequestedSize::new(size);
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_arenas_alloc_typed(ArenaAllocArgs {
             heap: HeapPtr::new(heap),
@@ -1780,11 +1921,13 @@ unsafe fn mi_abandoned_page_unown(
     let page_ptr = page.page();
     let page = page_ptr.as_ptr();
     let current_theap = current_theap.ptr().as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(unsafe {
         _mi_thread_id() == (*(*current_theap).tld).thread_id
     });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let owned_page = unsafe { crate::core_types::OwnedAbandonedPage::new_unchecked(page_ptr) };
 
     let atomic_tf =
@@ -1795,18 +1938,21 @@ unsafe fn mi_abandoned_page_unown(
     loop {
         crate::internal::mi_assert_internal!(tf_old.is_owned());
         while tf_old.head().is_some() {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             let local_free = unsafe { page_ptr.local_free() };
             let local_free = unsafe {
                 atomic_tf
                     .collect_acq_rel()
                     .collect_into_local(owned_page, local_free)
             };
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             if unsafe { page_ptr.free().0.is_none() } && local_free.0.is_some() {
                 unsafe {
                     page_ptr.set_free(crate::core_types::AvailableFreeList(local_free.0));
                     page_ptr.set_local_free(crate::core_types::LocalFreeList(None));
                 }
             }
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             if unsafe { mi_page_all_free(page) } {
                 unsafe { _mi_arenas_page_unabandon(page, current_theap) };
                 unsafe { _mi_arenas_page_free(page, current_theap) };
@@ -1815,6 +1961,7 @@ unsafe fn mi_abandoned_page_unown(
             tf_old = atomic_tf.load_relaxed();
         }
         crate::internal::mi_assert_internal!(tf_old.head().is_none());
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         if unsafe { atomic_tf.release_acq_rel(&mut tf_old) } {
             return false;
         }
@@ -1828,12 +1975,14 @@ unsafe fn mi_arena_try_claim_abandoned_at(
 ) -> bool {
     let slice_index = slice_index.get();
     crate::internal::mi_assert_internal!(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
     );
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     let page = {
         let index = slice_index;
         let page_addr: usize;
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             core::arch::asm!(
                 "mov {page_addr}, qword ptr [{arena} + {pages_meta_offset}]",
@@ -1859,6 +2008,7 @@ unsafe fn mi_arena_try_claim_abandoned_at(
     };
     #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
     let page = {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let pages_meta = unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta };
         if !pages_meta.is_null() {
             unsafe { pages_meta.add(slice_index) }
@@ -1871,15 +2021,18 @@ unsafe fn mi_arena_try_claim_abandoned_at(
             }
         }
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
     let abandoned = unsafe { crate::core_types::AbandonedPage::new_unchecked(page_ptr) };
     if unsafe { mi_page_claim_ownership(abandoned) }.is_none() {
         unsafe { *keep_abandoned = true };
         false
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { *keep_abandoned = false };
         true
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 }
 
 unsafe extern "C" fn mi_arena_try_claim_abandoned(
@@ -1887,6 +2040,7 @@ unsafe extern "C" fn mi_arena_try_claim_abandoned(
     arena: *mut mi_arena_t,
     keep_abandoned: *mut bool,
 ) -> bool {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { mi_arena_try_claim_abandoned_at(SliceIndex::new(slice_index), arena, keep_abandoned) }
 }
 
@@ -1896,6 +2050,7 @@ unsafe fn mi_heap_ensure_arena_pages_from_raw(
 ) -> *mut mi_arena_pages_t {
     crate::internal::mi_assert_internal!(!arena.is_null());
     crate::internal::mi_assert_internal!(!heap.is_null());
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let arena_idx = unsafe { mi_arena_index(arena) };
     unsafe {
         mi_heap_ensure_arena_pages(
@@ -1914,11 +2069,13 @@ unsafe fn mi_heap_ensure_arena_pages(
     let heap_raw = heap.ptr().as_ptr();
     let arena_raw = arena.as_ptr();
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let mut arena_pages = unsafe { mi_heap_arena_pages(heap, arena) };
     if arena_pages.is_null() {
         unsafe { mi_lock_acquire(heap.ptr().arena_pages_lock()) };
         arena_pages = unsafe { mi_heap_arena_pages(heap, arena) };
         if arena_pages.is_null() {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             if unsafe { _mi_is_heap_main(heap_raw) } {
                 arena_pages =
                     unsafe { ptr::addr_of_mut!((*arena_raw.cast::<MiArenaPrefix>()).pages_main) };
@@ -1928,17 +2085,20 @@ unsafe fn mi_heap_ensure_arena_pages(
                     crate::core_types::SliceRange::new(0, slice_count.get() as usize, arena)
                 else {
                     crate::internal::mi_assert_internal!(false);
+                    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                     unsafe { mi_lock_release(heap.ptr().arena_pages_lock()) };
                     return ptr::null_mut();
                 };
                 let (alloc_size, bitmap_base) = unsafe { mi_arena_pages_size(slice_count) };
                 arena_pages =
+                    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                     unsafe { mi_arena_pages_alloc(arena, range, alloc_size, bitmap_base) };
             }
             unsafe { mi_heap_arena_page_cell(heap, arena_idx).store_release(arena_pages.cast()) };
         }
         unsafe { mi_lock_release(heap.ptr().arena_pages_lock()) };
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if unsafe { _mi_is_heap_main(heap_raw) } {
         crate::internal::mi_assert!(!arena_pages.is_null());
     }
@@ -1947,6 +2107,7 @@ unsafe fn mi_heap_ensure_arena_pages(
 
 #[inline]
 unsafe fn mi_page_is_full_local(page: *const mi_page_t) -> bool {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let full = unsafe {
         crate::page::mi_page_reserved_count(page).get()
             == crate::page::mi_page_used_count(page).get()
@@ -1960,6 +2121,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
     slice_count: crate::core_types::SliceCount,
     block_size: crate::core_types::BlockSize,
 ) -> *mut mi_page_t {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let heap = unsafe { _mi_theap_heap(theap) };
     let tseq = crate::core_types::ThreadSeq::new(unsafe { (*(*theap).tld).thread_seq });
     let req_arena = unsafe { (*heap.cast::<MiHeapPrefix>()).exclusive_arena };
@@ -1967,6 +2129,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
 
     let bin = mi_bin_from_block_size(block_size);
     crate::internal::mi_assert_internal!(bin.as_usize() < MI_BIN_COUNT);
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if unsafe { mi_heap_abandoned_count(heap, bin).load_relaxed() } == 0 {
         return ptr::null_mut();
     }
@@ -1974,6 +2137,7 @@ unsafe fn mi_arenas_page_try_find_abandoned(
     let any_numa = crate::core_types::NumaNode::any();
     let mut result = ptr::null_mut();
     let claim_fun = ThreadLocalClaimCallback::new(mi_arena_try_claim_abandoned);
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         let Some(heap_ptr) = HeapPtr::new(heap) else {
             crate::internal::mi_assert_internal!(false);
@@ -2071,11 +2235,13 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     let block_alignment = block_alignment.get();
     let allow_large = true;
     let page_alignment = MI_ARENA_SLICE_ALIGN;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let heap = unsafe { _mi_theap_heap(theap) };
     let tld = unsafe { (*theap).tld };
     let req_arena = unsafe { (*heap.cast::<MiHeapPrefix>()).exclusive_arena };
     let heap_numa =
         crate::core_types::NumaNode::new(unsafe { (*heap.cast::<MiHeapPrefix>()).numa_node });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let tld_numa = crate::core_types::NumaNode::new(unsafe { (*tld).numa_node });
     let numa_node = if !heap_numa.is_any() {
         heap_numa
@@ -2084,17 +2250,20 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     };
 
     let mut start = ptr::null_mut::<u8>();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { *memid = _mi_memid_none() };
     let slice_count_usize = slice_count.get() as usize;
     let alloc_size = mi_size_of_slices(slice_count_usize);
     if !mi_option_is_enabled(mi_option_t::mi_option_disallow_arena_alloc)
         && !os_align
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         && slice_count_usize <= unsafe { mi_arena_max_object_size() } / MI_ARENA_SLICE_SIZE
     {
         let Some(heap_ptr) = HeapPtr::new(heap) else {
             crate::internal::mi_assert_internal!(false);
             return ptr::null_mut();
         };
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let page_alignment = unsafe { crate::core_types::Alignment::new_unchecked(page_alignment) };
         start = unsafe {
             mi_arenas_try_alloc(
@@ -2111,11 +2280,13 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
             .cast::<u8>()
         };
         if !start.is_null() {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             match crate::core_types::MemId::view(unsafe { *memid }) {
                 crate::core_types::MemIdView::Arena(a) => {
                     let arena = a.arena.as_ptr();
                     let arena_pages = unsafe { mi_heap_ensure_arena_pages_from_raw(heap, arena) };
                     if arena_pages.is_null() {
+                        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                         unsafe { _mi_arenas_free(start.cast(), alloc_size, *memid) };
                         start = ptr::null_mut();
                     } else {
@@ -2123,6 +2294,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
                         crate::internal::mi_assert_internal!(unsafe {
                             !mi_bitmap_is_setN((*arena_pages).pages, slice_idx, 1)
                         });
+                        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                         unsafe { mi_bitmap_set((*arena_pages).pages, slice_idx) };
                     }
                 }
@@ -2135,6 +2307,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
 
     if start.is_null() {
         start = if os_align {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 mi_arena_os_alloc_aligned(
                     ArenaOsAllocRequest {
@@ -2150,6 +2323,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
                 .cast::<u8>()
             }
         } else {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 mi_arena_os_alloc_aligned(
                     ArenaOsAllocRequest {
@@ -2177,6 +2351,7 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
     crate::internal::mi_assert_internal!(
         !os_align
             || crate::internal::_mi_is_aligned(
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe { start.add(page_alignment) }.cast(),
                 block_alignment
             )
@@ -2214,6 +2389,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     let os_align = block_alignment_raw > MI_PAGE_MAX_OVERALLOC_ALIGN;
     let slice_count_usize = slice_count.get() as usize;
     let alloc_size = mi_size_of_slices(slice_count_usize);
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let mut memid = unsafe { _mi_memid_none() };
     let slice_start = unsafe {
         mi_arenas_page_alloc_fresh_area(
@@ -2237,12 +2413,14 @@ unsafe fn mi_arenas_page_alloc_fresh(
 
     if let crate::core_types::MemIdView::Arena(a) = crate::core_types::MemId::view(memid) {
         let arena = a.arena.as_ptr();
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         if unsafe { !(*arena.cast::<MiArenaPrefix>()).pages_meta.is_null() } {
             let page_meta = unsafe {
                 (*arena.cast::<MiArenaPrefix>())
                     .pages_meta
                     .add(a.range.start().0)
             };
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             crate::internal::mi_assert_internal!(unsafe { (*page_meta).block_size == 0 });
             if block_size_raw > MI_SMALL_SIZE_MAX || MI_PAGE_META_ALIGNED_FREE_SMALL == 0 {
                 page = page_meta;
@@ -2254,6 +2432,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
                 {
                     block_start += block_size_raw;
                 }
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe {
                     crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>())
                 };
@@ -2262,6 +2441,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     }
     if page.is_null() {
         page = slice_start.cast::<mi_page_t>();
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         block_start = unsafe { mi_page_block_start(block_size, os_align) };
     }
 
@@ -2274,6 +2454,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
         }
         commit_size = crate::core_types::CommittedBytes::new(commit_size_raw);
         let mut is_zero = false;
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         if !unsafe {
             let (arena_ptr, range) = match crate::core_types::MemId::view(memid) {
                 crate::core_types::MemIdView::Arena(a) => (a.arena, a.range),
@@ -2291,16 +2472,19 @@ unsafe fn mi_arenas_page_alloc_fresh(
                 crate::core_types::CommittedBytes::new(0),
             )
         } {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
             return ptr::null_mut();
         }
     }
     if !memid.initially_zero && !page_meta_is_separate {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>()) };
     }
 
     if memid.initially_committed {
         if memid.initially_zero {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 mi_track_mem_defined(slice_start.cast(), slice_count_usize * MI_ARENA_SLICE_SIZE)
             };
@@ -2313,6 +2497,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     if MI_DEBUG > 1
         && memid.initially_zero
         && memid.initially_committed
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         && !unsafe { mi_mem_is_zero(slice_start.cast(), page_noguard_size) }
     {
         crate::options::_mi_error_message_fmt(
@@ -2321,6 +2506,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
         );
         memid.initially_zero = false;
         if block_start > 0 {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe { crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>()) };
         }
     }
@@ -2331,23 +2517,27 @@ unsafe fn mi_arenas_page_alloc_fresh(
     };
     crate::internal::mi_assert_internal!(reserved > 0 && u16::try_from(reserved).is_ok());
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         crate::page::mi_page_set_reserved_count(
             page,
             crate::core_types::ReservedBlockCount::new(reserved as u16),
         )
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { (*page).page_start = slice_start.add(block_start) };
     unsafe { (*page).block_size = block_size_raw };
     unsafe { crate::page::mi_page_set_slice_committed(page, commit_size) };
     unsafe { (*page).memid = memid };
     unsafe { (*page).free_is_zero = memid.initially_zero };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe { (*page).free.is_null() });
     crate::internal::mi_assert_internal!(
         page_meta_is_separate == unsafe { mi_page_meta_is_separated(page) }
     );
     crate::internal::mi_assert_internal!(unsafe { mi_page_slice_start(page) } == slice_start);
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         (*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(
             None,
@@ -2355,6 +2545,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
         )
         .raw()
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
     let claimed = unsafe { page_ptr.thread_free_cell().claim_acq_rel() };
     crate::internal::mi_assert_internal!(claimed);
@@ -2363,17 +2554,20 @@ unsafe fn mi_arenas_page_alloc_fresh(
         return ptr::null_mut();
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.pages), 1) };
     let stats_bin = unsafe { _mi_page_stats_bin(page) };
     unsafe { __mi_stat_increase(ptr::addr_of_mut!((*theap).stats.page_bins[stats_bin]), 1) };
 
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe { mi_page_block_size(page) } == block_size_raw);
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
@@ -2386,6 +2580,7 @@ unsafe fn mi_arenas_page_regular_alloc(
     slice_count: crate::core_types::SliceCount,
     block_size: crate::core_types::BlockSize,
 ) -> *mut mi_page_t {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let mut page = unsafe { mi_arenas_page_try_find_abandoned(theap, slice_count, block_size) };
     if !page.is_null() {
         return page;
@@ -2395,6 +2590,7 @@ unsafe fn mi_arenas_page_regular_alloc(
         crate::options::mi_option_get(mi_option_t::mi_option_page_commit_on_demand);
     let slice_count_usize = slice_count.get() as usize;
     let commit = slice_count_usize <= mi_slice_count_of_size(MI_PAGE_MIN_COMMIT_SIZE)
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         || (commit_on_demand == 2 && unsafe { _mi_os_has_overcommit() })
         || commit_on_demand == 0;
     page = unsafe {
@@ -2409,12 +2605,14 @@ unsafe fn mi_arenas_page_regular_alloc(
     if page.is_null() {
         return ptr::null_mut();
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(match crate::core_types::MemId::view(unsafe {
         (*page).memid
     }) {
         crate::core_types::MemIdView::Arena(a) => a.range.count() == slice_count,
         _ => true, // Non-arena allocations trivially pass this slice_count assert
     });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if !unsafe { crate::page::_mi_page_init(theap, page) } {
         unsafe {
             _mi_arenas_free(
@@ -2444,6 +2642,7 @@ unsafe fn mi_arenas_page_singleton_alloc(
     };
     let slice_count = mi_slice_count_of_size(info_size + block_size_raw);
     let Some(slice_count) = crate::core_types::SliceCount::from_usize(slice_count) else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_set_errno(ENOMEM) };
         return ptr::null_mut();
     };
@@ -2453,6 +2652,7 @@ unsafe fn mi_arenas_page_singleton_alloc(
     if page.is_null() {
         return ptr::null_mut();
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe {
         crate::page::mi_page_reserved_count(page).get() == 1
     });
@@ -2471,23 +2671,27 @@ unsafe fn mi_arenas_page_singleton_alloc(
 
 /// # Safety
 /// Internal arena page allocator matching the C ABI.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
     theap: *mut mi_theap_t,
     block_size: usize,
     block_alignment: usize,
 ) -> *mut mi_page_t {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let block_size_typed = unsafe { crate::core_types::BlockSize::new_unchecked(block_size) };
     let block_alignment_typed =
         unsafe { crate::core_types::MaybeAlignment::new_unchecked(block_alignment) };
     let page = if block_alignment > MI_PAGE_MAX_OVERALLOC_ALIGN {
         crate::internal::mi_assert_internal!(crate::internal::_mi_is_power_of_two(block_alignment));
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_arenas_page_singleton_alloc(theap, block_size_typed, block_alignment_typed) }
     } else if block_size <= MI_SMALL_MAX_OBJ_SIZE {
         unsafe { mi_arenas_page_regular_alloc(theap, MI_SMALL_PAGE_SLICE_COUNT, block_size_typed) }
     } else if block_size <= MI_MEDIUM_MAX_OBJ_SIZE {
         unsafe { mi_arenas_page_regular_alloc(theap, MI_MEDIUM_PAGE_SLICE_COUNT, block_size_typed) }
     } else if MI_ENABLE_LARGE_PAGES != 0 && block_size <= MI_LARGE_MAX_OBJ_SIZE {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_arenas_page_regular_alloc(theap, MI_LARGE_PAGE_SLICE_COUNT, block_size_typed) }
     } else {
         unsafe { mi_arenas_page_singleton_alloc(theap, block_size_typed, block_alignment_typed) }
@@ -2496,6 +2700,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
         return ptr::null_mut();
     }
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
@@ -2505,6 +2710,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
     crate::internal::mi_assert_internal!(
         block_alignment <= MI_PAGE_MAX_OVERALLOC_ALIGN
             || crate::internal::_mi_is_aligned(
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe { mi_page_start(page) }.cast(),
                 block_alignment
             )
@@ -2514,22 +2720,26 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
 
 /// # Safety
 /// Internal arena page free path matching the C ABI.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
     page: *mut mi_page_t,
     current_theapx: *mut mi_theap_t,
 ) {
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let abandoned = unsafe { crate::core_types::AbandonedPage::new_unchecked(page_ptr) };
     let all_free = unsafe { crate::core_types::AllFreePage::abandoned_unchecked(abandoned) };
     let current_theap = if current_theapx.is_null() {
         None
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(current_theapx),
             )
         })
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { _mi_arenas_page_free_internal(&all_free, current_theap) };
 }
 
@@ -2542,12 +2752,14 @@ unsafe fn _mi_arenas_page_free_internal<S>(
         .map(|theap| theap.ptr().as_ptr())
         .unwrap_or(ptr::null_mut());
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_all_free(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
@@ -2555,6 +2767,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
         (*page).next.is_null() && (*page).prev.is_null()
     });
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let stats_bin = unsafe { _mi_page_stats_bin(page) };
     if !current_theapx.is_null() {
         unsafe {
@@ -2563,11 +2776,13 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 1,
             )
         };
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             crate::internal::__mi_stat_decrease(ptr::addr_of_mut!((*current_theapx).stats.pages), 1)
         };
     } else {
         let heap = unsafe { mi_page_heap(page) };
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             crate::internal::__mi_stat_decrease_mt(&mut (*heap).stats.page_bins[stats_bin], 1)
         };
@@ -2575,6 +2790,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
     }
 
     if MI_DEBUG > 1
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         && unsafe { mi_page_memid_is_arena(page) }
         && !unsafe { mi_page_is_full_local(page) }
     {
@@ -2582,6 +2798,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let arena = unsafe {
             mi_page_arena_pages(
                 PagePtr::new_unchecked(page),
@@ -2590,6 +2807,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 &mut arena_pages,
             )
         };
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -2597,6 +2815,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 slice_count,
             )
         });
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
         crate::internal::mi_assert_internal!(
             !committed.is_zero()
@@ -2608,6 +2827,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                     )
                 }
         );
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         crate::internal::mi_assert_internal!(!unsafe {
             mi_bitmap_is_setN(
                 (*arena_pages).pages_abandoned[bin.as_usize()],
@@ -2615,16 +2835,19 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 1,
             )
         });
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN((*arena_pages).pages, slice_index, 1)
         });
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { _mi_page_map_unregister(page) };
     if unsafe { mi_page_memid_is_arena(page) } {
         let mut arena_pages = ptr::null_mut();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let arena = unsafe {
             mi_page_arena_pages(
                 PagePtr::new_unchecked(page),
@@ -2634,12 +2857,14 @@ unsafe fn _mi_arenas_page_free_internal<S>(
             )
         };
         crate::internal::mi_assert_internal!(!arena_pages.is_null());
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
         if !committed.is_zero() {
             let total_slices = committed.get() / MI_ARENA_SLICE_SIZE;
             crate::internal::mi_assert_internal!(slice_count >= total_slices);
             if total_slices > 0 {
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe {
                     mi_bitmap_setN(
                         (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -2651,6 +2876,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
             }
             let extra = committed.get() % MI_ARENA_SLICE_SIZE;
             if extra > 0 {
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 unsafe {
                     crate::internal::__mi_stat_decrease_mt(
                         &mut (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed,
@@ -2659,6 +2885,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 };
             }
         } else {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             crate::internal::mi_assert_internal!(unsafe {
                 mi_bitmap_is_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -2668,6 +2895,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
             });
         }
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if unsafe { mi_page_meta_is_separated(page) } {
         unsafe { (*page).block_size = 0 };
     }
@@ -2687,27 +2915,32 @@ pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(
     page: crate::core_types::AllFreePage<S>,
     owner: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::DestroyedPage {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { _mi_arenas_page_free(page.page().as_ptr(), owner.ptr().as_ptr()) };
     page.free_to_arena(owner)
 }
 
 /// # Safety
 /// Internal arena abandon path matching the C ABI.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 pub(crate) unsafe extern "C" fn _mi_arenas_page_abandon(
     page: *mut mi_page_t,
     current_theap: *mut mi_theap_t,
 ) {
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let page_wrapper = if unsafe { mi_page_is_full_local(page) } {
         unsafe { crate::core_types::FullPage::new_unchecked(page_ptr).for_abandon() }
     } else {
         unsafe { crate::core_types::ActivePage::new_unchecked(page_ptr).for_abandon() }
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let current_theap = unsafe {
         crate::core_types::ThreadHeapLocal::new_unchecked(
             crate::core_types::ThreadHeapPtr::new_unchecked(current_theap),
         )
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { _mi_arenas_page_abandon_internal(page_wrapper, current_theap) };
 }
 
@@ -2721,12 +2954,14 @@ unsafe fn _mi_arenas_page_abandon_internal(
     };
     let current_theap = current_theap.ptr().as_ptr();
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
@@ -2734,6 +2969,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
         (*page).next.is_null() && (*page).prev.is_null()
     });
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let heap = unsafe { mi_page_heap(page) };
     crate::internal::mi_assert_internal!(heap == unsafe { _mi_theap_heap(current_theap) });
     if unsafe { mi_page_memid_is_arena(page) } && !unsafe { mi_page_is_full_local(page) } {
@@ -2741,6 +2977,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let arena = unsafe {
             mi_page_arena_pages(
                 PagePtr::new_unchecked(page),
@@ -2750,6 +2987,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
             )
         };
         let _ = arena;
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
         crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(
@@ -2758,6 +2996,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
                 slice_count,
             )
         });
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
         crate::internal::mi_assert_internal!(
             !committed.is_zero()
@@ -2769,6 +3008,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
                     )
                 }
         );
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_dirty,
@@ -2778,17 +3018,20 @@ unsafe fn _mi_arenas_page_abandon_internal(
         });
 
         let atomic_tid =
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             crate::core_types::AtomicPageThreadId(crate::core_types::AtomicUsizeField(unsafe {
                 ptr::addr_of_mut!((*page).xthread_id)
             }));
         unsafe { atomic_tid.store_owner(crate::core_types::PageOwnerId::AbandonedMapped) };
         let was_clear =
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe { mi_bitmap_set((*arena_pages).pages_abandoned[bin.as_usize()], slice_index) };
         crate::internal::MI_UNUSED(&was_clear);
         crate::internal::mi_assert_internal!(was_clear);
         unsafe { mi_heap_abandoned_count(heap, bin).fetch_add_relaxed(1) };
         unsafe { __mi_stat_increase(ptr::addr_of_mut!((*current_theap).stats.pages_abandoned), 1) };
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         if !unsafe { mi_page_memid_is_arena(page) }
             && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
         {
@@ -2797,6 +3040,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
                     (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
                 ))
             };
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 (*page).prev = ptr::null_mut();
                 (*page).next = (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages;
@@ -2805,12 +3049,14 @@ unsafe fn _mi_arenas_page_abandon_internal(
                 }
                 (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages = page;
             }
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 mi_lock_release(ptr::addr_of_mut!(
                     (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
                 ))
             };
         }
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { __mi_stat_increase(ptr::addr_of_mut!((*current_theap).stats.pages_abandoned), 1) };
     }
     unsafe {
@@ -2825,11 +3071,13 @@ unsafe fn _mi_arenas_page_abandon_internal(
 
 /// # Safety
 /// Called from the free path on pages already associated with an arena.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
     page: *mut mi_page_t,
 ) -> bool {
     let page_raw = page;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let page = unsafe {
         crate::core_types::OwnedAbandonedPage::new_unchecked(PagePtr::new_unchecked(page))
     };
@@ -2837,6 +3085,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
         crate::core_types::MemIdView::Arena(arena_memid) => arena_memid,
         _ => return false,
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { _mi_arenas_page_try_reabandon_to_mapped_arena(page, arena_memid) }
 }
 
@@ -2847,23 +3096,27 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
 ) -> bool {
     let page = page.page().as_ptr();
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(!unsafe { mi_page_is_abandoned_mapped(page) });
     crate::internal::mi_assert_internal!(!unsafe { mi_page_is_full_local(page) });
     crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
 
     if unsafe { mi_page_is_full_local(page) } || unsafe { mi_page_is_abandoned_mapped(page) } {
         return false;
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let Some(theap) = (unsafe {
         _mi_page_associated_theap_peek(crate::core_types::PagePtr::new_unchecked(page))
     }) else {
@@ -2871,6 +3124,7 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
     };
     let theap = theap.as_ptr();
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reabandon_full), 1)
     };
@@ -2881,6 +3135,7 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
 
 /// # Safety
 /// Called from `free` paths while racing with abandoned-page readers.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     page: *mut mi_page_t,
     current_theapx: *mut mi_theap_t,
@@ -2891,12 +3146,14 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     let current_theap = if current_theapx.is_null() {
         None
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(current_theapx),
             )
         })
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { _mi_arenas_page_unabandon_internal(page, current_theap) };
 }
 
@@ -2910,12 +3167,14 @@ unsafe fn _mi_arenas_page_unabandon_internal(
         .unwrap_or(ptr::null_mut());
 
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(
@@ -2923,6 +3182,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             || unsafe { _mi_thread_id() == (*(*current_theapx).tld).thread_id }
     );
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let heap = unsafe { mi_page_heap(page) };
     if unsafe { mi_page_is_abandoned_mapped(page) } {
         crate::internal::mi_assert_internal!(unsafe { mi_page_memid_is_arena(page) });
@@ -2930,6 +3190,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let arena = unsafe {
             mi_page_arena_pages(
                 PagePtr::new_unchecked(page),
@@ -2939,6 +3200,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             )
         };
         let _ = arena;
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -2946,6 +3208,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
                 slice_count,
             )
         });
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
         crate::internal::mi_assert_internal!(
             !committed.is_zero()
@@ -2957,11 +3220,13 @@ unsafe fn _mi_arenas_page_unabandon_internal(
                     )
                 }
         );
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             mi_bitmap_clear_once_set((*arena_pages).pages_abandoned[bin.as_usize()], slice_index)
         };
         unsafe { mi_page_clear_abandoned_mapped(PagePtr::new_unchecked(page)) };
         unsafe { mi_heap_abandoned_count(heap, bin).fetch_sub_relaxed(1) };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     } else if !unsafe { mi_page_memid_is_arena(page) }
         && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
     {
@@ -2970,6 +3235,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
                 (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
             ))
         };
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             if !(*page).prev.is_null() {
                 (*(*page).prev).next = (*page).next;
@@ -2983,6 +3249,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             (*page).next = ptr::null_mut();
             (*page).prev = ptr::null_mut();
         };
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             mi_lock_release(ptr::addr_of_mut!(
                 (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
@@ -2991,6 +3258,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
     }
 
     if !current_theapx.is_null() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             __mi_stat_decrease(
                 ptr::addr_of_mut!((*current_theapx).stats.pages_abandoned),
@@ -2998,6 +3266,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             )
         };
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { __mi_stat_decrease_mt(&mut (*heap).stats.pages_abandoned, 1) };
     }
 }
@@ -3007,11 +3276,13 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
     let arena = arena.as_ptr();
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let delay = unsafe { mi_arena_purge_delay() };
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } || delay < 0 || _mi_preloading()
     {
         return;
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(unsafe {
         mi_bbitmap_is_clearN(
             (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -3020,12 +3291,14 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
         )
     });
     if delay == 0 {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { mi_arena_purge(arena_ptr, range) };
         return;
     }
 
     let expire = crate::stats::_mi_clock_now() + delay as i64;
     let mut expire0 = 0i64;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if unsafe {
         crate::core_types::AtomicI64Field(
             ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
@@ -3033,6 +3306,7 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
         .compare_exchange_acq_rel(&mut expire0, expire)
     } {
         crate::internal::mi_assert_internal!(expire0 == 0);
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let subproc = unsafe { (*arena.cast::<MiArenaPrefix>()).subproc };
         unsafe {
             crate::core_types::AtomicI64Field(
@@ -3041,6 +3315,7 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
             .compare_exchange_acq_rel(&mut expire0, expire)
         };
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_bitmap_setN(
             (*arena.cast::<MiArenaPrefix>()).slices_purge,
@@ -3053,11 +3328,13 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
 
 /// # Safety
 /// Internal arena free path matching the C ABI.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
     if p.is_null() || size == 0 {
         return;
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { mi_track_mem_undefined(p, size) };
     match crate::core_types::MemId::view(memid) {
         crate::core_types::MemIdView::Os(_) => {
@@ -3073,11 +3350,13 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
             crate::internal::mi_assert_internal!(size.is_multiple_of(MI_ARENA_SLICE_SIZE));
             crate::internal::mi_assert_internal!(slice_count * MI_ARENA_SLICE_SIZE == size);
             crate::internal::mi_assert_internal!(
+                // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                 slice_end <= unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
             );
             crate::internal::mi_assert_internal!(unsafe {
                 mi_arena_range_is_after_info_slices(arena_ptr, range)
             });
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             if !unsafe { mi_arena_range_is_after_info_slices(arena_ptr, range) }
                 || slice_end > unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
             {
@@ -3091,6 +3370,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
                 return;
             }
 
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             if !unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
                 unsafe { mi_arena_schedule_purge(ArenaPtr::new_unchecked(arena), range) };
             }
@@ -3113,6 +3393,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
             }
         }
         crate::core_types::MemIdView::Meta(_) => {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe { _mi_meta_free(p, size, memid) };
         }
         crate::core_types::MemIdView::None(_)
@@ -3134,6 +3415,7 @@ unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) 
     let arena = arena.as_ptr();
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     crate::internal::mi_assert_internal!(!unsafe {
         (*arena.cast::<MiArenaPrefix>()).memid.is_pinned
     });
@@ -3146,12 +3428,14 @@ unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) 
     });
 
     let size = mi_size_of_slices(slice_count);
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let p = unsafe {
         mi_arena_slice_start(ArenaPtr::new_unchecked(arena), range.start())
             .as_ptr()
             .cast::<c_void>()
     };
     let mut already_committed = 0usize;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_bitmap_setN(
             (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -3161,6 +3445,7 @@ unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) 
         )
     };
     let all_committed = already_committed == slice_count;
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let needs_recommit = unsafe {
         crate::internal::_mi_os_purge_ex(
             p,
@@ -3173,6 +3458,7 @@ unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) 
     };
 
     if needs_recommit || !all_committed {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             mi_bitmap_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -3190,6 +3476,7 @@ unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::Sl
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
     crate::internal::mi_assert!(slice_count < MI_BCHUNK_BITS);
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if unsafe {
         mi_bbitmap_try_clearNC(
             (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -3197,6 +3484,7 @@ unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::Sl
             slice_count,
         )
     } {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let decommitted = unsafe { mi_arena_purge(ArenaPtr::new_unchecked(arena), range) };
         crate::internal::mi_assert_internal!(
             !decommitted
@@ -3208,6 +3496,7 @@ unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::Sl
                     )
                 }
         );
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe {
             mi_bbitmap_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -3226,6 +3515,7 @@ unsafe fn mi_arena_try_purge_visit(
     range: crate::core_types::SliceRange,
     vinfo: &mut mi_purge_visit_info_t,
 ) -> bool {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if unsafe { mi_arena_try_purge_range(arena, range) } {
         vinfo.any_purged = true;
         vinfo.all_purged = true;
@@ -3236,6 +3526,7 @@ unsafe fn mi_arena_try_purge_visit(
                 vinfo.all_purged = false;
                 continue;
             };
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             let purged = unsafe { mi_arena_try_purge_range(arena, single) };
             vinfo.any_purged = vinfo.any_purged || purged;
             vinfo.all_purged = vinfo.all_purged && purged;
@@ -3244,6 +3535,7 @@ unsafe fn mi_arena_try_purge_visit(
     true
 }
 
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 unsafe extern "C" fn mi_arena_try_purge_visitor(
     slice_index: usize,
     slice_count: usize,
@@ -3259,17 +3551,20 @@ unsafe extern "C" fn mi_arena_try_purge_visitor(
         crate::internal::mi_assert_internal!(false);
         return true;
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let Some(vinfo) = (unsafe { arg.cast::<mi_purge_visit_info_t>().as_mut() }) else {
         crate::internal::mi_assert_internal!(false);
         return true;
     };
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { mi_arena_try_purge_visit(arena_ptr, range, vinfo) }
 }
 
 unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c_int {
     let arena_ptr = arena;
     let arena = arena.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
         return -1;
     }
@@ -3289,12 +3584,14 @@ unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c
         }
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         crate::core_types::AtomicI64Field(
             ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
         )
         .store(0, crate::core_types::MemoryOrder::Release)
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         __mi_stat_counter_increase_mt(
             ptr::addr_of_mut!(
@@ -3308,11 +3605,13 @@ unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c
 
     let mut vinfo = mi_purge_visit_info_t {
         now,
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         delay: unsafe { mi_arena_purge_delay() },
         all_purged: true,
         any_purged: false,
     };
     let minslices = mi_slice_count_of_size(unsafe { _mi_os_minimal_purge_size() });
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         _mi_bitmap_forall_setc_rangesn(
             (*arena.cast::<MiArenaPrefix>()).slices_purge,
@@ -3334,12 +3633,14 @@ unsafe fn mi_arenas_try_purge(
 ) {
     let subproc_ptr = subproc;
     let subproc = subproc.as_ptr();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let delay = unsafe { mi_arena_purge_delay() };
     if _mi_preloading() || delay <= 0 {
         return;
     }
 
     let now = crate::stats::_mi_clock_now();
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let arenas_expire = unsafe {
         crate::core_types::AtomicI64Field(
             ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast::<i64>(),
@@ -3350,6 +3651,7 @@ unsafe fn mi_arenas_try_purge(
         return;
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let max_arena = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
     if max_arena == 0 {
         return;
@@ -3358,6 +3660,7 @@ unsafe fn mi_arenas_try_purge(
     static PURGE_GUARD: mi_atomic_guard_t = AtomicUsize::new(0);
     crate::atomic::mi_atomic_guard!(ptr::addr_of!(PURGE_GUARD).cast_mut(), {
         if arenas_expire > now {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 crate::core_types::AtomicI64Field(
                     ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
@@ -3386,6 +3689,7 @@ unsafe fn mi_arenas_try_purge(
                 crate::internal::mi_assert_internal!(false);
                 continue;
             };
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             let arena = unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) };
             if !arena.is_null() {
                 let purged =
@@ -3403,6 +3707,7 @@ unsafe fn mi_arenas_try_purge(
             }
         }
         if all_visited && !any_purged {
+            // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
             unsafe {
                 crate::core_types::AtomicI64Field(
                     ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
@@ -3416,11 +3721,13 @@ unsafe fn mi_arenas_try_purge(
 
 /// # Safety
 /// Purges scheduled arena ranges for the current thread-local context.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 pub(crate) unsafe extern "C" fn _mi_arenas_collect(
     force_purge: bool,
     visit_all: bool,
     tld: *mut mi_tld_t,
 ) {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_arenas_try_purge(
             force_purge,
@@ -3445,11 +3752,13 @@ unsafe fn mi_reserve_os_memory_ex2(
     let allow_large = allow_large.get();
     let exclusive = exclusive.get();
     if !arena_id.is_null() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { *arena_id = _mi_arena_id_none() };
     }
 
     let size = _mi_align_up(size.get(), MI_ARENA_SLICE_SIZE);
     let mut memid = unsafe { _mi_memid_none() };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let start = unsafe {
         _mi_os_alloc_aligned(size, MI_ARENA_SLICE_ALIGN, commit, allow_large, &mut memid)
     };
@@ -3457,6 +3766,7 @@ unsafe fn mi_reserve_os_memory_ex2(
         return ENOMEM;
     }
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(subproc),
@@ -3481,6 +3791,7 @@ unsafe fn mi_reserve_os_memory_ex2(
         ));
         0
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { _mi_os_free_ex(start, size, commit, memid, ptr::null_mut()) };
         crate::options::_mi_verbose_message(format_args!(
             "failed to reserve {} KiB memory\n",
@@ -3492,6 +3803,7 @@ unsafe fn mi_reserve_os_memory_ex2(
 
 /// # Safety
 /// Matches the C API and may mutate global arena state through the active sub-process.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     size: usize,
@@ -3500,6 +3812,7 @@ pub unsafe extern "C" fn mi_reserve_os_memory_ex(
     exclusive: bool,
     arena_id: *mut mi_arena_id_t,
 ) -> c_int {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_reserve_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -3515,17 +3828,20 @@ pub unsafe extern "C" fn mi_reserve_os_memory_ex(
 
 /// # Safety
 /// Matches the C API and may mutate global arena state through the active sub-process.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_os_memory(
     size: usize,
     commit: bool,
     allow_large: bool,
 ) -> c_int {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe { mi_reserve_os_memory_ex(size, commit, allow_large, false, ptr::null_mut()) }
 }
 
 /// # Safety
 /// Matches the C API and forwards to the current arena-management entrypoint.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_manage_os_memory(
     start: *mut c_void,
@@ -3535,6 +3851,7 @@ pub unsafe extern "C" fn mi_manage_os_memory(
     is_zero: bool,
     numa_node: c_int,
 ) -> bool {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_manage_os_memory_ex(
             start,
@@ -3566,6 +3883,7 @@ unsafe fn mi_manage_os_memory_ex2(
     let mut size = size.get();
     let exclusive = exclusive.get();
     if !arena_id.is_null() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { *arena_id = _mi_arena_id_none() };
     }
     if !(start as usize).is_multiple_of(MI_ARENA_SLICE_SIZE) {
@@ -3604,6 +3922,7 @@ unsafe fn mi_manage_os_memory_ex2(
             return false;
         };
 
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let arena = unsafe {
             mi_arena_initialize(
                 SubprocPtr::new_unchecked(subproc),
@@ -3633,6 +3952,7 @@ unsafe fn mi_manage_os_memory_ex2(
             }
             crate::internal::mi_assert!(
                 mi_size_of_slices(total_slice_count)
+                    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
                     <= unsafe { (*parent.cast::<MiArenaPrefix>()).total_size }
             );
             unsafe {
@@ -3648,6 +3968,7 @@ unsafe fn mi_manage_os_memory_ex2(
         }
         crate::internal::mi_assert!(slice_count <= total_slice_count);
         total_slice_count -= slice_count;
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         start = unsafe {
             start
                 .cast::<u8>()
@@ -3661,6 +3982,7 @@ unsafe fn mi_manage_os_memory_ex2(
 
 /// # Safety
 /// Matches the C API and may mutate arena state for externally managed memory.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_manage_os_memory_ex(
     start: *mut c_void,
@@ -3683,6 +4005,7 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     let Some(start_ptr) = crate::core_types::OsMemPtr::new(start) else {
         return false;
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -3698,6 +4021,7 @@ pub unsafe extern "C" fn mi_manage_os_memory_ex(
     }
 }
 
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `start..start+size` must describe caller-owned memory suitable for arena management.
@@ -3725,6 +4049,7 @@ pub unsafe extern "C" fn mi_manage_memory(
     let Some(start_ptr) = crate::core_types::OsMemPtr::new(start) else {
         return false;
     };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -3742,6 +4067,7 @@ pub unsafe extern "C" fn mi_manage_memory(
 
 /// # Safety
 /// Matches the C API and may reserve/manage huge-page backed arena memory.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     pages: usize,
@@ -3751,6 +4077,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     arena_id: *mut mi_arena_id_t,
 ) -> c_int {
     if !arena_id.is_null() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { *arena_id = ptr::null_mut() };
     }
     if pages == 0 {
@@ -3761,11 +4088,13 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
     } else {
         crate::core_types::NumaNode::new(numa_node)
     }
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     .normalize(unsafe { _mi_os_numa_node_count() });
     let numa_node_raw = numa_node.get();
     let mut hsize = 0usize;
     let mut pages_reserved = 0usize;
     let mut memid = unsafe { _mi_memid_none() };
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     let p = unsafe {
         _mi_os_alloc_huge_os_pages(
             pages,
@@ -3788,6 +4117,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
         numa_node_raw, pages_reserved, pages
     ));
 
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     if !unsafe {
         mi_manage_os_memory_ex2(
             SubprocPtr::new_unchecked(_mi_subproc()),
@@ -3801,6 +4131,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
             arena_id,
         )
     } {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { _mi_os_free(p, hsize, memid) };
         return ENOMEM;
     }
@@ -3809,12 +4140,14 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at_ex(
 
 /// # Safety
 /// Matches the C API and reserves huge-page backed arena memory on a specific NUMA node.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages_at(
     pages: usize,
     numa_node: c_int,
     timeout_msecs: usize,
 ) -> c_int {
+    // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
     unsafe {
         mi_reserve_huge_os_pages_at_ex(pages, numa_node, timeout_msecs, false, ptr::null_mut())
     }
@@ -3822,6 +4155,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_at(
 
 /// # Safety
 /// Matches the C API and reserves huge-page backed arena memory interleaved across NUMA nodes.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
     mut pages: usize,
@@ -3835,6 +4169,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
     let mut numa_count = if numa_nodes > 0 && numa_nodes <= c_int::MAX as usize {
         numa_nodes as c_int
     } else {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { _mi_os_numa_node_count() }
     };
     if numa_count <= 0 {
@@ -3856,6 +4191,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
         if (numa_node as usize) < pages_mod {
             node_pages += 1;
         }
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         let err = unsafe { mi_reserve_huge_os_pages_at(node_pages, numa_node, timeout_per) };
         if err != 0 {
             return err;
@@ -3872,6 +4208,7 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages_interleave(
 
 /// # Safety
 /// Matches the deprecated C API and forwards to the interleaved huge-page reservation path.
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reserve_huge_os_pages(
     pages: usize,
@@ -3882,11 +4219,13 @@ pub unsafe extern "C" fn mi_reserve_huge_os_pages(
         "mi_reserve_huge_os_pages is deprecated: use mi_reserve_huge_os_pages_interleave/at instead\n"
     ));
     if !pages_reserved.is_null() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { *pages_reserved = 0 };
     }
     let err =
         unsafe { mi_reserve_huge_os_pages_interleave(pages, 0, (max_secs * 1000.0) as usize) };
     if err == 0 && !pages_reserved.is_null() {
+        // SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
         unsafe { *pages_reserved = pages };
     }
     err
@@ -3904,6 +4243,7 @@ static MI_ARENAS_PAGE_SINGLETON_ALLOC_KEEP: unsafe fn(
     crate::core_types::BlockSize,
     crate::core_types::MaybeAlignment,
 ) -> *mut mi_page_t = mi_arenas_page_singleton_alloc;
+// SAFETY[AUDIT:arena-region-boundary]: arena registry, slice maps, abandoned-page bitmaps, page lifecycle handoff, purge state, and C ABI helpers preserve allocator ownership invariants.
 #[used]
 static MI_ARENAS_PAGE_ALLOC_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,

@@ -200,6 +200,35 @@ fn free_path_internals_are_not_dynamic_exports() {
             && page_rs.contains("__mi_stat_counter_increase("),
         "page allocation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/arena.rs\t"))
+            && arena_rs
+                .matches("SAFETY[AUDIT:arena-region-boundary]")
+                .count()
+                >= 330
+            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_alloc_aligned")
+            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_alloc")
+            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_page_alloc")
+            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_page_free")
+            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_page_abandon")
+            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_page_unabandon")
+            && arena_rs.contains(
+                "pub(crate) unsafe extern \"C\" fn _mi_arenas_page_try_reabandon_to_mapped",
+            )
+            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_free")
+            && arena_rs.contains("unsafe fn mi_arena_try_alloc_at(")
+            && arena_rs.contains("unsafe fn mi_arenas_try_alloc(")
+            && arena_rs.contains("unsafe fn mi_arenas_page_try_find_abandoned(")
+            && arena_rs.contains("unsafe fn mi_heap_ensure_arena_pages(")
+            && arena_rs.contains("unsafe fn mi_arena_purge(")
+            && arena_rs.contains("_mi_bitmap_forall_setc_rangesn(")
+            && arena_rs.contains("ThreadLocalClaimCallback::new(mi_arena_try_claim_abandoned)")
+            && arena_rs.contains("mi_heap_abandoned_count(heap, bin).fetch_add_relaxed(1)")
+            && arena_rs.contains("mi_heap_arena_page_cell(heap, arena_idx).store_release"),
+        "arena region unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
 
     local_boundaries::assert_page_map_and_deferred_boundaries(local_boundaries::BoundarySources {
         page_map: &page_map,

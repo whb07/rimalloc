@@ -73,6 +73,11 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   extension, generic refill, page queue movement, retire/free/abandon
   transitions, stat gates, huge-page allocation, raw page helper exports, and
   no-allocation hot paths.
+- `SAFETY[AUDIT:arena-region-boundary]`: arena region management in
+  `src/allocator/arena.rs`. The boundary covers arena registry state, slice
+  maps, abandoned-page bitmap claims, arena allocation/free, purge traversal,
+  page lifecycle shims, subproc arena tables, raw arena exports, and OS-memory
+  handoff.
 - `SAFETY[AUDIT:internal-bitmap-boundary]`: internal bitmap and binned-bitmap
   operations in `src/internal/bitmap.rs`. The boundary covers chunk/field
   projection, bit set/clear/search loops, arena traversal callbacks, typed

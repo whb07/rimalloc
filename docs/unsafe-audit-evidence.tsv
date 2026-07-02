@@ -58,6 +58,10 @@ allocation-entry-boundary	script	scripts/check-unsafe-audit.py	Checks allocation
 page-allocation-boundary	test	src/allocator/page.rs	Exercises page bin classification characterization and page helper unit coverage in the page module.
 page-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page marker coverage, migration allowlist removal, local helper shape, queue/free-list/refill helpers, huge-page allocation, and no-allocation hot-path evidence.
 page-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks page allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-region-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena marker coverage, migration allowlist removal, raw helper shape, typed arena/slice/memid routing, abandoned-page bitmap paths, purge state, and page lifecycle shims.
+arena-region-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs	Checks arena page allocation/free/abandon shims preserve the C-shaped local helper boundaries used by page lifecycle code.
+arena-region-boundary	test	tests/original_main_override_static.rs	Exercises arena purge, heap walking, huge allocation, and static override behavior through arena-backed paths.
+arena-region-boundary	script	scripts/check-unsafe-audit.py	Checks arena region unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-bitmap-boundary	test	src/internal/bitmap.rs	Exercises bitmap set/clear accounting, binned-bitmap find/clear behavior, empty requests, and traversal callback fixtures.
 internal-bitmap-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks bitmap marker coverage, migration allowlist removal, helper shape, typed arena/range callbacks, out-of-range release branches, and binned first-fit wrappers.
 internal-bitmap-boundary	script	scripts/check-strict-types.py	Checks bitmap strict-type allowlist coverage remains explicit for translated C bitmap aliases.

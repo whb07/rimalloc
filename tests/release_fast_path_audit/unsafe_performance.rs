@@ -54,6 +54,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/options.rs");
     let page_rs =
         fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let page_counts_rs = fs::read_to_string(root.join("src/allocator/page/counts.rs"))
+        .expect("read src/allocator/page/counts.rs");
     let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
         .expect("read src/allocator/page/deferred.rs");
     let random_rs = fs::read_to_string(root.join("src/internal/random.rs"))
@@ -1614,6 +1616,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("_mi_page_free_collect(page_raw, false)")
             && arena_rs.contains("_mi_page_stats_bin(page)")
             && theap_rs.contains("_mi_page_free_collect(page, true)")
+            && page_rs.contains("mod counts;")
+            && page_counts_rs.contains("SAFETY[AUDIT:page-count-accessors]")
+            && page_counts_rs.contains("pub(crate) unsafe fn mi_page_used_count(")
+            && page_counts_rs.contains("pub(crate) unsafe fn mi_page_capacity_count(")
+            && page_counts_rs.contains("pub(super) unsafe fn mi_page_queue_block_size_raw(")
             && page_rs.contains("unsafe fn mi_page_queue_is_valid_typed(")
             && page_rs.contains("pub(crate) unsafe fn mi_normal_page_queue_is_valid(")
             && page_rs.contains("pub(crate) unsafe fn mi_huge_page_queue_is_valid(")

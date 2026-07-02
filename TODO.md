@@ -21,7 +21,7 @@ Review evidence:
   `alloc`, `aligned`, `arena`, `bitmap`, `internal`, and `page`.
 - The largest source review units are still large:
   `src/allocator/arena.rs` is 4,613 lines,
-  `src/allocator/page.rs` is 3,442 lines,
+  `src/allocator/page.rs` is 3,220 lines,
   `src/internal/bitmap.rs` is 2,604 lines,
   `src/allocator/alloc.rs` is 2,545 lines,
   `src/allocator/init.rs` is 2,339 lines,
@@ -29,13 +29,14 @@ Review evidence:
   `src/platform/windows.rs` is 2,191 lines.
 - `tests/release_fast_path_audit.rs` is split, but the largest child modules are
   still review-heavy: root is 2,862 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,870 lines, and
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,877 lines, and
   `tests/release_fast_path_audit/release_policy.rs` is 2,291 lines.
 - `src/allocator/arena/debug.rs` is 625 lines and still has 34
   `SAFETY[AUDIT:arena-debug-render]` markers. It no longer needs a
   `metadata-reference` strict-type allowance for `ArenaDebugView::prefix`.
-- `src/allocator/page/deferred.rs` is a clean 139-line module, but
-  `src/allocator/page.rs` still mixes queue counts, queue movement,
+- `src/allocator/page/deferred.rs` is a clean 139-line module, and
+  `src/allocator/page/counts.rs` now owns the 264-line page/page-queue count
+  accessor boundary. `src/allocator/page.rs` still mixes queue movement,
   free-list extension, fresh allocation, retirement, and generic allocation.
 - `scripts/check-ffi-boundary.py`, `scripts/check-no-allocation-audit.py`,
   `scripts/check-unsafe-audit.py`, `scripts/check-unsafe-audit-evidence.py`,
@@ -151,19 +152,26 @@ Review evidence:
 ## Issue: Page module still mixes queue, count, and allocation policy
 
 > **Comment:** Extracting deferred-free state was a good first production split,
-> but `page.rs` remains a 3,442-line translated unit. The next split should keep
+> but `page.rs` remains a large translated unit. The next split should keep
 > avoiding hot-path reshaping and move a cohesive queue/count helper cluster.
 
-- [ ] Inventory page queue count helpers, queue movement helpers, and queue
+- [x] Inventory page queue count helpers, queue movement helpers, and queue
       validation helpers in `src/allocator/page.rs`.
-- [ ] Pick one low-risk queue/count cluster with a small public surface and a
+- [x] Pick one low-risk queue/count cluster with a small public surface and a
       clear ownership invariant.
-- [ ] Move it into a documented `src/allocator/page/*.rs` module while
+- [x] Move it into a documented `src/allocator/page/*.rs` module while
       preserving existing `#[inline]` and `#[inline(never)]` behavior.
-- [ ] Update release-audit source-path assertions, strict-type allowances,
+- [x] Update release-audit source-path assertions, strict-type allowances,
       unsafe inventory, and boundary scripts after the move.
-- [ ] Keep allocator ABI, symbol exports, and benchmark-critical call shape
+- [x] Keep allocator ABI, symbol exports, and benchmark-critical call shape
       unchanged.
+  - Evidence: page/page-queue count accessors moved to
+    `src/allocator/page/counts.rs` with their existing inline attributes and
+    `crate::page` re-exports preserved for callers. `src/allocator/page.rs`
+    dropped to 3,220 lines, the new count module is 264 lines, the strict-type
+    checker maps the split file back to the existing page raw-metadata boundary,
+    and `SAFETY[AUDIT:page-count-accessors]` documents the moved unsafe field
+    access without adding a legacy unsafe allowlist entry.
 - Verify: focused page/release tests, API inventory, public symbol checks, full
   clippy, and full tests.
 
@@ -173,7 +181,7 @@ Review evidence:
 2. [x] Reduce one broad removable strict-type entry.
 3. [x] Tighten arena diagnostic metadata access.
 4. [x] Split one more release-audit unsafe/performance cluster.
-5. [ ] Split one page queue/count helper cluster.
+5. [x] Split one page queue/count helper cluster.
 
 ## Definition of done for this backlog
 
@@ -183,5 +191,5 @@ Review evidence:
       `ArenaDebugView::prefix`.
 - [x] Release fast-path audit modules are smaller and guarded against growing
       back into large review units.
-- [ ] A second page submodule owns a clear page queue/count boundary without API,
+- [x] A second page submodule owns a clear page queue/count boundary without API,
       ABI, or hot-path performance drift.

@@ -25,8 +25,8 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5967 |
-| `unsafe_blocks` | 3554 |
+| `unsafe_mentions` | 5966 |
+| `unsafe_blocks` | 3553 |
 | `unsafe_fns` | 1990 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
@@ -39,7 +39,7 @@ verify the source inventory after each supported advisory build mode checks.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/allocator/aligned.rs` | 217 | 131 | 57 | 0 | 0 | 29 | 0 |
 | `src/allocator/alloc.rs` | 333 | 134 | 141 | 5 | 0 | 48 | 0 |
-| `src/allocator/arena/debug.rs` | 54 | 42 | 10 | 0 | 0 | 2 | 0 |
+| `src/allocator/arena/debug.rs` | 53 | 41 | 10 | 0 | 0 | 2 | 0 |
 | `src/allocator/arena.rs` | 732 | 582 | 130 | 2 | 0 | 15 | 0 |
 | `src/allocator/arena_meta.rs` | 22 | 13 | 9 | 0 | 0 | 0 | 0 |
 | `src/allocator/bench_diagnostics.rs` | 8 | 3 | 2 | 0 | 0 | 3 | 0 |
@@ -47,8 +47,9 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/heap.rs` | 93 | 46 | 34 | 0 | 0 | 11 | 0 |
 | `src/allocator/init.rs` | 333 | 230 | 79 | 3 | 0 | 18 | 3 |
 | `src/allocator/options.rs` | 79 | 46 | 9 | 4 | 3 | 15 | 0 |
+| `src/allocator/page/counts.rs` | 42 | 21 | 21 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
-| `src/allocator/page.rs` | 269 | 128 | 140 | 0 | 0 | 1 | 0 |
+| `src/allocator/page.rs` | 227 | 107 | 119 | 0 | 0 | 1 | 0 |
 | `src/allocator/page_map.rs` | 184 | 144 | 38 | 0 | 0 | 2 | 0 |
 | `src/allocator/stats.rs` | 198 | 124 | 51 | 0 | 0 | 22 | 0 |
 | `src/allocator/thread_heap.rs` | 120 | 56 | 58 | 0 | 0 | 6 | 0 |

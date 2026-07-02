@@ -104,6 +104,9 @@ Per-file review:
   abandonment, and reclaim paths operate on pages selected by heap/theap queues
   and size classes. Encoded block links and thread-free state follow C page
   invariants.
+- `src/allocator/page/counts.rs`: page and page-queue count accessors read and
+  update allocator-owned metadata through typed counter wrappers while
+  preserving the original inline helper shape.
 - `src/allocator/page/deferred.rs`: deferred-free callback registration and
   dispatch owns the process-global callback slots and increments the local
   thread heap heartbeat before invoking the callback under the C-compatible
@@ -208,6 +211,10 @@ Operation IDs:
   globals, publishes callback and argument with release stores, reads them with
   acquire loads, and invokes callbacks only after bumping the local thread heap
   heartbeat and setting the per-thread-heap reentry guard.
+- `SAFETY[AUDIT:page-count-accessors]`: `src/allocator/page/counts.rs`
+  centralizes page and page-queue count field access. Callers supply live
+  allocator-owned page or queue metadata, and the helpers immediately convert
+  raw fields into typed counter wrappers before arithmetic or publication.
 - `SAFETY[AUDIT:safe-heap]`: `src/safe/heap.rs` ties heap allocations to the
   owning heap lifetime, prevents main-heap deletion through owned heap handles,
   and keeps raw heap/block calls behind wrapper ownership checks.

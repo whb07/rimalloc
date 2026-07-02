@@ -36,10 +36,10 @@ fn rust_idiom_backlog_tracks_current_work() {
         "strict-type-allowlist.txt",
         "95 entries; 6 are still marked `remove:`",
         "`src/allocator/arena.rs` is 4,613 lines",
-        "`src/allocator/page.rs` is 3,442",
+        "`src/allocator/page.rs` is 3,220",
         "`src/allocator/arena/debug.rs`",
         "`tests/release_fast_path_audit.rs` is split",
-        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,870 lines",
+        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,877 lines",
     ];
 
     for evidence in required_evidence {

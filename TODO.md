@@ -1,231 +1,175 @@
-# TODO: Strict-Type and Audit Granularity Backlog
+# TODO: Next Strict-Type and Audit Granularity Backlog
 
-Fresh-eyes review after completing the unsafe migration allowlist on `master` at
-`da60fc0`. The file-level unsafe migration work is done; the next mechanical
-translation debt is now in broad strict-type allowances, broad unsafe operation
-IDs, and large release-audit review units.
+Fresh-eyes review after completing the release-audit split on `master` at
+`d85e616`. The previous backlog is complete and pushed. The next mechanical
+translation debt is in stale audit evidence paths, remaining strict-type
+wildcard allowances, broad unsafe operation IDs, and a root release-audit
+harness that is still close to its cap.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 0 translation entries and no
-  production entries. `ALLOWLIST_ENTRY_CAP` is 0.
-- `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe mentions,
-  and 91 operation IDs.
-- `strict-type-allowlist.txt` has 413 entries: 242 raw-pointer-parameter
-  entries, 123 bare-domain `usize` entries, 19 pointer/usize round-trip
-  entries, 25 metadata-reference entries, 2 atomic-cast entries, and
-  2 heap-allocating-type entries. `REMOVE_ENTRY_CAP` remains 0.
-- 45 strict-type entries still use symbol `*`: 14 raw-pointer-parameter
-  entries, 16 bare-domain `usize` entries, 7 pointer/usize round-trip entries,
-  5 metadata-reference entries, 2 atomic-cast entries, and
-  1 heap-allocating-type entry.
-- `scripts/check-strict-types.py` now checks line-pattern findings with an
-  item-aware context for free functions, impl methods, associated consts,
-  statics, and extern declarations. It still allows deliberate wildcard
-  fallback entries for module-level or true ABI boundaries.
-- The broadest path-wide strict-type clusters are `src/allocator/alloc.rs`,
-  `src/allocator/free.rs`, and `src/allocator/init.rs`, each with 3 path-wide
-  entries. `src/bitmap.rs`, `src/allocator/page_map.rs`, `src/types/ptr.rs`,
-  `src/allocator/options.rs`, and `src/types/arena.rs` each still have
-  2 path-wide entries. The targeted platform, allocator, and internal files no
-  longer have strict-type wildcard entries.
-- The largest source unsafe audit marker clusters are still too broad:
-  `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers,
-  `SAFETY[AUDIT:allocation-entry-boundary]` has 166 markers,
-  `SAFETY[AUDIT:stats-reporting-boundary]` has 161 markers,
-  `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
-  `SAFETY[AUDIT:aligned-allocation-boundary]` has 158 markers,
-  `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
-  `SAFETY[AUDIT:os-memory-boundary]` has 136 markers,
-  `SAFETY[AUDIT:init-thread-tls-boundary]` has 129 markers, and
-  `SAFETY[AUDIT:windows-primitive-boundary]` has 114 markers.
-- The arena audit cluster is now split into `arena-page-lifecycle-boundary`
-  with 107 markers, `arena-allocation-boundary` with 105 markers,
-  `arena-purge-boundary` with 38 markers, `arena-registry-boundary` with
-  37 markers, `arena-slice-boundary` with 31 markers, and
-  `arena-abandoned-boundary` with 22 markers.
-- The initialization audit cluster is now split into
-  `init-thread-tls-boundary` with 129 markers, `init-subproc-boundary` with
-  102 markers, `init-process-boundary` with 16 markers,
-  `init-options-guarded-boundary` with 14 markers,
-  `init-random-cpu-boundary` with 13 markers, and
-  `init-platform-hooks-boundary` with 9 markers.
-- The release audit review units are now split below the tightened module cap:
-  `tests/release_fast_path_audit.rs` is 1,935 lines,
-  `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
-  is 922 lines,
-  `tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs`
-  is 895 lines,
-  `tests/release_fast_path_audit/unsafe_performance/raw_facade.rs` is
-  825 lines,
-  `tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs`
-  is 724 lines,
-  `tests/release_fast_path_audit/release_policy/docs_and_linking.rs` is
-  633 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 47 lines,
-  `tests/release_fast_path_audit/release_policy.rs` is 14 lines, and
-  `tests/release_fast_path_audit/datatype_acceptance.rs` is 43 lines.
+- `scripts/check-unsafe-audit.py` still covers 82 source files, 5,893 unsafe
+  mentions, and 91 operation IDs. The migration allowlist remains empty.
+- `strict-type-allowlist.txt` has 45 wildcard entries left: 14
+  raw-pointer-parameter entries, 16 bare-domain `usize` entries, 7
+  pointer/usize round-trip entries, 5 metadata-reference entries, 2 atomic-cast
+  entries, and 1 heap-allocating-type entry.
+- The remaining wildcard-heavy paths are `src/allocator/alloc.rs`,
+  `src/allocator/free.rs`, and `src/allocator/init.rs` with 3 entries each;
+  `src/bitmap.rs`, `src/allocator/page_map.rs`, `src/types/ptr.rs`,
+  `src/allocator/options.rs`, and `src/types/arena.rs` with 2 entries each.
+- The largest remaining unsafe audit marker clusters are
+  `raw-macro-allocation-boundary` with 178 markers,
+  `allocation-entry-boundary` with 166 markers,
+  `stats-reporting-boundary` with 161 markers,
+  `typed-pointer-accessors` with 161 markers,
+  `aligned-allocation-boundary` with 158 markers,
+  `page-map-boundary` with 153 markers,
+  `os-memory-boundary` with 136 markers,
+  `init-thread-tls-boundary` with 129 markers, and
+  `windows-primitive-boundary` with 114 markers.
+- Some unsafe audit evidence rows still point at old release-audit harness
+  files such as `tests/release_fast_path_audit/unsafe_performance.rs`,
+  `tests/release_fast_path_audit/release_policy.rs`, and
+  `tests/release_fast_path_audit.rs` even though the checks now live in focused
+  submodules.
+- The release-audit module cap is 1,000 lines, but the root harness is still
+  1,935 lines. The largest split modules are
+  `unsafe_performance/lifecycle_boundaries.rs` at 922 lines,
+  `unsafe_performance/platform_primitive_boundaries.rs` at 895 lines,
+  `unsafe_performance/raw_facade.rs` at 809 lines, and
+  `unsafe_performance/page_arena_behavior.rs` at 724 lines.
 
-## Issue 1: Make strict-type line-pattern checks item-aware
+## Issue 1: Refresh audit evidence paths after the release-audit split
 
-> **Comment:** The strict-type checker can only narrow some checks today.
-> Raw-pointer and bare-domain parameters are symbol-aware, but line-pattern
-> checks used file-level `*` allowances. This pass made those checks
-> item-aware while preserving deliberate wildcard fallback compatibility for
-> true ABI or module-level boundaries.
+> **Comment:** The release-audit assertions now live in focused modules, but
+> some evidence rows still cite the old harness files. That weakens review
+> precision and makes future evidence updates harder to trace.
 
-- [x] Teach `scripts/check-strict-types.py` to identify the containing Rust item
-      for line-based findings, including free functions, associated functions,
-      extern blocks, statics, consts, and impl methods.
-- [x] Use the detected item name when checking metadata-reference,
-      pointer-usize-roundtrip, heap-allocating-type, atomic-cast, and
-      dynamic-dispatch entries; keep a deliberate fallback for module-level or
-      extern-block findings.
-- [x] Preserve the existing checker behavior for raw ABI boundaries and
-      translated C compatibility shims; do not create false positives for cfg
-      branches, test modules, macro definitions, or source comments.
-- [x] Add focused checker tests or release-audit assertions that prove new
-      line-pattern allowlist entries can be symbol-level and that new broad
-      `*` entries need explicit justification.
+- [ ] Update `docs/unsafe-audit-evidence.tsv` rows for allocation, aligned
+      allocation, raw macro allocation, OS memory, page-map, stats, and typed
+      pointer checks to name the focused release-audit modules that now own the
+      assertions.
+- [ ] Update `UNSAFE_AUDIT.md` and `docs/unsafe-audit.md` wording where it still
+      describes broad release-audit harness ownership instead of focused
+      modules.
+- [ ] Add or update release-audit assertions so evidence rows cannot drift back
+      to stale root harness paths when a focused module exists.
 
-Verify: `scripts/check-strict-types.py`, release fast-path TODO/datatype audit
-tests, full formatting, full clippy, and full tests.
+Verify: unsafe audit scripts, unsafe evidence scripts, release fast-path audit,
+full formatting, full clippy, and full tests.
 
-## Issue 2: Narrow platform strict-type wildcard allowances
+## Issue 2: Narrow the remaining allocator/init strict-type wildcards
 
-> **Comment:** Platform primitives are legitimate raw compatibility boundaries,
-> but the current wildcard entries hide which functions actually need the raw
-> pointer, metadata-reference, pointer/integer, byte-count, and heap-allocating
-> allowances.
+> **Comment:** The checker is item-aware now, but the highest-risk allocator
+> paths still retain path-level strict-type entries.
 
-- [x] Replace broad strict-type entries for `src/platform/windows.rs` with
-      symbol/domain entries for TLS/FLS association, virtual-memory byte counts,
-      ETW/metadata callbacks, environment string conversion, and dynamic import
-      helpers.
-- [x] Replace broad strict-type entries for `src/platform/unix.rs` with
-      symbol/domain entries for TLS association, mmap/madvise byte counts,
-      metadata scanning, and alignment/provenance checks.
-- [x] Narrow the matching platform entries in `src/platform/wasi.rs` and
-      `src/platform/os.rs` where the checker can now name the responsible
-      function or item.
-- [x] Add release-audit guards that reject accidental new platform wildcard
-      strict-type entries unless they are explicitly documented ABI shims.
+- [ ] Replace wildcard strict-type entries in `src/allocator/alloc.rs`,
+      `src/allocator/free.rs`, and `src/allocator/init.rs` with named helper or
+      documented ABI-boundary entries wherever the checker can identify the
+      responsible item.
+- [ ] Narrow the remaining paired wildcard entries in `src/bitmap.rs`,
+      `src/allocator/page_map.rs`, `src/types/ptr.rs`,
+      `src/allocator/options.rs`, and `src/types/arena.rs`.
+- [ ] Preserve true public ABI, platform ABI, proof-fixture, and typed-domain
+      constructor boundaries as explicit documented exceptions instead of
+      broad accidental fallbacks.
 
-Verify: strict-type checker, platform primitive release-audit tests,
+Verify: strict-type checker, datatype acceptance audit, release fast-path audit,
 no-allocation audit, full clippy, and full tests.
 
-## Issue 3: Narrow allocator and internal strict-type wildcard allowances
+## Issue 3: Split the raw macro allocation audit cluster
 
-> **Comment:** Several hot allocator files still carry path-wide strict-type
-> allowances even after the unsafe migration allowlist was removed. The next
-> pass should convert those allowances to named helper boundaries without
-> perturbing hot-path code shape.
+> **Comment:** `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers in
+> the raw allocation override and forwarding layer. It mixes bootstrap
+> allocation, malloc/free/realloc shims, C header macro behavior, and platform
+> forwarding contracts.
 
-- [x] Narrow `src/allocator/aligned.rs` wildcard entries for raw heap/thread-heap
-      parameters, guarded block handoff, and alignment/provenance arithmetic to
-      the specific allocation and padding helpers that need them.
-- [x] Narrow `src/internal/mod.rs` wildcard entries for page/block helper
-      parameters, thread-heap dispatch, metadata references, and packed-pointer
-      conversions to named helper items.
-- [x] Narrow `src/allocator/stats.rs` and `src/allocator/thread_heap.rs`
-      wildcard entries to the stats aggregation, heap lifecycle, page visitor,
-      and area visitor helpers that need raw compatibility.
-- [x] Add release-audit assertions that the targeted files no longer gain broad
-      strict-type wildcards while preserving existing no-allocation and assembly
-      expectations for allocation/free hot paths.
+- [ ] Split raw macro markers into narrower operation IDs for bootstrap
+      tracking, allocator override entry points, libc/posix forwarding,
+      usability/size queries, and C header macro compatibility.
+- [ ] Update audit docs and evidence rows with separate invariants and tests for
+      each new raw macro operation ID.
+- [ ] Preserve exported allocator symbols, no hidden Rust allocation before init,
+      downstream header macro expansion, and Unix bootstrap allocation behavior.
 
-Verify: strict-type checker, datatype acceptance audit, no-allocation audit,
-release fast-path audit, full clippy, and full tests.
+Verify: header macro expansion tests, raw macro unit tests, release fast-path
+audit, unsafe audit scripts, unsafe evidence scripts, full clippy, and full
+tests.
 
-## Issue 4: Split the arena audit operation cluster
+## Issue 4: Split allocation, aligned allocation, stats, page-map, and OS audit clusters
 
-> **Comment:** `SAFETY[AUDIT:arena-region-boundary]` now covers 340 source
-> markers across arena registry state, slice math, OS allocation, abandoned-page
-> claiming, heap page tables, purge traversal, and page lifecycle shims. That is
-> too broad to review well.
+> **Comment:** Several production clusters are still above 130 markers and each
+> mixes multiple invariants. They should be split only where the code already
+> has clear boundaries so performance-sensitive paths stay stable.
 
-- [x] Split arena markers into narrower operation IDs for registry/subproc table
-      access, slice/range projection, arena allocation/reservation, abandoned
-      page claim/reclaim, purge traversal, and page lifecycle handoff.
-- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, and
-      `docs/unsafe-audit-evidence.tsv` so each new operation ID has distinct
-      invariants and evidence.
-- [x] Move the arena release-audit assertions out of the monolithic
-      `unsafe_performance.rs` test into focused arena modules that guard marker
-      counts, helper shape, and ownership transfer behavior.
-- [x] Preserve arena index bounds, NUMA fields, memid ownership, abandoned-page
-      semantics, purge ordering, subproc locking, OS memory interaction, and C
-      ABI callback signatures.
+- [ ] Split `allocation-entry-boundary` into allocation ABI entry, heap/thread
+      heap dispatch, layout/product request, and page refill handoff IDs.
+- [ ] Split `aligned-allocation-boundary` into alignment request normalization,
+      padding shrink/grow, heap aligned allocation, and realloc/recalloc IDs.
+- [ ] Split `stats-reporting-boundary`, `page-map-boundary`, and
+      `os-memory-boundary` into review units that match their helper groups and
+      update evidence for each new operation ID.
 
-Verify: arena/page lifecycle release audits, arena metadata tests, unsafe audit
-scripts, unsafe evidence scripts, unsafe inventory regeneration/check, full
-clippy, and full tests.
+Verify: allocation boundary tests, stats/lifecycle exports, release fast-path
+audit, unsafe audit scripts, unsafe evidence scripts, full clippy, and full
+tests.
 
-## Issue 5: Split the initialization lifecycle audit cluster
+## Issue 5: Split typed pointer accessor audit coverage
 
-> **Comment:** `SAFETY[AUDIT:init-lifecycle-boundary]` had 277 source markers
-> across subproc identity, process init/done, thread init/done, TLS, guarded
-> setup, options/stat setup, random reinitialization, CPU feature detection, and
-> constructor/destructor hooks. Those are separate invariants.
+> **Comment:** `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers in
+> `src/types/ptr.rs`. The module is doing useful work, but page, block, heap,
+> thread-heap, TLD, arena, subproc, page-queue, and provenance helpers are
+> separate invariants.
 
-- [x] Split init markers into narrower operation IDs for subproc identity and
-      main heap access, process lifecycle, thread/TLS lifecycle, guarded/options
-      setup, random/CPU initialization, and platform constructor/destructor
-      hooks.
-- [x] Update audit docs and evidence rows with separate invariants for each
-      lifecycle operation ID.
-- [x] Split lifecycle release-audit assertions so process, thread/TLS, subproc,
-      and CPU/random checks are reviewable independently.
-- [x] Preserve idempotent initialization, preloading gates, default heap TLS,
-      subproc ID mapping, option/stat initialization order, random reseeding,
-      no-unwind behavior, and no hidden allocator allocation before init is
-      safe.
+- [ ] Split typed pointer accessor markers by pointer family and provenance
+      helper responsibility.
+- [ ] Keep layout/niche tests and strict-type allowlist coverage aligned with
+      the new operation IDs.
+- [ ] Preserve transparent wrapper layout, hot-path inlining, and no allocator
+      allocation in strict-type wrappers.
 
-Verify: lifecycle release audits, runtime-gate tests, original lifecycle and
-override tests, unsafe audit scripts, unsafe evidence scripts, full clippy, and
-full tests.
+Verify: pointer/layout tests, datatype acceptance audit, strict-type checker,
+unsafe audit scripts, unsafe evidence scripts, full clippy, and full tests.
 
-## Issue 6: Shrink release-audit review units and lower line caps
+## Issue 6: Split the release fast-path root harness and lower the root cap
 
-> **Comment:** The release audit is doing useful work, but some modules are now
-> large enough that future changes become hard to review. Splitting tests by
-> boundary also helps keep later audit and strict-type changes focused.
+> **Comment:** Module caps are now below 1,000 lines, but
+> `tests/release_fast_path_audit.rs` is still 1,935 lines and mixes shared
+> helpers with unrelated policy checks.
 
-- [x] Split `tests/release_fast_path_audit/unsafe_performance.rs` into focused
-      modules for allocator allocation/free, arena/page behavior, OS memory, raw
-      facade checks, and shared helpers.
-- [x] Split `tests/release_fast_path_audit/release_policy.rs` into policy
-      modules that match the documentation areas they guard.
-- [x] Split or reorganize `tests/release_fast_path_audit/datatype_acceptance.rs`
-      so strict-type, layout, provenance, callbacks, and page-state acceptance
-      checks can be reviewed independently.
-- [x] Lower the release-audit line-count guard after the split so the root and
-      module caps catch future growth before files reach the current 2,000-line
-      scale.
+- [ ] Move root release-audit tests into focused modules for public facade
+      shape, safe allocation API behavior, interposition/export checks,
+      strict-type/no-allocation policy, and allowance inventories.
+- [ ] Keep only shared source collection helpers and module declarations in the
+      root harness.
+- [ ] Lower the root line-count cap after the split while preserving the 1,000
+      line module cap.
 
 Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Make strict-type line-pattern checks item-aware.
-2. [x] Narrow platform strict-type wildcard allowances.
-3. [x] Narrow allocator and internal strict-type wildcard allowances.
-4. [x] Split the arena audit operation cluster.
-5. [x] Split the initialization lifecycle audit cluster.
-6. [x] Shrink release-audit review units and lower line caps.
+1. [ ] Refresh audit evidence paths after the release-audit split.
+2. [ ] Narrow the remaining allocator/init strict-type wildcards.
+3. [ ] Split the raw macro allocation audit cluster.
+4. [ ] Split allocation, aligned allocation, stats, page-map, and OS audit
+       clusters.
+5. [ ] Split typed pointer accessor audit coverage.
+6. [ ] Split the release fast-path root harness and lower the root cap.
 
 ## Definition of done for this backlog
 
-- [x] The strict-type checker can enforce symbol-level entries for line-pattern
-      findings and has release-audit coverage for that behavior.
-- [x] The targeted platform, allocator, and internal strict-type wildcard
-      entries are replaced by named symbol/domain allowances or are explicitly
-      documented as true ABI/module boundaries.
-- [x] The arena and initialization operation IDs are split into narrower audit
-      IDs with separate docs, evidence, and release-audit guards.
-- [x] The large release-audit modules are split enough to lower the line-count
-      caps without weakening coverage.
-- [x] For every completed item, run `cargo fmt --all`,
+- [ ] Unsafe audit evidence rows point at the focused tests that actually guard
+      each operation ID.
+- [ ] Remaining strict-type wildcard entries are either narrowed to named items
+      or documented as true ABI, public API, fixture, or typed-constructor
+      boundaries.
+- [ ] The largest unsafe audit operation IDs are split into narrower review
+      units with separate docs, evidence, and release-audit guards.
+- [ ] The release fast-path root harness is split enough to lower its cap
+      without weakening coverage.
+- [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

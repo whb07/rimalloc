@@ -35,7 +35,7 @@ use crate::types::{
     MI_SMALL_PAGE_SIZE, MI_SMALL_SIZE_MAX, mi_block_t, mi_page_t, mi_theap_t,
 };
 
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 #[cfg(mi_c_malloc_fast)]
 core::arch::global_asm!(
     ".hidden _mi_padding_shrink",
@@ -45,7 +45,7 @@ core::arch::global_asm!(
     ".size _mi_padding_shrink, .-_mi_padding_shrink",
 );
 
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 #[cfg(mi_c_malloc_fast)]
 core::arch::global_asm!(
     ".globl mi_free_size",
@@ -76,7 +76,7 @@ unsafe fn mi_list_contains(
     mut list: *const mi_block_t,
     elem: *const mi_block_t,
 ) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         while !list.is_null() {
             if ptr::eq(elem, list) {
@@ -88,13 +88,13 @@ unsafe fn mi_list_contains(
     }
 }
 
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_ptr_unalign(
     page: *const mi_page_t,
     p: *const c_void,
 ) -> *mut mi_block_t {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null() && !p.is_null());
         let diff = p.cast::<u8>().offset_from(mi_page_start(page)) as usize;
@@ -109,7 +109,7 @@ pub(crate) unsafe extern "C" fn _mi_page_ptr_unalign(
 }
 
 unsafe fn mi_check_is_double_freex(page: *const mi_page_t, block: *const mi_block_t) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         if mi_list_contains(page, (*page).free, block)
             || mi_list_contains(page, (*page).local_free, block)
@@ -132,7 +132,7 @@ unsafe fn mi_page_decode_padding(
     delta: *mut usize,
     bsize: *mut usize,
 ) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-padding-boundary]: padding decode/shrink/check operations use typed padding metadata on validated blocks.
     unsafe {
         let page_ptr = crate::core_types::PagePtr::new_unchecked(page.cast_mut());
         let block_ptr = crate::core_types::BlockPtr::new_unchecked(block.cast_mut());
@@ -160,7 +160,7 @@ unsafe fn mi_page_decode_padding(
     }
 }
 
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-padding-boundary]: padding decode/shrink/check operations use typed padding metadata on validated blocks.
 #[cfg(not(mi_c_malloc_fast))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_padding_shrink(
@@ -168,7 +168,7 @@ pub(crate) unsafe extern "C" fn _mi_padding_shrink(
     block: *const mi_block_t,
     min_size: usize,
 ) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-padding-boundary]: padding decode/shrink/check operations use typed padding metadata on validated blocks.
     unsafe {
         if MI_PADDING == 0 {
             let _ = page;
@@ -224,7 +224,7 @@ unsafe fn mi_verify_padding(
     size: *mut usize,
     wrong: *mut usize,
 ) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-padding-boundary]: padding decode/shrink/check operations use typed padding metadata on validated blocks.
     unsafe {
         let mut bsize = 0usize;
         let mut delta = 0usize;
@@ -256,7 +256,7 @@ unsafe fn mi_verify_padding(
 /// # Safety
 /// `page` and `block` must refer to a valid block owned by that page.
 pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-padding-boundary]: padding decode/shrink/check operations use typed padding metadata on validated blocks.
     unsafe {
         if MI_PADDING == 0 || MI_PADDING_CHECK == 0 {
             return;
@@ -278,7 +278,7 @@ pub unsafe fn mi_check_padding(page: *const mi_page_t, block: *const mi_block_t)
 /// # Safety
 /// `page` and `block` must refer to a valid block owned by that page.
 pub unsafe fn mi_check_is_double_free(page: *const mi_page_t, block: *const mi_block_t) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         if MI_ENCODE_FREELIST == 0 || (crate::internal::MI_SECURE < 4 && MI_DEBUG == 0) {
             return false;
@@ -300,7 +300,7 @@ pub(crate) unsafe fn mi_page_usable_size_of_typed(
     block: *const mi_block_t,
     is_guarded: bool,
 ) -> crate::core_types::UsableSize {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-usable-size-boundary]: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
     unsafe {
         if MI_PADDING == 0 {
             let _ = block;
@@ -337,14 +337,14 @@ pub unsafe fn mi_page_usable_size_of(
     block: *const mi_block_t,
     is_guarded: bool,
 ) -> usize {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-usable-size-boundary]: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
     unsafe { mi_page_usable_size_of_typed(page, block, is_guarded).get() }
 }
 
 /// # Safety
 /// `page` and `block` must refer to a valid block being freed.
 pub unsafe fn mi_stat_free(page: *const mi_page_t, block: *const mi_block_t) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-stats-boundary]: free stat updates mutate current thread-heap counters for caller-validated blocks.
     unsafe {
         let _ = block;
         if crate::types::MI_STAT == 0 {
@@ -382,7 +382,7 @@ pub(crate) unsafe fn mi_free_block_local(
     block_wrapper: crate::core_types::BlockForFree,
     mode: crate::core_types::LocalFreeMode,
 ) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-local-list-boundary]: local frees mutate the owning page free list after validation and optional padding checks.
     unsafe {
         let page = page_wrapper.page().as_ptr();
         let block = block_wrapper.block().as_ptr();
@@ -446,7 +446,7 @@ pub(crate) unsafe fn mi_free_block_mt(
     page_wrapper: crate::core_types::ForeignPage,
     block_wrapper: crate::core_types::BlockForFree,
 ) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-remote-list-boundary]: remote frees publish blocks through the typed atomic thread-free word.
     unsafe {
         let page_ptr = page_wrapper.page();
         let page = page_ptr.as_ptr();
@@ -497,7 +497,7 @@ unsafe fn mi_block_unguard(
     block: crate::core_types::GuardedBlock,
     p: crate::core_types::UserPtr,
 ) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let page = page.as_ptr();
         let block = block.block().as_ptr();
@@ -535,7 +535,7 @@ pub(crate) unsafe fn mi_block_check_unguard(
     block: crate::core_types::BlockForFree,
     p: crate::core_types::UserPtr,
 ) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let block_ptr = block.block();
         let user = p.as_ptr();
@@ -563,7 +563,7 @@ pub(crate) unsafe fn mi_validate_block_from_ptr(
     page: crate::core_types::PagePtr,
     user: crate::core_types::UserPtr,
 ) -> crate::core_types::PointerLookup {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let location = mi_pointer_location(page, user, MI_SECURE > 0, true);
 
@@ -574,7 +574,7 @@ pub(crate) unsafe fn mi_validate_block_from_ptr(
 unsafe fn mi_lookup_pointer_page(
     user: crate::core_types::UserPtr,
 ) -> Option<crate::core_types::PagePtr> {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let p = user.as_ptr();
         if MI_DEBUG != 0 || cfg!(feature = "secure") {
@@ -597,7 +597,7 @@ unsafe fn mi_pointer_location(
     force_unalign: bool,
     assert_block_start: bool,
 ) -> crate::core_types::PointerLocation {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let page_raw = page.as_ptr();
         let user_raw = user.as_ptr();
@@ -637,14 +637,14 @@ unsafe fn mi_pointer_location(
 unsafe fn mi_block_for_free_from_lookup(
     lookup: crate::core_types::PointerLookup,
 ) -> Option<crate::core_types::BlockForFree> {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe { mi_prepare_validated_free(lookup).map(crate::core_types::ValidatedFree::block) }
 }
 
 const _: unsafe fn(crate::core_types::PointerLookup) -> Option<crate::core_types::BlockForFree> =
     mi_block_for_free_from_lookup;
 
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
 #[cold]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *mut c_void) {
@@ -669,7 +669,7 @@ pub(crate) unsafe extern "C" fn mi_free_generic_local(page: *mut mi_page_t, p: *
     }
 }
 
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
 #[cold]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut c_void) {
@@ -690,14 +690,14 @@ pub(crate) unsafe extern "C" fn mi_free_generic_mt(page: *mut mi_page_t, p: *mut
     }
 }
 
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_free_generic(
     page: *mut mi_page_t,
     is_local: bool,
     p: *mut c_void,
 ) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
         if is_local {
             mi_free_generic_local(page, p);
@@ -708,7 +708,7 @@ pub(crate) unsafe extern "C" fn _mi_free_generic(
 }
 
 #[used]
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
 static MI_FREE_GENERIC_KEEP: unsafe extern "C" fn(*mut mi_page_t, bool, *mut c_void) =
     _mi_free_generic;
 
@@ -716,7 +716,7 @@ pub(crate) unsafe fn mi_validate_pointer(
     p: *mut c_void,
     msg: *const c_char,
 ) -> crate::core_types::PointerLookup {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
         use crate::core_types::{PointerInvalidReason, PointerLookup, UserPtr};
         if p.is_null() {
@@ -765,7 +765,7 @@ pub(crate) unsafe fn mi_validate_pointer(
 unsafe fn mi_prepare_validated_free(
     lookup: crate::core_types::PointerLookup,
 ) -> Option<crate::core_types::ValidatedFree> {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let validated = lookup.prepare_free()?;
         if validated.block().was_guarded() == crate::core_types::WasGuarded::Yes {
@@ -777,7 +777,7 @@ unsafe fn mi_prepare_validated_free(
 
 #[inline(always)]
 unsafe fn mi_free_validated(validated: crate::core_types::ValidatedFree, usable: *mut usize) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
     unsafe {
         let page = validated.page().as_ptr();
         crate::core_types::UsableOut::new(usable).write_if_present(mi_page_usable_block_size(page));
@@ -815,7 +815,7 @@ fn mi_free_fast_path_enabled(usable: *mut usize) -> bool {
 
 #[inline(always)]
 unsafe fn mi_free_fast_try(p: *mut c_void, usable: *mut usize) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
         if !mi_free_fast_path_enabled(usable) {
             return false;
@@ -861,7 +861,7 @@ pub(crate) unsafe fn mi_free_ex_slow(
     owner: crate::core_types::PageFreeOwner,
     path: crate::core_types::FreePathKind,
 ) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
         // `validated` was produced by `mi_validate_pointer`, which already derived the
         // interior-corrected block and resolved guard state. Route the typed witness
@@ -894,7 +894,7 @@ pub(crate) unsafe fn mi_free_ex_slow(
 }
 
 pub(crate) unsafe fn mi_route_free(p: *mut c_void, msg: *const c_char, usable: *mut usize) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
         if p.is_null() {
             return;
@@ -912,7 +912,7 @@ pub(crate) unsafe fn mi_route_usable_size_typed(
     p: *const c_void,
     msg: *const c_char,
 ) -> crate::core_types::UsableSize {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-route-dispatch-boundary]: free routing dispatches validated blocks to local, remote, or abandoned owners without allocation.
     unsafe {
         if p.is_null() {
             return crate::core_types::UsableSize::new(0);
@@ -943,14 +943,14 @@ pub(crate) unsafe fn mi_route_usable_size_typed(
 }
 
 pub(crate) unsafe fn mi_route_usable_size(p: *const c_void, msg: *const c_char) -> usize {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-usable-size-boundary]: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
     unsafe { mi_route_usable_size_typed(p, msg).get() }
 }
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator and not yet freed.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-usable-size-boundary]: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
 pub unsafe extern "C" fn mi_free(p: *mut c_void) {
     unsafe {
         mi_route_free(p, c"mi_free".as_ptr(), ptr::null_mut());
@@ -958,7 +958,7 @@ pub unsafe extern "C" fn mi_free(p: *mut c_void) {
 }
 
 unsafe fn mi_abandoned_page_try_free(page: crate::core_types::OwnedAbandonedPage) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-usable-size-boundary]: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
     unsafe {
         let page_ptr = page.page();
         if !mi_page_all_free(page_ptr.as_ptr()) {
@@ -975,7 +975,7 @@ unsafe fn mi_abandoned_page_try_free(page: crate::core_types::OwnedAbandonedPage
 unsafe fn mi_abandoned_page_try_reabandon_to_mapped(
     page: crate::core_types::OwnedAbandonedPage,
 ) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-usable-size-boundary]: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
     unsafe {
         #[cfg(feature = "bench-diagnostics")]
         crate::bench_diagnostics::reabandon_attempt();
@@ -1018,7 +1018,7 @@ unsafe fn mi_abandoned_page_unown_from_free(
     page: crate::core_types::OwnedAbandonedPage,
     mut tf_expect: crate::core_types::ThreadFreeWord,
 ) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-usable-size-boundary]: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
     unsafe {
         let page_raw = page.page().as_ptr();
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
@@ -1050,7 +1050,7 @@ unsafe fn mi_page_queue_len_is_atmost(
     block_size: crate::core_types::BlockSize,
     atmost: crate::core_types::PageQueueCount,
 ) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-usable-size-boundary]: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
     unsafe {
         let pq = mi_page_queue(theap.ptr().as_ptr(), block_size);
         crate::internal::mi_assert_internal!(!pq.is_null());
@@ -1062,7 +1062,7 @@ unsafe fn mi_abandoned_page_try_reclaim(
     page: crate::core_types::OwnedAbandonedPage,
     reclaim_on_free: crate::core_types::PageReclaimOnFree,
 ) -> bool {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-usable-size-boundary]: usable-size queries derive block sizes from validated page/block or user-pointer witnesses.
     unsafe {
         #[cfg(feature = "bench-diagnostics")]
         crate::bench_diagnostics::abandoned_reclaim_attempt();
@@ -1146,7 +1146,7 @@ unsafe fn mi_free_try_collect_mt_typed(
     page: crate::core_types::OwnedAbandonedPage,
     remote_free: crate::core_types::RemoteFreeList,
 ) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-abandoned-page-boundary]: abandoned-page collection owns temporary page ownership before reclaim or reabandon decisions.
     unsafe {
         let page_raw = page.page().as_ptr();
         crate::internal::mi_assert_internal!(mi_page_is_owned(page_raw));
@@ -1201,14 +1201,14 @@ unsafe fn mi_free_try_collect_mt_typed(
     }
 }
 
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 #[cold]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
     page: *mut mi_page_t,
     mt_free: *mut mi_block_t,
 ) {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
     unsafe {
         crate::internal::mi_assert_internal!(!page.is_null());
         crate::internal::mi_assert_internal!(!mt_free.is_null());
@@ -1223,18 +1223,18 @@ pub(crate) unsafe extern "C" fn mi_free_try_collect_mt(
     }
 }
 
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 const _: unsafe extern "C" fn(*mut mi_page_t, *mut mi_block_t) = mi_free_try_collect_mt;
 
 /// # Safety
 /// `page` must be the page containing `p`.
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 #[inline(never)]
 pub unsafe extern "C" fn mi_page_usable_aligned_size_of(
     page: *const mi_page_t,
     p: *const c_void,
 ) -> usize {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
     unsafe { mi_page_usable_aligned_size_of_typed(page, p).get() }
 }
 
@@ -1242,7 +1242,7 @@ pub(crate) unsafe fn mi_page_usable_aligned_size_of_typed(
     page: *const mi_page_t,
     p: *const c_void,
 ) -> crate::core_types::UsableSize {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
     unsafe {
         let block = _mi_page_ptr_unalign(page, p);
         let is_guarded = mi_block_ptr_is_guarded(block, p.cast_mut());
@@ -1261,7 +1261,7 @@ pub(crate) unsafe fn mi_usable_size_from_validated_location(
     page: crate::core_types::PagePtr,
     location: crate::core_types::PointerLocation,
 ) -> crate::core_types::UsableSize {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
     unsafe {
         let located = location.located_block();
         let was_guarded = located.was_guarded() == crate::core_types::WasGuarded::Yes;
@@ -1281,7 +1281,7 @@ pub(crate) unsafe fn _mi_usable_size_typed(
     p: *const c_void,
     page: *const mi_page_t,
 ) -> crate::core_types::UsableSize {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
     unsafe {
         if page.is_null() {
             return crate::core_types::UsableSize::new(0);
@@ -1297,7 +1297,7 @@ pub(crate) unsafe fn _mi_usable_size_typed(
 /// # Safety
 /// `page` must be null or the page containing `p`.
 pub unsafe fn _mi_usable_size(p: *const c_void, page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+    // SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
     unsafe { _mi_usable_size_typed(p, page).get() }
 }
 
@@ -1308,7 +1308,7 @@ static MI_ABANDONED_PAGE_TRY_RECLAIM_KEEP: unsafe fn(
 ) -> bool = mi_abandoned_page_try_reclaim;
 
 #[used]
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP: unsafe extern "C" fn(
     *const mi_page_t,
     *const c_void,
@@ -1316,7 +1316,7 @@ static MI_PAGE_USABLE_ALIGNED_SIZE_OF_KEEP: unsafe extern "C" fn(
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-raw-export-boundary]: C ABI free/export shims preserve upstream symbols and delegate to validated free routing.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_usable_size(p: *const c_void) -> usize {
     unsafe { mi_route_usable_size(p, c"mi_usable_size".as_ptr()) }
@@ -1327,7 +1327,7 @@ pub unsafe extern "C" fn mi_usable_size(p: *const c_void) -> usize {
 // Retained as an exported C ABI free-size symbol; release cdylib builds may
 // reference it only from external dynamic callers or assembly aliases.
 #[allow(dead_code)]
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
     unsafe {
@@ -1345,7 +1345,7 @@ pub unsafe extern "C" fn mi_free_size(p: *mut c_void, size: usize) {
 // Retained as an exported C ABI free-size-aligned symbol; release cdylib builds
 // may reference it only from external dynamic callers or assembly aliases.
 #[allow(dead_code)]
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_size_aligned(p: *mut c_void, size: usize, alignment: usize) {
     unsafe {
@@ -1359,7 +1359,7 @@ pub unsafe extern "C" fn mi_free_size_aligned(p: *mut c_void, size: usize, align
 // Retained as an exported C ABI aligned-free symbol; release cdylib builds may
 // reference it only from external dynamic callers or assembly aliases.
 #[allow(dead_code)]
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_free_aligned(p: *mut c_void, alignment: usize) {
     unsafe {
@@ -1371,7 +1371,7 @@ pub unsafe extern "C" fn mi_free_aligned(p: *mut c_void, alignment: usize) {
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator and not yet freed. If
 /// `usable` is non-null it must be writable for one `usize`.
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_ufree(p: *mut c_void, usable: *mut usize) {
     unsafe {
@@ -1381,7 +1381,7 @@ pub unsafe extern "C" fn mi_ufree(p: *mut c_void, usable: *mut usize) {
 
 /// # Safety
 /// `p` must be null or a small allocation pointer previously returned by this allocator.
-// SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+// SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_free_small(p: *mut c_void) {
     unsafe {
@@ -1438,7 +1438,7 @@ mod tests {
                     mi_block_t::default(),
                 ],
             };
-            // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+            // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
             unsafe {
                 let page = fixture.page.as_mut_ptr();
                 ptr::addr_of_mut!((*page).xthread_id)
@@ -1467,7 +1467,7 @@ mod tests {
         }
 
         fn page(&mut self) -> PagePtr {
-            // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+            // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
             unsafe {
                 ptr::addr_of_mut!((*self.page.as_mut_ptr()).page_start)
                     .write(ptr::addr_of_mut!(self.blocks[0]).cast::<u8>());
@@ -1476,7 +1476,7 @@ mod tests {
         }
 
         fn user(&mut self, index: usize) -> UserPtr {
-            // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+            // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
             unsafe { UserPtr::new_unchecked(ptr::addr_of_mut!(self.blocks[index * 2]).cast()) }
         }
 
@@ -1514,7 +1514,7 @@ mod tests {
     #[test]
     fn free_validation_covers_null_invalid_and_bad_alignment() {
         let _quiet_expected_errors = ShowErrorsGuard::disabled();
-        // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             assert!(matches!(
                 mi_validate_pointer(ptr::null_mut(), c"free-test".as_ptr()),
@@ -1547,7 +1547,7 @@ mod tests {
     fn free_validation_covers_interior_pointer_lookup() {
         let mut fixture =
             FreeFixture::new(current_thread_owner(), PageFlags::HAS_INTERIOR_POINTERS);
-        // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let page = fixture.page();
             let user = UserPtr::new_unchecked(fixture.user(0).as_u8_ptr().add(1).cast());
@@ -1571,7 +1571,7 @@ mod tests {
     fn free_validation_covers_guarded_pointer_lookup() {
         let mut fixture =
             FreeFixture::new(current_thread_owner(), PageFlags::HAS_INTERIOR_POINTERS);
-        // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             crate::core_types::BlockTag::write_guarded_to(fixture.block(0));
             let page = fixture.page();
@@ -1615,7 +1615,7 @@ mod tests {
         let current = ThreadId::new(_mi_thread_id()).expect("current thread id is valid");
 
         let mut local = FreeFixture::new(current_thread_owner(), PageFlags::EMPTY);
-        // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let validated =
                 mi_prepare_validated_free(mi_validate_block_from_ptr(local.page(), local.user(0)))
@@ -1638,7 +1638,7 @@ mod tests {
         };
         let remote_owner = PageOwnerId::Thread(ThreadId::new(remote_raw).expect("valid remote id"));
         let mut remote = FreeFixture::new(remote_owner, PageFlags::EMPTY);
-        // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let validated = mi_prepare_validated_free(mi_validate_block_from_ptr(
                 remote.page(),
@@ -1657,7 +1657,7 @@ mod tests {
         }
 
         let mut abandoned = FreeFixture::new(PageOwnerId::Abandoned, PageFlags::EMPTY);
-        // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let validated = mi_prepare_validated_free(mi_validate_block_from_ptr(
                 abandoned.page(),
@@ -1679,7 +1679,7 @@ mod tests {
     fn free_checks_cover_double_free_detection() {
         let mut fixture = FreeFixture::new(current_thread_owner(), PageFlags::EMPTY);
         let _quiet_expected_errors = ShowErrorsGuard::disabled();
-        // SAFETY[AUDIT:free-path-boundary]: free-path operations use validated page/block/user-pointer witnesses or raw C ABI shims.
+        // SAFETY[AUDIT:free-validation-boundary]: pointer validation and double-free checks only inspect allocator-owned page/block witnesses.
         unsafe {
             let page = fixture.page().as_ptr();
             let block = fixture.block(0).as_ptr();

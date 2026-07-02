@@ -119,50 +119,53 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
     let unsafe_audit_doc =
         fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read unsafe audit doc");
 
+    const ALLOCATION_FREE_FOCUSED_PATH: &str =
+        "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs";
+    let assert_focused_evidence = |audit_id: &str, focused_path: &str| {
+        let row_prefix = format!("{audit_id}\ttest\t{focused_path}\t");
+        assert!(
+            evidence.lines().any(|line| line.starts_with(&row_prefix)),
+            "unsafe audit evidence should map {audit_id} to focused release-audit module {focused_path}"
+        );
+    };
+
+    for audit_id in [
+        "allocation-platform-shim-boundary",
+        "allocation-product-entry-boundary",
+        "allocation-realloc-entry-boundary",
+        "allocation-string-path-boundary",
+        "allocation-cxx-new-boundary",
+        "allocation-heap-dispatch-boundary",
+        "allocation-layout-request-boundary",
+        "allocation-page-refill-boundary",
+        "free-raw-export-boundary",
+        "free-validation-boundary",
+        "free-padding-boundary",
+        "free-usable-size-boundary",
+        "free-stats-boundary",
+        "free-local-list-boundary",
+        "free-remote-list-boundary",
+        "free-route-dispatch-boundary",
+        "free-abandoned-page-boundary",
+        "aligned-padding-boundary",
+        "aligned-thread-heap-allocation-boundary",
+        "aligned-page-allocation-boundary",
+        "aligned-calloc-product-boundary",
+        "aligned-global-allocation-export-boundary",
+        "aligned-heap-allocation-export-boundary",
+        "aligned-realloc-request-boundary",
+        "aligned-realloc-copy-boundary",
+        "aligned-recalloc-product-boundary",
+        "aligned-realloc-global-export-boundary",
+        "aligned-realloc-heap-export-boundary",
+    ] {
+        assert_focused_evidence(audit_id, ALLOCATION_FREE_FOCUSED_PATH);
+    }
+
     for (audit_id, focused_path) in [
         (
-            "allocation-platform-shim-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "allocation-product-entry-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "allocation-realloc-entry-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "allocation-string-path-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "allocation-cxx-new-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "allocation-heap-dispatch-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "allocation-layout-request-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "allocation-page-refill-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "aligned-padding-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "aligned-heap-allocation-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
-        ),
-        (
-            "aligned-realloc-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+            "raw-macro-bootstrap-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
         ),
         (
             "raw-macro-bootstrap-boundary",
@@ -405,11 +408,7 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
             "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
         ),
     ] {
-        let row_prefix = format!("{audit_id}\ttest\t{focused_path}\t");
-        assert!(
-            evidence.lines().any(|line| line.starts_with(&row_prefix)),
-            "unsafe audit evidence should map {audit_id} to focused release-audit module {focused_path}"
-        );
+        assert_focused_evidence(audit_id, focused_path);
     }
 
     let tracked_ids = [
@@ -421,9 +420,26 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         "allocation-string-path-boundary",
         "allocation-cxx-new-boundary",
         "allocation-page-refill-boundary",
+        "free-raw-export-boundary",
+        "free-validation-boundary",
+        "free-padding-boundary",
+        "free-usable-size-boundary",
+        "free-stats-boundary",
+        "free-local-list-boundary",
+        "free-remote-list-boundary",
+        "free-route-dispatch-boundary",
+        "free-abandoned-page-boundary",
         "aligned-padding-boundary",
-        "aligned-heap-allocation-boundary",
-        "aligned-realloc-boundary",
+        "aligned-thread-heap-allocation-boundary",
+        "aligned-page-allocation-boundary",
+        "aligned-calloc-product-boundary",
+        "aligned-global-allocation-export-boundary",
+        "aligned-heap-allocation-export-boundary",
+        "aligned-realloc-request-boundary",
+        "aligned-realloc-copy-boundary",
+        "aligned-recalloc-product-boundary",
+        "aligned-realloc-global-export-boundary",
+        "aligned-realloc-heap-export-boundary",
         "raw-macro-bootstrap-boundary",
         "raw-macro-override-entry-boundary",
         "raw-macro-unix-core-boundary",

@@ -583,33 +583,97 @@ Operation IDs:
   encoded free-list block links. Unsafe operations preserve pointer provenance,
   tracking gates, page keys, encoded/unencoded link reads and writes, and
   same-page corruption checks.
-- `SAFETY[AUDIT:free-path-boundary]`: `src/allocator/free.rs` owns free and
-  usable-size routing. Unsafe operations are limited to free fast-path assembly
-  aliases, validated page/block/user-pointer lookup, padding and guarded-block
-  metadata, local and remote free-list mutation, thread-free atomic
-  publication, abandoned-page collect/reclaim/reabandon decisions, usable-size
-  shims, and raw C ABI free exports while preserving allocator ownership and
-  no-allocation hot-path constraints.
+- `SAFETY[AUDIT:free-raw-export-boundary]`: `src/allocator/free.rs` owns raw
+  C ABI free, free-size, aligned-free, usable-size, and fast assembly alias
+  shims. Unsafe operations are limited to symbol-preserving entry points and
+  direct delegation into validated routing while preserving no-allocation
+  interposition behavior.
+- `SAFETY[AUDIT:free-validation-boundary]`: `src/allocator/free.rs` owns free
+  pointer validation, double-free detection, interior/guarded pointer
+  classification, and validation proof fixtures. Unsafe operations are limited
+  to allocator-owned page/block/user-pointer witnesses, same-page checks, and
+  guarded-block unprotection.
+- `SAFETY[AUDIT:free-padding-boundary]`: `src/allocator/free.rs` owns padding
+  decode, shrink, verification, and debug canary checks. Unsafe operations are
+  limited to typed padding metadata on validated blocks and the matching
+  tracking visibility transitions.
+- `SAFETY[AUDIT:free-usable-size-boundary]`: `src/allocator/free.rs` owns
+  usable-size queries for page/block, aligned/interior, and public user-pointer
+  paths. Unsafe operations are limited to validated page metadata, unaligned
+  block recovery, guarded-block adjustment, and caller-visible size shims.
+- `SAFETY[AUDIT:free-stats-boundary]`: `src/allocator/free.rs` owns free-side
+  statistic decrement updates. Unsafe operations are limited to current
+  thread-heap counters and bin indexes derived from caller-validated pages.
+- `SAFETY[AUDIT:free-local-list-boundary]`: `src/allocator/free.rs` owns local
+  free-list mutation for blocks owned by the current thread heap. Unsafe
+  operations are limited to typed local page/block witnesses, padding checks,
+  local free-list pushes, used-count updates, retirement, and full-queue
+  transitions.
+- `SAFETY[AUDIT:free-remote-list-boundary]`: `src/allocator/free.rs` owns
+  cross-thread free publication. Unsafe operations are limited to typed foreign
+  page/block witnesses, thread-free atomic head updates, and abandoned-page
+  collection handoff when ownership is not held.
+- `SAFETY[AUDIT:free-route-dispatch-boundary]`: `src/allocator/free.rs` owns
+  hot and cold free dispatch after validation. Unsafe operations are limited to
+  validated free witnesses, local/remote/abandoned owner classification, usable
+  out-pointers, and no-allocation routing.
+- `SAFETY[AUDIT:free-abandoned-page-boundary]`: `src/allocator/free.rs` owns
+  abandoned-page collection, reclaim, reabandon, and ownership release from the
+  free path. Unsafe operations are limited to owned abandoned-page witnesses,
+  remote free-list collection, arena suitability checks, and thread-free
+  ownership-word release.
 - `SAFETY[AUDIT:aligned-padding-boundary]`:
   `src/allocator/aligned.rs` owns padding shrink/grow behavior, over-allocation
   trimming, guarded aligned allocation, interior-pointer tagging, and tracking
   metadata for adjusted aligned blocks. Unsafe operations are limited to
   padding-shrink shims, page/block metadata, padding metadata writes, and
   tracking hooks while preserving usable-size and offset invariants.
-- `SAFETY[AUDIT:aligned-heap-allocation-boundary]`:
-  `src/allocator/aligned.rs` owns heap and thread-heap aligned malloc, zalloc,
-  calloc, and zeroed aligned entry paths after safe request normalization.
-  Unsafe operations are limited to thread-heap local witnesses, aligned page
-  free-list checks, usable-size out-pointers, heap borrowing, guarded handoff,
-  and raw aligned allocation exports while preserving alignment and hot-path
-  dispatch constraints.
-- `SAFETY[AUDIT:aligned-realloc-boundary]`:
-  `src/allocator/aligned.rs` owns aligned realloc, recalloc, offset-aware
-  realloc request routing, old-allocation validation, copy preservation, and
-  raw aligned realloc exports. Unsafe operations are limited to caller-proven
-  old allocation pointers, heap borrowing, aligned allocation/free handoff, and
-  bounded copy metadata while preserving old contents and realloc failure
-  semantics.
+- `SAFETY[AUDIT:aligned-thread-heap-allocation-boundary]`:
+  `src/allocator/aligned.rs` owns thread-heap aligned malloc and zalloc entry
+  paths after checked layout normalization. Unsafe operations are limited to
+  local thread-heap witnesses and delegation into typed aligned allocation
+  requests.
+- `SAFETY[AUDIT:aligned-page-allocation-boundary]`:
+  `src/allocator/aligned.rs` owns aligned allocation fast paths that inspect
+  guarded allocation state and small-page free slots. Unsafe operations are
+  limited to active page witnesses, usable-size out-pointers, direct page
+  allocation, and tracking handoff for aligned blocks.
+- `SAFETY[AUDIT:aligned-calloc-product-boundary]`:
+  `src/allocator/aligned.rs` owns aligned calloc product handling for
+  thread-heap and heap entry paths. Unsafe operations are limited to checked
+  `CallocRequest` totals, heap/thread-heap witness creation, and zeroed aligned
+  dispatch.
+- `SAFETY[AUDIT:aligned-global-allocation-export-boundary]`:
+  `src/allocator/aligned.rs` owns global aligned allocation C ABI exports.
+  Unsafe operations are limited to raw global malloc/zalloc/calloc entry points
+  forwarding into checked aligned request helpers.
+- `SAFETY[AUDIT:aligned-heap-allocation-export-boundary]`:
+  `src/allocator/aligned.rs` owns heap aligned allocation C ABI exports.
+  Unsafe operations are limited to borrowing raw heap handles, deriving
+  thread-heap witnesses, and forwarding checked aligned requests.
+- `SAFETY[AUDIT:aligned-realloc-request-boundary]`:
+  `src/allocator/aligned.rs` owns thread-heap aligned realloc request
+  construction. Unsafe operations are limited to old user-pointer validation,
+  checked layout creation, default/null allocation routing, and typed realloc
+  request handoff.
+- `SAFETY[AUDIT:aligned-realloc-copy-boundary]`:
+  `src/allocator/aligned.rs` owns aligned realloc copy preservation. Unsafe
+  operations are limited to newly allocated aligned blocks, old allocation
+  usable-size metadata, bounded zeroing, bounded copy, and freeing the validated
+  old block.
+- `SAFETY[AUDIT:aligned-recalloc-product-boundary]`:
+  `src/allocator/aligned.rs` owns aligned recalloc product handling. Unsafe
+  operations are limited to checked `CallocRequest` totals, old allocation
+  validation, zeroed layout construction, and typed recalloc handoff.
+- `SAFETY[AUDIT:aligned-realloc-global-export-boundary]`:
+  `src/allocator/aligned.rs` owns global aligned realloc C ABI exports. Unsafe
+  operations are limited to raw realloc/rezalloc/recalloc entry points
+  forwarding into checked default thread-heap requests.
+- `SAFETY[AUDIT:aligned-realloc-heap-export-boundary]`:
+  `src/allocator/aligned.rs` owns heap aligned realloc C ABI exports. Unsafe
+  operations are limited to borrowing raw heap handles, validating old
+  allocation pointers, checked layout/product handling, and forwarding typed
+  heap realloc requests.
 - `SAFETY[AUDIT:options-storage-lock-boundary]`: `src/allocator/options.rs`
   owns option descriptor storage and initialization. Unsafe operations are
   limited to mimalloc lock guards, atomic option values, bounded environment

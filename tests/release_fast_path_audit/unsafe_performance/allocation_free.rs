@@ -29,7 +29,7 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/free.rs\t"))
-            && free_rs.matches("SAFETY[AUDIT:free-path-boundary]").count() >= 60
+            && !free_rs.contains("SAFETY[AUDIT:free-path-boundary]")
             && free_rs.contains("core::arch::global_asm!(")
             && free_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign(")
             && free_rs.contains("pub(crate) unsafe extern \"C\" fn mi_free_generic_local(")
@@ -41,15 +41,42 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             && free_rs.contains("pub unsafe extern \"C\" fn mi_free_small("),
         "free-path unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
-    for (audit_id, min_count) in [
-        ("aligned-padding-boundary", 20),
-        ("aligned-heap-allocation-boundary", 60),
-        ("aligned-realloc-boundary", 60),
+    for (audit_id, expected_count) in [
+        ("free-raw-export-boundary", 13),
+        ("free-validation-boundary", 28),
+        ("free-padding-boundary", 5),
+        ("free-usable-size-boundary", 9),
+        ("free-stats-boundary", 1),
+        ("free-local-list-boundary", 1),
+        ("free-remote-list-boundary", 1),
+        ("free-route-dispatch-boundary", 10),
+        ("free-abandoned-page-boundary", 1),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
-        assert!(
-            alloc_aligned_rs.matches(&marker).count() >= min_count,
-            "aligned allocation unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        assert_eq!(
+            free_rs.matches(&marker).count(),
+            expected_count,
+            "free unsafe boundary {audit_id} should retain exactly {expected_count} local operation markers"
+        );
+    }
+    for (audit_id, expected_count) in [
+        ("aligned-padding-boundary", 23),
+        ("aligned-thread-heap-allocation-boundary", 11),
+        ("aligned-page-allocation-boundary", 11),
+        ("aligned-calloc-product-boundary", 14),
+        ("aligned-global-allocation-export-boundary", 17),
+        ("aligned-heap-allocation-export-boundary", 15),
+        ("aligned-realloc-request-boundary", 15),
+        ("aligned-realloc-copy-boundary", 4),
+        ("aligned-recalloc-product-boundary", 8),
+        ("aligned-realloc-global-export-boundary", 14),
+        ("aligned-realloc-heap-export-boundary", 26),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert_eq!(
+            alloc_aligned_rs.matches(&marker).count(),
+            expected_count,
+            "aligned allocation unsafe boundary {audit_id} should retain exactly {expected_count} local operation markers"
         );
     }
     assert!(
@@ -57,6 +84,8 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             .lines()
             .any(|line| line.starts_with("src/allocator/aligned.rs\t"))
             && !alloc_aligned_rs.contains("SAFETY[AUDIT:aligned-allocation-boundary]")
+            && !alloc_aligned_rs.contains("SAFETY[AUDIT:aligned-heap-allocation-boundary]")
+            && !alloc_aligned_rs.contains("SAFETY[AUDIT:aligned-realloc-boundary]")
             && alloc_aligned_rs.contains("fn mi_malloc_is_naturally_aligned(")
             && alloc_aligned_rs.contains("fn aligned_layout_or_report(")
             && alloc_aligned_rs.contains("crate::core_types::LayoutRequest::aligned_at(")

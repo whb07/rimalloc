@@ -9,12 +9,10 @@ plus two release-audit modules that block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 242 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 242 operation IDs with
-  521 automated evidence rows.
-- The largest source audit operation IDs are `free-path-boundary` with 69
-  markers, `aligned-heap-allocation-boundary` with 68 markers,
-  `aligned-realloc-boundary` with 67 markers, `page-map-register-boundary` with
+  mentions, and 258 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 258 operation IDs with
+  555 automated evidence rows.
+- The largest source audit operation IDs are `page-map-register-boundary` with
   66 markers, `internal-atomic-field-boundary` with 65 markers,
   `os-memory-allocation-boundary` with 59 markers, and
   `arena-heap-page-visitors` and `init-thread-heap-tls-boundary` with 56 markers
@@ -28,6 +26,12 @@ Current review evidence:
   `macos-zone-allocation-boundary` with 22 markers,
   `emscripten-memory-boundary` with 20 markers, and
   `macos-zone-lookup-boundary` with 16 markers.
+- The completed free/aligned split left the largest new allocation IDs at
+  `free-validation-boundary` with 28 markers,
+  `aligned-realloc-heap-export-boundary` with 26 markers,
+  `aligned-global-allocation-export-boundary` with 17 markers, and
+  `aligned-realloc-request-boundary` and
+  `aligned-heap-allocation-export-boundary` with 15 markers each.
 - The largest remaining medium clusters are `typed-atomic-domain` with 51
   markers, `threadlocal-key-manager` and `ffi-libc-helpers` with 50 markers
   each, `page-queue-transition-boundary` with 49 markers,
@@ -45,8 +49,8 @@ Current review evidence:
   module cap is still 700 lines; the largest modules are
   `unsafe_performance/page_arena_behavior.rs` at 656 lines,
   `release_policy/docs_and_linking.rs` at 633 lines,
+  `release_policy/security.rs` at 597 lines,
   `datatype_acceptance/strict_type.rs` at 592 lines,
-  `release_policy/security.rs` at 581 lines,
   `release_policy/api_surface.rs` at 523 lines,
   `release_policy/release_process.rs` at 504 lines,
   `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 426 lines,
@@ -105,18 +109,18 @@ clippy, and full tests.
 
 ## Issue 3: Split free-path and aligned allocation marker clusters
 
-> **Comment:** `free-path-boundary` has 69 markers,
-> `aligned-heap-allocation-boundary` has 68, and `aligned-realloc-boundary` has
+> **Comment:** `free-path-boundary` had 69 markers,
+> `aligned-heap-allocation-boundary` had 68, and `aligned-realloc-boundary` had
 > 67. Each combines raw ABI shims, validation, padding, stats, local/remote
 > routing, and allocation/reallocation variants.
 
-- [ ] Split `free-path-boundary` by validation/double-free detection, padding
+- [x] Split `free-path-boundary` by validation/double-free detection, padding
       decode/shrink/check, usable-size queries, free stats, local free, remote
       free, abandoned free, and public raw free shims.
-- [ ] Split `aligned-heap-allocation-boundary` by aligned layout parsing,
+- [x] Split `aligned-heap-allocation-boundary` by aligned layout parsing,
       over-allocation/padding setup, heap/default dispatch, malloc/zalloc/calloc
       families, and public heap/global raw export shims.
-- [ ] Split `aligned-realloc-boundary` by old-allocation validation, copy bounds,
+- [x] Split `aligned-realloc-boundary` by old-allocation validation, copy bounds,
       realloc/rezalloc/recalloc product handling, heap/default dispatch, and
       public raw export shims.
 
@@ -168,16 +172,16 @@ tests.
 
 1. [x] Split typed pointer and heap proof-fixture audit clusters.
 2. [x] Split macOS zone and platform primitive marker clusters.
-3. [ ] Split free-path and aligned allocation marker clusters.
+3. [x] Split free-path and aligned allocation marker clusters.
 4. [ ] Split page-map registration and internal atomic marker clusters.
 5. [ ] Split largest release-audit modules and lower the module cap.
 
 ## Definition of done for this backlog
 
 - [ ] No source audit operation ID has more than 60 source markers.
-- [ ] The largest remaining free/aligned allocation, page-map, and atomic
-      clusters listed above are split into narrower review units with separate
-      docs, evidence rows, and release-audit guards.
+- [ ] The largest remaining page-map and atomic clusters listed above are split
+      into narrower review units with separate docs, evidence rows, and
+      release-audit guards.
 - [ ] Release-audit modules are split enough to lower the module cap to 600
       lines without weakening coverage.
 - [ ] The strict-type wildcard guard remains at exactly one retained

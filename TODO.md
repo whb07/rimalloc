@@ -10,8 +10,8 @@ paths casually.
 
 Review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` still has 62 entries: 44 production,
-  15 test, and 3 translation files.
+- `docs/unsafe-migration-allowlist.tsv` still has 60 entries: 44 production,
+  13 test, and 3 translation files.
 - `strict-type-allowlist.txt` has 95 entries; 8 are still marked `remove:`.
   Those removable entries are broad `bare-domain-usize` file allowances in
   allocator, bitmap, and internal translation units.
@@ -38,16 +38,24 @@ Review evidence:
 > paths and instead target small typed-wrapper or test-only files where the
 > safety proof is local.
 
-- [ ] Inventory the 15 test entries and the smallest production typed-wrapper
+- [x] Inventory the 15 test entries and the smallest production typed-wrapper
       entries still on `docs/unsafe-migration-allowlist.tsv`.
-- [ ] Pick at least two low-risk files whose unsafe operations can receive
+- [x] Pick at least two low-risk files whose unsafe operations can receive
       operation-level `SAFETY[AUDIT:*]` tags without assembly evidence.
-- [ ] Add `UNSAFE_AUDIT.md` entries and
+- [x] Add `UNSAFE_AUDIT.md` entries and
       `docs/unsafe-audit-evidence.tsv` rows for each new operation ID.
-- [ ] Remove the migrated files from the allowlist and lower
+- [x] Remove the migrated files from the allowlist and lower
       `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
-- [ ] Keep production, test, and translation categories visible in the audit
+- [x] Keep production, test, and translation categories visible in the audit
       output so test fixtures do not hide production debt.
+  - Evidence: `src/types/page/tests.rs` now carries
+    `SAFETY[AUDIT:typed-page-test-fixtures]` for its stack-local page/range
+    fixture construction, and `src/types/validation/tests.rs` now carries
+    `SAFETY[AUDIT:typed-free-validation]` for its stack-local guarded free
+    validation fixture. Both test files were removed from
+    `docs/unsafe-migration-allowlist.tsv`, the allowlist cap is now 60, and
+    `scripts/check-unsafe-audit.py` reports 60 legacy files across production,
+    test, and translation categories.
 - Verify: `scripts/check-unsafe-audit.py`,
   `scripts/check-unsafe-audit-evidence.py`,
   `scripts/check-unsafe-inventory.py`, focused release audit, full clippy, and
@@ -137,7 +145,7 @@ Review evidence:
 
 ## Suggested implementation order
 
-1. [ ] Shrink the unsafe migration allowlist with small reviewable files.
+1. [x] Shrink the unsafe migration allowlist with small reviewable files.
 2. [ ] Reduce one removable strict-type file-level allowance.
 3. [ ] Consolidate unsafe arena diagnostic metadata reads.
 4. [ ] Split the uneven release-audit unsafe/performance module further.
@@ -145,7 +153,7 @@ Review evidence:
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is below 62 entries and the cap is lowered.
+- [x] The unsafe migration allowlist is below 62 entries and the cap is lowered.
 - [ ] The strict-type allowlist has fewer than 8 `remove:` entries and the
       removable-entry count is capped lower.
 - [ ] `src/allocator/arena/debug.rs` has clearer diagnostic helper boundaries

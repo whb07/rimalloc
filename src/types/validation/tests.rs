@@ -8,6 +8,9 @@ fn guarded_pointer_lookup_prepares_guarded_free_witnesses() {
     let mut raw_block = mi_block_t::default();
     let mut raw_user = 0usize;
 
+    // SAFETY[AUDIT:typed-free-validation]: These stack-local page, block, and
+    // user objects form a synthetic lookup result for exercising guarded free
+    // witness preparation; they are not published to allocator state.
     let page = unsafe { PagePtr::new_unchecked(raw_page.as_mut_ptr()) };
     let block = unsafe { BlockPtr::new_unchecked(core::ptr::addr_of_mut!(raw_block)) };
     let user = unsafe { UserPtr::new_unchecked(core::ptr::addr_of_mut!(raw_user).cast()) };

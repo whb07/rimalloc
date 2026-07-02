@@ -22,6 +22,8 @@ safe-stats	test	src/safe/tests.rs	Exercises StatsSnapshot capture, heap stats, J
 safe-stats	test	tests/stats_exports.rs	Exercises raw stats bin export bounds used by typed stats wrappers.
 typed-freelist	test	src/types/freelist/tests.rs	Exercises thread-free word owner/head packing and raw pointer reconstruction.
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
+typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page metadata and registered-range witness fixture construction.
+typed-page-test-fixtures	test	tests/release_fast_path_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.
 typed-free-validation	test	src/types/validation/tests.rs	Exercises pointer lookup conversion into validated free witnesses.
 typed-free-validation	test	tests/release_fast_path_audit.rs	Checks free-path validation uses typed pointer lookup boundaries.
 unsafe-callback	test	src/safe/tests.rs	Exercises unsafe callback guards, restoration, and panic containment.

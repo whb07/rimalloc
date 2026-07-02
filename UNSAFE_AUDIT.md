@@ -238,6 +238,13 @@ Operation IDs:
   declarations, `sbrk` memory growth, nullable primitive out-pointer conversion,
   bounded C-string stderr and environment handling, no-op primitive range shims,
   unsupported huge-page result publication, and thread/TLS compatibility shims.
+- `SAFETY[AUDIT:emscripten-primitive-boundary]`:
+  `src/platform/emscripten.rs` owns the bounded Emscripten primitive backend.
+  Unsafe operations are limited to Emscripten import declarations, emmalloc
+  allocation/free calls, nullable primitive out-pointer conversion, clock and
+  console calls, host stderr fallback C-string handling, unsupported environment
+  and huge-page shims, pthread key lifecycle, static key mutation, and fallback
+  thread-local association.
 - `SAFETY[AUDIT:arena-debug-render]`: `src/allocator/arena/debug.rs` renders
   arena diagnostics by reading arena/page metadata discovered through the
   current sub-process registry, page map lookup, and typed memid views. The

@@ -43,6 +43,7 @@ raw-macro-boundary	script	scripts/check-ffi-boundary.py	Checks raw macro boundar
 raw-macro-boundary	test	tests/header_macro_expansion.rs	Exercises macro expansion through public raw paths and unsafe call sites.
 random-context-boundaries	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks random context entry points stay no-retention direct-call C ABI shims with local audit markers.
 wasi-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks WASI primitive imports, memory-growth fallback, nullable out-pointers, bounded stderr/env C-string handling, and thread association shims.
+emscripten-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks Emscripten imports, emmalloc allocation/free, nullable out-pointers, clock/console fallbacks, pthread key lifecycle, and fallback thread-local association.
 safe-heap	test	src/safe/tests.rs	Exercises safe heap creation, main heap handling, heap-tied allocation, resize, and stats paths.
 safe-heap	test	tests/lifecycle_stats_exports.rs	Exercises raw heap lifecycle and heap statistics behavior used by safe heap wrappers.
 safe-process-info	test	src/safe/tests.rs	Exercises ProcessInfo capture through typed safe output values.

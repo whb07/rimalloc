@@ -13,8 +13,8 @@ ABI behavior.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 29 entries: 26 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 29.
+- `docs/unsafe-migration-allowlist.tsv` has 28 entries: 25 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 28.
 - The completed pass moved `src/types/memid.rs`, `src/types/layout.rs`,
   `src/types/page_states.rs`, and `src/allocator/bench_diagnostics.rs` to local
   `SAFETY[AUDIT:*]` operation markers with evidence rows and no migration
@@ -29,12 +29,18 @@ Current review evidence:
   growth, nullable primitive out-pointers, C-string stderr/env handling, no-op
   primitive range shims, and thread/TLS compatibility shims, and is off the
   unsafe migration allowlist.
+- `src/platform/emscripten.rs` now uses 48
+  `SAFETY[AUDIT:emscripten-primitive-boundary]` markers for Emscripten imports,
+  emmalloc allocation/free calls, nullable primitive out-pointers, clock/console
+  fallbacks, pthread key lifecycle, static key mutation, and fallback
+  thread-local association, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are
   `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers,
   `src/lib.rs` at 398 lines with 21 `unsafe` hits and 8 local markers,
-  `src/platform/emscripten.rs` at 424 lines with 35 `unsafe` hits and 0 local
+  `src/ffi/libc.rs` at 518 lines with 46 `unsafe` hits and 0 local markers,
+  `src/allocator/threadlocal.rs` at 579 lines with 42 `unsafe` hits and 0 local
   markers, and
-  `src/ffi/libc.rs` at 518 lines with 46 `unsafe` hits and 0 local markers.
+  `src/allocator/heap.rs` at 604 lines with 93 `unsafe` hits and 0 local markers.
 - `src/ffi/abi.rs` now uses 1
   `SAFETY[AUDIT:ffi-abi-declarations]` marker for its raw C declaration block,
   preserves the existing C-header macro markers, and is off the unsafe
@@ -140,16 +146,16 @@ inventory regeneration/check, release audit, full clippy, and full tests.
 > pthread key lifecycle, and a fallback thread-local cell for non-Emscripten
 > builds.
 
-- [ ] Add local `SAFETY[AUDIT:emscripten-primitive-boundary]` markers for
+- [x] Add local `SAFETY[AUDIT:emscripten-primitive-boundary]` markers for
       Emscripten import declarations, emmalloc calls, clock/entropy calls,
       console/C-string output, pthread key lifecycle, static key mutation, and
       fallback thread-local association.
-- [ ] Preserve Emscripten-target behavior, non-Emscripten fallback behavior,
+- [x] Preserve Emscripten-target behavior, non-Emscripten fallback behavior,
       errno-style returns, and no extra allocation or dynamic dispatch in
       primitive paths.
-- [ ] Add release-audit assertions or targeted tests for null out-pointers,
+- [x] Add release-audit assertions or targeted tests for null out-pointers,
       fallback allocation failure, clock fallback, and thread-key lifecycle.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -186,7 +192,7 @@ regeneration/check, release audit, full clippy, and full tests.
 1. [x] Migrate `src/ffi/abi.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/allocator/arena_meta.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/platform/wasi.rs` off the unsafe migration allowlist.
-4. [ ] Migrate `src/platform/emscripten.rs` off the unsafe migration allowlist.
+4. [x] Migrate `src/platform/emscripten.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/types/atomic.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog

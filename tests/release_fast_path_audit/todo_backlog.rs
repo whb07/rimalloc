@@ -63,15 +63,16 @@ fn rust_idiom_backlog_tracks_current_work() {
         "has no retained wildcard entries",
         "Strict-type wildcard guard: total=0; none.",
         "release-audit root harness is 247 lines under a 300-line root cap",
-        "release-audit module-size guard discovers 91 module files recursively and\n  enforces a 500-line cap",
-        "largest release-audit modules are:\n  `release_policy/security/unsafe_audit_evidence.rs` at 480 lines",
-        "`unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 459 lines",
-        "`interposition_exports.rs` at 457 lines",
-        "`unsafe_performance/allocation_free.rs` at 432 lines",
-        "`unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines",
-        "`unsafe_performance/os_memory.rs` at 409 lines",
+        "release-audit module-size guard discovers 107 module files recursively and\n  enforces a 400-line cap",
+        "largest release-audit modules are:\n  `allowance_inventory.rs` at 398 lines",
+        "`unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 390 lines",
+        "`interposition_exports/linux_override.rs` at 371 lines",
+        "`unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367 lines",
+        "`primitive_options.rs` at 323 lines",
+        "`unsafe_performance/thread_stats.rs` at 319 lines",
         "Full validation for Issue 4 passed",
         "Full validation for Issue 5 passed",
+        "Full validation for Issue 6 passed",
         "split across libc\n> file symbols, recursion guards, delayed buffering, stderr forwarding,\n> registered callback routing",
         "broad arena registry, purge, and debug render IDs\n> are gone from allocator source",
         "registry markers are split across\n> count/index lookup, heap arena-page tables",
@@ -100,7 +101,7 @@ fn rust_idiom_backlog_tracks_current_work() {
         "3. [x] Split allocation entry and raw override audit clusters.",
         "4. [x] Split typed page-state and subproc association audit clusters.",
         "5. [x] Tighten strict-type allowlist hotspots.",
-        "6. [ ] Split release-audit modules over 400 lines and lower the cap.",
+        "6. [x] Split release-audit modules over 400 lines and lower the cap.",
         "No source audit operation ID has more than 32 source markers",
         "Strict-type allowlist hotspots are measured in release-audit coverage",
         "Release-audit modules are split enough to lower the module cap to 400\n      lines",
@@ -156,7 +157,7 @@ fn release_audit_harness_stays_split() {
             .count();
 
         assert!(
-            line_count <= 500,
+            line_count <= 400,
             "release fast-path audit module {} should stay reviewable; found {line_count} lines",
             path.display()
         );

@@ -37,14 +37,14 @@ Current review evidence:
   `src/types/atomic/concurrency_models.rs` is covered by exact test-function
   symbols. Strict-type wildcard guard: total=0; none.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 91 module files recursively and
-  enforces a 500-line cap. The largest release-audit modules are:
-  `release_policy/security/unsafe_audit_evidence.rs` at 480 lines,
-  `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 459 lines,
-  `interposition_exports.rs` at 457 lines,
-  `unsafe_performance/allocation_free.rs` at 432 lines,
-  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines, and
-  `unsafe_performance/os_memory.rs` at 409 lines.
+  release-audit module-size guard discovers 107 module files recursively and
+  enforces a 400-line cap. The largest release-audit modules are:
+  `allowance_inventory.rs` at 398 lines,
+  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 390 lines,
+  `interposition_exports/linux_override.rs` at 371 lines,
+  `unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367 lines,
+  `primitive_options.rs` at 323 lines, and
+  `unsafe_performance/thread_stats.rs` at 319 lines.
 - Full validation for Issue 4 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
@@ -52,6 +52,12 @@ Current review evidence:
   scripts, strict-type checks, no-allocation audit, unsafe inventory
   refresh/check, atomic ordering audit, and `git diff --check`.
 - Full validation for Issue 5 passed: `cargo fmt --all`,
+  `cargo clippy --workspace --all-targets --all-features`,
+  `cargo test --workspace --all-targets --all-features`,
+  `cargo test --test release_fast_path_audit --all-features`, unsafe audit
+  scripts, strict-type checks, no-allocation audit, unsafe inventory
+  refresh/check, atomic ordering audit, and `git diff --check`.
+- Full validation for Issue 6 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -182,21 +188,27 @@ no-allocation audit, full formatting, full clippy, and full tests.
 
 ## Issue 6: Split release-audit modules over 400 lines and lower the cap
 
-The recursive module-size guard now enforces 500 lines. The next bottleneck is
-the 400-line band: `release_policy/security/unsafe_audit_evidence.rs` at 480,
-`unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 459,
-`interposition_exports.rs` at 457,
-`unsafe_performance/allocation_free.rs` at 432,
-`unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at
-421, and `unsafe_performance/os_memory.rs` at 409.
+The recursive module-size guard now enforces 400 lines. The next bottleneck is
+the high-300-line band: `allowance_inventory.rs` at 398,
+`unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 390,
+`interposition_exports/linux_override.rs` at 371,
+`unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367,
+`primitive_options.rs` at 323, and `unsafe_performance/thread_stats.rs` at 319.
 
-- [ ] Split `process_lifecycle.rs`, `interposition_exports.rs`,
+> **Comment:** Completed. The over-400-line release-audit modules are now thin
+> parent dispatchers plus focused child modules for lifecycle/init markers,
+> subproc fast paths, allocation/free marker groups, typed helper checks,
+> OS/platform wrappers, Unix/WASI/Emscripten platform backends, interposition
+> export groups, and unsafe-audit evidence families. The recursive guard now
+> enforces the 400-line cap against every release-audit module file.
+
+- [x] Split `process_lifecycle.rs`, `interposition_exports.rs`,
       `unix_wasi_emscripten.rs`, `allocation_free.rs`, and `os_memory.rs` into
       focused modules matching their existing test groups.
-- [ ] Split `release_policy/security/unsafe_audit_evidence.rs` by evidence
+- [x] Split `release_policy/security/unsafe_audit_evidence.rs` by evidence
       family so source cluster caps, stale ID rejection, docs evidence, and TSV
       evidence stay independently reviewable.
-- [ ] Lower the release-audit module cap from 500 to 400 without weakening
+- [x] Lower the release-audit module cap from 500 to 400 without weakening
       recursive module discovery or TODO measured-count checks.
 
 Verify: release fast-path audit, docs/security/release policy modules,
@@ -210,7 +222,7 @@ formatting, full clippy, and full tests.
 3. [x] Split allocation entry and raw override audit clusters.
 4. [x] Split typed page-state and subproc association audit clusters.
 5. [x] Tighten strict-type allowlist hotspots.
-6. [ ] Split release-audit modules over 400 lines and lower the cap.
+6. [x] Split release-audit modules over 400 lines and lower the cap.
 
 ## Definition of done for this backlog
 
@@ -219,11 +231,11 @@ formatting, full clippy, and full tests.
       review units with separate docs, evidence rows, and release-audit guards.
 - [x] Strict-type allowlist hotspots are measured in release-audit coverage, and
       any removed or retained entries have explicit symbol-level rationale.
-- [ ] Release-audit modules are split enough to lower the module cap to 400
+- [x] Release-audit modules are split enough to lower the module cap to 400
       lines without weakening recursive discovery or measured TODO checks.
 - [x] The strict-type wildcard guard either reaches zero retained wildcards or
       remains explicitly documented with current measured evidence.
-- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
 - [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the

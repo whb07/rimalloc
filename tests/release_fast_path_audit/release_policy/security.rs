@@ -121,7 +121,23 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
 
     for (audit_id, focused_path) in [
         (
-            "allocation-abi-entry-boundary",
+            "allocation-platform-shim-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "allocation-product-entry-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "allocation-realloc-entry-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "allocation-string-path-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
+        ),
+        (
+            "allocation-cxx-new-boundary",
             "tests/release_fast_path_audit/unsafe_performance/allocation_free.rs",
         ),
         (
@@ -309,9 +325,13 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
     }
 
     let tracked_ids = [
-        "allocation-abi-entry-boundary",
+        "allocation-platform-shim-boundary",
+        "allocation-product-entry-boundary",
         "allocation-heap-dispatch-boundary",
         "allocation-layout-request-boundary",
+        "allocation-realloc-entry-boundary",
+        "allocation-string-path-boundary",
+        "allocation-cxx-new-boundary",
         "allocation-page-refill-boundary",
         "aligned-padding-boundary",
         "aligned-heap-allocation-boundary",

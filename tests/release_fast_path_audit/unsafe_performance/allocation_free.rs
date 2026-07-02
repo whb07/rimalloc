@@ -66,9 +66,13 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         "aligned allocation unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
     );
     for (audit_id, min_count) in [
-        ("allocation-abi-entry-boundary", 100),
+        ("allocation-platform-shim-boundary", 4),
+        ("allocation-product-entry-boundary", 20),
         ("allocation-heap-dispatch-boundary", 30),
-        ("allocation-layout-request-boundary", 15),
+        ("allocation-layout-request-boundary", 10),
+        ("allocation-realloc-entry-boundary", 35),
+        ("allocation-string-path-boundary", 20),
+        ("allocation-cxx-new-boundary", 30),
         ("allocation-page-refill-boundary", 8),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
@@ -82,9 +86,13 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             .lines()
             .any(|line| line.starts_with("src/allocator/alloc.rs\t"))
             && !alloc_rs.contains("SAFETY[AUDIT:allocation-entry-boundary]")
+            && !alloc_rs.contains("SAFETY[AUDIT:allocation-abi-entry-boundary]")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_malloc(")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_calloc(")
+            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_mallocn(")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_realloc(")
+            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_strdup(")
+            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_new(")
             && alloc_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero(")
             && alloc_rs.contains("pub(crate) unsafe fn mi_theap_realloc_req(")
             && alloc_rs.contains("pub(crate) fn calloc_request_or_report(")

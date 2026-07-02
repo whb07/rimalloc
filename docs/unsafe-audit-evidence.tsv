@@ -77,11 +77,22 @@ init-random-cpu-boundary	script	scripts/check-unsafe-audit.py	Checks random/CPU 
 init-platform-hooks-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks platform hook marker coverage, hidden init symbols, process attach/detach shims, and ELF constructor/destructor slots.
 init-platform-hooks-boundary	test	tests/release_fast_path_audit.rs	Checks process lifecycle hook shape with primitive platform audit coverage.
 init-platform-hooks-boundary	script	scripts/check-unsafe-audit.py	Checks platform init hook unsafe operations retain operation-level SAFETY markers and source audit coverage.
-allocation-abi-entry-boundary	test	tests/allocation_boundary_cases.rs	Exercises public allocation, realloc, and null/failure ABI behavior through raw entry points.
-allocation-abi-entry-boundary	test	tests/property_alloc_sequences.rs	Exercises seeded allocation and realloc/free sequences through the raw allocation entry points.
-allocation-abi-entry-boundary	test	tests/fuzz_alloc_sequences.rs	Exercises byte-stream allocation programs over malloc/calloc/realloc/free entry behavior.
-allocation-abi-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks allocation ABI marker coverage, raw export shape, C++ shims, and migration allowlist removal.
-allocation-abi-entry-boundary	script	scripts/check-unsafe-audit.py	Checks allocation ABI unsafe operations retain operation-level SAFETY markers and source audit coverage.
+allocation-platform-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks allocation-local platform shims keep errno/pathconf/abort markers split from allocation entry behavior.
+allocation-platform-shim-boundary	script	scripts/check-unsafe-audit.py	Checks allocation platform shim unsafe operations retain operation-level SAFETY markers and source audit coverage.
+allocation-product-entry-boundary	test	tests/allocation_boundary_cases.rs	Exercises calloc, mallocn, overflow, usable-size, and null/failure behavior through raw entry points.
+allocation-product-entry-boundary	test	tests/property_alloc_sequences.rs	Exercises seeded product allocation and realloc/free sequences through raw allocation entry points.
+allocation-product-entry-boundary	test	tests/fuzz_alloc_sequences.rs	Exercises byte-stream allocation programs over malloc/calloc/realloc/free entry behavior.
+allocation-product-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks product allocation marker coverage, raw export shape, typed request construction, and migration allowlist removal.
+allocation-product-entry-boundary	script	scripts/check-unsafe-audit.py	Checks allocation product entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
+allocation-realloc-entry-boundary	test	tests/allocation_boundary_cases.rs	Exercises public realloc, reallocn, reallocf, recalloc, and null/failure ABI behavior through raw entry points.
+allocation-realloc-entry-boundary	test	tests/property_alloc_sequences.rs	Exercises seeded realloc/free sequences through raw allocation entry points.
+allocation-realloc-entry-boundary	test	tests/fuzz_alloc_sequences.rs	Exercises byte-stream allocation programs over realloc-family entry behavior.
+allocation-realloc-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks realloc-family marker coverage, raw export shape, typed validation handoff, and migration allowlist removal.
+allocation-realloc-entry-boundary	script	scripts/check-unsafe-audit.py	Checks allocation realloc entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
+allocation-string-path-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks string/path marker coverage, raw export shape, realpath routing, and migration allowlist removal.
+allocation-string-path-boundary	script	scripts/check-unsafe-audit.py	Checks allocation string/path unsafe operations retain operation-level SAFETY markers and source audit coverage.
+allocation-cxx-new-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks C++ new marker coverage, retry helper shape, retained shim pointers, and migration allowlist removal.
+allocation-cxx-new-boundary	script	scripts/check-unsafe-audit.py	Checks allocation C++ new unsafe operations retain operation-level SAFETY markers and source audit coverage.
 allocation-heap-dispatch-boundary	test	tests/allocation_boundary_cases.rs	Exercises heap/thread-heap allocation dispatch through malloc, calloc, realloc, and zero-size edges.
 allocation-heap-dispatch-boundary	test	tests/no_allocation_critical_paths.rs	Checks allocation dispatch critical paths do not route through Rust's global allocator.
 allocation-heap-dispatch-boundary	test	tests/release_fast_path_audit/unsafe_performance/allocation_free.rs	Checks heap dispatch marker coverage, typed thread-heap routing, usable out-pointers, and no-allocation hot-path evidence.

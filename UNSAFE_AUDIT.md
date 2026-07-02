@@ -301,12 +301,17 @@ Operation IDs:
   are limited to hidden local link-name assembly, process attach/detach C ABI
   shims, and ELF constructor/destructor callback slots that forward into the
   bounded process lifecycle.
-- `SAFETY[AUDIT:allocation-abi-entry-boundary]`: `src/allocator/alloc.rs` owns
-  public C allocation, string, realpath, realloc-family, and C++ new/delete
-  entry shims. Unsafe operations are limited to caller-proven ABI pointers,
-  errno slots, exported symbol wrappers, old-allocation validation handoff, and
-  new-handler callbacks while preserving C null/failure semantics and raw
-  ownership transfer.
+- `SAFETY[AUDIT:allocation-platform-shim-boundary]`:
+  `src/allocator/alloc.rs` owns allocation-local platform imports and errno
+  shims. Unsafe operations are limited to C ABI declarations for abort,
+  pathconf/realpath, and platform errno slots while preserving libc-compatible
+  failure reporting.
+- `SAFETY[AUDIT:allocation-product-entry-boundary]`:
+  `src/allocator/alloc.rs` owns product-sized allocation entry shims for
+  calloc, mallocn, and usable-size allocation exports. Unsafe operations are
+  limited to checked count/size products, typed request construction,
+  caller-provided usable-size out-pointers, and raw public allocation wrappers
+  while preserving overflow and null/failure semantics.
 - `SAFETY[AUDIT:allocation-heap-dispatch-boundary]`:
   `src/allocator/alloc.rs` owns thread-heap and heap allocation dispatch for
   small, zeroed, calloc, and typed allocation requests. Unsafe operations are
@@ -314,11 +319,26 @@ Operation IDs:
   free-list inspection, and tracking handoff while preserving no-allocation
   hot paths.
 - `SAFETY[AUDIT:allocation-layout-request-boundary]`:
-  `src/allocator/alloc.rs` owns allocation request construction, product
-  overflow handling, layout padding, realloc-size validation, and old-block
-  usable-size recovery. Unsafe operations are limited to caller-proven
-  allocation pointers, typed layout witnesses, and bounded metadata queries
-  while preserving overflow and realloc copy bounds.
+  `src/allocator/alloc.rs` owns allocation request construction, layout
+  padding, realloc-size validation, and old-block usable-size recovery. Unsafe
+  operations are limited to caller-proven allocation pointers, typed layout
+  witnesses, and bounded metadata queries while preserving realloc copy bounds.
+- `SAFETY[AUDIT:allocation-realloc-entry-boundary]`:
+  `src/allocator/alloc.rs` owns raw, thread-heap, and heap realloc-family entry
+  shims. Unsafe operations are limited to caller-proven allocation pointers,
+  typed old-allocation validation results, free-on-failure behavior, zero-tail
+  routing, and usable-size out-pointers while preserving C realloc-family
+  semantics.
+- `SAFETY[AUDIT:allocation-string-path-boundary]`:
+  `src/allocator/alloc.rs` owns strdup, strndup, and realpath allocation entry
+  shims. Unsafe operations are limited to caller-proven C string/path pointers,
+  bounded scans, heap/default thread-heap routing, path-max caching, and
+  caller-owned output buffers while preserving C string and realpath behavior.
+- `SAFETY[AUDIT:allocation-cxx-new-boundary]`:
+  `src/allocator/alloc.rs` owns C++ new/new_nothrow compatibility entry shims
+  and retry loops. Unsafe operations are limited to optional new-handler lookup
+  and invocation, exported retry shims, aligned/new realloc wrappers, and
+  retained function-pointer shapes while preserving C++ abort/nothrow behavior.
 - `SAFETY[AUDIT:allocation-page-refill-boundary]`:
   `src/allocator/alloc.rs` owns page refill handoff, generic fallback
   allocation, guarded allocation, zeroing, and padding canary publication.

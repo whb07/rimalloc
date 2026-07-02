@@ -110,14 +110,21 @@ file when such a module exists.
 - `SAFETY[AUDIT:init-platform-hooks-boundary]`: hidden init link-name assembly
   in `src/allocator/init.rs` plus process attach/detach constructor and
   destructor hook glue in `src/platform/mod.rs`.
-- `SAFETY[AUDIT:allocation-abi-entry-boundary]`: public allocation, string,
-  realpath, realloc-family, and C++ ABI entry shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-platform-shim-boundary]`: allocation-local abort,
+  pathconf/realpath, and errno platform shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-product-entry-boundary]`: calloc, mallocn, and
+  usable-size product allocation entry shims in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-heap-dispatch-boundary]`: thread-heap and heap
   allocation dispatch in `src/allocator/alloc.rs` for small, zeroed, calloc,
   and typed allocation requests.
-- `SAFETY[AUDIT:allocation-layout-request-boundary]`: product overflow checks,
-  layout padding, request construction, and realloc-size validation in
-  `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-layout-request-boundary]`: layout padding, request
+  construction, and realloc-size validation in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-realloc-entry-boundary]`: raw, thread-heap, and
+  heap realloc-family entry shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-string-path-boundary]`: strdup, strndup, and
+  realpath allocation entry shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-cxx-new-boundary]`: C++ new/new_nothrow retry and
+  new-handler compatibility shims in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-page-refill-boundary]`: page refill handoff,
   generic fallback allocation, guarded allocation, zeroing, and padding canary
   publication in `src/allocator/alloc.rs`.

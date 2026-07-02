@@ -59,12 +59,20 @@ Current review evidence:
 - Audit evidence rows for allocation, aligned allocation, split raw macro IDs,
   OS memory, page-map, stats, and typed pointer checks point at focused
   release-audit modules instead of the old aggregate harness paths.
-- The release-audit module cap is 1,000 lines, but the root harness is still
-  1,935 lines. The largest split modules are
+- The release-audit module cap is 1,000 lines, and the root harness is now 247
+  lines with a lowered 300-line root cap. The largest split modules are
   `unsafe_performance/lifecycle_boundaries.rs` at 922 lines,
   `unsafe_performance/platform_primitive_boundaries.rs` at 895 lines,
-  `unsafe_performance/raw_facade.rs` at 826 lines, and
+  `unsafe_performance/raw_facade.rs` at 852 lines, and
   `unsafe_performance/page_arena_behavior.rs` at 724 lines.
+- The root release-audit tests are split into focused child modules:
+  `allowance_inventory.rs` at 398 lines,
+  `interposition_exports.rs` at 388 lines,
+  `primitive_options.rs` at 264 lines,
+  `strict_policy.rs` at 255 lines,
+  `allocation_contracts.rs` at 195 lines,
+  `public_facade.rs` at 146 lines, and
+  `safe_api.rs` at 99 lines.
 
 ## Issue 1: Refresh audit evidence paths after the release-audit split
 
@@ -165,12 +173,12 @@ unsafe audit scripts, unsafe evidence scripts, full clippy, and full tests.
 > `tests/release_fast_path_audit.rs` is still 1,935 lines and mixes shared
 > helpers with unrelated policy checks.
 
-- [ ] Move root release-audit tests into focused modules for public facade
+- [x] Move root release-audit tests into focused modules for public facade
       shape, safe allocation API behavior, interposition/export checks,
       strict-type/no-allocation policy, and allowance inventories.
-- [ ] Keep only shared source collection helpers and module declarations in the
+- [x] Keep only shared source collection helpers and module declarations in the
       root harness.
-- [ ] Lower the root line-count cap after the split while preserving the 1,000
+- [x] Lower the root line-count cap after the split while preserving the 1,000
       line module cap.
 
 Verify: release fast-path audit, full formatting, full clippy, and full tests.
@@ -183,7 +191,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 4. [x] Split allocation, aligned allocation, stats, page-map, and OS audit
        clusters.
 5. [x] Split typed pointer accessor audit coverage.
-6. [ ] Split the release fast-path root harness and lower the root cap.
+6. [x] Split the release fast-path root harness and lower the root cap.
 
 ## Definition of done for this backlog
 
@@ -194,7 +202,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
       boundaries.
 - [ ] The largest unsafe audit operation IDs are split into narrower review
       units with separate docs, evidence, and release-audit guards.
-- [ ] The release fast-path root harness is split enough to lower its cap
+- [x] The release fast-path root harness is split enough to lower its cap
       without weakening coverage.
 - [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and

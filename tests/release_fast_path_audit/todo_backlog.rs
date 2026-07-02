@@ -1,6 +1,8 @@
 use super::*;
 
 const RELEASE_AUDIT_MODULES: &[&str] = &[
+    "allocation_contracts.rs",
+    "allowance_inventory.rs",
     "datatype_acceptance.rs",
     "datatype_acceptance/callbacks.rs",
     "datatype_acceptance/domain_wrappers.rs",
@@ -9,6 +11,9 @@ const RELEASE_AUDIT_MODULES: &[&str] = &[
     "datatype_acceptance/page_queues.rs",
     "datatype_acceptance/spec_reconciliation.rs",
     "datatype_acceptance/strict_type.rs",
+    "interposition_exports.rs",
+    "primitive_options.rs",
+    "public_facade.rs",
     "release_policy.rs",
     "release_policy/api_surface.rs",
     "release_policy/benchmarking.rs",
@@ -17,6 +22,8 @@ const RELEASE_AUDIT_MODULES: &[&str] = &[
     "release_policy/release_process.rs",
     "release_policy/security.rs",
     "runtime_gates.rs",
+    "safe_api.rs",
+    "strict_policy.rs",
     "todo_backlog.rs",
     "unsafe_performance.rs",
     "unsafe_performance/allocation_free.rs",
@@ -100,21 +107,29 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`typed-pointer-constructor-boundary` with 6 markers",
         "Audit evidence rows for allocation, aligned allocation, split raw macro IDs,\n  OS memory, page-map, stats, and typed pointer checks point at focused",
         "release-audit modules instead of the old aggregate harness paths",
-        "root harness is still\n  1,935 lines",
+        "root harness is now 247\n  lines with a lowered 300-line root cap",
         "`unsafe_performance/lifecycle_boundaries.rs` at 922 lines",
         "`unsafe_performance/platform_primitive_boundaries.rs` at 895 lines",
-        "`unsafe_performance/raw_facade.rs` at 826 lines",
+        "`unsafe_performance/raw_facade.rs` at 852 lines",
         "`unsafe_performance/page_arena_behavior.rs` at 724 lines",
+        "root release-audit tests are split into focused child modules",
+        "`allowance_inventory.rs` at 398 lines",
+        "`interposition_exports.rs` at 388 lines",
+        "`primitive_options.rs` at 264 lines",
+        "`strict_policy.rs` at 255 lines",
+        "`allocation_contracts.rs` at 195 lines",
+        "`public_facade.rs` at 146 lines",
+        "`safe_api.rs` at 99 lines",
         "1. [x] Refresh audit evidence paths after the release-audit split.",
         "2. [x] Narrow the remaining allocator/init strict-type wildcards.",
         "3. [x] Split the raw macro allocation audit cluster.",
         "4. [x] Split allocation, aligned allocation, stats, page-map, and OS audit",
         "5. [x] Split typed pointer accessor audit coverage.",
-        "6. [ ] Split the release fast-path root harness and lower the root cap.",
+        "6. [x] Split the release fast-path root harness and lower the root cap.",
         "[x] Unsafe audit evidence rows point at the focused tests",
         "[x] Remaining strict-type wildcard entries are either narrowed",
         "The largest unsafe audit operation IDs are split into narrower review\n      units",
-        "The release fast-path root harness is split enough to lower its cap",
+        "[x] The release fast-path root harness is split enough to lower its cap",
         "For every completed item, run `cargo fmt --all`",
     ];
 
@@ -137,7 +152,7 @@ fn release_audit_harness_stays_split() {
         .count();
 
     assert!(
-        root_lines <= 2_000,
+        root_lines <= 300,
         "release fast-path audit root should stay a small harness; found {root_lines} lines"
     );
 

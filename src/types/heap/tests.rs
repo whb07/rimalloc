@@ -7,6 +7,8 @@ use core::mem::MaybeUninit;
 
 fn with_heap_ptr(f: impl FnOnce(HeapPtr)) {
     let mut heap = MaybeUninit::<mi_heap_t>::uninit();
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `heap` is stack-local heap
+    // metadata used only as an identity witness during the callback.
     let ptr = unsafe { HeapPtr::new_unchecked(heap.as_mut_ptr()) };
     f(ptr);
 }
@@ -14,6 +16,9 @@ fn with_heap_ptr(f: impl FnOnce(HeapPtr)) {
 fn with_thread_heap_ptr(heap: Option<HeapPtr>, tld: Option<TldPtr>, f: impl FnOnce(ThreadHeapPtr)) {
     let mut theap = MaybeUninit::<mi_theap_t>::zeroed();
     let raw = theap.as_mut_ptr();
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `raw` points at stack-local,
+    // zeroed thread-heap metadata that this fixture owns exclusively while it
+    // writes heap/tld identity fields and constructs the witness.
     unsafe {
         (*raw).heap = heap.map(HeapPtr::as_ptr).unwrap_or(core::ptr::null_mut());
         (*raw).tld = tld.map(TldPtr::as_ptr).unwrap_or(core::ptr::null_mut());
@@ -24,8 +29,14 @@ fn with_thread_heap_ptr(heap: Option<HeapPtr>, tld: Option<TldPtr>, f: impl FnOn
 #[test]
 fn heap_witnesses_preserve_heap_pointer() {
     with_heap_ptr(|ptr| {
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: `ptr` comes from the
+        // stack-local heap fixture and is used only to check witness identity.
         let main = unsafe { MainHeap::new_unchecked(ptr) };
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: same stack-local heap
+        // identity witness as above; no allocator operation observes it.
         let owned = unsafe { OwnedHeap::new_unchecked(ptr) };
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: same stack-local heap
+        // identity witness as above; no allocator operation observes it.
         let borrowed = unsafe { BorrowedHeap::new_unchecked(ptr) };
 
         assert_eq!(main.ptr().as_ptr(), ptr.as_ptr());
@@ -36,45 +47,81 @@ fn heap_witnesses_preserve_heap_pointer() {
 
 #[test]
 fn main_heap_checked_constructor_accepts_only_main_heap() {
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `mi_heap_main` returns the
+    // allocator-owned main heap pointer for checked witness construction.
     let main_raw = unsafe { mi_heap_main() };
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: the main heap pointer is non-null
+    // allocator metadata for this process.
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: the checked constructor verifies
+    // that `main_ptr` is the process main heap before producing the witness.
     let main = unsafe { MainHeap::new(main_ptr) }.expect("main heap should be accepted");
     assert_eq!(main.ptr().as_ptr(), main_raw);
 
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: allocates a real heap for the
+    // rejection path and releases it before the test returns.
     let owned_raw = unsafe { mi_heap_new() };
     assert!(!owned_raw.is_null());
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `owned_raw` is non-null heap
+    // metadata returned by `mi_heap_new`.
     let owned_ptr = unsafe { HeapPtr::new_unchecked(owned_raw) };
     assert!(
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: checked constructor must
+        // reject this real non-main heap.
         unsafe { MainHeap::new(owned_ptr) }.is_none(),
         "non-main heaps must not produce MainHeap witnesses"
     );
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: releases the heap allocated above
+    // exactly once after all witnesses are consumed.
     unsafe { mi_heap_delete(owned_raw) };
 }
 
 #[test]
 fn owned_heap_checked_constructor_rejects_main_heap() {
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `mi_heap_main` returns the
+    // allocator-owned main heap pointer for checked witness construction.
     let main_raw = unsafe { mi_heap_main() };
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: the main heap pointer is non-null
+    // allocator metadata for this process.
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
     assert!(
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: checked constructor must
+        // reject the process main heap.
         unsafe { OwnedHeap::new(main_ptr) }.is_none(),
         "main heap must not produce an OwnedHeap witness"
     );
 
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: allocates a real non-main heap
+    // for the accepted owned-heap path and releases it before return.
     let owned_raw = unsafe { mi_heap_new() };
     assert!(!owned_raw.is_null());
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `owned_raw` is non-null heap
+    // metadata returned by `mi_heap_new`.
     let owned_ptr = unsafe { HeapPtr::new_unchecked(owned_raw) };
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: checked constructor accepts the
+    // non-main heap allocated by this test.
     let owned = unsafe { OwnedHeap::new(owned_ptr) }.expect("non-main heap should be accepted");
     assert_eq!(owned.ptr().as_ptr(), owned_raw);
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: releases the heap allocated above
+    // exactly once after all witnesses are consumed.
     unsafe { mi_heap_delete(owned_raw) };
 }
 
 #[test]
 fn main_heap_cannot_create_owned_delete_witness() {
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `mi_heap_main` returns the
+    // allocator-owned main heap pointer for checked witness construction.
     let main_raw = unsafe { mi_heap_main() };
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: the main heap pointer is non-null
+    // allocator metadata for this process.
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
 
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: checked constructor verifies the
+    // process main heap before producing the witness.
     assert!(unsafe { MainHeap::new(main_ptr) }.is_some());
     assert!(
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: checked constructor must
+        // reject main heap ownership/deletion witnesses.
         unsafe { OwnedHeap::new(main_ptr) }.is_none(),
         "main heap must remain unable to enter OwnedHeap deletion helpers"
     );
@@ -83,24 +130,38 @@ fn main_heap_cannot_create_owned_delete_witness() {
 #[test]
 fn borrowed_heap_raw_constructors_reject_null_and_preserve_heap() {
     assert!(
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: null input is the explicit
+        // rejection case for the raw allocation-heap constructor.
         unsafe { BorrowedHeap::from_allocation_raw(core::ptr::null_mut()) }.is_none(),
         "allocation raw constructor should reject null heaps"
     );
     assert!(
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: null input is the explicit
+        // rejection case for the raw lookup-heap constructor.
         unsafe { BorrowedHeap::from_lookup_raw(core::ptr::null_mut()) }.is_none(),
         "lookup raw constructor should preserve failed heap lookups"
     );
 
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `mi_heap_main` returns the
+    // allocator-owned main heap pointer for borrowed witness construction.
     let main_raw = unsafe { mi_heap_main() };
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: raw constructor accepts non-null
+    // heap metadata returned by the allocator.
     let main = unsafe { BorrowedHeap::from_allocation_raw(main_raw) }
         .expect("main heap can be borrowed for allocation");
     assert_eq!(main.ptr().as_ptr(), main_raw);
 
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: allocates a real non-main heap
+    // for borrowed lookup construction and releases it before return.
     let owned_raw = unsafe { mi_heap_new() };
     assert!(!owned_raw.is_null());
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: raw constructor accepts non-null
+    // heap metadata returned by lookup/allocation paths.
     let owned = unsafe { BorrowedHeap::from_lookup_raw(owned_raw) }
         .expect("looked-up non-main heap can be borrowed");
     assert_eq!(owned.ptr().as_ptr(), owned_raw);
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: releases the heap allocated above
+    // exactly once after all witnesses are consumed.
     unsafe { mi_heap_delete(owned_raw) };
 }
 
@@ -108,37 +169,59 @@ fn borrowed_heap_raw_constructors_reject_null_and_preserve_heap() {
 fn thread_heap_borrowed_accepts_only_initialized_theaps() {
     with_thread_heap_ptr(None, None, |theap| {
         assert!(
+            // SAFETY[AUDIT:typed-heap-test-fixtures]: `theap` is stack-local
+            // thread-heap metadata with a cleared heap field.
             unsafe { ThreadHeapBorrowed::new(theap) }.is_none(),
             "cleared heap field should not produce an initialized thread-heap witness"
         );
     });
 
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: allocates a real non-main heap
+    // whose pointer is stored in stack-local thread-heap metadata.
     let owned_raw = unsafe { mi_heap_new() };
     assert!(!owned_raw.is_null());
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `owned_raw` is non-null heap
+    // metadata returned by `mi_heap_new`.
     let owned_ptr = unsafe { HeapPtr::new_unchecked(owned_raw) };
     with_thread_heap_ptr(Some(owned_ptr), None, |theap| {
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: `theap` is stack-local
+        // metadata with a non-null heap field.
         let borrowed = unsafe { ThreadHeapBorrowed::new(theap) }
             .expect("non-null heap field should produce borrowed thread-heap witness");
         assert_eq!(borrowed.ptr().as_ptr(), theap.as_ptr());
     });
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: releases the heap allocated above
+    // exactly once after the stack-local thread-heap fixture is consumed.
     unsafe { mi_heap_delete(owned_raw) };
 }
 
 #[test]
 fn thread_heap_state_classifies_main_initialized_uninitialized_and_deleted() {
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `mi_heap_main` returns the
+    // allocator-owned main heap pointer for stack-local thread-heap metadata.
     let main_raw = unsafe { mi_heap_main() };
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: the main heap pointer is non-null
+    // allocator metadata for this process.
     let main_ptr = unsafe { HeapPtr::new_unchecked(main_raw) };
     with_thread_heap_ptr(Some(main_ptr), None, |theap| {
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: `theap` is stack-local
+        // thread-heap metadata populated with the process main heap pointer.
         match unsafe { theap.state() } {
             ThreadHeapState::Main(main) => assert_eq!(main.ptr().as_ptr(), theap.as_ptr()),
             _ => panic!("main heap thread-heap should classify as main"),
         }
     });
 
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: allocates a real non-main heap
+    // whose pointer is stored in stack-local thread-heap metadata.
     let owned_raw = unsafe { mi_heap_new() };
     assert!(!owned_raw.is_null());
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `owned_raw` is non-null heap
+    // metadata returned by `mi_heap_new`.
     let owned_ptr = unsafe { HeapPtr::new_unchecked(owned_raw) };
     with_thread_heap_ptr(Some(owned_ptr), None, |theap| {
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: `theap` is stack-local
+        // thread-heap metadata populated with a non-main heap pointer.
         match unsafe { theap.state() } {
             ThreadHeapState::Initialized(initialized) => {
                 assert_eq!(initialized.ptr().as_ptr(), theap.as_ptr())
@@ -146,36 +229,56 @@ fn thread_heap_state_classifies_main_initialized_uninitialized_and_deleted() {
             _ => panic!("non-main initialized thread-heap should classify as initialized"),
         }
     });
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: releases the heap allocated above
+    // exactly once after the stack-local thread-heap fixture is consumed.
     unsafe { mi_heap_delete(owned_raw) };
 
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: dangling non-null TLD pointer is
+    // used only as an identity sentinel; the test never dereferences it.
     let tld = unsafe { TldPtr::new_unchecked(core::ptr::NonNull::<mi_tld_t>::dangling().as_ptr()) };
     with_thread_heap_ptr(None, Some(tld), |theap| match unsafe { theap.state() } {
         ThreadHeapState::Uninitialized(raw) => assert_eq!(raw.as_ptr(), theap.as_ptr()),
         _ => panic!("null heap with tld should classify as uninitialized"),
     });
 
-    with_thread_heap_ptr(None, None, |theap| match unsafe { theap.state() } {
-        ThreadHeapState::Deleted(raw) => assert_eq!(raw.as_ptr(), theap.as_ptr()),
-        _ => panic!("cleared heap and tld should classify as deleted"),
+    with_thread_heap_ptr(None, None, |theap| {
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: `theap` is stack-local
+        // thread-heap metadata with cleared heap and TLD fields.
+        match unsafe { theap.state() } {
+            ThreadHeapState::Deleted(raw) => assert_eq!(raw.as_ptr(), theap.as_ptr()),
+            _ => panic!("cleared heap and tld should classify as deleted"),
+        }
     });
 }
 
 #[test]
 fn borrowed_thread_heap_converts_to_local_only_for_matching_thread() {
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: allocates a real non-main heap
+    // whose pointer is stored in stack-local thread-heap metadata.
     let owned_raw = unsafe { mi_heap_new() };
     assert!(!owned_raw.is_null());
     let mut tld = MaybeUninit::<mi_tld_t>::zeroed();
     let tld_raw = tld.as_mut_ptr();
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `tld_raw` points at stack-local
+    // zeroed TLD metadata owned exclusively by this test.
     unsafe {
         (*tld_raw).thread_id = 16;
     }
 
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `owned_raw` is non-null heap
+    // metadata returned by `mi_heap_new`.
     let owned_ptr = unsafe { HeapPtr::new_unchecked(owned_raw) };
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: `tld_raw` is stack-local TLD
+    // metadata that remains live for the thread-heap fixture callback.
     let tld_ptr = unsafe { TldPtr::new_unchecked(tld_raw) };
     with_thread_heap_ptr(Some(owned_ptr), Some(tld_ptr), |theap| {
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: `theap` is stack-local
+        // metadata populated with matching heap and TLD identity fields.
         let borrowed =
             unsafe { ThreadHeapBorrowed::new(theap) }.expect("thread heap is initialized");
         let current = crate::core_types::ThreadId::new(16).expect("valid thread id");
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: the stored thread id matches
+        // `current`, so the borrowed thread heap may become local for this test.
         let local = match unsafe { borrowed.try_local(current) } {
             Ok(local) => local,
             Err(_) => panic!("matching thread id should produce ThreadHeapLocal"),
@@ -185,10 +288,14 @@ fn borrowed_thread_heap_converts_to_local_only_for_matching_thread() {
 
         let other = crate::core_types::ThreadId::new(24).expect("valid thread id");
         assert!(
+            // SAFETY[AUDIT:typed-heap-test-fixtures]: the mismatched thread id
+            // is the explicit rejection path for local-thread promotion.
             unsafe { borrowed.try_local(other) }.is_err(),
             "different thread id should not produce ThreadHeapLocal"
         );
     });
+    // SAFETY[AUDIT:typed-heap-test-fixtures]: releases the heap allocated above
+    // exactly once after the stack-local thread-heap fixture is consumed.
     unsafe { mi_heap_delete(owned_raw) };
 }
 
@@ -196,15 +303,21 @@ fn borrowed_thread_heap_converts_to_local_only_for_matching_thread() {
 fn deleted_thread_heap_cannot_be_promoted_to_local() {
     let current = crate::core_types::ThreadId::new(16).expect("valid thread id");
     with_thread_heap_ptr(None, None, |theap| {
+        // SAFETY[AUDIT:typed-heap-test-fixtures]: `theap` is stack-local
+        // thread-heap metadata with cleared heap and TLD fields.
         match unsafe { theap.state() } {
             ThreadHeapState::Deleted(raw) => assert_eq!(raw.as_ptr(), theap.as_ptr()),
             _ => panic!("cleared heap and tld should classify as deleted"),
         }
         assert!(
+            // SAFETY[AUDIT:typed-heap-test-fixtures]: deleted stack-local
+            // thread-heap metadata must not produce a borrowed witness.
             unsafe { ThreadHeapBorrowed::new(theap) }.is_none(),
             "deleted thread heaps should not produce borrowed witnesses"
         );
         assert!(
+            // SAFETY[AUDIT:typed-heap-test-fixtures]: deleted stack-local
+            // thread-heap metadata is the explicit local-promotion rejection.
             unsafe { theap.try_local(current) }.is_err(),
             "deleted thread heaps should be rejected before ThreadHeapLocal construction"
         );

@@ -12,10 +12,9 @@ exceptions with typed Rust boundaries or operation-level audit evidence.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 49 entries: 41 production, 5 test,
-  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 49.
+- `docs/unsafe-migration-allowlist.tsv` has 48 entries: 41 production, 4 test,
+  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 48.
 - The smallest remaining allowlisted test fixtures are reviewable:
-  `src/types/heap/tests.rs` is 212 lines,
   `src/types/memid/tests.rs` is 243 lines,
   `src/types/atomic/tests.rs` is 287 lines, and
   `src/types/scalar/tests.rs` is 412 lines.
@@ -64,14 +63,19 @@ Current review evidence:
 > allowlisted test file and its unsafe blocks are centered on stack-local heap
 > and thread-heap witnesses.
 
-- [ ] Migrate `src/types/heap/tests.rs` from file-level unsafe allowlisting to
+- [x] Migrate `src/types/heap/tests.rs` from file-level unsafe allowlisting to
       local `SAFETY[AUDIT:typed-heap-test-fixtures]` markers.
-- [ ] Keep the helper fixtures stack-local and avoid widening test-only helper
+- [x] Keep the helper fixtures stack-local and avoid widening test-only helper
       visibility.
-- [ ] Add matching `UNSAFE_AUDIT.md` and
+- [x] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [ ] Remove the migrated file from `docs/unsafe-migration-allowlist.tsv`.
-- [ ] Lower `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
+- [x] Remove the migrated file from `docs/unsafe-migration-allowlist.tsv`.
+- [x] Lower `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
+  - Evidence: `src/types/heap/tests.rs` now uses
+    `SAFETY[AUDIT:typed-heap-test-fixtures]` for stack-local heap,
+    thread-heap, and TLD metadata plus real heap allocation/deletion witness
+    checks. The file was removed from
+    `docs/unsafe-migration-allowlist.tsv`, and `ALLOWLIST_ENTRY_CAP` is now 48.
 
 Verify: `cargo test types::heap::tests --lib --all-features`,
 `scripts/check-unsafe-audit.py`, `scripts/check-unsafe-audit-evidence.py`,
@@ -169,7 +173,7 @@ full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/types/heap/tests.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/types/heap/tests.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/allocator/tracking.rs` off the unsafe migration allowlist.
 3. [ ] Narrow the broad `alloc` strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
@@ -177,7 +181,7 @@ full tests.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is below 49 entries and the cap is lowered.
+- [x] The unsafe migration allowlist is below 49 entries and the cap is lowered.
 - [ ] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.
 - [ ] One remaining broad strict-type `remove:` allowance is narrowed or

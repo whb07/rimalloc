@@ -282,6 +282,11 @@ Operation IDs:
   metadata to exercise encoded pointers, block tags, available-list pop, and
   local-list push witnesses. The fixtures are not registered with allocator
   globals and are used only while the local records are live.
+- `SAFETY[AUDIT:typed-heap-test-fixtures]`: `src/types/heap/tests.rs` builds
+  stack-local heap, thread-heap, and TLD metadata to exercise heap witness
+  constructors and thread-local promotion checks. Real heaps allocated by the
+  tests are released exactly once, and stack-local records are used only while
+  their fixtures are live.
 - `SAFETY[AUDIT:typed-layout-test-fixtures]`: `src/types/layout/tests.rs`
   uses concrete valid unchecked scalar values and non-dereferenced dangling
   pointer witnesses to exercise layout, realloc, and flag packing invariants.

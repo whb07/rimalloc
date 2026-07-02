@@ -9,13 +9,13 @@ translated review units only at boundaries with clear invariants.
 
 Review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` still has 60 entries: 44 production,
-  13 test, and 3 translation files.
+- `docs/unsafe-migration-allowlist.tsv` still has 58 entries: 44 production,
+  11 test, and 3 translation files.
 - The smallest allowlisted test files are good next migration candidates:
-  `src/types/freelist/tests.rs` is 84 lines,
-  `src/types/padding/tests.rs` is 94 lines,
-  `src/types/arena/tests.rs` is 109 lines, and
-  `src/types/freelist_wrappers/tests.rs` is 119 lines.
+  `src/types/arena/tests.rs` is 109 lines,
+  `src/types/freelist_wrappers/tests.rs` is 119 lines,
+  `src/types/callbacks/tests.rs` is 135 lines, and
+  `src/types/layout/tests.rs` is 139 lines.
 - `strict-type-allowlist.txt` has 97 entries; 7 are still marked `remove:`.
   The removable entries are broad `bare-domain-usize` allowances for
   `alloc`, `aligned`, `arena`, `bitmap`, `free`, `internal`, and `page`.
@@ -49,16 +49,24 @@ Review evidence:
 > of those keeps reducing legacy exception surface without touching allocator hot
 > paths.
 
-- [ ] Inventory the four smallest allowlisted test files and confirm their
+- [x] Inventory the four smallest allowlisted test files and confirm their
       unsafe operations are stack-local fixtures or wrapper proof helpers.
-- [ ] Migrate at least two of those files to operation-level
+- [x] Migrate at least two of those files to operation-level
       `SAFETY[AUDIT:*]` markers.
-- [ ] Add `UNSAFE_AUDIT.md` operation entries and
+- [x] Add `UNSAFE_AUDIT.md` operation entries and
       `docs/unsafe-audit-evidence.tsv` rows for the new IDs.
-- [ ] Remove the migrated files from `docs/unsafe-migration-allowlist.tsv` and
+- [x] Remove the migrated files from `docs/unsafe-migration-allowlist.tsv` and
       lower `ALLOWLIST_ENTRY_CAP`.
-- [ ] Keep the audit output category split visible so test-only progress does
+- [x] Keep the audit output category split visible so test-only progress does
       not obscure production unsafe debt.
+  - Evidence: `src/types/freelist/tests.rs` now carries
+    `SAFETY[AUDIT:typed-freelist-test-fixtures]` for stack-local block metadata
+    and raw link helper fixtures, and `src/types/padding/tests.rs` now carries
+    `SAFETY[AUDIT:typed-padding-test-fixtures]` for stack-local padding records,
+    byte buffers, and non-dereferenced canary witnesses. Both files were removed
+    from `docs/unsafe-migration-allowlist.tsv`, `ALLOWLIST_ENTRY_CAP` is now 58,
+    and `scripts/check-unsafe-audit.py` reports 58 legacy files across
+    production, test, and translation categories.
 - Verify: `scripts/check-unsafe-audit.py`,
   `scripts/check-unsafe-audit-evidence.py`,
   `scripts/check-unsafe-inventory.py`, release audit, full clippy, and full
@@ -143,7 +151,7 @@ Review evidence:
 
 ## Suggested implementation order
 
-1. [ ] Shrink the unsafe migration allowlist using small test fixtures.
+1. [x] Shrink the unsafe migration allowlist using small test fixtures.
 2. [ ] Reduce one broad removable strict-type entry.
 3. [ ] Tighten arena diagnostic metadata access.
 4. [ ] Split one more release-audit unsafe/performance cluster.
@@ -151,7 +159,7 @@ Review evidence:
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is below 60 entries and the cap is lowered.
+- [x] The unsafe migration allowlist is below 60 entries and the cap is lowered.
 - [ ] The strict-type removable-entry count is below 7 and capped lower.
 - [ ] Arena diagnostics no longer need a broad metadata-reference allowance for
       `ArenaDebugView::prefix`.

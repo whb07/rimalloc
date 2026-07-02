@@ -24,6 +24,8 @@ safe-process-info	test	tests/release_fast_path_audit.rs	Checks safe facade expos
 safe-stats	test	src/safe/tests.rs	Exercises StatsSnapshot capture, heap stats, JSON output, and buffer failure behavior.
 safe-stats	test	tests/stats_exports.rs	Exercises raw stats bin export bounds used by typed stats wrappers.
 typed-freelist	test	src/types/freelist/tests.rs	Exercises thread-free word owner/head packing and raw pointer reconstruction.
+typed-freelist-test-fixtures	test	src/types/freelist/tests.rs	Exercises stack-local block metadata and raw link helper fixtures.
+typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-local padding metadata, canary witnesses, and padding pointer arithmetic fixtures.
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
 typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page metadata and registered-range witness fixture construction.
 typed-page-test-fixtures	test	tests/release_fast_path_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.

@@ -221,6 +221,14 @@ Operation IDs:
   non-null block pointers from packed thread-free words after masking the
   ownership bit. Miri provenance helpers retain the original pointer identity,
   and `BlockPtr` adds only the non-null wrapper invariant.
+- `SAFETY[AUDIT:typed-freelist-test-fixtures]`:
+  `src/types/freelist/tests.rs` builds stack-local block metadata and opaque
+  pointer words to exercise `ThreadFreeWord`, encoded-link, and raw link helper
+  behavior. The fixtures are not registered with allocator globals.
+- `SAFETY[AUDIT:typed-padding-test-fixtures]`: `src/types/padding/tests.rs`
+  builds stack-local padding records and byte buffers, plus non-dereferenced
+  dangling pointer witnesses for canary hashing, to exercise padding wrapper
+  reads, writes, and pointer arithmetic.
 - `SAFETY[AUDIT:typed-page-test-fixtures]`: `src/types/page/tests.rs` builds
   stack-local page metadata and synthetic page-map range witnesses to exercise
   typed page wrapper accessors. The fixtures are not registered with allocator

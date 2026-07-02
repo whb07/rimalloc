@@ -1,10 +1,11 @@
-# TODO: Fresh-Eyes Evidence, Source-Audit, and Harness Backlog
+# TODO: Fresh-Eyes Audit Cap, Harness, and Strict-Type Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`18ed54a`. The previous backlog is implemented, validated, committed, and
-pushed. The next mechanical-translation debt is concentrated in evidence rows
-that still cite aggregate release-audit modules, remaining broad source audit
-operation IDs, and release-audit modules that now block a lower module-size cap.
+`8ade753`. The previous backlog is implemented, validated, committed, and
+pushed. The next mechanical-translation debt is concentrated in broad source
+audit IDs just below the current cap, release-audit modules still clustered
+around 300 lines, and strict-type allowlist hotspots that need sharper
+governance before deeper typed rewrites.
 
 Current review evidence:
 
@@ -12,29 +13,14 @@ Current review evidence:
   mentions, and 437 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 437 operation IDs with
   927 automated evidence rows.
-- No source audit operation ID remains over 28 source markers. The largest
-  source audit IDs are `thread-heap-visit-boundary`,
-  `stats-output-boundary`, and `free-validation-boundary` at 28 markers each,
-  followed by `windows-tls-fls-boundary`, `typed-arena-accessors`, and
-  `ffi-libc-string-boundary` at 27 markers each.
-- Issue 1 retargeted 184 dispatcher evidence rows. `docs/unsafe-audit-evidence.tsv`
-  no longer cites the targeted aggregate or parent release-audit modules:
-  root `release_fast_path_audit.rs`, `release_policy.rs`,
-  `datatype_acceptance.rs`, `interposition_exports.rs`,
-  `unsafe_performance.rs`, `allocation_free.rs`, `lifecycle_boundaries.rs`,
-  `os_memory.rs`, `platform_primitive_boundaries.rs`, and
-  `platform_primitive_boundaries/unix_wasi_emscripten.rs` all have zero
-  evidence rows.
-- Issue 2 split four broad source audit IDs into 26 operation-specific IDs:
-  typed heap/thread-heap/TLD/address fixtures, platform default/cached
-  thread-heap load/store and fallback paths, Windows virtual-memory operations,
-  and subproc create/destroy/teardown operations.
-- Issue 3 split eight broad 29-31 marker IDs into 32 operation-specific IDs:
-  arena slice geometry/containment/layout and allocation commit/bitmap/dispatch
-  paths, page free-list collection/extension/fresh allocation/search-refill
-  paths, stats init/update/accumulate paths, aligned C++ raw facade variants,
-  owned allocation production/test boundaries, and typed subproc/scalar fixture
-  groups.
+- No source audit operation ID remains over 28 source markers. The next useful
+  cap is 24 markers. The IDs blocking that cap are
+  `thread-heap-visit-boundary`, `stats-output-boundary`, and
+  `free-validation-boundary` at 28 markers each;
+  `windows-tls-fls-boundary`, `typed-arena-accessors`, and
+  `ffi-libc-string-boundary` at 27 markers each; and `unsafe-callback`,
+  `unix-mmap-syscall-boundary`, and
+  `aligned-realloc-heap-export-boundary` at 26 markers each.
 - `strict-type-allowlist.txt` has 634 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -54,117 +40,107 @@ Current review evidence:
   `mi_page_t` with 110, and `mi_heap_t` with 67.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   release-audit module-size guard discovers 118 module files recursively and
-  enforces a 320-line cap. The largest release-audit modules are:
+  enforces a 320-line cap. The next useful cap is 280 lines. The largest
+  release-audit modules are:
   `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 308 lines,
   `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 305 lines,
   `release_policy/callbacks.rs` at 303 lines,
   `release_policy/api_surface/raw_facade.rs` at 302 lines,
   `unsafe_performance/platform_primitive_boundaries/windows.rs` at 299 lines,
   and `unsafe_performance/thread_stats.rs` at 284 lines.
-- Issue 4 split release-audit checks into 11 focused child modules covering
-  allowance families, thread-TLS reclaim helpers, Linux raw marker inventory,
-  focused evidence groups, MemId dispatch, primitive stats policy, and thread
-  stats marker inventory.
-- Full validation for the previous backlog passed after Issue 6: `cargo fmt
-  --all`, `cargo clippy --workspace --all-targets --all-features`, `cargo test
-  --workspace --all-targets --all-features`, `cargo test --test
-  release_fast_path_audit --all-features`, unsafe audit scripts, strict-type
-  checks, no-allocation audit, unsafe inventory refresh/check, atomic ordering
-  audit, and `git diff --check`.
+- Review sampling found the largest release-audit modules still mix independent
+  assertion families: thread/TLS lifecycle, focused evidence path groups,
+  callback ABI versus safe guard policy, raw facade versus nullability policy,
+  Windows TLS/FLS versus virtual memory policy, and stats output versus marker
+  inventory.
+- Validation for commit `8ade753` passed: `cargo fmt --all`, `cargo clippy
+  --workspace --all-targets --all-features`, `cargo test --workspace
+  --all-targets --all-features`, `cargo test --test release_fast_path_audit
+  --all-features`, unsafe audit scripts, strict-type checks, no-allocation
+  audit, unsafe inventory refresh/check, atomic ordering audit, and
+  `git diff --check`.
 
-## Issue 1: Repoint unsafe audit evidence to focused modules
+## Issue 1: Lower the source audit marker cap to 24
 
-The release-audit split made several parent modules into dispatchers, but the
-evidence TSV still cites those parent paths for operation-specific evidence.
-That weakens the evidence ownership model the previous backlog was trying to
-make more precise.
+The current 28-marker cap is no longer the most useful review boundary. Nine
+operation IDs still group unrelated unsafe concerns and should be split before
+the cap moves to 24.
 
-- [x] Move evidence rows for split parent modules to the child module that owns
-      the assertion: allocation/free marker groups, typed helper checks,
-      OS/platform wrappers, Unix/WASI/Emscripten backends, and interposition
-      export groups.
-- [x] Split or retarget aggregate rows for `lifecycle_boundaries.rs`,
-      `datatype_acceptance.rs`, `unsafe_performance.rs`,
-      `platform_primitive_boundaries.rs`, and the root
-      `release_fast_path_audit.rs` where a focused module already owns the
-      check.
-- [x] Tighten the release-audit evidence guard so parent dispatcher paths are
-      accepted only for genuinely harness-wide policy checks, not
-      operation-specific audit IDs.
-
-Verify: unsafe audit evidence script, release fast-path audit, unsafe audit
-script, full formatting, full clippy, and full tests.
-
-## Issue 2: Split remaining source audit IDs over 32 markers
-
-The source audit has one ID above the previous 32-marker target and three IDs
-exactly at 32. These are still too broad for reviewable unsafe ownership.
-
-- [x] Split `typed-heap-thread-tld-pointer-test-fixtures` into separate heap,
-      thread-heap, TLD, and pointer-fixture IDs with matching evidence rows.
-- [x] Split `platform-thread-heap-association-boundary` by default heap TLS
-      load/store, cached heap TLS load/store, empty sentinel access, and
-      platform fallback behavior.
-- [x] Split `windows-virtual-memory-boundary` and
-      `init-subproc-registry-boundary` by operation so each virtual-memory and
-      subproc-registry concern has independent docs, source markers, and
-      release-audit evidence.
-
-Verify: unsafe audit scripts, unsafe evidence scripts, platform/init release
-audit modules, full formatting, full clippy, and full tests.
-
-## Issue 3: Lower the source audit marker cap to 28
-
-After Issue 2, the next useful source-audit cap is 28 markers. The remaining
-29-31 marker IDs are concentrated in arena slices, safe allocation ownership,
-typed pointer accessors, scalar tests, page free-list refill, stats counters,
-and C++ aligned raw overrides.
-
-- [x] Split `arena-slice-boundary`, `arena-slice-allocation-boundary`,
-      `page-free-list-refill-boundary`, `stats-counter-boundary`, and
-      `raw-macro-cxx-aligned-boundary` into narrower operation IDs.
-- [x] Split test-only broad IDs: `owned-allocation`,
-      `typed-subproc-accessors`, and `typed-scalar-test-fixtures`.
-- [x] Update docs, evidence rows, and release-audit guards so no source audit
-      operation ID exceeds 28 source markers.
+- [ ] Split `thread-heap-visit-boundary` into independent visitation,
+      callback-argument, page-area, and thread-heap helper audit IDs.
+- [ ] Split `stats-output-boundary` by stack-buffer formatting, output callback
+      forwarding, print/export C ABI paths, and stats-output test fixtures.
+- [ ] Split `free-validation-boundary` by null/alignment validation,
+      pointer-page lookup, interior/guarded lookup, double-free checks, and
+      local/remote/abandoned validation fixtures.
+- [ ] Split the 26-27 marker IDs by operation family:
+      `windows-tls-fls-boundary`, `typed-arena-accessors`,
+      `ffi-libc-string-boundary`, `unsafe-callback`,
+      `unix-mmap-syscall-boundary`, and
+      `aligned-realloc-heap-export-boundary`.
+- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
+      release-audit guards so no source audit operation ID exceeds 24 source
+      markers.
 
 Verify: unsafe audit scripts, unsafe evidence scripts, release fast-path audit,
 full formatting, full clippy, and full tests.
 
-## Issue 4: Split release-audit modules over 320 lines
+## Issue 2: Split release-audit modules over 280 lines
 
-The release-audit cap is now 320 lines. The previous 400-line cap was blocked by
-large dispatcher modules that mixed independent assertion families.
+The release-audit cap is now 320 lines. Six modules still sit near 300 lines and
+mix assertion families that should be independently reviewable.
 
-- [x] Split `allowance_inventory.rs` by allowance family so package lints,
-      phase6 unsafe-op allowances, clippy allowances, dead-code allowances, and
-      C compatibility allowances are independently reviewable.
-- [x] Split `thread_tls.rs`, `interposition_exports/linux_override.rs`, and
-      `page_arena_behavior/memid_arena_dispatch.rs` by existing assertion
-      groups without changing the release checks they perform.
-- [x] Split `primitive_options.rs` enough to lower the recursive release-audit
-      module cap from 400 to 320 while preserving measured TODO checks.
+- [ ] Split `unsafe_performance/lifecycle_boundaries/thread_tls.rs` by thread
+      lifecycle, TLS/default-heap checks, visitation checks, and reclaim helpers.
+- [ ] Split `release_policy/security/unsafe_audit_evidence/focused_paths.rs`
+      so allocation/free, datatype fixtures, raw facade, and mixed evidence path
+      groups live in focused child modules.
+- [ ] Split `release_policy/callbacks.rs` into callback ABI inventory,
+      no-alloc/no-unwind trampoline policy, and safe callback guard policy.
+- [ ] Split `release_policy/api_surface/raw_facade.rs` into raw facade shape,
+      raw macro policy, repository import policy, and raw pointer nullability
+      checks.
+- [ ] Split `unsafe_performance/platform_primitive_boundaries/windows.rs` and
+      `unsafe_performance/thread_stats.rs` enough to lower the recursive module
+      cap from 320 to 280 while preserving measured TODO checks.
 
 Verify: release fast-path audit, TODO guard, unsafe audit scripts, strict-type
 checks, no-allocation audit, full formatting, full clippy, and full tests.
 
+## Issue 3: Tighten strict-type allowlist hotspot governance
+
+The allowlist has no wildcards or removable entries, but the current inventory
+still reads as a flat mechanical list. The next step is to make the permanent
+boundary categories more reviewable before attempting deeper typed rewrites.
+
+- [ ] Split the strict-type allowlist inventory release-audit checks by concern:
+      active entry counts, kind/file hotspots, raw-pointer domains, and
+      wildcard/removable-entry policy.
+- [ ] Add measured guards for the top raw-pointer domains and strict-type
+      hotspot files so future work cannot silently grow the `mi_theap_t`,
+      `mi_page_t`, `mi_heap_t`, `src/internal/mod.rs`,
+      `src/allocator/alloc.rs`, or `src/allocator/page.rs` debt.
+- [ ] Document which hotspot families are permanent C ABI compatibility edges
+      and which are candidates for future typed helper rewrites.
+
+Verify: release fast-path audit, strict-type checker, full formatting, full
+clippy, and full tests.
+
 ## Suggested implementation order
 
-1. [x] Repoint unsafe audit evidence to focused modules.
-2. [x] Split remaining source audit IDs over 32 markers.
-3. [x] Lower the source audit marker cap to 28.
-4. [x] Split release-audit modules over 320 lines.
+1. [ ] Lower the source audit marker cap to 24.
+2. [ ] Split release-audit modules over 280 lines.
+3. [ ] Tighten strict-type allowlist hotspot governance.
 
 ## Definition of done for this backlog
 
-- [x] Evidence rows for operation-specific audit IDs cite focused child modules
-      instead of aggregate release-audit dispatchers.
-- [x] No source audit operation ID has more than 28 source markers.
-- [x] Release-audit modules are split enough to lower the recursive module cap
-      to 320 lines without weakening discovery or measured TODO checks.
-- [x] Strict-type wildcard coverage remains at zero retained wildcards.
-- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [x] For every completed item, run `cargo fmt --all`,
+- [ ] No source audit operation ID has more than 24 source markers.
+- [ ] Release-audit modules are split enough to lower the recursive module cap
+      to 280 lines without weakening discovery or measured TODO checks.
+- [ ] Strict-type allowlist hotspot governance is split, measured, and tied to
+      permanent-versus-rewriteable boundary documentation.
+- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

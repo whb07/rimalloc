@@ -5,9 +5,9 @@ Fresh-eyes review after completing the previous TODO backlog on `master` at
 cap 24, release-audit module cap 280, and strict-type allowlist hotspot
 governance. The next mechanical-translation debt is concentrated in audit IDs
 now sitting at the 22-marker source cap, release-audit modules at the tightened
-harness cap, and strict-type allowlist reason/domain hotspots that can still
-grow without focused review. Issues 1 and 2 of this backlog have been
-implemented and validated locally; Issue 3 remains.
+harness cap, and strict-type allowlist reason/domain hotspots. Issues 1, 2, and
+3 of this backlog have been implemented and validated locally; the final
+fresh-eyes review remains.
 
 Current review evidence:
 
@@ -57,7 +57,7 @@ Current review evidence:
   `src/allocator/free.rs`/`mi_page_t` with 19, and
   `src/allocator/page.rs`/`mi_theap_t` with 19.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 131 module files recursively and
+  release-audit module-size guard discovers 134 module files recursively and
   enforces a 260-line cap. The largest release-audit modules are:
   `strict_policy.rs` at 260 lines, `release_policy/callbacks.rs` at 255 lines,
   `datatype_acceptance/domain_wrappers.rs` at 253 lines,
@@ -106,21 +106,21 @@ checks, no-allocation audit, full formatting, full clippy, and full tests.
 
 ## Issue 3: Guard strict-type permanent reason and file/domain hotspots
 
-The strict-type allowlist now has active-entry, kind/file, domain, wildcard, and
-removable-entry governance. It still lacks focused caps for permanent reason
-groups and raw-pointer file/domain pairs.
+Completed in this pass. The strict-type allowlist now has active-entry,
+kind/file, domain, wildcard, removable-entry, permanent reason-group, and
+raw-pointer file/domain hotspot governance.
 
-- [ ] Add release-audit guards for the top permanent disposition reason groups:
+- [x] Add release-audit guards for the top permanent disposition reason groups:
       allocation compatibility boundary, typed-domain constructor boundary,
       internal translated C helper boundary, C ABI parity/source-shape
       boundary, C/platform ABI forwarding boundary, and aligned allocation
       compatibility boundary.
-- [ ] Add measured guards for the top raw-pointer file/domain pairs so the
+- [x] Add measured guards for the top raw-pointer file/domain pairs so the
       `src/internal/mod.rs`/`mi_page_t`, `src/allocator/alloc.rs`/`mi_theap_t`,
       `src/allocator/page.rs`/`mi_page_t`, `src/allocator/thread_heap.rs`/
       `mi_theap_t`, `src/allocator/free.rs`/`mi_page_t`, and
       `src/allocator/page.rs`/`mi_theap_t` hotspots cannot silently grow.
-- [ ] Update `docs/strict-types.md` to classify those reason groups as
+- [x] Update `docs/strict-types.md` to classify those reason groups as
       permanent ABI/source-shape edges or future typed-helper rewrite
       candidates.
 
@@ -131,18 +131,18 @@ clippy, and full tests.
 
 1. [x] Lower the source audit marker cap to 22.
 2. [x] Split release-audit modules over 260 lines.
-3. [ ] Guard strict-type permanent reason and file/domain hotspots.
+3. [x] Guard strict-type permanent reason and file/domain hotspots.
 
 ## Definition of done for this backlog
 
 - [x] No source audit operation ID has more than 22 source markers.
 - [x] Release-audit modules are split enough to lower the recursive module cap
       to 260 lines without weakening discovery or measured TODO checks.
-- [ ] Strict-type permanent reason and file/domain hotspot governance is
+- [x] Strict-type permanent reason and file/domain hotspot governance is
       measured, documented, and tied to permanent-versus-rewriteable boundary
       classifications.
 - [x] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [ ] For every completed item, run `cargo fmt --all`,
+- [x] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

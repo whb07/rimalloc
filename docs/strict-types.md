@@ -114,6 +114,22 @@ largest file hotspots are `src/internal/mod.rs`, `src/allocator/alloc.rs`,
 and `src/raw/macros.rs`; these are guarded by the release fast-path audit so
 new growth must be intentional.
 
+Permanent reason-group caps are also guarded by the release fast-path audit:
+`allocation compatibility boundary` (47) is a permanent allocation ABI/source-shape edge,
+`typed-domain constructor boundary` (42) is a permanent constructor/proof-helper edge,
+`internal translated C helper boundary` (41) is a permanent translated-C source-shape edge,
+`compatibility boundary retained for C ABI parity or translated-C source shape` (33) is a permanent raw ABI/source-shape edge,
+`C/platform ABI forwarding boundary` (32) is a permanent platform ABI forwarding edge,
+and `aligned allocation compatibility boundary` (30) is a permanent aligned allocation ABI/source-shape edge.
+
+Raw pointer file/domain caps are guarded separately:
+`src/internal/mod.rs`/`mi_page_t` at 33,
+`src/allocator/alloc.rs`/`mi_theap_t` at 30,
+`src/allocator/page.rs`/`mi_page_t` at 25,
+`src/allocator/thread_heap.rs`/`mi_theap_t` at 20,
+`src/allocator/free.rs`/`mi_page_t` at 19,
+and `src/allocator/page.rs`/`mi_theap_t` at 19.
+
 Future rewrite candidates must be recorded as `remove:` entries with a concrete
 follow-up task before they are allowed to grow. Likely candidates are narrow
 bare-domain `usize` arithmetic around bitmap ranges, raw macro size handling,

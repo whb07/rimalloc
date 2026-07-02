@@ -1,10 +1,10 @@
 # TODO: Next Audit Cluster, Strict-Type, and Harness Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`9e797a8`. The previous backlog is implemented, validated, committed, and
-pushed. The next mechanical-translation debt is concentrated in broad source
-audit operation IDs, strict-type allowlist hotspots, and release-audit modules
-that now block a lower module-size cap.
+`f34084c`. The previous backlog is implemented, validated, committed, and
+pushed. The next mechanical-translation debt is concentrated in the remaining
+broad source audit operation IDs, strict-type allowlist hotspots, and
+release-audit modules that now block a lower module-size cap.
 
 Current review evidence:
 
@@ -14,13 +14,13 @@ Current review evidence:
   725 automated evidence rows.
 - No source audit operation ID is over 39 source markers. The largest remaining
   source IDs are `options-message-output-boundary` with 39 markers,
-  `arena-purge-boundary` with 38 markers, `arena-registry-boundary` and
-  `allocation-realloc-entry-boundary` with 37 markers each,
-  `typed-page-state-domain`, `raw-macro-override-entry-boundary`, and
-  `init-subproc-heap-association-boundary` with 36 markers each,
-  `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers, and
-  `arena-debug-render` and `allocation-heap-dispatch-boundary` with 34 markers
-  each.
+  `arena-purge-boundary` with 38 markers, `allocation-realloc-entry-boundary`
+  and `arena-registry-boundary` with 37 markers each,
+  `init-subproc-heap-association-boundary`,
+  `raw-macro-override-entry-boundary`, and `typed-page-state-domain` with 36
+  markers each, `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers,
+  and `allocation-heap-dispatch-boundary` and `arena-debug-render` with 34
+  markers each.
 - `strict-type-allowlist.txt` has 631 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -41,7 +41,7 @@ Current review evidence:
   `heap-allocating-type` Loom proof-model boundary in
   `src/types/atomic/concurrency_models.rs`. Strict-type wildcard guard: total=1; heap-allocating-type=1.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard now discovers 91 module files recursively and
+  release-audit module-size guard discovers 91 module files recursively and
   enforces a 500-line cap. The largest release-audit modules are:
   `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 448 lines,
   `interposition_exports.rs` at 444 lines,
@@ -49,164 +49,138 @@ Current review evidence:
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines,
   `unsafe_performance/allocation_free.rs` at 409 lines, and
   `unsafe_performance/os_memory.rs` at 409 lines.
-- Full validation for Issue 5 passed: `cargo fmt --all`,
+- Full validation for Issue 6 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
   scripts, strict-type checks, no-allocation audit, unsafe inventory
   refresh/check, atomic ordering audit, and `git diff --check`.
-- Issue 1 split `os-memory-allocation-boundary` into primitive allocation,
-  aligned allocation, memid/provenance, zeroing, direct request allocation, and
-  public export IDs. It split `page-map-init-boundary` into 32-bit commit
-  bitmap, 32-bit bootstrap, top-level lazy commit, global bootstrap, initial
-  submap, and null-sentinel IDs.
-- Issue 2 split `init-thread-heap-tls-boundary` into empty sentinel, main TLS,
-  main static metadata, default heap association, cached heap association, and
-  safe-access IDs. It split `init-thread-lifecycle-boundary` into thread
-  identity, thread-done entry, thread-done dispatch, default-heap init,
-  thread-done cleanup, and thread-init entry IDs. It split
-  `threadlocal-key-manager` into empty sentinel, TLS shim, slot block, claim
-  callback, key claim/free/create/access, free bitmap, global manager, and
-  thread-done IDs.
-- Issue 3 split `arena-heap-page-visitors` into visit callback, block visit,
-  page iteration, abandoned visit, delete, transfer, delete dispatch, move, and
-  destroy IDs. It split `page-queue-transition-boundary` into full transition,
-  free release, retire, abandon, reclaim, validation, direct-cache, link
-  mutation, and append IDs. It split `internal-page-metadata-boundary` into
-  direct-bin, page-map lookup, size/count, owner/heap, location, and flag/owner
-  IDs while retaining free-list link helpers under `internal-block-link-boundary`.
-- Issue 4 split `typed-atomic-domain` into usize field, i64 field, pointer
-  field, page thread-id, thread-free, abandoned count, thread-heap refcount,
-  arena-page, and guard/once/lock IDs. It split `ffi-libc-helpers` into string,
-  environment, output, format, and retention IDs. It split
-  `raw-macro-cxx-boundary` into delete, array delete, aligned, nothrow, and new
-  IDs.
-- Issue 5 added a release-audit inventory guard for strict-type allowlist counts
-  by kind, file, kind/file pair, raw-pointer domain, and wildcard kind. It
-  narrowed page free-list extension typed helpers to carry `ThreadHeapLocal` and
-  `PagePtr` witnesses, reducing the strict-type checker to 338 raw-pointer
-  parameter sites and removing three raw-pointer allowlist entries.
 
-## Issue 1: Split OS memory and page-map initialization audit clusters
+## Issue 1: Split options output and diagnostic audit clusters
 
-> **Comment:** Completed. The stale broad source IDs
-> `os-memory-allocation-boundary` and `page-map-init-boundary` are gone from
-> allocator source and are now explicitly rejected by release-audit guards.
+The broadest remaining source ID is `options-message-output-boundary` with 39
+markers in `src/allocator/options.rs`. It mixes delayed output buffers,
+stderr/file output, output callback routing, recursion guards, formatting, error
+reporting, option printing, and assertion/panic handling.
 
-- [x] Split `os-memory-allocation-boundary` by operation: reserve/commit,
-      decommit/reset, aligned allocation, free/release, remap/protect, large-page
-      handling, and memid/provenance helpers.
-- [x] Split `page-map-init-boundary` by operation: global map bootstrap, submap
-      allocation/initialization, lazy publication, lookup base setup, and
-      teardown safety.
-- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
-      release-audit guards so each new operation ID is named and counted
-      independently.
+- [ ] Split `options-message-output-boundary` into focused IDs for delayed
+      output buffering, default output callback lookup, stderr/file output,
+      recursion guard entry/exit, formatted output, error reporting, option
+      printing, and assertion failure handling.
+- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
+      release-audit guards so each new option/output ID has separate evidence.
+- [ ] Keep the output paths allocation-free and no-unwind where the current
+      no-allocation and panic-audit guards require it.
 
-Verify: OS memory tests, page-map tests, atomic ordering audit, unsafe audit
-scripts, unsafe evidence scripts, full formatting, full clippy, and full tests.
+Verify: primitive option output tests, no-allocation audit, unsafe audit scripts,
+unsafe evidence scripts, full formatting, full clippy, and full tests.
 
-## Issue 2: Split thread lifecycle and thread-local audit clusters
+## Issue 2: Split arena registry and purge audit clusters
 
-> **Comment:** Completed. The stale broad source IDs
-> `init-thread-heap-tls-boundary`, `init-thread-lifecycle-boundary`, and
-> `threadlocal-key-manager` are gone from allocator source and are now
-> explicitly rejected by release-audit guards.
+`arena-purge-boundary` has 38 markers and `arena-registry-boundary` has 37
+markers in `src/allocator/arena.rs`. They still group registry lookup,
+subprocess arena tables, heap arena-page tables, suitability iteration, arena
+add/destroy paths, purge scheduling, purge visitation, elapsed timing, purge
+bitmap updates, OS decommit, and collection guards.
 
-- [x] Split `init-thread-heap-tls-boundary` into focused IDs for TLS lookup,
-      TLS publication, default heap association, main/static heap handling, and
-      thread-local teardown.
-- [x] Split `init-thread-lifecycle-boundary` into focused IDs for thread init,
-      thread done, TLD initialization, TLD cleanup, abandoned-page handling, and
-      process/thread ordering checks.
-- [x] Split `threadlocal-key-manager` into focused IDs for key creation,
-      key deletion, get/set operations, destructor callback handling, and
-      platform TLS shim behavior.
+- [ ] Split `arena-registry-boundary` by operation: arena count/index lookup,
+      heap arena-page table lookup, suitability tests, arena iteration, add,
+      destroy, and subproc table access.
+- [ ] Split `arena-purge-boundary` by operation: purge scheduling, direct purge,
+      range purge, purge visitor traversal, elapsed/force policy, OS
+      decommit/reset, and global collect guard behavior.
+- [ ] Include nearby `arena-debug-render`, `arena-slice-boundary`, and
+      `arena-slice-allocation-boundary` markers where the same edit surface can
+      be split without touching unrelated allocator behavior.
 
-Verify: lifecycle boundary release-audit modules, thread stats regression,
-interposition export checks, strict-type checks, unsafe audit scripts, unsafe
-evidence scripts, full formatting, full clippy, and full tests.
+Verify: arena behavior release-audit modules, original static arena tests,
+atomic ordering audit, unsafe audit scripts, unsafe evidence scripts, full
+formatting, full clippy, and full tests.
 
-## Issue 3: Split arena visitor and page queue audit clusters
+## Issue 3: Split allocation entry and raw override audit clusters
 
-> **Comment:** Completed. The stale broad source IDs
-> `arena-heap-page-visitors`, `page-queue-transition-boundary`, and
-> `internal-page-metadata-boundary` are gone from allocator source and are now
-> explicitly rejected by release-audit guards.
+`allocation-realloc-entry-boundary` has 37 markers,
+`allocation-heap-dispatch-boundary` has 34, `allocation-cxx-new-boundary` has
+30, and `raw-macro-override-entry-boundary` has 36. These IDs still combine
+public C ABI shims, thread-heap dispatch, heap dispatch, typed request creation,
+zeroing, realloc failure/free policy, C++ new handlers, Windows override
+exports, Unix override exports, and interpose tables.
 
-- [x] Split `arena-heap-page-visitors` into focused IDs for block visitation,
-      abandoned-block visitation, heap page iteration, page delete/destroy,
-      page move/transfer, and visitor callback adapters.
-- [x] Split `page-queue-transition-boundary` into focused IDs for normal queue
-      insertion/removal, full queue insertion/removal, abandoned queue
-      transitions, delayed-free collection, and queue statistic updates.
-- [x] Split `internal-page-metadata-boundary` where release-audit guards already
-      distinguish page size/count fields, free-list fields, heap/thread-heap
-      ownership, and page flags.
+- [ ] Split `allocation-realloc-entry-boundary` into realloc request parsing,
+      reallocn/recalloc product checks, reallocf free-on-failure, zeroing
+      variants, heap-specific variants, and public C ABI forwarding IDs.
+- [ ] Split `allocation-heap-dispatch-boundary` into default thread-heap
+      dispatch, borrowed heap dispatch, small allocation fast paths, zeroing
+      dispatch, and allocation product/request helpers.
+- [ ] Split `allocation-cxx-new-boundary` and `raw-macro-override-entry-boundary`
+      by ABI family so C++ new/delete, Unix exports, Windows exports, bootstrap
+      forwarding, and interpose tables are reviewed independently.
 
-Verify: page lifecycle and page queue tests, arena heap-page visitor
-release-audit modules, strict-type checks, unsafe audit scripts, unsafe evidence
+Verify: allocation boundary cases, aligned/compat exports, interposition
+exports, raw facade release-audit modules, unsafe audit scripts, unsafe evidence
 scripts, full formatting, full clippy, and full tests.
 
-## Issue 4: Split atomic, FFI libc, and raw macro facade audit clusters
+## Issue 4: Split typed page-state and subproc association audit clusters
 
-> **Comment:** Completed. The stale broad source IDs `typed-atomic-domain`,
-> `ffi-libc-helpers`, and `raw-macro-cxx-boundary` are gone from allocator
-> source and are now explicitly rejected by release-audit guards.
+`typed-page-state-domain` has 36 markers in `src/types/page_states.rs`, and
+`init-subproc-heap-association-boundary` has 36 markers in
+`src/allocator/init.rs`. Both are typed Rust improvements, but each still groups
+several independent ownership transitions under one audit ID.
 
-- [x] Split `typed-atomic-domain` by wrapper family: usize/isize/i64 fields,
-      pointer fields, page/thread-free atomics, arena-page atomics,
-      guard/once/lock wrappers, and volatile/ordering helpers.
-- [x] Split `ffi-libc-helpers` by helper family: byte/string operations,
-      fixed-buffer formatting, output callback routing, environment/path helpers,
-      and no-allocation/no-unwind critical helpers.
-- [x] Split `raw-macro-cxx-boundary` by C++ facade family: scalar new/delete,
-      array new/delete, nothrow variants, aligned variants, and heap-specific
-      wrappers.
+- [ ] Split `typed-page-state-domain` into uninit initialization, active/free
+      transitions, available/full transitions, all-free retire/expire,
+      abandoned claim/reclaim, foreign/remote-free classification, and
+      thread-heap local/borrowed witnesses.
+- [ ] Split `init-subproc-heap-association-boundary` into subproc prefix/main
+      heap lookup, heap-to-subproc lookup, current subproc lookup, main heap
+      export, main heap predicates, thread association, and heap visitation IDs.
+- [ ] Update strict-type and datatype acceptance guards so the typed witness
+      transitions remain covered after the audit IDs are split.
 
-Verify: datatype acceptance strict-type modules, primitive option output tests,
-raw facade release-audit modules, interposition exports, no-allocation audit,
-unsafe audit scripts, unsafe evidence scripts, full formatting, full clippy, and
-full tests.
+Verify: page-state tests, lifecycle/subproc release-audit modules, strict-type
+checks, unsafe audit scripts, unsafe evidence scripts, full formatting, full
+clippy, and full tests.
 
 ## Issue 5: Tighten strict-type allowlist hotspots
 
-> **Comment:** Completed. A release-audit inventory guard now checks allowlist
-> counts by kind, file, kind/file pair, raw-pointer domain, and wildcard kind.
-> The page free-list extension typed path now carries `ThreadHeapLocal` and
-> `PagePtr` witnesses instead of raw `mi_theap_t`/`mi_page_t` parameters.
+The largest strict-type hotspots remain raw-pointer parameters in
+`src/allocator/alloc.rs` (47), `src/allocator/page.rs` (44), and
+`src/internal/mod.rs` (41), plus bare-domain `usize` entries in
+`src/internal/bitmap.rs` (33) and `src/raw/macros.rs` (32). The remaining
+wildcard entry is the Loom proof-model heap-allocation boundary.
 
-- [x] Add a release-audit guard that computes strict-type allowlist counts by
-      kind, file, kind/file pair, and raw-pointer domain, then checks the current
-      measured top entries against `TODO.md`.
-- [x] Audit the top raw-pointer hotspots and replace any compatibility entries
-      that can be moved behind existing typed wrappers with narrower wrappers or
-      remove the now-unneeded allowlist entries.
-- [x] Keep permanent allowlist entries symbol-level. Replace the final retained
-      wildcard with exact proof-model coverage if the checker can model the Loom
-      boundary without weakening hot-path heap-allocation detection; otherwise
-      keep the wildcard count explicitly documented.
+- [ ] Audit the top raw-pointer hotspot families and remove entries that can be
+      moved behind existing `ThreadHeapLocal`, `PagePtr`, `HeapPtr`, or
+      `BlockPtr` witnesses without adding hot-path allocation or dynamic
+      dispatch.
+- [ ] Split or tighten bare-domain `usize` allowlist entries in bitmap and raw
+      facade helpers where existing scalar/domain wrappers can carry the same
+      invariants.
+- [ ] Replace the retained Loom wildcard with exact symbol coverage if the
+      checker can model that proof boundary; otherwise keep the wildcard count
+      measured and documented.
 
 Verify: strict-type checker, datatype acceptance release-audit modules,
 no-allocation audit, full formatting, full clippy, and full tests.
 
-## Issue 6: Split release-audit modules over 500 lines and lower the cap
+## Issue 6: Split release-audit modules over 400 lines and lower the cap
 
-> **Comment:** Completed. The four oversized release-audit modules are split
-> into topic modules, and the module-size guard now discovers module files
-> recursively before enforcing the 500-line cap.
+The recursive module-size guard now enforces 500 lines. The next bottleneck is
+the 400-line band: `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs`
+at 448, `interposition_exports.rs` at 444,
+`release_policy/security/unsafe_audit_evidence.rs` and
+`unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at
+421 each, and `unsafe_performance/allocation_free.rs` and
+`unsafe_performance/os_memory.rs` at 409 each.
 
-- [x] Split `datatype_acceptance/strict_type.rs` into focused modules for page
-      thread/free bit domains, pointer/freelist wrappers, atomic/provenance
-      guards, metadata-reference guards, strict-checker self-tests, and
-      allowlist inventory checks.
-- [x] Split `release_policy/security.rs` into focused modules for advisory/CVE
-      policy, fuzz/reproducer policy, unsafe-audit evidence ownership,
-      hardening threat model, and memory-corruption triage.
-- [x] Split `release_policy/api_surface.rs` and
-      `release_policy/release_process.rs` into topic modules matching their
-      existing tests, then lower the release-audit module cap from 600 to 500
-      without weakening coverage.
+- [ ] Split `process_lifecycle.rs`, `interposition_exports.rs`,
+      `unix_wasi_emscripten.rs`, `allocation_free.rs`, and `os_memory.rs` into
+      focused modules matching their existing test groups.
+- [ ] Split `release_policy/security/unsafe_audit_evidence.rs` by evidence
+      family so source cluster caps, stale ID rejection, docs evidence, and TSV
+      evidence stay independently reviewable.
+- [ ] Lower the release-audit module cap from 500 to 400 without weakening
+      recursive module discovery or TODO measured-count checks.
 
 Verify: release fast-path audit, docs/security/release policy modules,
 strict-type checks, unsafe audit scripts, unsafe evidence scripts, full
@@ -214,26 +188,26 @@ formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Split OS memory and page-map initialization audit clusters.
-2. [x] Split thread lifecycle and thread-local audit clusters.
-3. [x] Split arena visitor and page queue audit clusters.
-4. [x] Split atomic, FFI libc, and raw macro facade audit clusters.
-5. [x] Tighten strict-type allowlist hotspots.
-6. [x] Split release-audit modules over 500 lines and lower the cap.
+1. [ ] Split options output and diagnostic audit clusters.
+2. [ ] Split arena registry and purge audit clusters.
+3. [ ] Split allocation entry and raw override audit clusters.
+4. [ ] Split typed page-state and subproc association audit clusters.
+5. [ ] Tighten strict-type allowlist hotspots.
+6. [ ] Split release-audit modules over 400 lines and lower the cap.
 
 ## Definition of done for this backlog
 
-- [x] No source audit operation ID has more than 40 source markers.
-- [x] The largest source audit clusters listed above are split into narrower
+- [ ] No source audit operation ID has more than 32 source markers.
+- [ ] The largest source audit clusters listed above are split into narrower
       review units with separate docs, evidence rows, and release-audit guards.
-- [x] Strict-type allowlist hotspots are measured in release-audit coverage, and
+- [ ] Strict-type allowlist hotspots are measured in release-audit coverage, and
       any removed or retained entries have explicit symbol-level rationale.
-- [x] Release-audit modules are split enough to lower the module cap to 500
-      lines without weakening coverage.
-- [x] The strict-type wildcard guard either reaches zero retained wildcards or
+- [ ] Release-audit modules are split enough to lower the module cap to 400
+      lines without weakening recursive discovery or measured TODO checks.
+- [ ] The strict-type wildcard guard either reaches zero retained wildcards or
       remains explicitly documented with current measured evidence.
-- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [x] For every completed item, run `cargo fmt --all`,
+- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

@@ -1,5 +1,8 @@
 use super::super::DatatypeAcceptanceSources;
 
+#[path = "checker_allowlist_symbols/path_wildcards.rs"]
+mod path_wildcards;
+
 pub(super) fn assert_strict_checker_and_allowlist_symbols(
     audit_sources: &DatatypeAcceptanceSources<'_>,
 ) {
@@ -49,69 +52,7 @@ pub(super) fn assert_strict_checker_and_allowlist_symbols(
         wildcard_entries.is_empty(),
         "strict-type allowlist should not retain wildcard entries: {wildcard_entries:?}"
     );
-    for platform_path in [
-        "src/allocator/heap.rs",
-        "src/allocator/threadlocal.rs",
-        "src/platform/windows.rs",
-        "src/platform/unix.rs",
-        "src/platform/wasi.rs",
-        "src/platform/os.rs",
-        "src/platform/mod.rs",
-        "src/platform/emscripten.rs",
-        "src/platform/macos.rs",
-        "src/allocator/aligned.rs",
-        "src/allocator/arena.rs",
-        "src/allocator/tracking.rs",
-        "src/internal/mod.rs",
-        "src/internal/atomic.rs",
-        "src/allocator/stats.rs",
-        "src/allocator/thread_heap.rs",
-        "src/allocator/alloc.rs",
-        "src/allocator/alloc/cxx_new.rs",
-        "src/allocator/alloc/string_path.rs",
-        "src/allocator/free.rs",
-        "src/allocator/arena/os_memory.rs",
-        "src/allocator/arena/purge.rs",
-        "src/allocator/init.rs",
-        "src/allocator/page_map.rs",
-        "src/allocator/page/stats_bin.rs",
-        "src/allocator/options.rs",
-        "src/bitmap.rs",
-        "src/internal/bitmap.rs",
-        "src/internal/bitmap/chunkmap.rs",
-        "src/internal/page_flags.rs",
-        "src/internal/random.rs",
-        "src/raw/macros.rs",
-        "src/raw/macros/header_forwarding.rs",
-        "src/types/arena.rs",
-        "src/types/atomic.rs",
-        "src/types/atomic/tests.rs",
-        "src/types/callbacks.rs",
-        "src/types/freelist.rs",
-        "src/types/guarded.rs",
-        "src/types/layout.rs",
-        "src/types/memid.rs",
-        "src/types/page_queues.rs",
-        "src/types/page_queues/tests.rs",
-        "src/types/ptr.rs",
-        "src/types/ptr/tests.rs",
-        "src/types/scalar.rs",
-        "src/ffi/libc.rs",
-        "src/safe/mod.rs",
-        "src/safe/allocation.rs",
-        "src/safe/heap.rs",
-    ] {
-        assert!(
-            !allowlist_rs.lines().any(|line| {
-                let mut fields = line.split('|');
-                let _kind = fields.next();
-                let path = fields.next();
-                let symbol = fields.next();
-                path == Some(platform_path) && symbol == Some("*")
-            }),
-            "{platform_path} should not retain path-wide strict-type allowlist entries"
-        );
-    }
+    path_wildcards::assert_no_path_wide_allowlist_entries(allowlist_rs);
     for required in [
         "raw-pointer-parameter|src/platform/windows.rs|_mi_prim_thread_associate_default_theap|mi_theap_t|",
         "raw-pointer-parameter|src/platform/unix.rs|_mi_prim_thread_associate_default_theap|mi_theap_t|",

@@ -365,7 +365,7 @@ pub static mut win_minor_version: DWORD = 0;
 static mut win_allocation_granularity: usize = 64 * MI_KiB;
 
 pub type PVirtualAlloc2 = Option<
-    // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+    // SAFETY[AUDIT:windows-virtual-memory-import-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
     unsafe extern "system" fn(
         HANDLE,
         PVOID,
@@ -378,7 +378,7 @@ pub type PVirtualAlloc2 = Option<
 >;
 
 pub type PNtAllocateVirtualMemoryEx = Option<
-    // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+    // SAFETY[AUDIT:windows-virtual-memory-import-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
     unsafe extern "system" fn(
         HANDLE,
         *mut PVOID,
@@ -727,7 +727,7 @@ pub unsafe extern "C" fn _mi_prim_getenv(
     true
 }
 
-// SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+// SAFETY[AUDIT:windows-virtual-memory-config-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     if config.is_null() {
@@ -758,7 +758,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
         (*config).virtual_address_bits = vbits;
     }
 
-    // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+    // SAFETY[AUDIT:windows-virtual-memory-import-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
     let mut h_dll = unsafe { LoadLibraryA(c"kernelbase.dll".as_ptr()) };
     if !h_dll.is_null() {
         unsafe {
@@ -771,7 +771,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
         }
     }
 
-    // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+    // SAFETY[AUDIT:windows-virtual-memory-import-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
     h_dll = unsafe { LoadLibraryA(c"ntdll.dll".as_ptr()) };
     if !h_dll.is_null() {
         unsafe {
@@ -977,7 +977,7 @@ pub(crate) unsafe extern "C" fn _mi_allocator_init(message: *mut *const c_char) 
     true
 }
 
-// SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+// SAFETY[AUDIT:windows-virtual-memory-commit-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_commit(
     addr: *mut c_void,
@@ -987,7 +987,7 @@ pub unsafe extern "C" fn _mi_prim_commit(
     if !is_zero.is_null() {
         *is_zero = false;
     }
-    // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+    // SAFETY[AUDIT:windows-virtual-memory-commit-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
     let p = unsafe { VirtualAlloc(addr, size, MEM_COMMIT, PAGE_READWRITE) };
     if p.is_null() {
         unsafe { GetLastError() as i32 }
@@ -996,14 +996,14 @@ pub unsafe extern "C" fn _mi_prim_commit(
     }
 }
 
-// SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+// SAFETY[AUDIT:windows-virtual-memory-decommit-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_decommit(
     addr: *mut c_void,
     size: usize,
     needs_recommit: *mut bool,
 ) -> i32 {
-    // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+    // SAFETY[AUDIT:windows-virtual-memory-decommit-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
     let ok = unsafe { VirtualFree(addr, size, MEM_DECOMMIT) };
     if !needs_recommit.is_null() {
         *needs_recommit = true;
@@ -1011,18 +1011,18 @@ pub unsafe extern "C" fn _mi_prim_decommit(
     if ok != FALSE as BOOL {
         0
     } else {
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-decommit-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         unsafe { GetLastError() as i32 }
     }
 }
 
-// SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+// SAFETY[AUDIT:windows-virtual-memory-release-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, _size: usize) -> i32 {
     let mut errcode: DWORD = 0;
     let mut err = unsafe { VirtualFree(addr, 0, MEM_RELEASE) == FALSE as BOOL };
     if err {
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-release-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         errcode = unsafe { GetLastError() };
     }
     if errcode == ERROR_INVALID_ADDRESS {
@@ -1038,7 +1038,7 @@ pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, _size: usize) -> i32 {
             && (addr as usize).saturating_sub(info.AllocationBase as usize) < 4 * MI_MiB
         {
             errcode = 0;
-            // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+            // SAFETY[AUDIT:windows-virtual-memory-release-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
             err = unsafe { VirtualFree(info.AllocationBase, 0, MEM_RELEASE) == FALSE as BOOL };
             if err {
                 errcode = unsafe { GetLastError() };
@@ -1048,7 +1048,7 @@ pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, _size: usize) -> i32 {
     errcode as i32
 }
 
-// SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+// SAFETY[AUDIT:windows-virtual-memory-reset-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> i32 {
     let p = unsafe { VirtualAlloc(addr, size, MEM_RESET, PAGE_READWRITE) };
@@ -1056,12 +1056,12 @@ pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> i32 {
     if !p.is_null() {
         0
     } else {
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-reset-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         unsafe { GetLastError() as i32 }
     }
 }
 
-// SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+// SAFETY[AUDIT:windows-virtual-memory-reset-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> i32 {
     let _ = addr;
@@ -1167,7 +1167,7 @@ pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
     }
 }
 
-// SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+// SAFETY[AUDIT:windows-virtual-memory-protect-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protect: bool) -> i32 {
     let mut oldprotect: DWORD = 0;
@@ -1186,7 +1186,7 @@ pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protec
     if ok != FALSE as BOOL {
         0
     } else {
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-protect-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         unsafe { GetLastError() as i32 }
     }
 }
@@ -1267,7 +1267,7 @@ unsafe fn win_virtual_alloc_prim_once(
     flags: DWORD,
 ) -> *mut c_void {
     if MI_SIZE_BITS >= 64 && addr.is_null() {
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-reserve-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         let hint = unsafe { _mi_os_get_aligned_hint(try_alignment, size) };
         if !hint.is_null() {
             let p = unsafe { VirtualAlloc(hint, size, flags, PAGE_READWRITE) };
@@ -1277,7 +1277,7 @@ unsafe fn win_virtual_alloc_prim_once(
             _mi_verbose_message(format_args!(
                 "warning: unable to allocate hinted aligned OS memory ({} bytes, error code: 0x{:x}, address: {:p}, alignment: {}, flags: 0x{:x})\n",
                 size,
-                // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+                // SAFETY[AUDIT:windows-virtual-memory-reserve-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
                 unsafe { GetLastError() },
                 hint,
                 try_alignment,
@@ -1287,7 +1287,7 @@ unsafe fn win_virtual_alloc_prim_once(
     }
 
     if addr.is_null()
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-reserve-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         && try_alignment > unsafe { win_allocation_granularity }
         && try_alignment.is_multiple_of(unsafe { _mi_os_page_size_typed().get() })
         && let Some(virtual_alloc2) = unsafe { pVirtualAlloc2 }
@@ -1300,7 +1300,7 @@ unsafe fn win_virtual_alloc_prim_once(
         param.Type.bits =
             MI_MEM_EXTENDED_PARAMETER_TYPE_E::MiMemExtendedParameterAddressRequirements as DWORD64;
         param.Arg.Pointer = (&mut reqs as *mut MI_MEM_ADDRESS_REQUIREMENTS).cast::<c_void>();
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-reserve-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         let p = unsafe {
             virtual_alloc2(
                 GetCurrentProcess(),
@@ -1318,7 +1318,7 @@ unsafe fn win_virtual_alloc_prim_once(
         _mi_warning_message_fmt(format_args!(
             "unable to allocate aligned OS memory (0x{:x} bytes, error code: 0x{:x}, address: {:p}, alignment: 0x{:x}, flags: 0x{:x})\n",
             size,
-            // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+            // SAFETY[AUDIT:windows-virtual-memory-reserve-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
             unsafe { GetLastError() },
             addr,
             try_alignment,
@@ -1326,7 +1326,7 @@ unsafe fn win_virtual_alloc_prim_once(
         ));
     }
 
-    // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+    // SAFETY[AUDIT:windows-virtual-memory-reserve-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
     unsafe { VirtualAlloc(addr, size, flags, PAGE_READWRITE) }
 }
 
@@ -1343,7 +1343,7 @@ unsafe fn win_virtual_alloc_prim(
     }
     let mut tries = 1u32;
     loop {
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-retry-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         let p = unsafe { win_virtual_alloc_prim_once(addr, size, try_alignment, flags) };
         if !p.is_null() {
             return p;
@@ -1365,7 +1365,7 @@ unsafe fn win_virtual_alloc_prim(
                 sleep_msecs = max_retry_msecs;
             }
             max_retry_msecs -= sleep_msecs;
-            // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+            // SAFETY[AUDIT:windows-virtual-memory-retry-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
             unsafe {
                 Sleep(sleep_msecs as DWORD);
             }
@@ -1540,7 +1540,7 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     }
 }
 
-// SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+// SAFETY[AUDIT:windows-virtual-memory-allocation-export-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_alloc(
     hint_addr: *mut c_void,
@@ -1553,13 +1553,13 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     addr: *mut *mut c_void,
 ) -> i32 {
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-allocation-export-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         size > 0 && size.is_multiple_of(unsafe { _mi_os_page_size_typed().get() })
     );
     crate::internal::mi_assert_internal!(commit || !allow_large);
     crate::internal::mi_assert_internal!(try_alignment > 0);
     if !is_zero.is_null() {
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-allocation-export-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         unsafe {
             *is_zero = true;
         }
@@ -1568,7 +1568,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     if commit {
         flags |= MEM_COMMIT;
     }
-    // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+    // SAFETY[AUDIT:windows-virtual-memory-allocation-export-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
     let p = unsafe {
         win_virtual_alloc(
             hint_addr,
@@ -1581,7 +1581,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
         )
     };
     if !addr.is_null() {
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-allocation-export-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         unsafe {
             *addr = p;
         }
@@ -1589,7 +1589,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     if !p.is_null() {
         0
     } else {
-        // SAFETY[AUDIT:windows-virtual-memory-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
+        // SAFETY[AUDIT:windows-virtual-memory-allocation-export-boundary]: Windows virtual-memory primitives preserve reservation, commit, protection, alignment, and error-code contracts.
         unsafe { GetLastError() as i32 }
     }
 }

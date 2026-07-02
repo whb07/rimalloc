@@ -469,7 +469,7 @@ pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
             not(target_env = "musl")
         ))]
         {
-            // SAFETY[AUDIT:platform-thread-heap-association-boundary]: Linux x86_64 fast path
+            // SAFETY[AUDIT:platform-thread-heap-default-load-boundary]: Linux x86_64 fast path
             // reads the hidden default thread-heap TLS cell.
             unsafe { mi_linux_x64_theap_default_get() }
         }
@@ -480,7 +480,7 @@ pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
             not(all(target_arch = "x86_64", not(target_env = "musl")))
         ))]
         {
-            // SAFETY[AUDIT:platform-thread-heap-association-boundary]: non-x86_64 Linux shim path
+            // SAFETY[AUDIT:platform-thread-heap-default-load-boundary]: non-x86_64 Linux shim path
             // reads the hidden default thread-heap TLS cell through C.
             unsafe { _mi_tls_theap_default_get() }
         }
@@ -489,16 +489,16 @@ pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
     } else if MI_TLS_MODEL_FIXED_SLOT {
         mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_DEFAULT) as *mut mi_theap_t
     } else if MI_TLS_MODEL_DYNAMIC_WIN32 {
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: dynamic Win32 TLS may route
+        // SAFETY[AUDIT:platform-thread-heap-default-load-boundary]: dynamic Win32 TLS may route
         // through an expansion slot containing thread-heap pointers.
         unsafe { mi_prim_tls_slot_theap(_mi_theap_default_slot, _mi_theap_default_expansion_slot) }
     } else if MI_TLS_MODEL_DYNAMIC_PTHREADS {
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: pthread key zero is the
+        // SAFETY[AUDIT:platform-thread-heap-default-load-boundary]: pthread key zero is the
         // uninitialized sentinel for the dynamic default thread-heap key.
         if unsafe { _mi_theap_default_key } == 0 {
             ptr::null_mut()
         } else {
-            // SAFETY[AUDIT:platform-thread-heap-association-boundary]: nonzero pthread keys are
+            // SAFETY[AUDIT:platform-thread-heap-default-load-boundary]: nonzero pthread keys are
             // platform-managed TLS keys for default thread-heap storage.
             unsafe { _mi_thread_local_get(_mi_theap_default_key) as *mut mi_theap_t }
         }
@@ -513,11 +513,11 @@ pub unsafe fn _mi_theap_default_raw() -> *mut mi_theap_t {
 /// caller must treat the returned pointer as allocator-owned thread-local state.
 #[inline]
 pub unsafe fn _mi_theap_default() -> *mut mi_theap_t {
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: raw default thread-heap lookup
+    // SAFETY[AUDIT:platform-thread-heap-default-load-boundary]: raw default thread-heap lookup
     // returns null or allocator-owned thread-local metadata.
     let theap = unsafe { _mi_theap_default_raw() };
     if theap.is_null() {
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: null default TLS falls back to
+        // SAFETY[AUDIT:platform-thread-heap-empty-sentinel-boundary]: null default TLS falls back to
         // the process-global empty thread-heap sentinel.
         unsafe { __mi_theap_empty() }
     } else {
@@ -536,7 +536,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         {
             let theap = TLS_THEAP_CACHED.with(Cell::get);
             if theap.is_null() {
-                // SAFETY[AUDIT:platform-thread-heap-association-boundary]: null cached TLS falls
+                // SAFETY[AUDIT:platform-thread-heap-empty-sentinel-boundary]: null cached TLS falls
                 // back to the process-global empty thread-heap sentinel.
                 unsafe { __mi_theap_empty() }
             } else {
@@ -552,7 +552,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         {
             let theap = TLS_THEAP_CACHED.with(Cell::get);
             if theap.is_null() {
-                // SAFETY[AUDIT:platform-thread-heap-association-boundary]: null cached TLS falls
+                // SAFETY[AUDIT:platform-thread-heap-empty-sentinel-boundary]: null cached TLS falls
                 // back to the process-global empty thread-heap sentinel.
                 unsafe { __mi_theap_empty() }
             } else {
@@ -567,11 +567,11 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
             not(target_env = "musl")
         ))]
         {
-            // SAFETY[AUDIT:platform-thread-heap-association-boundary]: Linux x86_64 fast path
+            // SAFETY[AUDIT:platform-thread-heap-cached-load-boundary]: Linux x86_64 fast path
             // reads the hidden cached thread-heap TLS cell.
             let theap = unsafe { mi_linux_x64_theap_cached_get() };
             if theap.is_null() {
-                // SAFETY[AUDIT:platform-thread-heap-association-boundary]: null cached TLS falls
+                // SAFETY[AUDIT:platform-thread-heap-empty-sentinel-boundary]: null cached TLS falls
                 // back to the process-global empty thread-heap sentinel.
                 unsafe { __mi_theap_empty() }
             } else {
@@ -585,11 +585,11 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
             not(all(target_arch = "x86_64", not(target_env = "musl")))
         ))]
         {
-            // SAFETY[AUDIT:platform-thread-heap-association-boundary]: non-x86_64 Linux shim path
+            // SAFETY[AUDIT:platform-thread-heap-cached-load-boundary]: non-x86_64 Linux shim path
             // reads the hidden cached thread-heap TLS cell through C.
             let theap = unsafe { _mi_tls_theap_cached_get() };
             if theap.is_null() {
-                // SAFETY[AUDIT:platform-thread-heap-association-boundary]: null cached TLS falls
+                // SAFETY[AUDIT:platform-thread-heap-empty-sentinel-boundary]: null cached TLS falls
                 // back to the process-global empty thread-heap sentinel.
                 unsafe { __mi_theap_empty() }
             } else {
@@ -600,7 +600,7 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
         TLS_THEAP_CACHED.with(|cell| {
             let theap = cell.get();
             if theap.is_null() {
-                // SAFETY[AUDIT:platform-thread-heap-association-boundary]: null cached TLS falls
+                // SAFETY[AUDIT:platform-thread-heap-empty-sentinel-boundary]: null cached TLS falls
                 // back to the process-global empty thread-heap sentinel.
                 unsafe { __mi_theap_empty() }
             } else {
@@ -610,16 +610,16 @@ pub unsafe fn _mi_theap_cached() -> *mut mi_theap_t {
     } else if MI_TLS_MODEL_FIXED_SLOT {
         mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_CACHED) as *mut mi_theap_t
     } else if MI_TLS_MODEL_DYNAMIC_WIN32 {
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: dynamic Win32 TLS may route
+        // SAFETY[AUDIT:platform-thread-heap-cached-load-boundary]: dynamic Win32 TLS may route
         // through an expansion slot containing thread-heap pointers.
         unsafe { mi_prim_tls_slot_theap(_mi_theap_cached_slot, _mi_theap_cached_expansion_slot) }
     } else if MI_TLS_MODEL_DYNAMIC_PTHREADS {
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: pthread key zero is the
+        // SAFETY[AUDIT:platform-thread-heap-cached-load-boundary]: pthread key zero is the
         // uninitialized sentinel for the dynamic cached thread-heap key.
         if unsafe { _mi_theap_cached_key } == 0 {
             ptr::null_mut()
         } else {
-            // SAFETY[AUDIT:platform-thread-heap-association-boundary]: nonzero pthread keys are
+            // SAFETY[AUDIT:platform-thread-heap-cached-load-boundary]: nonzero pthread keys are
             // platform-managed TLS keys for cached thread-heap storage.
             unsafe { _mi_thread_local_get(_mi_theap_cached_key) as *mut mi_theap_t }
         }
@@ -649,7 +649,7 @@ pub(crate) fn mi_prim_thread_local_default_set(theap: Option<ThreadHeapPtr>) {
             target_arch = "x86_64",
             not(target_env = "musl")
         ))]
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: Linux x86_64 fast path stores
+        // SAFETY[AUDIT:platform-thread-heap-default-store-boundary]: Linux x86_64 fast path stores
         // the normalized default thread-heap pointer in the hidden TLS cell.
         unsafe {
             mi_linux_x64_theap_default_set(theap);
@@ -660,7 +660,7 @@ pub(crate) fn mi_prim_thread_local_default_set(theap: Option<ThreadHeapPtr>) {
             any(feature = "tls-shim", not(feature = "std")),
             not(all(target_arch = "x86_64", not(target_env = "musl")))
         ))]
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: non-x86_64 Linux shim path
+        // SAFETY[AUDIT:platform-thread-heap-default-store-boundary]: non-x86_64 Linux shim path
         // stores the normalized default thread-heap pointer through C TLS.
         unsafe {
             _mi_tls_theap_default_set(theap);
@@ -692,7 +692,7 @@ pub(crate) fn mi_prim_thread_local_cached_set(theap: Option<ThreadHeapPtr>) {
             target_arch = "x86_64",
             not(target_env = "musl")
         ))]
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: Linux x86_64 fast path stores
+        // SAFETY[AUDIT:platform-thread-heap-cached-store-boundary]: Linux x86_64 fast path stores
         // the normalized cached thread-heap pointer in the hidden TLS cell.
         unsafe {
             mi_linux_x64_theap_cached_set(theap);
@@ -703,7 +703,7 @@ pub(crate) fn mi_prim_thread_local_cached_set(theap: Option<ThreadHeapPtr>) {
             any(feature = "tls-shim", not(feature = "std")),
             not(all(target_arch = "x86_64", not(target_env = "musl")))
         ))]
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: non-x86_64 Linux shim path
+        // SAFETY[AUDIT:platform-thread-heap-cached-store-boundary]: non-x86_64 Linux shim path
         // stores the normalized cached thread-heap pointer through C TLS.
         unsafe {
             _mi_tls_theap_cached_set(theap);
@@ -720,10 +720,10 @@ pub(crate) fn mi_prim_thread_local_cached_set(theap: Option<ThreadHeapPtr>) {
 /// thread.
 #[inline]
 pub unsafe fn _mi_thread_is_initialized() -> bool {
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: default thread-heap lookup yields
+    // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: default thread-heap lookup yields
     // a nullable allocator-owned pointer before initialization is queried.
     let theap = unsafe { _mi_theap_default() };
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: non-null thread-heap metadata is
+    // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: non-null thread-heap metadata is
     // checked through the internal initialized-state helper.
     !theap.is_null() && unsafe { crate::internal::mi_theap_is_initialized(theap) }
 }
@@ -733,15 +733,15 @@ pub unsafe fn _mi_thread_is_initialized() -> bool {
 /// `heap` must be null or point to a heap object managed by this allocator.
 #[inline]
 pub unsafe fn _mi_heap_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: cached thread-heap lookup yields
+    // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: cached thread-heap lookup yields
     // the current thread-local heap or the empty sentinel.
     let theap = unsafe { _mi_theap_cached() };
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: non-null cached thread heaps expose
+    // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: non-null cached thread heaps expose
     // allocator-owned heap metadata for identity comparison only.
     if !theap.is_null() && unsafe { crate::internal::_mi_theap_heap(theap) } == heap.cast_mut() {
         return theap;
     }
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: fallback lookup may initialize the
+    // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: fallback lookup may initialize the
     // caller-provided heap's associated thread-heap.
     unsafe { _mi_heap_theap_get_or_init(heap) }
 }
@@ -751,15 +751,15 @@ pub unsafe fn _mi_heap_theap(heap: *const mi_heap_t) -> *mut mi_theap_t {
 /// `heap` must be null or point to a heap object managed by this allocator.
 #[inline]
 pub unsafe fn _mi_heap_theap_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: cached thread-heap lookup yields
+    // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: cached thread-heap lookup yields
     // the current thread-local heap or the empty sentinel.
     let theap = unsafe { _mi_theap_cached() };
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: non-null cached thread heaps expose
+    // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: non-null cached thread heaps expose
     // allocator-owned heap metadata for identity comparison only.
     if !theap.is_null() && unsafe { crate::internal::_mi_theap_heap(theap) } == heap.cast_mut() {
         return theap;
     }
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: fallback peek does not initialize
+    // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: fallback peek does not initialize
     // new thread-heap state for the caller-provided heap.
     unsafe { _mi_heap_theap_get_peek(heap) }
 }
@@ -770,18 +770,18 @@ pub unsafe fn _mi_heap_theap_peek(heap: *const mi_heap_t) -> *mut mi_theap_t {
 #[inline]
 pub(crate) unsafe fn _mi_page_associated_theap_peek(page: PagePtr) -> Option<ThreadHeapPtr> {
     let page = page.as_ptr();
-    // SAFETY[AUDIT:platform-thread-heap-association-boundary]: `PagePtr` witnesses live allocator
+    // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: `PagePtr` witnesses live allocator
     // page metadata, so reading its heap owner is within the page boundary.
     let heap = unsafe { (*page).heap };
     let theap = if heap.is_null() {
         crate::init::mi_theap_main_tls_peek()
     } else {
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: page-owned heap metadata is
+        // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: page-owned heap metadata is
         // used only for a non-initializing thread-heap peek.
         unsafe { _mi_heap_theap_peek(heap) }
     };
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:platform-thread-heap-association-boundary]: non-null associated thread
+        // SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]: non-null associated thread
         // heaps have initialized TLD metadata owned by this allocator.
         theap.is_null() || crate::init::_mi_thread_id() == unsafe { (*(*theap).tld).thread_id }
     );

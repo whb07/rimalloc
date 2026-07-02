@@ -149,24 +149,24 @@ fn block_ptr_free_list_link_helpers_delegate_to_encoded_links() {
 fn heap_ptr_field_helpers_read_and_write_heap_fields() {
     let mut heap_storage = MaybeUninit::<mi_heap_t>::zeroed();
     let raw_heap = heap_storage.as_mut_ptr();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: `raw_heap` points at
+    // SAFETY[AUDIT:typed-heap-pointer-test-fixtures]: `raw_heap` points at
     // stack-local heap storage that remains live for this test.
     let heap = unsafe { HeapPtr::new_unchecked(raw_heap) };
 
     let mut subproc_storage = MaybeUninit::<mi_subproc_t>::zeroed();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: wraps stack-local subproc
+    // SAFETY[AUDIT:typed-heap-pointer-test-fixtures]: wraps stack-local subproc
     // storage used only as a heap field value.
     let subproc = unsafe { SubprocPtr::new_unchecked(subproc_storage.as_mut_ptr()) };
     let mut theap_storage = MaybeUninit::<mi_theap_t>::zeroed();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: wraps stack-local thread-heap
+    // SAFETY[AUDIT:typed-heap-pointer-test-fixtures]: wraps stack-local thread-heap
     // storage used only as a heap field value.
     let theap = unsafe { ThreadHeapPtr::new_unchecked(theap_storage.as_mut_ptr()) };
     let mut arena_storage = MaybeUninit::<mi_arena_t>::zeroed();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: wraps stack-local arena
+    // SAFETY[AUDIT:typed-heap-pointer-test-fixtures]: wraps stack-local arena
     // storage used only as a heap field value.
     let arena = unsafe { ArenaPtr::new_unchecked(arena_storage.as_mut_ptr()) };
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: field writes mutate only the
+    // SAFETY[AUDIT:typed-heap-pointer-test-fixtures]: field writes mutate only the
     // stack-local heap fixture and store other live stack-local fixtures.
     unsafe {
         heap.set_subproc(Some(subproc));
@@ -175,7 +175,7 @@ fn heap_ptr_field_helpers_read_and_write_heap_fields() {
         heap.set_exclusive_arena(Some(arena));
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: the heap fixture and stored
+    // SAFETY[AUDIT:typed-heap-pointer-test-fixtures]: the heap fixture and stored
     // stack-local pointer values remain live through these field reads.
     unsafe {
         assert_eq!(
@@ -193,7 +193,7 @@ fn heap_ptr_field_helpers_read_and_write_heap_fields() {
         );
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: clearing fields mutates only
+    // SAFETY[AUDIT:typed-heap-pointer-test-fixtures]: clearing fields mutates only
     // the stack-local heap fixture.
     unsafe {
         heap.set_subproc(None);
@@ -201,7 +201,7 @@ fn heap_ptr_field_helpers_read_and_write_heap_fields() {
         heap.set_exclusive_arena(None);
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: the heap fixture remains live
+    // SAFETY[AUDIT:typed-heap-pointer-test-fixtures]: the heap fixture remains live
     // and the nullable fields were just cleared.
     unsafe {
         assert!(heap.subproc().is_none());
@@ -210,7 +210,7 @@ fn heap_ptr_field_helpers_read_and_write_heap_fields() {
     }
 
     let arena_index = ArenaIndex::new(0).unwrap();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: raw field addresses are taken
+    // SAFETY[AUDIT:typed-pointer-address-test-fixtures]: raw field addresses are taken
     // from the same live stack-local heap fixture wrapped by `heap`.
     unsafe {
         assert_eq!(
@@ -233,20 +233,20 @@ fn heap_ptr_field_helpers_read_and_write_heap_fields() {
 fn thread_heap_ptr_field_helpers_read_and_write_thread_heap_fields() {
     let mut theap_storage = MaybeUninit::<mi_theap_t>::zeroed();
     let raw_theap = theap_storage.as_mut_ptr();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: `raw_theap` points at
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: `raw_theap` points at
     // stack-local thread-heap storage that remains live for this test.
     let theap = unsafe { ThreadHeapPtr::new_unchecked(raw_theap) };
 
     let mut tld_storage = MaybeUninit::<mi_tld_t>::zeroed();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: wraps stack-local TLD storage
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: wraps stack-local TLD storage
     // used only as a thread-heap field value.
     let tld = unsafe { TldPtr::new_unchecked(tld_storage.as_mut_ptr()) };
     let mut heap_storage = MaybeUninit::<mi_heap_t>::zeroed();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: wraps stack-local heap storage
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: wraps stack-local heap storage
     // used only as a thread-heap field value.
     let heap = unsafe { HeapPtr::new_unchecked(heap_storage.as_mut_ptr()) };
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: field writes mutate only the
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: field writes mutate only the
     // stack-local thread-heap fixture and store live stack-local pointers.
     unsafe {
         theap.set_tld(Some(tld));
@@ -255,7 +255,7 @@ fn thread_heap_ptr_field_helpers_read_and_write_thread_heap_fields() {
         theap.refcount_cell().store_seq_cst(1);
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: reads target the same
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: reads target the same
     // stack-local thread-heap fixture and stored stack-local pointer values.
     unsafe {
         assert_eq!(theap.tld().map(TldPtr::as_ptr), Some(tld.as_ptr()));
@@ -266,15 +266,15 @@ fn thread_heap_ptr_field_helpers_read_and_write_thread_heap_fields() {
     }
 
     let mut raw_page = MaybeUninit::<mi_page_t>::zeroed();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: wraps stack-local page storage
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: wraps stack-local page storage
     // used only as a direct-page table value.
     let page = unsafe { PagePtr::new_unchecked(raw_page.as_mut_ptr()) };
     let direct_bin = DirectBin::new(0).unwrap();
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: direct-page writes mutate only
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: direct-page writes mutate only
     // the stack-local thread-heap fixture.
     unsafe { theap.set_direct_page(direct_bin, Some(page)) };
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: the stored page pointer refers
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: the stored page pointer refers
     // to the live stack-local page fixture assigned above.
     unsafe {
         assert_eq!(
@@ -283,17 +283,17 @@ fn thread_heap_ptr_field_helpers_read_and_write_thread_heap_fields() {
         );
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: direct-page clearing mutates
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: direct-page clearing mutates
     // only the stack-local thread-heap fixture.
     unsafe { theap.set_direct_page(direct_bin, None) };
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: the direct-page slot was just
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: the direct-page slot was just
     // cleared and the thread-heap fixture remains live.
     unsafe {
         assert!(theap.direct_page(direct_bin).is_none());
     }
 
     let bin = Bin::new(0).unwrap();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: raw field addresses are taken
+    // SAFETY[AUDIT:typed-pointer-address-test-fixtures]: raw field addresses are taken
     // from the same live stack-local thread-heap fixture wrapped by `theap`.
     unsafe {
         assert_eq!(
@@ -303,14 +303,14 @@ fn thread_heap_ptr_field_helpers_read_and_write_thread_heap_fields() {
         assert_eq!(theap.stats(), ptr::addr_of_mut!((*raw_theap).stats));
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: clearing nullable fields
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: clearing nullable fields
     // mutates only the stack-local thread-heap fixture.
     unsafe {
         theap.set_tld(None);
         theap.set_heap(None);
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: the nullable fields were just
+    // SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]: the nullable fields were just
     // cleared and the thread-heap fixture remains live.
     unsafe {
         assert!(theap.tld().is_none());
@@ -322,25 +322,25 @@ fn thread_heap_ptr_field_helpers_read_and_write_thread_heap_fields() {
 fn tld_ptr_field_helpers_read_and_write_thread_local_fields() {
     let mut raw_tld = MaybeUninit::<mi_tld_t>::zeroed();
     let raw_tld = raw_tld.as_mut_ptr();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: `raw_tld` points at
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: `raw_tld` points at
     // stack-local TLD storage that remains live for this test.
     let tld = unsafe { TldPtr::new_unchecked(raw_tld) };
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: `0x1000` is a non-zero
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: `0x1000` is a non-zero
     // thread-id fixture with page flag bits clear.
     let thread_id = unsafe { ThreadId::new_unchecked(0x1000) };
     let mut raw_subproc = MaybeUninit::<mi_subproc_t>::zeroed();
     let raw_subproc = raw_subproc.as_mut_ptr();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: wraps stack-local subproc
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: wraps stack-local subproc
     // storage used only as a TLD field value.
     let subproc = unsafe { SubprocPtr::new_unchecked(raw_subproc) };
     let mut raw_theap = MaybeUninit::<mi_theap_t>::zeroed();
     let raw_theap = raw_theap.as_mut_ptr();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: wraps stack-local thread-heap
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: wraps stack-local thread-heap
     // storage used only as a TLD field value.
     let theap = unsafe { ThreadHeapPtr::new_unchecked(raw_theap) };
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: field writes mutate only the
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: field writes mutate only the
     // stack-local TLD fixture and store live stack-local pointer values.
     unsafe {
         tld.set_thread_id(Some(thread_id));
@@ -352,7 +352,7 @@ fn tld_ptr_field_helpers_read_and_write_thread_local_fields() {
         tld.set_is_in_threadpool(true);
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: reads target the same live
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: reads target the same live
     // stack-local TLD/subproc/thread-heap fixtures assigned above.
     unsafe {
         assert_eq!(tld.thread_id().map(ThreadId::get), Some(0x1000));
@@ -382,14 +382,14 @@ fn tld_ptr_field_helpers_read_and_write_thread_local_fields() {
 
     let mut raw_arena = MaybeUninit::<mi_arena_t>::zeroed();
     let raw_arena = raw_arena.as_mut_ptr();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: wraps stack-local arena
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: wraps stack-local arena
     // storage used only as a TLD arena-table value.
     let arena = unsafe { ArenaPtr::new_unchecked(raw_arena) };
     let arena_index = ArenaIndex::new(1).unwrap();
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: arena-table writes mutate only
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: arena-table writes mutate only
     // the stack-local TLD fixture and store a live stack-local arena pointer.
     unsafe { tld.set_arena(arena_index, Some(arena)) };
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: the stored arena pointer refers
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: the stored arena pointer refers
     // to the live stack-local arena fixture assigned above.
     unsafe {
         assert_eq!(
@@ -397,16 +397,16 @@ fn tld_ptr_field_helpers_read_and_write_thread_local_fields() {
             Some(arena.as_ptr())
         );
     }
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: arena-table clearing mutates
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: arena-table clearing mutates
     // only the stack-local TLD fixture.
     unsafe { tld.set_arena(arena_index, None) };
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: the arena slot was just
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: the arena slot was just
     // cleared and the TLD fixture remains live.
     unsafe {
         assert!(tld.arena(arena_index).is_none());
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: clearing nullable and boolean
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: clearing nullable and boolean
     // fields mutates only the stack-local TLD fixture.
     unsafe {
         tld.set_thread_id(None);
@@ -416,7 +416,7 @@ fn tld_ptr_field_helpers_read_and_write_thread_local_fields() {
         tld.set_is_in_threadpool(false);
     }
 
-    // SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]: the TLD fixture remains live
+    // SAFETY[AUDIT:typed-tld-pointer-test-fixtures]: the TLD fixture remains live
     // and the nullable/boolean fields were just cleared.
     unsafe {
         assert!(tld.thread_id().is_none());

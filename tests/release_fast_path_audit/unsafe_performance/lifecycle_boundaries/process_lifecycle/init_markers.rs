@@ -10,7 +10,12 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
         "SAFETY[AUDIT:init-subproc-main-heap-predicate-boundary]",
         "SAFETY[AUDIT:init-subproc-heap-visit-boundary]",
         "SAFETY[AUDIT:init-subproc-identity-boundary]",
-        "SAFETY[AUDIT:init-subproc-registry-boundary]",
+        "SAFETY[AUDIT:init-subproc-create-boundary]",
+        "SAFETY[AUDIT:init-subproc-metadata-destroy-boundary]",
+        "SAFETY[AUDIT:init-subproc-list-unlink-boundary]",
+        "SAFETY[AUDIT:init-subproc-destroy-loop-boundary]",
+        "SAFETY[AUDIT:init-subproc-registry-teardown-boundary]",
+        "SAFETY[AUDIT:init-subproc-public-destroy-boundary]",
         "SAFETY[AUDIT:init-subproc-stats-count-boundary]",
         "SAFETY[AUDIT:init-thread-identity-boundary]",
         "SAFETY[AUDIT:init-thread-done-entry-boundary]",
@@ -42,7 +47,12 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
         ("init-subproc-main-heap-predicate-boundary", 11),
         ("init-subproc-heap-visit-boundary", 4),
         ("init-subproc-identity-boundary", 16),
-        ("init-subproc-registry-boundary", 32),
+        ("init-subproc-create-boundary", 6),
+        ("init-subproc-metadata-destroy-boundary", 3),
+        ("init-subproc-list-unlink-boundary", 1),
+        ("init-subproc-destroy-loop-boundary", 14),
+        ("init-subproc-registry-teardown-boundary", 2),
+        ("init-subproc-public-destroy-boundary", 6),
         ("init-subproc-stats-count-boundary", 12),
         ("init-thread-identity-boundary", 1),
         ("init-thread-done-entry-boundary", 6),
@@ -66,6 +76,7 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
             && !init_rs.contains("SAFETY[AUDIT:init-lifecycle-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-subproc-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-subproc-heap-association-boundary]")
+            && !init_rs.contains("SAFETY[AUDIT:init-subproc-registry-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-thread-tls-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-thread-heap-tls-boundary]")
             && !init_rs.contains("SAFETY[AUDIT:init-thread-lifecycle-boundary]")

@@ -45,12 +45,16 @@ file:
 
 - `SAFETY[AUDIT:typed-page-pointer-test-fixtures]`,
   `SAFETY[AUDIT:typed-block-pointer-test-fixtures]`,
-  `SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]`,
+  `SAFETY[AUDIT:typed-heap-pointer-test-fixtures]`,
+  `SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]`,
+  `SAFETY[AUDIT:typed-tld-pointer-test-fixtures]`,
+  `SAFETY[AUDIT:typed-pointer-address-test-fixtures]`,
   `SAFETY[AUDIT:typed-arena-subproc-pointer-test-fixtures]`,
   `SAFETY[AUDIT:typed-page-queue-pointer-test-fixtures]`, and
   `SAFETY[AUDIT:typed-provenance-pointer-test-fixtures]` cover
-  `src/types/ptr/tests.rs` stack-local metadata, encoded-link, accessor, queue,
-  and exposed-address/provenance fixtures independently.
+  `src/types/ptr/tests.rs` stack-local metadata, encoded-link, heap,
+  thread-heap, TLD, raw field-address, accessor, queue, and
+  exposed-address/provenance fixtures independently.
 - `SAFETY[AUDIT:typed-main-heap-test-fixtures]`,
   `SAFETY[AUDIT:typed-owned-heap-test-fixtures]`,
   `SAFETY[AUDIT:typed-borrowed-heap-test-fixtures]`,
@@ -129,8 +133,18 @@ file:
 - `SAFETY[AUDIT:init-main-subproc-lifecycle-boundary]`: main subproc address
   resolution and process-global main heap/subproc publication in
   `src/allocator/init.rs`.
-- `SAFETY[AUDIT:init-subproc-registry-boundary]`: subproc creation, destruction,
-  list mutation, and metadata cleanup in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-create-boundary]`: subproc metadata allocation,
+  lock initialization, and registry insertion in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-metadata-destroy-boundary]`: subproc lock teardown
+  and metadata free in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-list-unlink-boundary]`: lock-serialized subproc
+  list unlinking in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-destroy-loop-boundary]`: subproc heap, arena, and
+  page-map destruction ordering in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-registry-teardown-boundary]`: full registry
+  teardown during process shutdown in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-public-destroy-boundary]`: public subproc
+  destroy/delete entrypoint validation and dispatch in `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-subproc-prefix-boundary]`: subproc prefix projection in
   `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-subproc-main-heap-load-boundary]`: subproc main-heap and
@@ -400,7 +414,16 @@ file:
   `SAFETY[AUDIT:unix-numa-boundary]`, and
   `SAFETY[AUDIT:unix-ffi-import-boundary]`: Unix primitive backend slices in
   `src/platform/unix.rs`.
-- `SAFETY[AUDIT:windows-virtual-memory-boundary]`,
+- `SAFETY[AUDIT:windows-virtual-memory-import-boundary]`,
+  `SAFETY[AUDIT:windows-virtual-memory-config-boundary]`,
+  `SAFETY[AUDIT:windows-virtual-memory-commit-boundary]`,
+  `SAFETY[AUDIT:windows-virtual-memory-decommit-boundary]`,
+  `SAFETY[AUDIT:windows-virtual-memory-release-boundary]`,
+  `SAFETY[AUDIT:windows-virtual-memory-reset-boundary]`,
+  `SAFETY[AUDIT:windows-virtual-memory-protect-boundary]`,
+  `SAFETY[AUDIT:windows-virtual-memory-reserve-boundary]`,
+  `SAFETY[AUDIT:windows-virtual-memory-retry-boundary]`,
+  `SAFETY[AUDIT:windows-virtual-memory-allocation-export-boundary]`,
   `SAFETY[AUDIT:windows-process-info-boundary]`,
   `SAFETY[AUDIT:windows-output-env-boundary]`,
   `SAFETY[AUDIT:windows-tls-fls-boundary]`,

@@ -21,8 +21,26 @@ pub(super) fn assert_typed_fixture_audit_splits(audit_sources: &DatatypeAcceptan
         (
             "src/types/ptr/tests.rs",
             ptr_tests_rs,
-            "typed-heap-thread-tld-pointer-test-fixtures",
-            35,
+            "typed-heap-pointer-test-fixtures",
+            8,
+        ),
+        (
+            "src/types/ptr/tests.rs",
+            ptr_tests_rs,
+            "typed-thread-heap-pointer-test-fixtures",
+            12,
+        ),
+        (
+            "src/types/ptr/tests.rs",
+            ptr_tests_rs,
+            "typed-tld-pointer-test-fixtures",
+            13,
+        ),
+        (
+            "src/types/ptr/tests.rs",
+            ptr_tests_rs,
+            "typed-pointer-address-test-fixtures",
+            2,
         ),
         (
             "src/types/ptr/tests.rs",
@@ -89,6 +107,7 @@ pub(super) fn assert_typed_fixture_audit_splits(audit_sources: &DatatypeAcceptan
 
     assert!(
         !ptr_tests_rs.contains("SAFETY[AUDIT:typed-pointer-test-fixtures]")
+            && !ptr_tests_rs.contains("SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]")
             && !heap_tests_rs.contains("SAFETY[AUDIT:typed-heap-test-fixtures]"),
         "typed pointer and heap test fixtures should stay split by proof responsibility"
     );

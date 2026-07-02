@@ -645,17 +645,17 @@ unsafe fn mi_subproc_destroy_meta(subproc: *mut mi_subproc_t) {
     let Some(subproc) = SubprocPtr::new(subproc) else {
         return;
     };
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-metadata-destroy-boundary]: subproc metadata destruction is serialized by the subproc registry lock.
     unsafe { mi_subproc_destroy_meta_typed(subproc) };
 }
 
 const _: unsafe fn(*mut mi_subproc_t) = mi_subproc_destroy_meta;
 
 unsafe fn mi_subproc_destroy_meta_typed(subproc: SubprocPtr) {
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-metadata-destroy-boundary]: subproc metadata destruction is serialized by the subproc registry lock.
     let subproc = unsafe { mi_subproc_prefix_typed(subproc) };
     // SAFETY: `subproc` points to metadata allocated by `mi_subproc_new`.
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-metadata-destroy-boundary]: subproc metadata destruction is serialized by the subproc registry lock.
     unsafe {
         mi_lock_done(ptr::addr_of_mut!((*subproc).arena_reserve_lock));
         mi_lock_done(ptr::addr_of_mut!((*subproc).heaps_lock));
@@ -720,7 +720,7 @@ fn mi_subproc_main_init() {
 }
 
 unsafe fn mi_subproc_unlink_locked(subproc: *mut MiSubprocPrefix) {
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-list-unlink-boundary]: subproc list unlinking is serialized by the subproc registry lock.
     unsafe {
         if !(*subproc).next.is_null() {
             (*mi_subproc_prefix((*subproc).next)).prev = (*subproc).prev;
@@ -739,48 +739,48 @@ unsafe fn mi_subproc_unsafe_destroy(subproc: *mut mi_subproc_t, acquire_subprocs
     let Some(subproc) = SubprocPtr::new(subproc) else {
         return;
     };
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
     unsafe { mi_subproc_unsafe_destroy_typed(subproc, acquire_subprocs_lock) };
 }
 
 unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_lock: bool) {
     let subproc_raw = subproc.as_ptr();
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
     let main_subproc = unsafe { mi_subproc_main_addr_typed().ptr() };
     let is_main = ptr::eq(subproc_raw, main_subproc.as_ptr());
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
     let subproc_prefix = unsafe { mi_subproc_prefix_typed(subproc) };
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
     let borrowed_subproc = unsafe { BorrowedSubproc::new(subproc) };
     if acquire_subprocs_lock {
-        // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+        // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         unsafe { mi_lock_acquire(ptr::addr_of_mut!(subprocs_lock)) };
     }
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
     unsafe { mi_subproc_unlink_locked(subproc_prefix) };
     if acquire_subprocs_lock {
-        // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+        // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         unsafe { mi_lock_release(ptr::addr_of_mut!(subprocs_lock)) };
     }
 
     loop {
-        // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+        // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         let heaps_lock = unsafe { MiLockGuard::acquire(subproc.heaps_lock()) };
-        // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+        // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         let heap = unsafe { (*subproc_prefix).heaps };
         drop(heaps_lock);
         if heap.is_null() {
             break;
         }
-        // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+        // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         let main_heap = unsafe { mi_subproc_heap_main_typed(borrowed_subproc) }
             .map(HeapPtr::as_ptr)
             .unwrap_or(ptr::null_mut());
         if !ptr::eq(heap, main_heap) {
-            // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+            // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
             unsafe { mi_heap_destroy(heap) };
         } else {
-            // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+            // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
             unsafe { _mi_heap_force_destroy(heap) };
             break;
         }
@@ -788,13 +788,13 @@ unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_
 
     {
         let subproc = subproc_raw;
-        // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+        // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         unsafe { _mi_arenas_unsafe_destroy_all(subproc) };
     }
 
     if is_main {
         let subproc = subproc_raw;
-        // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+        // SAFETY[AUDIT:init-subproc-destroy-loop-boundary]: subproc destruction drains heaps, arenas, and page maps under registry ordering.
         unsafe { crate::page_map::_mi_page_map_unsafe_destroy(subproc) };
     } else {
         // SAFETY[AUDIT:init-subproc-stats-count-boundary]: subproc thread/heap counters and stats merges use typed subproc metadata witnesses.
@@ -812,9 +812,9 @@ unsafe fn mi_subproc_unsafe_destroy_typed(subproc: SubprocPtr, acquire_subprocs_
 
 unsafe fn mi_subprocs_unsafe_destroy_all() {
     mi_subproc_main_init();
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-registry-teardown-boundary]: registry teardown walks remaining subprocs while holding the registry lock.
     let main_subproc = unsafe { _mi_subproc_main() };
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-registry-teardown-boundary]: registry teardown walks remaining subprocs while holding the registry lock.
     unsafe {
         {
             let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
@@ -2287,7 +2287,7 @@ pub unsafe extern "C" fn mi_thread_init() {
     };
 }
 
-// SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+// SAFETY[AUDIT:init-subproc-create-boundary]: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
 #[unsafe(no_mangle)]
 /// # Safety
 /// The returned opaque identifier must only be passed back to this crate's subproc functions.
@@ -2295,16 +2295,16 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     mi_subproc_main_init();
     let seq = SUBPROC_TOTAL_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
     let mut memid = mi_memid_t::default();
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-create-boundary]: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
     let subproc_ptr = unsafe {
         _mi_meta_zalloc(size_of::<MiSubprocPrefix>(), ptr::addr_of_mut!(memid))
             .cast::<MiSubprocPrefix>()
     };
     if subproc_ptr.is_null() {
-        // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+        // SAFETY[AUDIT:init-subproc-create-boundary]: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
         return unsafe { _mi_subproc_to_id(ptr::null_mut()) };
     }
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-create-boundary]: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
     unsafe {
         subproc_ptr.write(MiSubprocPrefix::new_with_memid(
             crate::core_types::SubprocSeq::new(seq),
@@ -2312,13 +2312,13 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
         ))
     };
     // SAFETY: initializing lock words for a freshly allocated local prefix.
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-create-boundary]: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
     unsafe {
         mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).arena_reserve_lock));
         mi_lock_init(ptr::addr_of_mut!((*subproc_ptr).heaps_lock));
     }
     // SAFETY: local subproc list mutation is serialized by `subprocs_lock`.
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-create-boundary]: subproc creation allocates metadata, initializes locks, and links into the registry under lock.
     unsafe {
         let lock = MiLockPtr(NonNull::new_unchecked(ptr::addr_of_mut!(subprocs_lock)));
         let _lock = MiLockGuard::acquire(lock);
@@ -2331,29 +2331,29 @@ pub unsafe extern "C" fn mi_subproc_new() -> mi_subproc_id_t {
     }
 }
 
-// SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+// SAFETY[AUDIT:init-subproc-public-destroy-boundary]: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
 #[unsafe(no_mangle)]
 /// # Safety
 /// `subproc_id` must identify a subproc created by this crate.
 pub unsafe extern "C" fn mi_subproc_destroy(subproc_id: mi_subproc_id_t) {
     mi_subproc_main_init();
     // SAFETY: raw ID comes from the C ABI surface.
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-public-destroy-boundary]: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
     let subproc = unsafe { _mi_subproc_from_id(subproc_id) };
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-public-destroy-boundary]: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
     if subproc.is_null() || core::ptr::eq(subproc, unsafe { _mi_subproc_main() }) {
         return;
     }
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-public-destroy-boundary]: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
     unsafe { mi_subproc_unsafe_destroy(subproc, true) };
 }
 
-// SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+// SAFETY[AUDIT:init-subproc-public-destroy-boundary]: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 /// # Safety
 /// Same requirements as `mi_subproc_destroy`.
 pub unsafe extern "C" fn mi_subproc_delete(subproc_id: mi_subproc_id_t) {
-    // SAFETY[AUDIT:init-subproc-registry-boundary]: subproc list mutation and destruction are serialized by the subproc registry lock.
+    // SAFETY[AUDIT:init-subproc-public-destroy-boundary]: public subproc destroy entrypoints validate IDs before registry-ordered destruction.
     unsafe { mi_subproc_destroy(subproc_id) };
 }
 

@@ -27,10 +27,19 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
         !prim_rs.contains("SAFETY[AUDIT:platform-tls-primitives]"),
         "platform TLS primitive markers should stay split by operation"
     );
+    assert!(
+        !prim_rs.contains("SAFETY[AUDIT:platform-thread-heap-association-boundary]"),
+        "platform thread-heap association markers should stay split by load/store and fallback responsibility"
+    );
     for (audit_id, exact_count) in [
         ("platform-dynamic-tls-key-boundary", 3),
         ("platform-linux-tls-shim-boundary", 11),
-        ("platform-thread-heap-association-boundary", 32),
+        ("platform-thread-heap-default-load-boundary", 6),
+        ("platform-thread-heap-cached-load-boundary", 5),
+        ("platform-thread-heap-default-store-boundary", 2),
+        ("platform-thread-heap-cached-store-boundary", 2),
+        ("platform-thread-heap-empty-sentinel-boundary", 6),
+        ("platform-thread-heap-association-fallback-boundary", 11),
         ("platform-allocator-shim-boundary", 8),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");

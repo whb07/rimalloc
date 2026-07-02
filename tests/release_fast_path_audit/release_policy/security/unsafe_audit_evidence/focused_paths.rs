@@ -81,6 +81,40 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
     const EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH: &str = "tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs";
     const RAW_CXX_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs";
+    const DATATYPE_FIXTURE_FOCUSED_PATH: &str =
+        "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs";
+    for audit_id in [
+        "windows-virtual-memory-import-boundary",
+        "windows-virtual-memory-config-boundary",
+        "windows-virtual-memory-commit-boundary",
+        "windows-virtual-memory-decommit-boundary",
+        "windows-virtual-memory-release-boundary",
+        "windows-virtual-memory-reset-boundary",
+        "windows-virtual-memory-protect-boundary",
+        "windows-virtual-memory-reserve-boundary",
+        "windows-virtual-memory-retry-boundary",
+        "windows-virtual-memory-allocation-export-boundary",
+    ] {
+        assert_focused_evidence(audit_id, WINDOWS_PRIMITIVE_FOCUSED_PATH);
+    }
+    for audit_id in [
+        "typed-page-pointer-test-fixtures",
+        "typed-block-pointer-test-fixtures",
+        "typed-heap-pointer-test-fixtures",
+        "typed-thread-heap-pointer-test-fixtures",
+        "typed-tld-pointer-test-fixtures",
+        "typed-pointer-address-test-fixtures",
+        "typed-arena-subproc-pointer-test-fixtures",
+        "typed-page-queue-pointer-test-fixtures",
+        "typed-provenance-pointer-test-fixtures",
+        "typed-main-heap-test-fixtures",
+        "typed-owned-heap-test-fixtures",
+        "typed-borrowed-heap-test-fixtures",
+        "typed-thread-heap-state-test-fixtures",
+        "typed-thread-local-heap-test-fixtures",
+    ] {
+        assert_focused_evidence(audit_id, DATATYPE_FIXTURE_FOCUSED_PATH);
+    }
     for audit_id in [
         "page-map-global-boundary",
         "page-map-32bit-commit-bitmap-boundary",
@@ -183,10 +217,6 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         ("unix-thread-tls-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
         ("unix-huge-page-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
         ("unix-numa-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
-        (
-            "windows-virtual-memory-boundary",
-            WINDOWS_PRIMITIVE_FOCUSED_PATH,
-        ),
         (
             "windows-process-info-boundary",
             WINDOWS_PRIMITIVE_FOCUSED_PATH,
@@ -334,50 +364,6 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         (
             "typed-page-queue-accessors",
             "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
-        ),
-        (
-            "typed-page-pointer-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-block-pointer-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-heap-thread-tld-pointer-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-arena-subproc-pointer-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-page-queue-pointer-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-provenance-pointer-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-main-heap-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-owned-heap-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-borrowed-heap-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-thread-heap-state-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
-        ),
-        (
-            "typed-thread-local-heap-test-fixtures",
-            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
         ),
     ] {
         assert_focused_evidence(audit_id, focused_path);

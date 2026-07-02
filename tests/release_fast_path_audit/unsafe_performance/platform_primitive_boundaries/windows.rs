@@ -18,8 +18,21 @@ fn windows_primitive_backend_stays_bounded_and_audited() {
         !windows_rs.contains("SAFETY[AUDIT:windows-primitive-boundary]"),
         "Windows primitive backend aggregate marker should stay split"
     );
+    assert!(
+        !windows_rs.contains("SAFETY[AUDIT:windows-virtual-memory-boundary]"),
+        "Windows virtual-memory markers should stay split by operation"
+    );
     for (marker, minimum_count) in [
-        ("windows-virtual-memory-boundary", 32),
+        ("windows-virtual-memory-import-boundary", 4),
+        ("windows-virtual-memory-config-boundary", 1),
+        ("windows-virtual-memory-commit-boundary", 2),
+        ("windows-virtual-memory-decommit-boundary", 3),
+        ("windows-virtual-memory-release-boundary", 3),
+        ("windows-virtual-memory-reset-boundary", 3),
+        ("windows-virtual-memory-protect-boundary", 2),
+        ("windows-virtual-memory-reserve-boundary", 6),
+        ("windows-virtual-memory-retry-boundary", 2),
+        ("windows-virtual-memory-allocation-export-boundary", 6),
         ("windows-tls-fls-boundary", 27),
         ("windows-large-page-boundary", 22),
         ("windows-process-info-boundary", 11),

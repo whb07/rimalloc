@@ -9,17 +9,15 @@ operation IDs, and release-audit modules that now block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,899 unsafe
-  mentions, and 391 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 391 operation IDs with
-  842 automated evidence rows.
-- One source audit operation ID is still over 32 source markers, and 12 IDs are
-  over 28 markers. The largest remaining source ID is
-  `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers. The next
-  largest are `platform-thread-heap-association-boundary`,
-  `windows-virtual-memory-boundary`, and `init-subproc-registry-boundary` with
-  32 markers each; `arena-slice-boundary`, `owned-allocation`,
+  mentions, and 413 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 413 operation IDs with
+  881 automated evidence rows.
+- No source audit operation ID remains over 32 source markers. Eight IDs remain
+  over 28 markers: `arena-slice-boundary`, `owned-allocation`,
   `typed-subproc-accessors`, and `typed-scalar-test-fixtures` have 31 markers
-  each.
+  each; `arena-slice-allocation-boundary`, `page-free-list-refill-boundary`, and
+  `stats-counter-boundary` have 30 markers each; and
+  `raw-macro-cxx-aligned-boundary` has 29 markers.
 - Issue 1 retargeted 184 dispatcher evidence rows. `docs/unsafe-audit-evidence.tsv`
   no longer cites the targeted aggregate or parent release-audit modules:
   root `release_fast_path_audit.rs`, `release_policy.rs`,
@@ -28,6 +26,10 @@ Current review evidence:
   `os_memory.rs`, `platform_primitive_boundaries.rs`, and
   `platform_primitive_boundaries/unix_wasi_emscripten.rs` all have zero
   evidence rows.
+- Issue 2 split four broad source audit IDs into 26 operation-specific IDs:
+  typed heap/thread-heap/TLD/address fixtures, platform default/cached
+  thread-heap load/store and fallback paths, Windows virtual-memory operations,
+  and subproc create/destroy/teardown operations.
 - `strict-type-allowlist.txt` has 634 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -48,10 +50,10 @@ Current review evidence:
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   release-audit module-size guard discovers 107 module files recursively and
   enforces a 400-line cap. The largest release-audit modules are:
+  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 399 lines,
   `allowance_inventory.rs` at 398 lines,
-  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 390 lines,
-  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 385 lines,
   `interposition_exports/linux_override.rs` at 371 lines,
+  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 371 lines,
   `unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367 lines,
   and `primitive_options.rs` at 323 lines.
 - Full validation for the previous backlog passed after Issue 6: `cargo fmt
@@ -89,12 +91,12 @@ script, full formatting, full clippy, and full tests.
 The source audit has one ID above the previous 32-marker target and three IDs
 exactly at 32. These are still too broad for reviewable unsafe ownership.
 
-- [ ] Split `typed-heap-thread-tld-pointer-test-fixtures` into separate heap,
+- [x] Split `typed-heap-thread-tld-pointer-test-fixtures` into separate heap,
       thread-heap, TLD, and pointer-fixture IDs with matching evidence rows.
-- [ ] Split `platform-thread-heap-association-boundary` by default heap TLS
+- [x] Split `platform-thread-heap-association-boundary` by default heap TLS
       load/store, cached heap TLS load/store, empty sentinel access, and
       platform fallback behavior.
-- [ ] Split `windows-virtual-memory-boundary` and
+- [x] Split `windows-virtual-memory-boundary` and
       `init-subproc-registry-boundary` by operation so each virtual-memory and
       subproc-registry concern has independent docs, source markers, and
       release-audit evidence.
@@ -140,7 +142,7 @@ checks, no-allocation audit, full formatting, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Repoint unsafe audit evidence to focused modules.
-2. [ ] Split remaining source audit IDs over 32 markers.
+2. [x] Split remaining source audit IDs over 32 markers.
 3. [ ] Lower the source audit marker cap to 28.
 4. [ ] Split release-audit modules over 320 lines.
 

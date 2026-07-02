@@ -313,10 +313,23 @@ Operation IDs:
   publication. Unsafe operations are limited to hidden local symbol address
   resolution, static metadata initialization, and one-time main heap/subproc
   association.
-- `SAFETY[AUDIT:init-subproc-registry-boundary]`: `src/allocator/init.rs` owns
-  subproc creation, destruction, list mutation, and metadata cleanup. Unsafe
-  operations are limited to lock-protected registry updates, metadata allocation
-  and free, arena/page-map teardown handoff, and heap destruction ordering.
+- `SAFETY[AUDIT:init-subproc-create-boundary]`: `src/allocator/init.rs` owns
+  subproc metadata allocation, lock initialization, and registry insertion under
+  the subproc registry lock.
+- `SAFETY[AUDIT:init-subproc-metadata-destroy-boundary]`:
+  `src/allocator/init.rs` owns subproc metadata teardown after the destroy path
+  has removed live heap/arena/page-map state.
+- `SAFETY[AUDIT:init-subproc-list-unlink-boundary]`: `src/allocator/init.rs`
+  owns lock-protected subproc list unlinking and prev/next pointer clearing.
+- `SAFETY[AUDIT:init-subproc-destroy-loop-boundary]`: `src/allocator/init.rs`
+  owns subproc destruction ordering across heap draining, arena teardown, main
+  page-map destruction, and metadata handoff.
+- `SAFETY[AUDIT:init-subproc-registry-teardown-boundary]`:
+  `src/allocator/init.rs` owns process-shutdown registry traversal while the
+  registry lock prevents concurrent subproc list mutation.
+- `SAFETY[AUDIT:init-subproc-public-destroy-boundary]`:
+  `src/allocator/init.rs` owns public subproc destroy/delete entrypoint ID
+  validation and dispatch into the registry-ordered destroy path.
 - `SAFETY[AUDIT:init-subproc-prefix-boundary]`: `src/allocator/init.rs` owns
   subproc prefix projection from validated subproc pointer witnesses.
 - `SAFETY[AUDIT:init-subproc-main-heap-load-boundary]`:
@@ -1079,12 +1092,37 @@ Operation IDs:
 - `SAFETY[AUDIT:unix-numa-boundary]`: `src/platform/unix.rs` owns Unix NUMA
   helpers. Unsafe operations are limited to `mbind`/`getcpu` syscalls, sysfs
   node-count probes, node-mask construction, and NUMA placement fallbacks.
-- `SAFETY[AUDIT:windows-virtual-memory-boundary]`: `src/platform/windows.rs`
-  owns Windows virtual-memory allocation, commit, decommit, reset, protect,
-  query, aligned reservation, retry, and error-code paths. Unsafe operations
-  are limited to `VirtualAlloc`/`VirtualFree`/`VirtualProtect`/`VirtualQuery`,
-  `VirtualAlloc2`/`NtAllocateVirtualMemoryEx` lookup and calls, nullable
-  out-pointer writes, and Windows error propagation.
+- `SAFETY[AUDIT:windows-virtual-memory-import-boundary]`:
+  `src/platform/windows.rs` owns translated Windows virtual-memory function
+  pointer types and dynamic lookup for `VirtualAlloc2`/`NtAllocateVirtualMemoryEx`.
+- `SAFETY[AUDIT:windows-virtual-memory-config-boundary]`:
+  `src/platform/windows.rs` owns primitive memory configuration publication for
+  Windows page size, allocation granularity, and virtual-address bits.
+- `SAFETY[AUDIT:windows-virtual-memory-commit-boundary]`:
+  `src/platform/windows.rs` owns `VirtualAlloc(MEM_COMMIT)` and commit error-code
+  propagation.
+- `SAFETY[AUDIT:windows-virtual-memory-decommit-boundary]`:
+  `src/platform/windows.rs` owns `VirtualFree(MEM_DECOMMIT)`, recommit flag
+  publication, and decommit error-code propagation.
+- `SAFETY[AUDIT:windows-virtual-memory-release-boundary]`:
+  `src/platform/windows.rs` owns `VirtualFree(MEM_RELEASE)` and allocation-base
+  fallback release after `VirtualQuery`.
+- `SAFETY[AUDIT:windows-virtual-memory-reset-boundary]`:
+  `src/platform/windows.rs` owns `VirtualAlloc(MEM_RESET)` and no-op reuse
+  compatibility.
+- `SAFETY[AUDIT:windows-virtual-memory-protect-boundary]`:
+  `src/platform/windows.rs` owns `VirtualProtect` guard/unprotect transitions and
+  error-code propagation.
+- `SAFETY[AUDIT:windows-virtual-memory-reserve-boundary]`:
+  `src/platform/windows.rs` owns aligned reservation attempts, aligned
+  `VirtualAlloc2` parameters, fallback `VirtualAlloc`, and associated diagnostics.
+- `SAFETY[AUDIT:windows-virtual-memory-retry-boundary]`:
+  `src/platform/windows.rs` owns bounded retry/sleep behavior for retryable
+  Windows allocation failures.
+- `SAFETY[AUDIT:windows-virtual-memory-allocation-export-boundary]`:
+  `src/platform/windows.rs` owns the public primitive allocation export,
+  nullable out-pointers, reserve/commit flag construction, and Windows error
+  propagation.
 - `SAFETY[AUDIT:windows-process-info-boundary]`: `src/platform/windows.rs`
   owns Windows process, time, version, system-info, and memory counter helpers.
   Unsafe operations are limited to `QueryPerformanceFrequency`, `FILETIME`
@@ -1210,10 +1248,24 @@ Operation IDs:
   hidden Linux C TLS shim declarations, x86_64 initial-exec assembly loads and
   stores, thread-pointer reads, empty thread-heap symbol loads, and Linux TLS
   shim tests.
-- `SAFETY[AUDIT:platform-thread-heap-association-boundary]`:
-  `src/platform/mod.rs` owns default/cached thread-heap get/set helpers, empty
-  sentinel fallbacks, heap/thread-heap association lookup, and page-associated
-  thread-heap peeks.
+- `SAFETY[AUDIT:platform-thread-heap-default-load-boundary]`:
+  `src/platform/mod.rs` owns default thread-heap TLS loads across Linux fast
+  paths, C shims, fixed slots, Win32 dynamic TLS, and pthread dynamic keys.
+- `SAFETY[AUDIT:platform-thread-heap-cached-load-boundary]`:
+  `src/platform/mod.rs` owns cached thread-heap TLS loads across Linux fast
+  paths, C shims, fixed slots, Win32 dynamic TLS, and pthread dynamic keys.
+- `SAFETY[AUDIT:platform-thread-heap-default-store-boundary]`:
+  `src/platform/mod.rs` owns default thread-heap TLS stores through Linux fast
+  paths and C shim fallbacks.
+- `SAFETY[AUDIT:platform-thread-heap-cached-store-boundary]`:
+  `src/platform/mod.rs` owns cached thread-heap TLS stores through Linux fast
+  paths and C shim fallbacks.
+- `SAFETY[AUDIT:platform-thread-heap-empty-sentinel-boundary]`:
+  `src/platform/mod.rs` owns empty thread-heap sentinel fallback loads when
+  default or cached TLS cells are null.
+- `SAFETY[AUDIT:platform-thread-heap-association-fallback-boundary]`:
+  `src/platform/mod.rs` owns thread-heap initialization checks, heap association
+  fallback lookup/peek, and page-associated thread-heap peeks.
 - `SAFETY[AUDIT:platform-allocator-shim-boundary]`: `src/platform/mod.rs` owns
   redirected-query and allocator init/done C ABI compatibility shims, including
   fast-malloc assembly symbols and nullable diagnostic out-pointer writes.
@@ -1690,10 +1742,21 @@ Operation IDs:
   `src/types/ptr/tests.rs` builds stack-local block and page-key fixtures to
   exercise `BlockPtr` encoded-link read, write, clear, and next-pointer helper
   behavior.
-- `SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]`:
-  `src/types/ptr/tests.rs` builds stack-local heap, thread-heap, TLD, page,
-  arena, and subproc records to exercise `HeapPtr`, `ThreadHeapPtr`, and
-  `TldPtr` metadata fields while all stored pointers remain live.
+- `SAFETY[AUDIT:typed-heap-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` builds stack-local heap, thread-heap, arena, and
+  subproc records to exercise `HeapPtr` metadata fields while all stored pointers
+  remain live.
+- `SAFETY[AUDIT:typed-thread-heap-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` builds stack-local thread-heap, TLD, heap, and page
+  records to exercise `ThreadHeapPtr` metadata fields while all stored pointers
+  remain live.
+- `SAFETY[AUDIT:typed-tld-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` builds stack-local TLD, subproc, thread-heap, and
+  arena records to exercise `TldPtr` metadata fields while all stored pointers
+  remain live.
+- `SAFETY[AUDIT:typed-pointer-address-test-fixtures]`:
+  `src/types/ptr/tests.rs` compares raw field addresses from stack-local heap and
+  thread-heap fixtures without transferring ownership or extending lifetimes.
 - `SAFETY[AUDIT:typed-arena-subproc-pointer-test-fixtures]`:
   `src/types/ptr/tests.rs` builds stack-local arena, subproc, heap, page, and
   bitmap records to exercise arena/subproc pointer fields, counters, locks,

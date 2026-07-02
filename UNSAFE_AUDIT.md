@@ -69,6 +69,12 @@ Per-file review:
 - `src/allocator/arena/prefix.rs`: arena, heap, and sub-process prefix layouts
   remain private to `allocator::arena`; accessors require typed heap/subproc
   witnesses or checked arena/bin indexes before returning typed atomic fields.
+- `src/allocator/arena/os_memory.rs`: arena reserve growth, public
+  reserve/manage-memory APIs, and huge-page reservation normalize raw C ABI
+  inputs before registering typed OS memory with arena memid state.
+- `src/allocator/arena/purge.rs`: arena free dispatch, delayed purge
+  scheduling, purge callbacks, and sub-process collection keep purge bitmap and
+  expiration updates together with OS decommit handoff.
 - `src/allocator/arena_meta.rs`: arena metadata page stack operations publish
   and reclaim metadata pages through the audited atomic stack discipline.
 - `src/atomic.rs`: raw atomic pointer casts are centralized here and mapped to
@@ -686,10 +692,11 @@ Operation IDs:
   slice counts, bitmap initialization, and arena header writes while preserving
   reserved-range bounds and arena alignment.
 - `SAFETY[AUDIT:arena-reserve-growth-boundary]`:
-  `src/allocator/arena.rs` owns arena reserve growth and retry sizing.
-  Unsafe operations are limited to subproc arena counts, reserve-lock guarded
-  growth, virtual reserve feature checks, and stat adjustment balancing while
-  preserving bounded reserve sizes and retry accounting.
+  `src/allocator/arena.rs` and `src/allocator/arena/os_memory.rs` own arena
+  reserve growth and retry sizing. Unsafe operations are limited to subproc
+  arena counts, reserve-lock guarded growth, virtual reserve feature checks,
+  and stat adjustment balancing while preserving bounded reserve sizes and
+  retry accounting.
 - `SAFETY[AUDIT:arena-os-fallback-boundary]`:
   `src/allocator/arena.rs` owns OS allocation fallback for arena allocation
   requests and internal C-shaped arena allocation shims. Unsafe operations are
@@ -697,13 +704,13 @@ Operation IDs:
   primitives, and memid out-pointers while preserving disallow-options behavior
   and fallback semantics.
 - `SAFETY[AUDIT:arena-public-reserve-boundary]`:
-  `src/allocator/arena.rs` owns public reserve/manage arena APIs and internal
-  OS-memory registration. Unsafe operations are limited to C ABI pointers,
-  typed OS-memory and memid witnesses, arena initialization handoff, and OS
-  release on registration failure while preserving alignment and caller-owned
-  memory contracts.
+  `src/allocator/arena/os_memory.rs` owns public reserve/manage arena APIs and
+  internal OS-memory registration. Unsafe operations are limited to C ABI
+  pointers, typed OS-memory and memid witnesses, arena initialization handoff,
+  and OS release on registration failure while preserving alignment and
+  caller-owned memory contracts.
 - `SAFETY[AUDIT:arena-huge-reservation-boundary]`:
-  `src/allocator/arena.rs` owns huge OS page reservation APIs. Unsafe
+  `src/allocator/arena/os_memory.rs` owns huge OS page reservation APIs. Unsafe
   operations are limited to NUMA normalization, huge-page OS allocation,
   memid publication, arena registration, and OS release on failure while
   preserving timeout, interleave, and reserved-page reporting semantics.
@@ -784,28 +791,28 @@ Operation IDs:
   thread-free ownership words, and page-map registration while preserving page
   metadata invariants before ownership becomes visible.
 - `SAFETY[AUDIT:arena-purge-schedule-boundary]`:
-  `src/allocator/arena.rs` owns delayed purge scheduling. Unsafe operations
-  update arena/subproc purge clocks and purge bitmaps after validating arena
-  and slice-range state.
+  `src/allocator/arena/purge.rs` owns delayed purge scheduling. Unsafe
+  operations update arena/subproc purge clocks and purge bitmaps after
+  validating arena and slice-range state.
 - `SAFETY[AUDIT:arena-purge-free-dispatch-boundary]`:
-  `src/allocator/arena.rs` owns arena free dispatch into purge scheduling.
+  `src/allocator/arena/purge.rs` owns arena free dispatch into purge scheduling.
   Unsafe operations validate memid ranges, mark free slices, and preserve
   OS/meta free forwarding semantics.
-- `SAFETY[AUDIT:arena-purge-direct-boundary]`: `src/allocator/arena.rs` owns
+- `SAFETY[AUDIT:arena-purge-direct-boundary]`: `src/allocator/arena/purge.rs` owns
   direct purge/decommit work. Unsafe operations update committed-slice bitmaps
   around `_mi_os_purge_ex` and restore commit state when the OS requires it.
-- `SAFETY[AUDIT:arena-purge-range-boundary]`: `src/allocator/arena.rs` owns
+- `SAFETY[AUDIT:arena-purge-range-boundary]`: `src/allocator/arena/purge.rs` owns
   range purge attempts. Unsafe operations claim free-slice ranges, fall back to
   single-slice ranges, and restore free bitmap state.
-- `SAFETY[AUDIT:arena-purge-visitor-boundary]`: `src/allocator/arena.rs` owns
+- `SAFETY[AUDIT:arena-purge-visitor-boundary]`: `src/allocator/arena/purge.rs` owns
   purge traversal callback ABI validation. Unsafe operations validate raw slice
   ranges and callback state before forwarding typed purge work.
 - `SAFETY[AUDIT:arena-purge-expire-policy-boundary]`:
-  `src/allocator/arena.rs` owns per-arena purge expiration policy. Unsafe
+  `src/allocator/arena/purge.rs` owns per-arena purge expiration policy. Unsafe
   operations read/clear delayed purge clocks, count purge attempts, and visit
   purge bitmap ranges.
 - `SAFETY[AUDIT:arena-purge-collect-guard-boundary]`:
-  `src/allocator/arena.rs` owns subproc-wide arena collection. Unsafe
+  `src/allocator/arena/purge.rs` owns subproc-wide arena collection. Unsafe
   operations use the global purge guard, bounded arena visitation, and
   subproc purge clock updates.
 - `SAFETY[AUDIT:internal-bitmap-simd-boundary]`: `src/internal/bitmap.rs`

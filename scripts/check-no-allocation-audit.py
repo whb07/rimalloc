@@ -17,6 +17,8 @@ CRITICAL_FILES = {
     "src/allocator/alloc.rs",
     "src/allocator/aligned.rs",
     "src/allocator/arena.rs",
+    "src/allocator/arena/os_memory.rs",
+    "src/allocator/arena/purge.rs",
     "src/allocator/arena_meta.rs",
     "src/internal/bitmap.rs",
     "src/allocator/free.rs",

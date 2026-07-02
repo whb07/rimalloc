@@ -1,17 +1,17 @@
 # TODO: Fresh-Eyes Audit Density, Module Cap, Strict-Type Hotspot, and Production Module Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`8f8cb27`, then completing the source-audit density and release-audit module
-split items in this backlog. The implemented source audit marker cap is now 18,
-release-audit module cap is now 220, and strict-type permanent reason groups
-remain capped at 40 entries. Strict-type file, kind/file, raw-pointer
-file/domain, and usize file/domain hotspots now meet their tighter caps. The
-remaining mechanical-translation debt is concentrated in the largest translated
-production module.
+`8f8cb27`, then completing the source-audit density, release-audit module
+split, strict-type hotspot, and production module split items in this backlog.
+The implemented source audit marker cap is now 18, release-audit module cap is
+now 220, and strict-type permanent reason groups remain capped at 40 entries.
+Strict-type file, kind/file, raw-pointer file/domain, and usize file/domain
+hotspots meet their tighter caps. The largest translated production module is
+now split below the 3,500-line cap.
 
 Current review evidence:
 
-- `scripts/check-unsafe-audit.py` covers 88 source files, 5,898 unsafe
+- `scripts/check-unsafe-audit.py` covers 90 source files, 5,898 unsafe
   mentions, and 524 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 524 operation IDs with
   1,119 automated evidence rows.
@@ -63,22 +63,23 @@ Current review evidence:
   release-audit module-size guard discovers 164 module files recursively and
   enforces a 220-line cap. The largest release-audit modules are:
   `unsafe_performance/allocation_free/marker_counts.rs` at 219 lines,
+  `unsafe_performance/arena_boundaries.rs` at 217 lines,
   `unsafe_performance/thread_stats.rs` at 216 lines,
-  `unsafe_performance/allocation_free/typed_helpers.rs` at 209 lines,
   `release_policy/benchmarking.rs` at 209 lines,
+  `unsafe_performance/allocation_free/typed_helpers.rs` at 209 lines,
   `unsafe_performance/local_boundaries.rs` at 208 lines,
-  `unsafe_performance/arena_boundaries.rs` at 207 lines,
+  `datatype_acceptance/strict_type/checker_allowlist_symbols.rs` at 205 lines,
   `unsafe_performance/platform_primitive_boundaries/macos.rs` at 204 lines,
-  `datatype_acceptance/strict_type/checker_allowlist_symbols.rs` at 203 lines,
+  `datatype_acceptance/domain_wrappers.rs` at 201 lines, and
   `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view.rs` at
-  201 lines, and `datatype_acceptance/domain_wrappers.rs` at 201 lines. No
-  release-audit module currently exceeds 220 lines, but ten modules still
+  200 lines. No
+  release-audit module currently exceeds 220 lines, but nine modules still
   exceed the next useful 200-line cap.
 - Production source module size remains dominated by translated-C-shaped files:
-  `src/allocator/arena.rs` at 4,255 lines, `src/allocator/page.rs` at 2,855,
-  `src/allocator/init.rs` at 2,612, `src/allocator/alloc.rs` at 2,440,
-  `src/internal/bitmap.rs` at 2,422, and `src/raw/macros.rs` at 2,330. The next
-  useful production module cap is 3,500 lines, starting with `arena.rs`.
+  `src/allocator/arena.rs` at 3,159 lines, `src/allocator/page.rs` at 2,855,
+  `src/allocator/init.rs` at 2,612, `src/internal/bitmap.rs` at 2,422,
+  `src/allocator/alloc.rs` at 2,419, and `src/raw/macros.rs` at 2,330. The next
+  useful production module cap is 2,800 lines, starting with `page.rs`.
 
 ## Issue 1: Lower the source audit marker cap to 18
 
@@ -147,14 +148,14 @@ formatting, full clippy, and full tests.
 after earlier helper extraction. Start the production module split with the
 largest file and keep the exported/raw ABI surface stable.
 
-- [ ] Extract reserve/manage-OS-memory entrypoints and huge-page reservation
+- [x] Extract reserve/manage-OS-memory entrypoints and huge-page reservation
       helpers from `src/allocator/arena.rs` into focused child modules.
-- [ ] Extract purge/collect scheduling helpers from `src/allocator/arena.rs`
+- [x] Extract purge/collect scheduling helpers from `src/allocator/arena.rs`
       where doing so does not broaden visibility or hide unsafe invariants.
-- [ ] Add or refresh release-audit/source-size evidence so
+- [x] Add or refresh release-audit/source-size evidence so
       `src/allocator/arena.rs` stays under 3,500 lines without weakening ABI
       compatibility checks.
-- [ ] Keep hot-path helpers monomorphic and allocation-free; do not introduce
+- [x] Keep hot-path helpers monomorphic and allocation-free; do not introduce
       dynamic dispatch, heap allocation, or broad public re-exports to make the
       split compile.
 
@@ -166,7 +167,7 @@ strict-type checker, full formatting, full clippy, and full tests.
 1. [x] Lower the source audit marker cap to 18.
 2. [x] Split release-audit modules over 220 lines.
 3. [x] Tighten strict-type hotspot caps.
-4. [ ] Split the largest production module under 3,500 lines.
+4. [x] Split the largest production module under 3,500 lines.
 
 ## Definition of done for this backlog
 
@@ -177,10 +178,10 @@ strict-type checker, full formatting, full clippy, and full tests.
       hotspots are capped at 40 active entries, raw-pointer file/domain hotspots
       are capped at 30 active entries, and usize file/domain hotspots are capped
       at 30 active entries.
-- [ ] `src/allocator/arena.rs` is split below 3,500 lines while keeping raw ABI,
+- [x] `src/allocator/arena.rs` is split below 3,500 lines while keeping raw ABI,
       no-allocation, unsafe-audit, and strict-type checks intact.
 - [x] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [ ] For every completed item, run `cargo fmt --all`,
+- [x] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

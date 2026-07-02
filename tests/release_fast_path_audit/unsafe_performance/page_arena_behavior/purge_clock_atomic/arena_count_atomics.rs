@@ -9,35 +9,35 @@ pub(super) fn assert_arena_count_atomic_boundaries(sources: &PageArenaBehaviorSo
                 "pub(crate) unsafe fn compare_exchange_acq_rel(self, expected: &mut i64, desired: i64) -> bool"
             )
             && sources
-                .arena_rs
+                .arena_purge_rs
                 .matches("crate::core_types::AtomicI64Field(")
                 .count()
                 == 7
             && sources
-                .arena_rs
+                .arena_purge_rs
                 .matches(".compare_exchange_acq_rel(&mut expire0, expire)")
                 .count()
                 == 2
             && sources
-                .arena_rs
+                .arena_purge_rs
                 .contains(".load(crate::core_types::MemoryOrder::Relaxed)")
             && sources
-                .arena_rs
+                .arena_purge_rs
                 .contains(".load(crate::core_types::MemoryOrder::Acquire)")
             && sources
-                .arena_rs
+                .arena_purge_rs
                 .matches(".store(0, crate::core_types::MemoryOrder::Release)")
                 .count()
                 == 2
-            && sources.arena_rs.contains(
+            && sources.arena_purge_rs.contains(
                 "now + ((delay as mi_msecs_t) / 10),\n                    crate::core_types::MemoryOrder::Release,"
             )
-            && !sources.arena_rs.contains("mi_atomic_casi64_strong_acq_rel")
-            && !sources.arena_rs.contains("mi_atomic_loadi64_explicit")
-            && !sources.arena_rs.contains("mi_atomic_loadi64_acquire")
-            && !sources.arena_rs.contains("mi_atomic_storei64_release")
+            && !sources.arena_purge_rs.contains("mi_atomic_casi64_strong_acq_rel")
+            && !sources.arena_purge_rs.contains("mi_atomic_loadi64_explicit")
+            && !sources.arena_purge_rs.contains("mi_atomic_loadi64_acquire")
+            && !sources.arena_purge_rs.contains("mi_atomic_storei64_release")
             && !sources
-                .arena_rs
+                .arena_purge_rs
                 .contains("mi_memory_order_e::mi_memory_order_relaxed"),
         "arena purge expiry should use typed atomic i64 field wrappers"
     );

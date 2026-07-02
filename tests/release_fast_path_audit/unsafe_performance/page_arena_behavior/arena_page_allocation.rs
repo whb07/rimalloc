@@ -107,9 +107,9 @@ pub(super) fn assert_arena_page_allocation_boundaries(sources: &PageArenaBehavio
             .arena_rs
             .contains("let slice_count_usize = slice_count.get() as usize;")
             && sources
-                .arena_rs
+                .arena_os_memory_rs
                 .contains("let Some(typed_slice_count) = crate::core_types::SliceCount::from_usize(slice_count)")
-            && sources.arena_rs.contains("mi_arena_initialize(\n                SubprocPtr::new_unchecked(subproc),\n                OsMemPtr::new_unchecked(start),\n                typed_slice_count,")
+            && sources.arena_os_memory_rs.contains("mi_arena_initialize(\n                SubprocPtr::new_unchecked(subproc),\n                OsMemPtr::new_unchecked(start),\n                typed_slice_count,")
             && !sources
                 .arena_rs
                 .contains("unsafe fn mi_arena_pages_size(slice_count: usize")

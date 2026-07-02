@@ -23,10 +23,10 @@ pub(super) fn assert_clock_helper_boundaries(sources: &PageArenaBehaviorSources<
                 .os_rs
                 .contains("let mut elapsed = _mi_clock_end(start_t);")
             && sources
-                .arena_rs
+                .arena_purge_rs
                 .contains("let expire = crate::stats::_mi_clock_now() + delay as i64;")
             && sources
-                .arena_rs
+                .arena_purge_rs
                 .contains("let now = crate::stats::_mi_clock_now();"),
         "clock helpers should keep C's timing helper boundaries and main callers"
     );

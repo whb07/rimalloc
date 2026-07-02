@@ -20,7 +20,9 @@ pub(super) struct PageArenaBehaviorSources<'a> {
     pub(super) arena_rs: &'a str,
     pub(super) arena_debug_rs: &'a str,
     pub(super) arena_ids_rs: &'a str,
+    pub(super) arena_os_memory_rs: &'a str,
     pub(super) arena_prefix_rs: &'a str,
+    pub(super) arena_purge_rs: &'a str,
     pub(super) arena_meta_rs: &'a str,
     pub(super) free_rs: &'a str,
     pub(super) memid_rs: &'a str,
@@ -62,7 +64,9 @@ pub(super) fn assert_page_arena_behavior_boundaries(sources: &UnsafePerformanceS
         arena_rs: sources.arena_rs.as_str(),
         arena_debug_rs,
         arena_ids_rs: sources.arena_ids_rs.as_str(),
+        arena_os_memory_rs: sources.arena_os_memory_rs.as_str(),
         arena_prefix_rs: sources.arena_prefix_rs.as_str(),
+        arena_purge_rs: sources.arena_purge_rs.as_str(),
         arena_meta_rs: sources.arena_meta_rs.as_str(),
         free_rs: sources.free_rs.as_str(),
         memid_rs: sources.memid_rs.as_str(),
@@ -80,6 +84,8 @@ pub(super) fn assert_page_arena_behavior_boundaries(sources: &UnsafePerformanceS
 
     arena_boundaries::assert_arena_region_boundaries(arena_boundaries::BoundarySources {
         arena_rs: sources.arena_rs,
+        arena_os_memory_rs: sources.arena_os_memory_rs,
+        arena_purge_rs: sources.arena_purge_rs,
         unsafe_allowlist,
     });
 
@@ -105,6 +111,7 @@ pub(super) fn assert_page_arena_behavior_boundaries(sources: &UnsafePerformanceS
         &bitmap_boundary_rs,
         unsafe_allowlist,
         sources.arena_rs,
+        sources.arena_purge_rs,
         arena_heap_pages_rs,
         callbacks_rs,
         threadlocal_rs,
@@ -113,6 +120,7 @@ pub(super) fn assert_page_arena_behavior_boundaries(sources: &UnsafePerformanceS
     arena_helpers::assert_arena_helper_boundaries(
         sources.arena_rs,
         arena_debug_rs,
+        sources.arena_purge_rs,
         sources.arena_types,
     );
     memid_arena_dispatch::assert_memid_and_arena_dispatch_boundaries(&sources);

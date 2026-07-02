@@ -5,6 +5,7 @@ pub(super) fn assert_allocator_page_no_exports(sources: &UnsafePerformanceSource
     let arena_rs = sources.arena_rs.as_str();
     let arena_heap_pages_rs = sources.arena_heap_pages_rs.as_str();
     let arena_ids_rs = sources.arena_ids_rs.as_str();
+    let arena_purge_rs = sources.arena_purge_rs.as_str();
     let arena_meta_rs = sources.arena_meta_rs.as_str();
     let deferred_rs = sources.deferred_rs.as_str();
     let free_rs = sources.free_rs.as_str();
@@ -27,8 +28,8 @@ pub(super) fn assert_allocator_page_no_exports(sources: &UnsafePerformanceSource
             "pub unsafe extern \"C\" fn _mi_arenas_alloc_aligned",
         ),
         (
-            "src/allocator/arena.rs",
-            arena_rs,
+            "src/allocator/arena/purge.rs",
+            arena_purge_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_collect",
         ),
         (
@@ -37,8 +38,8 @@ pub(super) fn assert_allocator_page_no_exports(sources: &UnsafePerformanceSource
             "pub unsafe extern \"C\" fn _mi_arenas_contain",
         ),
         (
-            "src/allocator/arena.rs",
-            arena_rs,
+            "src/allocator/arena/purge.rs",
+            arena_purge_rs,
             "pub unsafe extern \"C\" fn _mi_arenas_free",
         ),
         (

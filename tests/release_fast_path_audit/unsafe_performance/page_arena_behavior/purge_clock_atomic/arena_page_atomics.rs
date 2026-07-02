@@ -79,7 +79,11 @@ pub(super) fn assert_arena_page_atomic_boundaries(sources: &PageArenaBehaviorSou
                 .arena_rs
                 .matches("mi_arena_from_index_typed(")
                 .count()
-                >= 5
+                + sources
+                    .arena_purge_rs
+                    .matches("mi_arena_from_index_typed(")
+                    .count()
+                    >= 5
             && sources
                 .arena_rs
                 .matches(".compare_exchange_release(&mut expected, arena)")

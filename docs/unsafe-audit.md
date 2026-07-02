@@ -345,14 +345,14 @@ file:
   and registry insertion in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-reserve-growth-boundary]`: reserve growth, retry
   sizing, reserve-lock discipline, and commit accounting balance in
-  `src/allocator/arena.rs`.
+  `src/allocator/arena.rs` and `src/allocator/arena/os_memory.rs`.
 - `SAFETY[AUDIT:arena-os-fallback-boundary]`: OS allocation fallback for
   internal arena allocation shims in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-public-reserve-boundary]`: public reserve/manage APIs
-  and OS-memory arena registration in `src/allocator/arena.rs`.
+  and OS-memory arena registration in `src/allocator/arena/os_memory.rs`.
 - `SAFETY[AUDIT:arena-huge-reservation-boundary]`: huge OS page reservation
   APIs, NUMA normalization, registration, and release-on-failure handling in
-  `src/allocator/arena.rs`.
+  `src/allocator/arena/os_memory.rs`.
 - `SAFETY[AUDIT:arena-abandoned-boundary]`: abandoned-page claim/reclaim in
   `src/allocator/arena.rs`. The boundary covers abandoned ownership transfer,
   remote-free collection, and thread-local claim callbacks.
@@ -395,20 +395,20 @@ file:
 - `SAFETY[AUDIT:arena-page-ownership-transition-boundary]`: owner-word and
   page-map visibility transitions in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-purge-schedule-boundary]`: delayed purge scheduling and
-  purge bitmap publication in `src/allocator/arena.rs`.
+  purge bitmap publication in `src/allocator/arena/purge.rs`.
 - `SAFETY[AUDIT:arena-purge-free-dispatch-boundary]`: arena free dispatch into
-  purge scheduling and OS/meta free forwarding in `src/allocator/arena.rs`.
+  purge scheduling and OS/meta free forwarding in `src/allocator/arena/purge.rs`.
 - `SAFETY[AUDIT:arena-purge-direct-boundary]`: direct OS purge/decommit handoff
-  and committed-slice bitmap updates in `src/allocator/arena.rs`.
+  and committed-slice bitmap updates in `src/allocator/arena/purge.rs`.
 - `SAFETY[AUDIT:arena-purge-range-boundary]`: purge range claiming, single-slice
-  fallback, and free bitmap restoration in `src/allocator/arena.rs`.
+  fallback, and free bitmap restoration in `src/allocator/arena/purge.rs`.
 - `SAFETY[AUDIT:arena-purge-visitor-boundary]`: purge visitor C ABI range/state
-  validation in `src/allocator/arena.rs`.
+  validation in `src/allocator/arena/purge.rs`.
 - `SAFETY[AUDIT:arena-purge-expire-policy-boundary]`: per-arena purge expiration
   policy, purge attempt accounting, and bitmap traversal in
-  `src/allocator/arena.rs`.
+  `src/allocator/arena/purge.rs`.
 - `SAFETY[AUDIT:arena-purge-collect-guard-boundary]`: subproc-wide arena
-  collection under the global purge guard in `src/allocator/arena.rs`.
+  collection under the global purge guard in `src/allocator/arena/purge.rs`.
 - `SAFETY[AUDIT:arena-debug-snapshot-boundary]`: read-only arena diagnostic
   snapshots in `src/allocator/arena/debug.rs`.
 - `SAFETY[AUDIT:arena-debug-page-state-boundary]`: page-state classification

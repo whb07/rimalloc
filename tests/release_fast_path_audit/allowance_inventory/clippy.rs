@@ -8,8 +8,12 @@ fn phase6_clippy_allowances_stay_intentional() {
     collect_rs_sources(root, &src, &mut sources);
 
     let expected = BTreeMap::from([
-        (("src/allocator/arena.rs", "too_many_arguments"), 4),
+        (("src/allocator/arena.rs", "too_many_arguments"), 3),
         (("src/allocator/arena/debug.rs", "too_many_arguments"), 1),
+        (
+            ("src/allocator/arena/os_memory.rs", "too_many_arguments"),
+            1,
+        ),
         (("src/internal/bitmap.rs", "many_single_char_names"), 1),
         (("src/allocator/free.rs", "absurd_extreme_comparisons"), 1),
         (("src/ffi/libc.rs", "many_single_char_names"), 2),

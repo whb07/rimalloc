@@ -5,17 +5,18 @@ mod thread_heap_refcount;
 
 pub(super) fn assert_memid_view_dispatch(sources: &PageArenaBehaviorSources<'_>) {
     thread_heap_refcount::assert_thread_heap_refcount_dispatch(sources);
+    let arena_region = format!("{}\n{}", sources.arena_rs, sources.arena_os_memory_rs);
 
     assert!(
-        sources.arena_rs.contains(
+        sources.arena_purge_rs.contains(
             "unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::SliceRange)"
-        ) && sources.arena_rs.contains(
+        ) && sources.arena_purge_rs.contains(
             "unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) -> bool"
-        ) && sources.arena_rs.contains(
+        ) && sources.arena_purge_rs.contains(
             "unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::SliceRange) -> bool"
-        ) && !sources.arena_rs.contains(
+        ) && !sources.arena_purge_rs.contains(
             "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange) -> bool"
-        ) && !sources.arena_rs.contains(
+        ) && !sources.arena_purge_rs.contains(
             "unsafe fn mi_arena_try_purge_range(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> bool"
         ) && sources.arena_ids_rs.contains("match crate::core_types::MemId::view(memid)")
             && sources
@@ -30,11 +31,11 @@ pub(super) fn assert_memid_view_dispatch(sources: &PageArenaBehaviorSources<'_>)
             && sources.memid_rs.contains("External(ExternalMemId)")
             && sources.memid_rs.contains("impl MemId<ExternalMem>")
             && sources.memid_rs.contains("pub(crate) fn external(")
-            && sources.arena_rs.contains(
+            && sources.arena_os_memory_rs.contains(
                 "memid = crate::core_types::MemId::<crate::core_types::NoneMem>::none().into_raw();"
             )
             && sources
-                .arena_rs
+                .arena_os_memory_rs
                 .contains("crate::core_types::MemId::<crate::core_types::ExternalMem>::external")
             && sources
                 .arena_ids_rs
@@ -61,10 +62,10 @@ pub(super) fn assert_memid_view_dispatch(sources: &PageArenaBehaviorSources<'_>)
                 .contains("crate::core_types::MemId::<crate::core_types::OsMem>::os_huge(")
             && !sources.os_rs.contains("mi_memkind_is_os(memid.memkind)")
             && !sources.os_rs.contains("(*memid).memkind = crate::internal::mi_memkind_t::MI_MEM_OS_HUGE")
-            && !sources.arena_rs.contains("memid.mem.os.")
-            && !sources.arena_rs.contains("memid.mem.arena.")
-            && !sources.arena_rs.contains("memid.memkind = mi_memkind_t::MI_MEM_EXTERNAL")
-            && !sources.arena_rs.contains("memid.memkind = mi_memkind_t::MI_MEM_NONE")
+            && !arena_region.contains("memid.mem.os.")
+            && !arena_region.contains("memid.mem.arena.")
+            && !arena_region.contains("memid.memkind = mi_memkind_t::MI_MEM_EXTERNAL")
+            && !arena_region.contains("memid.memkind = mi_memkind_t::MI_MEM_NONE")
             && !sources.os_rs.contains("memid.mem.os.")
             && !sources.internal.contains("memid.mem.os.base = base")
             && !sources.internal.contains("memid.mem.os.size = size")
@@ -183,17 +184,15 @@ pub(super) fn assert_memid_view_dispatch(sources: &PageArenaBehaviorSources<'_>)
             && !sources
                 .arena_meta_rs
                 .contains("memid.memkind == crate::internal::mi_memkind_t::MI_MEM_META")
-            && !sources
-                .arena_rs
-                .contains("const fn mi_memkind_is_os(memkind: mi_memkind_t)")
-            && !sources.arena_rs.contains("mi_memkind_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.memkind })")
-            && !sources.arena_rs.contains(
+            && !arena_region.contains("const fn mi_memkind_is_os(memkind: mi_memkind_t)")
+            && !arena_region.contains("mi_memkind_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.memkind })")
+            && !sources.arena_purge_rs.contains(
                 "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize)"
             )
-            && !sources.arena_rs.contains(
+            && !sources.arena_purge_rs.contains(
                 "unsafe fn mi_arena_schedule_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange)"
             )
-            && !sources.arena_rs.contains(
+            && !sources.arena_purge_rs.contains(
                 "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, slice_index: usize, slice_count: usize)"
             ),
         "arena free/purge path should dispatch through MemIdView and carry SliceRange"

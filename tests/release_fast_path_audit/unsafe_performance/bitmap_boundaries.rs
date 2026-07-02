@@ -5,6 +5,7 @@ pub(super) fn assert_bitmap_traversal_and_regular_boundaries(
     bitmap_rs: &str,
     unsafe_allowlist: &str,
     arena_rs: &str,
+    arena_purge_rs: &str,
     arena_heap_pages_rs: &str,
     callbacks_rs: &str,
     threadlocal_rs: &str,
@@ -45,7 +46,7 @@ pub(super) fn assert_bitmap_traversal_and_regular_boundaries(
             )
             && bitmap_rs
                 .contains("return mi_bitmap_forall_setc_ranges_typed(bitmap, visit, ArenaPtr::new(arena), arg);")
-            && arena_rs.contains("_mi_bitmap_forall_setc_rangesn("),
+            && arena_purge_rs.contains("_mi_bitmap_forall_setc_rangesn("),
         "bitmap traversal should keep C's set/range traversal helper boundaries"
     );
     assert!(

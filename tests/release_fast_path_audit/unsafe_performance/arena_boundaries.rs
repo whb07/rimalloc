@@ -1,13 +1,19 @@
 pub(super) struct BoundarySources<'a> {
     pub(super) arena_rs: &'a str,
+    pub(super) arena_os_memory_rs: &'a str,
+    pub(super) arena_purge_rs: &'a str,
     pub(super) unsafe_allowlist: &'a str,
 }
 
 pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
     let BoundarySources {
         arena_rs,
+        arena_os_memory_rs,
+        arena_purge_rs,
         unsafe_allowlist,
     } = sources;
+    let arena_region = format!("{arena_rs}\n{arena_os_memory_rs}\n{arena_purge_rs}");
+    let arena_allocation_region = format!("{arena_rs}\n{arena_os_memory_rs}");
 
     let focused_markers = [
         "SAFETY[AUDIT:arena-slice-geometry-boundary]",
@@ -56,7 +62,7 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
     ];
     let marker_total = focused_markers
         .into_iter()
-        .map(|marker| arena_rs.matches(marker).count())
+        .map(|marker| arena_region.matches(marker).count())
         .sum::<usize>();
     for (audit_id, min_count) in [
         ("arena-slice-geometry-boundary", 11),
@@ -105,7 +111,7 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert!(
-            arena_rs.matches(&marker).count() >= min_count,
+            arena_region.matches(&marker).count() >= min_count,
             "arena unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
         );
     }
@@ -113,18 +119,18 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
     assert!(
         !unsafe_allowlist
             .lines()
-            .any(|line| line.starts_with("src/allocator/arena.rs\t"))
-            && !arena_rs.contains("SAFETY[AUDIT:arena-region-boundary]")
-            && !arena_rs.contains("SAFETY[AUDIT:arena-allocation-boundary]")
-            && !arena_rs.contains("SAFETY[AUDIT:arena-page-lifecycle-boundary]")
-            && !arena_rs.contains("SAFETY[AUDIT:arena-registry-boundary]")
-            && !arena_rs.contains("SAFETY[AUDIT:arena-purge-boundary]")
-            && !arena_rs.contains("SAFETY[AUDIT:arena-slice-boundary]")
-            && !arena_rs.contains("SAFETY[AUDIT:arena-slice-allocation-boundary]")
+            .any(|line| line.starts_with("src/allocator/arena"))
+            && !arena_region.contains("SAFETY[AUDIT:arena-region-boundary]")
+            && !arena_region.contains("SAFETY[AUDIT:arena-allocation-boundary]")
+            && !arena_region.contains("SAFETY[AUDIT:arena-page-lifecycle-boundary]")
+            && !arena_region.contains("SAFETY[AUDIT:arena-registry-boundary]")
+            && !arena_region.contains("SAFETY[AUDIT:arena-purge-boundary]")
+            && !arena_region.contains("SAFETY[AUDIT:arena-slice-boundary]")
+            && !arena_region.contains("SAFETY[AUDIT:arena-slice-allocation-boundary]")
             && marker_total >= 340
             && focused_markers
                 .into_iter()
-                .all(|marker| arena_rs.contains(marker)),
+                .all(|marker| arena_region.contains(marker)),
         "arena unsafe boundaries should stay split into focused operation markers without a migration allowlist entry"
     );
 
@@ -144,19 +150,23 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
     );
 
     assert!(
-        arena_rs.contains("unsafe fn mi_arena_try_alloc_at(")
-            && arena_rs.contains("unsafe fn mi_arenas_try_alloc(")
-            && arena_rs.contains("unsafe fn mi_arena_reserve(")
-            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_alloc_aligned")
-            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_alloc")
-            && arena_rs.contains("unsafe fn mi_reserve_os_memory_ex2(")
-            && arena_rs.contains("pub unsafe extern \"C\" fn mi_reserve_huge_os_pages_at_ex")
-            && arena_rs.contains("mi_memid_create_arena(arena, range)")
-            && arena_rs.contains("mi_bbitmap_try_find_and_clearN(")
-            && arena_rs.contains("mi_bitmap_setN(")
-            && arena_rs.contains("_mi_os_commit(")
-            && arena_rs.contains("_mi_os_alloc_aligned(")
-            && arena_rs.contains("MiLockGuard::acquire(subproc.arena_reserve_lock())"),
+        arena_allocation_region.contains("unsafe fn mi_arena_try_alloc_at(")
+            && arena_allocation_region.contains("unsafe fn mi_arenas_try_alloc(")
+            && arena_os_memory_rs.contains("pub(super) unsafe fn mi_arena_reserve(")
+            && arena_allocation_region
+                .contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_alloc_aligned")
+            && arena_allocation_region
+                .contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_alloc")
+            && arena_os_memory_rs.contains("unsafe fn mi_reserve_os_memory_ex2(")
+            && arena_os_memory_rs
+                .contains("pub unsafe extern \"C\" fn mi_reserve_huge_os_pages_at_ex")
+            && arena_allocation_region.contains("mi_memid_create_arena(arena, range)")
+            && arena_allocation_region.contains("mi_bbitmap_try_find_and_clearN(")
+            && arena_allocation_region.contains("mi_bitmap_setN(")
+            && arena_allocation_region.contains("_mi_os_commit(")
+            && arena_allocation_region.contains("_mi_os_alloc_aligned(")
+            && arena_allocation_region
+                .contains("MiLockGuard::acquire(subproc.arena_reserve_lock())"),
         "arena allocation and OS reservation boundaries should preserve memid, bitmap, commit, and lock invariants"
     );
 
@@ -192,16 +202,16 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
     );
 
     assert!(
-        arena_rs.contains("unsafe fn mi_arena_schedule_purge(")
-            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_free")
-            && arena_rs.contains("unsafe fn mi_arena_purge(")
-            && arena_rs.contains("unsafe fn mi_arena_try_purge_range(")
-            && arena_rs.contains("unsafe extern \"C\" fn mi_arena_try_purge_visitor")
-            && arena_rs.contains("unsafe fn mi_arenas_try_purge(")
-            && arena_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_collect")
-            && arena_rs.contains("_mi_bitmap_forall_setc_rangesn(")
-            && arena_rs.contains("purge_expire")
-            && arena_rs.contains("_mi_os_purge_ex("),
+        arena_purge_rs.contains("unsafe fn mi_arena_schedule_purge(")
+            && arena_purge_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_free")
+            && arena_purge_rs.contains("unsafe fn mi_arena_purge(")
+            && arena_purge_rs.contains("unsafe fn mi_arena_try_purge_range(")
+            && arena_purge_rs.contains("unsafe extern \"C\" fn mi_arena_try_purge_visitor")
+            && arena_purge_rs.contains("unsafe fn mi_arenas_try_purge(")
+            && arena_purge_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arenas_collect")
+            && arena_purge_rs.contains("_mi_bitmap_forall_setc_rangesn(")
+            && arena_purge_rs.contains("purge_expire")
+            && arena_purge_rs.contains("_mi_os_purge_ex("),
         "arena purge and collection boundaries should preserve purge bitmap, timing, stats, and OS decommit behavior"
     );
 }

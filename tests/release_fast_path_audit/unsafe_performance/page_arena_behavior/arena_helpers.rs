@@ -1,21 +1,29 @@
 pub(super) fn assert_arena_helper_boundaries(
     arena_rs: &str,
     arena_debug_rs: &str,
+    arena_purge_rs: &str,
     arena_types: &str,
 ) {
     for marker in [
         "#[inline(never)]\nunsafe fn mi_arena_slice_start(",
         "#[inline(never)]\nunsafe fn mi_arena_page_at_slice(",
         "#[inline(never)]\nunsafe fn mi_arenas_page_singleton_alloc(",
-        "#[inline(never)]\nunsafe fn mi_arena_purge(",
         "static MI_ARENA_SLICE_START_KEEP",
         "static MI_ARENA_PAGE_AT_SLICE_KEEP",
         "static MI_ARENAS_PAGE_SINGLETON_ALLOC_KEEP",
-        "static MI_ARENA_PURGE_KEEP",
     ] {
         assert!(
             arena_rs.contains(marker),
             "arena helper boundary marker missing: {marker}"
+        );
+    }
+    for marker in [
+        "#[inline(never)]\nunsafe fn mi_arena_purge(",
+        "static MI_ARENA_PURGE_KEEP",
+    ] {
+        assert!(
+            arena_purge_rs.contains(marker),
+            "arena purge helper boundary marker missing: {marker}"
         );
     }
     for marker in [
@@ -84,7 +92,7 @@ pub(super) fn assert_arena_helper_boundaries(
             && arena_rs.contains(
                 "mi_arena_slice_start(arena_ptr, crate::core_types::SliceIndex::new(slice_index))"
             )
-            && arena_rs.contains(
+            && arena_purge_rs.contains(
                 "mi_arena_slice_start(ArenaPtr::new_unchecked(arena), range.start())\n            .as_ptr()\n            .cast::<c_void>()"
             )
             && !arena_rs.contains("unsafe fn mi_arena_page_at_slice(\n    arena: *mut mi_arena_t,")
@@ -94,7 +102,7 @@ pub(super) fn assert_arena_helper_boundaries(
     assert!(
         arena_types.contains(
             "pub(crate) fn single_at_offset(self, offset: usize) -> Result<Self, SliceError>"
-        ) && arena_rs.contains("let Ok(single) = range.single_at_offset(i) else")
+        ) && arena_purge_rs.contains("let Ok(single) = range.single_at_offset(i) else")
             && !arena_rs.contains("SliceRange::new(slice_index + i, 1"),
         "arena purge fallback should split SliceRange values without reopening raw slice arithmetic"
     );

@@ -13,8 +13,8 @@ fn public_callback_abi_inventory_stays_documented() {
         .expect("read src/allocator/options.rs");
     let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
         .expect("read src/allocator/page/deferred.rs");
-    let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
-        .expect("read src/allocator/arena.rs");
+    let arena_os_memory_rs = fs::read_to_string(root.join("src/allocator/arena/os_memory.rs"))
+        .expect("read src/allocator/arena/os_memory.rs");
 
     for callback in [
         "mi_output_fun",
@@ -107,7 +107,7 @@ fn public_callback_abi_inventory_stays_documented() {
         options_rs.contains("pub extern \"C\" fn mi_register_output")
             && options_rs.contains("pub extern \"C\" fn mi_register_error")
             && deferred_rs.contains("pub unsafe extern \"C\" fn mi_register_deferred_free")
-            && arena_rs.contains("pub unsafe extern \"C\" fn mi_manage_memory")
+            && arena_os_memory_rs.contains("pub unsafe extern \"C\" fn mi_manage_memory")
             && abi_doc.contains("mi_claim_fun_t")
             && abi_doc.contains("mi_forall_set_fun_t")
             && abi_doc.contains("crate-private implementation modules"),

@@ -214,6 +214,11 @@ Operation IDs:
   globals, publishes callback and argument with release stores, reads them with
   acquire loads, and invokes callbacks only after bumping the local thread heap
   heartbeat and setting the per-thread-heap reentry guard.
+- `SAFETY[AUDIT:guarded-config]`: `src/internal/guarded.rs` constructs guarded
+  allocation sampling configuration from raw option values by clamping
+  `size_max` to at least `size_min` before using the private unchecked
+  constructor. Unit tests cover inverted bounds, sampling decisions, disabled
+  sampling, and exposed typed fields.
 - `SAFETY[AUDIT:page-count-accessors]`: `src/allocator/page/counts.rs`
   centralizes page and page-queue count field access. Callers supply live
   allocator-owned page or queue metadata, and the helpers route raw metadata

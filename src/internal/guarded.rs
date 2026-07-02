@@ -142,7 +142,9 @@ impl GuardedConfig {
         } else {
             GuardedSizeMax::new(size_max)
         };
-        // SAFETY: guarded initialization clamps `size_max` to at least `size_min`.
+        // SAFETY[AUDIT:guarded-config]: guarded initialization clamps
+        // `size_max` to at least `size_min` before constructing the private
+        // typed configuration.
         unsafe {
             Self::new_unchecked(
                 size_min,

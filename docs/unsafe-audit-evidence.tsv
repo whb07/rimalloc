@@ -6,6 +6,7 @@ arena-debug-render	script	scripts/check-ffi-boundary.py	Checks moved arena diagn
 deferred-free-callback-state	test	tests/release_fast_path_audit/release_policy.rs	Checks deferred-free callback registration and dispatch stay no-allocation/no-unwind C ABI boundaries.
 deferred-free-callback-state	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks deferred-free callback dispatch preserves acquire/release publication, heartbeat, and reentry guard structure.
 deferred-free-callback-state	script	scripts/check-ffi-boundary.py	Checks deferred-free registration remains in a classified C ABI boundary file.
+guarded-config	test	src/internal/guarded/tests.rs	Exercises guarded configuration clamping, inverted bounds rejection, sampling decisions, and typed field accessors.
 page-count-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page queue/count helpers preserve typed counter routing and page queue boundary assertions after the split.
 page-count-accessors	script	scripts/check-strict-types.py	Checks split page count accessors remain covered by the existing page strict-type raw metadata boundary.
 page-bin-size-classes	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks split bin/good-size helpers preserve C ABI wrappers, empty-theap table dependency, typed internal routing, and page.rs re-exports.

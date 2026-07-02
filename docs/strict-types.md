@@ -109,27 +109,40 @@ compatibility or proof boundaries.
 Permanent hotspot families are the C-shaped raw pointer domains that preserve
 upstream allocator call shapes before typed helpers take over: `mi_theap_t` has
 109 entries, `mi_page_t` has 110 entries, and `mi_heap_t` has 67 entries. The
-largest file hotspots are `src/internal/mod.rs` (45),
-`src/internal/bitmap.rs` (37), `src/allocator/aligned.rs` (36),
-`src/allocator/alloc.rs` (35), `src/allocator/page.rs` (33), and
-`src/allocator/thread_heap.rs` (25); these are guarded by the release fast-path
-audit so new growth must be intentional.
+largest file hotspots are `src/allocator/aligned.rs` (36),
+`src/internal/bitmap.rs` (35), `src/allocator/alloc.rs` (30),
+`src/allocator/page.rs` (29), `src/internal/mod.rs` (26), and
+`src/allocator/thread_heap.rs` (25); the release fast-path audit caps every
+strict-type file at 40 active entries so new growth must be intentional.
+
+Kind/file caps are guarded separately. No kind/file pair exceeds 25 active
+entries: `bare-domain-usize` in `src/types/scalar.rs` is at 24,
+`raw-pointer-parameter` in `src/allocator/alloc.rs` is at 24,
+`raw-pointer-parameter` in `src/allocator/page.rs` is at 24,
+`raw-pointer-parameter` in `src/allocator/thread_heap.rs` is at 24,
+`bare-domain-usize` in `src/internal/bitmap.rs` is at 23, and
+`bare-domain-usize` in `src/raw/macros.rs` is at 23.
 
 Permanent reason-group caps are also guarded by the release fast-path audit.
-No permanent reason group exceeds 40 entries:
-`internal page metadata helper boundary` (33) is a permanent translated-C page metadata edge,
-`compatibility boundary retained for C ABI parity or translated-C source shape` (33) is a permanent raw ABI/source-shape edge,
+No permanent reason group exceeds 32 entries:
 `C/platform ABI forwarding boundary` (32) is a permanent platform ABI forwarding edge,
+`compatibility boundary retained for C ABI parity or translated-C source shape` (32) is a permanent raw ABI/source-shape edge,
 `aligned allocation compatibility boundary` (30) is a permanent aligned allocation ABI/source-shape edge,
+`internal page metadata helper boundary` (26) is a permanent translated-C page metadata edge,
 `thread-heap compatibility boundary` (24) is a permanent thread-heap source-shape edge,
 and `scalar domain constructor boundary` (24) is a permanent scalar constructor/proof edge.
 
-Raw pointer file/domain caps are guarded separately:
-`src/allocator/alloc.rs`/`mi_theap_t` at 21,
-`src/internal/mod.rs`/`mi_page_t` at 21,
-`src/allocator/thread_heap.rs`/`mi_theap_t` at 20,
-`src/allocator/free.rs`/`mi_page_t` at 19,
-and `src/allocator/page.rs`/`mi_theap_t` at 19.
+Raw pointer file/domain caps are guarded separately. No raw pointer file/domain
+pair exceeds 20 entries: `src/allocator/thread_heap.rs`/`mi_theap_t` is at 20,
+`src/allocator/free.rs`/`mi_page_t` is at 19,
+`src/allocator/alloc.rs`/`mi_theap_t` is at 18,
+`src/allocator/page.rs`/`mi_theap_t` is at 18, and
+`src/internal/page_metadata.rs`/`mi_page_t` is at 15.
+
+Non-raw file/domain caps are guarded separately. No non-raw `usize`
+file/domain pair exceeds 24 entries: `src/types/scalar.rs`/`usize` is at 24,
+`src/internal/bitmap.rs`/`usize` is at 23, and
+`src/raw/macros.rs`/`usize` is at 23.
 
 Future rewrite candidates must be recorded as `remove:` entries with a concrete
 follow-up task before they are allowed to grow. Likely candidates are narrow

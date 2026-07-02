@@ -47,6 +47,7 @@ pub const MI_BITMAP_H: usize = 1;
 pub const MI_OPT_SIMD: usize = 0;
 
 mod bfield;
+mod chunk_bits;
 mod chunkmap;
 pub use bfield::{
     mi_bfield_all_set, mi_bfield_clear_least_bit, mi_bfield_clz, mi_bfield_ctz, mi_bfield_one,
@@ -60,6 +61,7 @@ use bfield::{
     mi_bfield_atomic_try_clearX, mi_bfield_find_highest_bit, mi_bfield_find_least_bit,
     mi_bfield_foreach_bit, mi_bfield_mask,
 };
+use chunk_bits::{mi_bchunk_is_xsetNC, mi_bchunk_popcountNC};
 pub use chunkmap::mi_bbitmap_debug_get_bin;
 use chunkmap::{
     mi_bbitmap_chunkmap_set, mi_bbitmap_chunkmap_try_clear, mi_bbitmap_set_chunk_bin,
@@ -374,31 +376,6 @@ fn mi_bchunk_clearN(
     }
 }
 
-#[inline(never)]
-fn mi_bchunk_popcountNC(
-    chunk: &mi_bchunk_t,
-    mut field_idx: usize,
-    mut idx: usize,
-    mut n: usize,
-) -> usize {
-    crate::internal::mi_debug_assert!((field_idx * MI_BFIELD_BITS) + idx + n <= MI_BCHUNK_BITS);
-    let mut count = 0usize;
-    while n > 0 {
-        let mut m = MI_BFIELD_BITS - idx;
-        if m > n {
-            m = n;
-        }
-        crate::internal::mi_debug_assert!(idx + m <= MI_BFIELD_BITS);
-        crate::internal::mi_debug_assert!(field_idx < MI_BCHUNK_FIELDS);
-        let mask = mi_bfield_mask(m, idx);
-        count += mi_bfield_atomic_popcount_mask(&chunk.bfields[field_idx], mask);
-        field_idx += 1;
-        idx = 0;
-        n -= m;
-    }
-    count
-}
-
 #[inline]
 fn mi_bchunk_popcountN(chunk: &mi_bchunk_t, cidx: usize, n: usize) -> usize {
     crate::internal::mi_debug_assert!(cidx + n <= MI_BCHUNK_BITS);
@@ -416,33 +393,6 @@ fn mi_bchunk_popcountN(chunk: &mi_bchunk_t, cidx: usize, n: usize) -> usize {
     } else {
         mi_bchunk_popcountNC(chunk, i, idx, n)
     }
-}
-
-#[inline(never)]
-fn mi_bchunk_is_xsetNC(
-    set: mi_xset_t,
-    chunk: &mi_bchunk_t,
-    mut field_idx: usize,
-    mut idx: usize,
-    mut n: usize,
-) -> bool {
-    crate::internal::mi_debug_assert!((field_idx * MI_BFIELD_BITS) + idx + n <= MI_BCHUNK_BITS);
-    while n > 0 {
-        let mut m = MI_BFIELD_BITS - idx;
-        if m > n {
-            m = n;
-        }
-        crate::internal::mi_debug_assert!(idx + m <= MI_BFIELD_BITS);
-        crate::internal::mi_debug_assert!(field_idx < MI_BCHUNK_FIELDS);
-        let mask = mi_bfield_mask(m, idx);
-        if !mi_bfield_atomic_is_xset_mask(set, &chunk.bfields[field_idx], mask) {
-            return false;
-        }
-        field_idx += 1;
-        idx = 0;
-        n -= m;
-    }
-    true
 }
 
 #[inline]

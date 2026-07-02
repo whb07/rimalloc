@@ -21,8 +21,8 @@ fn phase6_dead_code_allowances_stay_intentional() {
     }
 
     let expected = BTreeMap::from([
-        ("src/allocator/alloc.rs", 1),
         ("src/allocator/alloc/string_path.rs", 1),
+        ("src/allocator/alloc/zeroed.rs", 1),
         ("src/allocator/aligned.rs", 1),
         ("src/raw/macros.rs", 1),
         ("src/allocator/arena.rs", 1),

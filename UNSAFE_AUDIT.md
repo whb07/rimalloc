@@ -47,6 +47,9 @@ Per-file review:
 - `src/allocator/alloc/public_malloc.rs`: public malloc, small-malloc, and heap
   malloc wrappers normalize raw heap and thread-heap handles before delegating
   to typed allocation helpers.
+- `src/allocator/alloc/zeroed.rs`: public zalloc and calloc wrappers normalize
+  raw heap and thread-heap handles, validate checked product/layout requests,
+  and then delegate to typed zeroed allocation helpers.
 - `src/alloc_aligned.rs`: aligned allocation/reallocation uses C-equivalent
   offset and alignment checks before computing adjusted pointers; the original
   allocation pointer is preserved through mimalloc metadata before free.
@@ -130,6 +133,9 @@ Per-file review:
 - `src/internal/page_metadata.rs`: page block-size, TLD, and heap projections
   convert caller-proven page pointers into typed page metadata domains before
   returning C-compatible values.
+- `src/internal/page_location.rs`: page start, area, arena, and slice-location
+  helpers derive address ranges from caller-proven page metadata and keep
+  pointer/integer offset arithmetic isolated to the page-location boundary.
 - `src/internal/page_flags.rs`: page flag, owner-id, availability, and
   thread-free accessors read allocator-owned page metadata through typed atomic
   page-thread-id and thread-free wrappers.
@@ -156,6 +162,9 @@ Per-file review:
 - `src/allocator/page/flags.rs`: page flag, full-queue, huge-page,
   abandoned-page, and thread-heap owner helpers route raw page metadata through
   typed page, flag, memid, and atomic owner wrappers.
+- `src/allocator/page/queues.rs`: page queue containment, lookup, and removal
+  helpers validate queue membership and update linked-list metadata before
+  returning to typed page/queue witnesses.
 - `src/allocator/page/validation.rs`: page validation and block lookup helpers
   route raw page/block metadata through typed page witnesses before checking
   capacity, free-list, queue-membership, and ownership invariants.

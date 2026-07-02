@@ -12,21 +12,21 @@ dynamic TLS storage follows the C baseline's `mi_rezalloc`,
 
 ## Reviewed Critical Files
 
-- `src/alloc.rs`, `src/allocator/alloc/public_malloc.rs`,
-  `src/alloc_aligned.rs`, and `src/free.rs`: allocation, public malloc/heap
-  malloc entrypoints, realloc, aligned allocation, and free paths use mimalloc
-  page/theap helpers.
+- `src/allocator/alloc.rs`, `src/allocator/alloc/public_malloc.rs`,
+  `src/allocator/alloc/zeroed.rs`, `src/allocator/aligned.rs`, and
+  `src/allocator/free.rs`: allocation, public malloc/heap malloc, zeroed/calloc,
+  realloc, aligned allocation, and free paths use mimalloc page/theap helpers.
   Debug-only invalid-pointer diagnostics may format borrowed static C strings
   through `format_args!`, but the default supported path has `MI_DEBUG=0` and
   does not allocate through Rust's global allocator.
-- `src/page.rs`, `src/allocator/page/deferred.rs`,
-  `src/allocator/page/flags.rs`, `src/arena.rs`,
+- `src/allocator/page.rs`, `src/allocator/page/deferred.rs`,
+  `src/allocator/page/flags.rs`, `src/allocator/page/queues.rs`, `src/arena.rs`,
   `src/allocator/arena/os_memory.rs`, `src/allocator/arena/purge.rs`, and
   `src/arena_meta.rs`: page extension, free-list, deferred-free callback, page
-  flag/owner access, arena reserve/manage-memory, purge/free dispatch,
-  huge-object, and metadata allocation paths use OS, arena, or mimalloc
-  metadata helpers. They do not use `Box`, `Vec`, `String`, `format!`,
-  `CString`, or `std::alloc`.
+  flag/owner access, queue link mutation/validation, arena reserve/manage-memory,
+  purge/free dispatch, huge-object, and metadata allocation paths use OS, arena,
+  or mimalloc metadata helpers. They do not use `Box`, `Vec`, `String`,
+  `format!`, `CString`, or `std::alloc`.
 - `src/heap.rs`, `src/theap.rs`, `src/init.rs`, and `src/threadlocal.rs`: heap,
   theap, subprocess, process/thread, and dynamic TLS metadata now avoid Rust
   heap allocation. Dynamic subprocess metadata uses `_mi_meta_zalloc` and
@@ -34,9 +34,12 @@ dynamic TLS storage follows the C baseline's `mi_rezalloc`,
   `mi_zalloc_aligned`, and `mi_free`, matching `mimalloc-3.3.2/src/threadlocal.c`.
   Current Rust module paths for those lifecycle/TLS checks include
   `src/allocator/init.rs` and `src/allocator/threadlocal.rs`.
-- `src/bitmap.rs`, `src/page_map.rs`, `src/internal.rs`, and `src/os.rs`: shared
-  metadata helpers operate on caller-provided or OS/mimalloc-owned memory and do
-  not allocate through Rust's global allocator.
+- `src/internal/bitmap.rs`, `src/internal/bitmap/bfield.rs`,
+  `src/internal/bitmap/chunk_bits.rs`, `src/allocator/page_map.rs`,
+  `src/internal/mod.rs`, `src/internal/page_location.rs`,
+  `src/internal/page_metadata.rs`, and `src/platform/os.rs`: shared metadata
+  helpers operate on caller-provided or OS/mimalloc-owned memory and do not
+  allocate through Rust's global allocator.
 
 ## Non-Critical Formatting And Platform Helpers
 

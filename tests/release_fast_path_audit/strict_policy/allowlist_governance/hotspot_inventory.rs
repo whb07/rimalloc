@@ -23,11 +23,11 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
     }
 
     for (path, expected) in [
-        ("src/internal/mod.rs", 45),
-        ("src/internal/bitmap.rs", 37),
         ("src/allocator/aligned.rs", 36),
-        ("src/allocator/alloc.rs", 35),
-        ("src/allocator/page.rs", 33),
+        ("src/internal/bitmap.rs", 35),
+        ("src/allocator/alloc.rs", 30),
+        ("src/allocator/page.rs", 29),
+        ("src/internal/mod.rs", 26),
         ("src/allocator/thread_heap.rs", 25),
     ] {
         assert_eq!(
@@ -37,20 +37,20 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
         );
     }
     assert!(
-        file_counts.values().all(|count| *count <= 45),
+        file_counts.values().all(|count| *count <= 40),
         "strict-type allowlist has a new file hotspot above the documented cap"
     );
 
     for ((kind, path), expected) in [
-        (("raw-pointer-parameter", "src/allocator/alloc.rs"), 29),
-        (("raw-pointer-parameter", "src/internal/mod.rs"), 29),
-        (("raw-pointer-parameter", "src/allocator/page.rs"), 28),
-        (("bare-domain-usize", "src/internal/bitmap.rs"), 25),
         (("bare-domain-usize", "src/types/scalar.rs"), 24),
+        (("raw-pointer-parameter", "src/allocator/alloc.rs"), 24),
+        (("raw-pointer-parameter", "src/allocator/page.rs"), 24),
         (
             ("raw-pointer-parameter", "src/allocator/thread_heap.rs"),
             24,
         ),
+        (("bare-domain-usize", "src/internal/bitmap.rs"), 23),
+        (("bare-domain-usize", "src/raw/macros.rs"), 23),
     ] {
         assert_eq!(
             kind_file_counts.get(&(kind, path)),
@@ -58,6 +58,10 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
             "strict-type kind/file hotspot count drifted for {kind} in {path}"
         );
     }
+    assert!(
+        kind_file_counts.values().all(|count| *count <= 25),
+        "strict-type allowlist has a new kind/file hotspot above the documented cap"
+    );
 
     for (domain, expected) in [("mi_page_t", 110), ("mi_theap_t", 109), ("mi_heap_t", 67)] {
         assert_eq!(
@@ -75,18 +79,18 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
         "TODO.md",
         &todo,
         &[
-            "largest strict-type allowlist file hotspots are `src/internal/mod.rs`\n  with 45 active entries",
-            "`src/internal/bitmap.rs` with 37",
-            "`src/allocator/aligned.rs` with 36",
-            "`src/allocator/alloc.rs` with 35",
-            "`src/allocator/page.rs` with 33",
+            "largest strict-type allowlist file hotspots are `src/allocator/aligned.rs`\n  with 36 active entries",
+            "`src/internal/bitmap.rs` with 35",
+            "`src/allocator/alloc.rs` with 30",
+            "`src/allocator/page.rs` with 29",
+            "`src/internal/mod.rs` with 26",
             "`src/allocator/thread_heap.rs` with 25",
-            "`raw-pointer-parameter` in\n  `src/allocator/alloc.rs` with 29 active entries",
-            "`raw-pointer-parameter` in\n  `src/internal/mod.rs` with 29",
-            "`raw-pointer-parameter` in\n  `src/allocator/page.rs` with 28",
-            "`bare-domain-usize` in `src/internal/bitmap.rs` with 25",
-            "`bare-domain-usize` in `src/types/scalar.rs` with 24",
-            "`raw-pointer-parameter` in `src/allocator/thread_heap.rs` with 24",
+            "`bare-domain-usize` in\n  `src/types/scalar.rs` with 24 active entries",
+            "`raw-pointer-parameter` in\n  `src/allocator/alloc.rs` with 24",
+            "`raw-pointer-parameter` in\n  `src/allocator/page.rs` with 24",
+            "`raw-pointer-parameter` in\n  `src/allocator/thread_heap.rs` with 24",
+            "`bare-domain-usize` in `src/internal/bitmap.rs` with 23",
+            "`bare-domain-usize` in `src/raw/macros.rs` with 23",
             "raw-pointer domains are `mi_page_t` with 110 entries",
             "`mi_theap_t` with 109",
             "`mi_heap_t` with 67",

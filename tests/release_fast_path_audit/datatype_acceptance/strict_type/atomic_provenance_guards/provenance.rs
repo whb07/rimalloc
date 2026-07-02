@@ -64,7 +64,7 @@ pub(super) fn assert_pointer_provenance_boundaries(audit_sources: &DatatypeAccep
             )
             && !allowlist_rs.contains("pointer-usize-roundtrip|src/internal/mod.rs|*|")
             && allowlist_rs.contains(
-                "pointer-usize-roundtrip|src/internal/mod.rs|mi_page_slice_offset_of|packed-pointer|"
+                "pointer-usize-roundtrip|src/internal/page_location.rs|mi_page_slice_offset_of|packed-pointer|"
             )
             && !allowlist_rs.contains("pointer-usize-roundtrip|src/allocator/aligned.rs|*|")
             && allowlist_rs.contains(

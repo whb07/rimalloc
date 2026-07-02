@@ -9,6 +9,11 @@ fn linux_malloc_overrides_use_direct_fast_paths() {
         .expect("read src/allocator/aligned.rs");
     let alloc_rs = fs::read_to_string(root.join("src/allocator/alloc.rs"))
         .expect("read src/allocator/alloc.rs");
+    let alloc_public_malloc_rs =
+        fs::read_to_string(root.join("src/allocator/alloc/public_malloc.rs"))
+            .expect("read src/allocator/alloc/public_malloc.rs");
+    let alloc_zeroed_rs = fs::read_to_string(root.join("src/allocator/alloc/zeroed.rs"))
+        .expect("read src/allocator/alloc/zeroed.rs");
     let free_rs =
         fs::read_to_string(root.join("src/allocator/free.rs")).expect("read src/allocator/free.rs");
     let override_rs =
@@ -19,6 +24,7 @@ fn linux_malloc_overrides_use_direct_fast_paths() {
         fs::read_to_string(root.join("src/raw/macros/header_forwarding.rs"))
             .expect("read src/raw/macros/header_forwarding.rs");
     let raw_facade_rs = format!("{override_rs}\n{raw_linux_libc_rs}\n{raw_header_forwarding_rs}");
+    let alloc_exports_rs = format!("{alloc_rs}\n{alloc_public_malloc_rs}\n{alloc_zeroed_rs}");
 
     raw_marker_inventory::assert_raw_marker_inventory(&unsafe_allowlist, &raw_facade_rs);
     assert!(
@@ -69,13 +75,13 @@ fn linux_malloc_overrides_use_direct_fast_paths() {
         "default Linux malloc/new/free overrides should use direct naked-assembly fast paths"
     );
     assert!(
-        alloc_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))")
-            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_malloc"),
+        alloc_exports_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))")
+            && alloc_exports_rs.contains("pub unsafe extern \"C\" fn mi_malloc"),
         "Rust mi_malloc export gate must stay paired with the assembly fast override"
     );
     assert!(
-        alloc_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))")
-            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_calloc")
+        alloc_exports_rs.contains("cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))")
+            && alloc_exports_rs.contains("pub unsafe extern \"C\" fn mi_calloc")
             && override_rs.contains("cfg(all(not(windows), not(mi_c_malloc_fast)))")
             && override_rs.contains("export_name = \"calloc\""),
         "Rust calloc/mi_calloc export gates must stay paired with the assembly fast override"

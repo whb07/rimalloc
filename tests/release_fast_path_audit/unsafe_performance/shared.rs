@@ -62,7 +62,11 @@ impl UnsafePerformanceSources {
             page_map: read_source(root, "src/allocator/page_map.rs"),
             internal: read_sources(
                 root,
-                &["src/internal/mod.rs", "src/internal/page_metadata.rs"],
+                &[
+                    "src/internal/mod.rs",
+                    "src/internal/page_location.rs",
+                    "src/internal/page_metadata.rs",
+                ],
             ),
             internal_memid: read_source(root, "src/internal/memid.rs"),
             internal_page_flags_rs: read_source(root, "src/internal/page_flags.rs"),
@@ -72,6 +76,7 @@ impl UnsafePerformanceSources {
                     "src/allocator/alloc.rs",
                     "src/allocator/alloc/public_malloc.rs",
                     "src/allocator/alloc/cxx_new.rs",
+                    "src/allocator/alloc/zeroed.rs",
                 ],
             ),
             alloc_cxx_new_rs: read_source(root, "src/allocator/alloc/cxx_new.rs"),
@@ -85,7 +90,13 @@ impl UnsafePerformanceSources {
             arena_purge_rs: read_source(root, "src/allocator/arena/purge.rs"),
             arena_meta_rs: read_source(root, "src/allocator/arena_meta.rs"),
             atomic_rs: read_source(root, "src/internal/atomic.rs"),
-            bitmap_rs: read_source(root, "src/internal/bitmap.rs"),
+            bitmap_rs: read_sources(
+                root,
+                &[
+                    "src/internal/bitmap.rs",
+                    "src/internal/bitmap/chunk_bits.rs",
+                ],
+            ),
             bitmap_chunkmap_rs: read_source(root, "src/internal/bitmap/chunkmap.rs"),
             free_rs: read_source(root, "src/allocator/free.rs"),
             libc_rs: read_source(root, "src/ffi/libc.rs"),
@@ -104,7 +115,11 @@ impl UnsafePerformanceSources {
             options_rs: read_source(root, "src/allocator/options.rs"),
             page_rs: read_sources(
                 root,
-                &["src/allocator/page.rs", "src/allocator/page/lifecycle.rs"],
+                &[
+                    "src/allocator/page.rs",
+                    "src/allocator/page/lifecycle.rs",
+                    "src/allocator/page/queues.rs",
+                ],
             ),
             page_bins_rs: read_source(root, "src/allocator/page/bins.rs"),
             page_counts_rs: read_source(root, "src/allocator/page/counts.rs"),

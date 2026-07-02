@@ -2,16 +2,16 @@
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
 `83d42e1`. The implemented source audit marker cap is 16, release-audit module
-cap is 190, strict-type file hotspots are capped at 45 active entries,
-kind/file hotspots at 30 entries, raw-pointer file/domain hotspots at 25
-entries, usize file/domain hotspots at 25 entries, and `src/allocator/page.rs`
-is split below the 2,800-line production module cap. The next
-mechanical-translation debt is concentrated in strict-type hotspot groups and
+cap is 190, strict-type file hotspots are capped at 40 active entries,
+kind/file hotspots at 25 entries, raw-pointer file/domain hotspots at 20
+entries, usize file/domain hotspots at 24 entries, permanent reason groups at
+32 entries, and `src/allocator/page.rs` is split below the 2,800-line
+production module cap. The next mechanical-translation debt is concentrated in
 the largest remaining translated production module.
 
 Current review evidence:
 
-- `scripts/check-unsafe-audit.py` covers 95 source files, 5,898 unsafe
+- `scripts/check-unsafe-audit.py` covers 98 source files, 5,898 unsafe
   mentions, and 540 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 540 operation IDs with
   1,155 automated evidence rows.
@@ -32,62 +32,60 @@ Current review evidence:
 - Compatibility snapshot: It has no retained wildcard
   entries.
 - Strict-type wildcard guard: total=0; none.
-- The largest strict-type allowlist file hotspots are `src/internal/mod.rs`
-  with 45 active entries, `src/internal/bitmap.rs` with 37,
-  `src/allocator/aligned.rs` with 36, `src/allocator/alloc.rs` with 35,
-  `src/allocator/page.rs` with 33, and `src/allocator/thread_heap.rs` with 25.
-  The active file hotspot cap remains 45 active entries; the next useful file
-  hotspot cap is 40 active entries.
-- The largest strict-type kind/file hotspots are `raw-pointer-parameter` in
-  `src/allocator/alloc.rs` with 29 active entries, `raw-pointer-parameter` in
-  `src/internal/mod.rs` with 29, `raw-pointer-parameter` in
-  `src/allocator/page.rs` with 28,
-  `bare-domain-usize` in `src/internal/bitmap.rs` with 25,
-  `raw-pointer-parameter` in `src/allocator/thread_heap.rs` with 24, and
-  `bare-domain-usize` in `src/types/scalar.rs` with 24. The active kind/file
-  hotspot cap remains 30 active entries; the next useful kind/file cap is 25
-  active entries.
+- The largest strict-type allowlist file hotspots are `src/allocator/aligned.rs`
+  with 36 active entries, `src/internal/bitmap.rs` with 35,
+  `src/allocator/alloc.rs` with 30, `src/allocator/page.rs` with 29,
+  `src/internal/mod.rs` with 26, and `src/allocator/thread_heap.rs` with 25.
+  The active file hotspot cap is 40 active entries; the next useful file
+  hotspot cap is 35 active entries.
+- The largest strict-type kind/file hotspots are `bare-domain-usize` in
+  `src/types/scalar.rs` with 24 active entries, `raw-pointer-parameter` in
+  `src/allocator/alloc.rs` with 24, `raw-pointer-parameter` in
+  `src/allocator/page.rs` with 24, `raw-pointer-parameter` in
+  `src/allocator/thread_heap.rs` with 24,
+  `bare-domain-usize` in `src/internal/bitmap.rs` with 23, and
+  `bare-domain-usize` in `src/raw/macros.rs` with 23. The active kind/file
+  hotspot cap is 25 active entries; the next useful kind/file cap is 23 active
+  entries.
 - The largest raw-pointer domains are `mi_page_t` with 110 entries,
   `mi_theap_t` with 109, and `mi_heap_t` with 67.
-- No strict-type permanent reason group exceeds 40 entries. The largest groups
-  are internal page metadata helper boundary with 33 entries, C ABI parity or
-  translated-C source shape with 33 entries, C/platform ABI forwarding boundary
-  with 32 entries, aligned allocation compatibility boundary with 30 entries,
-  thread-heap compatibility boundary with 24 entries, and scalar domain
+- No strict-type permanent reason group exceeds 32 entries. The largest groups
+  are C/platform ABI forwarding boundary with 32 entries, C ABI parity or
+  translated-C source shape with 32 entries, aligned allocation compatibility
+  boundary with 30 entries, internal page metadata helper boundary with 26
+  entries, thread-heap compatibility boundary with 24 entries, and scalar domain
   constructor boundary with 24 entries. The next useful permanent reason cap is
-  32 entries.
+  30 entries.
 - The largest strict-type raw-pointer file/domain hotspots are
-  `src/allocator/alloc.rs`/`mi_theap_t` with 21 entries,
-  `src/internal/mod.rs`/`mi_page_t` with 21,
-  `src/allocator/thread_heap.rs`/`mi_theap_t` with 20,
-  `src/allocator/page.rs`/`mi_theap_t` with 19, and
-  `src/allocator/free.rs`/`mi_page_t` with 19. The active raw-pointer
-  file/domain cap remains 25 entries; the next useful raw-pointer file/domain
-  cap is 20 entries.
+  `src/allocator/thread_heap.rs`/`mi_theap_t` with 20 entries,
+  `src/allocator/free.rs`/`mi_page_t` with 19,
+  `src/allocator/alloc.rs`/`mi_theap_t` with 18,
+  `src/allocator/page.rs`/`mi_theap_t` with 18, and
+  `src/internal/page_metadata.rs`/`mi_page_t` with 15. The active raw-pointer
+  file/domain cap is 20 entries; the next useful raw-pointer file/domain cap is
+  19 entries.
 - Across all strict-type file/domain pairs, the remaining non-raw hotspots are
-  `src/internal/bitmap.rs`/`usize` with 25,
-  `src/types/scalar.rs`/`usize` with 24, and
-  `src/raw/macros.rs`/`usize` with 23. The active usize file/domain cap remains
-  25 entries; the next useful
-  usize file/domain cap is 24 entries.
+  `src/types/scalar.rs`/`usize` with 24,
+  `src/internal/bitmap.rs`/`usize` with 23, and
+  `src/raw/macros.rs`/`usize` with 23. The active usize file/domain cap is 24
+  entries; the next useful usize file/domain cap is 23 entries.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   release-audit module-size guard discovers 183 module files recursively and
   enforces a 190-line cap. The largest release-audit modules are:
   `unsafe_performance/raw_facade/raw_override/os_random.rs` at 190 lines,
+  `todo_backlog.rs` at 189 lines,
   `unsafe_performance/os_memory/platform_helpers.rs` at 189 lines,
   `unsafe_performance/page_lifecycle.rs` at 186 lines,
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs` at 185 lines,
-  `todo_backlog.rs` at 185 lines,
   `datatype_acceptance/strict_type_allowlist_inventory.rs` at 183 lines,
-  `strict_policy.rs` at 182 lines, and
-  `unsafe_performance/raw_facade/bootstrap_query.rs` at 181 lines. No
-  release-audit module currently exceeds 190 lines; the next useful recursive
-  module cap would be 180 lines.
+  `unsafe_performance/shared.rs` at 183 lines, and
+  `strict_policy.rs` at 182 lines. No release-audit module currently exceeds
+  190 lines; the next useful recursive module cap would be 180 lines.
 - Production source module size remains dominated by translated-C-shaped files:
   `src/allocator/arena.rs` at 3,159 lines, `src/allocator/init.rs` at 2,612,
-  `src/allocator/page.rs` at 2,530, `src/internal/bitmap.rs` at 2,422,
+  `src/allocator/page.rs` at 2,419, `src/internal/bitmap.rs` at 2,372,
   `src/platform/windows.rs` at 2,305, `src/raw/macros.rs` at 2,260,
-  `src/allocator/stats.rs` at 2,182, and `src/allocator/alloc.rs` at 1,952.
+  `src/allocator/stats.rs` at 2,182, and `src/allocator/alloc.rs` at 1,794.
   `src/allocator/arena.rs` is the only remaining production module above the
   next useful 3,000-line cap.
 
@@ -131,15 +129,15 @@ files, kind/file groups, file/domain pairs, and two broad permanent reason
 groups. Continue moving cohesive helper families into child modules or narrower
 reason buckets instead of adding wildcard or broader permanent allowlist rows.
 
-- [ ] Reduce strict-type allowlist file hotspots so no file exceeds 40 active
+- [x] Reduce strict-type allowlist file hotspots so no file exceeds 40 active
       entries.
-- [ ] Reduce strict-type kind/file hotspots so no kind/file pair exceeds 25
+- [x] Reduce strict-type kind/file hotspots so no kind/file pair exceeds 25
       active entries.
-- [ ] Reduce raw-pointer file/domain hotspots so no pair exceeds 20 entries.
-- [ ] Reduce non-raw file/domain hotspots so no usize pair exceeds 24 entries.
-- [ ] Reduce permanent reason groups so no group exceeds 32 entries without
+- [x] Reduce raw-pointer file/domain hotspots so no pair exceeds 20 entries.
+- [x] Reduce non-raw file/domain hotspots so no usize pair exceeds 24 entries.
+- [x] Reduce permanent reason groups so no group exceeds 32 entries without
       hiding genuinely distinct compatibility boundaries under vague labels.
-- [ ] Refresh `docs/strict-types.md`, `strict-type-allowlist.txt`,
+- [x] Refresh `docs/strict-types.md`, `strict-type-allowlist.txt`,
       release-audit guards, and TODO evidence after the measured caps move.
 
 Verify: strict-type checker, release fast-path audit, no-allocation audit, full
@@ -168,7 +166,7 @@ strict-type checker, full formatting, full clippy, and full tests.
 
 1. [x] Lower the source audit marker cap to 16.
 2. [x] Split release-audit modules over 190 lines.
-3. [ ] Tighten strict-type and permanent-reason hotspot caps.
+3. [x] Tighten strict-type and permanent-reason hotspot caps.
 4. [ ] Split the next largest production module under 3,000 lines.
 
 ## Definition of done for this backlog
@@ -176,7 +174,7 @@ strict-type checker, full formatting, full clippy, and full tests.
 - [x] No source audit operation ID has more than 16 source markers.
 - [x] Release-audit modules are split enough to lower the recursive module cap
       to 190 lines without weakening discovery or measured TODO checks.
-- [ ] Strict-type file hotspots are capped at 40 active entries, kind/file
+- [x] Strict-type file hotspots are capped at 40 active entries, kind/file
       hotspots are capped at 25 active entries, raw-pointer file/domain hotspots
       are capped at 20 entries, usize file/domain hotspots are capped at 24
       entries, and permanent reason groups are capped at 32 entries.

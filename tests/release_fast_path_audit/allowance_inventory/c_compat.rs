@@ -18,7 +18,7 @@ fn phase6_c_compat_allowances_stay_intentional() {
     let expected = BTreeMap::from([
         (("src/ffi/abi.rs", "non_camel_case_types"), 1),
         (("src/ffi/abi.rs", "non_upper_case_globals"), 1),
-        (("src/allocator/alloc.rs", "unused_imports"), 5),
+        (("src/allocator/alloc.rs", "unused_imports"), 6),
         (("src/allocator/alloc/cxx_new.rs", "non_snake_case"), 1),
         (("src/allocator/aligned.rs", "non_camel_case_types"), 1),
         (("src/allocator/aligned.rs", "non_upper_case_globals"), 1),
@@ -50,6 +50,7 @@ fn phase6_c_compat_allowances_stay_intentional() {
         (("src/internal/bitmap.rs", "non_camel_case_types"), 1),
         (("src/internal/bitmap.rs", "non_snake_case"), 1),
         (("src/internal/bitmap.rs", "non_upper_case_globals"), 1),
+        (("src/internal/bitmap/chunk_bits.rs", "non_snake_case"), 1),
         (("src/internal/bits.rs", "non_camel_case_types"), 1),
         (("src/internal/bits.rs", "non_upper_case_globals"), 1),
         (("src/ffi/headers.rs", "non_upper_case_globals"), 14),

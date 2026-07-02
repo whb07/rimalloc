@@ -18,6 +18,7 @@ pub(crate) mod bits;
 pub(crate) mod guarded;
 pub(crate) mod memid;
 mod page_flags;
+mod page_location;
 mod page_metadata;
 pub(crate) mod provenance;
 pub(crate) mod random;
@@ -115,8 +116,18 @@ pub use page_flags::{
     mi_page_is_abandoned_mapped, mi_page_is_owned, mi_page_thread_free, mi_page_thread_id,
     mi_page_xthread_id,
 };
-pub(crate) use page_metadata::mi_page_block_size_typed;
-pub use page_metadata::{mi_page_block_size, mi_page_heap, mi_page_tld};
+pub use page_location::{
+    mi_page_area, mi_page_contains_address, mi_page_is_in_arena, mi_page_meta_is_separated,
+    mi_page_slice_offset_of, mi_page_slice_start, mi_page_start,
+};
+pub use page_metadata::{
+    mi_page_all_free, mi_page_block_size, mi_page_committed, mi_page_heap,
+    mi_page_immediate_available, mi_page_is_expandable, mi_page_is_full, mi_page_is_mostly_used,
+    mi_page_is_singleton, mi_page_is_used_at_frac, mi_page_size, mi_page_tld,
+};
+pub(crate) use page_metadata::{
+    mi_page_block_size_typed, mi_page_committed_typed, mi_page_usable_block_size,
+};
 
 pub const MI_INTERNAL_H: () = ();
 pub const _Atomic: () = ();
@@ -574,232 +585,9 @@ pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t {
     }
 }
 
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_start(page: *const mi_page_t) -> *mut u8 {
-    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
-    unsafe { (*page).page_start }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_size(page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        let block_size = mi_page_block_size(page);
-        block_size * crate::page::mi_page_reserved_count(page).as_usize()
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator. If non-null, `size` must be valid
-/// for a `usize` write.
-#[inline]
-pub unsafe fn mi_page_area(page: *const mi_page_t, size: *mut usize) -> *mut u8 {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        if !size.is_null() {
-            *size = mi_page_size(page);
-        }
-        mi_page_start(page)
-    }
-}
-
 #[inline]
 pub const fn mi_page_info_size() -> usize {
     _mi_align_up(size_of::<mi_page_t>(), 16)
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_contains_address(page: *const mi_page_t, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
-    unsafe {
-        let mut psize = 0usize;
-        let start = mi_page_area(page, &mut psize);
-        start <= p.cast_mut().cast::<u8>() && p.cast::<u8>() < start.add(psize)
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_is_in_arena(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
-    unsafe {
-        matches!(
-            crate::core_types::MemId::view((*page).memid),
-            crate::core_types::MemIdView::Arena(_)
-        )
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_is_singleton(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
-    unsafe { crate::page::mi_page_reserved_count(page).get() == 1 }
-}
-
-#[inline]
-pub(crate) unsafe fn mi_page_usable_block_size(
-    page: *const mi_page_t,
-) -> crate::core_types::UsableSize {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe { mi_page_block_size_typed(page).usable() }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_meta_is_separated(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
-    unsafe {
-        if MI_PAGE_META_IS_SEPARATED != 0 {
-            mi_page_is_in_arena(page)
-                && page.cast_mut().cast::<c_void>()
-                    != _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN)
-        } else {
-            false
-        }
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_slice_start(page: *const mi_page_t) -> *mut u8 {
-    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
-    unsafe {
-        if mi_page_meta_is_separated(page) {
-            _mi_align_down_ptr((*page).page_start.cast(), MI_ARENA_SLICE_ALIGN).cast::<u8>()
-        } else {
-            page.cast_mut().cast::<u8>()
-        }
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_slice_offset_of(
-    page: *const mi_page_t,
-    offset_relative_to_page_start: usize,
-) -> usize {
-    // SAFETY[AUDIT:internal-page-location-boundary]: page location helpers derive arena, slice, and address ranges from allocator metadata.
-    unsafe {
-        ((*page).page_start as usize - mi_page_slice_start(page) as usize)
-            + offset_relative_to_page_start
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub(crate) unsafe fn mi_page_committed_typed(
-    page: *const mi_page_t,
-) -> crate::core_types::CommittedBytes {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        crate::core_types::CommittedBytes::new(if (*page).slice_committed == 0 {
-            mi_page_size(page)
-        } else {
-            (*page).slice_committed - mi_page_slice_offset_of(page, 0)
-        })
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_committed(page: *const mi_page_t) -> usize {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe { mi_page_committed_typed(page).get() }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_all_free(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        crate::internal::mi_assert_internal!(!page.is_null());
-        crate::page::mi_page_used_count(page).get() == 0
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_immediate_available(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        crate::internal::mi_assert_internal!(!page.is_null());
-        !(*page).free.is_null()
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_is_expandable(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        crate::internal::mi_assert_internal!(!page.is_null());
-        let capacity = crate::page::mi_page_capacity_count(page);
-        let reserved = crate::page::mi_page_reserved_count(page);
-        crate::internal::mi_assert_internal!(capacity.get() <= reserved.get());
-        capacity.get() < reserved.get()
-    }
-}
-
-/// # Safety
-/// `page` must point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_is_full(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        let full = crate::page::mi_page_reserved_count(page).get()
-            == crate::page::mi_page_used_count(page).get();
-        crate::internal::mi_assert_internal!(!full || (*page).free.is_null());
-        full
-    }
-}
-
-/// # Safety
-/// `page` must be null or point to page metadata owned by this allocator.
-#[inline]
-pub unsafe fn mi_page_is_mostly_used(page: *const mi_page_t) -> bool {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        if page.is_null() {
-            return true;
-        }
-        let reserved = crate::page::mi_page_reserved_count(page);
-        let used = crate::page::mi_page_used_count(page);
-        let frac = reserved.get() / 8u16;
-        reserved.get() - used.get() <= frac
-    }
-}
-
-/// # Safety
-/// `page` must be null or point to page metadata owned by this allocator. `n` must be nonzero.
-#[inline]
-pub unsafe fn mi_page_is_used_at_frac(page: *const mi_page_t, n: u16) -> bool {
-    // SAFETY[AUDIT:internal-page-size-count-boundary]: page size/count accessors project caller-proven metadata into typed scalar domains.
-    unsafe {
-        if page.is_null() {
-            return true;
-        }
-        let reserved = crate::page::mi_page_reserved_count(page);
-        let used = crate::page::mi_page_used_count(page);
-        let frac = reserved.get() / n;
-        reserved.get() - used.get() <= frac
-    }
 }
 
 #[inline]

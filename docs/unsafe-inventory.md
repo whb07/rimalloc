@@ -42,7 +42,8 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/alloc/cxx_new.rs` | 60 | 21 | 28 | 2 | 0 | 9 | 0 |
 | `src/allocator/alloc/public_malloc.rs` | 27 | 9 | 9 | 0 | 0 | 8 | 0 |
 | `src/allocator/alloc/string_path.rs` | 46 | 18 | 18 | 3 | 0 | 6 | 0 |
-| `src/allocator/alloc.rs` | 199 | 86 | 85 | 0 | 0 | 25 | 0 |
+| `src/allocator/alloc/zeroed.rs` | 28 | 11 | 11 | 0 | 0 | 5 | 0 |
+| `src/allocator/alloc.rs` | 171 | 75 | 74 | 0 | 0 | 20 | 0 |
 | `src/allocator/arena/debug.rs` | 53 | 41 | 10 | 0 | 0 | 2 | 0 |
 | `src/allocator/arena/heap_pages.rs` | 81 | 66 | 13 | 0 | 0 | 2 | 0 |
 | `src/allocator/arena/ids.rs` | 33 | 18 | 14 | 0 | 0 | 0 | 0 |
@@ -61,9 +62,10 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/flags.rs` | 20 | 10 | 10 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/lifecycle.rs` | 32 | 16 | 16 | 0 | 0 | 0 | 0 |
+| `src/allocator/page/queues.rs` | 10 | 5 | 5 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/stats_bin.rs` | 8 | 4 | 4 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/validation.rs` | 10 | 5 | 5 | 0 | 0 | 0 | 0 |
-| `src/allocator/page.rs` | 156 | 71 | 85 | 0 | 0 | 0 | 0 |
+| `src/allocator/page.rs` | 146 | 66 | 80 | 0 | 0 | 0 | 0 |
 | `src/allocator/page_map.rs` | 186 | 144 | 38 | 0 | 0 | 2 | 0 |
 | `src/allocator/stats.rs` | 198 | 124 | 51 | 0 | 0 | 22 | 0 |
 | `src/allocator/thread_heap.rs` | 120 | 56 | 58 | 0 | 0 | 6 | 0 |
@@ -78,9 +80,10 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/internal/bitmap.rs` | 140 | 61 | 79 | 0 | 0 | 0 | 0 |
 | `src/internal/guarded.rs` | 2 | 1 | 1 | 0 | 0 | 0 | 0 |
 | `src/internal/memid.rs` | 2 | 0 | 2 | 0 | 0 | 0 | 0 |
-| `src/internal/mod.rs` | 139 | 76 | 62 | 1 | 0 | 0 | 0 |
+| `src/internal/mod.rs` | 103 | 58 | 44 | 1 | 0 | 0 | 0 |
 | `src/internal/page_flags.rs` | 16 | 8 | 8 | 0 | 0 | 0 | 0 |
-| `src/internal/page_metadata.rs` | 8 | 4 | 4 | 0 | 0 | 0 | 0 |
+| `src/internal/page_location.rs` | 14 | 7 | 7 | 0 | 0 | 0 | 0 |
+| `src/internal/page_metadata.rs` | 30 | 15 | 15 | 0 | 0 | 0 | 0 |
 | `src/internal/provenance.rs` | 2 | 0 | 0 | 0 | 2 | 0 | 0 |
 | `src/internal/random.rs` | 13 | 8 | 5 | 0 | 0 | 0 | 0 |
 | `src/lib.rs` | 21 | 8 | 4 | 1 | 1 | 1 | 0 |

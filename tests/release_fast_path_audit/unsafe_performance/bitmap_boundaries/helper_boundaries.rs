@@ -49,8 +49,8 @@ pub(super) fn assert_bitmap_helper_boundaries(bitmap_rs: &str) {
     );
     for marker in [
         "#[inline(never)]\nfn mi_bchunk_xsetNC(",
-        "#[inline(never)]\nfn mi_bchunk_popcountNC(",
-        "#[inline(never)]\nfn mi_bchunk_is_xsetNC(",
+        "#[inline(never)]\npub(super) fn mi_bchunk_popcountNC(",
+        "#[inline(never)]\npub(super) fn mi_bchunk_is_xsetNC(",
         "#[inline(never)]\nfn mi_bchunk_try_clearNC(",
         "#[inline(never)]\nfn mi_bchunk_try_find_and_clear8(",
         "#[inline(never)]\nfn mi_bchunk_try_find_and_clearNX(",

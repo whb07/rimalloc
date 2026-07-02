@@ -10,7 +10,7 @@
     },
     {
       "entrypoint": "mi_calloc",
-      "file": "src/allocator/alloc.rs"
+      "file": "src/allocator/alloc/zeroed.rs"
     },
     {
       "entrypoint": "mi_rezalloc",

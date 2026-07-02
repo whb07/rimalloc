@@ -21,24 +21,26 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
     }
 
     for (reason, expected) in [
-        ("internal page metadata helper boundary", 33),
         (
             "compatibility boundary retained for C ABI parity or translated-C source shape",
-            33,
+            32,
         ),
         ("C/platform ABI forwarding boundary", 32),
         ("aligned allocation compatibility boundary", 30),
+        ("internal page metadata helper boundary", 26),
         ("thread-heap compatibility boundary", 24),
         ("scalar domain constructor boundary", 24),
         ("thread-heap allocation compatibility boundary", 16),
         ("realloc allocation compatibility boundary", 13),
         ("layout request constructor boundary", 11),
         ("heap allocation export compatibility boundary", 9),
+        ("internal page location helper boundary", 7),
         ("C++ and guarded allocation compatibility boundary", 7),
         ("guarded configuration constructor boundary", 5),
         ("internal thread-heap helper boundary", 4),
         ("internal free-list helper boundary", 4),
         ("memid byte-count constructor boundary", 2),
+        ("output buffer pointer/integer compatibility boundary", 1),
     ] {
         assert_eq!(
             permanent_reasons.get(reason),
@@ -47,16 +49,16 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         );
     }
     assert!(
-        permanent_reasons.values().all(|count| *count <= 40),
-        "strict-type allowlist has a new permanent reason group above the 40-entry cap"
+        permanent_reasons.values().all(|count| *count <= 32),
+        "strict-type allowlist has a new permanent reason group above the 32-entry cap"
     );
 
     for ((path, domain), expected) in [
-        (("src/allocator/alloc.rs", "mi_theap_t"), 21),
-        (("src/internal/mod.rs", "mi_page_t"), 21),
         (("src/allocator/thread_heap.rs", "mi_theap_t"), 20),
         (("src/allocator/free.rs", "mi_page_t"), 19),
-        (("src/allocator/page.rs", "mi_theap_t"), 19),
+        (("src/allocator/alloc.rs", "mi_theap_t"), 18),
+        (("src/allocator/page.rs", "mi_theap_t"), 18),
+        (("src/internal/page_metadata.rs", "mi_page_t"), 15),
     ] {
         assert_eq!(
             raw_pointer_file_domains.get(&(path, domain)),
@@ -65,7 +67,7 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         );
     }
     assert!(
-        raw_pointer_file_domains.values().all(|count| *count <= 25),
+        raw_pointer_file_domains.values().all(|count| *count <= 20),
         "strict-type allowlist has a new raw-pointer file/domain hotspot above the documented cap"
     );
 
@@ -73,18 +75,19 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         "TODO.md",
         &todo,
         &[
-            "No strict-type permanent reason group exceeds 40 entries",
-            "internal page metadata helper boundary with 33 entries",
-            "C ABI parity or\n  translated-C source shape with 33 entries",
-            "C/platform ABI forwarding boundary\n  with 32 entries",
-            "aligned allocation compatibility boundary with 30 entries",
+            "No strict-type permanent reason group exceeds 32 entries",
+            "C/platform ABI forwarding boundary with 32 entries",
+            "C ABI parity or\n  translated-C source shape with 32 entries",
+            "internal page metadata helper boundary with 26\n  entries",
+            "aligned allocation compatibility\n  boundary with 30 entries",
             "thread-heap compatibility boundary with 24 entries",
             "scalar domain\n  constructor boundary with 24 entries",
-            "largest strict-type raw-pointer file/domain hotspots are\n  `src/allocator/alloc.rs`/`mi_theap_t` with 21 entries",
-            "`src/internal/mod.rs`/`mi_page_t` with 21",
-            "`src/allocator/thread_heap.rs`/`mi_theap_t`",
+            "largest strict-type raw-pointer file/domain hotspots are\n  `src/allocator/thread_heap.rs`/`mi_theap_t` with 20 entries",
+            "`src/allocator/thread_heap.rs`/`mi_theap_t` with 20",
             "`src/allocator/free.rs`/`mi_page_t` with 19",
-            "`src/allocator/page.rs`/`mi_theap_t` with 19",
+            "`src/allocator/alloc.rs`/`mi_theap_t` with 18",
+            "`src/allocator/page.rs`/`mi_theap_t` with 18",
+            "`src/internal/page_metadata.rs`/`mi_page_t` with 15",
         ],
     );
     assert_doc_snippets(
@@ -92,19 +95,20 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         &strict_docs,
         &[
             "Permanent reason-group caps",
-            "No permanent reason group exceeds 40 entries",
-            "`internal page metadata helper boundary` (33) is a permanent translated-C page metadata edge",
-            "`compatibility boundary retained for C ABI parity or translated-C source shape` (33) is a permanent raw ABI/source-shape edge",
+            "No permanent reason group exceeds 32 entries",
             "`C/platform ABI forwarding boundary` (32) is a permanent platform ABI forwarding edge",
+            "`compatibility boundary retained for C ABI parity or translated-C source shape` (32) is a permanent raw ABI/source-shape edge",
             "`aligned allocation compatibility boundary` (30) is a permanent aligned allocation ABI/source-shape edge",
+            "`internal page metadata helper boundary` (26) is a permanent translated-C page metadata edge",
             "`thread-heap compatibility boundary` (24) is a permanent thread-heap source-shape edge",
             "`scalar domain constructor boundary` (24) is a permanent scalar constructor/proof edge",
             "Raw pointer file/domain caps",
-            "`src/allocator/alloc.rs`/`mi_theap_t` at 21",
-            "`src/internal/mod.rs`/`mi_page_t` at 21",
-            "`src/allocator/thread_heap.rs`/`mi_theap_t` at 20",
-            "`src/allocator/free.rs`/`mi_page_t` at 19",
-            "`src/allocator/page.rs`/`mi_theap_t` at 19",
+            "No raw pointer file/domain\npair exceeds 20 entries",
+            "`src/allocator/thread_heap.rs`/`mi_theap_t` is at 20",
+            "`src/allocator/free.rs`/`mi_page_t` is at 19",
+            "`src/allocator/alloc.rs`/`mi_theap_t` is at 18",
+            "`src/allocator/page.rs`/`mi_theap_t` is at 18",
+            "`src/internal/page_metadata.rs`/`mi_page_t` is at 15",
         ],
     );
 }

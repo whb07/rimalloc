@@ -101,7 +101,7 @@ pub(super) fn assert_strict_checker_and_allowlist_symbols(
         "raw-pointer-parameter|src/internal/mod.rs|_mi_malloc_generic|mi_theap_t|",
         "raw-pointer-parameter|src/internal/page_metadata.rs|mi_page_block_size|mi_page_t|",
         "raw-pointer-parameter|src/internal/mod.rs|mi_block_nextx|mi_block_t|",
-        "pointer-usize-roundtrip|src/internal/mod.rs|mi_page_slice_offset_of|packed-pointer|",
+        "pointer-usize-roundtrip|src/internal/page_location.rs|mi_page_slice_offset_of|packed-pointer|",
         "raw-pointer-parameter|src/allocator/stats.rs|mi_stats_merge_theap_to_heap|mi_theap_t|",
         "raw-pointer-parameter|src/allocator/stats.rs|mi_heap_stats_get_json|mi_heap_t|",
         "metadata-reference|src/allocator/stats.rs|__mi_stat_increase_mt|mi_heap_t|",

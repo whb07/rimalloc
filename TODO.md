@@ -2,9 +2,8 @@
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
 `8ade753` and lowering the source audit marker cap to 24. The previous backlog
-and Issues 1 and 2 below are implemented. The remaining mechanical-translation
-debt is concentrated in strict-type allowlist hotspots that need sharper
-governance before deeper typed rewrites.
+and Issues 1, 2, and 3 below are implemented. The next step is a fresh-eyes
+rescan to replace this completed backlog with the next measured issues.
 
 Current review evidence:
 
@@ -36,12 +35,17 @@ Current review evidence:
   with 32, and `raw-pointer-parameter` in `src/allocator/aligned.rs` with 30.
 - The largest raw-pointer domains are `mi_theap_t` with 111 entries,
   `mi_page_t` with 110, and `mi_heap_t` with 67.
+- Strict-type governance is now split into release-audit checks for active entry
+  counts, kind/file hotspots, raw-pointer domains, and wildcard/removable-entry
+  policy. `docs/strict-types.md` documents permanent hotspot families and future
+  `remove:` rewrite candidates; the current allowlist has zero wildcard entries
+  and zero removable entries.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 124 module files recursively and
+  release-audit module-size guard discovers 125 module files recursively and
   enforces a 280-line cap. No release-audit module exceeds that cap. The largest
   release-audit modules are:
   `interposition_exports/linux_override.rs` at 279 lines,
-  `primitive_options.rs` at 279 lines, `strict_policy.rs` at 257 lines,
+  `primitive_options.rs` at 279 lines, `strict_policy.rs` at 260 lines,
   `release_policy/callbacks.rs` at 255 lines,
   `unsafe_performance/allocation_free/marker_counts.rs` at 248 lines, and
   `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view.rs` at 248 lines.
@@ -104,18 +108,18 @@ checks, no-allocation audit, full formatting, full clippy, and full tests.
 
 ## Issue 3: Tighten strict-type allowlist hotspot governance
 
-The allowlist has no wildcards or removable entries, but the current inventory
-still reads as a flat mechanical list. The next step is to make the permanent
-boundary categories more reviewable before attempting deeper typed rewrites.
+Completed in this pass. The allowlist remains wildcard-free and has no
+removable entries, and the permanent boundary categories are now measured by
+focused release-audit checks before deeper typed rewrites.
 
-- [ ] Split the strict-type allowlist inventory release-audit checks by concern:
+- [x] Split the strict-type allowlist inventory release-audit checks by concern:
       active entry counts, kind/file hotspots, raw-pointer domains, and
       wildcard/removable-entry policy.
-- [ ] Add measured guards for the top raw-pointer domains and strict-type
+- [x] Add measured guards for the top raw-pointer domains and strict-type
       hotspot files so future work cannot silently grow the `mi_theap_t`,
       `mi_page_t`, `mi_heap_t`, `src/internal/mod.rs`,
       `src/allocator/alloc.rs`, or `src/allocator/page.rs` debt.
-- [ ] Document which hotspot families are permanent C ABI compatibility edges
+- [x] Document which hotspot families are permanent C ABI compatibility edges
       and which are candidates for future typed helper rewrites.
 
 Verify: release fast-path audit, strict-type checker, full formatting, full
@@ -125,17 +129,17 @@ clippy, and full tests.
 
 1. [x] Lower the source audit marker cap to 24.
 2. [x] Split release-audit modules over 280 lines.
-3. [ ] Tighten strict-type allowlist hotspot governance.
+3. [x] Tighten strict-type allowlist hotspot governance.
 
 ## Definition of done for this backlog
 
 - [x] No source audit operation ID has more than 24 source markers.
 - [x] Release-audit modules are split enough to lower the recursive module cap
       to 280 lines without weakening discovery or measured TODO checks.
-- [ ] Strict-type allowlist hotspot governance is split, measured, and tied to
+- [x] Strict-type allowlist hotspot governance is split, measured, and tied to
       permanent-versus-rewriteable boundary documentation.
-- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [ ] For every completed item, run `cargo fmt --all`,
+- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [x] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

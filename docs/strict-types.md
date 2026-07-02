@@ -97,6 +97,28 @@ boundary.
   raw ABI boundaries or explicit allowlist entries. The allowlist now requires a
   `permanent:` or `remove:` disposition so permanent C compatibility and
   remaining migration debt are visible separately.
+
+## Strict-Type Allowlist Governance
+
+The current `strict-type-allowlist.txt` snapshot has 634 active entries: 332 raw-pointer-parameter,
+220 bare-domain-usize, 40 metadata-reference, 23 pointer-usize-roundtrip, 14
+atomic-cast, and 5 heap-allocating-type entries. It has zero wildcard entries
+and zero removable entries; all current entries are classified as `permanent:`
+compatibility or proof boundaries.
+
+Permanent hotspot families are the C-shaped raw pointer domains that preserve
+upstream allocator call shapes before typed helpers take over: `mi_theap_t` has
+111 entries, `mi_page_t` has 110 entries, and `mi_heap_t` has 67 entries. The
+largest file hotspots are `src/internal/mod.rs`, `src/allocator/alloc.rs`,
+`src/allocator/page.rs`, `src/allocator/aligned.rs`, `src/internal/bitmap.rs`,
+and `src/raw/macros.rs`; these are guarded by the release fast-path audit so
+new growth must be intentional.
+
+Future rewrite candidates must be recorded as `remove:` entries with a concrete
+follow-up task before they are allowed to grow. Likely candidates are narrow
+bare-domain `usize` arithmetic around bitmap ranges, raw macro size handling,
+and scalar helper boundaries where a typed wrapper can replace local translated
+C arithmetic without changing public ABI or allocation hot-path behavior.
 - Internal scalar domains with wrappers use typed values after raw ABI
   validation: allocation sizes/layouts (`RequestedSize`, `PaddedSize`,
   `UsableSize`, `BlockSize`), bin indexes (`Bin`, `DirectBin`), arena/page-map

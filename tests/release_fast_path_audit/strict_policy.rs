@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "strict_policy/allowlist_governance.rs"]
+mod allowlist_governance;
+
 #[test]
 fn c_memory_order_enum_stays_in_atomic_facade() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

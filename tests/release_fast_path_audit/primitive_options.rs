@@ -229,12 +229,19 @@ fn options_state_uses_internal_locks_like_c() {
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/options.rs\t"))
-            && !options_rs.contains("SAFETY[AUDIT:options-callback-boundary]"),
+            && !options_rs.contains("SAFETY[AUDIT:options-callback-boundary]")
+            && !options_rs.contains("SAFETY[AUDIT:options-message-output-boundary]"),
         "options/callback unsafe boundaries should stay split without a migration allowlist entry"
     );
     for (audit_id, min_count) in [
         ("options-storage-lock-boundary", 15),
-        ("options-message-output-boundary", 35),
+        ("options-libc-file-symbol-boundary", 2),
+        ("options-recurse-guard-boundary", 3),
+        ("options-delayed-output-buffer-boundary", 12),
+        ("options-stderr-output-boundary", 4),
+        ("options-output-callback-boundary", 7),
+        ("options-format-output-boundary", 8),
+        ("options-print-output-boundary", 3),
         ("options-warning-error-callback-boundary", 1),
         ("options-allocation-failure-callback-boundary", 10),
         ("options-assertion-boundary", 8),

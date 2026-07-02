@@ -174,6 +174,34 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
             "tests/release_fast_path_audit/primitive_options.rs",
         ),
         (
+            "options-libc-file-symbol-boundary",
+            "tests/release_fast_path_audit/primitive_options.rs",
+        ),
+        (
+            "options-recurse-guard-boundary",
+            "tests/release_fast_path_audit/primitive_options.rs",
+        ),
+        (
+            "options-delayed-output-buffer-boundary",
+            "tests/release_fast_path_audit/primitive_options.rs",
+        ),
+        (
+            "options-stderr-output-boundary",
+            "tests/release_fast_path_audit/primitive_options.rs",
+        ),
+        (
+            "options-output-callback-boundary",
+            "tests/release_fast_path_audit/primitive_options.rs",
+        ),
+        (
+            "options-format-output-boundary",
+            "tests/release_fast_path_audit/primitive_options.rs",
+        ),
+        (
+            "options-print-output-boundary",
+            "tests/release_fast_path_audit/primitive_options.rs",
+        ),
+        (
             "stats-heap-merge-boundary",
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
         ),
@@ -361,6 +389,13 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         "stats-counter-boundary",
         "stats-counter-merge-boundary",
         "stats-clock-boundary",
+        "options-libc-file-symbol-boundary",
+        "options-recurse-guard-boundary",
+        "options-delayed-output-buffer-boundary",
+        "options-stderr-output-boundary",
+        "options-output-callback-boundary",
+        "options-format-output-boundary",
+        "options-print-output-boundary",
         "stats-heap-merge-boundary",
         "stats-public-merge-boundary",
         "stats-heap-visitor-boundary",

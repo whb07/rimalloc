@@ -39,7 +39,7 @@ unsafe extern "C" {
     fn c_abort() -> !;
 }
 
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-libc-file-symbol-boundary]: C stdout/stderr symbol comparisons stay behind platform-gated libc file handles.
 #[cfg(all(target_os = "linux", not(target_env = "musl")))]
 unsafe extern "C" {
     #[link_name = "stdout"]
@@ -567,7 +567,7 @@ thread_local! {
     static recurse: Cell<bool> = const { Cell::new(false) };
 }
 
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-recurse-guard-boundary]: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
 #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
 unsafe extern "C" {
     fn _mi_tls_recurse_get() -> c_int;
@@ -576,7 +576,7 @@ unsafe extern "C" {
 
 struct DelayedOutputBuffer(UnsafeCell<[u8; MI_MAX_DELAY_OUTPUT + 1]>);
 
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
 unsafe impl Sync for DelayedOutputBuffer {}
 
 static out_buf: DelayedOutputBuffer =
@@ -707,7 +707,7 @@ fn mi_output_is_c_file(out: mi_output_fun) -> bool {
     let p = OutputCallback::new(Some(out)).storage_ptr();
     #[cfg(all(target_os = "linux", not(target_env = "musl")))]
     {
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-libc-file-symbol-boundary]: C stdout/stderr symbol comparisons stay behind platform-gated libc file handles.
         p == unsafe { C_STDOUT } || p == unsafe { C_STDERR }
     }
     #[cfg(not(all(target_os = "linux", not(target_env = "musl"))))]
@@ -717,24 +717,24 @@ fn mi_output_is_c_file(out: mi_output_fun) -> bool {
     }
 }
 
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-stderr-output-boundary]: stderr output validates C strings before forwarding to the primitive backend.
 unsafe extern "C" fn mi_out_stderr(msg: *const c_char, arg: *mut c_void) {
     let _ = arg;
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-stderr-output-boundary]: stderr output validates C strings before forwarding to the primitive backend.
     if !msg.is_null() && unsafe { *msg } != 0 {
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-stderr-output-boundary]: stderr output validates C strings before forwarding to the primitive backend.
         unsafe { _mi_prim_out_stderr(msg) };
     }
 }
 
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
 unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
     let _ = arg;
     if msg.is_null() || out_len.load(Ordering::Acquire) >= MI_MAX_DELAY_OUTPUT {
         return;
     }
 
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     let msg_bytes = unsafe { CStr::from_ptr(msg).to_bytes() };
     let mut n = msg_bytes.len();
     if n == 0 || n >= MI_MAX_DELAY_OUTPUT {
@@ -743,25 +743,25 @@ unsafe extern "C" fn mi_out_buf(msg: *const c_char, arg: *mut c_void) {
 
     // Manual lock handling keeps this translated callback buffer path close to
     // upstream and makes the callback-holding lifetime explicit.
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
     let start = out_len.fetch_add(n, Ordering::AcqRel);
     if start < MI_MAX_DELAY_OUTPUT {
         if start + n >= MI_MAX_DELAY_OUTPUT {
             n = MI_MAX_DELAY_OUTPUT - start - 1;
         }
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
         let buf = unsafe { &mut *out_buf.0.get() };
         buf[start..start + n].copy_from_slice(&msg_bytes[..n]);
     }
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
 }
 
 fn mi_out_buf_flush(out: OutputCallback, no_more_buf: bool, arg: OutputCallbackArg) {
     // Intentionally holds the output buffer lock while invoking `out`, matching
     // the existing delayed-output flush semantics.
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_acquire(addr_of_mut!(out_buf_lock)) };
     let mut count = out_len.fetch_add(
         if no_more_buf { MI_MAX_DELAY_OUTPUT } else { 1 },
@@ -770,23 +770,23 @@ fn mi_out_buf_flush(out: OutputCallback, no_more_buf: bool, arg: OutputCallbackA
     if count > MI_MAX_DELAY_OUTPUT {
         count = MI_MAX_DELAY_OUTPUT;
     }
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     let buf = unsafe { &mut *out_buf.0.get() };
     buf[count] = 0;
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { out.invoke(buf.as_ptr().cast::<c_char>(), arg) };
     if !no_more_buf {
         buf[count] = b'\n';
     }
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_lock_release(addr_of_mut!(out_buf_lock)) };
 }
 
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
 unsafe extern "C" fn mi_out_buf_stderr(msg: *const c_char, arg: *mut c_void) {
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-stderr-output-boundary]: stderr output validates C strings before forwarding to the primitive backend.
     unsafe { mi_out_stderr(msg, arg) };
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-delayed-output-buffer-boundary]: delayed output buffering uses a bounded static buffer and mimalloc lock discipline.
     unsafe { mi_out_buf(msg, arg) };
 }
 
@@ -795,7 +795,7 @@ fn mi_out_get_default(parg: Option<&mut OutputCallbackArg>) -> OutputCallback {
         *arg = OutputCallbackArg::from_raw(mi_out_arg.load(Ordering::Acquire));
     }
     let callback =
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
         unsafe { OutputCallback::from_storage_ptr(mi_out_default.load(Ordering::Acquire)) };
     OutputCallback::new(callback.raw().or(Some(mi_out_buf)))
 }
@@ -819,7 +819,7 @@ fn mi_add_stderr_output() {
 #[inline(never)]
 fn mi_recurse_enter_prim() -> bool {
     #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-recurse-guard-boundary]: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
     unsafe {
         if _mi_tls_recurse_get() != 0 {
             false
@@ -858,7 +858,7 @@ fn mi_recurse_enter() -> bool {
 #[inline(never)]
 fn mi_recurse_exit_prim() {
     #[cfg(all(target_os = "linux", any(feature = "tls-shim", not(feature = "std"))))]
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-recurse-guard-boundary]: diagnostic recursion guards use TLS or thread-local state before callback dispatch.
     unsafe {
         _mi_tls_recurse_set(0);
     }
@@ -886,7 +886,7 @@ fn mi_recurse_exit() {
 ///
 /// `prefix` and `message`, when non-null, must point to valid nul-terminated
 /// C strings. If `out` is supplied, it must be callable with `arg`.
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_fputs(
     out: Option<mi_output_fun>,
@@ -905,20 +905,20 @@ pub(crate) unsafe extern "C" fn _mi_fputs(
         let mut default_arg = OutputCallbackArg::null();
         let default_out = mi_out_get_default(Some(&mut default_arg));
         if !prefix.is_null() {
-            // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+            // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
             unsafe { default_out.invoke(prefix, default_arg) };
         }
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
         unsafe { default_out.invoke(message, default_arg) };
         mi_recurse_exit();
     } else if let Some(out) = out {
         let out = OutputCallback::new(Some(out));
         let arg = OutputCallbackArg::from_raw(arg);
         if !prefix.is_null() {
-            // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+            // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
             unsafe { out.invoke(prefix, arg) };
         }
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
         unsafe { out.invoke(message, arg) };
     }
 }
@@ -926,7 +926,7 @@ pub(crate) unsafe extern "C" fn _mi_fputs(
 pub(crate) fn _mi_fprintf(out: Option<mi_output_fun>, arg: *mut c_void, args: fmt::Arguments<'_>) {
     let mut text = StackMessage::new();
     if fmt::write(&mut text, args).is_ok() {
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
         unsafe { _mi_fputs(out, arg, ptr::null(), text.as_c_ptr()) };
     }
 }
@@ -983,7 +983,7 @@ fn mi_vfprintf(
     if !wrote {
         return;
     }
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
     unsafe { _mi_fputs(out, arg, prefix, text.as_c_ptr()) };
 }
 
@@ -994,12 +994,12 @@ fn mi_vfprintf_thread(
     args: fmt::Arguments<'_>,
 ) {
     if !prefix.is_null() {
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
         let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
         if prefix_len <= 32 && !_mi_is_main_thread() {
             let mut tprefix = StackMessage::new();
             let prefix_bytes =
-                // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+                // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
                 unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
             tprefix.write_bytes(prefix_bytes);
             let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
@@ -1020,21 +1020,21 @@ fn mi_vfputs_thread(
         return;
     }
     if !prefix.is_null() {
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
         let prefix_len = unsafe { _mi_strnlen(prefix, 33) };
         if prefix_len <= 32 && !_mi_is_main_thread() {
             let mut tprefix = StackMessage::new();
             let prefix_bytes =
-                // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+                // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
                 unsafe { core::slice::from_raw_parts(prefix.cast::<u8>(), prefix_len) };
             tprefix.write_bytes(prefix_bytes);
             let _ = write!(tprefix, "thread 0x{:x}: ", _mi_thread_id() as usize);
-            // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+            // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
             unsafe { _mi_fputs(out, arg, tprefix.as_c_ptr(), message) };
             return;
         }
     }
-    // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+    // SAFETY[AUDIT:options-format-output-boundary]: formatted diagnostic output uses bounded stack buffers and checked C-string prefixes.
     unsafe { _mi_fputs(out, arg, prefix, message) };
 }
 
@@ -1338,7 +1338,7 @@ pub(crate) fn mi_error_default(err: Errno) {
     }
 }
 
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-output-callback-boundary]: registered output callbacks are loaded, stored, and invoked through typed callback wrappers.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_register_output(out: Option<mi_output_fun>, arg: *mut c_void) {
     let callback = OutputCallback::new(Some(out.unwrap_or(mi_out_stderr)));
@@ -1575,7 +1575,7 @@ pub extern "C" fn mi_option_disable(option: mi_option_t) {
     mi_option_set_enabled(option, false);
 }
 
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-print-output-boundary]: option printing formats static option names and values through the registered output path.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     let (out, arg) = if let Some(out) = out {
@@ -1603,7 +1603,7 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
         let value = mi_option_get(option);
         let desc = with_options_table(|table| table[i]);
         // SAFETY: option names are static ASCII strings from the translated option table.
-        // SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+        // SAFETY[AUDIT:options-print-output-boundary]: option printing formats static option names and values through the registered output path.
         let name = unsafe { core::str::from_utf8_unchecked(CStr::from_ptr(desc.name).to_bytes()) };
         _mi_fprintf(
             Some(out),
@@ -1636,7 +1636,7 @@ pub extern "C" fn mi_options_print_out(out: Option<mi_output_fun>, arg: *mut c_v
     }
 }
 
-// SAFETY[AUDIT:options-message-output-boundary]: diagnostic output uses bounded C strings, recursion guards, and registered output callbacks.
+// SAFETY[AUDIT:options-print-output-boundary]: option printing formats static option names and values through the registered output path.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_options_print() {
     mi_options_print_out(None, ptr::null_mut());

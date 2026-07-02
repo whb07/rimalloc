@@ -164,6 +164,35 @@ file:
 - `SAFETY[AUDIT:init-platform-hooks-boundary]`: hidden init link-name assembly
   in `src/allocator/init.rs` plus process attach/detach constructor and
   destructor hook glue in `src/platform/mod.rs`.
+- `SAFETY[AUDIT:options-storage-lock-boundary]`: option descriptor storage,
+  initialization, environment reads, and raw option get/set exports in
+  `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-libc-file-symbol-boundary]`: platform-gated C
+  stdout/stderr symbol access for output callback compatibility checks in
+  `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-recurse-guard-boundary]`: diagnostic output recursion
+  guard entry/exit through TLS shims in `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-delayed-output-buffer-boundary]`: bounded delayed
+  diagnostic output buffering, flushing, and lock discipline in
+  `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-stderr-output-boundary]`: primitive stderr forwarding
+  after C string pointer validation in `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-output-callback-boundary]`: registered output callback
+  lookup, publication, and invocation through typed callback wrappers in
+  `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-format-output-boundary]`: bounded diagnostic formatting,
+  thread-prefix formatting, and callback forwarding in
+  `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-print-output-boundary]`: public option printing through
+  static option-name C strings and the selected output callback path in
+  `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-warning-error-callback-boundary]`: warning display
+  shims and warning/error counter gates in `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-allocation-failure-callback-boundary]`: error callback
+  storage and allocation/error failure callback dispatch in
+  `src/allocator/options.rs`.
+- `SAFETY[AUDIT:options-assertion-boundary]`: assertion failure diagnostics and
+  abort shims that must not unwind in `src/allocator/options.rs`.
 - `SAFETY[AUDIT:allocation-platform-shim-boundary]`: allocation-local abort,
   pathconf/realpath, and errno platform shims in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-product-entry-boundary]`: calloc, mallocn, and

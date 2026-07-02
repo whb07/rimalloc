@@ -9,14 +9,13 @@ release-audit modules that now block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 337 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 337 operation IDs with
-  725 automated evidence rows.
-- No source audit operation ID is over 39 source markers. The largest remaining
-  source IDs are `options-message-output-boundary` with 39 markers,
-  `arena-purge-boundary` with 38 markers, `allocation-realloc-entry-boundary`
-  and `arena-registry-boundary` with 37 markers each,
-  `init-subproc-heap-association-boundary`,
+  mentions, and 343 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 343 operation IDs with
+  731 automated evidence rows.
+- No source audit operation ID is over 38 source markers. The largest remaining
+  source IDs are `arena-purge-boundary` with 38 markers,
+  `allocation-realloc-entry-boundary` and `arena-registry-boundary` with 37
+  markers each, `init-subproc-heap-association-boundary`,
   `raw-macro-override-entry-boundary`, and `typed-page-state-domain` with 36
   markers each, `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers,
   and `allocation-heap-dispatch-boundary` and `arena-debug-render` with 34
@@ -43,13 +42,13 @@ Current review evidence:
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   release-audit module-size guard discovers 91 module files recursively and
   enforces a 500-line cap. The largest release-audit modules are:
+  `release_policy/security/unsafe_audit_evidence.rs` at 456 lines,
   `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 448 lines,
   `interposition_exports.rs` at 444 lines,
-  `release_policy/security/unsafe_audit_evidence.rs` at 421 lines,
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines,
   `unsafe_performance/allocation_free.rs` at 409 lines, and
   `unsafe_performance/os_memory.rs` at 409 lines.
-- Full validation for Issue 6 passed: `cargo fmt --all`,
+- Full validation for Issue 1 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -58,18 +57,18 @@ Current review evidence:
 
 ## Issue 1: Split options output and diagnostic audit clusters
 
-The broadest remaining source ID is `options-message-output-boundary` with 39
-markers in `src/allocator/options.rs`. It mixes delayed output buffers,
-stderr/file output, output callback routing, recursion guards, formatting, error
-reporting, option printing, and assertion/panic handling.
+> **Comment:** Completed. `options-message-output-boundary` is gone from
+> allocator source. The option/output unsafe markers are now split across libc
+> file symbols, recursion guards, delayed buffering, stderr forwarding,
+> registered callback routing, bounded formatting, and option printing IDs.
 
-- [ ] Split `options-message-output-boundary` into focused IDs for delayed
+- [x] Split `options-message-output-boundary` into focused IDs for delayed
       output buffering, default output callback lookup, stderr/file output,
       recursion guard entry/exit, formatted output, error reporting, option
       printing, and assertion failure handling.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
       release-audit guards so each new option/output ID has separate evidence.
-- [ ] Keep the output paths allocation-free and no-unwind where the current
+- [x] Keep the output paths allocation-free and no-unwind where the current
       no-allocation and panic-audit guards require it.
 
 Verify: primitive option output tests, no-allocation audit, unsafe audit scripts,
@@ -168,9 +167,9 @@ no-allocation audit, full formatting, full clippy, and full tests.
 The recursive module-size guard now enforces 500 lines. The next bottleneck is
 the 400-line band: `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs`
 at 448, `interposition_exports.rs` at 444,
-`release_policy/security/unsafe_audit_evidence.rs` and
+`release_policy/security/unsafe_audit_evidence.rs` at 456,
 `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at
-421 each, and `unsafe_performance/allocation_free.rs` and
+421, and `unsafe_performance/allocation_free.rs` and
 `unsafe_performance/os_memory.rs` at 409 each.
 
 - [ ] Split `process_lifecycle.rs`, `interposition_exports.rs`,
@@ -188,7 +187,7 @@ formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Split options output and diagnostic audit clusters.
+1. [x] Split options output and diagnostic audit clusters.
 2. [ ] Split arena registry and purge audit clusters.
 3. [ ] Split allocation entry and raw override audit clusters.
 4. [ ] Split typed page-state and subproc association audit clusters.

@@ -758,11 +758,32 @@ Operation IDs:
   owns option descriptor storage and initialization. Unsafe operations are
   limited to mimalloc lock guards, atomic option values, bounded environment
   buffers, static option-name C strings, and raw option get/set exports.
-- `SAFETY[AUDIT:options-message-output-boundary]`: `src/allocator/options.rs`
-  owns diagnostic output and output callback dispatch. Unsafe operations are
-  limited to C stdout/stderr symbols, recursion guards, delayed output buffers,
-  bounded stack formatting, primitive stderr forwarding, and registered output
-  callback invocation.
+- `SAFETY[AUDIT:options-libc-file-symbol-boundary]`:
+  `src/allocator/options.rs` owns platform-gated C stdout/stderr symbol access
+  for output callback compatibility checks.
+- `SAFETY[AUDIT:options-recurse-guard-boundary]`:
+  `src/allocator/options.rs` owns diagnostic output recursion guards. Unsafe
+  operations are limited to TLS shim get/set calls before callback dispatch.
+- `SAFETY[AUDIT:options-delayed-output-buffer-boundary]`:
+  `src/allocator/options.rs` owns delayed diagnostic output buffering. Unsafe
+  operations are limited to bounded static buffer access, mimalloc lock
+  acquire/release, and flushing buffered bytes through the selected callback.
+- `SAFETY[AUDIT:options-stderr-output-boundary]`:
+  `src/allocator/options.rs` owns primitive stderr diagnostic forwarding. Unsafe
+  operations are limited to validating C string pointers before calling the
+  primitive backend.
+- `SAFETY[AUDIT:options-output-callback-boundary]`:
+  `src/allocator/options.rs` owns registered output callback lookup,
+  publication, and invocation through typed callback wrappers.
+- `SAFETY[AUDIT:options-format-output-boundary]`:
+  `src/allocator/options.rs` owns bounded diagnostic formatting and
+  thread-prefix formatting. Unsafe operations are limited to C string prefix
+  length checks, stack-buffer conversion, and forwarding formatted bytes through
+  the output callback path.
+- `SAFETY[AUDIT:options-print-output-boundary]`:
+  `src/allocator/options.rs` owns public option printing. Unsafe operations are
+  limited to reading static option-name C strings and forwarding formatted option
+  values through the output callback path.
 - `SAFETY[AUDIT:options-warning-error-callback-boundary]`:
   `src/allocator/options.rs` owns warning display shims and warning/error
   counter gates. Unsafe operations are limited to C-compatible warning entry

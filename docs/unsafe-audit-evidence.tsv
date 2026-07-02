@@ -344,7 +344,13 @@ aligned-realloc-heap-export-boundary	test	tests/release_fast_path_audit/unsafe_p
 aligned-realloc-heap-export-boundary	script	scripts/check-unsafe-audit.py	Checks heap aligned realloc export unsafe operations retain operation-level SAFETY markers and source audit coverage.
 options-storage-lock-boundary	test	tests/options_exports.rs	Exercises option exports, callback mutation setup, and raw unknown option handling.
 options-storage-lock-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks option storage marker coverage, internal lock guards, bounded environment parsing, and no migration allowlist entry.
-options-message-output-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks message output marker coverage, primitive stderr routing, recursion guards, and fixed-buffer formatting.
+options-libc-file-symbol-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks platform-gated C stdout/stderr symbol marker coverage for output callback compatibility.
+options-recurse-guard-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks diagnostic recursion guard marker coverage for TLS and thread-local guard paths.
+options-delayed-output-buffer-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks delayed output buffer marker coverage, bounded static buffering, and mimalloc lock handling.
+options-stderr-output-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks primitive stderr marker coverage and C string validation before backend forwarding.
+options-output-callback-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks registered output callback lookup, publication, and invocation marker coverage.
+options-format-output-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks bounded diagnostic formatting, thread prefix formatting, and output forwarding marker coverage.
+options-print-output-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks public option printing marker coverage and static option-name formatting.
 options-warning-error-callback-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks warning/error callback marker coverage and bounded warning/error output counters.
 options-allocation-failure-callback-boundary	test	tests/options_exports.rs	Exercises registered error callback mutation through the public option/error callback surface.
 options-allocation-failure-callback-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks allocation/error failure callback marker coverage and locked callback state.

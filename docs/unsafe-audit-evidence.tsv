@@ -9,6 +9,8 @@ deferred-free-callback-state	script	scripts/check-ffi-boundary.py	Checks deferre
 guarded-config	test	src/internal/guarded/tests.rs	Exercises guarded configuration clamping, inverted bounds rejection, sampling decisions, and typed field accessors.
 page-count-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page queue/count helpers preserve typed counter routing and page queue boundary assertions after the split.
 page-count-accessors	script	scripts/check-strict-types.py	Checks split page count accessors remain covered by the existing page strict-type raw metadata boundary.
+page-flag-owner-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page flag, huge-page, full-queue, abandoned-page, and owner helpers preserve typed routing after the split.
+page-flag-owner-accessors	script	scripts/check-strict-types.py	Checks split page flag and owner helpers remain covered by the existing page strict-type raw metadata boundary.
 page-bin-size-classes	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks split bin/good-size helpers preserve C ABI wrappers, empty-theap table dependency, typed internal routing, and page.rs re-exports.
 page-bin-size-classes	script	scripts/check-ffi-boundary.py	Checks the moved mi_good_size export remains in a classified C ABI boundary file.
 page-bin-size-classes	script	scripts/check-strict-types.py	Checks split page bin helpers remain covered by the existing page strict-type raw size boundary.
@@ -40,6 +42,7 @@ typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-loca
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
 typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page metadata and registered-range witness fixture construction.
 typed-page-test-fixtures	test	tests/release_fast_path_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.
+typed-page-queue-test-fixtures	test	src/types/page_queues/tests.rs	Exercises stack-local page and queue metadata for normal, huge, full, linked, unlinked, and mismatched queue/page witnesses.
 typed-page-state-test-fixtures	test	src/types/page_states/tests.rs	Exercises stack-local page metadata and non-dereferenced thread-heap identity witnesses for typestate transition fixtures.
 typed-free-validation	test	src/types/validation/tests.rs	Exercises pointer lookup conversion into validated free witnesses.
 typed-free-validation	test	tests/release_fast_path_audit.rs	Checks free-path validation uses typed pointer lookup boundaries.

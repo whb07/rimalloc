@@ -104,6 +104,9 @@ Per-file review:
   abandonment, and reclaim paths operate on pages selected by heap/theap queues
   and size classes. Encoded block links and thread-free state follow C page
   invariants.
+- `src/allocator/page/flags.rs`: page flag, full-queue, huge-page,
+  abandoned-page, and thread-heap owner helpers route raw page metadata through
+  typed page, flag, memid, and atomic owner wrappers.
 - `src/allocator/page/bins.rs`: size-class and good-size helpers preserve the
   C bin ABI wrappers while routing internal callers through typed `Bin` and
   `GoodSize` domains.
@@ -224,6 +227,12 @@ Operation IDs:
   allocator-owned page or queue metadata, and the helpers route raw metadata
   through `PagePtr` and `PageQueuePtr` before typed counter arithmetic or
   publication.
+- `SAFETY[AUDIT:page-flag-owner-accessors]`:
+  `src/allocator/page/flags.rs` centralizes page flag, huge-page, full-queue,
+  abandoned-page, and thread-heap owner access. Callers supply allocator-owned
+  page metadata, and the helpers route raw fields through `PagePtr`,
+  `PageFlags`, `MemId`, `AtomicPageThreadId`, and typed owner witnesses before
+  reading or publishing page owner state.
 - `SAFETY[AUDIT:page-bin-size-classes]`: `src/allocator/page/bins.rs`
   centralizes the bin/good-size table boundary, bounds unchecked `Bin`
   construction by `MI_BIN_COUNT`, and preserves the exported `mi_good_size`
@@ -272,6 +281,11 @@ Operation IDs:
   stack-local page metadata and synthetic page-map range witnesses to exercise
   typed page wrapper accessors. The fixtures are not registered with allocator
   globals and are used only for local invariant tests.
+- `SAFETY[AUDIT:typed-page-queue-test-fixtures]`:
+  `src/types/page_queues/tests.rs` builds stack-local page and page-queue
+  metadata to exercise normal, huge, full, linked, unlinked, and mismatched
+  queue/page witnesses. The fixtures are not registered with allocator globals
+  and are used only while the local records are live.
 - `SAFETY[AUDIT:typed-page-state-test-fixtures]`:
   `src/types/page_states/tests.rs` builds stack-local page metadata and
   non-dereferenced thread-heap identity witnesses to exercise page typestate

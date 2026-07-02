@@ -35,13 +35,14 @@ fn rust_idiom_backlog_tracks_current_work() {
 
     let required_evidence = [
         "docs/unsafe-migration-allowlist.tsv",
-        "51 entries: 42 production, 6 test,\n  and 3 translation files",
-        "`ALLOWLIST_ENTRY_CAP` is 51",
-        "`src/types/page_queues/tests.rs` is 160 lines",
+        "50 entries: 42 production, 5 test,\n  and 3 translation files",
+        "`ALLOWLIST_ENTRY_CAP` is 50",
         "`src/types/heap/tests.rs` is 212 lines",
         "`src/types/memid/tests.rs` is 243 lines",
         "`src/types/atomic/tests.rs` is 287 lines",
         "`src/types/scalar/tests.rs` is 412 lines",
+        "SAFETY[AUDIT:typed-page-queue-test-fixtures]",
+        "`ALLOWLIST_ENTRY_CAP` is now 50",
         "`src/types/padding.rs` is 143 lines",
         "`src/allocator/tracking.rs` is 185 lines",
         "`src/types/callbacks.rs` is 255 lines",

@@ -13,10 +13,9 @@ mechanical file-level exceptions.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 51 entries: 42 production, 6 test,
-  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 51.
+- `docs/unsafe-migration-allowlist.tsv` has 50 entries: 42 production, 5 test,
+  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 50.
 - The smallest remaining allowlisted test fixtures are reviewable:
-  `src/types/page_queues/tests.rs` is 160 lines,
   `src/types/heap/tests.rs` is 212 lines,
   `src/types/memid/tests.rs` is 243 lines,
   `src/types/atomic/tests.rs` is 287 lines, and
@@ -66,15 +65,20 @@ Current review evidence:
 > small fixture file to operation-level markers keeps test debt from masking
 > production migration progress.
 
-- [ ] Rank `src/types/page_queues/tests.rs`, `src/types/heap/tests.rs`,
+- [x] Rank `src/types/page_queues/tests.rs`, `src/types/heap/tests.rs`,
       `src/types/memid/tests.rs`, and `src/types/atomic/tests.rs` by proof
       complexity.
-- [ ] Migrate at least one test fixture file to local `SAFETY[AUDIT:*]`
+- [x] Migrate at least one test fixture file to local `SAFETY[AUDIT:*]`
       markers.
-- [ ] Add matching `UNSAFE_AUDIT.md` and
+- [x] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [ ] Remove migrated files from `docs/unsafe-migration-allowlist.tsv`.
-- [ ] Lower `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
+- [x] Remove migrated files from `docs/unsafe-migration-allowlist.tsv`.
+- [x] Lower `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
+  - Evidence: `src/types/page_queues/tests.rs` now uses
+    `SAFETY[AUDIT:typed-page-queue-test-fixtures]` for stack-local page and
+    queue metadata covering normal, huge, full, linked, unlinked, and mismatched
+    queue/page witnesses. The file was removed from
+    `docs/unsafe-migration-allowlist.tsv`, and `ALLOWLIST_ENTRY_CAP` is now 50.
 
 Verify: `scripts/check-unsafe-audit.py`,
 `scripts/check-unsafe-audit-evidence.py`,
@@ -170,7 +174,7 @@ full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate one small test fixture off the unsafe migration allowlist.
+1. [x] Migrate one small test fixture off the unsafe migration allowlist.
 2. [ ] Migrate one small production file off the unsafe migration allowlist.
 3. [ ] Narrow one remaining broad strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
@@ -178,7 +182,7 @@ full tests.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is below 51 entries and the cap is lowered.
+- [x] The unsafe migration allowlist is below 51 entries and the cap is lowered.
 - [ ] At least one additional production allowlisted file is covered by
       operation-level audit markers.
 - [ ] One remaining broad strict-type `remove:` allowance is narrowed or

@@ -66,12 +66,16 @@ Current review evidence:
   the typed page count/validation child modules. It receives borrowed source
   strings from `unsafe_performance.rs`.
 - `strict-type-allowlist.txt` has 0 remaining `remove:` entries and
-  `REMOVE_ENTRY_CAP` is 0, but `src/allocator/page.rs` still has path-wide
-  raw-pointer entries for `mi_page_t`, `mi_block_t`, and `mi_theap_t`.
-  `scripts/check-strict-types.py` still aliases `src/allocator/page/bins.rs`,
+  `REMOVE_ENTRY_CAP` is 0. No
+  `raw-pointer-parameter|src/allocator/page.rs|*|...` entries remain:
+  `src/allocator/page.rs` now has 47 symbol-level raw-pointer entries, and
   `src/allocator/page/counts.rs`, `src/allocator/page/flags.rs`, and
-  `src/allocator/page/validation.rs` back to `src/allocator/page.rs`, even
-  though those child modules already exist.
+  `src/allocator/page/validation.rs` have 23 child-module raw-pointer entries.
+  `scripts/check-strict-types.py` no longer aliases
+  `src/allocator/page/bins.rs`, `src/allocator/page/counts.rs`,
+  `src/allocator/page/flags.rs`, or `src/allocator/page/validation.rs` back to
+  `src/allocator/page.rs`. `src/allocator/page/validation.rs` owns the
+  `mi_page_block_at` bare-domain entry.
 
 ## Issue: Scalar test fixtures are still file-level unsafe debt
 
@@ -171,14 +175,14 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 > entries should now be narrowed to child-module or symbol-level entries where
 > possible, matching the arena strict-type cleanup.
 
-- [ ] Re-run `scripts/check-strict-types.py` and collect live hits for
+- [x] Re-run `scripts/check-strict-types.py` and collect live hits for
       `src/allocator/page.rs` and the existing page child modules.
-- [ ] Remove page child path aliases that are no longer needed for current hits.
-- [ ] Replace broad page raw-pointer entries with child-module or symbol-level
+- [x] Remove page child path aliases that are no longer needed for current hits.
+- [x] Replace broad page raw-pointer entries with child-module or symbol-level
       entries for `mi_page_t`, `mi_block_t`, and `mi_theap_t` boundaries.
-- [ ] Keep permanent compatibility entries only where C-shaped hot page
+- [x] Keep permanent compatibility entries only where C-shaped hot page
       lifecycle, queue, and free-list signatures genuinely remain.
-- [ ] Keep `REMOVE_ENTRY_CAP` at 0 and update TODO/release-audit evidence.
+- [x] Keep `REMOVE_ENTRY_CAP` at 0 and update TODO/release-audit evidence.
 
 Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
 `cargo test --test release_fast_path_audit --all-features`, full clippy, and
@@ -190,14 +194,14 @@ full tests.
 2. [x] Migrate `src/types/ptr/tests.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/types/page.rs` off the unsafe migration allowlist.
 4. [x] Split the page lifecycle/page-queue release-audit assertion cluster.
-5. [ ] Narrow broad page strict-type entries after the existing child splits.
+5. [x] Narrow broad page strict-type entries after the existing child splits.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
+- [x] The unsafe migration allowlist cap is lowered after each migrated file.
 - [x] No test files remain in `docs/unsafe-migration-allowlist.tsv`.
 - [x] `src/types/page.rs` is covered by operation-level audit markers and
       evidence instead of a file-level migration exception.
 - [x] One more release-audit assertion cluster has a dedicated module.
-- [ ] Page strict-type documentation is narrower where existing child modules
+- [x] Page strict-type documentation is narrower where existing child modules
       provide concrete boundaries.

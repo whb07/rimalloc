@@ -1885,8 +1885,17 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
                 .contains("message=\"pointer-to-atomic cast outside atomic field wrappers\"")
             && strict_check_rs.contains("ATOMIC_CAST_RE = re.compile")
             && !strict_check_rs.contains("\"src/internal/atomic.rs\",\n}")
-            && strict_check_rs
+            && strict_check_rs.contains(
+                "\"src/internal/bitmap/bfield.rs\": {\"src/bitmap.rs\", \"src/internal/bitmap.rs\"}"
+            )
+            && !strict_check_rs
+                .contains("\"src/allocator/page/bins.rs\": {\"src/allocator/page.rs\"}")
+            && !strict_check_rs
                 .contains("\"src/allocator/page/counts.rs\": {\"src/allocator/page.rs\"}")
+            && !strict_check_rs
+                .contains("\"src/allocator/page/flags.rs\": {\"src/allocator/page.rs\"}")
+            && !strict_check_rs
+                .contains("\"src/allocator/page/validation.rs\": {\"src/allocator/page.rs\"}")
             && strict_check_rs.contains("ALLOWLIST = ROOT / \"strict-type-allowlist.txt\""),
         "pointer-to-atomic casts for allocator metadata should be centralized in typed atomic field wrappers and guarded by the strict checker"
     );

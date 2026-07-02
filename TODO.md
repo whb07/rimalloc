@@ -15,14 +15,16 @@ smaller audit modules, or symbol-level compatibility entries.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` now has 42 entries: 38 production,
-  1 test, and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 42.
+- `docs/unsafe-migration-allowlist.tsv` now has 41 entries: 38 production,
+  0 test, and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 41.
 - `src/types/scalar/tests.rs` now uses
   `SAFETY[AUDIT:typed-scalar-test-fixtures]` markers for 31 unchecked scalar
   constructor fixtures and is off the unsafe migration allowlist.
-- The only remaining allowlisted test file is `src/types/ptr/tests.rs`, which
-  is 618 lines with 168 `unsafe { ... }` sites and 0 local
-  `SAFETY[AUDIT:*]` markers.
+- `src/types/ptr/tests.rs` now uses
+  `SAFETY[AUDIT:typed-pointer-test-fixtures]` markers for 87 grouped
+  stack-local metadata and pointer arithmetic fixture blocks and is off the
+  unsafe migration allowlist.
+- No test files remain in `docs/unsafe-migration-allowlist.tsv`.
 - The smallest remaining allowlisted production file is
   `src/types/page.rs`, which is 258 lines with 5 `unsafe` hits and 0 local
   `SAFETY[AUDIT:*]` markers. Its existing tests in `src/types/page/tests.rs`
@@ -99,16 +101,16 @@ full tests.
 > arithmetic for wrapper APIs. The fixture boundaries should be local and
 > auditable instead of hidden by the file-level migration list.
 
-- [ ] Add local `SAFETY[AUDIT:typed-pointer-test-fixtures]` markers around the
+- [x] Add local `SAFETY[AUDIT:typed-pointer-test-fixtures]` markers around the
       stack-local metadata, raw field writes, wrapper constructor calls, and
       exposed-address pointer arithmetic fixtures.
-- [ ] Keep pointer arithmetic expectations explicit and avoid new heap
+- [x] Keep pointer arithmetic expectations explicit and avoid new heap
       allocation, dynamic dispatch, or shared mutable fixture state.
-- [ ] Add matching `UNSAFE_AUDIT.md` and
+- [x] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [ ] Remove `src/types/ptr/tests.rs` from
+- [x] Remove `src/types/ptr/tests.rs` from
       `docs/unsafe-migration-allowlist.tsv`.
-- [ ] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP` again.
+- [x] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP` again.
 
 Verify: `cargo test types::ptr::tests --lib --all-features`,
 unsafe audit scripts, unsafe inventory regeneration/check, release audit, full
@@ -183,7 +185,7 @@ full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/types/scalar/tests.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/types/ptr/tests.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/types/ptr/tests.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/types/page.rs` off the unsafe migration allowlist.
 4. [ ] Split the page lifecycle/page-queue release-audit assertion cluster.
 5. [ ] Narrow broad page strict-type entries after the existing child splits.
@@ -191,7 +193,7 @@ full tests.
 ## Definition of done for this backlog
 
 - [ ] The unsafe migration allowlist cap is lowered after each migrated file.
-- [ ] No test files remain in `docs/unsafe-migration-allowlist.tsv`.
+- [x] No test files remain in `docs/unsafe-migration-allowlist.tsv`.
 - [ ] `src/types/page.rs` is covered by operation-level audit markers and
       evidence instead of a file-level migration exception.
 - [ ] One more release-audit assertion cluster has a dedicated module.

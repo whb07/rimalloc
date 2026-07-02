@@ -349,6 +349,12 @@ Operation IDs:
   builds stack-local padding records and byte buffers, plus non-dereferenced
   dangling pointer witnesses for canary hashing, to exercise padding wrapper
   reads, writes, and pointer arithmetic.
+- `SAFETY[AUDIT:typed-pointer-test-fixtures]`: `src/types/ptr/tests.rs`
+  builds stack-local page, block, heap, thread-heap, TLD, arena, subproc, and
+  page-queue metadata to exercise pointer wrapper field accessors and exposed
+  address arithmetic. The fixtures remain stack-local, are not registered with
+  allocator globals, and use non-dereferenced extreme/dangling pointers only
+  for checked overflow and underflow cases.
 - `SAFETY[AUDIT:typed-scalar-test-fixtures]`:
   `src/types/scalar/tests.rs` uses concrete raw scalar values to exercise
   unchecked constructor boundaries, overflow reporting, and table-index

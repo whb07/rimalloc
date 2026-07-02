@@ -12,7 +12,7 @@ AUDIT = ROOT / "UNSAFE_AUDIT.md"
 ALLOWLIST = ROOT / "docs/unsafe-migration-allowlist.tsv"
 SAFETY_ID_RE = re.compile(r"SAFETY\[AUDIT:([a-z0-9_.-]+)\]")
 ALLOWLIST_HEADER = "path\tcategory\towner\tremove_by\treason"
-ALLOWLIST_ENTRY_CAP = 42
+ALLOWLIST_ENTRY_CAP = 41
 ALLOWLIST_CATEGORIES = {"production", "test", "translation"}
 PATH_ALIASES = {
     "src/allocator/aligned.rs": ["src/alloc_aligned.rs"],
@@ -167,13 +167,6 @@ def main() -> int:
         f"{ALLOWLIST.name} entry cap must match current migration count: "
         f"{len(allowlist)} entries, cap is {ALLOWLIST_ENTRY_CAP}",
     )
-    categories = {entry[0] for entry in allowlist.values()}
-    missing_categories = sorted(ALLOWLIST_CATEGORIES - categories)
-    require(
-        not missing_categories,
-        f"{ALLOWLIST.name} is missing migration categories: {', '.join(missing_categories)}",
-    )
-
     missing = sorted(path for path in found if not audit_mentions_path(audit_text, path))
     require(
         not missing,

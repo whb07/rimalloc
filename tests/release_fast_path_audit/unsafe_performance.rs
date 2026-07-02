@@ -7,6 +7,8 @@ mod lifecycle_boundaries;
 mod local_boundaries;
 #[path = "unsafe_performance/tail_guards.rs"]
 mod tail_guards;
+#[path = "unsafe_performance/threadlocal_boundaries.rs"]
+mod threadlocal_boundaries;
 #[test]
 fn free_path_internals_are_not_dynamic_exports() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

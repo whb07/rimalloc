@@ -44,16 +44,18 @@ Current review evidence:
   `SAFETY[AUDIT:page-count-accessors]` has 24 markers, and
   `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 23 markers.
 - The release audit still has large review units:
-  `tests/release_fast_path_audit.rs` is 2,864 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,651 lines,
+  `tests/release_fast_path_audit.rs` is 2,866 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,653 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,115 lines,
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
-  is 703 lines,
+  is 660 lines,
   `tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs` is
   206 lines,
   `tests/release_fast_path_audit/release_policy/security.rs` is 181 lines, and
   `tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is
-  160 lines.
+  160 lines. The new
+  `tests/release_fast_path_audit/unsafe_performance/threadlocal_boundaries.rs`
+  module is 46 lines.
 
 ## Issue: Heap and metadata fixtures still hide unsafe migration debt
 
@@ -147,13 +149,20 @@ full tests.
 > single-test cluster. Another cohesive group should move into a child module so
 > future audit additions have room.
 
-- [ ] Inventory assertion sections in `unsafe_performance.rs` and
+- [x] Inventory assertion sections in `unsafe_performance.rs` and
       `unsafe_performance/lifecycle_boundaries.rs`.
-- [ ] Move one cohesive cluster into a new or existing file under
+- [x] Move one cohesive cluster into a new or existing file under
       `tests/release_fast_path_audit/unsafe_performance/`.
-- [ ] Pass borrowed source strings rather than duplicating large file reads.
-- [ ] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
-- [ ] Preserve the release audit test count and coverage intent.
+- [x] Pass borrowed source strings rather than duplicating large file reads.
+- [x] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
+- [x] Preserve the release audit test count and coverage intent.
+  - Evidence: dynamic thread-local boundary assertions moved from
+    `unsafe_performance/lifecycle_boundaries.rs` into
+    `unsafe_performance/threadlocal_boundaries.rs`. The parent test still reads
+    `src/allocator/threadlocal.rs` once and passes a borrowed source string to
+    the helper. `lifecycle_boundaries.rs` dropped from 703 to 660 lines, the new
+    module is 46 lines, and `cargo test --test release_fast_path_audit
+    --all-features` still runs 67 tests.
 
 Verify: `cargo test --test release_fast_path_audit --all-features`,
 `git diff --check`, full clippy, and full tests.
@@ -189,7 +198,7 @@ full tests.
 1. [x] Migrate `src/types/heap/tests.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/allocator/tracking.rs` off the unsafe migration allowlist.
 3. [x] Narrow the broad `alloc` strict-type `usize` allowance.
-4. [ ] Split one more release-audit assertion cluster.
+4. [x] Split one more release-audit assertion cluster.
 5. [ ] Split one cohesive helper group out of `src/allocator/arena.rs`.
 
 ## Definition of done for this backlog
@@ -199,6 +208,6 @@ full tests.
       audit markers and evidence.
 - [x] One remaining broad strict-type `remove:` allowance is narrowed or
       eliminated.
-- [ ] One release-audit module has more review margin.
+- [x] One release-audit module has more review margin.
 - [ ] `src/allocator/arena.rs` is smaller without API, ABI, or hot-path
       performance drift.

@@ -338,6 +338,12 @@ Operation IDs:
   constructors and thread-local promotion checks. Real heaps allocated by the
   tests are released exactly once, and stack-local records are used only while
   their fixtures are live.
+- `SAFETY[AUDIT:typed-heap-domain]`: `src/types/heap.rs` owns heap,
+  thread-heap, and subproc witness construction. Unsafe operations are limited
+  to classifying initialized heap metadata, projecting heap and TLD pointers
+  from valid thread-heap records, promoting initialized thread heaps to local
+  witnesses after thread-id checks, and packaging transparent heap/subproc
+  role witnesses without allocation.
 - `SAFETY[AUDIT:typed-layout-test-fixtures]`: `src/types/layout/tests.rs`
   uses concrete valid unchecked scalar values and non-dereferenced dangling
   pointer witnesses to exercise layout, realloc, and flag packing invariants.

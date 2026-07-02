@@ -13,6 +13,9 @@ impl MainHeap {
     /// `heap` must point to initialized heap metadata.
     #[inline(always)]
     pub(crate) unsafe fn new(heap: HeapPtr) -> Option<Self> {
+        // SAFETY[AUDIT:typed-heap-domain]: callers provide initialized heap
+        // metadata; this checked constructor only reads the raw main-heap
+        // classification before packaging the MainHeap witness.
         if unsafe { crate::internal::_mi_is_heap_main(heap.as_ptr()) } {
             Some(Self(heap))
         } else {
@@ -43,6 +46,9 @@ impl OwnedHeap {
     /// delete or destroy path.
     #[inline(always)]
     pub(crate) unsafe fn new(heap: HeapPtr) -> Option<Self> {
+        // SAFETY[AUDIT:typed-heap-domain]: callers provide initialized heap
+        // metadata; this checked constructor only reads the raw main-heap
+        // classification to reject process-global heap ownership.
         if unsafe { crate::internal::_mi_is_heap_main(heap.as_ptr()) } {
             None
         } else {
@@ -129,6 +135,9 @@ impl ThreadHeapBorrowed {
     /// `theap` must point to thread-heap metadata owned by this allocator.
     #[inline(always)]
     pub(crate) unsafe fn new(theap: ThreadHeapPtr) -> Option<Self> {
+        // SAFETY[AUDIT:typed-heap-domain]: callers provide initialized
+        // thread-heap metadata; this constructor delegates the acquire heap
+        // projection and null classification to `ThreadHeapPtr::heap`.
         if unsafe { theap.heap() }.is_some() {
             Some(Self(theap))
         } else {
@@ -155,6 +164,9 @@ impl ThreadHeapBorrowed {
         self,
         current: crate::core_types::ThreadId,
     ) -> Result<ThreadHeapLocal, Self> {
+        // SAFETY[AUDIT:typed-heap-domain]: `self` proves an initialized
+        // thread-heap witness; locality classification is delegated to the
+        // raw ThreadHeapPtr helper with the caller-provided current thread id.
         match unsafe { self.0.try_local(current) } {
             Ok(local) => Ok(local),
             Err(_) => Err(self),
@@ -210,14 +222,24 @@ impl ThreadHeapPtr {
     /// `self` must point to thread-heap metadata allocated by this allocator.
     #[inline]
     pub(crate) unsafe fn state(self) -> ThreadHeapState {
+        // SAFETY[AUDIT:typed-heap-domain]: callers provide valid thread-heap
+        // metadata; the heap projection performs the acquire heap load and
+        // returns `None` for uninitialized or transferred-away thread heaps.
         let Some(heap) = (unsafe { self.heap() }) else {
+            // SAFETY[AUDIT:typed-heap-domain]: with no heap pointer, the tld
+            // projection distinguishes deleted thread heaps from initialized
+            // but heap-less thread-heap records without dereferencing a heap.
             if unsafe { self.tld() }.is_none() {
                 return ThreadHeapState::Deleted(self);
             }
             return ThreadHeapState::Uninitialized(self);
         };
 
+        // SAFETY[AUDIT:typed-heap-domain]: a present heap pointer proves this
+        // thread-heap is initialized enough to package a borrowed witness.
         let borrowed = unsafe { ThreadHeapBorrowed::new_unchecked(self) };
+        // SAFETY[AUDIT:typed-heap-domain]: `heap` was loaded from the valid
+        // thread-heap metadata above and is only classified as main/non-main.
         if unsafe { crate::internal::_mi_is_heap_main(heap.as_ptr()) } {
             ThreadHeapState::Main(borrowed)
         } else {
@@ -248,16 +270,23 @@ impl ThreadHeapPtr {
         self,
         current: crate::core_types::ThreadId,
     ) -> Result<crate::core_types::ThreadHeapLocal, ThreadHeapPtr> {
+        // SAFETY[AUDIT:typed-heap-domain]: callers provide valid thread-heap
+        // metadata; state classification rejects uninitialized and deleted
+        // records before any local-thread witness can be constructed.
         match unsafe { self.state() } {
             ThreadHeapState::Initialized(_) | ThreadHeapState::Main(_) => {}
             ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return Err(self),
         }
 
         let theap = self.as_ptr();
-        // SAFETY: see the function-level safety doc — `tld` and `thread_id` are
-        // stable after init, so this plain read is race-free.
+        // SAFETY[AUDIT:typed-heap-domain]: see the function-level safety doc:
+        // `tld` and `thread_id` are stable after init, so this plain read is
+        // race-free.
         let tld_thread_id = unsafe { (*(*theap).tld).thread_id };
         if tld_thread_id == 0 || tld_thread_id == current.get() {
+            // SAFETY[AUDIT:typed-heap-domain]: state classification above
+            // proved an initialized/main thread heap, and the thread id check
+            // proved the metadata belongs to the current thread or main tld.
             Ok(unsafe { crate::core_types::ThreadHeapLocal::new_unchecked(self) })
         } else {
             Err(self)
@@ -272,11 +301,14 @@ impl ThreadHeapPtr {
     /// `self` must point to a valid `mi_theap_t`.
     #[inline]
     pub(crate) unsafe fn heap(self) -> Option<HeapPtr> {
+        // SAFETY[AUDIT:typed-heap-domain]: callers provide valid thread-heap
+        // metadata; the helper performs the C-equivalent acquire heap load.
         let raw = unsafe { crate::internal::_mi_theap_heap(self.as_ptr()) };
         if raw.is_null() {
             None
         } else {
-            // SAFETY: `raw` is non-null and a valid heap pointer per the acquire load.
+            // SAFETY[AUDIT:typed-heap-domain]: `raw` is non-null and a valid
+            // heap pointer per the acquire load above.
             Some(unsafe { HeapPtr::new_unchecked(raw) })
         }
     }
@@ -288,18 +320,23 @@ impl ThreadHeapPtr {
     /// `self` must point to a valid `mi_theap_t`.
     #[inline]
     pub(crate) unsafe fn tld(self) -> Option<TldPtr> {
+        // SAFETY[AUDIT:typed-heap-domain]: callers provide valid thread-heap
+        // metadata; this reads the stable tld pointer field.
         let raw = unsafe { (*self.as_ptr()).tld };
         if raw.is_null() {
             None
         } else {
-            // SAFETY: `raw` is non-null and a valid tld pointer.
+            // SAFETY[AUDIT:typed-heap-domain]: `raw` is non-null and points to
+            // the stable tld metadata for this thread heap.
             Some(unsafe { TldPtr::new_unchecked(raw) })
         }
     }
 }
 
 pub(super) fn __lint_touch() {
-    let theap = unsafe { ThreadHeapPtr::new_unchecked(core::ptr::dangling_mut()) };
+    let Some(theap) = ThreadHeapPtr::new(core::ptr::dangling_mut()) else {
+        return;
+    };
     if let ThreadHeapState::Uninitialized(ptr) = ThreadHeapState::Uninitialized(theap) {
         let _ = ptr.as_ptr();
     }

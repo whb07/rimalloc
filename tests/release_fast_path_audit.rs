@@ -1475,7 +1475,11 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     );
     assert!(
         heap_rs.contains("const _: unsafe fn(HeapPtr) -> Option<OwnedHeap> = OwnedHeap::new;")
-            && heap_rs.contains("impl OwnedHeap {\n    /// # Safety\n    /// `heap` must point to initialized heap metadata owned by the current\n    /// delete or destroy path.\n    #[inline(always)]\n    pub(crate) unsafe fn new(heap: HeapPtr) -> Option<Self> {\n        if unsafe { crate::internal::_mi_is_heap_main(heap.as_ptr()) } {\n            None\n        } else {\n            Some(Self(heap))\n        }\n    }"),
+            && heap_rs.matches("SAFETY[AUDIT:typed-heap-domain]").count() >= 15
+            && heap_rs.contains("impl OwnedHeap {\n    /// # Safety\n    /// `heap` must point to initialized heap metadata owned by the current\n    /// delete or destroy path.\n    #[inline(always)]\n    pub(crate) unsafe fn new(heap: HeapPtr) -> Option<Self>")
+            && heap_rs.contains(
+                "if unsafe { crate::internal::_mi_is_heap_main(heap.as_ptr()) } {\n            None\n        } else {\n            Some(Self(heap))"
+            ),
         "OwnedHeap should have a checked constructor that rejects the main heap"
     );
     assert!(

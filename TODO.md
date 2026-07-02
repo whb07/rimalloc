@@ -13,8 +13,8 @@ strict-type entries, or smaller release-audit modules.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` now has 38 entries: 35 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 38.
+- `docs/unsafe-migration-allowlist.tsv` now has 37 entries: 34 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 37.
 - `src/types/arena.rs` now uses 7
   `SAFETY[AUDIT:typed-arena-domain]` markers for slice-range count
   construction and arena role witnesses, and is off the unsafe migration
@@ -23,15 +23,19 @@ Current review evidence:
   `SAFETY[AUDIT:typed-page-queue-domain]` markers for queue classification,
   queued-page membership, full/unfull transitions, queue removal, and
   arena-free page destruction, and is off the unsafe migration allowlist.
+- `src/types/heap.rs` now uses 15
+  `SAFETY[AUDIT:typed-heap-domain]` markers for heap classification,
+  thread-heap state/locality checks, heap/tld projections, and local witness
+  construction, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are:
-  `src/types/heap.rs` at 312 lines with 44 `unsafe` hits and 0 local markers,
   `src/allocator/arena_meta.rs` at 316 lines with 22 `unsafe` hits and 0 local
-  markers, and
+  markers,
   `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers,
   `src/allocator/bench_diagnostics.rs` at 350 lines with 8 `unsafe` hits and
   0 local markers, and
   `src/platform/wasi.rs` at 373 lines with 34 `unsafe` hits and 0 local
-  markers.
+  markers, and
+  `src/lib.rs` at 398 lines with 21 `unsafe` hits and 8 local markers.
 - `src/types/freelist_wrappers.rs` is 409 lines with 46 `unsafe` hits and
   0 local `SAFETY[AUDIT:*]` markers. It also still has broad strict-type rows:
   `raw-pointer-parameter|src/types/freelist_wrappers.rs|*|mi_block_t` and
@@ -118,14 +122,14 @@ clippy, and full tests.
 > classification and thread-local ownership reads still need operation-level
 > proof markers.
 
-- [ ] Add local `SAFETY[AUDIT:typed-heap-domain]` markers for main/owned/borrowed
+- [x] Add local `SAFETY[AUDIT:typed-heap-domain]` markers for main/owned/borrowed
       heap constructors, thread-heap borrowed/local classification, subproc
       witnesses, and thread-heap `heap`/`tld` projections.
-- [ ] Keep raw `mi_heap_t` and `mi_theap_t` constructor boundaries explicit and
+- [x] Keep raw `mi_heap_t` and `mi_theap_t` constructor boundaries explicit and
       avoid adding heap allocation or shared mutable state.
-- [ ] Preserve the existing tests that classify main, initialized,
+- [x] Preserve the existing tests that classify main, initialized,
       uninitialized, deleted, borrowed, and local thread-heap states.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -182,7 +186,7 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 
 1. [x] Migrate `src/types/arena.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/types/page_queues.rs` off the unsafe migration allowlist.
-3. [ ] Migrate `src/types/heap.rs` off the unsafe migration allowlist.
+3. [x] Migrate `src/types/heap.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/types/freelist_wrappers.rs` off the unsafe migration
        allowlist and narrow its broad strict-type entries where possible.
 5. [ ] Split the datatype acceptance release-audit assertion cluster.

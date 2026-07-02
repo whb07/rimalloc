@@ -259,6 +259,9 @@ pub struct mi_bench_diagnostics_snapshot_t {
     pub values: [c_ulonglong; COUNTER_COUNT],
 }
 
+// SAFETY[AUDIT:bench-diagnostics-ffi]: the exported reset symbol has no
+// caller-provided pointers and only resets diagnostic counters with relaxed
+// stores.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_bench_diagnostics_reset() {
     for counter in &COUNTERS {
@@ -268,6 +271,9 @@ pub extern "C" fn mi_bench_diagnostics_reset() {
 
 /// # Safety
 /// `out` must be null or point to writable storage for one snapshot.
+// SAFETY[AUDIT:bench-diagnostics-ffi]: the exported snapshot symbol preserves
+// the C ABI, rejects null output pointers, and writes exactly one snapshot when
+// the caller provides writable storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_bench_diagnostics_snapshot(
     out: *mut mi_bench_diagnostics_snapshot_t,
@@ -275,6 +281,8 @@ pub unsafe extern "C" fn mi_bench_diagnostics_snapshot(
     if out.is_null() {
         return false;
     }
+    // SAFETY[AUDIT:bench-diagnostics-ffi]: `out` is non-null and this function's
+    // safety contract requires writable storage for one snapshot.
     unsafe {
         for (idx, counter) in COUNTERS.iter().enumerate() {
             (*out).values[idx] = counter.load(Ordering::Relaxed) as c_ulonglong;
@@ -303,6 +311,9 @@ impl JsonBuf {
     fn finish(&mut self) -> usize {
         if !self.buf.is_null() && self.len > 0 {
             let nul_at = self.written.min(self.len - 1);
+            // SAFETY[AUDIT:bench-diagnostics-ffi]: non-null `buf` with
+            // `len > 0` provides at least one writable byte, and `nul_at` is
+            // clamped below `len`.
             unsafe { *self.buf.add(nul_at) = 0 };
         }
         self.needed
@@ -319,6 +330,9 @@ impl fmt::Write for JsonBuf {
         let available = cap.saturating_sub(self.written);
         let copy_len = available.min(s.len());
         if copy_len > 0 {
+            // SAFETY[AUDIT:bench-diagnostics-ffi]: `copy_len` is bounded by the
+            // remaining writable capacity before the reserved NUL byte, and the
+            // source `str` cannot overlap the caller-provided output buffer.
             unsafe {
                 ptr::copy_nonoverlapping(
                     s.as_ptr(),
@@ -334,6 +348,9 @@ impl fmt::Write for JsonBuf {
 
 /// # Safety
 /// If `buf` is non-null, it must point to `buf_len` writable bytes.
+// SAFETY[AUDIT:bench-diagnostics-ffi]: the exported JSON symbol accepts a
+// nullable caller buffer, writes at most `buf_len - 1` bytes when present, and
+// always NUL-terminates non-empty buffers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_bench_diagnostics_json(buf: *mut c_char, buf_len: usize) -> usize {
     let mut out = JsonBuf::new(buf, buf_len);
@@ -347,4 +364,78 @@ pub unsafe extern "C" fn mi_bench_diagnostics_json(buf: *mut c_char, buf_len: us
     }
     let _ = out.write_char('}');
     out.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Mutex, MutexGuard};
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn test_lock() -> MutexGuard<'static, ()> {
+        TEST_LOCK.lock().expect("bench diagnostics test lock")
+    }
+
+    #[test]
+    fn snapshot_rejects_null_and_copies_counter_values() {
+        let _guard = test_lock();
+        mi_bench_diagnostics_reset();
+
+        let counter = Counter::ReabandonFailAlreadyMapped;
+        let sentinel = u64::MAX / 4;
+        COUNTERS[counter as usize].store(sentinel, Ordering::Relaxed);
+
+        // SAFETY[AUDIT:bench-diagnostics-ffi]: null output is an explicitly
+        // supported rejection path for the C ABI snapshot helper.
+        assert!(!unsafe { mi_bench_diagnostics_snapshot(core::ptr::null_mut()) });
+
+        let mut snapshot = mi_bench_diagnostics_snapshot_t {
+            values: [0; COUNTER_COUNT],
+        };
+        // SAFETY[AUDIT:bench-diagnostics-ffi]: `snapshot` is writable storage
+        // for exactly one C ABI snapshot.
+        assert!(unsafe { mi_bench_diagnostics_snapshot(&mut snapshot) });
+        assert!(snapshot.values[counter as usize] >= sentinel as c_ulonglong);
+
+        mi_bench_diagnostics_reset();
+    }
+
+    #[test]
+    fn json_reports_needed_length_and_nul_terminates_truncated_buffers() {
+        let _guard = test_lock();
+        mi_bench_diagnostics_reset();
+
+        // SAFETY[AUDIT:bench-diagnostics-ffi]: null buffer with zero length is
+        // the size-query path and performs no writes.
+        let null_needed = unsafe { mi_bench_diagnostics_json(core::ptr::null_mut(), 0) };
+        assert!(null_needed > COUNTER_COUNT);
+
+        let mut zero_len = [0xA5_u8; 1];
+        // SAFETY[AUDIT:bench-diagnostics-ffi]: a non-null buffer with zero
+        // length is permitted and must not be written.
+        let zero_needed =
+            unsafe { mi_bench_diagnostics_json(zero_len.as_mut_ptr().cast::<c_char>(), 0) };
+        assert!(zero_needed >= null_needed);
+        assert_eq!(zero_len[0], 0xA5);
+
+        let mut one_byte = [0xA5_u8; 1];
+        // SAFETY[AUDIT:bench-diagnostics-ffi]: `one_byte` provides one
+        // writable byte, which is reserved for the NUL terminator.
+        let one_needed =
+            unsafe { mi_bench_diagnostics_json(one_byte.as_mut_ptr().cast::<c_char>(), 1) };
+        assert!(one_needed >= null_needed);
+        assert_eq!(one_byte[0], 0);
+
+        let mut small = [0xA5_u8; 8];
+        // SAFETY[AUDIT:bench-diagnostics-ffi]: `small` is a valid writable
+        // byte buffer and the writer must truncate before its trailing NUL.
+        let needed =
+            unsafe { mi_bench_diagnostics_json(small.as_mut_ptr().cast::<c_char>(), small.len()) };
+        assert!(needed >= small.len());
+        assert_eq!(&small[..7], b"{\"page_");
+        assert_eq!(small[7], 0);
+
+        mi_bench_diagnostics_reset();
+    }
 }

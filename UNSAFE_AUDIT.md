@@ -63,8 +63,9 @@ Per-file review:
 - `src/atomic.rs`: raw atomic pointer casts are centralized here and mapped to
   C mimalloc atomic operations. Ordering equivalence is covered by
   `ATOMIC_ORDERING_AUDIT.md`.
-- `src/bench_diagnostics.rs`: unsafe diagnostic hooks are test/benchmark support
-  and do not mutate allocator metadata outside the measured path.
+- `src/allocator/bench_diagnostics.rs`: unsafe diagnostic hooks are
+  test/benchmark support and do not mutate allocator metadata outside the
+  measured path.
 - `src/bitmap.rs`: bitmap word pointers are derived from caller-provided bitmap
   storage and bounded by bit counts; set/clear/claim transitions use atomic word
   operations equivalent to C.
@@ -232,6 +233,13 @@ Operation IDs:
   current sub-process registry, page map lookup, and typed memid views. The
   helpers are diagnostic-only, keep output in stack-local byte buffers, and do
   not allocate, publish, or mutate allocator ownership state.
+- `SAFETY[AUDIT:bench-diagnostics-ffi]`:
+  `src/allocator/bench_diagnostics.rs` owns benchmark-only C ABI diagnostic
+  counters and JSON export helpers. Unsafe operations are limited to exported
+  diagnostic symbols, nullable snapshot out-pointer validation, bounded JSON
+  buffer copies, NUL termination for non-empty buffers, and tests that call the
+  same C-shaped boundary with valid local storage. Counter updates stay relaxed
+  atomics, and the JSON writer remains allocation-free.
 - `SAFETY[AUDIT:arena-id-memid-helpers]`:
   `src/allocator/arena/ids.rs` keeps raw arena-id ABI shims and memid
   classification behind typed `ArenaPtr`, `SliceRange`, `MemIdView`, and

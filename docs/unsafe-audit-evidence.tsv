@@ -3,6 +3,7 @@ c-header-macro-reentry	script	scripts/check-ffi-boundary.py	Checks C header macr
 c-header-macro-reentry	test	tests/header_macro_expansion.rs	Exercises downstream C header macro expansion and feature gating.
 arena-debug-render	test	tests/release_fast_path_audit.rs	Checks arena diagnostics stay in src/allocator/arena/debug.rs and retain typed arena/page/memid boundary markers.
 arena-debug-render	script	scripts/check-ffi-boundary.py	Checks moved arena diagnostic C exports remain in a classified ABI boundary file.
+bench-diagnostics-ffi	test	src/allocator/bench_diagnostics.rs	Exercises reset, null snapshot rejection, snapshot copying, JSON size queries, zero-length buffers, truncation, and NUL termination.
 arena-id-memid-helpers	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena id and memid helpers stay in src/allocator/arena/ids.rs while preserving raw C ABI shims, typed MemIdView routing, and arena call sites.
 arena-id-memid-helpers	script	scripts/check-unsafe-audit.py	Checks arena id and memid unsafe operations retain operation-level SAFETY markers and source audit coverage.
 arena-heap-page-visitors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks heap page visit/delete/move/destroy helpers stay in src/allocator/arena/heap_pages.rs while preserving C ABI shims, callback traversal, and heap.rs call sites.

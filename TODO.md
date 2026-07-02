@@ -13,8 +13,8 @@ strict-type entries, or smaller review units.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 33 entries: 30 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 33.
+- `docs/unsafe-migration-allowlist.tsv` has 32 entries: 29 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 32.
 - `src/types/memid.rs` now uses 4
   `SAFETY[AUDIT:typed-memid-view]` markers for discriminant-gated union reads,
   plus a `SAFETY[AUDIT:typed-memid-test-fixtures]` marker for its lint-touch
@@ -34,15 +34,20 @@ Current review evidence:
 - The remaining low-risk typed-wrapper migration target is
   `src/types/atomic.rs` at 755 lines with 101 `unsafe` hits and 0 local
   markers.
+- `src/allocator/bench_diagnostics.rs` now uses 12
+  `SAFETY[AUDIT:bench-diagnostics-ffi]` markers for exported diagnostic
+  symbols, nullable snapshot writes, JSON buffer NUL termination, bounded byte
+  copies, and focused C ABI test calls, and is off the unsafe migration
+  allowlist.
 - The smallest remaining allowlisted production files are:
   `src/allocator/arena_meta.rs` at 316 lines with 24 `unsafe` hits and 0 local
   markers,
   `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers,
-  `src/allocator/bench_diagnostics.rs` at 350 lines with 8 `unsafe` hits and
-  0 local markers,
   `src/platform/wasi.rs` at 373 lines with 34 `unsafe` hits and 0 local
   markers, and
-  `src/lib.rs` at 398 lines with 23 `unsafe` hits and 8 local markers.
+  `src/lib.rs` at 398 lines with 23 `unsafe` hits and 8 local markers, and
+  `src/platform/emscripten.rs` at 424 lines with 35 `unsafe` hits and 0 local
+  markers.
 - `strict-type-allowlist.txt` has 75 path-wide entries with `symbol = *`,
   including 29 path-wide raw-pointer entries. `REMOVE_ENTRY_CAP` remains 0.
 - The largest unsafe audit marker clusters remain broad enough to revisit:
@@ -143,14 +148,14 @@ and full tests.
 > snapshot and JSON buffer writes; they can be documented locally without
 > changing counter hot paths.
 
-- [ ] Add local `SAFETY[AUDIT:bench-diagnostics-ffi]` markers for exported
+- [x] Add local `SAFETY[AUDIT:bench-diagnostics-ffi]` markers for exported
       diagnostic symbols, nullable snapshot writes, JSON buffer NUL
       termination, and bounded byte copies.
-- [ ] Preserve relaxed atomic counter updates and avoid heap allocation in the
+- [x] Preserve relaxed atomic counter updates and avoid heap allocation in the
       diagnostic JSON writer.
-- [ ] Add focused tests or release-audit assertions for null buffers,
+- [x] Add focused tests or release-audit assertions for null buffers,
       truncation/NUL termination, and snapshot copying.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -163,17 +168,17 @@ full tests.
 1. [x] Migrate `src/types/memid.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/types/layout.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/types/page_states.rs` off the unsafe migration allowlist.
-4. [ ] Migrate `src/allocator/bench_diagnostics.rs` off the unsafe migration
+4. [x] Migrate `src/allocator/bench_diagnostics.rs` off the unsafe migration
        allowlist.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
-- [ ] `src/types/memid.rs`, `src/types/layout.rs`,
+- [x] The unsafe migration allowlist cap is lowered after each migrated file.
+- [x] `src/types/memid.rs`, `src/types/layout.rs`,
       `src/types/page_states.rs`, and `src/allocator/bench_diagnostics.rs` are
       covered by operation-level audit markers and evidence instead of
       file-level migration exceptions.
-- [ ] Existing typed-domain behavior, C ABI behavior, and allocation-free hot
+- [x] Existing typed-domain behavior, C ABI behavior, and allocation-free hot
       paths remain unchanged.
-- [ ] Release-audit TODO guards track the active backlog and measurable
+- [x] Release-audit TODO guards track the active backlog and measurable
       evidence.

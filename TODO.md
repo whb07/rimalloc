@@ -15,9 +15,9 @@ Current review evidence:
   `src/types/freelist_wrappers/tests.rs` is 119 lines,
   `src/types/layout/tests.rs` is 139 lines, and
   `src/types/page_states/tests.rs` is 151 lines.
-- `strict-type-allowlist.txt` has 95 entries; 6 are still marked `remove:`.
+- `strict-type-allowlist.txt` has 94 entries; 5 are still marked `remove:`.
   The remaining broad `bare-domain-usize` allowances are for `alloc`,
-  `aligned`, `arena`, `bitmap`, `internal`, and `page`.
+  `aligned`, `bitmap`, `internal`, and `page`.
 - The largest production review units are still translated-style modules:
   `src/allocator/arena.rs` is 4,613 lines,
   `src/allocator/page.rs` is 3,220 lines,
@@ -101,14 +101,20 @@ full tests.
 > one broad allowance by adding typed scalar domains around helper code that is
 > not a C ABI boundary.
 
-- [ ] Re-rank the 6 removable entries by checker hits and hot-path risk.
-- [ ] Prefer `src/internal/mod.rs`, `src/internal/bitmap.rs`, or another
+- [x] Re-rank the 6 removable entries by checker hits and hot-path risk.
+- [x] Prefer `src/internal/mod.rs`, `src/internal/bitmap.rs`, or another
       helper-heavy area before touching allocation/free fast paths.
-- [ ] Replace one broad file-level allowance with typed wrappers or narrower
+- [x] Replace one broad file-level allowance with typed wrappers or narrower
       symbol-level compatibility entries.
-- [ ] Lower `REMOVE_ENTRY_CAP` in `scripts/check-strict-types.py`.
-- [ ] Preserve C ABI signatures, raw helper compatibility, and measured hot
+- [x] Lower `REMOVE_ENTRY_CAP` in `scripts/check-strict-types.py`.
+- [x] Preserve C ABI signatures, raw helper compatibility, and measured hot
       call shape.
+  - Evidence: `mi_arenas_try_find_free` now keeps
+    `crate::core_types::Alignment` instead of converting back to raw `usize`,
+    and `mi_arena_os_alloc_aligned` now takes a private `ArenaOsAllocRequest`
+    for the raw OS allocation fallback tuple. The broad
+    `bare-domain-usize|src/allocator/arena.rs|*|usize` allowance was removed,
+    and `REMOVE_ENTRY_CAP` is now 5.
 
 Verify: `scripts/check-strict-types.py`,
 `cargo test --test release_fast_path_audit --all-features`,
@@ -170,7 +176,7 @@ clippy, and full tests.
 - [x] The unsafe migration allowlist is below 58 entries and the cap is lowered.
 - [x] The page count accessor marker cluster is smaller or justified by a
       narrower helper proof.
-- [ ] The strict-type removable-entry count is below 6 and capped lower.
+- [x] The strict-type removable-entry count is below 6 and capped lower.
 - [ ] The largest release-audit child module has more guard margin.
 - [ ] One large allocator translation unit is smaller without API, ABI, or
       hot-path performance drift.

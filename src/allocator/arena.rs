@@ -1537,7 +1537,7 @@ unsafe fn mi_forall_suitable_arenas<F>(
 unsafe fn mi_arenas_try_find_free(
     heap: BorrowedHeap,
     slice_count: crate::core_types::SliceCount,
-    alignment: usize,
+    alignment: crate::core_types::Alignment,
     commit: bool,
     allow_large: bool,
     req_arena: Option<ArenaPtr>,
@@ -1545,8 +1545,8 @@ unsafe fn mi_arenas_try_find_free(
     numa_node: crate::core_types::NumaNode,
     allocation: *mut crate::core_types::ArenaAllocation,
 ) -> *mut c_void {
-    crate::internal::mi_assert!(alignment <= MI_ARENA_SLICE_ALIGN);
-    if alignment > MI_ARENA_SLICE_ALIGN {
+    crate::internal::mi_assert!(alignment.get() <= MI_ARENA_SLICE_ALIGN);
+    if alignment.get() > MI_ARENA_SLICE_ALIGN {
         return ptr::null_mut();
     }
 
@@ -2035,7 +2035,7 @@ unsafe fn mi_arenas_try_alloc(
         mi_arenas_try_find_free(
             heap,
             slice_count,
-            alignment.get(),
+            alignment,
             commit,
             allow_large,
             req_arena,
@@ -2082,7 +2082,7 @@ unsafe fn mi_arenas_try_alloc(
         mi_arenas_try_find_free(
             heap,
             slice_count,
-            alignment.get(),
+            alignment,
             commit,
             allow_large,
             req_arena,
@@ -2222,10 +2222,15 @@ unsafe fn mi_arena_reserve(
     err == 0
 }
 
-unsafe fn mi_arena_os_alloc_aligned(
+#[derive(Clone, Copy)]
+struct ArenaOsAllocRequest {
     size: usize,
     alignment: usize,
     align_offset: usize,
+}
+
+unsafe fn mi_arena_os_alloc_aligned(
+    request: ArenaOsAllocRequest,
     commit: bool,
     allow_large: bool,
     req_arena_id: mi_arena_id_t,
@@ -2238,19 +2243,19 @@ unsafe fn mi_arena_os_alloc_aligned(
         return ptr::null_mut();
     }
 
-    if align_offset > 0 {
+    if request.align_offset > 0 {
         unsafe {
             _mi_os_alloc_aligned_at_offset(
-                size,
-                alignment,
-                align_offset,
+                request.size,
+                request.alignment,
+                request.align_offset,
                 commit,
                 allow_large,
                 memid,
             )
         }
     } else {
-        unsafe { _mi_os_alloc_aligned(size, alignment, commit, allow_large, memid) }
+        unsafe { _mi_os_alloc_aligned(request.size, request.alignment, commit, allow_large, memid) }
     }
 }
 
@@ -2319,9 +2324,11 @@ unsafe fn mi_arenas_alloc_aligned_typed(args: ArenaAllocTypedArgs) -> *mut c_voi
 
     unsafe {
         mi_arena_os_alloc_aligned(
-            size.get(),
-            alignment.get(),
-            align_offset.get(),
+            ArenaOsAllocRequest {
+                size: size.get(),
+                alignment: alignment.get(),
+                align_offset: align_offset.get(),
+            },
             commit,
             allow_large,
             req_arena
@@ -2373,9 +2380,11 @@ pub(crate) unsafe extern "C" fn _mi_arenas_alloc_aligned(
         },
         Err(_) => unsafe {
             mi_arena_os_alloc_aligned(
-                size,
-                alignment,
-                align_offset,
+                ArenaOsAllocRequest {
+                    size,
+                    alignment,
+                    align_offset,
+                },
                 commit,
                 allow_large,
                 req_arena.cast::<c_void>(),
@@ -2428,9 +2437,11 @@ unsafe fn mi_arenas_alloc_typed(args: ArenaAllocArgs) -> *mut c_void {
         },
         Err(_) => unsafe {
             mi_arena_os_alloc_aligned(
-                size.get(),
-                alignment,
-                0,
+                ArenaOsAllocRequest {
+                    size: size.get(),
+                    alignment,
+                    align_offset: 0,
+                },
                 commit,
                 allow_large,
                 req_arena
@@ -2839,9 +2850,11 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
         start = if os_align {
             unsafe {
                 mi_arena_os_alloc_aligned(
-                    alloc_size,
-                    block_alignment,
-                    page_alignment,
+                    ArenaOsAllocRequest {
+                        size: alloc_size,
+                        alignment: block_alignment,
+                        align_offset: page_alignment,
+                    },
                     commit,
                     allow_large,
                     req_arena.cast(),
@@ -2852,9 +2865,11 @@ unsafe fn mi_arenas_page_alloc_fresh_area(
         } else {
             unsafe {
                 mi_arena_os_alloc_aligned(
-                    alloc_size,
-                    page_alignment,
-                    0,
+                    ArenaOsAllocRequest {
+                        size: alloc_size,
+                        alignment: page_alignment,
+                        align_offset: 0,
+                    },
                     commit,
                     allow_large,
                     req_arena.cast(),

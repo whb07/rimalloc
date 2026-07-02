@@ -16,11 +16,11 @@ fn rust_idiom_backlog_tracks_current_work() {
     let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
     let required_headings = [
         "# TODO: Fresh Rust Idiom Follow-up Backlog",
-        "## Issue: Unsafe migration allowlist still has small test fixtures",
-        "## Issue: Page count accessors repeat the same unsafe proof too often",
-        "## Issue: Strict-type removable entries are still broad",
-        "## Issue: Release fast-path audit still has large child modules",
-        "## Issue: Large allocator translation units still need boundary splits",
+        "## Issue: Small test fixtures still sit on the unsafe migration allowlist",
+        "## Issue: Small production files are still covered by broad unsafe allowlist entries",
+        "## Issue: The page strict-type allowance is still file-wide after the bin split",
+        "## Issue: Release fast-path audit has one large assertion module left",
+        "## Issue: Large allocator translation units still need cohesive boundaries",
         "## Definition of done for this backlog",
     ];
 
@@ -33,27 +33,27 @@ fn rust_idiom_backlog_tracks_current_work() {
 
     let required_evidence = [
         "docs/unsafe-migration-allowlist.tsv",
-        "56 entries: 44 production,\n  9 test, and 3 translation files",
-        "SAFETY[AUDIT:typed-arena-test-fixtures]",
-        "SAFETY[AUDIT:typed-callback-test-fixtures]",
+        "56 entries: 44 production, 9 test,\n  and 3 translation files",
+        "`src/types/freelist_wrappers/tests.rs` is 119 lines",
+        "`src/types/layout/tests.rs` is 139 lines",
+        "`src/types/page_states/tests.rs` is 151 lines",
+        "`src/types/padding.rs` is 143 lines",
+        "`src/internal/provenance.rs` is 169 lines",
+        "`src/allocator/tracking.rs` is 185 lines",
         "strict-type-allowlist.txt",
         "94 entries; 5 are still marked `remove:`",
-        "`mi_arenas_try_find_free` now keeps\n    `crate::core_types::Alignment`",
-        "`mi_arena_os_alloc_aligned` now takes a private `ArenaOsAllocRequest`",
-        "`REMOVE_ENTRY_CAP` is now 5",
-        "`src/allocator/arena.rs` is 4,613 lines",
+        "for `alloc`,\n  `aligned`, `bitmap`, `internal`, and `page`",
+        "`src/allocator/arena.rs` is 4,628 lines",
         "`src/allocator/page.rs` is 3,109",
         "`src/allocator/page/bins.rs` is 128 lines",
         "SAFETY[AUDIT:page-bin-size-classes]",
-        "`src/allocator/page/counts.rs` is 254 lines",
-        "22\n  `SAFETY[AUDIT:page-count-accessors]` markers",
-        "use typed `used`, `reserved`, `capacity`, `set_used`,\n    `set_reserved`, and `set_capacity` accessors",
-        "`src/allocator/arena/debug.rs`",
-        "34\n  `SAFETY[AUDIT:arena-debug-render]` markers",
+        "SAFETY[AUDIT:arena-debug-render]` with 34 markers",
+        "`SAFETY[AUDIT:page-count-accessors]` with 22\n  markers",
+        "SAFETY[AUDIT:owned-allocation]` with 17 markers",
         "`tests/release_fast_path_audit.rs` is 2,864 lines",
         "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,828 lines",
-        "`tests/release_fast_path_audit/unsafe_performance/tail_guards.rs` is 57",
-        "release audit still runs 67 tests",
+        "`tests/release_fast_path_audit/release_policy.rs` is 2,291 lines",
+        "`tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`\n  is 700 lines",
     ];
 
     for evidence in required_evidence {

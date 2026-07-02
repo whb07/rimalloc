@@ -108,5 +108,4 @@ bare-domain-usize|src/safe/mod.rs|*|usize|Public safe convenience constructors a
 bare-domain-usize|src/safe/allocation.rs|*|usize|Public safe allocation convenience methods accept Rust `size, align` pairs before building `Layout`.|permanent: public safe API constructor boundary.
 bare-domain-usize|src/safe/heap.rs|*|usize|Public safe heap allocation convenience methods accept Rust `size, align` pairs before building `Layout`.|permanent: public safe API constructor boundary.
 bare-domain-usize|src/allocator/stats.rs|*|usize|Stats raw-bin helper parses public C `usize` bin values into `StatsBin` before lookup.|permanent: C ABI parser boundary.
-bare-domain-usize|src/allocator/threadlocal.rs|*|usize|Thread-local table helpers use raw sizes/indexes for fixed translated C table growth and key packing.|remove: introduce typed thread-local table index/size wrappers if this module becomes part of the strict internal surface.
 bare-domain-usize|src/allocator/tracking.rs|*|usize|Tracking hooks mirror Valgrind/ASan-style raw byte-size callback contracts.|permanent: external tracking callback boundary.

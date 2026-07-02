@@ -2956,7 +2956,7 @@ fn rust_idiom_backlog_tracks_current_work() {
     assert!(
         todo.contains("# TODO: Fresh Rust Idiom Follow-up Backlog")
             && todo.contains("62 entries: 44 production,\n  15 test, and 3 translation files")
-            && todo.contains("96 entries; 9 are still marked `remove:`")
+            && todo.contains("95 entries; 8 are still marked `remove:`")
             && todo.contains("`tests/release_fast_path_audit.rs` is 8,845 lines")
             && todo.contains("## Issue: Unsafe migration allowlist should keep shrinking")
             && todo
@@ -7097,7 +7097,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && threadlocal_rs.contains(
                 "mi_bitmap_try_find_and_claim(slots, ThreadSeq::new(0), &mut idx, claim_fun, None)"
             )
-            && threadlocal_rs.contains("mi_key_create(idx.get(), version)")
+            && threadlocal_rs.contains(
+                "mi_key_create(\n            ThreadLocalSlotIndex::new(idx.get()),\n            ThreadLocalKeyVersion::new(version),\n        )"
+            )
             && arena_rs.contains(
                 "let claim_fun = ThreadLocalClaimCallback::new(mi_arena_try_claim_abandoned);"
             )

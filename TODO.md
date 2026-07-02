@@ -9,7 +9,7 @@ Review evidence:
 
 - `docs/unsafe-migration-allowlist.tsv` still has 62 entries: 44 production,
   15 test, and 3 translation files.
-- `strict-type-allowlist.txt` has 96 entries; 9 are still marked `remove:`.
+- `strict-type-allowlist.txt` has 95 entries; 8 are still marked `remove:`.
   Those removable entries are broad `bare-domain-usize` file allowances.
 - The largest source files remain hard to review as Rust modules:
   `src/allocator/arena.rs` is 5,071 lines, `src/allocator/page.rs` is 3,539
@@ -63,18 +63,24 @@ Review evidence:
 > indexes, and alignment values flow through non-ABI helpers longer than they
 > should.
 
-- [ ] Inventory all nine `remove:` entries and rank them by risk, hot-path
+- [x] Inventory all nine `remove:` entries and rank them by risk, hot-path
       sensitivity, and expected code churn.
-- [ ] Start with low-risk internal helpers such as `src/allocator/arena_meta.rs`
+- [x] Start with low-risk internal helpers such as `src/allocator/arena_meta.rs`
       or `src/allocator/threadlocal.rs` before touching `arena`, `page`, or
       allocation hot paths.
-- [ ] Replace broad file-level entries with symbol-level entries, typed scalar
+- [x] Replace broad file-level entries with symbol-level entries, typed scalar
       wrappers, or checked constructor boundaries where that improves clarity
       without changing codegen on hot paths.
-- [ ] Add a strict-type audit cap for removable entries so the count cannot
+- [x] Add a strict-type audit cap for removable entries so the count cannot
       grow silently.
-- [ ] Preserve permanent ABI/platform entries where raw `usize` is the correct
+- [x] Preserve permanent ABI/platform entries where raw `usize` is the correct
       public or external contract.
+  - Evidence: `src/allocator/threadlocal.rs` now uses local transparent
+    `ThreadLocalSlotIndex`, `ThreadLocalSlotCount`, and
+    `ThreadLocalKeyVersion` wrappers for dynamic TLS table/key helpers. The
+    broad `bare-domain-usize` remove entry for that file was deleted, the
+    checker now caps removable entries at 8, and the OS memid helper takes
+    `ReservedBytes` directly at its single call site.
 - Verify: `scripts/check-strict-types.py`, release fast-path audit, full
   clippy, full tests, and assembly capture for any touched hot path.
 
@@ -162,8 +168,8 @@ Review evidence:
 
 ## Suggested implementation order
 
-1. [ ] Shrink small typed-wrapper unsafe allowlist entries.
-2. [ ] Cap and reduce removable strict-type allowlist entries.
+1. [x] Shrink small typed-wrapper unsafe allowlist entries.
+2. [x] Cap and reduce removable strict-type allowlist entries.
 3. [ ] Localize small production module-level allowances.
 4. [ ] Move safe facade tests out of `src/safe/mod.rs`.
 5. [ ] Split the release fast-path audit into domain modules.
@@ -172,7 +178,7 @@ Review evidence:
 ## Definition of done for this backlog
 
 - [x] The unsafe migration allowlist is below 64 entries and the cap is lowered.
-- [ ] The strict-type allowlist has fewer than 9 `remove:` entries and the
+- [x] The strict-type allowlist has fewer than 9 `remove:` entries and the
       removable-entry count is capped.
 - [ ] Small production module-level allowances are localized or documented as
       permanent compatibility shims.

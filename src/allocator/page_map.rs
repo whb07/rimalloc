@@ -685,7 +685,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
                 let memid = unsafe {
                     _mi_memid_create_os(
                         sub.cast::<c_void>(),
-                        MI_PAGE_MAP_SUB_SIZE,
+                        crate::core_types::ReservedBytes::new(MI_PAGE_MAP_SUB_SIZE),
                         true,
                         false,
                         false,

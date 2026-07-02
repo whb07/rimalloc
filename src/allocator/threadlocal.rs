@@ -16,6 +16,54 @@ use crate::core_types::{ArenaPtr, SliceIndex, ThreadLocalClaimCallback, ThreadSe
 use crate::mimalloc::{mi_free, mi_rezalloc, mi_zalloc_aligned};
 use crate::types::{mi_arena_t, mi_thread_local_t, mi_thread_locals_t, mi_tls_slot_t};
 
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct ThreadLocalSlotIndex(usize);
+
+impl ThreadLocalSlotIndex {
+    #[inline(always)]
+    const fn new(raw: usize) -> Self {
+        Self(raw)
+    }
+
+    #[inline(always)]
+    const fn get(self) -> usize {
+        self.0
+    }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct ThreadLocalSlotCount(usize);
+
+impl ThreadLocalSlotCount {
+    #[inline(always)]
+    const fn new(raw: usize) -> Self {
+        Self(raw)
+    }
+
+    #[inline(always)]
+    const fn get(self) -> usize {
+        self.0
+    }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct ThreadLocalKeyVersion(usize);
+
+impl ThreadLocalKeyVersion {
+    #[inline(always)]
+    const fn new(version: usize) -> Self {
+        Self(version)
+    }
+
+    #[inline(always)]
+    const fn get(self) -> usize {
+        self.0
+    }
+}
+
 pub const MI_TLS_IDX_BITS: usize = if MI_SIZE_BITS < 64 {
     MI_SIZE_BITS / 2
 } else {
@@ -197,8 +245,9 @@ fn tls_slots(tls: *mut mi_thread_locals_t) -> *mut mi_tls_slot_t {
 }
 
 #[inline]
-fn thread_locals_size(count: usize) -> Option<usize> {
-    size_of::<mi_thread_locals_t>().checked_add(count.checked_mul(size_of::<mi_tls_slot_t>())?)
+fn thread_locals_size(slot_count: ThreadLocalSlotCount) -> Option<usize> {
+    size_of::<mi_thread_locals_t>()
+        .checked_add(slot_count.get().checked_mul(size_of::<mi_tls_slot_t>())?)
 }
 
 #[inline]
@@ -207,26 +256,29 @@ fn bitmap_alloc_size(bit_count: usize) -> usize {
 }
 
 #[inline]
-fn mi_key_index(key: usize) -> usize {
-    key & MI_TLS_IDX_MASK
+fn mi_key_index(key: mi_thread_local_t) -> ThreadLocalSlotIndex {
+    ThreadLocalSlotIndex::new(key & MI_TLS_IDX_MASK)
 }
 
 #[inline]
-fn mi_key_version(key: usize) -> usize {
-    key >> MI_TLS_IDX_BITS
+fn mi_key_version(key: mi_thread_local_t) -> ThreadLocalKeyVersion {
+    ThreadLocalKeyVersion::new(key >> MI_TLS_IDX_BITS)
 }
 
 #[inline]
-fn mi_key_create(index: usize, version: usize) -> mi_thread_local_t {
-    crate::internal::mi_debug_assert!(version != 0 && version <= MI_TLS_VERSION_MAX);
-    crate::internal::mi_debug_assert!(index <= MI_TLS_IDX_MAX);
-    let key = (version << MI_TLS_IDX_BITS) | index;
+fn mi_key_create(
+    slot_index: ThreadLocalSlotIndex,
+    version: ThreadLocalKeyVersion,
+) -> mi_thread_local_t {
+    crate::internal::mi_debug_assert!(version.get() != 0 && version.get() <= MI_TLS_VERSION_MAX);
+    crate::internal::mi_debug_assert!(slot_index.get() <= MI_TLS_IDX_MAX);
+    let key = (version.get() << MI_TLS_IDX_BITS) | slot_index.get();
     crate::internal::mi_debug_assert!(key != 0);
     key
 }
 
 #[inline]
-fn mi_thread_locals_expand(least_idx: usize) -> Option<*mut mi_thread_locals_t> {
+fn mi_thread_locals_expand(least_idx: ThreadLocalSlotIndex) -> Option<*mut mi_thread_locals_t> {
     let tls_old = thread_locals_ptr();
     let count_old = unsafe { (*tls_old).count };
     let mut count = if count_old == 0 {
@@ -236,14 +288,14 @@ fn mi_thread_locals_expand(least_idx: usize) -> Option<*mut mi_thread_locals_t> 
     } else {
         count_old.saturating_mul(2)
     };
-    if count <= least_idx {
-        count = least_idx + 1;
+    if count <= least_idx.get() {
+        count = least_idx.get() + 1;
     }
     if count > MI_TLS_IDX_MAX {
         return None;
     }
 
-    let size_new = thread_locals_size(count)?;
+    let size_new = thread_locals_size(ThreadLocalSlotCount::new(count))?;
     let old_ptr = if count_old == 0 {
         ptr::null_mut()
     } else {
@@ -272,11 +324,11 @@ fn mi_thread_local_set_expand(key: mi_thread_local_t, val: *mut core::ffi::c_voi
         None => return false,
     };
     crate::internal::mi_debug_assert!(tls == thread_locals_ptr());
-    crate::internal::mi_debug_assert!(idx < unsafe { (*tls).count });
+    crate::internal::mi_debug_assert!(idx.get() < unsafe { (*tls).count });
     unsafe {
         let slots = tls_slots(tls);
-        (*slots.add(idx)).value = val;
-        (*slots.add(idx)).version = mi_key_version(key);
+        (*slots.add(idx.get())).value = val;
+        (*slots.add(idx.get())).version = mi_key_version(key).get();
     }
     true
 }
@@ -341,7 +393,10 @@ fn mi_thread_local_claim() -> mi_thread_local_t {
             version = 1;
         }
         mi_thread_locals_version.store(version, Ordering::Relaxed);
-        mi_key_create(idx.get(), version)
+        mi_key_create(
+            ThreadLocalSlotIndex::new(idx.get()),
+            ThreadLocalKeyVersion::new(version),
+        )
     } else {
         0
     }
@@ -432,10 +487,10 @@ pub extern "C" fn _mi_thread_local_set(
     crate::internal::mi_debug_assert!(key != 0);
     let idx = mi_key_index(key);
     unsafe {
-        if idx < (*tls).count {
+        if idx.get() < (*tls).count {
             let slots = tls_slots(tls);
-            (*slots.add(idx)).value = val;
-            (*slots.add(idx)).version = mi_key_version(key);
+            (*slots.add(idx.get())).value = val;
+            (*slots.add(idx.get())).version = mi_key_version(key).get();
             true
         } else {
             mi_thread_local_set_expand(key, val)
@@ -454,10 +509,10 @@ pub extern "C" fn _mi_thread_local_get(key: mi_thread_local_t) -> *mut core::ffi
     crate::internal::mi_debug_assert!(key != 0);
     let idx = mi_key_index(key);
     unsafe {
-        if idx < (*tls).count {
+        if idx.get() < (*tls).count {
             let slots = tls_slots(tls);
-            if mi_key_version(key) == (*slots.add(idx)).version {
-                (*slots.add(idx)).value
+            if mi_key_version(key).get() == (*slots.add(idx.get())).version {
+                (*slots.add(idx.get())).value
             } else {
                 ptr::null_mut()
             }
@@ -510,9 +565,9 @@ pub extern "C" fn _mi_thread_local_free(key: mi_thread_local_t) {
         mi_lock_acquire(ptr::addr_of_mut!(mi_thread_locals_lock));
     }
     let slots = mi_thread_locals_free.load(Ordering::Acquire);
-    if !slots.is_null() && idx < unsafe { mi_bitmap_max_bits(slots) } {
+    if !slots.is_null() && idx.get() < unsafe { mi_bitmap_max_bits(slots) } {
         unsafe {
-            mi_bitmap_set(slots, idx);
+            mi_bitmap_set(slots, idx.get());
         }
     }
     unsafe {

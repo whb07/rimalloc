@@ -116,14 +116,14 @@ pub unsafe fn _mi_memid_none() -> mi_memid_t {
 #[inline]
 pub unsafe fn _mi_memid_create_os(
     base: *mut c_void,
-    size: usize,
+    size: crate::core_types::ReservedBytes,
     committed: bool,
     is_zero: bool,
     is_large: bool,
 ) -> mi_memid_t {
     crate::core_types::MemId::<crate::core_types::OsMem>::os(
         crate::core_types::OsMemPtr::new(base),
-        crate::core_types::ReservedBytes::new(size),
+        size,
         crate::core_types::InitiallyCommitted(committed),
         crate::core_types::InitiallyZero(is_zero),
         crate::core_types::Pinned(is_large),

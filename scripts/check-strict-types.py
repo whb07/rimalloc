@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ALLOWLIST = ROOT / "strict-type-allowlist.txt"
+REMOVE_ENTRY_CAP = 8
 
 RAW_BOUNDARY_FILES = {
     "src/ffi/abi.rs",
@@ -198,6 +199,14 @@ def read_allowlist() -> list[AllowEntry]:
                 "'permanent:' or 'remove:'"
             )
         entries.append(entry)
+    remove_entries = [
+        entry for entry in entries if entry.disposition.startswith("remove:")
+    ]
+    if len(remove_entries) > REMOVE_ENTRY_CAP:
+        raise AssertionError(
+            "strict-type allowlist has "
+            f"{len(remove_entries)} removable entries, above cap {REMOVE_ENTRY_CAP}"
+        )
     return entries
 
 

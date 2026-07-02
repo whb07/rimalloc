@@ -28,7 +28,9 @@ pub(super) fn assert_stats_format_and_markers(unsafe_allowlist: &str, stats_rs: 
     );
     for (audit_id, min_count) in [
         ("stats-init-bin-boundary", 4),
-        ("stats-counter-update-boundary", 23),
+        ("stats-counter-mt-update-boundary", 7),
+        ("stats-counter-local-update-boundary", 6),
+        ("stats-counter-adjust-boundary", 10),
         ("stats-counter-accumulate-boundary", 3),
         ("stats-counter-merge-boundary", 14),
         ("stats-clock-boundary", 1),

@@ -32,7 +32,11 @@ pub(super) fn assert_platform_primitive_focused_evidence(evidence: &str) {
     }
 
     for (audit_id, focused_path) in [
-        ("os-memory-config-boundary", OS_MEMORY_FOCUSED_PATH),
+        ("os-memory-config-state-boundary", OS_MEMORY_FOCUSED_PATH),
+        ("os-memory-subproc-stats-boundary", OS_MEMORY_FOCUSED_PATH),
+        ("os-memory-page-size-boundary", OS_MEMORY_FOCUSED_PATH),
+        ("os-memory-aligned-hint-boundary", OS_MEMORY_FOCUSED_PATH),
+        ("os-memory-page-align-boundary", OS_MEMORY_FOCUSED_PATH),
         ("os-memory-guard-boundary", OS_MEMORY_FOCUSED_PATH),
         ("os-memory-commit-boundary", OS_MEMORY_FOCUSED_PATH),
         ("os-memory-free-boundary", OS_MEMORY_FOCUSED_PATH),

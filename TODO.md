@@ -4,23 +4,26 @@ Fresh-eyes review after completing the previous TODO backlog on `master` at
 `7af25fa`. The previous backlog is implemented and pushed: source audit marker
 cap 24, release-audit module cap 280, and strict-type allowlist hotspot
 governance. The next mechanical-translation debt is concentrated in audit IDs
-just above the next useful source cap, release-audit modules just below the
+now sitting at the 22-marker source cap, release-audit modules just below the
 current harness cap, and strict-type allowlist reason/domain hotspots that can
-still grow without focused review.
+still grow without focused review. Issue 1 of this backlog has been implemented
+and validated through the unsafe-audit inventory locally; Issues 2 and 3 remain.
 
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,899 unsafe
-  mentions, and 462 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 462 operation IDs with
-  990 automated evidence rows.
-- No source audit operation ID has more than 24 source markers. Ten IDs exceed
-  the next useful 22-marker cap: `os-memory-config-boundary`,
-  `typed-tld-accessors`, and `arena-id-memid-helpers` at 24 markers each;
-  `aligned-padding-boundary`, `arena-page-free-boundary`,
-  `arena-page-reabandon-unabandon-boundary`, `heap-ownership-query-boundary`,
-  `stats-counter-update-boundary`, `typed-freelist-wrappers`, and
-  `scalar-domain-wrappers` at 23 markers each.
+  mentions, and 492 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 492 operation IDs with
+  1,052 automated evidence rows.
+- No source audit operation ID has more than 22 source markers. The old
+  over-cap IDs are split into responsibility-level marker families in source,
+  `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and release-audit
+  guards.
+- Eight IDs now sit at the 22-marker cap: `macos-zone-allocation-boundary`,
+  `windows-large-page-boundary`, `arena-abandoned-boundary`,
+  `arena-page-fresh-boundary`, `internal-atomic-fetch-boundary`,
+  `page-count-accessors`, `typed-callback-test-fixtures`, and
+  `typed-page-queue-test-fixtures`.
 - `strict-type-allowlist.txt` has 634 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -60,23 +63,24 @@ Current review evidence:
   `interposition_exports/linux_override.rs` at 279 lines,
   `primitive_options.rs` at 279 lines, `strict_policy.rs` at 260 lines,
   `release_policy/callbacks.rs` at 255 lines,
-  `unsafe_performance/allocation_free/marker_counts.rs` at 248 lines, and
-  `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view.rs` at 248 lines.
+  `datatype_acceptance/domain_wrappers.rs` at 253 lines, and
+  `unsafe_performance/allocation_free/marker_counts.rs` at 251 lines.
 
 ## Issue 1: Lower the source audit marker cap to 22
 
-The current 24-marker cap is enforced, but ten operation IDs still mix enough
-independent responsibilities to make review noisy.
+Completed in this pass. The current 22-marker cap is enforced, and the former
+23/24-marker operation IDs now have focused responsibility-level marker
+families.
 
-- [ ] Split the 24-marker IDs by responsibility:
+- [x] Split the 24-marker IDs by responsibility:
       `os-memory-config-boundary`, `typed-tld-accessors`, and
       `arena-id-memid-helpers`.
-- [ ] Split the 23-marker IDs by operation family:
+- [x] Split the 23-marker IDs by operation family:
       `aligned-padding-boundary`, `arena-page-free-boundary`,
       `arena-page-reabandon-unabandon-boundary`, `heap-ownership-query-boundary`,
       `stats-counter-update-boundary`, `typed-freelist-wrappers`, and
       `scalar-domain-wrappers`.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
       release-audit guards so no source audit operation ID exceeds 22 source
       markers.
 
@@ -125,13 +129,13 @@ clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Lower the source audit marker cap to 22.
+1. [x] Lower the source audit marker cap to 22.
 2. [ ] Split release-audit modules over 260 lines.
 3. [ ] Guard strict-type permanent reason and file/domain hotspots.
 
 ## Definition of done for this backlog
 
-- [ ] No source audit operation ID has more than 22 source markers.
+- [x] No source audit operation ID has more than 22 source markers.
 - [ ] Release-audit modules are split enough to lower the recursive module cap
       to 260 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type permanent reason and file/domain hotspot governance is

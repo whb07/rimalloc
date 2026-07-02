@@ -415,17 +415,17 @@ pub unsafe extern "C" fn mi_heap_destroy(heap: *mut mi_heap_t) {
 ///
 /// `p` may be null. A non-null pointer must be suitable for mimalloc's safe
 /// page lookup, such as an allocation pointer or supported interior pointer.
-// SAFETY[AUDIT:heap-ownership-query-boundary]: ownership lookup translates an
+// SAFETY[AUDIT:heap-ownership-lookup-boundary]: ownership lookup translates an
 // allocation pointer to its allocator page and heap without taking ownership.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_of(p: *const c_void) -> *mut mi_heap_t {
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: caller permits allocator page
+    // SAFETY[AUDIT:heap-ownership-lookup-boundary]: caller permits allocator page
     // lookup for `p`.
     let page: *mut mi_page_t = unsafe { _mi_safe_ptr_page(p) };
     if page.is_null() {
         return ptr::null_mut();
     }
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: non-null page came from the
+    // SAFETY[AUDIT:heap-ownership-lookup-boundary]: non-null page came from the
     // allocator page map.
     unsafe { mi_page_heap(page) }
 }
@@ -434,11 +434,11 @@ pub unsafe extern "C" fn mi_heap_of(p: *const c_void) -> *mut mi_heap_t {
 ///
 /// `p` may be null. A non-null pointer must be suitable for mimalloc's safe
 /// page lookup, such as an allocation pointer or supported interior pointer.
-// SAFETY[AUDIT:heap-ownership-query-boundary]: heap containment is a nullable
+// SAFETY[AUDIT:heap-ownership-lookup-boundary]: heap containment is a nullable
 // ownership lookup and does not retain pointers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_any_heap_contains(p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-lookup-boundary]: forwards this API's
     // ownership-inspection contract.
     unsafe { !mi_heap_of(p).is_null() }
 }
@@ -447,18 +447,18 @@ pub unsafe extern "C" fn mi_any_heap_contains(p: *const c_void) -> bool {
 ///
 /// `heap` may be null to select the main heap. Non-null heap and pointer
 /// arguments must remain valid for allocator ownership inspection.
-// SAFETY[AUDIT:heap-ownership-query-boundary]: heap-specific containment selects the
+// SAFETY[AUDIT:heap-ownership-contains-boundary]: heap-specific containment selects the
 // main heap for null and compares against allocator page ownership.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_void) -> bool {
     let heap = if heap.is_null() {
-        // SAFETY[AUDIT:heap-ownership-query-boundary]: null heap selects the main
+        // SAFETY[AUDIT:heap-ownership-contains-boundary]: null heap selects the main
         // heap by API contract.
         unsafe { mi_heap_main() }
     } else {
         heap.cast_mut()
     };
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-contains-boundary]: forwards this API's
     // ownership-inspection contract.
     core::ptr::eq(heap.cast_const(), unsafe { mi_heap_of(p) })
 }
@@ -467,58 +467,58 @@ pub unsafe extern "C" fn mi_heap_contains(heap: *const mi_heap_t, p: *const c_vo
 ///
 /// `heap` may be null to select the main heap. Non-null heap and pointer
 /// arguments must remain valid for allocator ownership inspection.
-// SAFETY[AUDIT:heap-ownership-query-boundary]: checked ownership parses heap metadata
+// SAFETY[AUDIT:heap-ownership-check-boundary]: checked ownership parses heap metadata
 // into a borrowed witness before comparing allocator page ownership.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_heap_check_owned(heap: *mut mi_heap_t, p: *const c_void) -> bool {
     let heap = if heap.is_null() {
-        // SAFETY[AUDIT:heap-ownership-query-boundary]: null heap selects the main
+        // SAFETY[AUDIT:heap-ownership-check-boundary]: null heap selects the main
         // heap by API contract.
         unsafe { mi_heap_main() }
     } else {
         heap
     };
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-check-boundary]: forwards this API's
     // ownership-inspection contract.
     let Some(heap) = (unsafe { BorrowedHeap::from_lookup_raw(heap) }) else {
         return false;
     };
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: heap and pointer arguments remain
+    // SAFETY[AUDIT:heap-ownership-check-boundary]: heap and pointer arguments remain
     // valid for ownership inspection.
     unsafe { mi_heap_check_owned_typed(heap, p) }
 }
 
-// SAFETY[AUDIT:heap-ownership-query-boundary]: typed ownership check preserves the
+// SAFETY[AUDIT:heap-ownership-check-boundary]: typed ownership check preserves the
 // main-heap and owned-heap distinction without retaining pointer state.
 #[inline]
 unsafe fn mi_heap_check_owned_typed(heap: BorrowedHeap, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: `heap` is a live heap borrowed for
+    // SAFETY[AUDIT:heap-ownership-check-boundary]: `heap` is a live heap borrowed for
     // this ownership check.
     if let Some(heap) = unsafe { OwnedHeap::new(heap.ptr()) } {
-        // SAFETY[AUDIT:heap-ownership-query-boundary]: non-main heap and pointer
+        // SAFETY[AUDIT:heap-ownership-check-boundary]: non-main heap and pointer
         // remain valid for ownership inspection.
         unsafe { mi_heap_check_owned_owned(heap, p) }
     } else {
-        // SAFETY[AUDIT:heap-ownership-query-boundary]: main heap and pointer remain
+        // SAFETY[AUDIT:heap-ownership-check-boundary]: main heap and pointer remain
         // valid for ownership inspection.
         unsafe { mi_heap_check_owned_borrowed(heap, p) }
     }
 }
 
-// SAFETY[AUDIT:heap-ownership-query-boundary]: owned-heap ownership check compares
+// SAFETY[AUDIT:heap-ownership-check-boundary]: owned-heap ownership check compares
 // only the heap metadata pointer against allocator page ownership.
 #[inline]
 unsafe fn mi_heap_check_owned_owned(heap: OwnedHeap, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-check-boundary]: forwards this API's
     // ownership-inspection contract.
     core::ptr::eq(heap.ptr().as_ptr().cast_const(), unsafe { mi_heap_of(p) })
 }
 
-// SAFETY[AUDIT:heap-ownership-query-boundary]: borrowed main-heap ownership check
+// SAFETY[AUDIT:heap-ownership-check-boundary]: borrowed main-heap ownership check
 // compares only the heap metadata pointer against allocator page ownership.
 #[inline]
 unsafe fn mi_heap_check_owned_borrowed(heap: BorrowedHeap, p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-check-boundary]: forwards this API's
     // ownership-inspection contract.
     core::ptr::eq(heap.ptr().as_ptr().cast_const(), unsafe { mi_heap_of(p) })
 }
@@ -529,7 +529,7 @@ unsafe fn mi_heap_check_owned_borrowed(heap: BorrowedHeap, p: *const c_void) -> 
 const _: unsafe extern "C" fn(*mut mi_heap_t) = mi_heap_stats_merge_to_main;
 
 #[cfg(feature = "c-abi")]
-// SAFETY[AUDIT:heap-ownership-query-boundary]: const ABI witness preserves the raw C
+// SAFETY[AUDIT:heap-ownership-check-boundary]: const ABI witness preserves the raw C
 // signature for feature-gated heap ownership exports.
 const _: unsafe extern "C" fn(*mut mi_heap_t, *const c_void) -> bool = mi_heap_check_owned;
 
@@ -537,11 +537,11 @@ const _: unsafe extern "C" fn(*mut mi_heap_t, *const c_void) -> bool = mi_heap_c
 ///
 /// `p` may be null. A non-null pointer must be suitable for mimalloc's safe
 /// page lookup, such as an allocation pointer or supported interior pointer.
-// SAFETY[AUDIT:heap-ownership-query-boundary]: global ownership check is a raw C ABI
+// SAFETY[AUDIT:heap-ownership-lookup-boundary]: global ownership check is a raw C ABI
 // shim over the same allocator page lookup as `mi_any_heap_contains`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_check_owned(p: *const c_void) -> bool {
-    // SAFETY[AUDIT:heap-ownership-query-boundary]: forwards this API's
+    // SAFETY[AUDIT:heap-ownership-lookup-boundary]: forwards this API's
     // ownership-inspection contract.
     unsafe { mi_any_heap_contains(p) }
 }

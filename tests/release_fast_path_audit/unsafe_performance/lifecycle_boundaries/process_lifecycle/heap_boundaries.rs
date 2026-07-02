@@ -21,7 +21,9 @@ pub(super) fn assert_process_lifecycle_boundaries(sources: &UnsafePerformanceSou
         ("heap-nonmain-cleanup-boundary", 6),
         ("heap-nonmain-lifecycle-boundary", 10),
         ("heap-main-lifecycle-boundary", 4),
-        ("heap-ownership-query-boundary", 23),
+        ("heap-ownership-lookup-boundary", 7),
+        ("heap-ownership-contains-boundary", 3),
+        ("heap-ownership-check-boundary", 13),
         ("heap-underutilized-boundary", 4),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");

@@ -221,9 +221,25 @@ pub(super) fn assert_domain_wrapper_acceptance(audit_sources: &DatatypeAcceptanc
     assert!(
         !unsafe_migration_allowlist.contains("src/types/scalar.rs")
             && scalar_rs
-                .matches("SAFETY[AUDIT:scalar-domain-wrappers]")
+                .matches("SAFETY[AUDIT:scalar-size-domain-wrappers]")
                 .count()
-                >= 20
+                >= 6
+            && scalar_rs
+                .matches("SAFETY[AUDIT:scalar-alignment-domain-wrappers]")
+                .count()
+                >= 3
+            && scalar_rs
+                .matches("SAFETY[AUDIT:scalar-page-count-domain-wrappers]")
+                .count()
+                >= 2
+            && scalar_rs
+                .matches("SAFETY[AUDIT:scalar-index-domain-wrappers]")
+                .count()
+                >= 8
+            && scalar_rs
+                .matches("SAFETY[AUDIT:scalar-lint-fixture-wrappers]")
+                .count()
+                >= 4
             && scalar_rs
                 .contains("Scalar domain wrappers for allocator sizes, counts, indexes, and bins.")
             && scalar_rs.contains("pub(crate) struct UsableOut(*mut usize);")

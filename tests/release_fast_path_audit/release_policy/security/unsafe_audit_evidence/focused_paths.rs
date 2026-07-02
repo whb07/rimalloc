@@ -111,7 +111,15 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
         ),
         (
-            "stats-counter-update-boundary",
+            "stats-counter-mt-update-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "stats-counter-local-update-boundary",
+            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
+        ),
+        (
+            "stats-counter-adjust-boundary",
             "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
         ),
         (
@@ -204,7 +212,16 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         ("typed-block-accessors", STRICT_TYPE_FOCUSED_PATH),
         ("typed-heap-accessors", STRICT_TYPE_FOCUSED_PATH),
         ("typed-thread-heap-accessors", STRICT_TYPE_FOCUSED_PATH),
-        ("typed-tld-accessors", STRICT_TYPE_FOCUSED_PATH),
+        (
+            "typed-tld-thread-identity-accessors",
+            STRICT_TYPE_FOCUSED_PATH,
+        ),
+        ("typed-tld-subproc-accessors", STRICT_TYPE_FOCUSED_PATH),
+        ("typed-tld-metadata-accessors", STRICT_TYPE_FOCUSED_PATH),
+        (
+            "typed-tld-fixture-touch-accessors",
+            STRICT_TYPE_FOCUSED_PATH,
+        ),
         ("typed-arena-identity-accessors", STRICT_TYPE_FOCUSED_PATH),
         ("typed-arena-linkage-accessors", STRICT_TYPE_FOCUSED_PATH),
         (

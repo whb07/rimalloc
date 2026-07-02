@@ -721,7 +721,7 @@ define_ptr_wrapper!(TldPtr, mi_tld_t, "Non-null thread-local data");
 impl TldPtr {
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-thread-identity-accessors]: TLD thread identity fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_id(self) -> Option<ThreadId> {
         let raw = self.as_ptr();
@@ -729,7 +729,7 @@ impl TldPtr {
         if thread_id == 0 {
             None
         } else {
-            // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+            // SAFETY[AUDIT:typed-tld-thread-identity-accessors]: TLD thread identity fields stay behind transparent NonNull wrappers.
             Some(unsafe { ThreadId::new_unchecked(thread_id) })
         }
     }
@@ -737,7 +737,7 @@ impl TldPtr {
     /// # Safety
     /// The TLD pointer must refer to writable thread-local metadata. `thread_id`
     /// must be `None` only for the main-thread sentinel state.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-thread-identity-accessors]: TLD thread identity fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_thread_id(self, thread_id: Option<ThreadId>) {
         let raw = self.as_ptr();
@@ -747,7 +747,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-thread-identity-accessors]: TLD thread identity fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_seq(self) -> ThreadSeq {
         let raw = self.as_ptr();
@@ -756,7 +756,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to writable thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-thread-identity-accessors]: TLD thread identity fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_thread_seq(self, seq: ThreadSeq) {
         let raw = self.as_ptr();
@@ -765,7 +765,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-thread-identity-accessors]: TLD thread identity fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn numa_node(self) -> NumaNode {
         let raw = self.as_ptr();
@@ -774,7 +774,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to writable thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-thread-identity-accessors]: TLD thread identity fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_numa_node(self, node: NumaNode) {
         let raw = self.as_ptr();
@@ -783,7 +783,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-subproc-accessors]: TLD subproc, stats, and arena forwarding stays behind optional typed witnesses.
     #[inline(always)]
     pub(crate) unsafe fn subproc(self) -> Option<SubprocPtr> {
         let raw = self.as_ptr();
@@ -792,7 +792,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to writable thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-subproc-accessors]: TLD subproc, stats, and arena forwarding stays behind optional typed witnesses.
     #[inline(always)]
     pub(crate) unsafe fn set_subproc(self, subproc: Option<SubprocPtr>) {
         let raw = self.as_ptr();
@@ -803,7 +803,7 @@ impl TldPtr {
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata whose
     /// subproc, if present, points to initialized subproc metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-subproc-accessors]: TLD subproc, stats, and arena forwarding stays behind optional typed witnesses.
     #[inline(always)]
     pub(crate) unsafe fn stats(self) -> Option<*mut mi_stats_t> {
         unsafe { self.subproc().map(|subproc| subproc.stats()) }
@@ -812,7 +812,7 @@ impl TldPtr {
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata whose
     /// subproc, if present, points to initialized subproc metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-subproc-accessors]: TLD subproc, stats, and arena forwarding stays behind optional typed witnesses.
     #[inline(always)]
     pub(crate) unsafe fn arena_count_cell(self) -> Option<AtomicUsizeField> {
         unsafe { self.subproc().map(|subproc| subproc.arena_count_cell()) }
@@ -821,7 +821,7 @@ impl TldPtr {
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata whose
     /// subproc, if present, points to initialized subproc metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-subproc-accessors]: TLD subproc, stats, and arena forwarding stays behind optional typed witnesses.
     #[inline(always)]
     pub(crate) unsafe fn arena(self, index: ArenaIndex) -> Option<ArenaPtr> {
         unsafe { self.subproc().and_then(|subproc| subproc.arena(index)) }
@@ -830,7 +830,7 @@ impl TldPtr {
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata whose
     /// subproc, if present, points to writable subproc metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-subproc-accessors]: TLD subproc, stats, and arena forwarding stays behind optional typed witnesses.
     #[inline(always)]
     pub(crate) unsafe fn set_arena(self, index: ArenaIndex, arena: Option<ArenaPtr>) {
         if let Some(subproc) = unsafe { self.subproc() } {
@@ -840,7 +840,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to thread-local metadata whose memid field is valid.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-metadata-accessors]: TLD memid, thread-heap, recursion, and thread-pool fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn memid_ptr(self) -> *mut mi_memid_t {
         let raw = self.as_ptr();
@@ -849,7 +849,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-metadata-accessors]: TLD memid, thread-heap, recursion, and thread-pool fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_heaps(self) -> Option<ThreadHeapPtr> {
         let raw = self.as_ptr();
@@ -858,7 +858,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to writable thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-metadata-accessors]: TLD memid, thread-heap, recursion, and thread-pool fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_thread_heaps(self, theaps: Option<ThreadHeapPtr>) {
         let raw = self.as_ptr();
@@ -868,7 +868,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to thread-local metadata whose lock field is valid.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-metadata-accessors]: TLD memid, thread-heap, recursion, and thread-pool fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn thread_heaps_lock(self) -> *mut mi_lock_t {
         let raw = self.as_ptr();
@@ -877,7 +877,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-metadata-accessors]: TLD memid, thread-heap, recursion, and thread-pool fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn recurse(self) -> bool {
         let raw = self.as_ptr();
@@ -886,7 +886,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to writable thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-metadata-accessors]: TLD memid, thread-heap, recursion, and thread-pool fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_recurse(self, recurse: bool) {
         let raw = self.as_ptr();
@@ -895,7 +895,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to initialized thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-metadata-accessors]: TLD memid, thread-heap, recursion, and thread-pool fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn is_in_threadpool(self) -> bool {
         let raw = self.as_ptr();
@@ -904,7 +904,7 @@ impl TldPtr {
 
     /// # Safety
     /// The TLD pointer must refer to writable thread-local metadata.
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-metadata-accessors]: TLD memid, thread-heap, recursion, and thread-pool fields stay behind transparent NonNull wrappers.
     #[inline(always)]
     pub(crate) unsafe fn set_is_in_threadpool(self, is_in_threadpool: bool) {
         let raw = self.as_ptr();
@@ -1658,21 +1658,21 @@ pub(super) fn __lint_touch() {
 
     let _ = TldPtr::thread_id as unsafe fn(TldPtr) -> Option<ThreadId>;
     let _ = TldPtr::set_thread_id as unsafe fn(TldPtr, Option<ThreadId>);
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-fixture-touch-accessors]: lint-touch references keep TLD accessors typechecked without dereferencing metadata.
     let _ = TldPtr::thread_seq as unsafe fn(TldPtr) -> ThreadSeq;
     let _ = TldPtr::set_thread_seq as unsafe fn(TldPtr, ThreadSeq);
     let _ = TldPtr::numa_node as unsafe fn(TldPtr) -> NumaNode;
     let _ = TldPtr::set_numa_node as unsafe fn(TldPtr, NumaNode);
     let _ = TldPtr::subproc as unsafe fn(TldPtr) -> Option<SubprocPtr>;
     let _ = TldPtr::set_subproc as unsafe fn(TldPtr, Option<SubprocPtr>);
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-fixture-touch-accessors]: lint-touch references keep TLD accessors typechecked without dereferencing metadata.
     let _ = TldPtr::stats as unsafe fn(TldPtr) -> Option<*mut mi_stats_t>;
     let _ = TldPtr::arena_count_cell as unsafe fn(TldPtr) -> Option<AtomicUsizeField>;
     let _ = TldPtr::arena as unsafe fn(TldPtr, ArenaIndex) -> Option<ArenaPtr>;
     let _ = TldPtr::set_arena as unsafe fn(TldPtr, ArenaIndex, Option<ArenaPtr>);
     let _ = TldPtr::memid_ptr as unsafe fn(TldPtr) -> *mut mi_memid_t;
     let _ = TldPtr::thread_heaps as unsafe fn(TldPtr) -> Option<ThreadHeapPtr>;
-    // SAFETY[AUDIT:typed-tld-accessors]: caller-proven metadata access stays behind transparent NonNull wrappers.
+    // SAFETY[AUDIT:typed-tld-fixture-touch-accessors]: lint-touch references keep TLD accessors typechecked without dereferencing metadata.
     let _ = TldPtr::set_thread_heaps as unsafe fn(TldPtr, Option<ThreadHeapPtr>);
     let _ = TldPtr::thread_heaps_lock as unsafe fn(TldPtr) -> *mut mi_lock_t;
     let _ = TldPtr::recurse as unsafe fn(TldPtr) -> bool;

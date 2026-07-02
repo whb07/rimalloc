@@ -157,7 +157,11 @@ pub(super) fn assert_os_wrapper_boundaries(sources: &UnsafePerformanceSources) {
         "OS helper wrappers should keep C's local helper boundaries and retained wrapper set"
     );
     for (audit_id, min_count) in [
-        ("os-memory-config-boundary", 20),
+        ("os-memory-config-state-boundary", 5),
+        ("os-memory-subproc-stats-boundary", 2),
+        ("os-memory-page-size-boundary", 10),
+        ("os-memory-aligned-hint-boundary", 3),
+        ("os-memory-page-align-boundary", 4),
         ("os-memory-guard-boundary", 6),
         ("os-memory-commit-boundary", 12),
         ("os-memory-free-boundary", 8),

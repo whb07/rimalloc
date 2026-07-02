@@ -40,7 +40,7 @@ unsafe fn mi_padding_shrink_call(
     block: *const mi_block_t,
     min_size: usize,
 ) {
-    // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+    // SAFETY[AUDIT:aligned-padding-shrink-boundary]: aligned padding-shrink shims preserve C ABI and page/block witness requirements.
     unsafe {
         core::arch::asm!(
             "call _mi_padding_shrink",
@@ -59,7 +59,7 @@ unsafe fn mi_padding_shrink_call(
     block: *const mi_block_t,
     min_size: usize,
 ) {
-    // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+    // SAFETY[AUDIT:aligned-padding-shrink-boundary]: aligned padding-shrink shims preserve C ABI and page/block witness requirements.
     unsafe { _mi_padding_shrink(page, block, min_size) };
 }
 
@@ -155,17 +155,17 @@ unsafe fn mi_theap_malloc_guarded_aligned(
         return core::ptr::null_mut();
     }
     let oversize = size + alignment - 1;
-    // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+    // SAFETY[AUDIT:aligned-guarded-allocation-boundary]: guarded aligned allocation preserves layout, tracking, and usable-size witnesses.
     let base = unsafe { _mi_theap_malloc_guarded(theap, oversize, zero) };
     if base.is_null() {
         return core::ptr::null_mut();
     }
     let p = _mi_align_up_ptr(base.cast_const(), alignment);
-    // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+    // SAFETY[AUDIT:aligned-guarded-allocation-boundary]: guarded aligned allocation preserves layout, tracking, and usable-size witnesses.
     unsafe {
         mi_track_align(base, p, p as usize - base as usize, size);
     }
-    // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+    // SAFETY[AUDIT:aligned-guarded-allocation-boundary]: guarded aligned allocation preserves layout, tracking, and usable-size witnesses.
     crate::internal::mi_assert_internal!(unsafe { crate::mimalloc::mi_usable_size(p) } >= size);
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(p, alignment));
     p
@@ -186,7 +186,7 @@ pub(crate) unsafe fn mi_theap_malloc_zero_no_guarded(
     let zero = layout.zeroed() == crate::core_types::Zeroed::Yes;
     crate::internal::mi_assert_internal!(alignment.get() > 0);
     crate::internal::mi_assert_internal!(offset.get() < alignment.get());
-    // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+    // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
     unsafe { _mi_theap_malloc_zero(theap.ptr().as_ptr(), size, zero, usable) }
 }
 
@@ -227,7 +227,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
         let theap = theap
             .map(|theap| theap.ptr().as_ptr())
             .unwrap_or(core::ptr::null_mut());
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
         p = unsafe { _mi_theap_malloc_zero_ex(theap, oversize, zero, alignment_raw, usable) };
         if p.is_null() {
             return core::ptr::null_mut();
@@ -249,12 +249,12 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
             return core::ptr::null_mut();
         };
         p = if let Some(theap) = theap {
-            // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+            // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
             unsafe {
                 mi_theap_malloc_zero_no_guarded(theap, no_guarded_layout, alignment, offset, usable)
             }
         } else {
-            // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+            // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
             unsafe { _mi_theap_malloc_zero(core::ptr::null_mut(), oversize, zero, usable) }
         };
         if p.is_null() {
@@ -272,48 +272,48 @@ unsafe fn mi_theap_malloc_zero_aligned_at_overalloc(
     crate::internal::mi_assert_internal!(adjust < alignment_raw);
     let aligned_p = (p as usize + adjust) as *mut c_void;
 
-    // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+    // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
     let page = unsafe { _mi_ptr_page(p) };
     if aligned_p != p {
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe {
             mi_page_set_has_interior_pointers(crate::core_types::PagePtr::new_unchecked(page), true)
         };
         if MI_GUARDED != 0 && adjust >= size_of::<mi_block_t>() {
             let block = p.cast::<mi_block_t>();
-            // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+            // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
             let block = unsafe { crate::core_types::BlockPtr::new_unchecked(block) };
-            // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+            // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
             unsafe {
                 crate::core_types::BlockTag::write_aligned_to(block);
             }
         }
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-padding-shrink-boundary]: aligned padding-shrink shims preserve C ABI and page/block witness requirements.
         unsafe { mi_padding_shrink_call(page, p.cast::<mi_block_t>(), adjust + size) };
     }
 
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe { mi_page_usable_block_size(page) }.get() >= adjust + size
     );
     crate::internal::mi_assert_internal!(
         ((aligned_p as usize) + offset_raw).is_multiple_of(alignment_raw)
     );
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe { crate::mimalloc::mi_usable_size(aligned_p) } >= size
     );
     crate::internal::mi_assert_internal!(
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe { crate::mimalloc::mi_usable_size(p) }
-            // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+            // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
             == unsafe { crate::mimalloc::mi_usable_size(aligned_p) } + adjust
     );
 
     if p != aligned_p {
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         let usable_size = unsafe { crate::mimalloc::mi_usable_size(aligned_p) };
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-overalloc-adjust-boundary]: over-allocation adjustment preserves page, block, interior-pointer, and usable-size invariants.
         unsafe { mi_track_align(p, aligned_p, adjust, usable_size) };
     }
     aligned_p
@@ -347,7 +347,7 @@ unsafe fn mi_theap_malloc_zero_aligned_at_generic(
         && offset_raw == 0
         && mi_malloc_is_naturally_aligned(layout.requested(), alignment)
     {
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
         let p = unsafe {
             mi_theap_malloc_zero_no_guarded(local_theap, layout, alignment, offset, usable)
         };
@@ -358,11 +358,11 @@ unsafe fn mi_theap_malloc_zero_aligned_at_generic(
             return p;
         }
         crate::internal::mi_assert!(false);
-        // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+        // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
         unsafe { crate::mimalloc::mi_free(p) };
     }
 
-    // SAFETY[AUDIT:aligned-padding-boundary]: aligned allocation operations use validated layout, heap, page, block, or raw C ABI witnesses.
+    // SAFETY[AUDIT:aligned-no-guard-allocation-boundary]: no-guard aligned allocation delegates through validated layout, alignment, and usable out-pointer witnesses.
     unsafe { mi_theap_malloc_zero_aligned_at_overalloc(theap, layout, alignment, offset, usable) }
 }
 

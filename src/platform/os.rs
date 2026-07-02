@@ -64,7 +64,7 @@ static mut mi_os_mem_config: mi_os_mem_config_t = mi_os_mem_config_t {
     has_transparent_huge_pages: false,
 };
 
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-config-state-boundary]: OS memory config readers preserve process-global memory configuration invariants.
 #[inline]
 unsafe fn mi_os_mem_config_ptr() -> *const mi_os_mem_config_t {
     core::ptr::addr_of!(mi_os_mem_config)
@@ -112,30 +112,30 @@ struct MiArenaCommitPrefix {
     pages_meta: *mut mi_page_t,
 }
 
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-subproc-stats-boundary]: OS subproc stats projection uses live borrowed subproc metadata.
 unsafe fn mi_os_current_subproc() -> Option<BorrowedSubproc> {
     SubprocPtr::new(unsafe { _mi_subproc() })
         .map(|subproc| unsafe { BorrowedSubproc::new(subproc) })
 }
 
 unsafe fn mi_os_subproc_stats_mut(subproc: BorrowedSubproc) -> *mut mi_stats_t {
-    // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-subproc-stats-boundary]: OS subproc stats projection uses live borrowed subproc metadata.
     unsafe { ptr::addr_of_mut!((*subproc.ptr().as_ptr().cast::<MiSubprocStatsPrefix>()).stats) }
 }
 
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-config-state-boundary]: OS memory config readers preserve process-global memory configuration invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_has_overcommit() -> bool {
     unsafe { (*mi_os_mem_config_ptr()).has_overcommit }
 }
 
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-config-state-boundary]: OS memory config readers preserve process-global memory configuration invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_has_virtual_reserve() -> bool {
     unsafe { (*mi_os_mem_config_ptr()).has_virtual_reserve }
 }
 
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_page_size() -> usize {
@@ -144,7 +144,7 @@ pub(crate) unsafe extern "C" fn _mi_os_page_size() -> usize {
 
 /// # Safety
 /// The OS memory configuration must have been initialized and contain a nonzero page size.
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
 #[inline]
 pub(crate) unsafe fn _mi_os_page_size_typed() -> crate::core_types::OsPageSize {
     let page_size = unsafe { _mi_os_page_size() };
@@ -154,34 +154,34 @@ pub(crate) unsafe fn _mi_os_page_size_typed() -> crate::core_types::OsPageSize {
 
 /// # Safety
 /// The OS memory configuration must have been initialized before this is called concurrently.
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_large_page_size() -> usize {
     let large = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
     if large != 0 {
         large
     } else {
-        // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+        // SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
         unsafe { _mi_os_page_size_typed().get() }
     }
 }
 
 /// # Safety
 /// The OS memory configuration and options state must be initialized.
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
     let minsize = mi_option_get_size(mi_option_t::mi_option_minimal_purge_size);
     if minsize != 0 {
         _mi_align_up(minsize, unsafe { _mi_os_page_size_typed().get() })
     } else {
-        // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+        // SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
         let has_transparent_huge_pages =
             unsafe { (*mi_os_mem_config_ptr()).has_transparent_huge_pages };
         if has_transparent_huge_pages && mi_option_get(mi_option_t::mi_option_allow_thp) == 2 {
             unsafe { _mi_os_large_page_size() }
         } else {
-            // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+            // SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
             unsafe { _mi_os_page_size_typed().get() }
         }
     }
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn _mi_os_minimal_purge_size() -> usize {
 
 /// # Safety
 /// The OS memory configuration must have been initialized.
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
     let gsize = unsafe { _mi_os_page_size_typed().get() };
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn _mi_os_guard_page_size() -> usize {
 
 /// # Safety
 /// The OS memory configuration must have been initialized.
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-config-state-boundary]: OS memory config readers preserve process-global memory configuration invariants.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
     let vbits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
@@ -209,7 +209,7 @@ pub(crate) unsafe extern "C" fn _mi_os_virtual_address_bits() -> usize {
 
 /// # Safety
 /// The OS memory configuration must have been initialized.
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize) -> bool {
     let large_page_size = unsafe { (*mi_os_mem_config_ptr()).large_page_size };
@@ -218,7 +218,7 @@ pub unsafe extern "C" fn _mi_os_canuse_large_page(size: usize, alignment: usize)
         && alignment.is_multiple_of(large_page_size)
 }
 
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-page-size-boundary]: OS page-size helpers read initialized memory config and preserve nonzero page-size domains.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
     let align_size = if size < 512 * MI_KiB {
@@ -241,7 +241,7 @@ pub(crate) unsafe extern "C" fn _mi_os_good_alloc_size(size: usize) -> usize {
 
 /// # Safety
 /// Must be called during process initialization before concurrent OS allocation use.
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-config-state-boundary]: OS memory config initialization updates the process-global memory configuration before concurrent OS allocation use.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_init() {
     unsafe { _mi_prim_mem_init(core::ptr::addr_of_mut!(mi_os_mem_config)) };
@@ -250,14 +250,14 @@ pub unsafe extern "C" fn _mi_os_init() {
 /// # Safety
 /// The OS memory configuration must be initialized; secure/release randomized hints also require
 /// an initialized default theap.
-// SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-aligned-hint-boundary]: aligned hint generation reads initialized memory config and the initialized default thread heap.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usize) -> *mut c_void {
     if MI_INTPTR_SIZE < 8 || try_alignment <= unsafe { (*mi_os_mem_config_ptr()).alloc_granularity }
     {
         return core::ptr::null_mut();
     }
-    // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-aligned-hint-boundary]: aligned hint generation reads initialized memory config and the initialized default thread heap.
     let virtual_address_bits = unsafe { (*mi_os_mem_config_ptr()).virtual_address_bits };
     if try_alignment > MI_HINT_ALIGN || virtual_address_bits < 46 {
         return core::ptr::null_mut();
@@ -272,7 +272,7 @@ pub unsafe extern "C" fn _mi_os_get_aligned_hint(try_alignment: usize, size: usi
     if hint == 0 || hint > MI_HINT_MAX {
         let mut init = MI_HINT_BASE;
         if cfg!(feature = "secure") || cfg!(not(debug_assertions)) {
-            // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+            // SAFETY[AUDIT:os-memory-aligned-hint-boundary]: aligned hint generation reads initialized memory config and the initialized default thread heap.
             let theap = unsafe { _mi_theap_default() };
             if unsafe { !mi_theap_is_initialized(theap) } {
                 return core::ptr::null_mut();
@@ -303,21 +303,21 @@ fn mi_os_page_align_areax(
 ) -> *mut c_void {
     crate::internal::mi_assert!(!addr.is_null() && size > 0);
     if !newsize.is_null() {
-        // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+        // SAFETY[AUDIT:os-memory-page-align-boundary]: page alignment helpers validate nullable out-pointers and initialized page-size configuration.
         unsafe { *newsize = 0 };
     }
     if addr.is_null() || size == 0 {
         return core::ptr::null_mut();
     }
 
-    // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-page-align-boundary]: page alignment helpers validate nullable out-pointers and initialized page-size configuration.
     let page_size = unsafe { _mi_os_page_size_typed().get() };
     let start = if conservative {
         _mi_align_up_ptr(addr.cast_const(), page_size)
     } else {
         _mi_align_down_ptr(addr.cast_const(), page_size)
     };
-    // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+    // SAFETY[AUDIT:os-memory-page-align-boundary]: page alignment helpers validate nullable out-pointers and initialized page-size configuration.
     let end_addr = unsafe { addr.cast::<u8>().add(size) };
     let end = if conservative {
         _mi_align_down_ptr(end_addr.cast::<c_void>().cast_const(), page_size)
@@ -334,7 +334,7 @@ fn mi_os_page_align_areax(
         (conservative && diff <= size) || (!conservative && diff >= size)
     );
     if !newsize.is_null() {
-        // SAFETY[AUDIT:os-memory-config-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+        // SAFETY[AUDIT:os-memory-page-align-boundary]: page alignment helpers validate nullable out-pointers and initialized page-size configuration.
         unsafe { *newsize = diff };
     }
     start

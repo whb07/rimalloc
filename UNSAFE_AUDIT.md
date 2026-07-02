@@ -279,10 +279,18 @@ Operation IDs:
   main-heap force-destroy handling. Unsafe operations classify live heap
   metadata, preserve main-heap ownership, and destroy pages/thread heaps without
   freeing the static main heap record.
-- `SAFETY[AUDIT:heap-ownership-query-boundary]`: `src/allocator/heap.rs` owns
-  allocator page ownership queries. Unsafe operations are limited to safe page
-  lookup, nullable heap selection, borrowed/owned heap witness construction, and
-  raw C ABI ownership shims.
+- `SAFETY[AUDIT:heap-ownership-lookup-boundary]`: `src/allocator/heap.rs` owns
+  allocator page lookup and global contains/check-owned shims. Unsafe operations
+  are limited to safe page lookup, page-to-heap projection, and raw C ABI
+  ownership shims that do not retain pointers.
+- `SAFETY[AUDIT:heap-ownership-contains-boundary]`:
+  `src/allocator/heap.rs` owns heap-specific containment checks. Unsafe
+  operations are limited to nullable main-heap selection and comparing the
+  looked-up allocator heap against the caller-provided heap.
+- `SAFETY[AUDIT:heap-ownership-check-boundary]`: `src/allocator/heap.rs` owns
+  checked heap ownership queries. Unsafe operations are limited to borrowed heap
+  witness construction, owned-versus-main heap classification, and feature-gated
+  C ABI witness retention.
 - `SAFETY[AUDIT:heap-underutilized-boundary]`: `src/allocator/heap.rs` owns
   under-utilized page inspection. Unsafe operations convert raw heap/page
   arguments into typed witnesses, read page counters, and compare optional heap
@@ -687,21 +695,44 @@ Operation IDs:
   large-object allocations. Unsafe operations are limited to block alignment,
   one-block reserved count checks, fresh-page setup, and failure cleanup while
   preserving singleton page invariants.
-- `SAFETY[AUDIT:arena-page-free-boundary]`:
-  `src/allocator/arena.rs` owns arena page free shims and internal free
-  cleanup. Unsafe operations are limited to all-free page witnesses, arena
-  memid projection, page-map unregister, bitmap clearing, stat adjustment, and
-  backing-slice release while preserving ownership and abandoned-state checks.
+- `SAFETY[AUDIT:arena-page-free-entry-boundary]`:
+  `src/allocator/arena.rs` owns arena page free entry shims. Unsafe operations
+  are limited to raw page/thread-heap conversion into typed all-free page and
+  optional thread-heap witnesses.
+- `SAFETY[AUDIT:arena-page-free-validation-boundary]`:
+  `src/allocator/arena.rs` owns arena page free validation. Unsafe operations
+  are limited to page alignment, ownership, abandoned-state, arena memid, and
+  bitmap consistency checks before page release.
+- `SAFETY[AUDIT:arena-page-free-stats-boundary]`:
+  `src/allocator/arena.rs` owns arena page free accounting. Unsafe operations
+  are limited to stats-bin derivation and current-thread, heap, or subproc stat
+  decrements while preserving ownership-derived counter selection.
+- `SAFETY[AUDIT:arena-page-free-release-boundary]`:
+  `src/allocator/arena.rs` owns arena page free release. Unsafe operations are
+  limited to arena bitmap cleanup, committed-slice restoration, separated-page
+  metadata cleanup, and backing-slice release after ownership is proven.
 - `SAFETY[AUDIT:arena-page-abandon-boundary]`:
   `src/allocator/arena.rs` owns arena page abandon shims and abandoned-state
   publication. Unsafe operations are limited to page-for-abandon witnesses,
   arena/heap abandoned bitmaps, owner-id words, heap lists, and stat updates
   while preserving mapped-abandoned visibility and thread ownership release.
-- `SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]`:
-  `src/allocator/arena.rs` owns reabandon and unabandon shims. Unsafe
-  operations are limited to owned-abandoned page witnesses, mapped-abandoned
-  bitmap transitions, heap abandoned lists, and stat updates while preserving
-  same-thread ownership and count reconciliation.
+- `SAFETY[AUDIT:arena-page-reabandon-boundary]`:
+  `src/allocator/arena.rs` owns page reabandon. Unsafe operations are limited to
+  owned-abandoned page witnesses, arena memid classification, associated
+  thread-heap lookup, and stats reconciliation before republishing the page as
+  abandoned.
+- `SAFETY[AUDIT:arena-page-unabandon-entry-boundary]`:
+  `src/allocator/arena.rs` owns page unabandon entry validation. Unsafe
+  operations are limited to raw page/thread-heap conversion, same-thread checks,
+  and heap lookup before mapped or OS abandoned-list cleanup.
+- `SAFETY[AUDIT:arena-page-unabandon-mapped-boundary]`:
+  `src/allocator/arena.rs` owns mapped abandoned-page cleanup. Unsafe operations
+  are limited to arena bitmap checks, abandoned bitmap clearing, mapped-state
+  clearing, and heap abandoned-count decrements.
+- `SAFETY[AUDIT:arena-page-unabandon-os-list-boundary]`:
+  `src/allocator/arena.rs` owns OS abandoned-list cleanup during unabandon.
+  Unsafe operations are limited to heap abandoned-list lock acquisition,
+  prev/next link updates, lock release, and pages-abandoned stat reconciliation.
 - `SAFETY[AUDIT:arena-heap-page-publication-boundary]`:
   `src/allocator/arena.rs` owns heap arena-page bitmap publication during
   page allocation. Unsafe operations are limited to per-heap arena page tables,
@@ -862,12 +893,22 @@ Operation IDs:
   free path. Unsafe operations are limited to owned abandoned-page witnesses,
   remote free-list collection, arena suitability checks, and thread-free
   ownership-word release.
-- `SAFETY[AUDIT:aligned-padding-boundary]`:
-  `src/allocator/aligned.rs` owns padding shrink/grow behavior, over-allocation
-  trimming, guarded aligned allocation, interior-pointer tagging, and tracking
-  metadata for adjusted aligned blocks. Unsafe operations are limited to
-  padding-shrink shims, page/block metadata, padding metadata writes, and
-  tracking hooks while preserving usable-size and offset invariants.
+- `SAFETY[AUDIT:aligned-padding-shrink-boundary]`:
+  `src/allocator/aligned.rs` owns padding-shrink helper calls from aligned
+  allocation. Unsafe operations are limited to the C-compatible fast shim and
+  typed fallback into `_mi_padding_shrink`.
+- `SAFETY[AUDIT:aligned-guarded-allocation-boundary]`:
+  `src/allocator/aligned.rs` owns guarded aligned allocation. Unsafe operations
+  are limited to guarded thread-heap allocation, tracking handoff, and
+  usable-size validation for adjusted aligned blocks.
+- `SAFETY[AUDIT:aligned-no-guard-allocation-boundary]`:
+  `src/allocator/aligned.rs` owns non-guarded aligned allocation delegation.
+  Unsafe operations are limited to validated layout/alignment witnesses,
+  optional thread-heap selection, and usable out-pointer forwarding.
+- `SAFETY[AUDIT:aligned-overalloc-adjust-boundary]`:
+  `src/allocator/aligned.rs` owns over-allocation adjustment. Unsafe operations
+  are limited to page/block metadata projection, interior-pointer tagging,
+  usable-size checks, and tracking updates after pointer adjustment.
 - `SAFETY[AUDIT:aligned-thread-heap-allocation-boundary]`:
   `src/allocator/aligned.rs` owns thread-heap aligned malloc and zalloc entry
   paths after checked layout normalization. Unsafe operations are limited to
@@ -967,10 +1008,18 @@ Operation IDs:
 - `SAFETY[AUDIT:stats-init-bin-boundary]`: `src/allocator/stats.rs` owns stats
   initialization and bin-size access. Unsafe operations are limited to POD zero
   initialization, checked bin indexes, and initialized stats-buffer witnesses.
-- `SAFETY[AUDIT:stats-counter-update-boundary]`:
-  `src/allocator/stats.rs` owns raw counter increment, decrement, and adjust
-  helpers. Unsafe operations are limited to atomic counter field access while
-  preserving counter width and stat-level gating.
+- `SAFETY[AUDIT:stats-counter-mt-update-boundary]`:
+  `src/allocator/stats.rs` owns multithreaded raw counter increment and
+  decrement helpers. Unsafe operations are limited to atomic-compatible counter
+  field access while preserving counter width.
+- `SAFETY[AUDIT:stats-counter-local-update-boundary]`:
+  `src/allocator/stats.rs` owns local raw counter increment and decrement
+  helpers. Unsafe operations are limited to caller-provided mutable stat
+  counters and local stat-level updates.
+- `SAFETY[AUDIT:stats-counter-adjust-boundary]`:
+  `src/allocator/stats.rs` owns raw adjust helpers that update current and total
+  counters without peak tracking. Unsafe operations are limited to validated
+  count storage and C helper retention.
 - `SAFETY[AUDIT:stats-counter-accumulate-boundary]`:
   `src/allocator/stats.rs` owns raw stats counter add entrypoints and
   accumulate helpers. Unsafe operations validate stats pointers before
@@ -1277,11 +1326,25 @@ Operation IDs:
   owns the typed dynamic import helper. Unsafe operations are limited to
   `GetProcAddress` calls and copying non-null function pointers into requested
   function pointer types.
-- `SAFETY[AUDIT:os-memory-config-boundary]`: `src/platform/os.rs` owns OS
-  memory configuration, sub-process stats projection, page-size queries, and
-  aligned address hints. Unsafe operations are limited to process-global memory
-  config reads/writes, page-size statics, typed subproc witnesses, and primitive
-  hint calls while preserving allocator-recursion avoidance.
+- `SAFETY[AUDIT:os-memory-config-state-boundary]`: `src/platform/os.rs` owns
+  process-global OS memory configuration state. Unsafe operations are limited to
+  initialized config pointer reads, overcommit/virtual-reserve flag access,
+  virtual-address-bit checks, and process initialization writes.
+- `SAFETY[AUDIT:os-memory-subproc-stats-boundary]`: `src/platform/os.rs` owns
+  subproc stats projection for OS memory accounting. Unsafe operations are
+  limited to current subproc lookup and stats-field projection through typed
+  borrowed subproc witnesses.
+- `SAFETY[AUDIT:os-memory-page-size-boundary]`: `src/platform/os.rs` owns OS
+  page-size and large-page sizing helpers. Unsafe operations are limited to
+  initialized page-size config reads and typed nonzero `OsPageSize` construction.
+- `SAFETY[AUDIT:os-memory-aligned-hint-boundary]`: `src/platform/os.rs` owns
+  aligned address hint generation. Unsafe operations are limited to memory
+  config reads, initialized default thread-heap checks, and primitive random
+  hint state.
+- `SAFETY[AUDIT:os-memory-page-align-boundary]`: `src/platform/os.rs` owns page
+  area alignment helpers. Unsafe operations are limited to nullable out-pointer
+  writes, initialized page-size reads, and bounded pointer arithmetic over the
+  caller-provided address range.
 - `SAFETY[AUDIT:os-memory-guard-boundary]`: `src/platform/os.rs` owns secure
   guard-page placement and reset callbacks. Unsafe operations are limited to
   random guard-page offset selection, primitive guard-page calls, and retained
@@ -1502,12 +1565,25 @@ Operation IDs:
   arbitrary-pointer page lookup and heap-region queries. Unsafe operations are
   limited to nullable input handling, committed index checks, submap reads, and
   page metadata projection while preserving safe lookup for invalid pointers.
-- `SAFETY[AUDIT:scalar-domain-wrappers]`: `src/types/scalar.rs` owns transparent
-  scalar domains for allocator sizes, alignments, indexes, bins, counts, and
-  optional out-pointers. Unsafe operations are limited to unchecked non-zero
-  constructors, caller-proven index/count/bin constructors, const
-  `SliceCount` construction, nullable `UsableOut` writes, and lint-touch
-  fixtures that use known-valid scalar values without publishing allocator
+- `SAFETY[AUDIT:scalar-size-domain-wrappers]`: `src/types/scalar.rs` owns
+  transparent size-domain wrappers. Unsafe operations are limited to unchecked
+  nonzero effective, padded, block, and full-block size constructors plus
+  nullable usable-size out-pointer writes.
+- `SAFETY[AUDIT:scalar-alignment-domain-wrappers]`: `src/types/scalar.rs` owns
+  transparent alignment wrappers. Unsafe operations are limited to checked or
+  caller-proven power-of-two alignment construction and optional-alignment
+  zero-or-power-of-two preservation.
+- `SAFETY[AUDIT:scalar-page-count-domain-wrappers]`: `src/types/scalar.rs` owns
+  page count and OS page-size scalar wrappers. Unsafe operations are limited to
+  caller-proven page capacity ordering and platform-initialized nonzero page
+  size construction.
+- `SAFETY[AUDIT:scalar-index-domain-wrappers]`: `src/types/scalar.rs` owns
+  page-map, bin, slice-count, and arena-index wrappers. Unsafe operations are
+  limited to caller-proven bounds, nonzero slice counts, and const checked
+  construction branches.
+- `SAFETY[AUDIT:scalar-lint-fixture-wrappers]`: `src/types/scalar.rs` owns
+  lint-touch fixtures for scalar wrappers. Unsafe operations use known-valid
+  scalar values solely to keep methods typechecked without publishing allocator
   state.
 - `SAFETY[AUDIT:random-context-boundaries]`: `src/internal/random.rs`
   confines random context raw pointers and primitive entropy/clock calls to
@@ -1576,12 +1652,23 @@ Operation IDs:
   buffer copies, NUL termination for non-empty buffers, and tests that call the
   same C-shaped boundary with valid local storage. Counter updates stay relaxed
   atomics, and the JSON writer remains allocation-free.
-- `SAFETY[AUDIT:arena-id-memid-helpers]`:
-  `src/allocator/arena/ids.rs` keeps raw arena-id ABI shims and memid
-  classification behind typed `ArenaPtr`, `SliceRange`, `MemIdView`, and
-  `PagePtr` witnesses. Unsafe operations are limited to arena prefix reads,
-  validated out-pointer writes, and page/base pointer offset checks for
-  allocator-owned memid ranges.
+- `SAFETY[AUDIT:arena-id-raw-shims]`: `src/allocator/arena/ids.rs` owns raw
+  arena-id ABI shims. Unsafe operations are limited to null arena-id sentinel
+  handling, top-level arena checks, C helper retention, and typed arena-id
+  conversion.
+- `SAFETY[AUDIT:arena-memid-suitability-helpers]`:
+  `src/allocator/arena/ids.rs` owns arena memid suitability checks. Unsafe
+  operations are limited to typed arena role/parent reads, nullable requested
+  arena conversion, and `MemIdView::Arena` classification.
+- `SAFETY[AUDIT:arena-memid-create-decode-helpers]`:
+  `src/allocator/arena/ids.rs` owns arena memid creation and decoding helpers.
+  Unsafe operations are limited to arena prefix slice-count/pinned reads,
+  typed `MemId` construction, arena range extraction, and validated out-pointer
+  writes.
+- `SAFETY[AUDIT:arena-page-memid-size-helpers]`:
+  `src/allocator/arena/ids.rs` owns page memid size projection. Unsafe
+  operations are limited to page memid reads and page/base pointer offset checks
+  for arena, OS, and external allocation ranges.
 - `SAFETY[AUDIT:arena-heap-visit-callback-boundary]`:
   `src/allocator/arena/heap_pages.rs` owns raw bitmap callback adaptation into
   typed heap/page visit state.
@@ -1744,12 +1831,22 @@ Operation IDs:
   metadata to exercise encoded pointers, block tags, available-list pop, and
   local-list push witnesses. The fixtures are not registered with allocator
   globals and are used only while the local records are live.
-- `SAFETY[AUDIT:typed-freelist-wrappers]`:
-  `src/types/freelist_wrappers.rs` owns typed encoded block links, block tags,
-  available/local free-list heads, and allocated/free block witness transitions.
-  Unsafe operations are limited to raw block-link reads and writes, page-local
-  encoded pointer helpers, non-null block witness construction after null
-  checks, and free-list pop/push conversions that preserve upstream layout.
+- `SAFETY[AUDIT:typed-freelist-encoded-link-wrappers]`:
+  `src/types/freelist_wrappers.rs` owns typed encoded block links. Unsafe
+  operations are limited to raw block-link word reads/writes and non-null
+  decoded block witness construction after null checks.
+- `SAFETY[AUDIT:typed-freelist-block-tag-wrappers]`:
+  `src/types/freelist_wrappers.rs` owns guarded/aligned block tag wrappers.
+  Unsafe operations are limited to raw tag reads/writes and guarded-tag
+  classification while preserving upstream block-link layout.
+- `SAFETY[AUDIT:typed-freelist-available-list-wrappers]`:
+  `src/types/freelist_wrappers.rs` owns available free-list pop wrappers.
+  Unsafe operations are limited to `AvailablePage` head reads, encoded next
+  lookup, and allocated-block witness construction.
+- `SAFETY[AUDIT:typed-freelist-local-list-wrappers]`:
+  `src/types/freelist_wrappers.rs` owns local free-list push wrappers. Unsafe
+  operations are limited to page-local next-link writes and non-null free-block
+  head construction.
 - `SAFETY[AUDIT:typed-main-heap-test-fixtures]`:
   `src/types/heap/tests.rs` exercises main-heap witness construction from the
   allocator-owned process heap and verifies that main heaps cannot become owned
@@ -1843,10 +1940,19 @@ Operation IDs:
   heap cells, refcount cells, heartbeat, page queue/direct-page fields, direct
   page array initialization, and stats pointers while preserving thread-heap
   locality requirements.
-- `SAFETY[AUDIT:typed-tld-accessors]`: `src/types/ptr.rs` owns `TldPtr`
-  accessors. Unsafe operations are limited to thread identity, sequence, NUMA,
-  subproc, stats, arena table, memid, thread-heap, recursion, and thread-pool
-  fields while preserving TLD ownership and optional subproc behavior.
+- `SAFETY[AUDIT:typed-tld-thread-identity-accessors]`: `src/types/ptr.rs` owns
+  `TldPtr` thread identity, sequence, and NUMA accessors. Unsafe operations are
+  limited to raw field reads/writes behind a non-null TLD witness.
+- `SAFETY[AUDIT:typed-tld-subproc-accessors]`: `src/types/ptr.rs` owns `TldPtr`
+  subproc forwarding accessors. Unsafe operations are limited to optional
+  subproc witnesses, stats projection, arena-count cells, and arena table
+  entries.
+- `SAFETY[AUDIT:typed-tld-metadata-accessors]`: `src/types/ptr.rs` owns `TldPtr`
+  memid, thread-heap, recursion, and thread-pool accessors. Unsafe operations
+  are limited to raw field reads/writes through transparent pointer wrappers.
+- `SAFETY[AUDIT:typed-tld-fixture-touch-accessors]`: `src/types/ptr.rs` owns
+  lint-touch references that keep TLD accessors visible to release-audit and
+  unit-test fixtures without dereferencing TLD metadata.
 - `SAFETY[AUDIT:typed-arena-identity-accessors]`: `src/types/ptr.rs` owns
   `ArenaPtr` identity and scalar metadata accessors. Unsafe operations are
   limited to arena memid, subproc, index, slice count, NUMA, and exclusivity

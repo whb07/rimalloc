@@ -342,15 +342,28 @@ file:
   allocation and abandoned-page reuse in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-singleton-boundary]`: singleton page setup for
   over-aligned and large-object allocations in `src/allocator/arena.rs`.
-- `SAFETY[AUDIT:arena-page-free-boundary]`: arena page free shims, bitmap
-  cleanup, page-map unregister, stat adjustment, and slice release in
+- `SAFETY[AUDIT:arena-page-free-entry-boundary]`: arena page free raw entry
+  conversion into typed all-free witnesses in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-free-validation-boundary]`: arena page free
+  ownership, alignment, memid, and bitmap validation in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-free-stats-boundary]`: arena page free stat
+  decrements for current-thread, heap, and subproc counters in
+  `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-free-release-boundary]`: arena page free page-map,
+  bitmap, separated metadata, and backing-slice release in
   `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-abandon-boundary]`: arena page abandon shims,
   abandoned bitmap publication, owner-id updates, heap-list updates, and stat
   accounting in `src/allocator/arena.rs`.
-- `SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]`: reabandon and
-  unabandon shims, mapped-abandoned bitmap transitions, heap list cleanup, and
-  stat reconciliation in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-reabandon-boundary]`: reabandon shims and
+  abandoned-page republication in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-unabandon-entry-boundary]`: unabandon entry
+  validation and same-thread ownership checks in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-unabandon-mapped-boundary]`: mapped-abandoned bitmap
+  and heap abandoned-count cleanup in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-unabandon-os-list-boundary]`: OS abandoned-list
+  unlink and stat reconciliation under the heap abandoned lock in
+  `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-heap-page-publication-boundary]`: heap arena-page bitmap
   publication and rollback during page allocation in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-ownership-transition-boundary]`: owner-word and

@@ -52,7 +52,7 @@ impl EncodedPtr<mi_block_t> {
     #[inline(always)]
     pub(crate) unsafe fn read_word_from_raw(block: *const mi_block_t) -> Self {
         Self {
-            // SAFETY[AUDIT:typed-freelist-wrappers]: callers provide a valid
+            // SAFETY[AUDIT:typed-freelist-encoded-link-wrappers]: callers provide a valid
             // block link word for the current tracking state; this reads only
             // the upstream-compatible `next` word.
             word: EncodedWord::new(unsafe { (*block.cast_mut()).next }),
@@ -67,7 +67,7 @@ impl EncodedPtr<mi_block_t> {
     /// the current tracking state.
     #[inline(always)]
     pub(crate) unsafe fn write_word_to_raw(self, block: BlockPtr) {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: `block` is a non-null block
+        // SAFETY[AUDIT:typed-freelist-encoded-link-wrappers]: `block` is a non-null block
         // witness and callers guarantee its link word is currently writable.
         unsafe { (*block.as_ptr()).next = self.word.get() };
     }
@@ -159,7 +159,7 @@ impl EncodedPtr<mi_block_t> {
         if raw.is_null() {
             None
         } else {
-            // SAFETY[AUDIT:typed-freelist-wrappers]: `raw` is a non-null
+            // SAFETY[AUDIT:typed-freelist-encoded-link-wrappers]: `raw` is a non-null
             // decoded block pointer for the page/key context supplied by the
             // caller.
             Some(unsafe { BlockPtr::new_unchecked(raw.cast()) })
@@ -217,14 +217,14 @@ impl BlockTag {
 
     #[inline(always)]
     pub(crate) unsafe fn write_aligned_to(block: BlockPtr) {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: callers provide a block whose
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: callers provide a block whose
         // link word may be tagged, and `block` is already non-null.
         unsafe { Self::aligned().write_to(block) };
     }
 
     #[inline(always)]
     pub(crate) unsafe fn write_guarded_to(block: BlockPtr) {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: callers provide a block whose
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: callers provide a block whose
         // link word may be tagged, and `block` is already non-null.
         unsafe { Self::guarded().write_to(block) };
     }
@@ -233,7 +233,7 @@ impl BlockTag {
     pub(crate) unsafe fn read_guarded_from_raw(
         block: *const mi_block_t,
     ) -> Option<GuardedBlockTag> {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: callers provide a readable
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: callers provide a readable
         // block link word; the raw tag read is immediately classified.
         let tag = unsafe { Self::read_from_raw(block) };
         if tag.is_guarded() {
@@ -250,14 +250,14 @@ impl BlockTag {
 
     #[inline(always)]
     unsafe fn read_from_raw(block: *const mi_block_t) -> Self {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: callers provide a readable
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: callers provide a readable
         // block link word and this wrapper preserves the raw tag domain.
         Self(unsafe { (*block.cast_mut()).next })
     }
 
     #[inline(always)]
     unsafe fn write_to(self, block: BlockPtr) {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: `block` is non-null and
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: `block` is non-null and
         // callers guarantee its link word can receive this tag value.
         unsafe { (*block.as_ptr()).next = self.0 };
     }
@@ -266,7 +266,7 @@ impl BlockTag {
 impl AlignedBlockTag {
     #[inline(always)]
     unsafe fn write_to(self, block: BlockPtr) {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: the aligned tag delegates to
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: the aligned tag delegates to
         // the raw tag writer with the caller's writable block proof.
         unsafe { self.0.write_to(block) };
     }
@@ -275,7 +275,7 @@ impl AlignedBlockTag {
 impl GuardedBlockTag {
     #[inline(always)]
     unsafe fn write_to(self, block: BlockPtr) {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: the guarded tag delegates to
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: the guarded tag delegates to
         // the raw tag writer with the caller's writable block proof.
         unsafe { self.0.write_to(block) };
     }
@@ -289,13 +289,13 @@ pub(crate) enum BlockLink {
 impl BlockLink {
     #[inline(always)]
     pub(crate) unsafe fn read_from_raw(block: *const mi_block_t) -> Self {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: callers provide a readable
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: callers provide a readable
         // block link word; the guarded tag probe decides whether the word is a
         // tag or an encoded free-list link.
         if let Some(tag) = unsafe { BlockTag::read_guarded_from_raw(block) } {
             Self::Guarded(tag)
         } else {
-            // SAFETY[AUDIT:typed-freelist-wrappers]: the guarded probe above
+            // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: the guarded probe above
             // ruled out the reserved guarded tag, so the same link word is
             // interpreted as an encoded free-list pointer.
             Self::FreeList(unsafe { EncodedPtr::read_word_from_raw(block) })
@@ -304,14 +304,14 @@ impl BlockLink {
 
     #[inline(always)]
     pub(crate) unsafe fn is_guarded_raw(block: *const mi_block_t) -> bool {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: callers provide a readable
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: callers provide a readable
         // block link word; this only classifies whether it is guarded.
         unsafe { BlockTag::read_guarded_from_raw(block).is_some() }
     }
 
     #[inline(always)]
     pub(crate) unsafe fn write_to(self, block: BlockPtr) {
-        // SAFETY[AUDIT:typed-freelist-wrappers]: `block` is non-null and
+        // SAFETY[AUDIT:typed-freelist-block-tag-wrappers]: `block` is non-null and
         // callers guarantee its link word can receive either encoded link or
         // guarded tag state.
         match self {
@@ -347,26 +347,26 @@ impl AvailableFreeList {
     #[inline(always)]
     pub(crate) unsafe fn pop(page: AvailablePage) -> (AllocatedBlock, AvailableFreeList) {
         let raw_page = page.page().as_ptr();
-        // SAFETY[AUDIT:typed-freelist-wrappers]: `page` proves the page has an
+        // SAFETY[AUDIT:typed-freelist-available-list-wrappers]: `page` proves the page has an
         // available free-list head, so reading the raw `free` field is valid.
         let free = unsafe { AvailableFreeList::from_raw((*raw_page).free) };
-        // SAFETY[AUDIT:typed-freelist-wrappers]: `AvailablePage` guarantees the
+        // SAFETY[AUDIT:typed-freelist-available-list-wrappers]: `AvailablePage` guarantees the
         // free-list head is present on the allocation fast path.
         let head = unsafe { free.0.unwrap_unchecked() };
         let head_raw = head.as_ptr();
-        // SAFETY[AUDIT:typed-freelist-wrappers]: `head` is a valid block
+        // SAFETY[AUDIT:typed-freelist-available-list-wrappers]: `head` is a valid block
         // pointer in `page`'s free list; the page keys and encoding are
         // page-local and `head_raw` is non-null.
         let next_raw = unsafe { mi_block_next(raw_page, head_raw) };
         let next = if next_raw.is_null() {
             None
         } else {
-            // SAFETY[AUDIT:typed-freelist-wrappers]: `next_raw` is a non-null
+            // SAFETY[AUDIT:typed-freelist-available-list-wrappers]: `next_raw` is a non-null
             // block in the same page's available free-list domain.
             Some(unsafe { BlockPtr::new_unchecked(next_raw) })
         };
         (
-            // SAFETY[AUDIT:typed-freelist-wrappers]: the popped head came from
+            // SAFETY[AUDIT:typed-freelist-available-list-wrappers]: the popped head came from
             // the available free-list, so it becomes the allocated-block
             // witness returned to the caller.
             unsafe { AllocatedBlock::new_unchecked(head) },
@@ -380,7 +380,7 @@ impl AvailableFreeList {
         if head.is_null() {
             Self(None)
         } else {
-            // SAFETY[AUDIT:typed-freelist-wrappers]: caller guarantees `head`
+            // SAFETY[AUDIT:typed-freelist-available-list-wrappers]: caller guarantees `head`
             // is a non-null block pointer from the page's available list.
             Self(Some(unsafe { BlockPtr::new_unchecked(head) }))
         }
@@ -412,11 +412,11 @@ impl LocalFreeList {
         let raw_page = page.page().as_ptr();
         let block_raw = block.block().as_ptr();
         let prev_raw = self.as_raw();
-        // SAFETY[AUDIT:typed-freelist-wrappers]: `block_raw` is a valid block
+        // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: `block_raw` is a valid block
         // in `page`; `prev_raw` is the current local_free head (null if empty).
         // Encoding is page-local.
         unsafe { mi_block_set_next(raw_page, block_raw, prev_raw) };
-        // SAFETY[AUDIT:typed-freelist-wrappers]: `block_raw` came from a
+        // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: `block_raw` came from a
         // FreeBlock witness and is therefore non-null.
         Self(Some(unsafe { BlockPtr::new_unchecked(block_raw) }))
     }
@@ -427,7 +427,7 @@ impl LocalFreeList {
         if head.is_null() {
             Self(None)
         } else {
-            // SAFETY[AUDIT:typed-freelist-wrappers]: caller guarantees `head`
+            // SAFETY[AUDIT:typed-freelist-local-list-wrappers]: caller guarantees `head`
             // is a non-null block pointer from the page's local free-list.
             Self(Some(unsafe { BlockPtr::new_unchecked(head) }))
         }

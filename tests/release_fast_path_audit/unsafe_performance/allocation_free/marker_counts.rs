@@ -56,7 +56,10 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         );
     }
     for (audit_id, expected_count) in [
-        ("aligned-padding-boundary", 23),
+        ("aligned-padding-shrink-boundary", 3),
+        ("aligned-guarded-allocation-boundary", 3),
+        ("aligned-no-guard-allocation-boundary", 7),
+        ("aligned-overalloc-adjust-boundary", 10),
         ("aligned-thread-heap-allocation-boundary", 11),
         ("aligned-page-allocation-boundary", 11),
         ("aligned-calloc-product-boundary", 14),

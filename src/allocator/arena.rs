@@ -2720,26 +2720,26 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_alloc(
 
 /// # Safety
 /// Internal arena page free path matching the C ABI.
-// SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+// SAFETY[AUDIT:arena-page-free-entry-boundary]: free entry converts raw page and thread-heap inputs into typed all-free witnesses.
 pub(crate) unsafe extern "C" fn _mi_arenas_page_free(
     page: *mut mi_page_t,
     current_theapx: *mut mi_theap_t,
 ) {
     let page_ptr = unsafe { PagePtr::new_unchecked(page) };
-    // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+    // SAFETY[AUDIT:arena-page-free-entry-boundary]: free entry converts raw page and thread-heap inputs into typed all-free witnesses.
     let abandoned = unsafe { crate::core_types::AbandonedPage::new_unchecked(page_ptr) };
     let all_free = unsafe { crate::core_types::AllFreePage::abandoned_unchecked(abandoned) };
     let current_theap = if current_theapx.is_null() {
         None
     } else {
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-entry-boundary]: free entry converts raw page and thread-heap inputs into typed all-free witnesses.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(current_theapx),
             )
         })
     };
-    // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+    // SAFETY[AUDIT:arena-page-free-entry-boundary]: free entry converts raw page and thread-heap inputs into typed all-free witnesses.
     unsafe { _mi_arenas_page_free_internal(&all_free, current_theap) };
 }
 
@@ -2752,14 +2752,14 @@ unsafe fn _mi_arenas_page_free_internal<S>(
         .map(|theap| theap.ptr().as_ptr())
         .unwrap_or(ptr::null_mut());
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-validation-boundary]: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
-    // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+    // SAFETY[AUDIT:arena-page-free-validation-boundary]: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_all_free(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
@@ -2767,7 +2767,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
         (*page).next.is_null() && (*page).prev.is_null()
     });
 
-    // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+    // SAFETY[AUDIT:arena-page-free-stats-boundary]: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
     let stats_bin = unsafe { _mi_page_stats_bin(page) };
     if !current_theapx.is_null() {
         unsafe {
@@ -2776,13 +2776,13 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 1,
             )
         };
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-stats-boundary]: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
         unsafe {
             crate::internal::__mi_stat_decrease(ptr::addr_of_mut!((*current_theapx).stats.pages), 1)
         };
     } else {
         let heap = unsafe { mi_page_heap(page) };
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-stats-boundary]: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
         unsafe {
             crate::internal::__mi_stat_decrease_mt(&mut (*heap).stats.page_bins[stats_bin], 1)
         };
@@ -2790,7 +2790,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
     }
 
     if MI_DEBUG > 1
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-validation-boundary]: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
         && unsafe { mi_page_memid_is_arena(page) }
         && !unsafe { mi_page_is_full_local(page) }
     {
@@ -2798,7 +2798,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-validation-boundary]: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
         let arena = unsafe {
             mi_page_arena_pages(
                 PagePtr::new_unchecked(page),
@@ -2807,7 +2807,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 &mut arena_pages,
             )
         };
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-validation-boundary]: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -2815,7 +2815,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 slice_count,
             )
         });
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-validation-boundary]: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
         crate::internal::mi_assert_internal!(
             !committed.is_zero()
@@ -2827,7 +2827,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                     )
                 }
         );
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-validation-boundary]: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
         crate::internal::mi_assert_internal!(!unsafe {
             mi_bitmap_is_setN(
                 (*arena_pages).pages_abandoned[bin.as_usize()],
@@ -2835,19 +2835,19 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 1,
             )
         });
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-validation-boundary]: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN((*arena_pages).pages, slice_index, 1)
         });
     }
 
-    // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+    // SAFETY[AUDIT:arena-page-free-validation-boundary]: free validation checks page alignment, ownership, memid, and arena bitmaps before release.
     unsafe { _mi_page_map_unregister(page) };
     if unsafe { mi_page_memid_is_arena(page) } {
         let mut arena_pages = ptr::null_mut();
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-release-boundary]: free release clears arena metadata and returns backing slices after ownership is proven.
         let arena = unsafe {
             mi_page_arena_pages(
                 PagePtr::new_unchecked(page),
@@ -2857,14 +2857,14 @@ unsafe fn _mi_arenas_page_free_internal<S>(
             )
         };
         crate::internal::mi_assert_internal!(!arena_pages.is_null());
-        // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+        // SAFETY[AUDIT:arena-page-free-release-boundary]: free release clears arena metadata and returns backing slices after ownership is proven.
         unsafe { mi_bitmap_clear((*arena_pages).pages, slice_index) };
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
         if !committed.is_zero() {
             let total_slices = committed.get() / MI_ARENA_SLICE_SIZE;
             crate::internal::mi_assert_internal!(slice_count >= total_slices);
             if total_slices > 0 {
-                // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+                // SAFETY[AUDIT:arena-page-free-release-boundary]: free release clears arena metadata and returns backing slices after ownership is proven.
                 unsafe {
                     mi_bitmap_setN(
                         (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -2876,7 +2876,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
             }
             let extra = committed.get() % MI_ARENA_SLICE_SIZE;
             if extra > 0 {
-                // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+                // SAFETY[AUDIT:arena-page-free-stats-boundary]: free accounting updates current-thread, heap, or subproc stats from ownership-derived metadata.
                 unsafe {
                     crate::internal::__mi_stat_decrease_mt(
                         &mut (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed,
@@ -2885,7 +2885,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
                 };
             }
         } else {
-            // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+            // SAFETY[AUDIT:arena-page-free-release-boundary]: free release clears arena metadata and returns backing slices after ownership is proven.
             crate::internal::mi_assert_internal!(unsafe {
                 mi_bitmap_is_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -2895,7 +2895,7 @@ unsafe fn _mi_arenas_page_free_internal<S>(
             });
         }
     }
-    // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+    // SAFETY[AUDIT:arena-page-free-release-boundary]: free release clears arena metadata and returns backing slices after ownership is proven.
     if unsafe { mi_page_meta_is_separated(page) } {
         unsafe { (*page).block_size = 0 };
     }
@@ -2915,7 +2915,7 @@ pub(crate) unsafe fn _mi_arenas_page_free_typed<S>(
     page: crate::core_types::AllFreePage<S>,
     owner: crate::core_types::ThreadHeapLocal,
 ) -> crate::core_types::DestroyedPage {
-    // SAFETY[AUDIT:arena-page-free-boundary]: arena page free paths unregister page mappings, clear arena bitmaps, adjust stats, and release backing slices once ownership is proven.
+    // SAFETY[AUDIT:arena-page-free-release-boundary]: free release clears arena metadata and returns backing slices after ownership is proven.
     unsafe { _mi_arenas_page_free(page.page().as_ptr(), owner.ptr().as_ptr()) };
     page.free_to_arena(owner)
 }
@@ -3071,13 +3071,13 @@ unsafe fn _mi_arenas_page_abandon_internal(
 
 /// # Safety
 /// Called from the free path on pages already associated with an arena.
-// SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+// SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
     page: *mut mi_page_t,
 ) -> bool {
     let page_raw = page;
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
     let page = unsafe {
         crate::core_types::OwnedAbandonedPage::new_unchecked(PagePtr::new_unchecked(page))
     };
@@ -3085,7 +3085,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_try_reabandon_to_mapped(
         crate::core_types::MemIdView::Arena(arena_memid) => arena_memid,
         _ => return false,
     };
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
     unsafe { _mi_arenas_page_try_reabandon_to_mapped_arena(page, arena_memid) }
 }
 
@@ -3096,27 +3096,27 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
 ) -> bool {
     let page = page.page().as_ptr();
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(!unsafe { mi_page_is_abandoned_mapped(page) });
     crate::internal::mi_assert_internal!(!unsafe { mi_page_is_full_local(page) });
     crate::internal::mi_assert_internal!(!unsafe { mi_page_all_free(page) });
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
     crate::internal::mi_assert_internal!(!unsafe { mi_page_is_singleton(page) });
 
     if unsafe { mi_page_is_full_local(page) } || unsafe { mi_page_is_abandoned_mapped(page) } {
         return false;
     }
 
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
     let Some(theap) = (unsafe {
         _mi_page_associated_theap_peek(crate::core_types::PagePtr::new_unchecked(page))
     }) else {
@@ -3124,7 +3124,7 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
     };
     let theap = theap.as_ptr();
 
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-reabandon-boundary]: reabandon republishes owned abandoned pages through arena ownership and stat reconciliation.
     unsafe {
         __mi_stat_counter_increase(ptr::addr_of_mut!((*theap).stats.pages_reabandon_full), 1)
     };
@@ -3135,7 +3135,7 @@ pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(
 
 /// # Safety
 /// Called from `free` paths while racing with abandoned-page readers.
-// SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+// SAFETY[AUDIT:arena-page-unabandon-entry-boundary]: unabandon entry validates raw page and thread-heap witnesses before cleanup.
 pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     page: *mut mi_page_t,
     current_theapx: *mut mi_theap_t,
@@ -3146,14 +3146,14 @@ pub(crate) unsafe extern "C" fn _mi_arenas_page_unabandon(
     let current_theap = if current_theapx.is_null() {
         None
     } else {
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-entry-boundary]: unabandon entry validates raw page and thread-heap witnesses before cleanup.
         Some(unsafe {
             crate::core_types::ThreadHeapLocal::new_unchecked(
                 crate::core_types::ThreadHeapPtr::new_unchecked(current_theapx),
             )
         })
     };
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-unabandon-entry-boundary]: unabandon entry validates raw page and thread-heap witnesses before cleanup.
     unsafe { _mi_arenas_page_unabandon_internal(page, current_theap) };
 }
 
@@ -3167,14 +3167,14 @@ unsafe fn _mi_arenas_page_unabandon_internal(
         .unwrap_or(ptr::null_mut());
 
     crate::internal::mi_assert_internal!(crate::internal::_mi_is_aligned(
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-entry-boundary]: unabandon entry validates raw page and thread-heap witnesses before cleanup.
         unsafe { mi_page_slice_start(page) }.cast(),
         MI_PAGE_ALIGN
     ));
     crate::internal::mi_assert_internal!(unsafe {
         crate::internal::_mi_ptr_page(mi_page_start(page).cast()) == page
     });
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-unabandon-entry-boundary]: unabandon entry validates raw page and thread-heap witnesses before cleanup.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_abandoned(page) });
     crate::internal::mi_assert_internal!(
@@ -3182,7 +3182,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             || unsafe { _mi_thread_id() == (*(*current_theapx).tld).thread_id }
     );
 
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-unabandon-entry-boundary]: unabandon entry validates raw page and thread-heap witnesses before cleanup.
     let heap = unsafe { mi_page_heap(page) };
     if unsafe { mi_page_is_abandoned_mapped(page) } {
         crate::internal::mi_assert_internal!(unsafe { mi_page_memid_is_arena(page) });
@@ -3190,7 +3190,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
         let mut slice_index = 0usize;
         let mut slice_count = 0usize;
         let mut arena_pages = ptr::null_mut();
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-mapped-boundary]: mapped unabandon clears arena abandoned bitmaps and heap counters.
         let arena = unsafe {
             mi_page_arena_pages(
                 PagePtr::new_unchecked(page),
@@ -3200,7 +3200,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             )
         };
         let _ = arena;
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-mapped-boundary]: mapped unabandon clears arena abandoned bitmaps and heap counters.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bbitmap_is_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -3208,7 +3208,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
                 slice_count,
             )
         });
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-mapped-boundary]: mapped unabandon clears arena abandoned bitmaps and heap counters.
         let committed = unsafe { crate::page::mi_page_slice_committed(page) };
         crate::internal::mi_assert_internal!(
             !committed.is_zero()
@@ -3220,13 +3220,13 @@ unsafe fn _mi_arenas_page_unabandon_internal(
                     )
                 }
         );
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-mapped-boundary]: mapped unabandon clears arena abandoned bitmaps and heap counters.
         unsafe {
             mi_bitmap_clear_once_set((*arena_pages).pages_abandoned[bin.as_usize()], slice_index)
         };
         unsafe { mi_page_clear_abandoned_mapped(PagePtr::new_unchecked(page)) };
         unsafe { mi_heap_abandoned_count(heap, bin).fetch_sub_relaxed(1) };
-    // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+    // SAFETY[AUDIT:arena-page-unabandon-mapped-boundary]: mapped unabandon clears arena abandoned bitmaps and heap counters.
     } else if !unsafe { mi_page_memid_is_arena(page) }
         && mi_option_is_enabled(mi_option_t::mi_option_visit_abandoned)
     {
@@ -3235,7 +3235,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
                 (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
             ))
         };
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-os-list-boundary]: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
         unsafe {
             if !(*page).prev.is_null() {
                 (*(*page).prev).next = (*page).next;
@@ -3249,7 +3249,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             (*page).next = ptr::null_mut();
             (*page).prev = ptr::null_mut();
         };
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-os-list-boundary]: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
         unsafe {
             mi_lock_release(ptr::addr_of_mut!(
                 (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
@@ -3258,7 +3258,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
     }
 
     if !current_theapx.is_null() {
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-os-list-boundary]: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
         unsafe {
             __mi_stat_decrease(
                 ptr::addr_of_mut!((*current_theapx).stats.pages_abandoned),
@@ -3266,7 +3266,7 @@ unsafe fn _mi_arenas_page_unabandon_internal(
             )
         };
     } else {
-        // SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]: reabandon and unabandon paths reconcile mapped-abandoned state, heap lists, bitmaps, stats, and thread-local ownership.
+        // SAFETY[AUDIT:arena-page-unabandon-os-list-boundary]: OS unabandon unlinks heap abandoned-list records and reconciles page stats.
         unsafe { __mi_stat_decrease_mt(&mut (*heap).stats.pages_abandoned, 1) };
     }
 }

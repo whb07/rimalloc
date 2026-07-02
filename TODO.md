@@ -1,9 +1,12 @@
 # TODO: Fresh-Eyes Audit Cap, Harness, and Strict-Type Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`8ade753` and lowering the source audit marker cap to 24. The previous backlog
-and Issues 1, 2, and 3 below are implemented. The next step is a fresh-eyes
-rescan to replace this completed backlog with the next measured issues.
+`7af25fa`. The previous backlog is implemented and pushed: source audit marker
+cap 24, release-audit module cap 280, and strict-type allowlist hotspot
+governance. The next mechanical-translation debt is concentrated in audit IDs
+just above the next useful source cap, release-audit modules just below the
+current harness cap, and strict-type allowlist reason/domain hotspots that can
+still grow without focused review.
 
 Current review evidence:
 
@@ -11,17 +14,19 @@ Current review evidence:
   mentions, and 462 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 462 operation IDs with
   990 automated evidence rows.
-- No source audit operation ID has more than 24 source markers. The IDs at the
-  current cap are `os-memory-config-boundary`, `typed-tld-accessors`, and
-  `arena-id-memid-helpers` at 24 markers each.
-- The retired broad marker families have been split into focused source IDs for
-  thread-heap visitation, stats output, free validation, Windows TLS/FLS, typed
-  page/arena accessors, libc string helpers, unsafe callback guards, Unix memory
-  primitives, and heap aligned realloc variants.
+- No source audit operation ID has more than 24 source markers. Ten IDs exceed
+  the next useful 22-marker cap: `os-memory-config-boundary`,
+  `typed-tld-accessors`, and `arena-id-memid-helpers` at 24 markers each;
+  `aligned-padding-boundary`, `arena-page-free-boundary`,
+  `arena-page-reabandon-unabandon-boundary`, `heap-ownership-query-boundary`,
+  `stats-counter-update-boundary`, `typed-freelist-wrappers`, and
+  `scalar-domain-wrappers` at 23 markers each.
 - `strict-type-allowlist.txt` has 634 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
-  entries, and 5 heap-allocating-type entries. It has no retained wildcard
+  entries, and 5 heap-allocating-type entries. It has zero wildcard entries and
+  zero removable entries.
+- Compatibility snapshot: It has no retained wildcard
   entries. Strict-type wildcard guard: total=0; none.
 - The largest strict-type allowlist file hotspots are `src/internal/mod.rs` with
   57 active entries, `src/allocator/alloc.rs` with 53,
@@ -35,111 +40,105 @@ Current review evidence:
   with 32, and `raw-pointer-parameter` in `src/allocator/aligned.rs` with 30.
 - The largest raw-pointer domains are `mi_theap_t` with 111 entries,
   `mi_page_t` with 110, and `mi_heap_t` with 67.
-- Strict-type governance is now split into release-audit checks for active entry
-  counts, kind/file hotspots, raw-pointer domains, and wildcard/removable-entry
-  policy. `docs/strict-types.md` documents permanent hotspot families and future
-  `remove:` rewrite candidates; the current allowlist has zero wildcard entries
-  and zero removable entries.
+- The largest strict-type permanent reason groups are allocation compatibility
+  boundary with 47 entries, typed-domain constructor boundary with 42 entries,
+  internal translated C helper boundary with 41 entries, C ABI parity or
+  translated-C source shape with 33 entries, C/platform ABI forwarding boundary
+  with 32 entries, and aligned allocation compatibility boundary with 30
+  entries.
+- The largest strict-type raw-pointer file/domain hotspots are
+  `src/internal/mod.rs`/`mi_page_t` with 33 entries,
+  `src/allocator/alloc.rs`/`mi_theap_t` with 30,
+  `src/allocator/page.rs`/`mi_page_t` with 25,
+  `src/allocator/thread_heap.rs`/`mi_theap_t` with 20,
+  `src/allocator/free.rs`/`mi_page_t` with 19, and
+  `src/allocator/page.rs`/`mi_theap_t` with 19.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   release-audit module-size guard discovers 125 module files recursively and
-  enforces a 280-line cap. No release-audit module exceeds that cap. The largest
+  enforces a 280-line cap. The next useful cap is 260 lines. The largest
   release-audit modules are:
   `interposition_exports/linux_override.rs` at 279 lines,
   `primitive_options.rs` at 279 lines, `strict_policy.rs` at 260 lines,
   `release_policy/callbacks.rs` at 255 lines,
   `unsafe_performance/allocation_free/marker_counts.rs` at 248 lines, and
   `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view.rs` at 248 lines.
-- Issue 2 split release-audit assertion families into focused child modules for
-  thread/TLS platform primitives, safe callback guards, raw pointer nullability,
-  Windows virtual memory, and stats merge policy.
-- Validation for commit `8ade753` passed: `cargo fmt --all`, `cargo clippy
-  --workspace --all-targets --all-features`, `cargo test --workspace
-  --all-targets --all-features`, `cargo test --test release_fast_path_audit
-  --all-features`, unsafe audit scripts, strict-type checks, no-allocation
-  audit, unsafe inventory refresh/check, atomic ordering audit, and
-  `git diff --check`.
 
-## Issue 1: Lower the source audit marker cap to 24
+## Issue 1: Lower the source audit marker cap to 22
 
-Completed in this pass. The source audit cap is now measured at 24 markers and
-the missed 25-marker `typed-page-accessors` hotspot was split as part of the
-same cap-lowering work.
+The current 24-marker cap is enforced, but ten operation IDs still mix enough
+independent responsibilities to make review noisy.
 
-- [x] Split `thread-heap-visit-boundary` into independent visitation,
-      callback-argument, page-area, and thread-heap helper audit IDs.
-- [x] Split `stats-output-boundary` by stack-buffer formatting, output callback
-      forwarding, print/export C ABI paths, and stats-output test fixtures.
-- [x] Split `free-validation-boundary` by null/alignment validation,
-      pointer-page lookup, interior/guarded lookup, double-free checks, and
-      local/remote/abandoned validation fixtures.
-- [x] Split the 25-27 marker IDs by operation family:
-      `windows-tls-fls-boundary`, `typed-arena-accessors`,
-      `typed-page-accessors`, `ffi-libc-string-boundary`, `unsafe-callback`,
-      `unix-mmap-syscall-boundary`, and
-      `aligned-realloc-heap-export-boundary`.
-- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
-      release-audit guards so no source audit operation ID exceeds 24 source
+- [ ] Split the 24-marker IDs by responsibility:
+      `os-memory-config-boundary`, `typed-tld-accessors`, and
+      `arena-id-memid-helpers`.
+- [ ] Split the 23-marker IDs by operation family:
+      `aligned-padding-boundary`, `arena-page-free-boundary`,
+      `arena-page-reabandon-unabandon-boundary`, `heap-ownership-query-boundary`,
+      `stats-counter-update-boundary`, `typed-freelist-wrappers`, and
+      `scalar-domain-wrappers`.
+- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
+      release-audit guards so no source audit operation ID exceeds 22 source
       markers.
 
 Verify: unsafe audit scripts, unsafe evidence scripts, release fast-path audit,
 full formatting, full clippy, and full tests.
 
-## Issue 2: Split release-audit modules over 280 lines
+## Issue 2: Split release-audit modules over 260 lines
 
-Completed in this pass. The release-audit cap is now 280 lines, and the largest
-module is 279 lines.
+The release-audit cap is now 280 lines. Two modules are still 279 lines, and
+`strict_policy.rs` sits exactly at the next 260-line target.
 
-- [x] Split `unsafe_performance/lifecycle_boundaries/thread_tls.rs` by thread
-      lifecycle, TLS/default-heap checks, visitation checks, and reclaim helpers.
-- [x] Split `release_policy/security/unsafe_audit_evidence/focused_paths.rs`
-      below 280 lines by moving platform primitive evidence checks into a
-      focused child module.
-- [x] Split `release_policy/callbacks.rs` into callback ABI inventory,
-      no-alloc/no-unwind trampoline policy, and safe callback guard policy.
-- [x] Split `release_policy/api_surface/raw_facade.rs` into raw facade shape,
-      raw macro policy, repository import policy, and raw pointer nullability
-      checks.
-- [x] Split `unsafe_performance/platform_primitive_boundaries/windows.rs` and
-      `unsafe_performance/thread_stats.rs` enough to lower the recursive module
-      cap to 280 while preserving measured TODO checks.
+- [ ] Split `interposition_exports/linux_override.rs` into Linux TLS shim,
+      override export, and C++/static-link compatibility assertion families.
+- [ ] Split `primitive_options.rs` into option storage, output/formatting, and
+      libc string helper assertion families.
+- [ ] Keep `strict_policy.rs` at or below 260 lines while preserving the new
+      strict-type allowlist governance child module.
+- [ ] Lower the recursive release-audit module cap from 280 to 260 and refresh
+      measured TODO evidence.
 
 Verify: release fast-path audit, TODO guard, unsafe audit scripts, strict-type
 checks, no-allocation audit, full formatting, full clippy, and full tests.
 
-## Issue 3: Tighten strict-type allowlist hotspot governance
+## Issue 3: Guard strict-type permanent reason and file/domain hotspots
 
-Completed in this pass. The allowlist remains wildcard-free and has no
-removable entries, and the permanent boundary categories are now measured by
-focused release-audit checks before deeper typed rewrites.
+The strict-type allowlist now has active-entry, kind/file, domain, wildcard, and
+removable-entry governance. It still lacks focused caps for permanent reason
+groups and raw-pointer file/domain pairs.
 
-- [x] Split the strict-type allowlist inventory release-audit checks by concern:
-      active entry counts, kind/file hotspots, raw-pointer domains, and
-      wildcard/removable-entry policy.
-- [x] Add measured guards for the top raw-pointer domains and strict-type
-      hotspot files so future work cannot silently grow the `mi_theap_t`,
-      `mi_page_t`, `mi_heap_t`, `src/internal/mod.rs`,
-      `src/allocator/alloc.rs`, or `src/allocator/page.rs` debt.
-- [x] Document which hotspot families are permanent C ABI compatibility edges
-      and which are candidates for future typed helper rewrites.
+- [ ] Add release-audit guards for the top permanent disposition reason groups:
+      allocation compatibility boundary, typed-domain constructor boundary,
+      internal translated C helper boundary, C ABI parity/source-shape
+      boundary, C/platform ABI forwarding boundary, and aligned allocation
+      compatibility boundary.
+- [ ] Add measured guards for the top raw-pointer file/domain pairs so the
+      `src/internal/mod.rs`/`mi_page_t`, `src/allocator/alloc.rs`/`mi_theap_t`,
+      `src/allocator/page.rs`/`mi_page_t`, `src/allocator/thread_heap.rs`/
+      `mi_theap_t`, `src/allocator/free.rs`/`mi_page_t`, and
+      `src/allocator/page.rs`/`mi_theap_t` hotspots cannot silently grow.
+- [ ] Update `docs/strict-types.md` to classify those reason groups as
+      permanent ABI/source-shape edges or future typed-helper rewrite
+      candidates.
 
 Verify: release fast-path audit, strict-type checker, full formatting, full
 clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Lower the source audit marker cap to 24.
-2. [x] Split release-audit modules over 280 lines.
-3. [x] Tighten strict-type allowlist hotspot governance.
+1. [ ] Lower the source audit marker cap to 22.
+2. [ ] Split release-audit modules over 260 lines.
+3. [ ] Guard strict-type permanent reason and file/domain hotspots.
 
 ## Definition of done for this backlog
 
-- [x] No source audit operation ID has more than 24 source markers.
-- [x] Release-audit modules are split enough to lower the recursive module cap
-      to 280 lines without weakening discovery or measured TODO checks.
-- [x] Strict-type allowlist hotspot governance is split, measured, and tied to
-      permanent-versus-rewriteable boundary documentation.
-- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [x] For every completed item, run `cargo fmt --all`,
+- [ ] No source audit operation ID has more than 22 source markers.
+- [ ] Release-audit modules are split enough to lower the recursive module cap
+      to 260 lines without weakening discovery or measured TODO checks.
+- [ ] Strict-type permanent reason and file/domain hotspot governance is
+      measured, documented, and tied to permanent-versus-rewriteable boundary
+      classifications.
+- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

@@ -787,8 +787,8 @@ unsafe fn _mi_theap_collect_retired_typed(theap: crate::core_types::ThreadHeapLo
 
 #[inline]
 unsafe fn mi_page_free_list_extend_secure(
-    theap: *mut mi_theap_t,
-    page: *mut mi_page_t,
+    theap: crate::core_types::ThreadHeapLocal,
+    page: crate::core_types::PagePtr,
     bsize: usize,
     extend: usize,
 ) {
@@ -796,7 +796,7 @@ unsafe fn mi_page_free_list_extend_secure(
     unsafe {
         mi_page_free_list_extend_secure_typed(
             theap,
-            crate::core_types::PagePtr::new_unchecked(page),
+            page,
             crate::core_types::BlockSize::new_unchecked(bsize),
             extend,
         );
@@ -805,13 +805,14 @@ unsafe fn mi_page_free_list_extend_secure(
 
 #[inline]
 unsafe fn mi_page_free_list_extend_secure_typed(
-    theap: *mut mi_theap_t,
+    theap: crate::core_types::ThreadHeapLocal,
     page: crate::core_types::PagePtr,
     bsize: crate::core_types::BlockSize,
     extend: usize,
 ) {
     // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
+        let theap = theap.ptr().as_ptr();
         let page_raw = page.as_ptr();
         let bsize = bsize.get();
         #[cfg(feature = "bench-diagnostics")]
@@ -936,13 +937,23 @@ static MI_PAGE_FREE_LIST_EXTEND_KEEP: unsafe extern "C" fn(*mut mi_page_t, usize
 // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
 #[inline(never)]
 unsafe extern "C" fn mi_page_extend_free(theap: *mut mi_theap_t, page: *mut mi_page_t) -> bool {
-    unsafe { mi_page_extend_free_typed(theap, PagePtr::new_unchecked(page)) }
+    unsafe {
+        let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
+            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
+        );
+        mi_page_extend_free_typed(theap, PagePtr::new_unchecked(page))
+    }
 }
 
 #[inline]
-unsafe fn mi_page_extend_free_typed(theap: *mut mi_theap_t, page_ptr: PagePtr) -> bool {
+unsafe fn mi_page_extend_free_typed(
+    theap: crate::core_types::ThreadHeapLocal,
+    page_ptr: PagePtr,
+) -> bool {
     // SAFETY[AUDIT:page-free-list-refill-boundary]: page-local free-list collection, extension, search, and refill preserve block ownership, capacity, commit, and availability invariants.
     unsafe {
+        let theap_local = theap;
+        let theap = theap.ptr().as_ptr();
         let page = page_ptr.as_ptr();
         crate::internal::mi_assert_expensive!(mi_page_is_valid_init(page_ptr));
         if MI_SECURE < 3 {
@@ -1015,7 +1026,7 @@ unsafe fn mi_page_extend_free_typed(theap: *mut mi_theap_t, page_ptr: PagePtr) -
         if extend < MI_MIN_SLICES || MI_SECURE < 2 {
             mi_page_free_list_extend(page, bsize, extend);
         } else {
-            mi_page_free_list_extend_secure(theap, page, bsize, extend);
+            mi_page_free_list_extend_secure(theap_local, page_ptr, bsize, extend);
         }
         mi_page_add_capacity_count(page, extend as u16);
         if MI_STAT > 0 {

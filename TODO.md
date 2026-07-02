@@ -21,16 +21,22 @@ Current review evidence:
   `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers, and
   `arena-debug-render` and `allocation-heap-dispatch-boundary` with 34 markers
   each.
-- `strict-type-allowlist.txt` has 634 active entries: 335
+- `strict-type-allowlist.txt` has 631 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
   entries, and 2 heap-allocating-type entries.
 - The largest strict-type allowlist file hotspots are `src/internal/mod.rs` with
-  57 active entries, `src/allocator/page.rs` with 54,
-  `src/allocator/alloc.rs` with 53, `src/allocator/aligned.rs` with 50,
+  57 active entries, `src/allocator/alloc.rs` with 53,
+  `src/allocator/page.rs` with 51, `src/allocator/aligned.rs` with 50,
   `src/internal/bitmap.rs` with 45, and `src/raw/macros.rs` with 32. The largest
-  raw-pointer domains are `mi_theap_t` with 114 entries, `mi_page_t` with 110,
+  raw-pointer domains are `mi_theap_t` with 111 entries, `mi_page_t` with 110,
   and `mi_heap_t` with 67.
+- The largest strict-type kind/file hotspots are `raw-pointer-parameter` in
+  `src/allocator/alloc.rs` with 47 active entries, `raw-pointer-parameter` in
+  `src/allocator/page.rs` with 44, `raw-pointer-parameter` in
+  `src/internal/mod.rs` with 41, `bare-domain-usize` in
+  `src/internal/bitmap.rs` with 33, `bare-domain-usize` in `src/raw/macros.rs`
+  with 32, and `raw-pointer-parameter` in `src/allocator/aligned.rs` with 30.
 - `strict-type-allowlist.txt` has 1 retained wildcard entry, the
   `heap-allocating-type` Loom proof-model boundary in
   `src/types/atomic/concurrency_models.rs`. Strict-type wildcard guard: total=1; heap-allocating-type=1.
@@ -40,7 +46,7 @@ Current review evidence:
   `datatype_acceptance/strict_type.rs` at 598 lines,
   `release_policy/api_surface.rs` at 523 lines, and
   `release_policy/release_process.rs` at 504 lines.
-- Full validation for Issue 4 passed: `cargo fmt --all`,
+- Full validation for Issue 5 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -72,6 +78,11 @@ Current review evidence:
   environment, output, format, and retention IDs. It split
   `raw-macro-cxx-boundary` into delete, array delete, aligned, nothrow, and new
   IDs.
+- Issue 5 added a release-audit inventory guard for strict-type allowlist counts
+  by kind, file, kind/file pair, raw-pointer domain, and wildcard kind. It
+  narrowed page free-list extension typed helpers to carry `ThreadHeapLocal` and
+  `PagePtr` witnesses, reducing the strict-type checker to 338 raw-pointer
+  parameter sites and removing three raw-pointer allowlist entries.
 
 ## Issue 1: Split OS memory and page-map initialization audit clusters
 
@@ -157,18 +168,18 @@ full tests.
 
 ## Issue 5: Tighten strict-type allowlist hotspots
 
-> **Comment:** The strict-type allowlist is symbol-level, but its largest file
-> hotspots still track broad translated-C domains: `src/internal/mod.rs` has 57
-> active entries, `src/allocator/page.rs` has 54, `src/allocator/alloc.rs` has
-> 53, and `src/allocator/aligned.rs` has 50.
+> **Comment:** Completed. A release-audit inventory guard now checks allowlist
+> counts by kind, file, kind/file pair, raw-pointer domain, and wildcard kind.
+> The page free-list extension typed path now carries `ThreadHeapLocal` and
+> `PagePtr` witnesses instead of raw `mi_theap_t`/`mi_page_t` parameters.
 
-- [ ] Add a release-audit guard that computes strict-type allowlist counts by
+- [x] Add a release-audit guard that computes strict-type allowlist counts by
       kind, file, kind/file pair, and raw-pointer domain, then checks the current
       measured top entries against `TODO.md`.
-- [ ] Audit the top raw-pointer hotspots and replace any compatibility entries
+- [x] Audit the top raw-pointer hotspots and replace any compatibility entries
       that can be moved behind existing typed wrappers with narrower wrappers or
       remove the now-unneeded allowlist entries.
-- [ ] Keep permanent allowlist entries symbol-level. Replace the final retained
+- [x] Keep permanent allowlist entries symbol-level. Replace the final retained
       wildcard with exact proof-model coverage if the checker can model the Loom
       boundary without weakening hot-path heap-allocation detection; otherwise
       keep the wildcard count explicitly documented.
@@ -207,7 +218,7 @@ formatting, full clippy, and full tests.
 2. [x] Split thread lifecycle and thread-local audit clusters.
 3. [x] Split arena visitor and page queue audit clusters.
 4. [x] Split atomic, FFI libc, and raw macro facade audit clusters.
-5. [ ] Tighten strict-type allowlist hotspots.
+5. [x] Tighten strict-type allowlist hotspots.
 6. [ ] Split release-audit modules over 500 lines and lower the cap.
 
 ## Definition of done for this backlog
@@ -215,11 +226,11 @@ formatting, full clippy, and full tests.
 - [x] No source audit operation ID has more than 40 source markers.
 - [ ] The largest source audit clusters listed above are split into narrower
       review units with separate docs, evidence rows, and release-audit guards.
-- [ ] Strict-type allowlist hotspots are measured in release-audit coverage, and
+- [x] Strict-type allowlist hotspots are measured in release-audit coverage, and
       any removed or retained entries have explicit symbol-level rationale.
 - [ ] Release-audit modules are split enough to lower the module cap to 500
       lines without weakening coverage.
-- [ ] The strict-type wildcard guard either reaches zero retained wildcards or
+- [x] The strict-type wildcard guard either reaches zero retained wildcards or
       remains explicitly documented with current measured evidence.
 - [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
 - [ ] For every completed item, run `cargo fmt --all`,

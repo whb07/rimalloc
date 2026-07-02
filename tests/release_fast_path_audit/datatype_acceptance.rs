@@ -4,6 +4,7 @@ pub(super) struct DatatypeAcceptanceSources<'a> {
     pub(super) unsafe_migration_allowlist: &'a str,
     pub(super) strict_type_allowlist: &'a str,
     pub(super) strict_type_checker: &'a str,
+    pub(super) todo: &'a str,
 }
 
 impl<'a> DatatypeAcceptanceSources<'a> {
@@ -31,6 +32,8 @@ mod page_queues;
 mod spec_reconciliation;
 #[path = "datatype_acceptance/strict_type.rs"]
 mod strict_type;
+#[path = "datatype_acceptance/strict_type_allowlist_inventory.rs"]
+mod strict_type_allowlist_inventory;
 
 pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
     audit_sources: DatatypeAcceptanceSources<'_>,
@@ -40,6 +43,7 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
     page_queues::assert_page_queue_and_memid_acceptance(&audit_sources);
     fixture_audit::assert_typed_fixture_audit_splits(&audit_sources);
     strict_type::assert_strict_type_and_provenance_acceptance(&audit_sources);
+    strict_type_allowlist_inventory::assert_strict_type_allowlist_inventory(&audit_sources);
     callbacks::assert_callback_acceptance(&audit_sources);
     padding_and_page_state::assert_padding_and_page_state_acceptance(&audit_sources);
     spec_reconciliation::assert_type_spec_reconciliation(&audit_sources);

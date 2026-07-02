@@ -242,6 +242,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         .expect("read strict-type allowlist");
     let strict_type_checker = fs::read_to_string(root.join("scripts/check-strict-types.py"))
         .expect("read strict-type checker");
+    let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
 
     datatype_acceptance::assert_datatype_acceptance_criteria_have_cross_cutting_guards(
         datatype_acceptance::DatatypeAcceptanceSources {
@@ -250,6 +251,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             unsafe_migration_allowlist: &unsafe_migration_allowlist,
             strict_type_allowlist: &strict_type_allowlist,
             strict_type_checker: &strict_type_checker,
+            todo: &todo,
         },
     );
 }

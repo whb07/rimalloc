@@ -1,0 +1,180 @@
+use std::collections::BTreeMap;
+
+use super::DatatypeAcceptanceSources;
+
+#[derive(Clone, Copy)]
+struct AllowEntry<'a> {
+    kind: &'a str,
+    path: &'a str,
+    symbol: &'a str,
+    domain: &'a str,
+}
+
+fn active_entries(allowlist: &str) -> Vec<AllowEntry<'_>> {
+    allowlist
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                return None;
+            }
+            let fields = line.split('|').collect::<Vec<_>>();
+            assert_eq!(
+                fields.len(),
+                6,
+                "strict-type allowlist entries should keep six pipe-delimited fields"
+            );
+            assert!(
+                !fields[4].trim().is_empty(),
+                "strict-type allowlist entries should include a rationale"
+            );
+            assert!(
+                fields[5].trim().starts_with("permanent:"),
+                "strict-type allowlist entries should not retain removable work items"
+            );
+            Some(AllowEntry {
+                kind: fields[0].trim(),
+                path: fields[1].trim(),
+                symbol: fields[2].trim(),
+                domain: fields[3].trim(),
+            })
+        })
+        .collect()
+}
+
+fn increment<'a>(counts: &mut BTreeMap<&'a str, usize>, key: &'a str) {
+    *counts.entry(key).or_default() += 1;
+}
+
+fn top_counts<'a>(counts: &BTreeMap<&'a str, usize>, limit: usize) -> Vec<(&'a str, usize)> {
+    let mut items = counts
+        .iter()
+        .map(|(key, count)| (*key, *count))
+        .collect::<Vec<_>>();
+    items.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(right.0)));
+    items.truncate(limit);
+    items
+}
+
+fn top_pair_counts<'a>(
+    counts: &BTreeMap<(&'a str, &'a str), usize>,
+    limit: usize,
+) -> Vec<((&'a str, &'a str), usize)> {
+    let mut items = counts
+        .iter()
+        .map(|(key, count)| (*key, *count))
+        .collect::<Vec<_>>();
+    items.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    items.truncate(limit);
+    items
+}
+
+pub(super) fn assert_strict_type_allowlist_inventory(
+    audit_sources: &DatatypeAcceptanceSources<'_>,
+) {
+    let entries = active_entries(audit_sources.strict_type_allowlist);
+    assert_eq!(
+        entries.len(),
+        631,
+        "strict-type allowlist active entry count should match TODO.md"
+    );
+
+    let mut by_kind = BTreeMap::new();
+    let mut by_file = BTreeMap::new();
+    let mut by_kind_file = BTreeMap::new();
+    let mut raw_pointer_domains = BTreeMap::new();
+    let mut wildcard_kinds = BTreeMap::new();
+
+    for entry in &entries {
+        increment(&mut by_kind, entry.kind);
+        increment(&mut by_file, entry.path);
+        *by_kind_file.entry((entry.kind, entry.path)).or_default() += 1;
+        if entry.kind == "raw-pointer-parameter" {
+            increment(&mut raw_pointer_domains, entry.domain);
+        }
+        if entry.symbol == "*" {
+            increment(&mut wildcard_kinds, entry.kind);
+        }
+    }
+
+    assert_eq!(
+        by_kind,
+        BTreeMap::from([
+            ("atomic-cast", 14),
+            ("bare-domain-usize", 220),
+            ("heap-allocating-type", 2),
+            ("metadata-reference", 40),
+            ("pointer-usize-roundtrip", 23),
+            ("raw-pointer-parameter", 332),
+        ]),
+        "strict-type allowlist count by kind should stay measured"
+    );
+    assert_eq!(
+        top_counts(&by_file, 6),
+        [
+            ("src/internal/mod.rs", 57),
+            ("src/allocator/alloc.rs", 53),
+            ("src/allocator/page.rs", 51),
+            ("src/allocator/aligned.rs", 50),
+            ("src/internal/bitmap.rs", 45),
+            ("src/raw/macros.rs", 32),
+        ],
+        "strict-type allowlist file hotspots should match TODO.md"
+    );
+    assert_eq!(
+        top_pair_counts(&by_kind_file, 6),
+        [
+            (("raw-pointer-parameter", "src/allocator/alloc.rs"), 47),
+            (("raw-pointer-parameter", "src/allocator/page.rs"), 44),
+            (("raw-pointer-parameter", "src/internal/mod.rs"), 41),
+            (("bare-domain-usize", "src/internal/bitmap.rs"), 33),
+            (("bare-domain-usize", "src/raw/macros.rs"), 32),
+            (("raw-pointer-parameter", "src/allocator/aligned.rs"), 30),
+        ],
+        "strict-type allowlist kind/file hotspots should stay measured"
+    );
+    assert_eq!(
+        raw_pointer_domains,
+        BTreeMap::from([
+            ("mi_arena_t", 17),
+            ("mi_block_t", 14),
+            ("mi_heap_t", 67),
+            ("mi_page_t", 110),
+            ("mi_subproc_t", 13),
+            ("mi_theap_t", 111),
+        ]),
+        "strict-type raw-pointer domain counts should stay measured"
+    );
+    assert_eq!(
+        wildcard_kinds,
+        BTreeMap::from([("heap-allocating-type", 1)]),
+        "strict-type wildcard count should stay limited to the Loom proof model"
+    );
+
+    for required in [
+        "strict-type-allowlist.txt` has 631 active entries: 332",
+        "220 bare-domain-usize entries, 40\n  metadata-reference entries",
+        "23 pointer-usize-roundtrip entries, 14 atomic-cast\n  entries, and 2 heap-allocating-type entries",
+        "largest strict-type allowlist file hotspots are `src/internal/mod.rs` with\n  57 active entries",
+        "`src/allocator/alloc.rs` with 53",
+        "`src/allocator/page.rs` with 51",
+        "`src/allocator/aligned.rs` with 50",
+        "`src/internal/bitmap.rs` with 45",
+        "`src/raw/macros.rs` with 32",
+        "`raw-pointer-parameter` in\n  `src/allocator/alloc.rs` with 47 active entries",
+        "`raw-pointer-parameter` in\n  `src/allocator/page.rs` with 44",
+        "`raw-pointer-parameter` in\n  `src/internal/mod.rs` with 41",
+        "`bare-domain-usize` in\n  `src/internal/bitmap.rs` with 33",
+        "`bare-domain-usize` in `src/raw/macros.rs`\n  with 32",
+        "`raw-pointer-parameter` in `src/allocator/aligned.rs` with 30",
+        "raw-pointer domains are `mi_theap_t` with 111 entries",
+        "`mi_page_t` with 110",
+        "`mi_heap_t` with 67",
+        "Strict-type wildcard guard: total=1; heap-allocating-type=1.",
+    ] {
+        assert!(
+            audit_sources.todo.contains(required),
+            "TODO.md should record measured strict-type allowlist evidence `{required}`"
+        );
+    }
+}

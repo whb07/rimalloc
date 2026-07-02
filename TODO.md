@@ -41,11 +41,14 @@ Current review evidence:
   `heap-allocating-type` Loom proof-model boundary in
   `src/types/atomic/concurrency_models.rs`. Strict-type wildcard guard: total=1; heap-allocating-type=1.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module cap is 600 lines; the only modules over 500 lines are
-  `release_policy/security.rs` at 600 lines,
-  `datatype_acceptance/strict_type.rs` at 598 lines,
-  `release_policy/api_surface.rs` at 523 lines, and
-  `release_policy/release_process.rs` at 504 lines.
+  release-audit module-size guard now discovers 91 module files recursively and
+  enforces a 500-line cap. The largest release-audit modules are:
+  `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 448 lines,
+  `interposition_exports.rs` at 444 lines,
+  `release_policy/security/unsafe_audit_evidence.rs` at 421 lines,
+  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines,
+  `unsafe_performance/allocation_free.rs` at 409 lines, and
+  `unsafe_performance/os_memory.rs` at 409 lines.
 - Full validation for Issue 5 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
@@ -189,21 +192,18 @@ no-allocation audit, full formatting, full clippy, and full tests.
 
 ## Issue 6: Split release-audit modules over 500 lines and lower the cap
 
-> **Comment:** Issue 5 lowered the cap to 600. The next release-audit bottleneck
-> is now four files over 500 lines:
-> `release_policy/security.rs` at 600,
-> `datatype_acceptance/strict_type.rs` at 598,
-> `release_policy/api_surface.rs` at 523, and
-> `release_policy/release_process.rs` at 504.
+> **Comment:** Completed. The four oversized release-audit modules are split
+> into topic modules, and the module-size guard now discovers module files
+> recursively before enforcing the 500-line cap.
 
-- [ ] Split `datatype_acceptance/strict_type.rs` into focused modules for page
+- [x] Split `datatype_acceptance/strict_type.rs` into focused modules for page
       thread/free bit domains, pointer/freelist wrappers, atomic/provenance
       guards, metadata-reference guards, strict-checker self-tests, and
       allowlist inventory checks.
-- [ ] Split `release_policy/security.rs` into focused modules for advisory/CVE
+- [x] Split `release_policy/security.rs` into focused modules for advisory/CVE
       policy, fuzz/reproducer policy, unsafe-audit evidence ownership,
       hardening threat model, and memory-corruption triage.
-- [ ] Split `release_policy/api_surface.rs` and
+- [x] Split `release_policy/api_surface.rs` and
       `release_policy/release_process.rs` into topic modules matching their
       existing tests, then lower the release-audit module cap from 600 to 500
       without weakening coverage.
@@ -219,21 +219,21 @@ formatting, full clippy, and full tests.
 3. [x] Split arena visitor and page queue audit clusters.
 4. [x] Split atomic, FFI libc, and raw macro facade audit clusters.
 5. [x] Tighten strict-type allowlist hotspots.
-6. [ ] Split release-audit modules over 500 lines and lower the cap.
+6. [x] Split release-audit modules over 500 lines and lower the cap.
 
 ## Definition of done for this backlog
 
 - [x] No source audit operation ID has more than 40 source markers.
-- [ ] The largest source audit clusters listed above are split into narrower
+- [x] The largest source audit clusters listed above are split into narrower
       review units with separate docs, evidence rows, and release-audit guards.
 - [x] Strict-type allowlist hotspots are measured in release-audit coverage, and
       any removed or retained entries have explicit symbol-level rationale.
-- [ ] Release-audit modules are split enough to lower the module cap to 500
+- [x] Release-audit modules are split enough to lower the module cap to 500
       lines without weakening coverage.
 - [x] The strict-type wildcard guard either reaches zero retained wildcards or
       remains explicitly documented with current measured evidence.
-- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [ ] For every completed item, run `cargo fmt --all`,
+- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [x] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

@@ -1,80 +1,16 @@
 use super::*;
 
-const RELEASE_AUDIT_MODULES: &[&str] = &[
-    "allocation_contracts.rs",
-    "allowance_inventory.rs",
-    "datatype_acceptance.rs",
-    "datatype_acceptance/callbacks.rs",
-    "datatype_acceptance/domain_wrappers.rs",
-    "datatype_acceptance/heap_lifecycle.rs",
-    "datatype_acceptance/padding_and_page_state.rs",
-    "datatype_acceptance/page_queues.rs",
-    "datatype_acceptance/spec_reconciliation.rs",
-    "datatype_acceptance/strict_type.rs",
-    "datatype_acceptance/strict_type_allowlist_inventory.rs",
-    "interposition_exports.rs",
-    "primitive_options.rs",
-    "public_facade.rs",
-    "release_policy.rs",
-    "release_policy/api_surface.rs",
-    "release_policy/benchmarking.rs",
-    "release_policy/callbacks.rs",
-    "release_policy/docs_and_linking.rs",
-    "release_policy/docs_and_linking/c_migration_guidance.rs",
-    "release_policy/docs_and_linking/feature_no_std_docs.rs",
-    "release_policy/docs_and_linking/ffi_linking_artifacts.rs",
-    "release_policy/docs_and_linking/public_docs_build_mode.rs",
-    "release_policy/docs_and_linking/symbol_versioning.rs",
-    "release_policy/release_process.rs",
-    "release_policy/security.rs",
-    "runtime_gates.rs",
-    "safe_api.rs",
-    "strict_policy.rs",
-    "todo_backlog.rs",
-    "unsafe_performance.rs",
-    "unsafe_performance/allocation_free.rs",
-    "unsafe_performance/arena_boundaries.rs",
-    "unsafe_performance/bitmap_boundaries.rs",
-    "unsafe_performance/heap_page_visitors.rs",
-    "unsafe_performance/lifecycle_boundaries.rs",
-    "unsafe_performance/lifecycle_boundaries/options_guarded.rs",
-    "unsafe_performance/lifecycle_boundaries/platform_hooks.rs",
-    "unsafe_performance/lifecycle_boundaries/process_lifecycle.rs",
-    "unsafe_performance/lifecycle_boundaries/random_cpu.rs",
-    "unsafe_performance/lifecycle_boundaries/thread_tls.rs",
-    "unsafe_performance/local_boundaries.rs",
-    "unsafe_performance/os_memory.rs",
-    "unsafe_performance/page_arena_behavior.rs",
-    "unsafe_performance/page_arena_behavior/arena_helpers.rs",
-    "unsafe_performance/page_arena_behavior/arena_page_allocation.rs",
-    "unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs",
-    "unsafe_performance/page_arena_behavior/page_map_atomic_helpers.rs",
-    "unsafe_performance/page_arena_behavior/page_map_range_witnesses.rs",
-    "unsafe_performance/page_arena_behavior/purge_clock_atomic.rs",
-    "unsafe_performance/page_lifecycle.rs",
-    "unsafe_performance/platform_primitive_boundaries.rs",
-    "unsafe_performance/platform_primitive_boundaries/macos.rs",
-    "unsafe_performance/platform_primitive_boundaries/shared_policy.rs",
-    "unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs",
-    "unsafe_performance/platform_primitive_boundaries/windows.rs",
-    "unsafe_performance/raw_facade.rs",
-    "unsafe_performance/raw_facade/bootstrap_query.rs",
-    "unsafe_performance/raw_facade/cxx_compat.rs",
-    "unsafe_performance/raw_facade/header_forwarding.rs",
-    "unsafe_performance/raw_facade/libc_posix.rs",
-    "unsafe_performance/raw_facade/raw_override.rs",
-    "unsafe_performance/raw_facade/raw_override/allocator_page.rs",
-    "unsafe_performance/raw_facade/raw_override/internal_imports.rs",
-    "unsafe_performance/raw_facade/raw_override/libc_helpers.rs",
-    "unsafe_performance/raw_facade/raw_override/options_stats.rs",
-    "unsafe_performance/raw_facade/raw_override/os_random.rs",
-    "unsafe_performance/raw_facade/raw_override/runtime_heap.rs",
-    "unsafe_performance/shared.rs",
-    "unsafe_performance/size_class_boundaries.rs",
-    "unsafe_performance/tail_guards.rs",
-    "unsafe_performance/thread_stats.rs",
-    "unsafe_performance/threadlocal_boundaries.rs",
-];
+fn collect_release_audit_modules(dir: &Path, modules: &mut Vec<std::path::PathBuf>) {
+    for entry in fs::read_dir(dir).expect("read release-audit module directory") {
+        let entry = entry.expect("read release-audit module entry");
+        let path = entry.path();
+        if path.is_dir() {
+            collect_release_audit_modules(&path, modules);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            modules.push(path);
+        }
+    }
+}
 
 #[test]
 fn rust_idiom_backlog_tracks_current_work() {
@@ -132,11 +68,13 @@ fn rust_idiom_backlog_tracks_current_work() {
         "has 1 retained wildcard entry, the\n  `heap-allocating-type` Loom proof-model boundary",
         "Strict-type wildcard guard: total=1; heap-allocating-type=1.",
         "release-audit root harness is 247 lines under a 300-line root cap",
-        "release-audit module cap is 600 lines",
-        "only modules over 500 lines are\n  `release_policy/security.rs` at 600 lines",
-        "`datatype_acceptance/strict_type.rs` at 598 lines",
-        "`release_policy/api_surface.rs` at 523 lines",
-        "`release_policy/release_process.rs` at 504 lines",
+        "release-audit module-size guard now discovers 91 module files recursively and\n  enforces a 500-line cap",
+        "largest release-audit modules are:\n  `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 448 lines",
+        "`interposition_exports.rs` at 444 lines",
+        "`release_policy/security/unsafe_audit_evidence.rs` at 421 lines",
+        "`unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines",
+        "`unsafe_performance/allocation_free.rs` at 409 lines",
+        "`unsafe_performance/os_memory.rs` at 409 lines",
         "Full validation for Issue 5 passed",
         "Issue 1 split `os-memory-allocation-boundary` into primitive allocation",
         "It split `page-map-init-boundary` into 32-bit commit\n  bitmap",
@@ -168,7 +106,7 @@ fn rust_idiom_backlog_tracks_current_work() {
         "3. [x] Split arena visitor and page queue audit clusters.",
         "4. [x] Split atomic, FFI libc, and raw macro facade audit clusters.",
         "5. [x] Tighten strict-type allowlist hotspots.",
-        "6. [ ] Split release-audit modules over 500 lines and lower the cap.",
+        "6. [x] Split release-audit modules over 500 lines and lower the cap.",
         "No source audit operation ID has more than 40 source markers",
         "Strict-type allowlist hotspots are measured in release-audit coverage",
         "Release-audit modules are split enough to lower the module cap to 500\n      lines",
@@ -189,6 +127,7 @@ fn release_audit_harness_stays_split() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let audit_root = root.join("tests/release_fast_path_audit.rs");
     let module_dir = root.join("tests/release_fast_path_audit");
+    let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
     let root_lines = fs::read_to_string(&audit_root)
         .expect("read release fast-path audit root")
         .lines()
@@ -199,17 +138,47 @@ fn release_audit_harness_stays_split() {
         "release fast-path audit root should stay a small harness; found {root_lines} lines"
     );
 
-    for module in RELEASE_AUDIT_MODULES {
-        let path = module_dir.join(module);
+    let mut modules = Vec::new();
+    collect_release_audit_modules(&module_dir, &mut modules);
+    modules.sort();
+    assert!(
+        modules.len() >= 80,
+        "release fast-path audit should discover split modules recursively; found {} modules",
+        modules.len()
+    );
+    assert!(
+        todo.contains(&format!(
+            "discovers {} module files recursively",
+            modules.len()
+        )),
+        "TODO.md should document the measured release-audit module count"
+    );
+
+    let mut line_counts = Vec::new();
+    for path in modules {
         let line_count = fs::read_to_string(&path)
             .unwrap_or_else(|err| panic!("read {}: {err}", path.display()))
             .lines()
             .count();
 
         assert!(
-            line_count <= 600,
+            line_count <= 500,
             "release fast-path audit module {} should stay reviewable; found {line_count} lines",
             path.display()
+        );
+        let rel = path
+            .strip_prefix(&module_dir)
+            .expect("module path under release-audit module directory")
+            .to_string_lossy()
+            .replace('\\', "/");
+        line_counts.push((rel, line_count));
+    }
+
+    line_counts.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    for (rel, line_count) in line_counts.iter().take(6) {
+        assert!(
+            todo.contains(&format!("`{rel}` at {line_count} lines")),
+            "TODO.md should document measured release-audit module size for {rel}"
         );
     }
 }

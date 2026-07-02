@@ -13,10 +13,13 @@ strict-type entries, or smaller review units.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 36 entries: 33 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 36.
-- The lowest-risk typed-wrapper migration targets are
-  `src/types/memid.rs` at 539 lines with 5 `unsafe` hits and 0 local markers,
+- `docs/unsafe-migration-allowlist.tsv` has 35 entries: 32 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 35.
+- `src/types/memid.rs` now uses 4
+  `SAFETY[AUDIT:typed-memid-view]` markers for discriminant-gated union reads,
+  plus a `SAFETY[AUDIT:typed-memid-test-fixtures]` marker for its lint-touch
+  fixture, and is off the unsafe migration allowlist.
+- The remaining low-risk typed-wrapper migration targets are
   `src/types/layout.rs` at 533 lines with 20 `unsafe` hits and 0 local markers,
   `src/types/page_states.rs` at 473 lines with 60 `unsafe` hits and 0 local
   markers, and `src/types/atomic.rs` at 755 lines with 101 `unsafe` hits and
@@ -63,13 +66,13 @@ Current review evidence:
 > union reads and one dead-code test fixture, so this file should not need a
 > broad migration exception.
 
-- [ ] Add local `SAFETY[AUDIT:typed-memid-view]` markers for the `os`, `meta`,
+- [x] Add local `SAFETY[AUDIT:typed-memid-view]` markers for the `os`, `meta`,
       and `arena` union arm reads in `MemId::view`.
-- [ ] Keep corrupt or unknown discriminants mapped to `MemIdView::Unknown`
+- [x] Keep corrupt or unknown discriminants mapped to `MemIdView::Unknown`
       rather than panicking, allocating, or assuming valid union payloads.
-- [ ] Cover the remaining test-fixture-only unsafe constructor with an existing
+- [x] Cover the remaining test-fixture-only unsafe constructor with an existing
       or new fixture audit marker, without expanding production unsafe scope.
-- [ ] Add matching `UNSAFE_AUDIT.md` and
+- [x] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries, remove `src/types/memid.rs`
       from `docs/unsafe-migration-allowlist.tsv`, regenerate unsafe inventory,
       and lower `ALLOWLIST_ENTRY_CAP`.
@@ -146,7 +149,7 @@ full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/types/memid.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/types/memid.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/types/layout.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/types/page_states.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/bench_diagnostics.rs` off the unsafe migration

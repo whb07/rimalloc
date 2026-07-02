@@ -58,8 +58,10 @@ typed-freelist-wrapper-test-fixtures	test	src/types/freelist_wrappers/tests.rs	E
 typed-heap-domain	test	src/types/heap/tests.rs	Exercises main, owned, borrowed, initialized, uninitialized, deleted, and local thread-heap witness classification.
 typed-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises stack-local heap, thread-heap, and TLD metadata plus real heap allocation/deletion witness checks.
 typed-layout-test-fixtures	test	src/types/layout/tests.rs	Exercises concrete valid unchecked scalar values and non-dereferenced pointer witnesses for layout/realloc request fixtures.
+typed-memid-view	test	src/types/memid/tests.rs	Exercises OS, external, meta, arena, heap-main, and invalid raw memid view classification.
+typed-memid-view	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks MemId::view owns union-arm reads and maps unknown or corrupt discriminants to Unknown.
 typed-memid-test-fixtures	test	src/types/memid/tests.rs	Exercises stack-local OS, meta, arena, and raw memid fixtures through typed MemId constructors and view rejection cases.
-typed-memid-test-fixtures	test	tests/release_fast_path_audit.rs	Checks memid views keep raw layout private and retain unknown-view rejection cases.
+typed-memid-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks memid views keep raw layout private and retain unknown-view rejection cases.
 typed-padding-metadata	test	src/types/padding/tests.rs	Exercises padding pointer construction, reads, writes, delta updates, and block-plus-usable-size pointer arithmetic.
 typed-padding-metadata	test	tests/release_fast_path_audit.rs	Checks production padding wrappers keep canary and delta fields private and route metadata access through PaddingPtr.
 typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-local padding metadata, canary witnesses, and padding pointer arithmetic fixtures.

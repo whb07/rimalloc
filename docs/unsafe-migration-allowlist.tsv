@@ -31,7 +31,6 @@ src/raw/posix.rs	production	release-readiness	2026-09-30	legacy raw facade unsaf
 src/types/atomic.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/constants.rs	translation	release-readiness	2026-09-30	legacy translated C layout unsafe pending per-operation SAFETY marker migration
 src/types/layout.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
-src/types/memid.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/page_states.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/ptr.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/scalar.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration

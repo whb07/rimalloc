@@ -188,6 +188,7 @@ pub struct rusage {
     pub ru_nivcsw: c_long,
 }
 
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[cfg(unix)]
 unsafe extern "C" {
     #[cfg(not(target_vendor = "apple"))]
@@ -225,6 +226,7 @@ unsafe extern "C" {
     fn mprotect(addr: *mut c_void, len: usize, prot: c_int) -> c_int;
     fn getrusage(who: c_int, usage: *mut rusage) -> c_int;
     fn clock_gettime(clk_id: c_int, tp: *mut timespec) -> c_int;
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     fn pthread_key_create(
         key: *mut pthread_key_t,
         dtor: Option<unsafe extern "C" fn(*mut c_void)>,
@@ -235,11 +237,13 @@ unsafe extern "C" {
     fn syscall(num: c_long, ...) -> c_long;
 }
 
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
     fn _NSGetEnviron() -> *mut *mut *mut c_char;
 }
 
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[cfg(not(target_os = "macos"))]
 unsafe extern "C" {
     static mut environ: *mut *mut c_char;
@@ -320,10 +324,12 @@ const SYS_Getrandom: c_long = -1;
 
 #[inline]
 fn mi_last_errno() -> c_int {
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     #[cfg(target_vendor = "apple")]
     unsafe {
         *__error()
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     #[cfg(not(target_vendor = "apple"))]
     unsafe {
         *__errno_location()
@@ -333,6 +339,7 @@ fn mi_last_errno() -> c_int {
 /// # Safety
 ///
 /// `fpath` must point to a valid NUL-terminated path string.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_prim_open(fpath: *const c_char, open_flags: c_int) -> c_int {
     unsafe { open(fpath, open_flags) }
@@ -341,6 +348,7 @@ pub unsafe extern "C" fn mi_prim_open(fpath: *const c_char, open_flags: c_int) -
 /// # Safety
 ///
 /// `buf` must be valid writable storage for `bufsize` bytes.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_prim_read(fd: c_int, buf: *mut c_void, bufsize: usize) -> ssize_t {
     unsafe { read(fd, buf, bufsize) }
@@ -349,6 +357,7 @@ pub unsafe extern "C" fn mi_prim_read(fd: c_int, buf: *mut c_void, bufsize: usiz
 /// # Safety
 ///
 /// `fd` must be a file descriptor that can be passed to `close`.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_prim_close(fd: c_int) -> c_int {
     unsafe { close(fd) }
@@ -357,6 +366,7 @@ pub unsafe extern "C" fn mi_prim_close(fd: c_int) -> c_int {
 /// # Safety
 ///
 /// `fpath` must point to a valid NUL-terminated path string.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_prim_access(fpath: *const c_char, mode: c_int) -> c_int {
     unsafe { access(fpath, mode) }
@@ -370,6 +380,7 @@ pub unsafe fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
     if tv.is_null() {
         return 0;
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     unsafe { ((*tv).tv_sec as mi_msecs_t * 1000) + ((*tv).tv_usec as mi_msecs_t / 1000) }
 }
 
@@ -377,11 +388,13 @@ pub unsafe fn timeval_secs(tv: *const mi_timeval) -> mi_msecs_t {
 ///
 /// `addr..addr + size` must describe a range previously returned by the Unix
 /// primitive allocator.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
     if size == 0 {
         return 0;
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     let err = unsafe { munmap(addr, size) == -1 };
     if err { mi_last_errno() } else { 0 }
 }
@@ -390,6 +403,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) ->
 unsafe fn unix_detect_overcommit() -> bool {
     #[cfg(target_os = "linux")]
     {
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         let fd = unsafe { mi_prim_open(c"/proc/sys/vm/overcommit_memory".as_ptr(), O_RDONLY) };
         if fd >= 0 {
             let mut buf = [0u8; 32];
@@ -407,6 +421,7 @@ unsafe fn unix_detect_overcommit() -> bool {
 unsafe fn unix_detect_thp() -> bool {
     #[cfg(target_os = "linux")]
     {
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         let fd = unsafe {
             mi_prim_open(
                 c"/sys/kernel/mm/transparent_hugepage/enabled".as_ptr(),
@@ -415,6 +430,7 @@ unsafe fn unix_detect_thp() -> bool {
         };
         if fd >= 0 {
             let mut buf = [0u8; 64];
+            // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
             let nread = unsafe { mi_prim_read(fd, buf.as_mut_ptr().cast::<c_void>(), buf.len()) };
             let _ = unsafe { mi_prim_close(fd) };
             if nread > 0 {
@@ -431,6 +447,7 @@ unsafe fn unix_detect_physical_memory(page_size: usize, physical_memory_in_kib: 
     if physical_memory_in_kib.is_null() {
         return;
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     let pphys = unsafe { sysconf(_SC_PHYS_PAGES) };
     let psize_in_kib = page_size / 1024;
     if pphys > 0 && psize_in_kib > 0 {
@@ -438,6 +455,7 @@ unsafe fn unix_detect_physical_memory(page_size: usize, physical_memory_in_kib: 
             return;
         };
         if let Some(total) = pphys.checked_mul(psize_in_kib) {
+            // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
             unsafe { *physical_memory_in_kib = total };
         }
     }
@@ -447,11 +465,13 @@ unsafe fn unix_detect_physical_memory(page_size: usize, physical_memory_in_kib: 
 ///
 /// `config`, when non-null, must point to writable primitive memory
 /// configuration storage.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
     if config.is_null() {
         return;
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     unsafe {
         let psize = sysconf(_SC_PAGESIZE);
         if psize > 0 {
@@ -476,6 +496,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_
 
 #[inline]
 unsafe fn unix_madvise(addr: *mut c_void, size: usize, advice: c_int) -> c_int {
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     let res = unsafe { madvise(addr, size, advice) };
     if res == 0 { 0 } else { mi_last_errno() }
 }
@@ -488,6 +509,7 @@ unsafe fn unix_mmap_prim(
     flags: c_int,
     fd: c_int,
 ) -> *mut c_void {
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     let p = unsafe { mmap(addr, size, protect_flags, flags, fd, 0) };
     if p == MAP_FAILED { ptr::null_mut() } else { p }
 }
@@ -502,6 +524,7 @@ unsafe fn unix_mmap_prim_aligned(
     fd: c_int,
 ) -> *mut c_void {
     if addr.is_null() && try_alignment > 1 {
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         let hint = unsafe { _mi_os_get_aligned_hint(try_alignment, size) };
         if !hint.is_null() {
             let p = unsafe { unix_mmap_prim(hint, size, protect_flags, flags, fd) };
@@ -510,6 +533,7 @@ unsafe fn unix_mmap_prim_aligned(
             }
         }
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     unsafe { unix_mmap_prim(addr, size, protect_flags, flags, fd) }
 }
 
@@ -539,6 +563,7 @@ unsafe fn unix_mmap(
     is_large: *mut bool,
 ) -> *mut c_void {
     if !is_large.is_null() {
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         unsafe { *is_large = false };
     }
     let mut flags = MAP_PRIVATE | MAP_ANONYMOUS;
@@ -547,6 +572,7 @@ unsafe fn unix_mmap(
     }
     if allow_large
         && (large_only
+            // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
             || (unsafe { _mi_os_canuse_large_page(size, try_alignment) }
                 && mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)))
     {
@@ -565,6 +591,7 @@ unsafe fn unix_mmap(
                 lflags |= MAP_HUGETLB;
                 let mut p = ptr::null_mut();
                 if large_only && size.is_multiple_of(MI_GiB) {
+                    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
                     p = unsafe {
                         unix_mmap_prim_aligned(
                             addr,
@@ -583,6 +610,7 @@ unsafe fn unix_mmap(
                     }
                 }
                 if p.is_null() {
+                    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
                     p = unsafe {
                         unix_mmap_prim_aligned(
                             addr,
@@ -596,12 +624,14 @@ unsafe fn unix_mmap(
                 }
                 if large_only {
                     if !is_large.is_null() {
+                        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
                         unsafe { *is_large = !p.is_null() };
                     }
                     return p;
                 }
                 if !p.is_null() {
                     if !is_large.is_null() {
+                        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
                         unsafe { *is_large = true };
                     }
                     return p;
@@ -614,6 +644,7 @@ unsafe fn unix_mmap(
             }
         }
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     let p = unsafe {
         unix_mmap_prim_aligned(
             addr,
@@ -628,6 +659,7 @@ unsafe fn unix_mmap(
     if !p.is_null()
         && allow_large
         && mi_option_is_enabled(mi_option_t::mi_option_allow_thp)
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         && unsafe { _mi_os_canuse_large_page(size, try_alignment) }
     {
         let _ = unsafe { unix_madvise(p, size, MADV_HUGEPAGE) };
@@ -639,6 +671,7 @@ unsafe fn unix_mmap(
 ///
 /// `is_large`, `is_zero`, and `addr`, when non-null, must be valid writable
 /// out-pointers for the duration of the call.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_alloc(
@@ -651,6 +684,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc(
     is_zero: *mut bool,
     addr: *mut *mut c_void,
 ) -> c_int {
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     unsafe {
         crate::internal::mi_assert_internal!(
             size > 0 && size.is_multiple_of(_mi_os_page_size_typed().get())
@@ -688,6 +722,7 @@ unsafe fn unix_mprotect_hint(_err: c_int) {}
 ///
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator. `is_zero`, when non-null, must be a valid writable out-pointer.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_commit(
@@ -695,6 +730,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_commit(
     size: usize,
     is_zero: *mut bool,
 ) -> c_int {
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     unsafe {
         if !is_zero.is_null() {
             *is_zero = false;
@@ -715,6 +751,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_commit(
 ///
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) -> c_int {
     let _ = start;
@@ -727,12 +764,14 @@ pub(crate) unsafe extern "C" fn _mi_prim_reuse(start: *mut c_void, size: usize) 
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator. `needs_recommit`, when non-null, must be a valid writable
 /// out-pointer.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_decommit(
     start: *mut c_void,
     size: usize,
     needs_recommit: *mut bool,
 ) -> c_int {
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     unsafe {
         let err = unix_madvise(start, size, MADV_DONTNEED);
         if !needs_recommit.is_null() {
@@ -751,6 +790,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_decommit(
 ///
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) -> c_int {
@@ -759,12 +799,14 @@ pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) 
     if advice == 0 {
         advice = MADV_DONTNEED;
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     let mut err = unsafe { unix_madvise(start, size, advice) };
     while err == EAGAIN {
         err = unsafe { unix_madvise(start, size, advice) };
     }
     if err == EINVAL && advice == MADV_FREE {
         ADVICE.store(MADV_DONTNEED, Ordering::Release);
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         err = unsafe { unix_madvise(start, size, MADV_DONTNEED) };
     }
     err
@@ -774,6 +816,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_reset(start: *mut c_void, size: usize) 
 ///
 /// `start..start + size` must describe a range managed by the Unix primitive
 /// allocator.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 #[cfg_attr(mi_internal_c_probe, unsafe(no_mangle))]
 pub(crate) unsafe extern "C" fn _mi_prim_protect(
@@ -786,11 +829,13 @@ pub(crate) unsafe extern "C" fn _mi_prim_protect(
     } else {
         PROT_READ | PROT_WRITE
     };
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     let err = if unsafe { mprotect(start, size, prot) } == 0 {
         0
     } else {
         mi_last_errno()
     };
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     unsafe { unix_mprotect_hint(err) };
     err
 }
@@ -799,6 +844,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_protect(
 ///
 /// `start..start + len` must describe a valid memory range. `nmask`, when
 /// non-null, must be valid for the kernel `mbind` call.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_prim_mbind(
     start: *mut c_void,
@@ -813,6 +859,7 @@ pub unsafe extern "C" fn mi_prim_mbind(
         any(target_arch = "x86_64", target_arch = "aarch64")
     ))]
     {
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         unsafe { syscall(SYS_MBind, start, len, mode, nmask, maxnode, flags) }
     }
     #[cfg(not(all(
@@ -829,6 +876,7 @@ pub unsafe extern "C" fn mi_prim_mbind(
 ///
 /// `is_zero` and `addr`, when non-null, must be valid writable out-pointers for
 /// the duration of the call.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     hint_addr: *mut c_void,
@@ -842,6 +890,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
         not(any(target_os = "haiku", target_os = "cygwin"))
     ))]
     {
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         unsafe {
             let mut is_large = true;
             if !is_zero.is_null() {
@@ -894,6 +943,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     {
         let _ = (hint_addr, size, numa_node);
         if !is_zero.is_null() {
+            // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
             unsafe { *is_zero = false };
         }
         if !addr.is_null() {
@@ -907,6 +957,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
 ///
 /// Must be called only in primitive-layer contexts where querying the current
 /// NUMA node is permitted.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 pub(crate) unsafe extern "C" fn _mi_prim_numa_node() -> usize {
     #[cfg(target_os = "linux")]
     {
@@ -914,6 +965,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_numa_node() -> usize {
         {
             let mut node: c_ulong = 0;
             let mut ncpu: c_ulong = 0;
+            // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
             if unsafe {
                 syscall(
                     SYS_Getcpu,
@@ -962,6 +1014,7 @@ fn mi_prim_numa_node_path(node: usize, buf: &mut [c_char; 128]) -> *const c_char
 ///
 /// Must be called only in primitive-layer contexts where querying NUMA topology
 /// is permitted.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
     #[cfg(target_os = "linux")]
@@ -970,6 +1023,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
         let mut buf = [0 as c_char; 128];
         while node < 256 {
             let path = mi_prim_numa_node_path(node, &mut buf);
+            // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
             if unsafe { access(path, R_OK) } != 0 {
                 break;
             }
@@ -987,6 +1041,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
 ///
 /// Must be called only in primitive-layer contexts where querying the platform
 /// clock is permitted.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
     #[cfg(any(
@@ -1013,6 +1068,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
         } else {
             CLOCK_REALTIME
         };
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         if unsafe { clock_gettime(clock_id, t.as_mut_ptr()) } == 0 {
             let t = unsafe { t.assume_init() };
             return (t.tv_sec as mi_msecs_t * 1000) + (t.tv_nsec as mi_msecs_t / 1_000_000);
@@ -1043,12 +1099,14 @@ pub(crate) unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
 /// # Safety
 ///
 /// `pinfo`, when non-null, must point to writable process-info storage.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
     if pinfo.is_null() {
         return;
     }
     let mut usage = rusage::default();
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     if unsafe { getrusage(RUSAGE_SELF, &mut usage) } != 0 {
         return;
     }
@@ -1063,11 +1121,13 @@ pub(crate) unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_inf
 /// # Safety
 ///
 /// `msg` must be null or point to a valid NUL-terminated C string.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
     if msg.is_null() {
         return;
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     let bytes = unsafe { CStr::from_ptr(msg) }.to_bytes();
     let mut written = 0usize;
     while written < bytes.len() {
@@ -1089,6 +1149,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
 /// # Safety
 ///
 /// Must be called only when the platform `environ` pointer is valid.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_get_environ() -> *mut *mut c_char {
     unsafe { *_NSGetEnviron() }
@@ -1098,6 +1159,7 @@ pub unsafe extern "C" fn mi_get_environ() -> *mut *mut c_char {
 /// # Safety
 ///
 /// Must be called only when the platform `environ` pointer is valid.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_get_environ() -> *mut *mut c_char {
     unsafe { environ }
@@ -1107,6 +1169,7 @@ pub unsafe extern "C" fn mi_get_environ() -> *mut *mut c_char {
 ///
 /// `name` must point to a valid NUL-terminated C string. `result`, when
 /// non-null, must point to writable storage for `result_size` bytes.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_getenv(
     name: *const c_char,
@@ -1122,6 +1185,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_getenv(
         target_os = "openbsd",
         target_os = "wasi"
     ))) {
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         let len = unsafe { _mi_strlen(name) };
         if len == 0 {
             return false;
@@ -1131,11 +1195,13 @@ pub(crate) unsafe extern "C" fn _mi_prim_getenv(
             return false;
         }
         for i in 0..10000usize {
+            // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
             let s = unsafe { *env.add(i) };
             if s.is_null() {
                 break;
             }
             if unsafe { _mi_strnicmp(name, s, len) == 0 && *s.add(len) == b'=' as c_char } {
+                // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
                 unsafe { _mi_strlcpy(result, s.add(len + 1), result_size) };
                 return true;
             }
@@ -1146,16 +1212,19 @@ pub(crate) unsafe extern "C" fn _mi_prim_getenv(
     if _mi_preloading() {
         return false;
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     let mut s = unsafe { getenv(name) };
     if s.is_null() {
         let mut buf = [0 as c_char; 65];
         let len = unsafe { _mi_strnlen(name, buf.len() - 1) };
         for (i, slot) in buf.iter_mut().take(len).enumerate() {
+            // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
             *slot = unsafe { _mi_toupper(*name.add(i)) };
         }
         buf[len] = 0;
         s = unsafe { getenv(buf.as_ptr()) };
     }
+    // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
     if s.is_null() || unsafe { _mi_strnlen(s, result_size) } >= result_size {
         return false;
     }
@@ -1166,6 +1235,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_getenv(
 /// # Safety
 ///
 /// `buf` must point to writable storage for `buf_len` bytes.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: usize) -> bool {
     if buf_len == 0 {
@@ -1182,6 +1252,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: u
         target_os = "macos"
     ))]
     {
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         unsafe extern "C" {
             fn arc4random_buf(buf: *mut c_void, nbytes: usize);
         }
@@ -1194,6 +1265,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: u
         #[cfg(any(target_os = "linux", target_os = "android"))]
         {
             if SYS_Getrandom >= 0 && no_getrandom.load(Ordering::Acquire) == 0 {
+                // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
                 let ret = unsafe { syscall(SYS_Getrandom, buf, buf_len, GRND_NONBLOCK) };
                 if ret >= 0 {
                     return ret as usize == buf_len;
@@ -1205,12 +1277,14 @@ pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: u
             }
         }
 
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         let fd = unsafe { mi_prim_open(c"/dev/urandom".as_ptr(), O_RDONLY | O_CLOEXEC) };
         if fd < 0 {
             return false;
         }
         let mut count = 0usize;
         while count < buf_len {
+            // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
             let ret = unsafe {
                 mi_prim_read(
                     fd,
@@ -1227,6 +1301,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: u
                 count += ret as usize;
             }
         }
+        // SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
         let _ = unsafe { mi_prim_close(fd) };
         count == buf_len
     }
@@ -1252,6 +1327,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_random_buf(buf: *mut c_void, buf_len: u
 ///
 /// `value`, when non-null, must be a thread heap pointer previously associated
 /// with the pthread destructor key.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline]
 pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
     if !value.is_null() {
@@ -1263,6 +1339,7 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
 ///
 /// Must be called during primitive thread initialization before a destructor key
 /// has been registered.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
     unsafe {
@@ -1275,6 +1352,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
 ///
 /// Must be called during primitive thread teardown or process teardown after the
 /// destructor key has been initialized.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
     unsafe {
@@ -1288,6 +1366,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
 ///
 /// `theap` must be null or a valid thread heap pointer whose lifetime covers
 /// subsequent pthread destructor callbacks.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
     unsafe {
@@ -1300,6 +1379,7 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *
 /// # Safety
 ///
 /// Must be called only from primitive thread-state queries.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
     false
@@ -1309,11 +1389,13 @@ pub(crate) unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
 ///
 /// Must be called only in contexts where yielding the current thread is
 /// permitted.
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_prim_thread_yield() {
     let _ = unsafe { sleep(0) };
 }
 
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[used]
 static MI_PRIM_MEM_INIT_KEEP: unsafe extern "C" fn(*mut mi_os_mem_config_t) = _mi_prim_mem_init;
 #[used]
@@ -1327,16 +1409,19 @@ static MI_PRIM_ALLOC_KEEP: unsafe extern "C" fn(
     *mut bool,
     *mut *mut c_void,
 ) -> c_int = _mi_prim_alloc;
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[used]
 static MI_PRIM_COMMIT_KEEP: unsafe extern "C" fn(*mut c_void, usize, *mut bool) -> c_int =
     _mi_prim_commit;
 #[used]
 static MI_PRIM_RESET_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> c_int = _mi_prim_reset;
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[used]
 static MI_PRIM_PROTECT_KEEP: unsafe extern "C" fn(*mut c_void, usize, bool) -> c_int =
     _mi_prim_protect;
 #[used]
 static MI_PRIM_REUSE_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> c_int = _mi_prim_reuse;
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[used]
 static MI_PRIM_ALLOC_HUGE_OS_PAGES_KEEP: unsafe extern "C" fn(
     *mut c_void,
@@ -1345,25 +1430,30 @@ static MI_PRIM_ALLOC_HUGE_OS_PAGES_KEEP: unsafe extern "C" fn(
     *mut bool,
     *mut *mut c_void,
 ) -> c_int = _mi_prim_alloc_huge_os_pages;
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[used]
 static MI_PRIM_NUMA_NODE_COUNT_KEEP: unsafe extern "C" fn() -> usize = _mi_prim_numa_node_count;
 #[used]
 static MI_PRIM_CLOCK_NOW_KEEP: unsafe extern "C" fn() -> mi_msecs_t = _mi_prim_clock_now;
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[used]
 static MI_PRIM_PROCESS_INFO_KEEP: unsafe extern "C" fn(*mut mi_process_info_t) =
     _mi_prim_process_info;
 #[used]
 static MI_PRIM_OUT_STDERR_KEEP: unsafe extern "C" fn(*const c_char) = _mi_prim_out_stderr;
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[used]
 static MI_PRIM_RANDOM_BUF_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> bool =
     _mi_prim_random_buf;
 #[used]
 static MI_PRIM_THREAD_INIT_AUTO_DONE_KEEP: unsafe extern "C" fn() = _mi_prim_thread_init_auto_done;
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[used]
 static MI_PRIM_THREAD_DONE_AUTO_DONE_KEEP: unsafe extern "C" fn() = _mi_prim_thread_done_auto_done;
 #[used]
 static MI_PRIM_THREAD_ASSOCIATE_DEFAULT_THEAP_KEEP: unsafe extern "C" fn(*mut mi_theap_t) =
     _mi_prim_thread_associate_default_theap;
+// SAFETY[AUDIT:unix-primitive-backend]: Unix primitive callers preserve C ABI ranges, buffers, and out-pointer contracts.
 #[used]
 static MI_PRIM_THREAD_IS_IN_THREADPOOL_KEEP: unsafe extern "C" fn() -> bool =
     _mi_prim_thread_is_in_threadpool;

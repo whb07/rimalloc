@@ -256,6 +256,12 @@ Operation IDs:
   errno slot publication, environment lookup, raw allocation forwarding,
   POSIX-compatible out-pointer and pointer-slot writes, wide-string scanning and
   copying, environment duplication, and aligned/product allocation shims.
+- `SAFETY[AUDIT:unix-primitive-backend]`: `src/platform/unix.rs` owns the Unix
+  primitive backend. Unsafe operations are limited to libc/syscall imports,
+  proc/sys probes, `sysconf`, `mmap`/`munmap`/`madvise`/`mprotect`, huge-page
+  and NUMA syscalls, process-info writes, stderr writes, environment lookup,
+  entropy fallbacks, pthread destructor keys, and scheduler yield while keeping
+  primitive helpers allocation-free and C ABI compatible.
 - `SAFETY[AUDIT:macos-zone-override]`: `src/platform/macos.rs` owns the
   source-present macOS malloc-zone override boundary. Unsafe operations are
   limited to Darwin malloc-zone callback signatures and imports, mutable

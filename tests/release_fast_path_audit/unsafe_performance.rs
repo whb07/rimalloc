@@ -1087,6 +1087,16 @@ fn free_path_internals_are_not_dynamic_exports() {
             "Unix primitive helper boundary marker missing: {marker}"
         );
     }
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/platform/unix.rs\t"))
+            && prim_unix_rs
+                .matches("SAFETY[AUDIT:unix-primitive-backend]")
+                .count()
+                >= 85,
+        "Unix primitive backend unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
     for marker in [
         "#[inline(never)]\npub(crate) extern \"C\" fn _mi_os_random_weak(",
         "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_random_split(",

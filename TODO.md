@@ -15,8 +15,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 15 entries: 13 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 15.
+- `docs/unsafe-migration-allowlist.tsv` has 14 entries: 12 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 14.
 - The completed pass moved `src/platform/macos.rs`, `src/platform/mod.rs`,
   `src/internal/atomic.rs`, `src/allocator/page_map.rs`, and
   `src/types/scalar.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -32,18 +32,24 @@ Current review evidence:
   collect/default-switching shims, thread-heap init/create/free/delete,
   refcount updates, random next, and arena-memory cleanup, and is off the
   unsafe migration allowlist.
+- The current pass moved `src/platform/unix.rs` to 90
+  `SAFETY[AUDIT:unix-primitive-backend]` markers for libc/syscall imports,
+  proc/sys probes, sysconf memory sizing, mmap/free/commit/decommit/reset/
+  protect paths, huge-page and NUMA syscalls, process-info writes, stderr
+  output, environment lookup, random source fallbacks, pthread TLS destructor
+  registration, and scheduler yield, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/platform/unix.rs` at 1,371 lines with 143 `unsafe` hits,
   `src/platform/os.rs` at 1,614 lines with 200 `unsafe` hits,
   `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits,
   `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits, and
-  `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits.
+  `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits, and
+  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits.
 - The next allowlisted production files after those are
-  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits,
   `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits,
   `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits,
   `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits, and
-  `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits.
+  `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits, and
+  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits.
 - `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
   `symbol = *` entries. The largest categories are 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
@@ -57,6 +63,7 @@ Current review evidence:
 - The largest unsafe audit marker clusters remain broad enough to split later:
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
   `SAFETY[AUDIT:internal-atomic-facade]` has 103 markers,
+  `SAFETY[AUDIT:unix-primitive-backend]` has 90 markers,
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
   `SAFETY[AUDIT:macos-zone-override]` has 83 markers,
   `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
@@ -144,23 +151,24 @@ audit scripts, unsafe inventory regeneration/check, full clippy, and full tests.
 > operations cover libc/syscall imports, overcommit and transparent huge-page
 > detection, `mmap`/`munmap`/`madvise`/`mprotect`, huge-page and NUMA probes,
 > process info, stderr writes, environment lookup, random-byte fallback, TLS
-> auto-done hooks, and scheduler yield.
+> auto-done hooks, and scheduler yield. This pass moved those boundaries from a
+> dated file allowance to local operation markers.
 
-- [ ] Add local `SAFETY[AUDIT:unix-primitive-backend]` markers for extern
+- [x] Add local `SAFETY[AUDIT:unix-primitive-backend]` markers for extern
       declarations, libc wrappers, proc/sys file reads, sysconf memory sizing,
       mmap allocation/free/commit/decommit/reset/protect paths, huge-page and
       NUMA syscalls, process-info writes, stderr output, environment scanning,
       random source fallbacks, pthread TLS destructor registration, and yield.
-- [ ] Preserve Linux/macOS/BSD cfg shape, syscall parity, `MAP_FAILED` handling,
+- [x] Preserve Linux/macOS/BSD cfg shape, syscall parity, `MAP_FAILED` handling,
       overcommit/THP detection, aligned mmap hint behavior, large-page fallback,
       preloading safeguards, bounded environment scans, partial-write handling,
       random-byte fallback ordering, TLS destructor semantics, and no allocator
       allocation inside primitive helpers.
-- [ ] Add or extend release-audit assertions and parity checks for Unix syscall
+- [x] Add or extend release-audit assertions and parity checks for Unix syscall
       shape, mmap/free/commit/decommit/reset/protect behavior, NUMA and process
       info probes, environment/random helpers, TLS auto-done hooks, and marker
       coverage without a migration allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/platform/unix.rs`
+- [x] Add matching unsafe audit/evidence entries, remove `src/platform/unix.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower the cap.
 
@@ -233,7 +241,7 @@ clippy, and full tests.
 1. [x] Migrate `src/types/constants.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/allocator/thread_heap.rs` off the unsafe migration
        allowlist.
-3. [ ] Migrate `src/platform/unix.rs` off the unsafe migration allowlist.
+3. [x] Migrate `src/platform/unix.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/platform/os.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/types/ptr.rs` off the unsafe migration allowlist.
 

@@ -52,9 +52,7 @@ Current review evidence:
   `heap-allocating-type` Loom proof-model boundary in
   `src/types/atomic/concurrency_models.rs`. Strict-type wildcard guard: total=1; heap-allocating-type=1.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  module cap is still 700 lines; the largest modules are
-  `unsafe_performance/page_arena_behavior.rs` at 656 lines,
-  `release_policy/docs_and_linking.rs` at 633 lines,
+  module cap is now 600 lines; the largest modules are
   `datatype_acceptance/strict_type.rs` at 592 lines,
   `release_policy/security.rs` at 584 lines,
   `release_policy/api_surface.rs` at 523 lines,
@@ -63,8 +61,16 @@ Current review evidence:
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs`
   at 421 lines,
   `interposition_exports.rs` at 413 lines,
-  `unsafe_performance/os_memory.rs` at 403 lines, and
-  `allowance_inventory.rs` at 398 lines.
+  `unsafe_performance/os_memory.rs` at 403 lines,
+  `allowance_inventory.rs` at 398 lines, and
+  `unsafe_performance/allocation_free.rs` at 397 lines.
+- The completed release-audit split moved
+  `unsafe_performance/page_arena_behavior.rs` behind focused child modules; its
+  largest child is
+  `unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367
+  lines. `release_policy/docs_and_linking.rs` is now a 10-line module with
+  docs child modules up to
+  `release_policy/docs_and_linking/c_migration_guidance.rs` at 172 lines.
 - Full validation for the last completed item passed:
   `cargo fmt --all`, `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
@@ -158,16 +164,16 @@ evidence scripts, full formatting, full clippy, and full tests.
 
 > **Comment:** The source audit clusters are now small enough that the largest
 > release-audit modules are the next reviewability bottleneck.
-> `unsafe_performance/page_arena_behavior.rs` is 656 lines and
-> `release_policy/docs_and_linking.rs` is 633 lines.
+  > `unsafe_performance/page_arena_behavior.rs` was 656 lines and
+  > `release_policy/docs_and_linking.rs` was 633 lines.
 
-- [ ] Split `unsafe_performance/page_arena_behavior.rs` into focused modules for
+- [x] Split `unsafe_performance/page_arena_behavior.rs` into focused modules for
       memid/arena dispatch, page-map range witnesses, arena allocation/page
       allocation, purge/clock/atomic behavior, and page-map atomic helpers.
-- [ ] Split `release_policy/docs_and_linking.rs` into focused modules for public
+- [x] Split `release_policy/docs_and_linking.rs` into focused modules for public
       docs/build-mode policy, feature/no-std docs, FFI linking artifacts, symbol
       versioning, and C migration guidance.
-- [ ] Once every release-audit module is below 600 lines, lower the release
+- [x] Once every release-audit module is below 600 lines, lower the release
       audit module cap from 700 to 600 without weakening coverage.
 
 Verify: release fast-path audit, docs/linking release policy modules, unsafe
@@ -180,7 +186,7 @@ tests.
 2. [x] Split macOS zone and platform primitive marker clusters.
 3. [x] Split free-path and aligned allocation marker clusters.
 4. [x] Split page-map registration and internal atomic marker clusters.
-5. [ ] Split largest release-audit modules and lower the module cap.
+5. [x] Split largest release-audit modules and lower the module cap.
 
 ## Definition of done for this backlog
 
@@ -188,13 +194,13 @@ tests.
 - [x] The largest remaining page-map and atomic clusters listed above are split
       into narrower review units with separate docs, evidence rows, and
       release-audit guards.
-- [ ] Release-audit modules are split enough to lower the module cap to 600
+- [x] Release-audit modules are split enough to lower the module cap to 600
       lines without weakening coverage.
-- [ ] The strict-type wildcard guard remains at exactly one retained
+- [x] The strict-type wildcard guard remains at exactly one retained
       proof-model wildcard unless `TODO.md` is updated with new measured
       evidence.
-- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [ ] For every completed item, run `cargo fmt --all`,
+- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [x] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

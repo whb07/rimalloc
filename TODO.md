@@ -3,9 +3,10 @@
 Fresh-eyes review after completing the previous TODO backlog on `master`. The
 last pass lowered the unsafe migration cap to 58, removed one stale strict-type
 allowance, split a release-audit boundary module, and moved page count helpers
-out of `page.rs`. The next pass should keep the same discipline: reduce broad
-exceptions, preserve allocator hot-path shape, and split translated code only at
-cohesive boundaries with clear invariants.
+out of `page.rs`. This pass completed the planned follow-up items, including a
+size-class helper split. Future passes should keep the same discipline: reduce
+broad exceptions, preserve allocator hot-path shape, and split translated code
+only at cohesive boundaries with clear invariants.
 
 Current review evidence:
 
@@ -20,12 +21,15 @@ Current review evidence:
   `aligned`, `bitmap`, `internal`, and `page`.
 - The largest production review units are still translated-style modules:
   `src/allocator/arena.rs` is 4,613 lines,
-  `src/allocator/page.rs` is 3,220 lines,
+  `src/allocator/page.rs` is 3,109 lines,
   `src/internal/bitmap.rs` is 2,604 lines,
   `src/allocator/alloc.rs` is 2,545 lines,
   `src/allocator/init.rs` is 2,339 lines,
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
+- `src/allocator/page/bins.rs` is 128 lines and owns the
+  `SAFETY[AUDIT:page-bin-size-classes]` markers for the bin table,
+  unchecked `Bin` construction, and `mi_good_size` symbol boundary.
 - `src/allocator/page/counts.rs` is 254 lines and now owns 22
   `SAFETY[AUDIT:page-count-accessors]` markers. The split improved module
   shape, and page field reads now route through `PagePtr` accessors.
@@ -33,7 +37,7 @@ Current review evidence:
   `SAFETY[AUDIT:arena-debug-render]` markers around diagnostic metadata reads.
 - The release audit is split, but its largest units remain close to the guard:
   `tests/release_fast_path_audit.rs` is 2,864 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,823 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,828 lines,
   `tests/release_fast_path_audit/unsafe_performance/tail_guards.rs` is 57
   lines, and
   `tests/release_fast_path_audit/release_policy.rs` is 2,291 lines.
@@ -155,16 +159,23 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 > units. The next split should move one small, cohesive, non-hot helper cluster
 > into a submodule while preserving ABI, symbol names, and fast-path code shape.
 
-- [ ] Re-scan `src/allocator/arena.rs` and `src/allocator/page.rs` for helper
+- [x] Re-scan `src/allocator/arena.rs` and `src/allocator/page.rs` for helper
       clusters with narrow ownership invariants.
-- [ ] Pick a low-risk cluster away from allocation/free inner loops unless the
+- [x] Pick a low-risk cluster away from allocation/free inner loops unless the
       boundary already has release-audit coverage.
-- [ ] Move the cluster into an existing or new allocator submodule with private
+- [x] Move the cluster into an existing or new allocator submodule with private
       implementation details and explicit re-exports only where needed.
-- [ ] Update source-path assertions, strict-type path aliases, unsafe audit
+- [x] Update source-path assertions, strict-type path aliases, unsafe audit
       evidence, and generated unsafe inventory after the move.
-- [ ] Preserve allocator ABI, public symbols, and benchmark-critical inline
+- [x] Preserve allocator ABI, public symbols, and benchmark-critical inline
       behavior.
+  - Evidence: the size-class and good-size helpers moved from
+    `src/allocator/page.rs` into `src/allocator/page/bins.rs`. The new module
+    keeps the `mi_bin`, `_mi_bin`, `_mi_bin_size`, and `mi_good_size` ABI
+    wrappers, while `page.rs` re-exports only the crate-visible helpers that
+    current callers use. `src/allocator/page.rs` dropped from 3,220 to 3,109
+    lines, `src/allocator/page/bins.rs` is 128 lines, and the release audit now
+    checks the new source boundary plus the empty-theap table dependency.
 
 Verify: `scripts/check-ffi-boundary.py`, `scripts/check-api-inventory.py`,
 `scripts/check-public-abi.py`, focused release/page or arena tests, full
@@ -172,11 +183,11 @@ clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Shrink the unsafe migration allowlist using small test fixtures.
-2. [ ] Consolidate repeated page count accessor safety proof.
-3. [ ] Remove or narrow one broad strict-type `usize` allowance.
-4. [ ] Split one more release-audit assertion cluster.
-5. [ ] Split one production allocator helper boundary.
+1. [x] Shrink the unsafe migration allowlist using small test fixtures.
+2. [x] Consolidate repeated page count accessor safety proof.
+3. [x] Remove or narrow one broad strict-type `usize` allowance.
+4. [x] Split one more release-audit assertion cluster.
+5. [x] Split one production allocator helper boundary.
 
 ## Definition of done for this backlog
 
@@ -185,5 +196,5 @@ clippy, and full tests.
       narrower helper proof.
 - [x] The strict-type removable-entry count is below 6 and capped lower.
 - [x] The largest release-audit child module has more guard margin.
-- [ ] One large allocator translation unit is smaller without API, ABI, or
+- [x] One large allocator translation unit is smaller without API, ABI, or
       hot-path performance drift.

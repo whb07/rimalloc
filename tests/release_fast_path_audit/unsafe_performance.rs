@@ -56,6 +56,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/options.rs");
     let page_rs =
         fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let page_bins_rs = fs::read_to_string(root.join("src/allocator/page/bins.rs"))
+        .expect("read src/allocator/page/bins.rs");
     let page_counts_rs = fs::read_to_string(root.join("src/allocator/page/counts.rs"))
         .expect("read src/allocator/page/counts.rs");
     let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
@@ -876,27 +878,30 @@ fn free_path_internals_are_not_dynamic_exports() {
         "aligned allocation should keep C's _mi_padding_shrink helper boundary"
     );
     assert!(
-        page_rs.contains("#[inline(never)]\npub extern \"C\" fn mi_bin(size: usize) -> usize")
-            && page_rs
+        page_rs.contains("mod bins;")
+            && page_bins_rs
+                .contains("#[inline(never)]\npub extern \"C\" fn mi_bin(size: usize) -> usize")
+            && page_bins_rs
                 .contains("#[inline(never)]\npub extern \"C\" fn _mi_bin(size: usize) -> usize")
-            && page_rs.contains(
+            && page_bins_rs.contains(
                 "#[inline(never)]\npub extern \"C\" fn _mi_bin_size(bin: usize) -> usize"
             )
-            && page_rs.contains("pub(crate) fn mi_bin_impl(size: usize) -> usize")
-            && page_rs.contains("fn mi_bin_from_raw_size(size: usize) -> crate::core_types::Bin")
-            && page_rs.contains(
+            && page_bins_rs.contains("pub(crate) fn mi_bin_impl(size: usize) -> usize")
+            && page_bins_rs
+                .contains("fn mi_bin_from_raw_size(size: usize) -> crate::core_types::Bin")
+            && page_bins_rs.contains(
                 "pub(crate) fn mi_bin_from_padded(padded: crate::core_types::PaddedSize)"
             )
-            && page_rs.contains(
+            && page_bins_rs.contains(
                 "pub(crate) fn mi_bin_from_block_size(\n    block_size: crate::core_types::BlockSize,"
             )
-            && page_rs.contains(
+            && page_bins_rs.contains(
                 "pub(crate) fn mi_bin_from_usable(usable: crate::core_types::UsableSize)"
             )
-            && page_rs.contains("mi_bin_impl(size)")
-            && page_rs.contains("_mi_theap_empty")
-            && page_rs.contains(".pages[bin].block_size")
-            && page_rs.contains("_mi_bin_size(mi_bin_from_padded(padded).as_usize())")
+            && page_bins_rs.contains("mi_bin_impl(size)")
+            && page_bins_rs.contains("_mi_theap_empty")
+            && page_bins_rs.contains(".pages[bin].block_size")
+            && page_bins_rs.contains("_mi_bin_size(mi_bin_from_padded(padded).as_usize())")
             && stats_rs.contains("_mi_bin_size(bin)"),
         "bin lookup helpers should keep C's mi_bin/_mi_bin/_mi_bin_size boundaries and empty-theap table dependency"
     );
@@ -941,9 +946,9 @@ fn free_path_internals_are_not_dynamic_exports() {
         "internal usable-size routing should carry UsableSize until raw ABI/comparison boundaries"
     );
     assert!(
-        page_rs.contains("pub(crate) fn mi_good_size_typed(")
-            && page_rs.contains(") -> crate::core_types::GoodSize")
-            && page_rs.contains(
+        page_bins_rs.contains("pub(crate) fn mi_good_size_typed(")
+            && page_bins_rs.contains(") -> crate::core_types::GoodSize")
+            && page_bins_rs.contains(
                 "mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()"
             )
             && alloc_rs.contains("mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()")

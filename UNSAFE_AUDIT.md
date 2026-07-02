@@ -104,6 +104,9 @@ Per-file review:
   abandonment, and reclaim paths operate on pages selected by heap/theap queues
   and size classes. Encoded block links and thread-free state follow C page
   invariants.
+- `src/allocator/page/bins.rs`: size-class and good-size helpers preserve the
+  C bin ABI wrappers while routing internal callers through typed `Bin` and
+  `GoodSize` domains.
 - `src/allocator/page/counts.rs`: page and page-queue count accessors read and
   update allocator-owned metadata through typed counter wrappers while
   preserving the original inline helper shape.
@@ -216,6 +219,10 @@ Operation IDs:
   allocator-owned page or queue metadata, and the helpers route raw metadata
   through `PagePtr` and `PageQueuePtr` before typed counter arithmetic or
   publication.
+- `SAFETY[AUDIT:page-bin-size-classes]`: `src/allocator/page/bins.rs`
+  centralizes the bin/good-size table boundary, bounds unchecked `Bin`
+  construction by `MI_BIN_COUNT`, and preserves the exported `mi_good_size`
+  symbol while immediately routing into typed size domains.
 - `SAFETY[AUDIT:safe-heap]`: `src/safe/heap.rs` ties heap allocations to the
   owning heap lifetime, prevents main-heap deletion through owned heap handles,
   and keeps raw heap/block calls behind wrapper ownership checks.

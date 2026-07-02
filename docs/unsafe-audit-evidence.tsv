@@ -8,6 +8,9 @@ deferred-free-callback-state	test	tests/release_fast_path_audit/unsafe_performan
 deferred-free-callback-state	script	scripts/check-ffi-boundary.py	Checks deferred-free registration remains in a classified C ABI boundary file.
 page-count-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page queue/count helpers preserve typed counter routing and page queue boundary assertions after the split.
 page-count-accessors	script	scripts/check-strict-types.py	Checks split page count accessors remain covered by the existing page strict-type raw metadata boundary.
+page-bin-size-classes	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks split bin/good-size helpers preserve C ABI wrappers, empty-theap table dependency, typed internal routing, and page.rs re-exports.
+page-bin-size-classes	script	scripts/check-ffi-boundary.py	Checks the moved mi_good_size export remains in a classified C ABI boundary file.
+page-bin-size-classes	script	scripts/check-strict-types.py	Checks split page bin helpers remain covered by the existing page strict-type raw size boundary.
 global-alloc	test	tests/mimalloc_global_alloc.rs	Exercises GlobalAlloc alignment, reallocation preservation, and facade traits.
 global-alloc	test	tests/mimalloc_global_allocator_std.rs	Exercises MiMalloc as the process global allocator under std.
 owned-allocation	test	src/safe/tests.rs	Exercises safe owned Allocation construction, resize, initialization, and drop paths.

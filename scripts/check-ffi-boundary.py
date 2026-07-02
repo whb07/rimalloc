@@ -24,6 +24,7 @@ EXPORT_FILE_CLASSIFICATION = {
     "src/lib.rs": "panic-runtime-boundary",
     "src/allocator/options.rs": "c-abi",
     "src/platform/os.rs": "c-abi-internal-classified",
+    "src/allocator/page/bins.rs": "c-abi",
     "src/allocator/page/deferred.rs": "c-abi",
     "src/allocator/page.rs": "c-abi-internal-classified",
     "src/allocator/page_map.rs": "c-abi-internal-classified",

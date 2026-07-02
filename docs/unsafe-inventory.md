@@ -47,9 +47,10 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/heap.rs` | 93 | 46 | 34 | 0 | 0 | 11 | 0 |
 | `src/allocator/init.rs` | 333 | 230 | 79 | 3 | 0 | 18 | 3 |
 | `src/allocator/options.rs` | 79 | 46 | 9 | 4 | 3 | 15 | 0 |
+| `src/allocator/page/bins.rs` | 3 | 2 | 0 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/counts.rs` | 44 | 22 | 22 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
-| `src/allocator/page.rs` | 227 | 107 | 119 | 0 | 0 | 1 | 0 |
+| `src/allocator/page.rs` | 224 | 105 | 119 | 0 | 0 | 0 | 0 |
 | `src/allocator/page_map.rs` | 184 | 144 | 38 | 0 | 0 | 2 | 0 |
 | `src/allocator/stats.rs` | 198 | 124 | 51 | 0 | 0 | 22 | 0 |
 | `src/allocator/thread_heap.rs` | 120 | 56 | 58 | 0 | 0 | 6 | 0 |

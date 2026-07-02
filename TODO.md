@@ -33,7 +33,9 @@ Current review evidence:
   `SAFETY[AUDIT:arena-debug-render]` markers around diagnostic metadata reads.
 - The release audit is split, but its largest units remain close to the guard:
   `tests/release_fast_path_audit.rs` is 2,864 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,877 lines, and
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,823 lines,
+  `tests/release_fast_path_audit/unsafe_performance/tail_guards.rs` is 57
+  lines, and
   `tests/release_fast_path_audit/release_policy.rs` is 2,291 lines.
 
 ## Issue: Unsafe migration allowlist still has small test fixtures
@@ -127,17 +129,22 @@ Verify: `scripts/check-strict-types.py`,
 > remains close to the 3,000-line guard. Another cohesive assertion cluster can
 > move into a child module so the audit stays reviewable as new checks are added.
 
-- [ ] Inventory large assertion clusters in
+- [x] Inventory large assertion clusters in
       `tests/release_fast_path_audit/unsafe_performance.rs` and
       `tests/release_fast_path_audit/release_policy.rs`.
-- [ ] Move one cohesive cluster into a child module under
+- [x] Move one cohesive cluster into a child module under
       `tests/release_fast_path_audit/`.
-- [ ] Keep source-reading helpers shared instead of duplicating file-slicing
+- [x] Keep source-reading helpers shared instead of duplicating file-slicing
       utilities.
-- [ ] Preserve the current release-audit test coverage and tighten guards if
+- [x] Preserve the current release-audit test coverage and tighten guards if
       the split creates enough margin.
-- [ ] Update `tests/release_fast_path_audit/todo_backlog.rs` when the measured
+- [x] Update `tests/release_fast_path_audit/todo_backlog.rs` when the measured
       evidence changes.
+  - Evidence: the generic malloc refill inline guard, page stat gate guard, and
+    public option representation guard moved to
+    `tests/release_fast_path_audit/unsafe_performance/tail_guards.rs`.
+    `unsafe_performance.rs` dropped from 2,877 to 2,823 lines, the child module
+    is 57 lines, and the release audit still runs 67 tests.
 
 Verify: `cargo test --test release_fast_path_audit --all-features`,
 `git diff --check`, full clippy, and full tests.
@@ -177,6 +184,6 @@ clippy, and full tests.
 - [x] The page count accessor marker cluster is smaller or justified by a
       narrower helper proof.
 - [x] The strict-type removable-entry count is below 6 and capped lower.
-- [ ] The largest release-audit child module has more guard margin.
+- [x] The largest release-audit child module has more guard margin.
 - [ ] One large allocator translation unit is smaller without API, ABI, or
       hot-path performance drift.

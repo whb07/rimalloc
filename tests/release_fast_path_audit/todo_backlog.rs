@@ -7,6 +7,7 @@ const RELEASE_AUDIT_MODULES: &[&str] = &[
     "unsafe_performance.rs",
     "unsafe_performance/lifecycle_boundaries.rs",
     "unsafe_performance/local_boundaries.rs",
+    "unsafe_performance/tail_guards.rs",
 ];
 
 #[test]
@@ -48,7 +49,9 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`src/allocator/arena/debug.rs`",
         "34\n  `SAFETY[AUDIT:arena-debug-render]` markers",
         "`tests/release_fast_path_audit.rs` is 2,864 lines",
-        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,877 lines",
+        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,823 lines",
+        "`tests/release_fast_path_audit/unsafe_performance/tail_guards.rs` is 57",
+        "release audit still runs 67 tests",
     ];
 
     for evidence in required_evidence {

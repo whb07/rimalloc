@@ -1396,6 +1396,9 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     collect_rs_sources(root, &src, &mut rust_sources);
 
     let types_spec = fs::read_to_string(root.join("TYPES_SPEC.md")).expect("read TYPES_SPEC.md");
+    let unsafe_migration_allowlist =
+        fs::read_to_string(root.join("docs/unsafe-migration-allowlist.tsv"))
+            .expect("read unsafe migration allowlist");
     let strict_type_allowlist = fs::read_to_string(root.join("strict-type-allowlist.txt"))
         .expect("read strict-type allowlist");
     let strict_type_checker = fs::read_to_string(root.join("scripts/check-strict-types.py"))
@@ -1405,6 +1408,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
         datatype_acceptance::DatatypeAcceptanceSources {
             rust_sources: &rust_sources,
             types_spec: &types_spec,
+            unsafe_migration_allowlist: &unsafe_migration_allowlist,
             strict_type_allowlist: &strict_type_allowlist,
             strict_type_checker: &strict_type_checker,
         },

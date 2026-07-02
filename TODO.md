@@ -15,8 +15,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 18 entries: 15 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 18.
+- `docs/unsafe-migration-allowlist.tsv` has 17 entries: 14 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 17.
 - The completed pass moved `src/raw/posix.rs`, `src/lib.rs`,
   `src/ffi/libc.rs`, `src/allocator/threadlocal.rs`, and
   `src/allocator/heap.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -47,23 +47,29 @@ Current review evidence:
   publication, range set/clear/register/unregister, `RegisteredPageRange`
   witnesses, safe arbitrary-pointer lookup, and heap-region forwarding, and is
   off the unsafe migration allowlist.
+- The current pass also moved `src/types/scalar.rs` to 23
+  `SAFETY[AUDIT:scalar-domain-wrappers]` markers for unchecked non-zero
+  constructors, caller-proven index/count/bin constructors, const
+  `SliceCount` construction, nullable `UsableOut` writes, and lint-touch
+  fixtures, cleaned the scalar module wording, and is off the unsafe migration
+  allowlist.
 - The smallest remaining allowlisted production files are
-  `src/types/scalar.rs` at 1,097 lines with 33 `unsafe` hits and 0 local
-  markers,
   `src/allocator/thread_heap.rs` at 1,267 lines with 120 `unsafe` hits and
   0 local markers,
   `src/platform/unix.rs` at 1,371 lines with 143 `unsafe` hits and
   0 local markers,
   `src/platform/os.rs` at 1,614 lines with 200 `unsafe` hits and
-  0 local markers, and
+  0 local markers,
   `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits and
+  0 local markers, and
+  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits and
   0 local markers.
 - The next smallest allowlisted production files after those are
-  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits,
   `src/allocator/options.rs` at 1,715 lines with 78 `unsafe` hits,
   `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits,
-  `src/allocator/stats.rs` at 2,021 lines with 196 `unsafe` hits, and
-  `src/raw/macros.rs` at 2,223 lines with 381 `unsafe` hits.
+  `src/allocator/stats.rs` at 2,021 lines with 196 `unsafe` hits,
+  `src/raw/macros.rs` at 2,223 lines with 381 `unsafe` hits, and
+  `src/allocator/init.rs` at 2,339 lines with 332 `unsafe` hits.
 - `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
   `symbol = *` entries. The largest categories are 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
@@ -98,8 +104,8 @@ Current review evidence:
 - The release audit is still split but has large review units:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,416 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
-  `tests/release_fast_path_audit.rs` is 1,895 lines, and
-  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,108 lines.
+  `tests/release_fast_path_audit.rs` is 1,899 lines, and
+  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,126 lines.
 
 ## Issue: macOS malloc-zone override still uses a file-level unsafe allowance
 
@@ -226,21 +232,21 @@ full tests.
 > make the wrapper surface feel less deliberately Rust-shaped than the newer
 > typed modules.
 
-- [ ] Add local `SAFETY[AUDIT:scalar-domain-wrappers]` markers for unchecked
+- [x] Add local `SAFETY[AUDIT:scalar-domain-wrappers]` markers for unchecked
       non-zero constructors, index/count/bin constructors, `SliceCount`
       const construction, lint-touch fixture construction, and `UsableOut`
       optional out-pointer writes.
-- [ ] Preserve transparent layout, `Option` niche behavior, checked constructor
+- [x] Preserve transparent layout, `Option` niche behavior, checked constructor
       domains, zero-size normalization, branchless hot-path helpers, no heap
       allocation, no dynamic dispatch, and existing scalar test coverage.
-- [ ] Clean up duplicated/mechanical scalar comments only where directly tied to
+- [x] Clean up duplicated/mechanical scalar comments only where directly tied to
       the audited wrapper surface, without broad refactoring or changing public
       crate-private names.
-- [ ] Add or extend release-audit assertions and focused tests for scalar
+- [x] Add or extend release-audit assertions and focused tests for scalar
       constructor boundaries, layout/niche expectations, `UsableOut`
       null/non-null writes, `SliceCount` overflow behavior, and marker coverage
       without a migration allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/types/scalar.rs`
+- [x] Add matching unsafe audit/evidence entries, remove `src/types/scalar.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower the cap.
 
@@ -254,17 +260,17 @@ clippy, and full tests.
 2. [x] Migrate `src/platform/mod.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/internal/atomic.rs` off the unsafe migration allowlist.
 4. [x] Migrate `src/allocator/page_map.rs` off the unsafe migration allowlist.
-5. [ ] Migrate `src/types/scalar.rs` off the unsafe migration allowlist.
+5. [x] Migrate `src/types/scalar.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
-- [ ] `src/platform/macos.rs`, `src/platform/mod.rs`,
+- [x] The unsafe migration allowlist cap is lowered after each migrated file.
+- [x] `src/platform/macos.rs`, `src/platform/mod.rs`,
       `src/internal/atomic.rs`, `src/allocator/page_map.rs`, and
       `src/types/scalar.rs` are covered by operation-level audit markers and
       evidence instead of file-level migration exceptions.
-- [ ] Platform TLS/zone behavior, atomic ordering, page-map lookup, scalar
+- [x] Platform TLS/zone behavior, atomic ordering, page-map lookup, scalar
       wrapper layout, and allocator hot-path performance constraints remain
       unchanged.
-- [ ] Release-audit TODO guards track the active backlog and measurable
+- [x] Release-audit TODO guards track the active backlog and measurable
       evidence.

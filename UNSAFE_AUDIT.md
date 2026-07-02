@@ -271,6 +271,13 @@ Operation IDs:
   allocation and acquire/release publication, page range set/clear/register/
   unregister operations, `RegisteredPageRange` witness construction, safe
   arbitrary-pointer lookup, and heap-region query forwarding.
+- `SAFETY[AUDIT:scalar-domain-wrappers]`: `src/types/scalar.rs` owns transparent
+  scalar domains for allocator sizes, alignments, indexes, bins, counts, and
+  optional out-pointers. Unsafe operations are limited to unchecked non-zero
+  constructors, caller-proven index/count/bin constructors, const
+  `SliceCount` construction, nullable `UsableOut` writes, and lint-touch
+  fixtures that use known-valid scalar values without publishing allocator
+  state.
 - `SAFETY[AUDIT:random-context-boundaries]`: `src/internal/random.rs`
   confines random context raw pointers and primitive entropy/clock calls to
   the allocator's C-compatible random boundary. The shims convert live context

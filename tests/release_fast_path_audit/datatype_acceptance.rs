@@ -1,6 +1,7 @@
 pub(super) struct DatatypeAcceptanceSources<'a> {
     pub(super) rust_sources: &'a [(String, String)],
     pub(super) types_spec: &'a str,
+    pub(super) unsafe_migration_allowlist: &'a str,
     pub(super) strict_type_allowlist: &'a str,
     pub(super) strict_type_checker: &'a str,
 }
@@ -23,6 +24,7 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
     let heap_api_rs = audit_sources.source("src/allocator/heap.rs");
     let ptr_rs = audit_sources.source("src/types/ptr.rs");
     let scalar_rs = audit_sources.source("src/types/scalar.rs");
+    let unsafe_migration_allowlist = audit_sources.unsafe_migration_allowlist;
     let page_states_rs = audit_sources.source("src/types/page_states.rs");
     let validation_extra_rs = audit_sources.source("src/types/validation_extra.rs");
     for module in [
@@ -233,6 +235,22 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
                 "pub(crate) unsafe fn heap_total_count(self, order: MemoryOrder) -> HeapCount"
             ),
         "subproc sequence and count fields should have scalar wrappers plus typed SubprocPtr accessors"
+    );
+    assert!(
+        !unsafe_migration_allowlist.contains("src/types/scalar.rs")
+            && scalar_rs
+                .matches("SAFETY[AUDIT:scalar-domain-wrappers]")
+                .count()
+                >= 20
+            && scalar_rs
+                .contains("Scalar domain wrappers for allocator sizes, counts, indexes, and bins.")
+            && scalar_rs.contains("pub(crate) struct UsableOut(*mut usize);")
+            && scalar_rs.contains("pub(crate) unsafe fn write_if_present")
+            && scalar_rs.contains("pub(crate) const unsafe fn new_unchecked(size: usize) -> Self")
+            && scalar_rs.contains("pub(crate) const unsafe fn new_unchecked(index: usize) -> Self")
+            && scalar_rs.contains("pub(crate) const unsafe fn new_unchecked(count: u32) -> Self")
+            && scalar_rs.contains("pub(crate) const unsafe fn new_unchecked(idx: u16) -> Self"),
+        "scalar domain wrappers should stay locally audited and off the unsafe migration allowlist"
     );
     let heap_delete_rs = audit_sources.source("src/allocator/heap.rs");
     let heap_delete_body = heap_delete_rs

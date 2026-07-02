@@ -333,6 +333,12 @@ Operation IDs:
   metadata to exercise encoded pointers, block tags, available-list pop, and
   local-list push witnesses. The fixtures are not registered with allocator
   globals and are used only while the local records are live.
+- `SAFETY[AUDIT:typed-freelist-wrappers]`:
+  `src/types/freelist_wrappers.rs` owns typed encoded block links, block tags,
+  available/local free-list heads, and allocated/free block witness transitions.
+  Unsafe operations are limited to raw block-link reads and writes, page-local
+  encoded pointer helpers, non-null block witness construction after null
+  checks, and free-list pop/push conversions that preserve upstream layout.
 - `SAFETY[AUDIT:typed-heap-test-fixtures]`: `src/types/heap/tests.rs` builds
   stack-local heap, thread-heap, and TLD metadata to exercise heap witness
   constructors and thread-local promotion checks. Real heaps allocated by the

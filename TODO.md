@@ -13,8 +13,8 @@ strict-type entries, or smaller release-audit modules.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` now has 37 entries: 34 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 37.
+- `docs/unsafe-migration-allowlist.tsv` now has 36 entries: 33 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 36.
 - `src/types/arena.rs` now uses 7
   `SAFETY[AUDIT:typed-arena-domain]` markers for slice-range count
   construction and arena role witnesses, and is off the unsafe migration
@@ -36,10 +36,15 @@ Current review evidence:
   `src/platform/wasi.rs` at 373 lines with 34 `unsafe` hits and 0 local
   markers, and
   `src/lib.rs` at 398 lines with 21 `unsafe` hits and 8 local markers.
-- `src/types/freelist_wrappers.rs` is 409 lines with 46 `unsafe` hits and
-  0 local `SAFETY[AUDIT:*]` markers. It also still has broad strict-type rows:
-  `raw-pointer-parameter|src/types/freelist_wrappers.rs|*|mi_block_t` and
-  `pointer-usize-roundtrip|src/types/freelist_wrappers.rs|*|encoded-pointer`.
+- `src/types/freelist_wrappers.rs` now uses 23
+  `SAFETY[AUDIT:typed-freelist-wrappers]` markers for encoded block links,
+  block tags, available/local free-list conversions, and allocated/free block
+  witnesses, and is off the unsafe migration allowlist.
+- The broad freelist strict-type rows are gone:
+  `raw-pointer-parameter|src/types/freelist_wrappers.rs|*|mi_block_t` was
+  replaced by 7 symbol-level rows, and
+  `pointer-usize-roundtrip|src/types/freelist_wrappers.rs|*|encoded-pointer`
+  was removed as stale coverage because the module uses `ptr_exposed_addr`.
 - The largest unsafe audit marker clusters remain broad enough to revisit:
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 89 markers,
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 58 markers,
@@ -67,7 +72,7 @@ Current review evidence:
   is 662 lines. The root
   `datatype_acceptance_criteria_have_cross_cutting_guards` test spans roughly
   lines 1,327 through 2,420, making it the next clear release-audit split.
-- `strict-type-allowlist.txt` still has 30 path-wide raw-pointer entries with
+- `strict-type-allowlist.txt` still has 29 path-wide raw-pointer entries with
   `symbol = *`, even after the page cleanup. `REMOVE_ENTRY_CAP` remains 0.
 
 ## Issue: Arena typed domain wrappers still use a file-level unsafe allowance
@@ -144,15 +149,15 @@ full tests.
 > free-list conversion. It is the right module for these operations, but both
 > the unsafe migration allowlist and strict-type allowlist are still broad.
 
-- [ ] Add local `SAFETY[AUDIT:typed-freelist-wrappers]` markers for encoded
+- [x] Add local `SAFETY[AUDIT:typed-freelist-wrappers]` markers for encoded
       pointer reads/writes, block tag reads/writes, allocated/free block
       witness construction, and local/remote free-list conversions.
-- [ ] Keep free-list wrappers allocation-free and preserve raw block-link
+- [x] Keep free-list wrappers allocation-free and preserve raw block-link
       layout compatibility.
-- [ ] Replace broad strict-type entries for
+- [x] Replace broad strict-type entries for
       `src/types/freelist_wrappers.rs` with symbol-level rows where the checker
       can express the active `mi_block_t` and encoded-pointer boundaries.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -187,16 +192,16 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 1. [x] Migrate `src/types/arena.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/types/page_queues.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/types/heap.rs` off the unsafe migration allowlist.
-4. [ ] Migrate `src/types/freelist_wrappers.rs` off the unsafe migration
+4. [x] Migrate `src/types/freelist_wrappers.rs` off the unsafe migration
        allowlist and narrow its broad strict-type entries where possible.
 5. [ ] Split the datatype acceptance release-audit assertion cluster.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
-- [ ] `src/types/arena.rs`, `src/types/page_queues.rs`, `src/types/heap.rs`,
+- [x] The unsafe migration allowlist cap is lowered after each migrated file.
+- [x] `src/types/arena.rs`, `src/types/page_queues.rs`, `src/types/heap.rs`,
       and `src/types/freelist_wrappers.rs` are covered by operation-level audit
       markers and evidence instead of file-level migration exceptions.
-- [ ] Broad strict-type rows for `src/types/freelist_wrappers.rs` are narrowed
+- [x] Broad strict-type rows for `src/types/freelist_wrappers.rs` are narrowed
       where the current checker can express the active boundaries.
 - [ ] One more release-audit assertion cluster has a dedicated module.

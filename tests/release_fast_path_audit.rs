@@ -1863,7 +1863,30 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && strict_check_rs.contains("\"src/types/freelist_wrappers.rs\"")
             && strict_check_rs.contains("kind=\"block-next-access\"")
             && strict_check_rs
-                .contains("message=\"direct mi_block_s.next access outside free-list wrappers\""),
+                .contains("message=\"direct mi_block_s.next access outside free-list wrappers\"")
+            && !allowlist_rs
+                .contains("raw-pointer-parameter|src/types/freelist_wrappers.rs|*|mi_block_t|")
+            && allowlist_rs.contains(
+                "raw-pointer-parameter|src/types/freelist_wrappers.rs|read_word_from_raw|mi_block_t|"
+            )
+            && allowlist_rs.contains(
+                "raw-pointer-parameter|src/types/freelist_wrappers.rs|from_unencoded_raw|mi_block_t|"
+            )
+            && allowlist_rs.contains(
+                "raw-pointer-parameter|src/types/freelist_wrappers.rs|encode_block_raw|mi_block_t|"
+            )
+            && allowlist_rs.contains(
+                "raw-pointer-parameter|src/types/freelist_wrappers.rs|read_guarded_from_raw|mi_block_t|"
+            )
+            && allowlist_rs.contains(
+                "raw-pointer-parameter|src/types/freelist_wrappers.rs|read_from_raw|mi_block_t|"
+            )
+            && allowlist_rs.contains(
+                "raw-pointer-parameter|src/types/freelist_wrappers.rs|is_guarded_raw|mi_block_t|"
+            )
+            && allowlist_rs.contains(
+                "raw-pointer-parameter|src/types/freelist_wrappers.rs|from_raw|mi_block_t|"
+            ),
         "mi_block_s.next reads/writes should stay behind EncodedPtr, BlockLink, BlockPtr, or free-list wrappers and strict checker coverage"
     );
     assert!(
@@ -1989,7 +2012,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && strict_check_rs.contains(
                 "message=\"pointer/integer round trip outside typed provenance helpers\""
             )
-            && allowlist_rs.contains(
+            && !allowlist_rs.contains(
                 "pointer-usize-roundtrip|src/types/freelist_wrappers.rs|*|encoded-pointer|"
             )
             && allowlist_rs

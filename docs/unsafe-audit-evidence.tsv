@@ -53,6 +53,7 @@ typed-arena-test-fixtures	test	src/types/arena/tests.rs	Exercises stack-local ar
 typed-atomic-test-fixtures	test	src/types/atomic/tests.rs	Exercises stack-local atomic words, pointer cells, page/free-list metadata, once state, and lock storage for typed atomic wrappers.
 typed-callback-test-fixtures	test	src/types/callbacks/tests.rs	Exercises callback wrapper layout, raw argument preservation, and storage pointer round-trip fixtures.
 typed-freelist-test-fixtures	test	src/types/freelist/tests.rs	Exercises stack-local block metadata and raw link helper fixtures.
+typed-freelist-wrappers	test	src/types/freelist_wrappers/tests.rs	Exercises encoded pointer, block tag, available-list pop, and local-list push wrappers.
 typed-freelist-wrapper-test-fixtures	test	src/types/freelist_wrappers/tests.rs	Exercises stack-local page/block metadata for encoded pointer, block tag, available-list, and local-list wrapper fixtures.
 typed-heap-domain	test	src/types/heap/tests.rs	Exercises main, owned, borrowed, initialized, uninitialized, deleted, and local thread-heap witness classification.
 typed-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises stack-local heap, thread-heap, and TLD metadata plus real heap allocation/deletion witness checks.

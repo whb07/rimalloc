@@ -91,15 +91,18 @@ Current review evidence:
   `unix-random-boundary` and `unix-numa-boundary` with 7 markers each, and
   `unix-ffi-import-boundary` with 3 markers.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  module cap is still 1,000 lines; the largest modules are
-  `unsafe_performance/lifecycle_boundaries.rs` at 922 lines,
-  `unsafe_performance/platform_primitive_boundaries.rs` at 895 lines,
-  `unsafe_performance/raw_facade.rs` at 852 lines,
+  module cap is now 850 lines; the largest modules are
+  `unsafe_performance/raw_facade/raw_override.rs` at 754 lines,
   `unsafe_performance/page_arena_behavior.rs` at 724 lines,
   `release_policy/docs_and_linking.rs` at 633 lines,
   `release_policy/api_surface.rs` at 517 lines,
-  `datatype_acceptance/strict_type.rs` at 512 lines, and
-  `release_policy/release_process.rs` at 504 lines.
+  `datatype_acceptance/strict_type.rs` at 512 lines,
+  `release_policy/release_process.rs` at 504 lines,
+  `release_policy/security.rs` at 451 lines,
+  `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 404 lines,
+  `unsafe_performance/os_memory.rs` at 403 lines, and
+  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs`
+  at 400 lines.
 - The previous raw macro, allocation/aligned/stats/page-map/OS, typed pointer,
   and root release-audit aggregate splits are complete and guarded by focused
   release-audit tests.
@@ -171,14 +174,14 @@ audit scripts, unsafe evidence scripts, full clippy, and full tests.
 > are still near the 1,000-line cap. The next cap reduction should happen only
 > after moving coherent checks into submodules.
 
-- [ ] Split `unsafe_performance/lifecycle_boundaries.rs` into process lifecycle,
+- [x] Split `unsafe_performance/lifecycle_boundaries.rs` into process lifecycle,
       thread/TLS, options/guarded, random/CPU, and platform hook modules.
-- [ ] Split `unsafe_performance/platform_primitive_boundaries.rs` into Windows,
+- [x] Split `unsafe_performance/platform_primitive_boundaries.rs` into Windows,
       Unix/WASI/Emscripten, macOS, and shared primitive-policy modules.
-- [ ] Split `unsafe_performance/raw_facade.rs` into raw override, libc/POSIX,
+- [x] Split `unsafe_performance/raw_facade.rs` into raw override, libc/POSIX,
       C++ compatibility, header forwarding, and bootstrap/query modules.
-- [ ] Lower the release-audit module cap below 1,000 after the largest modules
-      are comfortably below the new cap.
+- [x] Lower the release-audit module cap below 1,000 after the largest modules
+      are comfortably below the new 850-line cap.
 
 Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
@@ -187,16 +190,16 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 1. [x] Split init thread/TLS and subproc audit clusters.
 2. [x] Split page and arena allocation lifecycle clusters.
 3. [x] Split platform and atomic facade audit clusters.
-4. [ ] Split remaining large release-audit modules and lower the module cap.
+4. [x] Split remaining large release-audit modules and lower the module cap.
 
 ## Definition of done for this backlog
 
 - [ ] Remaining unsafe audit operation IDs above 100 markers are split into
       narrower review units with separate docs, evidence, and release-audit
       guards.
-- [ ] Release-audit modules are split enough to lower the 1,000-line module cap
-      without weakening coverage.
-- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [x] Release-audit modules are split enough to lower the module cap to 850
+      lines without weakening coverage.
+- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
 - [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the

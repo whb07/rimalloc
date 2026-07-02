@@ -1,0 +1,226 @@
+use super::*;
+
+#[test]
+fn macos_malloc_zone_override_stays_bounded_and_audited() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let macos_rs =
+        fs::read_to_string(root.join("src/platform/macos.rs")).expect("read src/platform/macos.rs");
+    let allowlist = fs::read_to_string(root.join("docs/unsafe-migration-allowlist.tsv"))
+        .expect("read unsafe migration allowlist");
+
+    assert!(
+        !allowlist
+            .lines()
+            .any(|line| line.starts_with("src/platform/macos.rs\t")),
+        "macOS malloc-zone override should stay off the unsafe migration allowlist"
+    );
+    assert!(
+        macos_rs
+            .matches("SAFETY[AUDIT:macos-zone-override]")
+            .count()
+            >= 55,
+        "macOS malloc-zone override should keep local operation-level audit markers"
+    );
+    assert!(
+        macos_rs.contains("pub static mut mi_malloc_zone: malloc_zone_t = malloc_zone_t {")
+            && macos_rs.contains("zone_name: MI_MALLOC_ZONE_NAME.as_ptr().cast(),")
+            && macos_rs.contains("pub static _mi_zone_interposes: [mi_interpose_s; 27]")
+            && macos_rs.contains("#[unsafe(link_section = \"__DATA,__interpose\")]")
+            && macos_rs.contains("#[unsafe(link_section = \"__DATA,__mod_init_func\")]"),
+        "macOS malloc-zone source should preserve zone metadata and section-based interposition shape"
+    );
+    for import in [
+        "fn malloc_default_zone() -> *mut malloc_zone_t;",
+        "fn malloc_default_purgeable_zone() -> *mut malloc_zone_t;",
+        "fn malloc_get_all_zones(",
+        "fn malloc_zone_register(zone: *mut malloc_zone_t);",
+        "fn malloc_zone_unregister(zone: *mut malloc_zone_t);",
+        "fn malloc_zone_batch_free(zone: *mut malloc_zone_t, ps: *mut *mut c_void, count: u32);",
+        "fn malloc_zone_batch_malloc(",
+    ] {
+        assert!(
+            macos_rs.contains(import),
+            "macOS malloc-zone import missing: {import}"
+        );
+    }
+
+    let zone_struct = source_item(
+        "src/platform/macos.rs",
+        &macos_rs,
+        "pub struct malloc_zone_t",
+    );
+    assert!(
+        zone_struct.contains("pub size: Option<unsafe extern \"C\" fn")
+            && zone_struct.contains("pub malloc: Option<unsafe extern \"C\" fn")
+            && zone_struct.contains("pub calloc: Option<unsafe extern \"C\" fn")
+            && zone_struct.contains("pub valloc: Option<unsafe extern \"C\" fn")
+            && zone_struct.contains("pub free: Option<unsafe extern \"C\" fn")
+            && zone_struct.contains("pub realloc:")
+            && zone_struct.contains("pub destroy: Option<unsafe extern \"C\" fn")
+            && zone_struct.contains("pub zone_name: *const c_char")
+            && zone_struct.contains("pub batch_malloc:")
+            && zone_struct.contains("pub batch_free: Option<unsafe extern \"C\" fn"),
+        "malloc_zone_t should keep the Darwin callback layout and raw C ABI slots"
+    );
+
+    for (marker, expected) in [
+        (
+            "pub unsafe extern \"C\" fn mi_malloc_create_zone(",
+            "unsafe { mi_get_default_zone() }",
+        ),
+        (
+            "pub unsafe extern \"C\" fn mi_malloc_default_zone()",
+            "unsafe { mi_get_default_zone() }",
+        ),
+        (
+            "pub unsafe extern \"C\" fn mi_malloc_default_purgeable_zone()",
+            "unsafe { mi_get_default_zone() }",
+        ),
+    ] {
+        let item = source_item("src/platform/macos.rs", &macos_rs, marker);
+        assert_no_rust_heap_constructs("src/platform/macos.rs", marker, item);
+        assert!(
+            item.contains(expected),
+            "{marker} should continue returning the process-global mimalloc zone"
+        );
+    }
+
+    let all_zones = source_item(
+        "src/platform/macos.rs",
+        &macos_rs,
+        "pub unsafe extern \"C\" fn mi_malloc_get_all_zones(",
+    );
+    assert_no_rust_heap_constructs(
+        "src/platform/macos.rs",
+        "pub unsafe extern \"C\" fn mi_malloc_get_all_zones",
+        all_zones,
+    );
+    assert!(
+        all_zones.contains("if !addresses.is_null()")
+            && all_zones.contains("*addresses = null_mut();")
+            && all_zones.contains("if !count.is_null()")
+            && all_zones.contains("*count = 0;")
+            && all_zones.contains("KERN_SUCCESS"),
+        "macOS all-zones shim should preserve nullable out-pointer writes and success result"
+    );
+
+    let zone_size = source_item(
+        "src/platform/macos.rs",
+        &macos_rs,
+        "pub unsafe extern \"C\" fn zone_size(",
+    );
+    assert!(
+        zone_size.contains("mi_any_heap_contains(p)")
+            && zone_size.contains("crate::mimalloc::mi_usable_size(p)")
+            && zone_size.contains("!unsafe { is_mimalloc_zone(zone) }")
+            && zone_size.contains("match unsafe { (*zone).size }")
+            && zone_size.contains("Some(size_fn) => unsafe { size_fn(zone, p) }"),
+        "zone_size should preserve mimalloc ownership detection and foreign-zone forwarding"
+    );
+
+    let zone_free = source_item(
+        "src/platform/macos.rs",
+        &macos_rs,
+        "pub unsafe extern \"C\" fn zone_free(",
+    );
+    assert!(
+        zone_free.contains("mi_any_heap_contains(p.cast_const())")
+            && zone_free.contains("crate::mimalloc::mi_free(p)")
+            && zone_free.contains("!unsafe { is_mimalloc_zone(zone) }")
+            && zone_free.contains("let Some(free_fn) = unsafe { (*zone).free }")
+            && zone_free.contains("unsafe { free_fn(zone, p) };"),
+        "zone_free should keep mimalloc local free and non-mimalloc zone forwarding"
+    );
+
+    let zone_realloc = source_item(
+        "src/platform/macos.rs",
+        &macos_rs,
+        "pub unsafe extern \"C\" fn zone_realloc(",
+    );
+    assert!(
+        zone_realloc.contains("if p.is_null() || unsafe { mi_any_heap_contains(p.cast_const()) }")
+            && zone_realloc.contains("crate::mimalloc::mi_realloc(p, newsize)")
+            && zone_realloc.contains("match unsafe { (*zone).realloc }")
+            && zone_realloc.contains("Some(realloc_fn) => unsafe { realloc_fn(zone, p, newsize) }")
+            && zone_realloc.contains("None => null_mut()"),
+        "zone_realloc should preserve null/mimalloc routing and foreign-zone fallback"
+    );
+
+    let batch_malloc = source_item(
+        "src/platform/macos.rs",
+        &macos_rs,
+        "pub unsafe extern \"C\" fn zone_batch_malloc(",
+    );
+    assert_no_rust_heap_constructs(
+        "src/platform/macos.rs",
+        "pub unsafe extern \"C\" fn zone_batch_malloc",
+        batch_malloc,
+    );
+    assert!(
+        batch_malloc.contains("while i < count")
+            && batch_malloc.contains("let p = unsafe { zone_malloc(zone, size) };")
+            && batch_malloc.contains("unsafe { *ps.add(i as usize) = p };")
+            && batch_malloc.contains("if p.is_null()")
+            && batch_malloc.contains("i += 1;"),
+        "zone_batch_malloc should fill caller pointer slots and stop at first failure"
+    );
+
+    let batch_free = source_item(
+        "src/platform/macos.rs",
+        &macos_rs,
+        "pub unsafe extern \"C\" fn zone_batch_free(",
+    );
+    assert_no_rust_heap_constructs(
+        "src/platform/macos.rs",
+        "pub unsafe extern \"C\" fn zone_batch_free",
+        batch_free,
+    );
+    assert!(
+        batch_free.contains("let p = unsafe { *ps.add(i as usize) };")
+            && batch_free.contains("unsafe { zone_free(zone, p) };")
+            && batch_free.contains("unsafe { *ps.add(i as usize) = null_mut() };")
+            && batch_free.contains("i += 1;"),
+        "zone_batch_free should free each caller slot and clear it afterward"
+    );
+
+    for symbol in [
+        "pub unsafe extern \"C\" fn _malloc_fork_prepare()",
+        "pub unsafe extern \"C\" fn _malloc_fork_parent()",
+        "pub unsafe extern \"C\" fn _malloc_fork_child()",
+    ] {
+        let item = source_item("src/platform/macos.rs", &macos_rs, symbol);
+        assert!(
+            item.contains("#[unsafe(no_mangle)]")
+                || macos_rs[..macos_rs.find(symbol).expect("fork hook symbol present")]
+                    .rsplit("\n\n")
+                    .next()
+                    .is_some_and(|prefix| prefix.contains("#[unsafe(no_mangle)]")),
+            "{symbol} should keep the exported Darwin fork-hook symbol"
+        );
+    }
+
+    let override_malloc = source_item(
+        "src/platform/macos.rs",
+        &macos_rs,
+        "pub unsafe extern \"C\" fn _mi_macos_override_malloc(",
+    );
+    assert_no_rust_heap_constructs(
+        "src/platform/macos.rs",
+        "pub unsafe extern \"C\" fn _mi_macos_override_malloc",
+        override_malloc,
+    );
+    assert!(
+        override_malloc.contains("malloc_zone_register(addr_of_mut!(mi_malloc_zone))")
+            && override_malloc
+                .contains("malloc_get_all_zones(0, null_mut(), &mut zones, &mut count)")
+            && override_malloc.contains("ret == KERN_SUCCESS && count > 0 && !zones.is_null()")
+            && override_malloc.contains("unsafe { *zones }")
+            && override_malloc.contains("unsafe { malloc_default_zone() }")
+            && override_malloc.contains("malloc_zone_unregister(default_zone)")
+            && override_malloc.contains("malloc_zone_register(default_zone)")
+            && override_malloc.contains("if !purgeable_zone.is_null()")
+            && override_malloc.contains("malloc_zone_unregister(purgeable_zone)")
+            && override_malloc.contains("malloc_zone_register(purgeable_zone)"),
+        "macOS override setup should preserve default and purgeable zone ordering"
+    );
+}

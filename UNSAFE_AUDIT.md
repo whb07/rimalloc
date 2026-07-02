@@ -272,6 +272,15 @@ Operation IDs:
   bounded chunk and field projection, raw callback invocation, typed
   arena/slice wrapper handoff, and local test fixtures while preserving bit
   ordering, field width, empty/full handling, and allocation-free search paths.
+- `SAFETY[AUDIT:internal-translation-boundary]`: `src/internal/mod.rs` owns
+  translated internal header helpers, page and block pointer lookup, page
+  metadata accessors, thread-free ownership words, packed pointer
+  encode/decode, tracking gates, CPU copy/fill shims, and C-compatible helper
+  declarations. Unsafe operations are limited to caller-proven allocator
+  metadata pointers, page-map projection, typed atomic field wrappers, encoded
+  free-list words, provenance-aware pointer/integer conversions, inline
+  assembly copy/fill thresholds, and raw helper shims while preserving the
+  local ABI shape and allocation-free hot paths.
 - `SAFETY[AUDIT:free-path-boundary]`: `src/allocator/free.rs` owns free and
   usable-size routing. Unsafe operations are limited to free fast-path assembly
   aliases, validated page/block/user-pointer lookup, padding and guarded-block

@@ -66,6 +66,11 @@ internal-bitmap-boundary	test	src/internal/bitmap.rs	Exercises bitmap set/clear 
 internal-bitmap-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks bitmap marker coverage, migration allowlist removal, helper shape, typed arena/range callbacks, out-of-range release branches, and binned first-fit wrappers.
 internal-bitmap-boundary	script	scripts/check-strict-types.py	Checks bitmap strict-type allowlist coverage remains explicit for translated C bitmap aliases.
 internal-bitmap-boundary	script	scripts/check-unsafe-audit.py	Checks bitmap unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-translation-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks internal marker coverage, migration allowlist removal, helper shape, page/block metadata helpers, packed pointer conversions, thread-free ownership words, CPU copy/fill shims, and runtime gate surface.
+internal-translation-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks pointer/metadata aliases, strict-type boundaries, packed-pointer round trips, and wrapper source shape for internal helpers.
+internal-translation-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks runtime gate behavior for debug assertions through internal helper macros.
+internal-translation-boundary	script	scripts/check-strict-types.py	Checks internal strict-type allowlist coverage remains explicit for raw pointer and metadata boundaries.
+internal-translation-boundary	script	scripts/check-unsafe-audit.py	Checks internal translation unsafe operations retain operation-level SAFETY markers and source audit coverage.
 free-path-boundary	test	src/allocator/free.rs	Exercises pointer validation, interior and guarded pointer lookup, local/remote/abandoned routing, and double-free fixtures.
 free-path-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks free-path marker coverage, migration allowlist removal, typed routing, C ABI shims, and no-allocation hot-path shape.
 free-path-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation/free boundary cases for zero-size, realloc, calloc/product overflow, and freeable pointers.

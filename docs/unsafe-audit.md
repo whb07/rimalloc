@@ -82,6 +82,11 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   operations in `src/internal/bitmap.rs`. The boundary covers chunk/field
   projection, bit set/clear/search loops, arena traversal callbacks, typed
   slice wrappers, and allocation-free bitmap search paths.
+- `SAFETY[AUDIT:internal-translation-boundary]`: translated internal header
+  helpers in `src/internal/mod.rs`. The boundary covers page-map lookup,
+  page/block metadata accessors, thread-free ownership words, packed pointer
+  encode/decode, tracking gates, CPU copy/fill shims, and raw C-compatible
+  helper declarations.
 - `SAFETY[AUDIT:unsafe-callback]`: unsafe-adjacent callback guards. Unsafe guard construction
   registers a trampoline with a borrowed callback context, stores the previous
   registration, restores that previous registration on drop, and catches Rust

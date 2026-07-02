@@ -229,6 +229,40 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("mi_heap_arena_page_cell(heap, arena_idx).store_release"),
         "arena region unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/internal/mod.rs\t"))
+            && internal
+                .matches("SAFETY[AUDIT:internal-translation-boundary]")
+                .count()
+                >= 70
+            && internal.contains("unsafe extern \"C\" {")
+            && internal.contains("pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t")
+            && internal.contains("pub unsafe fn _mi_checked_ptr_page(p: *const c_void)")
+            && internal.contains("pub unsafe fn _mi_unchecked_ptr_page(p: *const c_void)")
+            && internal.contains("pub(crate) unsafe fn mi_page_block_size_typed(")
+            && internal.contains("pub unsafe fn mi_page_start(page: *const mi_page_t)")
+            && internal.contains("pub unsafe fn mi_page_slice_start(page: *const mi_page_t)")
+            && internal.contains("pub unsafe fn mi_page_thread_free(page: *const mi_page_t)")
+            && internal.contains("pub unsafe fn mi_page_is_owned(page: *const mi_page_t)")
+            && internal.contains("pub(crate) unsafe fn mi_page_claim_ownership(")
+            && internal.contains("pub unsafe fn mi_block_next(")
+            && internal.contains("pub unsafe fn mi_block_set_next(")
+            && internal.contains("pub(crate) fn mi_ptr_decode(")
+            && internal.contains("pub(crate) fn mi_ptr_encode(")
+            && internal.contains("crate::provenance::remember_encoded(word.get(), null, keys, p);")
+            && internal.contains(
+                "crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())"
+            )
+            && internal.contains(
+                "crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField("
+            )
+            && internal.contains("unsafe fn mi_cpu_movsb_max() -> usize")
+            && internal.contains("unsafe fn mi_cpu_stosb_max() -> usize")
+            && internal.contains("core::arch::asm!("),
+        "internal translation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
 
     local_boundaries::assert_page_map_and_deferred_boundaries(local_boundaries::BoundarySources {
         page_map: &page_map,

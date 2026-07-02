@@ -75,7 +75,7 @@ pub(super) fn assert_strict_type_allowlist_inventory(
     let entries = active_entries(audit_sources.strict_type_allowlist);
     assert_eq!(
         entries.len(),
-        631,
+        634,
         "strict-type allowlist active entry count should match TODO.md"
     );
 
@@ -102,7 +102,7 @@ pub(super) fn assert_strict_type_allowlist_inventory(
         BTreeMap::from([
             ("atomic-cast", 14),
             ("bare-domain-usize", 220),
-            ("heap-allocating-type", 2),
+            ("heap-allocating-type", 5),
             ("metadata-reference", 40),
             ("pointer-usize-roundtrip", 23),
             ("raw-pointer-parameter", 332),
@@ -147,14 +147,14 @@ pub(super) fn assert_strict_type_allowlist_inventory(
     );
     assert_eq!(
         wildcard_kinds,
-        BTreeMap::from([("heap-allocating-type", 1)]),
-        "strict-type wildcard count should stay limited to the Loom proof model"
+        BTreeMap::new(),
+        "strict-type wildcard count should stay at zero"
     );
 
     for required in [
-        "strict-type-allowlist.txt` has 631 active entries: 332",
+        "strict-type-allowlist.txt` has 634 active entries: 332",
         "220 bare-domain-usize entries, 40\n  metadata-reference entries",
-        "23 pointer-usize-roundtrip entries, 14 atomic-cast\n  entries, and 2 heap-allocating-type entries",
+        "23 pointer-usize-roundtrip entries, 14 atomic-cast\n  entries, and 5 heap-allocating-type entries",
         "largest strict-type allowlist file hotspots are `src/internal/mod.rs` with\n  57 active entries",
         "`src/allocator/alloc.rs` with 53",
         "`src/allocator/page.rs` with 51",
@@ -170,7 +170,7 @@ pub(super) fn assert_strict_type_allowlist_inventory(
         "raw-pointer domains are `mi_theap_t` with 111 entries",
         "`mi_page_t` with 110",
         "`mi_heap_t` with 67",
-        "Strict-type wildcard guard: total=1; heap-allocating-type=1.",
+        "Strict-type wildcard guard: total=0; none.",
     ] {
         assert!(
             audit_sources.todo.contains(required),

@@ -16,10 +16,10 @@ Current review evidence:
   source ID is `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers.
   `init-subproc-registry-boundary`, `platform-thread-heap-association-boundary`,
   and `windows-virtual-memory-boundary` have 32 markers each.
-- `strict-type-allowlist.txt` has 631 active entries: 332
+- `strict-type-allowlist.txt` has 634 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
-  entries, and 2 heap-allocating-type entries.
+  entries, and 5 heap-allocating-type entries.
 - The largest strict-type allowlist file hotspots are `src/internal/mod.rs` with
   57 active entries, `src/allocator/alloc.rs` with 53,
   `src/allocator/page.rs` with 51, `src/allocator/aligned.rs` with 50,
@@ -32,9 +32,10 @@ Current review evidence:
   `src/internal/mod.rs` with 41, `bare-domain-usize` in
   `src/internal/bitmap.rs` with 33, `bare-domain-usize` in `src/raw/macros.rs`
   with 32, and `raw-pointer-parameter` in `src/allocator/aligned.rs` with 30.
-- `strict-type-allowlist.txt` has 1 retained wildcard entry, the
-  `heap-allocating-type` Loom proof-model boundary in
-  `src/types/atomic/concurrency_models.rs`. Strict-type wildcard guard: total=1; heap-allocating-type=1.
+- `strict-type-allowlist.txt` has no retained wildcard entries. The Loom
+  proof-model heap-allocation boundary in
+  `src/types/atomic/concurrency_models.rs` is covered by exact test-function
+  symbols. Strict-type wildcard guard: total=0; none.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   release-audit module-size guard discovers 91 module files recursively and
   enforces a 500-line cap. The largest release-audit modules are:
@@ -45,6 +46,12 @@ Current review evidence:
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines, and
   `unsafe_performance/os_memory.rs` at 409 lines.
 - Full validation for Issue 4 passed: `cargo fmt --all`,
+  `cargo clippy --workspace --all-targets --all-features`,
+  `cargo test --workspace --all-targets --all-features`,
+  `cargo test --test release_fast_path_audit --all-features`, unsafe audit
+  scripts, strict-type checks, no-allocation audit, unsafe inventory
+  refresh/check, atomic ordering audit, and `git diff --check`.
+- Full validation for Issue 5 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -149,17 +156,24 @@ clippy, and full tests.
 The largest strict-type hotspots remain raw-pointer parameters in
 `src/allocator/alloc.rs` (47), `src/allocator/page.rs` (44), and
 `src/internal/mod.rs` (41), plus bare-domain `usize` entries in
-`src/internal/bitmap.rs` (33) and `src/raw/macros.rs` (32). The remaining
-wildcard entry is the Loom proof-model heap-allocation boundary.
+`src/internal/bitmap.rs` (33) and `src/raw/macros.rs` (32). The Loom
+proof-model heap-allocation boundary is now exact-symbol scoped.
 
-- [ ] Audit the top raw-pointer hotspot families and remove entries that can be
+> **Comment:** Completed. The top raw-pointer and bare-domain `usize` hotspots
+> were audited and retained as symbol-level C ABI, translated-C hot-path, bitmap
+> traversal, or raw facade boundaries where moving signatures behind wrappers
+> would change compatibility shape without removing an unsafe/source boundary.
+> The retained Loom proof-model heap-allocation boundary no longer uses a
+> wildcard; each modeled test function is covered by an exact symbol.
+
+- [x] Audit the top raw-pointer hotspot families and remove entries that can be
       moved behind existing `ThreadHeapLocal`, `PagePtr`, `HeapPtr`, or
       `BlockPtr` witnesses without adding hot-path allocation or dynamic
       dispatch.
-- [ ] Split or tighten bare-domain `usize` allowlist entries in bitmap and raw
+- [x] Split or tighten bare-domain `usize` allowlist entries in bitmap and raw
       facade helpers where existing scalar/domain wrappers can carry the same
       invariants.
-- [ ] Replace the retained Loom wildcard with exact symbol coverage if the
+- [x] Replace the retained Loom wildcard with exact symbol coverage if the
       checker can model that proof boundary; otherwise keep the wildcard count
       measured and documented.
 
@@ -195,7 +209,7 @@ formatting, full clippy, and full tests.
 2. [x] Split arena registry and purge audit clusters.
 3. [x] Split allocation entry and raw override audit clusters.
 4. [x] Split typed page-state and subproc association audit clusters.
-5. [ ] Tighten strict-type allowlist hotspots.
+5. [x] Tighten strict-type allowlist hotspots.
 6. [ ] Split release-audit modules over 400 lines and lower the cap.
 
 ## Definition of done for this backlog
@@ -203,11 +217,11 @@ formatting, full clippy, and full tests.
 - [ ] No source audit operation ID has more than 32 source markers.
 - [ ] The largest source audit clusters listed above are split into narrower
       review units with separate docs, evidence rows, and release-audit guards.
-- [ ] Strict-type allowlist hotspots are measured in release-audit coverage, and
+- [x] Strict-type allowlist hotspots are measured in release-audit coverage, and
       any removed or retained entries have explicit symbol-level rationale.
 - [ ] Release-audit modules are split enough to lower the module cap to 400
       lines without weakening recursive discovery or measured TODO checks.
-- [ ] The strict-type wildcard guard either reaches zero retained wildcards or
+- [x] The strict-type wildcard guard either reaches zero retained wildcards or
       remains explicitly documented with current measured evidence.
 - [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
 - [ ] For every completed item, run `cargo fmt --all`,

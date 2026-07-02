@@ -1,5 +1,4 @@
 use crate::core_types::{ThreadFreeOwner, ThreadFreeWord};
-use loom::sync::Arc;
 use loom::sync::atomic::{AtomicUsize as LoomAtomicUsize, Ordering as LoomOrdering};
 use loom::thread;
 
@@ -102,18 +101,18 @@ fn mark_reachable(
 #[test]
 fn concurrent_remote_pushes_keep_both_nodes_reachable() {
     loom::model(|| {
-        let cell = Arc::new(LoomAtomicUsize::new(0));
-        let next_a = Arc::new(LoomAtomicUsize::new(0));
-        let next_b = Arc::new(LoomAtomicUsize::new(0));
+        let cell = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+        let next_a = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+        let next_b = loom::sync::Arc::new(LoomAtomicUsize::new(0));
 
         let push_a = {
-            let cell = Arc::clone(&cell);
-            let next_a = Arc::clone(&next_a);
+            let cell = loom::sync::Arc::clone(&cell);
+            let next_a = loom::sync::Arc::clone(&next_a);
             thread::spawn(move || push_remote_word(&cell, &next_a, HEAD_A))
         };
         let push_b = {
-            let cell = Arc::clone(&cell);
-            let next_b = Arc::clone(&next_b);
+            let cell = loom::sync::Arc::clone(&cell);
+            let next_b = loom::sync::Arc::clone(&next_b);
             thread::spawn(move || push_remote_word(&cell, &next_b, HEAD_B))
         };
 
@@ -132,21 +131,21 @@ fn concurrent_remote_pushes_keep_both_nodes_reachable() {
 #[test]
 fn collect_racing_with_push_does_not_drop_nodes() {
     loom::model(|| {
-        let cell = Arc::new(LoomAtomicUsize::new(HEAD_A | ThreadFreeWord::OWNED_BIT));
-        let next_a = Arc::new(LoomAtomicUsize::new(0));
-        let next_b = Arc::new(LoomAtomicUsize::new(0));
-        let collected = Arc::new(LoomAtomicUsize::new(0));
+        let cell = loom::sync::Arc::new(LoomAtomicUsize::new(HEAD_A | ThreadFreeWord::OWNED_BIT));
+        let next_a = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+        let next_b = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+        let collected = loom::sync::Arc::new(LoomAtomicUsize::new(0));
 
         let collect = {
-            let cell = Arc::clone(&cell);
-            let collected = Arc::clone(&collected);
+            let cell = loom::sync::Arc::clone(&cell);
+            let collected = loom::sync::Arc::clone(&collected);
             thread::spawn(move || {
                 collected.store(collect_word(&cell), LoomOrdering::Release);
             })
         };
         let push = {
-            let cell = Arc::clone(&cell);
-            let next_b = Arc::clone(&next_b);
+            let cell = loom::sync::Arc::clone(&cell);
+            let next_b = loom::sync::Arc::clone(&next_b);
             thread::spawn(move || push_remote_word(&cell, &next_b, HEAD_B))
         };
 
@@ -171,12 +170,12 @@ fn collect_racing_with_push_does_not_drop_nodes() {
 #[test]
 fn concurrent_claims_allow_exactly_one_owner_transition() {
     loom::model(|| {
-        let cell = Arc::new(LoomAtomicUsize::new(0));
-        let wins = Arc::new(LoomAtomicUsize::new(0));
+        let cell = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+        let wins = loom::sync::Arc::new(LoomAtomicUsize::new(0));
 
         let first = {
-            let cell = Arc::clone(&cell);
-            let wins = Arc::clone(&wins);
+            let cell = loom::sync::Arc::clone(&cell);
+            let wins = loom::sync::Arc::clone(&wins);
             thread::spawn(move || {
                 if claim_word(&cell) {
                     wins.fetch_add(1, LoomOrdering::Relaxed);
@@ -184,8 +183,8 @@ fn concurrent_claims_allow_exactly_one_owner_transition() {
             })
         };
         let second = {
-            let cell = Arc::clone(&cell);
-            let wins = Arc::clone(&wins);
+            let cell = loom::sync::Arc::clone(&cell);
+            let wins = loom::sync::Arc::clone(&wins);
             thread::spawn(move || {
                 if claim_word(&cell) {
                     wins.fetch_add(1, LoomOrdering::Relaxed);
@@ -207,19 +206,19 @@ fn concurrent_claims_allow_exactly_one_owner_transition() {
 #[test]
 fn release_ownership_racing_with_push_preserves_heads() {
     loom::model(|| {
-        let cell = Arc::new(LoomAtomicUsize::new(HEAD_A | ThreadFreeWord::OWNED_BIT));
-        let next_a = Arc::new(LoomAtomicUsize::new(0));
-        let next_b = Arc::new(LoomAtomicUsize::new(0));
+        let cell = loom::sync::Arc::new(LoomAtomicUsize::new(HEAD_A | ThreadFreeWord::OWNED_BIT));
+        let next_a = loom::sync::Arc::new(LoomAtomicUsize::new(0));
+        let next_b = loom::sync::Arc::new(LoomAtomicUsize::new(0));
 
         let release = {
-            let cell = Arc::clone(&cell);
+            let cell = loom::sync::Arc::clone(&cell);
             thread::spawn(move || {
                 assert!(release_ownership_word(&cell));
             })
         };
         let push = {
-            let cell = Arc::clone(&cell);
-            let next_b = Arc::clone(&next_b);
+            let cell = loom::sync::Arc::clone(&cell);
+            let next_b = loom::sync::Arc::clone(&next_b);
             thread::spawn(move || push_remote_word(&cell, &next_b, HEAD_B))
         };
 

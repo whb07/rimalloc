@@ -45,12 +45,9 @@ pub(super) fn assert_strict_checker_and_allowlist_symbols(
             kind.is_some() && path.is_some() && symbol == Some("*")
         })
         .collect::<Vec<_>>();
-    assert_eq!(
-        wildcard_entries.as_slice(),
-        [
-            "heap-allocating-type|src/types/atomic/concurrency_models.rs|*|loom-model|Loom concurrency models use Arc to share modeled atomics between spawned model threads outside allocator hot paths.|permanent: strict-type proof model boundary."
-        ],
-        "the only retained strict-type wildcard should be the Loom proof-model boundary"
+    assert!(
+        wildcard_entries.is_empty(),
+        "strict-type allowlist should not retain wildcard entries: {wildcard_entries:?}"
     );
     for platform_path in [
         "src/allocator/heap.rs",
@@ -128,7 +125,10 @@ pub(super) fn assert_strict_checker_and_allowlist_symbols(
         "pointer-usize-roundtrip|src/ffi/libc.rs|mi_outc|output-buffer|",
         "atomic-cast|src/internal/atomic.rs|atomic_usize|atomic-field|",
         "atomic-cast|src/types/atomic/tests.rs|atomic_thread_free_claims_and_releases_ownership_bit|atomic-field-test|",
-        "heap-allocating-type|src/types/atomic/concurrency_models.rs|*|loom-model|",
+        "heap-allocating-type|src/types/atomic/concurrency_models.rs|concurrent_remote_pushes_keep_both_nodes_reachable|loom-model|",
+        "heap-allocating-type|src/types/atomic/concurrency_models.rs|collect_racing_with_push_does_not_drop_nodes|loom-model|",
+        "heap-allocating-type|src/types/atomic/concurrency_models.rs|concurrent_claims_allow_exactly_one_owner_transition|loom-model|",
+        "heap-allocating-type|src/types/atomic/concurrency_models.rs|release_ownership_racing_with_push_preserves_heads|loom-model|",
         "heap-allocating-type|src/platform/windows.rs|mi_getenv_value|String|",
         "bare-domain-usize|src/platform/windows.rs|win_virtual_alloc|usize|",
         "bare-domain-usize|src/platform/unix.rs|unix_mmap_prim_aligned|usize|",

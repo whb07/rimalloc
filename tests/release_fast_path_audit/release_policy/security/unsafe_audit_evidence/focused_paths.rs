@@ -4,6 +4,8 @@ mod allocation_free;
 mod datatype_fixtures;
 #[path = "focused_paths/platform_primitives.rs"]
 mod platform_primitives;
+#[path = "focused_paths/stats_and_strict_type.rs"]
+mod stats_and_strict_type;
 
 pub(super) fn assert_focused_evidence_paths(evidence: &str) {
     let assert_focused_evidence = |audit_id: &str, focused_path: &str| {
@@ -16,6 +18,7 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
 
     allocation_free::assert_allocation_free_focused_evidence(evidence);
     platform_primitives::assert_platform_primitive_focused_evidence(evidence);
+    stats_and_strict_type::assert_stats_and_strict_type_focused_evidence(evidence);
 
     const LOCAL_BOUNDARIES_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs";
@@ -23,8 +26,6 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs";
     const RAW_CXX_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs";
-    const STRICT_TYPE_FOCUSED_PATH: &str =
-        "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs";
     datatype_fixtures::assert_datatype_fixture_focused_evidence(evidence);
     for audit_id in [
         "page-map-global-boundary",
@@ -106,141 +107,6 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
             "raw-macro-header-forwarding-boundary",
             "tests/release_fast_path_audit/release_policy/api_surface.rs",
         ),
-        (
-            "stats-init-bin-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-counter-mt-update-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-counter-local-update-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-counter-adjust-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-counter-accumulate-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-counter-merge-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-clock-boundary",
-            "tests/release_fast_path_audit/primitive_options.rs",
-        ),
-        (
-            "options-libc-file-symbol-boundary",
-            "tests/release_fast_path_audit/primitive_options.rs",
-        ),
-        (
-            "options-recurse-guard-boundary",
-            "tests/release_fast_path_audit/primitive_options.rs",
-        ),
-        (
-            "options-delayed-output-buffer-boundary",
-            "tests/release_fast_path_audit/primitive_options.rs",
-        ),
-        (
-            "options-stderr-output-boundary",
-            "tests/release_fast_path_audit/primitive_options.rs",
-        ),
-        (
-            "options-output-callback-boundary",
-            "tests/release_fast_path_audit/primitive_options.rs",
-        ),
-        (
-            "options-format-output-boundary",
-            "tests/release_fast_path_audit/primitive_options.rs",
-        ),
-        (
-            "options-print-output-boundary",
-            "tests/release_fast_path_audit/primitive_options.rs",
-        ),
-        (
-            "stats-heap-merge-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-public-merge-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-heap-visitor-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-public-export-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-formatting-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-buffered-output-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-print-export-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-process-info-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "stats-json-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/thread_stats.rs",
-        ),
-        (
-            "typed-pointer-constructor-boundary",
-            STRICT_TYPE_FOCUSED_PATH,
-        ),
-        ("typed-page-scalar-accessors", STRICT_TYPE_FOCUSED_PATH),
-        ("typed-page-free-list-accessors", STRICT_TYPE_FOCUSED_PATH),
-        ("typed-page-atomic-accessors", STRICT_TYPE_FOCUSED_PATH),
-        (
-            "typed-page-fixture-touch-accessors",
-            STRICT_TYPE_FOCUSED_PATH,
-        ),
-        ("typed-block-accessors", STRICT_TYPE_FOCUSED_PATH),
-        ("typed-heap-accessors", STRICT_TYPE_FOCUSED_PATH),
-        ("typed-thread-heap-accessors", STRICT_TYPE_FOCUSED_PATH),
-        (
-            "typed-tld-thread-identity-accessors",
-            STRICT_TYPE_FOCUSED_PATH,
-        ),
-        ("typed-tld-subproc-accessors", STRICT_TYPE_FOCUSED_PATH),
-        ("typed-tld-metadata-accessors", STRICT_TYPE_FOCUSED_PATH),
-        (
-            "typed-tld-fixture-touch-accessors",
-            STRICT_TYPE_FOCUSED_PATH,
-        ),
-        ("typed-arena-identity-accessors", STRICT_TYPE_FOCUSED_PATH),
-        ("typed-arena-linkage-accessors", STRICT_TYPE_FOCUSED_PATH),
-        (
-            "typed-arena-fixture-touch-accessors",
-            STRICT_TYPE_FOCUSED_PATH,
-        ),
-        ("typed-subproc-identity-accessors", STRICT_TYPE_FOCUSED_PATH),
-        ("typed-subproc-arena-accessors", STRICT_TYPE_FOCUSED_PATH),
-        (
-            "typed-subproc-heap-link-accessors",
-            STRICT_TYPE_FOCUSED_PATH,
-        ),
-        ("typed-subproc-count-accessors", STRICT_TYPE_FOCUSED_PATH),
-        ("typed-subproc-metadata-accessors", STRICT_TYPE_FOCUSED_PATH),
-        (
-            "typed-subproc-fixture-touch-accessors",
-            STRICT_TYPE_FOCUSED_PATH,
-        ),
-        ("typed-page-queue-accessors", STRICT_TYPE_FOCUSED_PATH),
     ] {
         assert_focused_evidence(audit_id, focused_path);
     }

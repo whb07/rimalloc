@@ -4,9 +4,10 @@ Fresh-eyes review after completing the previous TODO backlog on `master` at
 `5c47626`. That backlog is implemented and pushed: source audit marker cap 22,
 release-audit module cap 260, and strict-type permanent reason/file-domain
 hotspot governance. Issue 1 in this backlog has now lowered the source audit
-marker cap to 20. The remaining mechanical-translation debt is concentrated in
-release-audit modules just above a 240-line review target and broad strict-type permanent reason buckets
-that still hide different compatibility responsibilities.
+marker cap to 20, and Issue 2 has split the release-audit modules enough to
+enforce a 240-line recursive cap. The remaining mechanical-translation debt is
+concentrated in broad strict-type permanent reason buckets that still hide
+different compatibility responsibilities.
 
 Current review evidence:
 
@@ -53,23 +54,16 @@ Current review evidence:
   `src/allocator/page.rs`/`mi_theap_t` with 19. The current raw-pointer
   file/domain cap is 33 entries.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 135 module files recursively and
-  enforces a 260-line cap. The next useful cap is 240 lines. The largest
-  release-audit modules are:
-  `strict_policy.rs` at 260 lines, `release_policy/callbacks.rs` at 255 lines,
-  `datatype_acceptance/domain_wrappers.rs` at 253 lines,
-  `unsafe_performance/allocation_free/marker_counts.rs` at 252 lines,
-  `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view.rs` at 248 lines, and
-  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 247 lines.
-- Ten release-audit modules currently exceed 240 lines: `strict_policy.rs`,
-  `release_policy/callbacks.rs`, `datatype_acceptance/domain_wrappers.rs`,
-  `unsafe_performance/allocation_free/marker_counts.rs`,
-  `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view.rs`,
-  `release_policy/security/unsafe_audit_evidence/focused_paths.rs`,
-  `unsafe_performance/page_lifecycle.rs`,
-  `unsafe_performance/platform_primitive_boundaries/macos.rs`,
-  `unsafe_performance/page_arena_behavior/arena_page_allocation.rs`, and
-  `unsafe_performance/bitmap_boundaries.rs`.
+  release-audit module-size guard discovers 145 module files recursively and
+  enforces a 240-line cap. The largest release-audit modules are:
+  `unsafe_performance/os_memory/platform_helpers.rs` at 240 lines,
+  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs` at 237 lines,
+  `unsafe_performance/platform_primitive_boundaries/windows.rs` at 233 lines,
+  `unsafe_performance/page_arena_behavior/purge_clock_atomic.rs` at 232 lines,
+  `datatype_acceptance/strict_type/atomic_provenance_guards.rs` at 231 lines,
+  and
+  `unsafe_performance/lifecycle_boundaries/process_lifecycle/subproc_fast_paths.rs` at 223 lines.
+- No release-audit module currently exceeds 240 lines.
 
 ## Issue 1: Lower the source audit marker cap to 20
 
@@ -95,24 +89,23 @@ full formatting, full clippy, and full tests.
 
 ## Issue 2: Split release-audit modules over 240 lines
 
-The recursive release-audit module cap is now 260 lines. Ten modules exceed the
-next 240-line review target.
+Done. The recursive release-audit module cap is now 240 lines.
 
-- [ ] Split `strict_policy.rs` so the strict-type hot-path, no-allocation, and
+- [x] Split `strict_policy.rs` so the strict-type hot-path, no-allocation, and
       datatype acceptance checks live in focused child modules while the root
       harness remains small.
-- [ ] Split `release_policy/callbacks.rs`,
+- [x] Split `release_policy/callbacks.rs`,
       `datatype_acceptance/domain_wrappers.rs`, and
       `unsafe_performance/allocation_free/marker_counts.rs` by assertion
       family.
-- [ ] Split the remaining 241-248 line modules:
+- [x] Split the remaining 241-248 line modules:
       `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view.rs`,
       `release_policy/security/unsafe_audit_evidence/focused_paths.rs`,
       `unsafe_performance/page_lifecycle.rs`,
       `unsafe_performance/platform_primitive_boundaries/macos.rs`,
       `unsafe_performance/page_arena_behavior/arena_page_allocation.rs`, and
       `unsafe_performance/bitmap_boundaries.rs`.
-- [ ] Lower the recursive release-audit module cap from 260 to 240 and refresh
+- [x] Lower the recursive release-audit module cap from 260 to 240 and refresh
       measured TODO evidence.
 
 Verify: release fast-path audit, TODO guard, unsafe audit scripts, strict-type
@@ -141,13 +134,13 @@ clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Lower the source audit marker cap to 20.
-2. [ ] Split release-audit modules over 240 lines.
+2. [x] Split release-audit modules over 240 lines.
 3. [ ] Split strict-type permanent reason groups over 40.
 
 ## Definition of done for this backlog
 
 - [x] No source audit operation ID has more than 20 source markers.
-- [ ] Release-audit modules are split enough to lower the recursive module cap
+- [x] Release-audit modules are split enough to lower the recursive module cap
       to 240 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type permanent disposition reason groups are split enough that no
       group exceeds 40 entries, while raw-pointer file/domain hotspot governance

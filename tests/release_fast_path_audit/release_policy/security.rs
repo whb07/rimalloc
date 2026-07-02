@@ -1,0 +1,181 @@
+use super::super::*;
+
+#[test]
+fn cve_and_advisory_policy_is_linked_and_concrete() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let advisory = fs::read_to_string(root.join("docs/security-advisories.md"))
+        .expect("read security advisory policy");
+    let security = fs::read_to_string(root.join("SECURITY.md")).expect("read SECURITY.md");
+    let governance = fs::read_to_string(root.join("docs/governance.md")).expect("read governance");
+    let release = fs::read_to_string(root.join("docs/release.md")).expect("read release");
+
+    for required in [
+        "Severity Triage",
+        "Critical",
+        "High",
+        "Medium",
+        "Low",
+        "CVE Handling",
+        "Request or reserve a CVE",
+        "Embargo Handling",
+        "default embargo target is up to 90 calendar days",
+        "Embargo extensions require reporter agreement",
+        "Coordinated Disclosure",
+        "private security branch or private advisory fork",
+        "Publish fixed releases, tags, checksums, release notes, changelog, and the\n   advisory in the same disclosure window",
+        "Changelog and Advisory Publication",
+        "The changelog `Security` entry must include",
+        "The GitHub Security Advisory must include",
+    ] {
+        assert!(
+            advisory.contains(required),
+            "advisory policy should include marker {required}"
+        );
+    }
+
+    for required in [
+        "affected versions, release lines, target platforms, artifact modes, and\n  features",
+        "whether C mimalloc 3.3.2 reproduces the same behavior",
+        "affected versions and first fixed version",
+        "workaround or mitigation status",
+        "links to release notes, changelog, signed checksums",
+    ] {
+        assert!(
+            advisory.contains(required),
+            "advisory policy should require publication field {required}"
+        );
+    }
+
+    assert!(
+        security.contains("docs/security-advisories.md")
+            && governance.contains("docs/security-advisories.md")
+            && release.contains("docs/security-advisories.md"),
+        "security, governance, and release docs should link to advisory policy"
+    );
+    assert!(
+        governance.contains("severity triage, CVE handling, embargoes")
+            && release.contains("changelog `Security` entry requirements"),
+        "governance and release docs should summarize advisory policy obligations"
+    );
+}
+
+#[test]
+fn fuzz_corpus_and_reproducer_policy_maps_to_security_and_unsafe_audit() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let testing = fs::read_to_string(root.join("docs/testing.md")).expect("read testing");
+    let security = fs::read_to_string(root.join("SECURITY.md")).expect("read SECURITY.md");
+    let unsafe_audit =
+        fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read unsafe audit");
+
+    for required in [
+        "fuzz/corpus/alloc_sequences/<descriptive-name>",
+        "fuzz/fuzz_targets/alloc_sequences.rs",
+        "A focused Rust regression test under `tests/` or the owning source module",
+        "Corpus additions are required",
+        "valid\nsafe API use, documented raw/C ABI use, release artifact behavior",
+        "allocator-owned memory corruption, realloc preservation, zeroing,\nalignment, heap ownership, cross-thread free",
+        "Do not commit corpus inputs that depend on invalid caller UB",
+        "A\nfinding is an allocator bug",
+        "A\nfinding is invalid-caller UB",
+        "forged pointers, foreign\nallocations, use-after-free",
+        "Confirmed fuzz findings that touch unsafe invariants must update the unsafe\naudit mapping",
+        "docs/unsafe-audit-evidence.tsv",
+        "SAFETY[AUDIT:*]",
+        "Private security reproducers stay out of the public corpus",
+    ] {
+        assert!(
+            testing.contains(required),
+            "testing docs should define fuzz reproducer policy marker {required}"
+        );
+    }
+
+    for required in [
+        "docs/testing.md",
+        "fuzz corpus and minimized reproducer policy",
+        "invalid-caller undefined behavior versus allocator bugs",
+        "unsafe-audit evidence",
+    ] {
+        assert!(
+            security.contains(required),
+            "security policy should link fuzz policy marker {required}"
+        );
+    }
+
+    assert!(
+        unsafe_audit.contains("Fuzz Finding Mapping")
+            && unsafe_audit.contains("docs/testing.md")
+            && unsafe_audit.contains("docs/unsafe-audit-evidence.tsv")
+            && unsafe_audit.contains("SAFETY[AUDIT:*]"),
+        "unsafe audit docs should map confirmed fuzz findings to audit evidence"
+    );
+}
+
+#[test]
+fn hardening_threat_model_is_concrete_and_linked_from_security_policy() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let threat_model = fs::read_to_string(root.join("docs/hardening-threat-model.md"))
+        .expect("read hardening threat model");
+    let security = fs::read_to_string(root.join("SECURITY.md")).expect("read SECURITY.md");
+    let release = fs::read_to_string(root.join("docs/release.md")).expect("read release");
+
+    for required in [
+        "Hardening Threat Model",
+        "Baseline Assumptions",
+        "The `secure` feature is expected to mitigate or detect selected allocator\nmetadata corruptions",
+        "secure-mode padding, canaries, encoded free lists",
+        "Non-goals",
+        "The `guarded` feature is expected to detect selected out-of-bounds and\nuse-after-free patterns",
+        "guarded size bounds, sample rate, sample\ncount",
+        "Out Of Scope For Malicious Unsafe Callers",
+        "forged pointers, foreign allocations, or interior pointers",
+        "use-after-free, double-free, or realloc-after-free",
+        "arbitrary process-memory write, code execution, or data-race capability",
+        "Entropy, Canaries, And Metadata Corruption",
+        "predictable entropy, repeated\ncanaries, or failed random initialization",
+        "not a cryptographic boundary",
+        "Allocator metadata corruption is in scope",
+        "Hardening reports should include",
+    ] {
+        assert!(
+            threat_model.contains(required),
+            "hardening threat model should include marker {required}"
+        );
+    }
+
+    assert!(
+        security.contains("docs/hardening-threat-model.md")
+            && security.contains("`secure`, `guarded`, malicious unsafe callers")
+            && release.contains("docs/hardening-threat-model.md"),
+        "security and release docs should link to hardening threat model"
+    );
+}
+
+#[test]
+fn memory_corruption_triage_checklist_is_concrete_in_security_policy() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let security = fs::read_to_string(root.join("SECURITY.md")).expect("read SECURITY.md");
+
+    for required in [
+        "Memory Corruption Triage Checklist",
+        "allocation/free/realloc sequence",
+        "API names, sizes, alignments",
+        "zeroing expectations, preserved-byte expectations",
+        "allocation origin, heap or\n  main-heap ownership",
+        "thread ownership, cross-thread transfer",
+        "feature set and target platform",
+        "Cargo features, target triple",
+        "`secure`/`guarded`/tracking mode",
+        "sanitizer/Valgrind/Miri evidence where applicable",
+        "exact commands,\n  logs, stack traces, core dump notes",
+        "upstream C mimalloc comparison against vendored C mimalloc 3.3.2",
+        "FFI symbol/artifact mode details",
+        "`c-abi-cdylib`, `interpose-cdylib`",
+        "`LD_PRELOAD`, `dlopen`, C++\n  operator override use",
+        "unexpected exported or resolved symbol",
+    ] {
+        assert!(
+            security.contains(required),
+            "security policy should include memory-corruption checklist marker {required}"
+        );
+    }
+}

@@ -2,6 +2,7 @@ use super::*;
 
 const RELEASE_AUDIT_MODULES: &[&str] = &[
     "release_policy.rs",
+    "release_policy/security.rs",
     "runtime_gates.rs",
     "todo_backlog.rs",
     "unsafe_performance.rs",
@@ -71,9 +72,12 @@ fn rust_idiom_backlog_tracks_current_work() {
         "SAFETY[AUDIT:owned-allocation]` with 17 markers",
         "`tests/release_fast_path_audit.rs` is 2,864 lines",
         "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,756 lines",
-        "`tests/release_fast_path_audit/release_policy.rs` is 2,291 lines",
+        "`tests/release_fast_path_audit/release_policy.rs` is 2,115 lines",
+        "`tests/release_fast_path_audit/release_policy/security.rs` is 181 lines",
         "`tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`\n  is 700 lines",
         "`tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is\n  160 lines",
+        "security-policy assertion cluster moved into\n    `tests/release_fast_path_audit/release_policy/security.rs`",
+        "release audit still runs 67 tests",
     ];
 
     for evidence in required_evidence {

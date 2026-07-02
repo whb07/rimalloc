@@ -8,6 +8,7 @@ import re
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+TEST_ONLY_SAFE_FILES = {"src/safe/tests.rs"}
 
 SAFE_BACKEND_IMPORT_ALLOWLIST = {
     "src/safe/allocation.rs": set(),
@@ -106,7 +107,9 @@ def backend_modules_used(text: str) -> set[str]:
 
 def main() -> int:
     safe_files = sorted(
-        path.relative_to(ROOT).as_posix() for path in (ROOT / "src/safe").glob("*.rs")
+        rel
+        for path in (ROOT / "src/safe").glob("*.rs")
+        if (rel := path.relative_to(ROOT).as_posix()) not in TEST_ONLY_SAFE_FILES
     )
     expected_files = sorted(SAFE_BACKEND_IMPORT_ALLOWLIST)
     require(

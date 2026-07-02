@@ -76,8 +76,8 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/raw/posix.rs` | 81 | 41 | 20 | 3 | 0 | 17 | 0 |
 | `src/safe/allocation.rs` | 21 | 12 | 1 | 0 | 6 | 0 | 0 |
 | `src/safe/heap.rs` | 15 | 14 | 1 | 0 | 0 | 0 | 0 |
-| `src/safe/mod.rs` | 60 | 39 | 2 | 0 | 0 | 0 | 0 |
 | `src/safe/stats.rs` | 10 | 10 | 0 | 0 | 0 | 0 | 0 |
+| `src/safe/tests.rs` | 60 | 39 | 2 | 0 | 0 | 0 | 0 |
 | `src/types/arena/tests.rs` | 11 | 11 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/arena.rs` | 13 | 7 | 6 | 0 | 0 | 0 | 0 |
 | `src/types/atomic/tests.rs` | 56 | 56 | 0 | 0 | 0 | 0 | 0 |

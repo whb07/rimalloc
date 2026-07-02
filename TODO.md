@@ -19,9 +19,9 @@ Review evidence:
 - `tests/release_fast_path_audit.rs` is 8,845 lines and mixes API inventory,
   release policy, performance, unsafe, platform, and TODO-backlog assertions in
   one integration-test crate.
-- `src/safe/mod.rs` is 1,194 lines because it contains the facade module plus a
-  large in-file test suite with process-global callback and failure-injection
-  fixtures.
+- `src/safe/mod.rs` is now 40 lines and only wires the facade modules,
+  re-exports, failure-injection test helper, and `src/safe/tests.rs`; the moved
+  safe facade test suite is 1,150 lines.
 - Small production modules still carry crate-level allowances where they are
   permanent compatibility shims, such as `src/allocator/static_alloc.rs` and
   translated C-name modules. `src/internal/provenance.rs`,
@@ -120,16 +120,23 @@ Review evidence:
 > current in-file test module is useful, but it makes the facade harder to
 > scan and keeps process-global fixtures next to production re-exports.
 
-- [ ] Move the safe facade test module into `src/safe/tests.rs` or focused
+- [x] Move the safe facade test module into `src/safe/tests.rs` or focused
       test submodules without changing the public safe facade.
-- [ ] Keep `failure_injection` private to tests and preserve the serialized
+- [x] Keep `failure_injection` private to tests and preserve the serialized
       locks for process-global options and callback registration.
-- [ ] Keep safe facade source files free of new backend imports and local
+- [x] Keep safe facade source files free of new backend imports and local
       Clippy allowances.
-- [ ] Update `scripts/check-safe-boundary.py` and release audit checks only if
+- [x] Update `scripts/check-safe-boundary.py` and release audit checks only if
       the test-file move changes their inventory assumptions.
-- [ ] Confirm callback, heap, allocation, options, stats, and process-info
+- [x] Confirm callback, heap, allocation, options, stats, and process-info
       tests still run under the expected feature sets.
+  - Evidence: the full safe facade test suite now lives in `src/safe/tests.rs`;
+    `src/safe/mod.rs` keeps only facade wiring plus the cfg(test)
+    `failure_injection` helper. `scripts/check-safe-boundary.py` and
+    `scripts/check-layer-boundaries.py` exclude the test-only module from
+    production safe facade inventories, while `scripts/check-safe-api-features.sh`
+    confirms the moved tests across default, std, secure, guarded,
+    track-valgrind, and track-asan compile/test modes.
 - Verify: `scripts/check-safe-boundary.py`, `scripts/check-layer-boundaries.py`,
   `scripts/check-safe-api-features.sh`, focused safe tests, full clippy, and
   full tests.
@@ -180,7 +187,7 @@ Review evidence:
 1. [x] Shrink small typed-wrapper unsafe allowlist entries.
 2. [x] Cap and reduce removable strict-type allowlist entries.
 3. [x] Localize small production module-level allowances.
-4. [ ] Move safe facade tests out of `src/safe/mod.rs`.
+4. [x] Move safe facade tests out of `src/safe/mod.rs`.
 5. [ ] Split the release fast-path audit into domain modules.
 6. [ ] Split one additional low-risk translated module cluster.
 
@@ -191,7 +198,7 @@ Review evidence:
       removable-entry count is capped.
 - [x] Small production module-level allowances are localized or documented as
       permanent compatibility shims.
-- [ ] `src/safe/mod.rs` contains the facade and test wiring only, not the full
+- [x] `src/safe/mod.rs` contains the facade and test wiring only, not the full
       safe facade test suite.
 - [ ] The release fast-path audit is split into reviewable modules without
       losing coverage.

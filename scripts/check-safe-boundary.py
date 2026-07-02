@@ -8,10 +8,15 @@ import re
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+TEST_ONLY_SAFE_FILES = {"src/safe/tests.rs"}
 SAFE_BOUNDARY_FILES = [
     "src/lib.rs",
     "src/safe/mod.rs",
-    *sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / "src/safe").glob("*.rs")),
+    *sorted(
+        rel
+        for path in (ROOT / "src/safe").glob("*.rs")
+        if (rel := path.relative_to(ROOT).as_posix()) not in TEST_ONLY_SAFE_FILES
+    ),
 ]
 AUDIT_TAG = "SAFETY[AUDIT:"
 ALLOWED_PUBLIC_UNSAFE = {

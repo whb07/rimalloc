@@ -54,6 +54,9 @@ raw-posix-compat	test	tests/compat_exports.rs	Exercises POSIX out-pointer and er
 raw-posix-compat	test	tests/release_fast_path_audit.rs	Checks src/raw/posix.rs keeps product allocation typed, raw POSIX compatibility exports present, and operation-level audit markers local.
 macos-zone-override	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks macOS malloc-zone struct layout, interpose targets, forwarding branches, batch pointer clearing, fork hooks, and migration allowlist removal.
 macos-zone-override	script	scripts/check-unsafe-audit.py	Checks macOS malloc-zone operations retain operation-level SAFETY markers and source audit coverage.
+platform-tls-primitives	test	tests/release_fast_path_audit.rs	Checks Linux TLS fast-path assembly, C TLS shim shape, empty-thread-heap symbol loads, and process lifecycle hook shape.
+platform-tls-primitives	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks primitive TLS model constants, default/cached thread-heap helpers, page-associated lookup, allocator init/done shims, and migration allowlist removal.
+platform-tls-primitives	script	scripts/check-unsafe-audit.py	Checks platform TLS primitive operations retain operation-level SAFETY markers and source audit coverage.
 random-context-boundaries	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks random context entry points stay no-retention direct-call C ABI shims with local audit markers.
 threadlocal-key-manager	test	src/allocator/threadlocal.rs	Exercises versioned key helper splitting and callback keep-set witness clearing.
 threadlocal-key-manager	test	tests/release_fast_path_audit.rs	Checks Linux TLS shim shape, dynamic thread-local marker coverage, and migration allowlist removal.

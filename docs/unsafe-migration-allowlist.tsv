@@ -12,7 +12,6 @@ src/allocator/thread_heap.rs	production	release-readiness	2026-09-30	legacy tran
 src/internal/atomic.rs	production	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
 src/internal/bitmap.rs	production	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
 src/internal/mod.rs	translation	release-readiness	2026-09-30	legacy translated internal macros and layout helpers pending per-operation SAFETY marker migration
-src/platform/mod.rs	production	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
 src/platform/os.rs	production	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
 src/platform/unix.rs	production	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
 src/platform/windows.rs	translation	release-readiness	2026-09-30	legacy translated Windows ABI and platform unsafe pending per-operation SAFETY marker migration

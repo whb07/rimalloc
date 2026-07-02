@@ -37,6 +37,85 @@ fn lifecycle_and_local_boundary_helpers_stay_classified() {
         .expect("read src/allocator/threadlocal.rs");
 
     assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/platform/mod.rs\t"))
+            && prim_rs
+                .matches("SAFETY[AUDIT:platform-tls-primitives]")
+                .count()
+                >= 55,
+        "platform TLS primitive boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
+    assert!(
+        prim_rs.contains("pub const MI_TLS_MODEL_THREAD_LOCAL")
+            && prim_rs.contains("pub const MI_TLS_MODEL_FIXED_SLOT")
+            && prim_rs.contains("pub const MI_TLS_MODEL_DYNAMIC_WIN32")
+            && prim_rs.contains("pub const MI_TLS_MODEL_DYNAMIC_PTHREADS")
+            && prim_rs.contains("pub const MI_THEAP_INITASNULL")
+            && prim_rs.contains("pub const MI_TLS_MODEL_FIXED_SLOT_DEFAULT: usize = 108;")
+            && prim_rs.contains("pub const MI_TLS_MODEL_FIXED_SLOT_CACHED: usize = 109;")
+            && prim_rs.contains("pub const MI_TLS_EXPANSION_SLOT: usize")
+            && prim_rs.contains("fn mi_prim_apple_tls_slot(slot: usize) -> *mut c_void")
+            && prim_rs.contains("fn _mi_tls_theap_default_get() -> *mut mi_theap_t;")
+            && prim_rs.contains("fn _mi_tls_theap_cached_get() -> *mut mi_theap_t;")
+            && prim_rs.contains("__mi_theap_default@GOTTPOFF")
+            && prim_rs.contains("__mi_theap_cached@GOTTPOFF")
+            && prim_rs.contains("\"lea {empty}, [rip + _mi_theap_empty]\""),
+        "platform TLS primitive layer should preserve model constants, Apple fixed-slot path, Linux C shim declarations, and x86_64 TLS assembly"
+    );
+    for marker in [
+        "pub unsafe fn _mi_theap_default_raw(",
+        "pub unsafe fn _mi_theap_default(",
+        "pub unsafe fn _mi_theap_cached(",
+        "pub(crate) fn mi_prim_thread_local_default_set(",
+        "pub(crate) fn mi_prim_thread_local_cached_set(",
+        "pub(crate) unsafe fn _mi_page_associated_theap_peek(",
+        "pub(crate) unsafe extern \"C\" fn _mi_allocator_init(",
+        "pub(crate) unsafe extern \"C\" fn _mi_allocator_done(",
+    ] {
+        let item = source_item("src/platform/mod.rs", &prim_rs, marker);
+        assert_no_rust_heap_constructs("src/platform/mod.rs", marker, item);
+    }
+    let default_raw = source_item(
+        "src/platform/mod.rs",
+        &prim_rs,
+        "pub unsafe fn _mi_theap_default_raw(",
+    );
+    assert!(
+        default_raw.contains("unsafe { mi_linux_x64_theap_default_get() }")
+            && default_raw.contains("unsafe { _mi_tls_theap_default_get() }")
+            && default_raw.contains("mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_DEFAULT)")
+            && default_raw
+                .contains("_mi_thread_local_get(_mi_theap_default_key) as *mut mi_theap_t"),
+        "raw default thread-heap lookup should preserve Linux fast path, C shim fallback, fixed-slot path, and dynamic key path"
+    );
+    let cached = source_item(
+        "src/platform/mod.rs",
+        &prim_rs,
+        "pub unsafe fn _mi_theap_cached(",
+    );
+    assert!(
+        cached.contains("mi_linux_x64_theap_cached_get()")
+            && cached.contains("unsafe { _mi_tls_theap_cached_get() }")
+            && cached.matches("unsafe { __mi_theap_empty() }").count() >= 4
+            && cached.contains("mi_prim_tls_slot(MI_TLS_MODEL_FIXED_SLOT_CACHED)")
+            && cached.contains("_mi_thread_local_get(_mi_theap_cached_key) as *mut mi_theap_t"),
+        "cached thread-heap lookup should preserve Linux fast path, empty fallback, fixed-slot path, and dynamic key path"
+    );
+    let page_assoc = source_item(
+        "src/platform/mod.rs",
+        &prim_rs,
+        "pub(crate) unsafe fn _mi_page_associated_theap_peek(",
+    );
+    assert!(
+        page_assoc.contains("let heap = unsafe { (*page).heap };")
+            && page_assoc.contains("crate::init::mi_theap_main_tls_peek()")
+            && page_assoc.contains("unsafe { _mi_heap_theap_peek(heap) }")
+            && page_assoc.contains("ThreadHeapPtr::new(theap)"),
+        "page-associated thread-heap lookup should keep non-initializing heap peeks and typed pointer wrapping"
+    );
+
+    assert!(
         init_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc()")
             && init_rs
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_subproc_to_id")

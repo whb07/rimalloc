@@ -251,6 +251,13 @@ Operation IDs:
   ordering during process initialization, non-mimalloc zone forwarding, mimalloc
   ownership queries, batch pointer-array reads/writes, fork-hook exports, and
   no-op compatibility shims.
+- `SAFETY[AUDIT:platform-tls-primitives]`: `src/platform/mod.rs` owns
+  cross-platform primitive TLS and thread-heap dispatch. Unsafe operations are
+  limited to platform TLS declarations, Linux x86_64 initial-exec assembly,
+  Apple fixed-slot reads, dynamic TLS key lookups, raw default/cached
+  thread-heap get/set helpers, empty-thread-heap fallbacks, page-associated
+  thread-heap lookup, process attach/detach callbacks, and allocator
+  init/done compatibility shims.
 - `SAFETY[AUDIT:random-context-boundaries]`: `src/internal/random.rs`
   confines random context raw pointers and primitive entropy/clock calls to
   the allocator's C-compatible random boundary. The shims convert live context

@@ -15,8 +15,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 21 entries: 18 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 21.
+- `docs/unsafe-migration-allowlist.tsv` has 20 entries: 17 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 20.
 - The completed pass moved `src/raw/posix.rs`, `src/lib.rs`,
   `src/ffi/libc.rs`, `src/allocator/threadlocal.rs`, and
   `src/allocator/heap.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -27,23 +27,30 @@ Current review evidence:
   writes, default-zone ordering, non-mimalloc zone forwarding, mimalloc
   ownership queries, batch pointer-array reads/writes, fork-hook exports, and
   no-op compatibility shims, and is off the unsafe migration allowlist.
+- The current pass also moved `src/platform/mod.rs` to 60
+  `SAFETY[AUDIT:platform-tls-primitives]` markers for platform TLS
+  declarations, Linux x86_64 initial-exec assembly, Apple fixed-slot reads,
+  dynamic TLS key lookups, default/cached thread-heap helpers,
+  page-associated thread-heap lookup, process attach/detach callbacks, and
+  allocator init/done compatibility shims, and is off the unsafe migration
+  allowlist.
 - The smallest remaining allowlisted production files are
-  `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits and 0 local
-  markers,
   `src/internal/atomic.rs` at 914 lines with 135 `unsafe` hits and 0 local
   markers,
   `src/allocator/page_map.rs` at 1,052 lines with 184 `unsafe` hits and
   0 local markers,
   `src/types/scalar.rs` at 1,097 lines with 33 `unsafe` hits and 0 local
-  markers, and
+  markers,
   `src/allocator/thread_heap.rs` at 1,267 lines with 120 `unsafe` hits and
+  0 local markers, and
+  `src/platform/unix.rs` at 1,371 lines with 143 `unsafe` hits and
   0 local markers.
 - The next smallest allowlisted production files after those are
-  `src/platform/unix.rs` at 1,371 lines with 143 `unsafe` hits,
   `src/platform/os.rs` at 1,614 lines with 200 `unsafe` hits,
-  `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits, and
-  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits, and
-  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits.
+  `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits,
+  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits,
+  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits, and
+  `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits.
 - `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
   `symbol = *` entries. The largest categories are 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
@@ -59,6 +66,7 @@ Current review evidence:
   `SAFETY[AUDIT:macos-zone-override]` has 83 markers,
   `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers,
+  `SAFETY[AUDIT:platform-tls-primitives]` has 60 markers,
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
   `SAFETY[AUDIT:typed-heap-test-fixtures]` has 55 markers,
   `SAFETY[AUDIT:typed-atomic-domain]` has 51 markers,
@@ -113,19 +121,19 @@ inventory regeneration/check, full clippy, and full tests.
 > pthread/Win32 TLS key access, cached/default thread-heap set/get paths, page
 > associated thread-heap lookup, and process attach/detach shims.
 
-- [ ] Add local `SAFETY[AUDIT:platform-tls-primitives]` markers for TLS externs,
+- [x] Add local `SAFETY[AUDIT:platform-tls-primitives]` markers for TLS externs,
       Linux assembly loads/stores, Apple fixed-slot reads, dynamic TLS key
       lookup, default/cached thread-heap accessors, page-associated lookup, and
       process attach/detach primitive shims.
-- [ ] Preserve `MI_TLS_MODEL_*` selection, `MI_THEAP_INITASNULL` behavior,
+- [x] Preserve `MI_TLS_MODEL_*` selection, `MI_THEAP_INITASNULL` behavior,
       Linux C TLS shim ABI, x86_64 `@GOTTPOFF` sequences, Apple slot constants,
       cached-thread-heap fast path, empty-theap fallback, and no allocation or
       dynamic dispatch in TLS get/set helpers.
-- [ ] Add or extend release-audit assertions for TLS model constants, assembly
+- [x] Add or extend release-audit assertions for TLS model constants, assembly
       symbols, C shim accessors, Apple fixed-slot path, dynamic key path,
       `_mi_heap_theap` cached lookup, `_mi_heap_theap_peek`, page-associated
       lookup, and marker coverage without a migration allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/platform/mod.rs`
+- [x] Add matching unsafe audit/evidence entries, remove `src/platform/mod.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower the cap.
 
@@ -228,7 +236,7 @@ clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/platform/macos.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/platform/mod.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/platform/mod.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/internal/atomic.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/page_map.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/types/scalar.rs` off the unsafe migration allowlist.

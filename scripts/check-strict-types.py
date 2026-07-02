@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ALLOWLIST = ROOT / "strict-type-allowlist.txt"
+TODO = ROOT / "TODO.md"
 REMOVE_ENTRY_CAP = 0
 
 RAW_BOUNDARY_FILES = {
@@ -418,7 +419,39 @@ def read_allowlist() -> list[AllowEntry]:
             "strict-type allowlist has "
             f"{len(remove_entries)} removable entries, above cap {REMOVE_ENTRY_CAP}"
         )
+    verify_wildcard_counts_documented(entries)
     return entries
+
+
+def wildcard_counts(entries: Iterable[AllowEntry]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for entry in entries:
+        if entry.symbol == "*":
+            counts[entry.kind] = counts.get(entry.kind, 0) + 1
+    return counts
+
+
+def wildcard_summary(counts: dict[str, int]) -> str:
+    total = sum(counts.values())
+    category_counts = ", ".join(
+        f"{kind}={count}" for kind, count in sorted(counts.items())
+    )
+    if category_counts:
+        return f"Strict-type wildcard guard: total={total}; {category_counts}."
+    return "Strict-type wildcard guard: total=0; none."
+
+
+def verify_wildcard_counts_documented(entries: Iterable[AllowEntry]) -> None:
+    expected = wildcard_summary(wildcard_counts(entries))
+    try:
+        todo = TODO.read_text()
+    except FileNotFoundError as err:
+        raise AssertionError("missing TODO.md for strict-type wildcard guard") from err
+    if expected not in todo:
+        raise AssertionError(
+            "TODO.md must record the current strict-type wildcard counts with:\n"
+            f"{expected}"
+        )
 
 
 def is_allowed(
@@ -533,6 +566,35 @@ static TABLE: [usize; 1] = [{
     assert "imported" in contexts[23].symbols
     assert contexts[28].symbols == ("TABLE",)
 
+    bare_contexts = item_contexts_by_line(
+        """
+struct LayoutRequest;
+
+impl LayoutRequest {
+    pub(crate) fn malloc(size: usize) -> Self {
+        Self
+    }
+}
+"""
+    )
+    assert bare_contexts[5].symbols == ("LayoutRequest::malloc", "malloc")
+    assert is_allowed(
+        [
+            AllowEntry(
+                "bare-domain-usize",
+                "src/types/layout.rs",
+                "LayoutRequest::malloc",
+                "usize",
+                "test",
+                "permanent: self-test",
+            )
+        ],
+        kind="bare-domain-usize",
+        rel="src/types/layout.rs",
+        symbol=bare_contexts[5].symbols,
+        domain="usize",
+    )
+
     entries = [
         AllowEntry(
             "pointer-usize-roundtrip",
@@ -616,6 +678,7 @@ def main() -> int:
             offenders.append(f"{rel}: crate-level dead_code allowance in core_types module")
 
         if rel not in RAW_BOUNDARY_FILES:
+            item_contexts = item_contexts_by_line(text)
             for match in RAW_POINTER_PARAM_RE.finditer(text):
                 symbol = match.group("name")
                 domain = match.group("domain")
@@ -636,17 +699,18 @@ def main() -> int:
                 if is_raw_compat_function(text, match.start()):
                     continue
                 symbol = match.group("name")
+                line = text.count("\n", 0, match.start()) + 1
+                context = item_contexts.get(line, ItemContext((symbol,), "fn"))
                 if is_allowed(
                     entries,
                     kind="bare-domain-usize",
                     rel=rel,
-                    symbol=symbol,
+                    symbol=context.symbols,
                     domain="usize",
                 ):
                     continue
-                line = text.count("\n", 0, match.start()) + 1
                 offenders.append(
-                    f"{rel}:{line}: bare domain usize parameter in {symbol} "
+                    f"{rel}:{line}: bare domain usize parameter in {context.primary_symbol} "
                     "lacks strict-type allowlist entry"
                 )
 

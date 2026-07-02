@@ -338,7 +338,7 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
             && allowlist_rs.contains(
                 "pointer-usize-roundtrip|src/allocator/alloc.rs|_mi_page_malloc_zero_typed|padding/provenance|"
             )
-            && allowlist_rs
+            && !allowlist_rs
                 .contains("pointer-usize-roundtrip|src/types/freelist.rs|*|packed-thread-free|")
             && !allowlist_rs.contains("pointer-usize-roundtrip|src/allocator/free.rs|*|")
             && allowlist_rs.contains(
@@ -377,7 +377,13 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
             && !allowlist_rs.contains("metadata-reference|src/allocator/stats.rs|*|")
             && allowlist_rs
                 .contains("metadata-reference|src/allocator/stats.rs|mi_heap_stats_get|mi_heap_t|")
-            && allowlist_rs.contains("metadata-reference|src/types/atomic.rs|*|atomic-field|")
+            && !allowlist_rs.contains("metadata-reference|src/types/atomic.rs|*|atomic-field|")
+            && allowlist_rs.contains(
+                "metadata-reference|src/types/atomic.rs|AtomicArenaPage::load_acquire|atomic-field|"
+            )
+            && allowlist_rs.contains(
+                "metadata-reference|src/types/atomic.rs|AtomicArenaPage::store_release|atomic-field|"
+            )
             && ptr_core_rs.contains("let raw = self.as_ptr();")
             && ptr_core_rs.contains("ptr::read(ptr::addr_of!((*raw).block_size))")
             && ptr_core_rs
@@ -402,8 +408,11 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
     );
     assert!(
         strict_check_rs.contains("class ItemContext:")
+            && strict_check_rs.contains("TODO = ROOT / \"TODO.md\"")
             && strict_check_rs
                 .contains("def item_contexts_by_line(text: str) -> dict[int, ItemContext]:")
+            && strict_check_rs.contains("def wildcard_counts(entries: Iterable[AllowEntry])")
+            && strict_check_rs.contains("def verify_wildcard_counts_documented")
             && strict_check_rs.contains("def run_self_tests() -> None:")
             && strict_check_rs.contains("symbol=context.symbols")
             && strict_check_rs.contains("f\"{message} in {context.primary_symbol}\"")
@@ -415,19 +424,50 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
                 .contains("assert contexts[18].symbols == (\"AtomicField::MASK\", \"MASK\")")
             && strict_check_rs.contains("assert \"imported\" in contexts[23].symbols")
             && strict_check_rs.contains("assert contexts[28].symbols == (\"TABLE\",)")
+            && strict_check_rs.contains(
+                "assert bare_contexts[5].symbols == (\"LayoutRequest::malloc\", \"malloc\")"
+            )
+            && strict_check_rs.contains("\"LayoutRequest::malloc\"")
+            && strict_check_rs.contains("wildcard_summary(wildcard_counts(entries))")
+            && strict_check_rs.contains("Strict-type wildcard guard: total=")
             && strict_check_rs.contains("\"pointer-usize-roundtrip\"")
             && strict_check_rs.contains("\"generic_function\"")
             && strict_check_rs.contains("\"AtomicField::load\"")
             && strict_check_rs.contains("strict-type self-test failed"),
         "strict-type line-pattern checks should use item-aware symbols and self-test symbol-level line-pattern allowlist entries"
     );
+    let wildcard_entries = allowlist_rs
+        .lines()
+        .filter(|line| {
+            let mut fields = line.split('|');
+            let kind = fields.next();
+            let path = fields.next();
+            let symbol = fields.next();
+            kind.is_some() && path.is_some() && symbol == Some("*")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        wildcard_entries.as_slice(),
+        [
+            "heap-allocating-type|src/types/atomic/concurrency_models.rs|*|loom-model|Loom concurrency models use Arc to share modeled atomics between spawned model threads outside allocator hot paths.|permanent: strict-type proof model boundary."
+        ],
+        "the only retained strict-type wildcard should be the Loom proof-model boundary"
+    );
     for platform_path in [
+        "src/allocator/heap.rs",
+        "src/allocator/threadlocal.rs",
         "src/platform/windows.rs",
         "src/platform/unix.rs",
         "src/platform/wasi.rs",
         "src/platform/os.rs",
+        "src/platform/mod.rs",
+        "src/platform/emscripten.rs",
+        "src/platform/macos.rs",
         "src/allocator/aligned.rs",
+        "src/allocator/arena.rs",
+        "src/allocator/tracking.rs",
         "src/internal/mod.rs",
+        "src/internal/atomic.rs",
         "src/allocator/stats.rs",
         "src/allocator/thread_heap.rs",
         "src/allocator/alloc.rs",
@@ -437,8 +477,25 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
         "src/allocator/options.rs",
         "src/bitmap.rs",
         "src/internal/bitmap.rs",
+        "src/internal/random.rs",
+        "src/raw/macros.rs",
         "src/types/arena.rs",
+        "src/types/atomic.rs",
+        "src/types/atomic/tests.rs",
+        "src/types/callbacks.rs",
+        "src/types/freelist.rs",
+        "src/types/guarded.rs",
+        "src/types/layout.rs",
+        "src/types/memid.rs",
+        "src/types/page_queues.rs",
+        "src/types/page_queues/tests.rs",
         "src/types/ptr.rs",
+        "src/types/ptr/tests.rs",
+        "src/types/scalar.rs",
+        "src/ffi/libc.rs",
+        "src/safe/mod.rs",
+        "src/safe/allocation.rs",
+        "src/safe/heap.rs",
     ] {
         assert!(
             !allowlist_rs.lines().any(|line| {
@@ -456,16 +513,39 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
         "raw-pointer-parameter|src/platform/unix.rs|_mi_prim_thread_associate_default_theap|mi_theap_t|",
         "raw-pointer-parameter|src/platform/wasi.rs|_mi_prim_thread_associate_default_theap|mi_theap_t|",
         "raw-pointer-parameter|src/platform/os.rs|_mi_os_free_ex|mi_subproc_t|",
+        "raw-pointer-parameter|src/allocator/heap.rs|mi_heap_destroy|mi_heap_t|",
+        "raw-pointer-parameter|src/platform/mod.rs|_mi_heap_theap|mi_heap_t|",
+        "raw-pointer-parameter|src/platform/emscripten.rs|_mi_prim_thread_associate_default_theap|mi_theap_t|",
+        "raw-pointer-parameter|src/allocator/threadlocal.rs|mi_thread_local_claim_fun|mi_arena_t|",
         "metadata-reference|src/platform/unix.rs|_mi_prim_getenv|platform|",
         "metadata-reference|src/platform/windows.rs|McGenControlCallbackV2|platform|",
+        "metadata-reference|src/internal/random.rs|_mi_random_next|random|",
+        "metadata-reference|src/types/atomic.rs|AtomicArenaPage::load_acquire|atomic-field|",
+        "pointer-usize-roundtrip|src/allocator/arena.rs|mi_manage_os_memory_ex2|arena-range|",
         "pointer-usize-roundtrip|src/platform/os.rs|mi_os_alloc_aligned_memid|os-memory|",
         "pointer-usize-roundtrip|src/platform/unix.rs|unix_mmap_prim_aligned|platform|",
         "pointer-usize-roundtrip|src/platform/wasi.rs|mi_prim_mem_grow|platform|",
+        "pointer-usize-roundtrip|src/types/ptr/tests.rs|provenance_address_helpers_match_raw_pointer_math|provenance-test|",
+        "pointer-usize-roundtrip|src/ffi/libc.rs|mi_outc|output-buffer|",
+        "atomic-cast|src/internal/atomic.rs|atomic_usize|atomic-field|",
+        "atomic-cast|src/types/atomic/tests.rs|atomic_thread_free_claims_and_releases_ownership_bit|atomic-field-test|",
+        "heap-allocating-type|src/types/atomic/concurrency_models.rs|*|loom-model|",
         "heap-allocating-type|src/platform/windows.rs|mi_getenv_value|String|",
         "bare-domain-usize|src/platform/windows.rs|win_virtual_alloc|usize|",
         "bare-domain-usize|src/platform/unix.rs|unix_mmap_prim_aligned|usize|",
         "bare-domain-usize|src/platform/wasi.rs|mi_wasi_try_alloc|usize|",
         "bare-domain-usize|src/platform/os.rs|mi_os_alloc_aligned_ex|usize|",
+        "bare-domain-usize|src/raw/macros.rs|mi_unix_reallocarray|usize|",
+        "bare-domain-usize|src/types/callbacks.rs|BlockVisitCallback::invoke|usize|",
+        "bare-domain-usize|src/types/guarded.rs|GuardedConfig::decide|usize|",
+        "bare-domain-usize|src/types/layout.rs|LayoutRequest::malloc|usize|",
+        "bare-domain-usize|src/types/memid.rs|ReservedBytes::new|usize|",
+        "bare-domain-usize|src/types/page_queues/tests.rs|with_queue|usize|",
+        "bare-domain-usize|src/types/scalar.rs|RequestedSize::new|usize|",
+        "bare-domain-usize|src/platform/macos.rs|malloc_zone_malloc|usize|",
+        "bare-domain-usize|src/safe/allocation.rs|Allocation::with_size_align|usize|",
+        "bare-domain-usize|src/safe/heap.rs|HeapAllocation::resize_with_size_align|usize|",
+        "bare-domain-usize|src/allocator/tracking.rs|mi_track_malloc|usize|",
         "raw-pointer-parameter|src/allocator/aligned.rs|mi_padding_shrink_call|mi_block_t|",
         "raw-pointer-parameter|src/allocator/aligned.rs|mi_theap_malloc_zero_aligned_at|mi_theap_t|",
         "raw-pointer-parameter|src/allocator/aligned.rs|mi_heap_realloc_aligned|mi_heap_t|",

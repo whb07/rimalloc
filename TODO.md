@@ -3,8 +3,8 @@
 Fresh-eyes review after completing the previous TODO backlog on `master` at
 `0bcbd7a`. The previous backlog is implemented, validated, committed, and
 pushed. The next mechanical translation debt is concentrated in several
-still-broad medium clusters, the largest release-audit modules, and residual
-strict-type wildcard allowlist entries.
+still-broad medium clusters, the largest release-audit modules, and the single
+retained strict-type proof-model wildcard.
 
 Current review evidence:
 
@@ -45,21 +45,21 @@ Current review evidence:
   `os-memory-allocation-boundary` with 59 markers, and
   `init-thread-heap-tls-boundary` and `arena-heap-page-visitors` with 56
   markers each.
-- `strict-type-allowlist.txt` has 515 active entries: 323
-  raw-pointer-parameter entries, 131 bare-domain `usize` entries, 35
-  metadata-reference entries, 22 pointer/usize round-trip entries, 2
+- `strict-type-allowlist.txt` has 634 active entries: 335
+  raw-pointer-parameter entries, 220 bare-domain `usize` entries, 40
+  metadata-reference entries, 23 pointer/usize round-trip entries, 14
   atomic-cast entries, and 2 heap-allocating-type entries.
-- `strict-type-allowlist.txt` still has 26 wildcard entries: 13
-  bare-domain `usize` entries, 4 raw-pointer-parameter entries, 4
-  pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
-  entries, and 1 heap-allocating-type entry.
+- `strict-type-allowlist.txt` has 1 retained wildcard entry, the
+  `heap-allocating-type` Loom proof-model boundary in
+  `src/types/atomic/concurrency_models.rs`. The strict-type checker requires
+  this measured line in `TODO.md`: Strict-type wildcard guard: total=1; heap-allocating-type=1.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   module cap is now 700 lines; the largest modules are
   `unsafe_performance/page_arena_behavior.rs` at 656 lines,
   `release_policy/docs_and_linking.rs` at 633 lines,
+  `datatype_acceptance/strict_type.rs` at 589 lines,
   `release_policy/security.rs` at 526 lines,
   `release_policy/api_surface.rs` at 523 lines,
-  `datatype_acceptance/strict_type.rs` at 512 lines,
   `release_policy/release_process.rs` at 504 lines,
   `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 426 lines,
   `interposition_exports.rs` at 413 lines,
@@ -144,16 +144,16 @@ unsafe audit scripts, unsafe evidence scripts, full clippy, and full tests.
 
 ## Issue 4: Reduce strict-type wildcard debt
 
-> **Comment:** The strict-type checker still has 26 wildcard entries. These are
-> intentional compatibility seams, but wildcard allowlist entries hide whether a
-> path has accumulated new untyped code since the last review.
+> **Comment:** The strict-type checker had 26 wildcard entries. These were
+> intentional compatibility seams, but wildcard allowlist entries hid whether a
+> path accumulated new untyped code since the last review.
 
-- [ ] Replace wildcard entries with symbol-specific entries wherever the source
+- [x] Replace wildcard entries with symbol-specific entries wherever the source
       already has named compatibility functions or typed wrappers.
-- [ ] For retained wildcard entries, add release-audit evidence that proves the
+- [x] For retained wildcard entries, add release-audit evidence that proves the
       file is a raw ABI/platform/proof-fixture boundary and not a growing typed
       domain.
-- [ ] Add a strict-type guard that tracks the wildcard count by category and
+- [x] Add a strict-type guard that tracks the wildcard count by category and
       fails if the count grows without updating `TODO.md`.
 
 Verify: strict-type checks, datatype acceptance release-audit modules, full
@@ -164,7 +164,7 @@ formatting, full clippy, and full tests.
 1. [x] Split allocation ABI entry audit cluster.
 2. [x] Split broad runtime and internal marker clusters.
 3. [x] Split raw/POSIX, bitmap, and release-audit no-export modules.
-4. [ ] Reduce strict-type wildcard debt.
+4. [x] Reduce strict-type wildcard debt.
 
 ## Definition of done for this backlog
 
@@ -173,10 +173,10 @@ formatting, full clippy, and full tests.
       units with separate docs, evidence rows, and release-audit guards.
 - [x] Release-audit modules are split enough to lower the module cap to 700
       lines without weakening coverage.
-- [ ] Strict-type wildcard entries are reduced or guarded by category-specific
+- [x] Strict-type wildcard entries are reduced or guarded by category-specific
       evidence, and the wildcard count cannot grow silently.
-- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [ ] For every completed item, run `cargo fmt --all`,
+- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [x] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

@@ -241,6 +241,14 @@ Operation IDs:
   setup, typed subproc/thread-heap witness construction, statically linked
   assembly symbols, option/stat initialization ordering, and teardown paths
   while preserving idempotent initialization and no-unwind lifecycle behavior.
+- `SAFETY[AUDIT:allocation-entry-boundary]`: `src/allocator/alloc.rs` owns
+  malloc/calloc/realloc request construction, thread-heap and heap dispatch,
+  small-page allocation, zeroing, padding/provenance recovery, product
+  overflow checks, raw allocation exports, and new/nothrow shims. Unsafe
+  operations are limited to caller-proven raw allocation pointers, typed layout
+  witnesses, page/block metadata reached through allocator ownership, C ABI
+  entry points, and local test fixtures while preserving failure/null
+  semantics, realloc copy bounds, and no-allocation hot-path constraints.
 - `SAFETY[AUDIT:internal-bitmap-boundary]`: `src/internal/bitmap.rs` owns
   bitmap and binned-bitmap chunk maps, bit scanning, set/clear mutation,
   first-fit claim loops, arena traversal callbacks, and AVX2 bitmap helper

@@ -64,6 +64,10 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   teardown in `src/allocator/init.rs`. The boundary covers subproc identity,
   main heap and thread-heap TLS association, preloading gates, constructor and
   destructor hooks, CPU/random initialization, and raw lifecycle exports.
+- `SAFETY[AUDIT:allocation-entry-boundary]`: allocation entry points in
+  `src/allocator/alloc.rs`. The boundary covers malloc/calloc/realloc request
+  construction, heap/thread-heap dispatch, zeroing, padding/provenance recovery,
+  product overflow checks, raw allocation exports, and no-allocation hot paths.
 - `SAFETY[AUDIT:internal-bitmap-boundary]`: internal bitmap and binned-bitmap
   operations in `src/internal/bitmap.rs`. The boundary covers chunk/field
   projection, bit set/clear/search loops, arena traversal callbacks, typed

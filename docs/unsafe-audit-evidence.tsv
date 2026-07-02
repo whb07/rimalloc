@@ -48,6 +48,13 @@ init-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/li
 init-lifecycle-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks preloading state transitions, process init routing, and CPU feature setup order.
 init-lifecycle-boundary	test	src/allocator/init.rs	Exercises large-page process initialization and Linux main-theap TLS locality fixtures.
 init-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks init lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
+allocation-entry-boundary	test	tests/allocation_boundary_cases.rs	Exercises zero-size allocations, product overflow, calloc overflow, realloc preservation, and null realloc behavior.
+allocation-entry-boundary	test	tests/property_alloc_sequences.rs	Exercises seeded allocation and realloc/free sequences through the raw allocation entry points.
+allocation-entry-boundary	test	tests/fuzz_alloc_sequences.rs	Exercises byte-stream allocation programs over malloc/calloc/realloc/free entry behavior.
+allocation-entry-boundary	test	tests/no_allocation_critical_paths.rs	Checks allocator critical paths do not route through Rust's global allocator.
+allocation-entry-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks allocation marker coverage, migration allowlist removal, raw export shape, typed layout routing, and no-allocation hot-path evidence.
+allocation-entry-boundary	script	scripts/check-no-allocation-audit.py	Checks allocation hot paths avoid hidden Rust allocation and dynamic dispatch.
+allocation-entry-boundary	script	scripts/check-unsafe-audit.py	Checks allocation entry unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-bitmap-boundary	test	src/internal/bitmap.rs	Exercises bitmap set/clear accounting, binned-bitmap find/clear behavior, empty requests, and traversal callback fixtures.
 internal-bitmap-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks bitmap marker coverage, migration allowlist removal, helper shape, typed arena/range callbacks, out-of-range release branches, and binned first-fit wrappers.
 internal-bitmap-boundary	script	scripts/check-strict-types.py	Checks bitmap strict-type allowlist coverage remains explicit for translated C bitmap aliases.

@@ -160,6 +160,24 @@ fn free_path_internals_are_not_dynamic_exports() {
             && alloc_aligned_rs.contains("fn mi_padding_shrink_call("),
         "aligned allocation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/alloc.rs\t"))
+            && alloc_rs
+                .matches("SAFETY[AUDIT:allocation-entry-boundary]")
+                .count()
+                >= 160
+            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_malloc(")
+            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_calloc(")
+            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_realloc(")
+            && alloc_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero(")
+            && alloc_rs.contains("pub(crate) unsafe fn mi_theap_realloc_req(")
+            && alloc_rs.contains("pub(crate) fn calloc_request_or_report(")
+            && alloc_rs.contains("crate::core_types::LayoutRequest::from_padded_unchecked(")
+            && alloc_rs.contains("crate::core_types::PaddingCanary::from_page_block_keys("),
+        "allocation entry unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
 
     local_boundaries::assert_page_map_and_deferred_boundaries(local_boundaries::BoundarySources {
         page_map: &page_map,

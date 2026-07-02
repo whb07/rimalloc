@@ -7,9 +7,10 @@ at `da44c1a`. That pass moved `src/allocator/free.rs`,
 allowlist with local operation markers, audit evidence, release-audit guards,
 and full validation.
 
-This follow-up pass has now also moved `src/allocator/init.rs` and
-`src/internal/bitmap.rs` off the unsafe migration allowlist with local operation
-markers, audit evidence, release-audit guards, and focused behavior tests.
+This follow-up pass has now also moved `src/allocator/init.rs`,
+`src/internal/bitmap.rs`, and `src/allocator/alloc.rs` off the unsafe migration
+allowlist with local operation markers, audit evidence, release-audit guards,
+and focused behavior tests.
 
 The next pass should finish the same class of work: retire every remaining
 file-level unsafe migration allowance, one file at a time, while preserving raw
@@ -19,8 +20,8 @@ test exposes a concrete bug.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 5 entries: 3 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 5.
+- `docs/unsafe-migration-allowlist.tsv` has 4 entries: 2 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 4.
 - The just-completed pass moved `src/allocator/free.rs` to 69
   `SAFETY[AUDIT:free-path-boundary]` markers, `src/allocator/options.rs` to 76
   `SAFETY[AUDIT:options-callback-boundary]` markers,
@@ -33,9 +34,10 @@ Current review evidence:
 - The current pass moved `src/allocator/init.rs` to 277
   `SAFETY[AUDIT:init-lifecycle-boundary]` markers and
   `src/internal/bitmap.rs` to 71
-  `SAFETY[AUDIT:internal-bitmap-boundary]` markers.
+  `SAFETY[AUDIT:internal-bitmap-boundary]` markers. It also moved
+  `src/allocator/alloc.rs` to 166
+  `SAFETY[AUDIT:allocation-entry-boundary]` markers.
 - Remaining production allowlist entries with no local markers are
-  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits,
   `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits, and
   `src/allocator/arena.rs` at 3,915 lines with 607 `unsafe` hits.
 - Remaining translation allowlist entries with no local markers are
@@ -49,11 +51,12 @@ Current review evidence:
   `src/internal/mod.rs`, `src/platform/unix.rs`, `src/platform/windows.rs`,
   `src/allocator/stats.rs`, and `src/allocator/thread_heap.rs`, each with
   4 path-wide entries. `src/allocator/alloc.rs` and
-  `src/allocator/init.rs` each still have 3 path-wide entries; init is no
+  `src/allocator/init.rs` each still have 3 path-wide entries; both are no
   longer on the unsafe migration allowlist.
 - The largest unsafe audit marker clusters remain broad enough to split later:
   `SAFETY[AUDIT:init-lifecycle-boundary]` has 277 markers,
   `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers,
+  `SAFETY[AUDIT:allocation-entry-boundary]` has 166 markers,
   `SAFETY[AUDIT:stats-reporting-boundary]` has 161 markers,
   `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
   `SAFETY[AUDIT:aligned-allocation-boundary]` has 158 markers,
@@ -70,7 +73,7 @@ Current review evidence:
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers, and
   `SAFETY[AUDIT:free-path-boundary]` has 69 markers.
 - The release audit is split but still has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,464 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,482 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
   `tests/release_fast_path_audit.rs` is 1,935 lines,
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines, and
@@ -132,26 +135,28 @@ Verify: bitmap unit tests, bitmap release-audit module, strict-type checker,
 unsafe audit scripts, unsafe inventory regeneration/check, full clippy, and full
 tests.
 
-## Issue: Hot allocation entry boundary still uses a file-level unsafe allowance
+## Completed: Hot allocation entry boundary moved off the file-level unsafe allowance
 
 > **Comment:** `src/allocator/alloc.rs` owns malloc/calloc/realloc/product
 > allocation paths, heap and thread-heap dispatch, zeroing behavior, allocation
 > request construction, padding/provenance decisions, and raw allocation exports.
-> It is a hot path, so migration must keep code-shape and no-allocation evidence.
+> It now has local operation markers, evidence rows, release-audit guards, and
+> focused allocation behavior coverage instead of a file-level migration
+> allowance.
 
-- [ ] Add local `SAFETY[AUDIT:allocation-entry-boundary]` markers for malloc,
+- [x] Add local `SAFETY[AUDIT:allocation-entry-boundary]` markers for malloc,
       calloc, realloc, recalloc, reallocf/reallocn, heap allocation, thread-heap
       allocation, product overflow, zero-size behavior, padding/provenance
       recovery, new/new-nothrow shims, and raw allocation exports.
-- [ ] Preserve null/zero-size behavior, overflow detection, allocation failure
+- [x] Preserve null/zero-size behavior, overflow detection, allocation failure
       semantics, realloc copy bounds, old-pointer validation, guarded and
       aligned handoff behavior, heap ownership, no hidden Rust allocation, and
       no dynamic dispatch on hot allocation paths.
-- [ ] Add or extend release-audit assertions and focused tests for marker
+- [x] Add or extend release-audit assertions and focused tests for marker
       coverage, no migration allowlist entry, product overflow, realloc
       preservation, raw export signatures, no-allocation critical paths, and
       assembly/benchmark evidence for fast allocation helpers.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/allocator/alloc.rs` from the unsafe migration allowlist, regenerate
       unsafe inventory, and lower the cap.
 
@@ -271,7 +276,7 @@ and full tests.
 
 1. [x] Migrate `src/allocator/init.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/internal/bitmap.rs` off the unsafe migration allowlist.
-3. [ ] Migrate `src/allocator/alloc.rs` off the unsafe migration allowlist.
+3. [x] Migrate `src/allocator/alloc.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/page.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/allocator/arena.rs` off the unsafe migration allowlist.
 6. [ ] Migrate `src/internal/mod.rs` off the unsafe migration allowlist.
@@ -281,7 +286,7 @@ and full tests.
 
 - [ ] The unsafe migration allowlist cap is lowered after each migrated file and
       reaches zero when the final entry is removed.
-- [ ] The completed init and bitmap migrations plus all 5 remaining
+- [ ] The completed init, bitmap, and allocation migrations plus all 4 remaining
       allowlisted files are covered by operation-level audit markers, source
       audit entries, evidence rows, release-audit guards, and focused behavior
       tests instead of file-level migration exceptions.

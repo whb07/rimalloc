@@ -1089,11 +1089,27 @@ Operation IDs:
   Unsafe operations are limited to raw block-link reads and writes, page-local
   encoded pointer helpers, non-null block witness construction after null
   checks, and free-list pop/push conversions that preserve upstream layout.
-- `SAFETY[AUDIT:typed-heap-test-fixtures]`: `src/types/heap/tests.rs` builds
-  stack-local heap, thread-heap, and TLD metadata to exercise heap witness
-  constructors and thread-local promotion checks. Real heaps allocated by the
-  tests are released exactly once, and stack-local records are used only while
-  their fixtures are live.
+- `SAFETY[AUDIT:typed-main-heap-test-fixtures]`:
+  `src/types/heap/tests.rs` exercises main-heap witness construction from the
+  allocator-owned process heap and verifies that main heaps cannot become owned
+  deletion witnesses.
+- `SAFETY[AUDIT:typed-owned-heap-test-fixtures]`:
+  `src/types/heap/tests.rs` allocates real non-main heaps to exercise owned-heap
+  witness acceptance and main-heap rejection. Each real heap is released exactly
+  once before the test returns.
+- `SAFETY[AUDIT:typed-borrowed-heap-test-fixtures]`:
+  `src/types/heap/tests.rs` builds stack-local heap identity records and real
+  heap lookup/allocation pointers to exercise borrowed-heap constructors, null
+  rejection, and pointer preservation without transferring free ownership.
+- `SAFETY[AUDIT:typed-thread-heap-state-test-fixtures]`:
+  `src/types/heap/tests.rs` builds stack-local thread-heap records to exercise
+  initialized, uninitialized, deleted, main, and borrowed thread-heap state
+  classification. Stack-local records are used only while their fixtures are
+  live.
+- `SAFETY[AUDIT:typed-thread-local-heap-test-fixtures]`:
+  `src/types/heap/tests.rs` builds stack-local TLD and thread-heap metadata to
+  exercise local-thread promotion success and rejection. Real non-main heaps are
+  released exactly once after the thread-local fixture is consumed.
 - `SAFETY[AUDIT:typed-heap-domain]`: `src/types/heap.rs` owns heap,
   thread-heap, and subproc witness construction. Unsafe operations are limited
   to classifying initialized heap metadata, projecting heap and TLD pointers
@@ -1175,12 +1191,30 @@ Operation IDs:
   page links, queue counts, optional block-size domains, and lint-touch
   function references while preserving queue sentinel and block-size
   invariants.
-- `SAFETY[AUDIT:typed-pointer-test-fixtures]`: `src/types/ptr/tests.rs`
-  builds stack-local page, block, heap, thread-heap, TLD, arena, subproc, and
-  page-queue metadata to exercise pointer wrapper field accessors and exposed
-  address arithmetic. The fixtures remain stack-local, are not registered with
-  allocator globals, and use non-dereferenced extreme/dangling pointers only
-  for checked overflow and underflow cases.
+- `SAFETY[AUDIT:typed-page-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` builds stack-local page metadata to exercise
+  `PagePtr` field, free-list head, atomic ownership, remote-free, and key
+  accessors without registering the page with allocator globals.
+- `SAFETY[AUDIT:typed-block-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` builds stack-local block and page-key fixtures to
+  exercise `BlockPtr` encoded-link read, write, clear, and next-pointer helper
+  behavior.
+- `SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` builds stack-local heap, thread-heap, TLD, page,
+  arena, and subproc records to exercise `HeapPtr`, `ThreadHeapPtr`, and
+  `TldPtr` metadata fields while all stored pointers remain live.
+- `SAFETY[AUDIT:typed-arena-subproc-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` builds stack-local arena, subproc, heap, page, and
+  bitmap records to exercise arena/subproc pointer fields, counters, locks,
+  memid, stats, and table accessors.
+- `SAFETY[AUDIT:typed-page-queue-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` builds stack-local page-queue and page records to
+  exercise first/last page links, counts, optional block sizes, and clearing
+  behavior.
+- `SAFETY[AUDIT:typed-provenance-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` uses stack-local byte buffers plus non-dereferenced
+  extreme or dangling pointer witnesses to exercise checked page/slice/OS
+  pointer offsets and exposed-address provenance helpers.
 - `SAFETY[AUDIT:typed-scalar-test-fixtures]`:
   `src/types/scalar/tests.rs` uses concrete raw scalar values to exercise
   unchecked constructor boundaries, overflow reporting, and table-index

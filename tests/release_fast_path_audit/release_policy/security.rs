@@ -360,6 +360,50 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
             "typed-page-queue-accessors",
             "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs",
         ),
+        (
+            "typed-page-pointer-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-block-pointer-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-heap-thread-tld-pointer-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-arena-subproc-pointer-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-page-queue-pointer-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-provenance-pointer-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-main-heap-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-owned-heap-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-borrowed-heap-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-thread-heap-state-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
+        (
+            "typed-thread-local-heap-test-fixtures",
+            "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs",
+        ),
     ] {
         let row_prefix = format!("{audit_id}\ttest\t{focused_path}\t");
         assert!(
@@ -423,6 +467,17 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         "typed-arena-accessors",
         "typed-subproc-accessors",
         "typed-page-queue-accessors",
+        "typed-page-pointer-test-fixtures",
+        "typed-block-pointer-test-fixtures",
+        "typed-heap-thread-tld-pointer-test-fixtures",
+        "typed-arena-subproc-pointer-test-fixtures",
+        "typed-page-queue-pointer-test-fixtures",
+        "typed-provenance-pointer-test-fixtures",
+        "typed-main-heap-test-fixtures",
+        "typed-owned-heap-test-fixtures",
+        "typed-borrowed-heap-test-fixtures",
+        "typed-thread-heap-state-test-fixtures",
+        "typed-thread-local-heap-test-fixtures",
     ];
     let stale_paths = [
         "tests/release_fast_path_audit.rs",

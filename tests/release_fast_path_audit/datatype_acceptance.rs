@@ -19,6 +19,8 @@ impl<'a> DatatypeAcceptanceSources<'a> {
 mod callbacks;
 #[path = "datatype_acceptance/domain_wrappers.rs"]
 mod domain_wrappers;
+#[path = "datatype_acceptance/fixture_audit.rs"]
+mod fixture_audit;
 #[path = "datatype_acceptance/heap_lifecycle.rs"]
 mod heap_lifecycle;
 #[path = "datatype_acceptance/padding_and_page_state.rs"]
@@ -36,6 +38,7 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
     domain_wrappers::assert_domain_wrapper_acceptance(&audit_sources);
     heap_lifecycle::assert_heap_lifecycle_acceptance(&audit_sources);
     page_queues::assert_page_queue_and_memid_acceptance(&audit_sources);
+    fixture_audit::assert_typed_fixture_audit_splits(&audit_sources);
     strict_type::assert_strict_type_and_provenance_acceptance(&audit_sources);
     callbacks::assert_callback_acceptance(&audit_sources);
     padding_and_page_state::assert_padding_and_page_state_acceptance(&audit_sources);

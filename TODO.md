@@ -9,17 +9,21 @@ plus two release-audit modules that block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 216 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 216 operation IDs with
-  487 automated evidence rows.
-- The largest source audit operation IDs are `typed-pointer-test-fixtures` with
-  87 markers, `macos-zone-override` with 83 markers, `free-path-boundary` with
-  69 markers, `aligned-heap-allocation-boundary` with 68 markers,
+  mentions, and 225 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 225 operation IDs with
+  507 automated evidence rows.
+- The largest source audit operation IDs are `macos-zone-override` with 83
+  markers, `free-path-boundary` with 69 markers,
+  `aligned-heap-allocation-boundary` with 68 markers,
   `aligned-realloc-boundary` with 67 markers, `page-map-register-boundary` with
   66 markers, `internal-atomic-field-boundary` with 65 markers,
-  `os-memory-allocation-boundary` with 59 markers,
-  `arena-heap-page-visitors` and `init-thread-heap-tls-boundary` with 56
-  markers each, and `typed-heap-test-fixtures` with 55 markers.
+  `os-memory-allocation-boundary` with 59 markers, and
+  `arena-heap-page-visitors` and `init-thread-heap-tls-boundary` with 56 markers
+  each.
+- The completed typed fixture split left the largest new fixture IDs at
+  `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers,
+  `typed-arena-subproc-pointer-test-fixtures` with 17 markers, and
+  `typed-thread-heap-state-test-fixtures` with 15 markers.
 - The largest remaining medium clusters are `platform-tls-primitives` with 54
   markers, `typed-atomic-domain` with 51 markers, `threadlocal-key-manager` and
   `ffi-libc-helpers` with 50 markers each, `page-queue-transition-boundary`
@@ -39,7 +43,7 @@ Current review evidence:
   `unsafe_performance/page_arena_behavior.rs` at 656 lines,
   `release_policy/docs_and_linking.rs` at 633 lines,
   `datatype_acceptance/strict_type.rs` at 592 lines,
-  `release_policy/security.rs` at 526 lines,
+  `release_policy/security.rs` at 581 lines,
   `release_policy/api_surface.rs` at 523 lines,
   `release_policy/release_process.rs` at 504 lines,
   `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 426 lines,
@@ -56,17 +60,17 @@ Current review evidence:
 
 ## Issue 1: Split typed pointer and heap proof-fixture audit clusters
 
-> **Comment:** `typed-pointer-test-fixtures` has 87 markers in
-> `src/types/ptr/tests.rs`, and `typed-heap-test-fixtures` has 55 markers. These
-> are proof fixtures, but one operation ID per whole fixture file makes pointer
+> **Comment:** `typed-pointer-test-fixtures` had 87 markers in
+> `src/types/ptr/tests.rs`, and `typed-heap-test-fixtures` had 55 markers. These
+> were proof fixtures, but one operation ID per whole fixture file made pointer
 > family regressions harder to review.
 
-- [ ] Split `typed-pointer-test-fixtures` by pointer family and proof purpose:
+- [x] Split `typed-pointer-test-fixtures` by pointer family and proof purpose:
       page fields, block links, heap/thread-heap/TLD fields, arena/subproc
       fields, page-queue fields, and exposed-address/provenance arithmetic.
-- [ ] Split `typed-heap-test-fixtures` by ownership witness type: main heap,
+- [x] Split `typed-heap-test-fixtures` by ownership witness type: main heap,
       owned heap, borrowed heap, thread-heap state, and thread-local promotion.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
       release-audit guards so each new proof-fixture operation ID is named and
       counted independently.
 
@@ -158,7 +162,7 @@ tests.
 
 ## Suggested implementation order
 
-1. [ ] Split typed pointer and heap proof-fixture audit clusters.
+1. [x] Split typed pointer and heap proof-fixture audit clusters.
 2. [ ] Split macOS zone and platform primitive marker clusters.
 3. [ ] Split free-path and aligned allocation marker clusters.
 4. [ ] Split page-map registration and internal atomic marker clusters.
@@ -167,8 +171,8 @@ tests.
 ## Definition of done for this backlog
 
 - [ ] No source audit operation ID has more than 60 source markers.
-- [ ] The largest platform, free/aligned allocation, page-map, atomic, and typed
-      fixture clusters listed above are split into narrower review units with
+- [ ] The largest remaining platform, free/aligned allocation, page-map, and
+      atomic clusters listed above are split into narrower review units with
       separate docs, evidence rows, and release-audit guards.
 - [ ] Release-audit modules are split enough to lower the module cap to 600
       lines without weakening coverage.

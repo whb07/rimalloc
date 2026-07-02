@@ -432,7 +432,16 @@ typed-freelist-test-fixtures	test	src/types/freelist/tests.rs	Exercises stack-lo
 typed-freelist-wrappers	test	src/types/freelist_wrappers/tests.rs	Exercises encoded pointer, block tag, available-list pop, and local-list push wrappers.
 typed-freelist-wrapper-test-fixtures	test	src/types/freelist_wrappers/tests.rs	Exercises stack-local page/block metadata for encoded pointer, block tag, available-list, and local-list wrapper fixtures.
 typed-heap-domain	test	src/types/heap/tests.rs	Exercises main, owned, borrowed, initialized, uninitialized, deleted, and local thread-heap witness classification.
-typed-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises stack-local heap, thread-heap, and TLD metadata plus real heap allocation/deletion witness checks.
+typed-main-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises main-heap witness construction from the allocator-owned process heap and main-heap rejection from owned deletion witnesses.
+typed-main-heap-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts main-heap fixture audit markers and rejects the old aggregate typed heap fixture marker.
+typed-owned-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises owned-heap witness rejection of the main heap and acceptance/release of real non-main heaps.
+typed-owned-heap-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts owned-heap fixture audit markers and rejects the old aggregate typed heap fixture marker.
+typed-borrowed-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises borrowed-heap null rejection, stack-local heap identity fixtures, and raw allocation/lookup pointer preservation.
+typed-borrowed-heap-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts borrowed-heap fixture audit markers and rejects the old aggregate typed heap fixture marker.
+typed-thread-heap-state-test-fixtures	test	src/types/heap/tests.rs	Exercises initialized, uninitialized, deleted, main, and borrowed thread-heap state classification using stack-local metadata.
+typed-thread-heap-state-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts thread-heap state fixture audit markers and rejects the old aggregate typed heap fixture marker.
+typed-thread-local-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises thread-local heap promotion success and rejection using stack-local TLD metadata plus real non-main heap ownership.
+typed-thread-local-heap-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts thread-local promotion fixture audit markers and rejects the old aggregate typed heap fixture marker.
 typed-layout-domain	test	src/types/layout/tests.rs	Exercises layout normalization, checked product constructors, realloc witnesses, preserve-byte bounds, and generic flag packing.
 typed-layout-domain	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks allocation layout wrappers stay typed and preserve the documented TYPES_SPEC contract.
 typed-layout-test-fixtures	test	src/types/layout/tests.rs	Exercises concrete valid unchecked scalar values and non-dereferenced pointer witnesses for layout/realloc request fixtures.
@@ -471,7 +480,18 @@ typed-subproc-accessors	script	scripts/check-unsafe-audit.py	Checks typed subpro
 typed-page-queue-accessors	test	src/types/ptr/tests.rs	Exercises PageQueuePtr first/last page, count, and optional block-size accessors.
 typed-page-queue-accessors	test	tests/release_fast_path_audit/datatype_acceptance/strict_type.rs	Checks PageQueuePtr accessors stay transparent, inlineable, locally audited, and off the migration allowlist.
 typed-page-queue-accessors	script	scripts/check-unsafe-audit.py	Checks typed page-queue pointer unsafe operations retain operation-level SAFETY markers and source audit coverage.
-typed-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises stack-local allocator metadata pointer wrappers, raw field accessors, and exposed-address pointer arithmetic fixtures.
+typed-page-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises stack-local page metadata fixtures for PagePtr field, free-list, atomic ownership, remote-free, and key accessors.
+typed-page-pointer-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts page pointer fixture audit markers and rejects the old aggregate typed pointer fixture marker.
+typed-block-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises stack-local page and block fixtures for BlockPtr encoded-link read, write, clear, and next-pointer helpers.
+typed-block-pointer-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts block pointer fixture audit markers and rejects the old aggregate typed pointer fixture marker.
+typed-heap-thread-tld-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises stack-local heap, thread-heap, and TLD pointer fixtures plus their live stored pointer fields.
+typed-heap-thread-tld-pointer-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts heap/thread/TLD pointer fixture audit markers and rejects the old aggregate typed pointer fixture marker.
+typed-arena-subproc-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises stack-local arena and subproc pointer fixtures, counters, locks, table entries, memid, stats, and bitmap fields.
+typed-arena-subproc-pointer-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts arena/subproc pointer fixture audit markers and rejects the old aggregate typed pointer fixture marker.
+typed-page-queue-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises stack-local page queue fixtures for first/last links, counts, optional block sizes, and clearing behavior.
+typed-page-queue-pointer-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts page-queue pointer fixture audit markers and rejects the old aggregate typed pointer fixture marker.
+typed-provenance-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises checked page/slice/OS pointer offsets, non-dereferenced overflow/underflow fixtures, and exposed-address provenance helpers.
+typed-provenance-pointer-test-fixtures	test	tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs	Counts provenance pointer fixture audit markers and rejects the old aggregate typed pointer fixture marker.
 typed-scalar-test-fixtures	test	src/types/scalar/tests.rs	Exercises concrete unchecked scalar constructor fixtures, overflow assertions, and table-index boundary checks.
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
 typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page metadata and registered-range witness fixture construction.

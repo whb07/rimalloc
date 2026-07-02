@@ -37,6 +37,27 @@ Release-audit evidence rows should cite the focused module that owns the
 assertion under `tests/release_fast_path_audit/` instead of an aggregate harness
 file when such a module exists.
 
+## Typed Fixture Audit Tags
+
+Typed proof fixtures are split by the invariant under test instead of by source
+file:
+
+- `SAFETY[AUDIT:typed-page-pointer-test-fixtures]`,
+  `SAFETY[AUDIT:typed-block-pointer-test-fixtures]`,
+  `SAFETY[AUDIT:typed-heap-thread-tld-pointer-test-fixtures]`,
+  `SAFETY[AUDIT:typed-arena-subproc-pointer-test-fixtures]`,
+  `SAFETY[AUDIT:typed-page-queue-pointer-test-fixtures]`, and
+  `SAFETY[AUDIT:typed-provenance-pointer-test-fixtures]` cover
+  `src/types/ptr/tests.rs` stack-local metadata, encoded-link, accessor, queue,
+  and exposed-address/provenance fixtures independently.
+- `SAFETY[AUDIT:typed-main-heap-test-fixtures]`,
+  `SAFETY[AUDIT:typed-owned-heap-test-fixtures]`,
+  `SAFETY[AUDIT:typed-borrowed-heap-test-fixtures]`,
+  `SAFETY[AUDIT:typed-thread-heap-state-test-fixtures]`, and
+  `SAFETY[AUDIT:typed-thread-local-heap-test-fixtures]` cover
+  `src/types/heap/tests.rs` main, owned, borrowed, thread-heap state, and
+  thread-local promotion witnesses independently.
+
 ## Boundary Audit Tags
 
 - `SAFETY[AUDIT:global-alloc]`: the `MiMalloc` `GlobalAlloc` facade. Callers

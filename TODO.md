@@ -61,7 +61,7 @@ Current review evidence:
   `SAFETY[AUDIT:page-count-accessors]` has 22 markers.
 - The release audit still has large review units:
   `tests/release_fast_path_audit.rs` is 2,893 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,583 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,561 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
   is 662 lines,
@@ -69,9 +69,11 @@ Current review evidence:
   207 lines,
   `tests/release_fast_path_audit/release_policy/security.rs` is 181 lines,
   `tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is
-  162 lines, and
+  162 lines,
   `tests/release_fast_path_audit/unsafe_performance/size_class_boundaries.rs`
-  is 132 lines.
+  is 132 lines, and
+  `tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs` is
+  56 lines.
 - The heap visit/delete/move/destroy cluster now lives in
   `src/allocator/arena/heap_pages.rs` around `mi_heap_visit_info_t`,
   `mi_heap_delete_visit_info_t`, `_mi_heap_visit_blocks`,
@@ -145,18 +147,18 @@ full tests.
 
 ## Issue: Release audit unsafe_performance.rs still carries broad source assertions
 
-> **Comment:** `unsafe_performance.rs` is still 2,583 lines. The next split
-> should move one cohesive arena, atomic, or OS assertion cluster into a child
-> module while keeping the root audit test readable.
+> **Comment:** The heap-page visitor assertion cluster now lives in
+> `tests/release_fast_path_audit/unsafe_performance/heap_page_visitors.rs`.
+> The root audit keeps borrowed source strings and is down to 2,561 lines.
 
-- [ ] Inventory assertion sections in `unsafe_performance.rs`, prioritizing
+- [x] Inventory assertion sections in `unsafe_performance.rs`, prioritizing
       arena heap-visitor assertions, atomic wrapper assertions, or OS/page-map
       assertion clusters.
-- [ ] Move one cohesive cluster into a new or existing file under
+- [x] Move one cohesive cluster into a new or existing file under
       `tests/release_fast_path_audit/unsafe_performance/`.
-- [ ] Pass borrowed source strings rather than duplicating large file reads.
-- [ ] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
-- [ ] Preserve the release audit test count and coverage intent.
+- [x] Pass borrowed source strings rather than duplicating large file reads.
+- [x] Update `RELEASE_AUDIT_MODULES` and this TODO evidence.
+- [x] Preserve the release audit test count and coverage intent.
 
 Verify: `cargo test --test release_fast_path_audit --all-features`,
 `git diff --check`, full clippy, and full tests.
@@ -188,7 +190,7 @@ full tests.
 1. [x] Migrate `src/types/atomic/tests.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/internal/random.rs` off the unsafe migration allowlist.
 3. [x] Split the arena heap visit/delete/move/destroy cluster.
-4. [ ] Split one more `unsafe_performance.rs` assertion cluster.
+4. [x] Split one more `unsafe_performance.rs` assertion cluster.
 5. [ ] Narrow broad arena strict-type entries after the arena split.
 
 ## Definition of done for this backlog
@@ -199,6 +201,6 @@ full tests.
       audit markers and evidence.
 - [x] `src/allocator/arena.rs` is smaller again without API, ABI, or hot-path
       performance drift.
-- [ ] One release-audit module has more review margin.
+- [x] One release-audit module has more review margin.
 - [ ] Broad arena strict-type documentation is narrower where the code now has
       child-module boundaries.

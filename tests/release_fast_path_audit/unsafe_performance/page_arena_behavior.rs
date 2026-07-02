@@ -43,6 +43,7 @@ pub(super) fn assert_page_arena_behavior_boundaries(sources: &UnsafePerformanceS
     let arena_debug_rs = sources.arena_debug_rs.as_str();
     let arena_heap_pages_rs = sources.arena_heap_pages_rs.as_str();
     let bitmap_rs = sources.bitmap_rs.as_str();
+    let bitmap_boundary_rs = format!("{bitmap_rs}\n{}", sources.bitmap_chunkmap_rs);
     let callbacks_rs = sources.callbacks_rs.as_str();
     let freelist_types = sources.freelist_types.as_str();
     let page_rs = sources.page_rs.as_str();
@@ -50,6 +51,7 @@ pub(super) fn assert_page_arena_behavior_boundaries(sources: &UnsafePerformanceS
     let page_flags_rs = sources.page_flags_rs.as_str();
     let page_queues_rs = sources.page_queues_rs.as_str();
     let page_states_rs = sources.page_states_rs.as_str();
+    let page_stats_bin_rs = sources.page_stats_bin_rs.as_str();
     let page_validation_rs = sources.page_validation_rs.as_str();
     let threadlocal_rs = sources.threadlocal_rs.as_str();
 
@@ -94,19 +96,20 @@ pub(super) fn assert_page_arena_behavior_boundaries(sources: &UnsafePerformanceS
         page_queues_rs,
         page_rs,
         page_states_rs,
+        page_stats_bin_rs,
         page_validation_rs,
         theap_rs: sources.theap_rs,
     });
 
     bitmap_boundaries::assert_bitmap_traversal_and_regular_boundaries(
-        bitmap_rs,
+        &bitmap_boundary_rs,
         unsafe_allowlist,
         sources.arena_rs,
         arena_heap_pages_rs,
         callbacks_rs,
         threadlocal_rs,
     );
-    bitmap_boundaries::assert_bitmap_helper_boundaries(bitmap_rs);
+    bitmap_boundaries::assert_bitmap_helper_boundaries(&bitmap_boundary_rs);
     arena_helpers::assert_arena_helper_boundaries(
         sources.arena_rs,
         arena_debug_rs,

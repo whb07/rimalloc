@@ -14,6 +14,7 @@ pub(super) struct BoundarySources<'a> {
     pub(super) page_queues_rs: &'a str,
     pub(super) page_rs: &'a str,
     pub(super) page_states_rs: &'a str,
+    pub(super) page_stats_bin_rs: &'a str,
     pub(super) page_validation_rs: &'a str,
     pub(super) theap_rs: &'a str,
 }
@@ -32,9 +33,11 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
         page_queues_rs,
         page_rs,
         page_states_rs,
+        page_stats_bin_rs,
         page_validation_rs,
         theap_rs,
     } = sources;
+    let page_boundary_rs = format!("{page_rs}\n{page_stats_bin_rs}");
 
     release_abandon::assert_page_release_and_abandon_boundaries(
         page_rs,
@@ -60,7 +63,8 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
                 .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_init(")
             && page_rs
                 .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_queue_is_valid(")
-            && page_rs.contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_stats_bin(")
+            && page_boundary_rs
+                .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_stats_bin(")
             && page_rs
                 .contains("#[inline(never)]\npub unsafe extern \"C\" fn _mi_page_queue_append(")
             && page_rs.contains("static MI_PAGE_QUEUE_IS_VALID_KEEP")

@@ -4,6 +4,7 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
     let unsafe_allowlist = sources.unsafe_allowlist.as_str();
     let page_map = sources.page_map.as_str();
     let internal = sources.internal.as_str();
+    let internal_boundary = format!("{internal}\n{}", sources.internal_page_flags_rs);
     let alloc_rs = sources.alloc_rs.as_str();
     let arena_rs = sources.arena_rs.as_str();
     let arena_debug_rs = sources.arena_debug_rs.as_str();
@@ -15,6 +16,7 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
     let init_rs = sources.init_rs.as_str();
     let page_rs = sources.page_rs.as_str();
     let raw_macros_rs = sources.raw_macros_rs.as_str();
+    let raw_facade_rs = format!("{raw_macros_rs}\n{}", sources.raw_header_forwarding_rs);
     let theap_rs = sources.theap_rs.as_str();
 
     let raw_macro_marker_minimums = [
@@ -47,7 +49,7 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
 
     for (audit_id, minimum) in raw_macro_marker_minimums {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
-        let count = raw_macros_rs.matches(&marker).count();
+        let count = raw_facade_rs.matches(&marker).count();
         assert!(
             count >= minimum,
             "raw macro facade should retain at least {minimum} {audit_id} markers; found {count}"
@@ -58,7 +60,7 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/internal/mod.rs\t"))
-            && !internal.contains("SAFETY[AUDIT:internal-translation-boundary]")
+            && !internal_boundary.contains("SAFETY[AUDIT:internal-translation-boundary]")
             && internal.contains("unsafe extern \"C\" {")
             && internal.contains("pub unsafe fn _mi_ptr_page(p: *const c_void) -> *mut mi_page_t")
             && internal.contains("pub unsafe fn _mi_checked_ptr_page(p: *const c_void)")
@@ -66,8 +68,9 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && internal.contains("pub(crate) unsafe fn mi_page_block_size_typed(")
             && internal.contains("pub unsafe fn mi_page_start(page: *const mi_page_t)")
             && internal.contains("pub unsafe fn mi_page_slice_start(page: *const mi_page_t)")
-            && internal.contains("pub unsafe fn mi_page_thread_free(page: *const mi_page_t)")
-            && internal.contains("pub unsafe fn mi_page_is_owned(page: *const mi_page_t)")
+            && internal_boundary
+                .contains("pub unsafe fn mi_page_thread_free(page: *const mi_page_t)")
+            && internal_boundary.contains("pub unsafe fn mi_page_is_owned(page: *const mi_page_t)")
             && internal.contains("pub(crate) unsafe fn mi_page_claim_ownership(")
             && internal.contains("pub unsafe fn mi_block_next(")
             && internal.contains("pub unsafe fn mi_block_set_next(")
@@ -77,7 +80,7 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && internal.contains(
                 "crate::core_types::AtomicPtrField(ptr::addr_of!((*theap).heap).cast_mut())"
             )
-            && internal.contains(
+            && internal_boundary.contains(
                 "crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField("
             )
             && internal.contains("unsafe fn mi_cpu_movsb_max() -> usize")
@@ -100,62 +103,62 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
         ("internal-block-link-boundary", 13),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
-        let count = internal.matches(&marker).count();
+        let count = internal_boundary.matches(&marker).count();
         assert!(
             count >= minimum,
             "internal unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
         );
     }
     assert!(
-        !internal.contains("SAFETY[AUDIT:internal-page-metadata-boundary]"),
+        !internal_boundary.contains("SAFETY[AUDIT:internal-page-metadata-boundary]"),
         "internal page metadata helpers should stay split into focused operation markers"
     );
     assert!(
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/raw/macros.rs\t"))
-            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
-            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-bootstrap-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-fast-override-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-macos-interpose-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-windows-crt-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-windows-aligned-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-core-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-string-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-realloc-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-cfree-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-wasi-libc-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-linux-libc-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-delete-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-array-delete-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-delete-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-new64-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-new32-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-operator-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-new-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")
-            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
-            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-boundary]")
-            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]")
-            && raw_macros_rs.contains("core::arch::global_asm!(")
-            && raw_macros_rs.contains("mod unix_bootstrap")
-            && raw_macros_rs.contains("if crate::internal::_mi_preloading()")
-            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
-            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_cxx_delete")
-            && raw_macros_rs.contains("pub unsafe fn mi_forward1")
-            && raw_macros_rs.contains("pub unsafe fn mi_malloc_size_forward")
-            && raw_macros_rs.contains("pub unsafe fn mi_unix_malloc(")
-            && raw_macros_rs.contains("pub unsafe fn mi_unix_posix_memalign")
-            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_unix_malloc_export")
-            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_wasi_libc_malloc_export")
-            && raw_macros_rs.contains("pub unsafe extern \"C\" fn mi_linux_libc_malloc_export"),
+            && !raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
+            && !raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-bootstrap-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-fast-override-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-macos-interpose-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-windows-crt-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-windows-aligned-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-unix-core-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-unix-string-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-unix-realloc-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-unix-page-aligned-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-unix-aligned-posix-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-unix-cfree-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-unix-product-realloc-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-wasi-libc-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-linux-libc-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-linux-libc-aligned-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-allocation-query-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-delete-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-array-delete-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-delete-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-new64-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-new32-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-operator-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-new-boundary]")
+            && raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")
+            && !raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
+            && !raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-boundary]")
+            && !raw_facade_rs.contains("SAFETY[AUDIT:raw-macro-cxx-aligned-boundary]")
+            && raw_facade_rs.contains("core::arch::global_asm!(")
+            && raw_facade_rs.contains("mod unix_bootstrap")
+            && raw_facade_rs.contains("if crate::internal::_mi_preloading()")
+            && raw_facade_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
+            && raw_facade_rs.contains("pub unsafe extern \"C\" fn mi_cxx_delete")
+            && raw_facade_rs.contains("pub unsafe fn mi_forward1")
+            && raw_facade_rs.contains("pub unsafe fn mi_malloc_size_forward")
+            && raw_facade_rs.contains("pub unsafe fn mi_unix_malloc(")
+            && raw_facade_rs.contains("pub unsafe fn mi_unix_posix_memalign")
+            && raw_facade_rs.contains("pub unsafe extern \"C\" fn mi_unix_malloc_export")
+            && raw_facade_rs.contains("pub unsafe extern \"C\" fn mi_wasi_libc_malloc_export")
+            && raw_facade_rs.contains("pub unsafe extern \"C\" fn mi_linux_libc_malloc_export"),
         "raw macro allocation facade unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
 

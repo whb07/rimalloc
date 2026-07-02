@@ -23,10 +23,10 @@ fn strict_type_allowlist_inventory_stays_measured_by_concern() {
 
     assert_eq!(
         entries.len(),
-        634,
+        632,
         "strict-type allowlist active entry count drifted"
     );
-    assert_eq!(kind_counts.get("raw-pointer-parameter"), Some(&332));
+    assert_eq!(kind_counts.get("raw-pointer-parameter"), Some(&330));
     assert_eq!(kind_counts.get("bare-domain-usize"), Some(&220));
     assert_eq!(kind_counts.get("metadata-reference"), Some(&40));
     assert_eq!(kind_counts.get("pointer-usize-roundtrip"), Some(&23));
@@ -45,7 +45,7 @@ fn strict_type_allowlist_inventory_stays_measured_by_concern() {
         "TODO.md",
         &todo,
         &[
-            "has 634 active entries: 332\n  raw-pointer-parameter entries, 220 bare-domain-usize entries, 40\n  metadata-reference entries",
+            "has 632 active entries: 330\n  raw-pointer-parameter entries, 220 bare-domain-usize entries, 40\n  metadata-reference entries",
             "23 pointer-usize-roundtrip entries, 14 atomic-cast\n  entries, and 5 heap-allocating-type entries",
             "It has no retained wildcard\n  entries",
             "Strict-type wildcard guard: total=0; none.",
@@ -56,8 +56,8 @@ fn strict_type_allowlist_inventory_stays_measured_by_concern() {
         &strict_docs,
         &[
             "## Strict-Type Allowlist Governance",
-            "634 active entries",
-            "332 raw-pointer-parameter",
+            "632 active entries",
+            "330 raw-pointer-parameter",
             "zero wildcard entries",
             "zero removable entries",
         ],

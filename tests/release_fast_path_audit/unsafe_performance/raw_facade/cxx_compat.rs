@@ -2,6 +2,7 @@ use super::*;
 
 pub(super) fn assert_cxx_compatibility_boundaries(sources: &UnsafePerformanceSources) {
     let alloc_rs = sources.alloc_rs.as_str();
+    let alloc_cxx_new_rs = sources.alloc_cxx_new_rs.as_str();
     let raw_macros_rs = sources.raw_macros_rs.as_str();
 
     assert!(
@@ -48,10 +49,11 @@ pub(super) fn assert_cxx_compatibility_boundaries(sources: &UnsafePerformanceSou
     assert!(
         alloc_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn mi_theap_try_new")
             && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_try_new")
-            && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_try_new")
+            && alloc_cxx_new_rs
+                .contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_try_new")
             && alloc_rs.contains("static MI_THEAP_TRY_NEW_KEEP")
             && alloc_rs.contains("static MI_TRY_NEW_KEEP")
-            && alloc_rs.contains("static MI_HEAP_TRY_NEW_KEEP"),
+            && alloc_cxx_new_rs.contains("static MI_HEAP_TRY_NEW_KEEP"),
         "C++ new retry paths should keep separate thread-heap, default-heap, and explicit-heap helper boundaries"
     );
 }

@@ -2,10 +2,12 @@ pub(super) fn assert_page_reclaim_atomic_paths(
     page_rs: &str,
     atomic_types: &str,
     internal: &str,
+    internal_page_flags: &str,
     page_flags_rs: &str,
     arena_rs: &str,
     free_rs: &str,
 ) {
+    let internal_page_boundary = format!("{internal}\n{internal_page_flags}");
     assert!(
     page_rs.contains(
         "#[inline(never)]\npub(crate) unsafe fn _mi_theap_page_reclaim(\n    page: crate::core_types::OwnedAbandonedPage,\n    target: crate::core_types::ThreadHeapLocal,"
@@ -20,10 +22,10 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && atomic_types.contains("pub(crate) unsafe fn load(self) -> PageThreadId")
         && atomic_types.contains("pub(crate) unsafe fn store_owner(self, owner: PageOwnerId)")
         && atomic_types.contains("pub(crate) unsafe fn compare_exchange_owner(\n        self,\n        expected: &mut PageThreadId,")
-        && internal.contains("let atomic_tid = crate::core_types::AtomicPageThreadId(\n            crate::core_types::AtomicUsizeField(")
-        && internal.contains("atomic_tid.load().raw()")
-        && internal.contains("let mut old = atomic_tid.load();")
-        && internal.contains("atomic_tid.compare_exchange_owner(&mut old, new)")
+        && internal_page_boundary.contains("let atomic_tid = crate::core_types::AtomicPageThreadId(\n            crate::core_types::AtomicUsizeField(")
+        && internal_page_boundary.contains("atomic_tid.load().raw()")
+        && internal_page_boundary.contains("let mut old = atomic_tid.load();")
+        && internal_page_boundary.contains("atomic_tid.compare_exchange_owner(&mut old, new)")
         && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::AbandonedMapped);")
         && internal.contains("let new = old.with_owner(crate::core_types::PageOwnerId::Abandoned);")
         && page_flags_rs
@@ -34,12 +36,12 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && page_flags_rs.contains("let xtid = xtid_old.with_owner(owner);")
         && page_flags_rs.contains("atomic_tid.compare_exchange_owner(&mut xtid_old, xtid)")
         && arena_rs.contains("unsafe { atomic_tid.store_owner(crate::core_types::PageOwnerId::AbandonedMapped) };")
-        && !internal.contains("atomic_tid.load_relaxed().raw()")
-        && !internal.contains("atomic_tid.compare_exchange_release(&mut old, new)")
+        && !internal_page_boundary.contains("atomic_tid.load_relaxed().raw()")
+        && !internal_page_boundary.contains("atomic_tid.compare_exchange_release(&mut old, new)")
         && !page_flags_rs.contains("atomic_tid.compare_exchange_release(&mut xtid_old, xtid)")
         && !arena_rs.contains("atomic_tid.set_owner_release(crate::core_types::PageOwnerId::AbandonedMapped)")
-        && !internal.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
-        && !internal.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
+        && !internal_page_boundary.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
+        && !internal_page_boundary.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
         && !page_flags_rs.contains("mi_atomic_cas_weak_release(&mut (*page).xthread_id")
         && !page_flags_rs.contains("mi_atomic_or_relaxed(&mut (*page).xthread_id")
         && !page_flags_rs.contains("mi_atomic_and_relaxed(&mut (*page).xthread_id")
@@ -72,13 +74,13 @@ pub(super) fn assert_page_reclaim_atomic_paths(
         && internal.contains("crate::core_types::ThreadFreeWord(tf).head_raw()")
         && internal.contains("crate::core_types::ThreadFreeWord(tf).is_owned()")
         && internal.contains("crate::core_types::ThreadFreeWord::from_parts(")
-        && internal.contains("pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t")
-        && internal.contains("atomic_tf.load_relaxed().head_raw()")
-        && internal.contains("pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool")
-        && internal.contains("atomic_tf.load_relaxed().is_owned()")
-        && internal.contains("let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),")
-        && internal.contains("atomic_tf.claim_acq_rel()")
-        && !internal.contains("atomic_tf.claim_ownership()")
+        && internal_page_boundary.contains("pub unsafe fn mi_page_thread_free(page: *const mi_page_t) -> *mut mi_block_t")
+        && internal_page_boundary.contains("atomic_tf.load_relaxed().head_raw()")
+        && internal_page_boundary.contains("pub unsafe fn mi_page_is_owned(page: *const mi_page_t) -> bool")
+        && internal_page_boundary.contains("atomic_tf.load_relaxed().is_owned()")
+        && internal_page_boundary.contains("let atomic_tf = crate::core_types::AtomicThreadFree(crate::core_types::AtomicUsizeField(\n            ptr::addr_of_mut!((*page).xthread_free),")
+        && internal_page_boundary.contains("atomic_tf.claim_acq_rel()")
+        && !internal_page_boundary.contains("atomic_tf.claim_ownership()")
         && arena_rs.contains("(*page).xthread_free = crate::core_types::ThreadFreeWord::from_parts(\n            None,\n            crate::core_types::ThreadFreeOwner::Unowned,")
         && !arena_rs.contains("(*page).xthread_free = 0")
         && free_rs.contains(

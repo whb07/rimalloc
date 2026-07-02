@@ -22,6 +22,7 @@ fn phase6_dead_code_allowances_stay_intentional() {
 
     let expected = BTreeMap::from([
         ("src/allocator/alloc.rs", 1),
+        ("src/allocator/alloc/string_path.rs", 1),
         ("src/allocator/aligned.rs", 1),
         ("src/raw/macros.rs", 1),
         ("src/allocator/arena.rs", 1),
@@ -51,6 +52,7 @@ fn phase6_dead_code_allowances_stay_intentional() {
     ]);
     let expected_module_level = BTreeMap::from([
         ("src/allocator/aligned.rs", 1),
+        ("src/allocator/alloc/string_path.rs", 1),
         ("src/raw/macros.rs", 1),
         ("src/allocator/arena_meta.rs", 1),
         ("src/internal/atomic.rs", 1),

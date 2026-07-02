@@ -8,6 +8,7 @@ mod platform_tls;
 pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
     let unsafe_allowlist = sources.unsafe_allowlist.as_str();
     let alloc_rs = sources.alloc_rs.as_str();
+    let alloc_cxx_new_rs = sources.alloc_cxx_new_rs.as_str();
     let arena_rs = sources.arena_rs.as_str();
     let arena_heap_pages_rs = sources.arena_heap_pages_rs.as_str();
     let atomic_types = sources.atomic_types.as_str();
@@ -15,6 +16,7 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
     let free_rs = sources.free_rs.as_str();
     let init_rs = sources.init_rs.as_str();
     let internal = sources.internal.as_str();
+    let internal_page_flags_rs = sources.internal_page_flags_rs.as_str();
     let page_rs = sources.page_rs.as_str();
     let page_flags_rs = sources.page_flags_rs.as_str();
     let stats_rs = sources.stats_rs.as_str();
@@ -38,18 +40,20 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
     assert!(
         alloc_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn mi_theap_try_new")
             && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_try_new")
-            && alloc_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_try_new")
-            && alloc_rs.contains("mi_heap_try_new_typed(heap, size, false)")
+            && alloc_cxx_new_rs
+                .contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_try_new")
+            && alloc_cxx_new_rs.contains("mi_heap_try_new_typed(heap, size, nothrow)")
             && alloc_rs.contains("mi_try_new(size, true)")
             && alloc_rs.contains("static MI_THEAP_TRY_NEW_KEEP")
             && alloc_rs.contains("static MI_TRY_NEW_KEEP")
-            && alloc_rs.contains("static MI_HEAP_TRY_NEW_KEEP"),
+            && alloc_cxx_new_rs.contains("static MI_HEAP_TRY_NEW_KEEP"),
         "C++ new retry paths should keep C's separate theap/default-heap/explicit-heap helper boundaries"
     );
     page_reclaim::assert_page_reclaim_atomic_paths(
         page_rs,
         atomic_types,
         internal,
+        internal_page_flags_rs,
         page_flags_rs,
         arena_rs,
         free_rs,

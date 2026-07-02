@@ -1,10 +1,10 @@
 use super::*;
 
 pub(super) fn assert_header_forwarding_boundaries(sources: &UnsafePerformanceSources) {
-    let raw_macros_rs = sources.raw_macros_rs.as_str();
+    let raw_header_forwarding_rs = sources.raw_header_forwarding_rs.as_str();
 
     assert!(
-        raw_macros_rs
+        raw_header_forwarding_rs
             .matches("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")
             .count()
             >= 6,
@@ -17,14 +17,18 @@ pub(super) fn assert_header_forwarding_boundaries(sources: &UnsafePerformanceSou
         "pub unsafe fn mi_vfree_forward",
         "pub unsafe fn mi_aligned_alloc_forward",
     ] {
-        let item = source_item("src/raw/macros.rs", raw_macros_rs, marker);
-        assert_no_rust_heap_constructs("src/raw/macros.rs", marker, item);
+        let item = source_item(
+            "src/raw/macros/header_forwarding.rs",
+            raw_header_forwarding_rs,
+            marker,
+        );
+        assert_no_rust_heap_constructs("src/raw/macros/header_forwarding.rs", marker, item);
     }
     assert!(
-        raw_macros_rs.contains("pub unsafe fn mi_malloc_good_size_forward")
-            && raw_macros_rs.contains("pub unsafe fn mi_malloc_size_forward")
-            && raw_macros_rs.contains("crate::mimalloc::mi_malloc_good_size(size)")
-            && raw_macros_rs.contains("crate::mimalloc::mi_usable_size(p)"),
+        raw_header_forwarding_rs.contains("pub unsafe fn mi_malloc_good_size_forward")
+            && raw_header_forwarding_rs.contains("pub unsafe fn mi_malloc_size_forward")
+            && raw_header_forwarding_rs.contains("crate::mimalloc::mi_malloc_good_size(size)")
+            && raw_header_forwarding_rs.contains("crate::mimalloc::mi_usable_size(p)"),
         "header/query forwarding should keep tiny direct calls into the public mimalloc facade"
     );
 }

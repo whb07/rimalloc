@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5899 |
+| `unsafe_mentions` | 5898 |
 | `unsafe_blocks` | 3466 |
-| `unsafe_fns` | 2000 |
+| `unsafe_fns` | 1999 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -38,7 +38,9 @@ verify the source inventory after each supported advisory build mode checks.
 | File | unsafe | blocks | fns | extern blocks | impls | attrs | global asm |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/allocator/aligned.rs` | 215 | 130 | 56 | 0 | 0 | 29 | 0 |
-| `src/allocator/alloc.rs` | 333 | 134 | 141 | 5 | 0 | 48 | 0 |
+| `src/allocator/alloc/cxx_new.rs` | 3 | 1 | 2 | 0 | 0 | 0 | 0 |
+| `src/allocator/alloc/string_path.rs` | 46 | 18 | 18 | 3 | 0 | 6 | 0 |
+| `src/allocator/alloc.rs` | 283 | 115 | 120 | 2 | 0 | 42 | 0 |
 | `src/allocator/arena/debug.rs` | 53 | 41 | 10 | 0 | 0 | 2 | 0 |
 | `src/allocator/arena/heap_pages.rs` | 81 | 66 | 13 | 0 | 0 | 2 | 0 |
 | `src/allocator/arena/ids.rs` | 33 | 18 | 14 | 0 | 0 | 0 | 0 |
@@ -54,8 +56,9 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/page/counts.rs` | 44 | 22 | 22 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
 | `src/allocator/page/flags.rs` | 20 | 10 | 10 | 0 | 0 | 0 | 0 |
+| `src/allocator/page/stats_bin.rs` | 8 | 4 | 4 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/validation.rs` | 10 | 5 | 5 | 0 | 0 | 0 | 0 |
-| `src/allocator/page.rs` | 196 | 91 | 105 | 0 | 0 | 0 | 0 |
+| `src/allocator/page.rs` | 188 | 87 | 101 | 0 | 0 | 0 | 0 |
 | `src/allocator/page_map.rs` | 186 | 144 | 38 | 0 | 0 | 2 | 0 |
 | `src/allocator/stats.rs` | 198 | 124 | 51 | 0 | 0 | 22 | 0 |
 | `src/allocator/thread_heap.rs` | 120 | 56 | 58 | 0 | 0 | 6 | 0 |
@@ -66,10 +69,12 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/ffi/headers.rs` | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `src/ffi/libc.rs` | 54 | 34 | 19 | 1 | 0 | 0 | 0 |
 | `src/internal/atomic.rs` | 135 | 72 | 62 | 1 | 0 | 0 | 0 |
-| `src/internal/bitmap.rs` | 147 | 67 | 80 | 0 | 0 | 0 | 0 |
+| `src/internal/bitmap/chunkmap.rs` | 7 | 6 | 1 | 0 | 0 | 0 | 0 |
+| `src/internal/bitmap.rs` | 140 | 61 | 79 | 0 | 0 | 0 | 0 |
 | `src/internal/guarded.rs` | 2 | 1 | 1 | 0 | 0 | 0 | 0 |
 | `src/internal/memid.rs` | 2 | 0 | 2 | 0 | 0 | 0 | 0 |
-| `src/internal/mod.rs` | 163 | 88 | 74 | 1 | 0 | 0 | 0 |
+| `src/internal/mod.rs` | 147 | 80 | 66 | 1 | 0 | 0 | 0 |
+| `src/internal/page_flags.rs` | 16 | 8 | 8 | 0 | 0 | 0 | 0 |
 | `src/internal/provenance.rs` | 2 | 0 | 0 | 0 | 2 | 0 | 0 |
 | `src/internal/random.rs` | 13 | 8 | 5 | 0 | 0 | 0 | 0 |
 | `src/lib.rs` | 21 | 8 | 4 | 1 | 1 | 1 | 0 |
@@ -80,7 +85,8 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/platform/unix.rs` | 143 | 75 | 58 | 4 | 0 | 0 | 0 |
 | `src/platform/wasi.rs` | 45 | 21 | 22 | 2 | 0 | 0 | 0 |
 | `src/platform/windows.rs` | 214 | 128 | 81 | 5 | 0 | 0 | 0 |
-| `src/raw/macros.rs` | 383 | 147 | 145 | 3 | 1 | 30 | 3 |
+| `src/raw/macros/header_forwarding.rs` | 17 | 7 | 10 | 0 | 0 | 0 | 0 |
+| `src/raw/macros.rs` | 366 | 140 | 135 | 3 | 1 | 30 | 3 |
 | `src/raw/mod.rs` | 4 | 3 | 0 | 0 | 0 | 0 | 0 |
 | `src/raw/posix.rs` | 81 | 41 | 20 | 3 | 0 | 17 | 0 |
 | `src/safe/allocation.rs` | 21 | 12 | 1 | 0 | 6 | 0 | 0 |

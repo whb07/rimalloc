@@ -30,7 +30,7 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         ("aligned allocation compatibility boundary", 30),
         ("thread-heap compatibility boundary", 24),
         ("scalar domain constructor boundary", 24),
-        ("thread-heap allocation compatibility boundary", 18),
+        ("thread-heap allocation compatibility boundary", 16),
         ("realloc allocation compatibility boundary", 13),
         ("layout request constructor boundary", 11),
         ("heap allocation export compatibility boundary", 9),
@@ -52,9 +52,9 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
     );
 
     for ((path, domain), expected) in [
-        (("src/internal/mod.rs", "mi_page_t"), 33),
-        (("src/allocator/alloc.rs", "mi_theap_t"), 30),
-        (("src/allocator/page.rs", "mi_page_t"), 25),
+        (("src/allocator/alloc.rs", "mi_theap_t"), 27),
+        (("src/internal/mod.rs", "mi_page_t"), 25),
+        (("src/allocator/page.rs", "mi_page_t"), 21),
         (("src/allocator/thread_heap.rs", "mi_theap_t"), 20),
         (("src/allocator/free.rs", "mi_page_t"), 19),
         (("src/allocator/page.rs", "mi_theap_t"), 19),
@@ -66,7 +66,7 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
         );
     }
     assert!(
-        raw_pointer_file_domains.values().all(|count| *count <= 33),
+        raw_pointer_file_domains.values().all(|count| *count <= 30),
         "strict-type allowlist has a new raw-pointer file/domain hotspot above the documented cap"
     );
 
@@ -81,9 +81,9 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
             "aligned allocation compatibility boundary with 30 entries",
             "thread-heap compatibility boundary with 24 entries",
             "scalar domain\n  constructor boundary with 24 entries",
-            "largest strict-type raw-pointer file/domain hotspots are\n  `src/internal/mod.rs`/`mi_page_t` with 33 entries",
-            "`src/allocator/alloc.rs`/`mi_theap_t` with 30",
-            "`src/allocator/page.rs`/`mi_page_t` with 25",
+            "largest strict-type raw-pointer file/domain hotspots are\n  `src/allocator/alloc.rs`/`mi_theap_t` with 27 entries",
+            "`src/internal/mod.rs`/`mi_page_t` with 25",
+            "`src/allocator/page.rs`/`mi_page_t` with 21",
             "`src/allocator/thread_heap.rs`/`mi_theap_t`",
             "`src/allocator/free.rs`/`mi_page_t` with 19",
             "`src/allocator/page.rs`/`mi_theap_t` with 19",
@@ -102,9 +102,9 @@ fn strict_type_permanent_reasons_and_raw_file_domains_stay_capped() {
             "`thread-heap compatibility boundary` (24) is a permanent thread-heap source-shape edge",
             "`scalar domain constructor boundary` (24) is a permanent scalar constructor/proof edge",
             "Raw pointer file/domain caps",
-            "`src/internal/mod.rs`/`mi_page_t` at 33",
-            "`src/allocator/alloc.rs`/`mi_theap_t` at 30",
-            "`src/allocator/page.rs`/`mi_page_t` at 25",
+            "`src/allocator/alloc.rs`/`mi_theap_t` at 27",
+            "`src/internal/mod.rs`/`mi_page_t` at 25",
+            "`src/allocator/page.rs`/`mi_page_t` at 21",
             "`src/allocator/thread_heap.rs`/`mi_theap_t` at 20",
             "`src/allocator/free.rs`/`mi_page_t` at 19",
             "`src/allocator/page.rs`/`mi_theap_t` at 19",

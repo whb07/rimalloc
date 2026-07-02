@@ -38,6 +38,12 @@ Per-file review:
   free-list blocks after initialization and size-class selection. Usable-size
   out-pointers are checked for null before writes. Overflow-prone count/size
   calls use existing checked helpers.
+- `src/allocator/alloc/string_path.rs`: strdup, strndup, and Unix realpath
+  compatibility shims validate caller-proven C strings or path buffers before
+  routing allocation through typed heap/thread-heap witnesses.
+- `src/allocator/alloc/cxx_new.rs`: explicit-heap C++ new retry compatibility
+  shims validate raw heap pointers before invoking the typed retry/new-handler
+  policy.
 - `src/alloc_aligned.rs`: aligned allocation/reallocation uses C-equivalent
   offset and alignment checks before computing adjusted pointers; the original
   allocation pointer is preserved through mimalloc metadata before free.
@@ -74,6 +80,9 @@ Per-file review:
 - `src/bitmap.rs`: bitmap word pointers are derived from caller-provided bitmap
   storage and bounded by bit counts; set/clear/claim transitions use atomic word
   operations equivalent to C.
+- `src/internal/bitmap/chunkmap.rs`: bitmap chunk-map and binned chunk-bin
+  bookkeeping validates chunk indexes against caller-owned bitmap storage before
+  updating map/bin words.
 - `src/core_types/arena.rs`, `src/core_types/atomic_wrappers.rs`,
   `src/core_types/callbacks.rs`, `src/core_types/freelist.rs`,
   `src/core_types/freelist_wrappers.rs`, `src/core_types/guarded.rs`,
@@ -106,6 +115,9 @@ Per-file review:
 - `src/internal/memid.rs`: raw memory-origin identifiers keep the C-compatible
   `mi_memid_t` layout and route construction/classification through
   `crate::core_types::MemId` typed views.
+- `src/internal/page_flags.rs`: page flag, owner-id, availability, and
+  thread-free accessors read allocator-owned page metadata through typed atomic
+  page-thread-id and thread-free wrappers.
 - `src/lib.rs`: crate-level exported allocator configuration keeps unsafe global
   allocator wiring at the public boundary.
 - `src/libc.rs`: libc FFI calls are thin wrappers around platform C APIs with
@@ -138,6 +150,9 @@ Per-file review:
   dispatch owns the process-global callback slots and increments the local
   thread heap heartbeat before invoking the callback under the C-compatible
   reentry guard.
+- `src/allocator/page/stats_bin.rs`: page bin and stats-bin compatibility shims
+  project caller-proven page metadata into typed bin domains before returning
+  C-compatible `usize` values.
 - `src/page_map.rs`: page-map submap publication and lookup bounds-check indexes
   against the C page-map layout and uses audited atomics for concurrent install.
 - `src/prim.rs`: primitive facade forwards to platform implementations through
@@ -161,6 +176,9 @@ Per-file review:
 - `src/provenance.rs`: pointer-address helpers preserve provenance-sensitive
   conversions in one small module used by allocator layout code.
 - `src/raw.rs`: raw module re-exports preserve the C ABI contract for callers.
+- `src/raw/macros/header_forwarding.rs`: header-shaped raw forwarding helpers
+  call caller-supplied C function pointers or raw allocator exports without
+  adding Rust ownership guarantees.
 - `src/safe.rs`: safe facade wrappers forward to raw allocator APIs while keeping
   unsafe pointer use at the boundary.
 - `src/safe/allocations.rs`, `src/safe/heaps.rs`, and `src/safe/stats.rs`:
@@ -506,22 +524,23 @@ Operation IDs:
   operations preserve nullable pointer semantics, usable out-pointers, and heap
   dispatch validation.
 - `SAFETY[AUDIT:allocation-string-dup-boundary]`:
-  `src/allocator/alloc.rs` owns strdup and strndup allocation entry shims.
-  Unsafe operations are limited to caller-proven C string pointers, bounded
-  scans, heap/default thread-heap routing, and mimalloc-owned duplicate output.
+  `src/allocator/alloc/string_path.rs` owns strdup and strndup allocation entry
+  shims. Unsafe operations are limited to caller-proven C string pointers,
+  bounded scans, heap/default thread-heap routing, and mimalloc-owned duplicate
+  output.
 - `SAFETY[AUDIT:allocation-realpath-boundary]`:
-  `src/allocator/alloc.rs` owns Unix realpath allocation entry shims. Unsafe
-  operations are limited to caller-proven path pointers, path-max caching,
-  heap/default thread-heap routing, and caller-owned output buffers while
-  preserving realpath behavior.
+  `src/allocator/alloc/string_path.rs` owns Unix realpath allocation entry
+  shims. Unsafe operations are limited to caller-proven path pointers, path-max
+  caching, heap/default thread-heap routing, and caller-owned output buffers
+  while preserving realpath behavior.
 - `SAFETY[AUDIT:allocation-cxx-new-handler-boundary]`:
   `src/allocator/alloc.rs` owns C++ new-handler lookup and invocation. Unsafe
   operations preserve platform ABI function pointer shape and abort/nothrow
   policy.
 - `SAFETY[AUDIT:allocation-cxx-new-try-boundary]`:
-  `src/allocator/alloc.rs` owns C++ new retry helpers and retained function
-  pointer shapes. Unsafe operations route allocation failures through the
-  new-handler policy.
+  `src/allocator/alloc.rs` and `src/allocator/alloc/cxx_new.rs` own C++ new
+  retry helpers and retained function pointer shapes. Unsafe operations route
+  allocation failures through the new-handler policy.
 - `SAFETY[AUDIT:allocation-cxx-new-public-boundary]`:
   `src/allocator/alloc.rs` owns public C++ new entrypoints. Unsafe operations
   validate heap/thread dispatch before retrying allocation failure.
@@ -600,11 +619,11 @@ Operation IDs:
   `src/allocator/page.rs` owns page metadata accessors. Unsafe operations are
   limited to caller-proven page pointers and typed scalar metadata projection.
 - `SAFETY[AUDIT:page-stats-public-boundary]`:
-  `src/allocator/page.rs` owns stats/bin helpers, public C-shaped page helpers,
-  and generic allocation entry shims. Unsafe operations are limited to
-  caller-proven page/heap pointers, typed count/bin witnesses, usable-size
-  out-pointers, and ABI flag decoding while preserving public null/failure
-  semantics and typed metadata invariants.
+  `src/allocator/page.rs` and `src/allocator/page/stats_bin.rs` own stats/bin
+  helpers, public C-shaped page helpers, and generic allocation entry shims.
+  Unsafe operations are limited to caller-proven page/heap pointers, typed
+  count/bin witnesses, usable-size out-pointers, and ABI flag decoding while
+  preserving public null/failure semantics and typed metadata invariants.
 - `SAFETY[AUDIT:arena-slice-geometry-boundary]`:
   `src/allocator/arena.rs` owns arena slice geometry, address projection, and
   typed slice/page helper routing. Unsafe operations are limited to
@@ -798,9 +817,10 @@ Operation IDs:
   metadata projection. Unsafe operations are limited to caller-proven bitmap
   storage, nullable chunk-count out-pointers, and zeroing initialized storage.
 - `SAFETY[AUDIT:internal-bitmap-chunkmap-boundary]`: `src/internal/bitmap.rs`
-  owns bitmap chunkmap and binned chunk-bin bookkeeping. Unsafe operations are
-  limited to chunk-count assertions, empty/full chunk probes, and bin map
-  updates that preserve chunkmap consistency.
+  and `src/internal/bitmap/chunkmap.rs` own bitmap chunkmap and binned chunk-bin
+  bookkeeping. Unsafe operations are limited to chunk-count assertions,
+  empty/full chunk probes, and bin map updates that preserve chunkmap
+  consistency.
 - `SAFETY[AUDIT:internal-bitmap-claim-boundary]`: `src/internal/bitmap.rs`
   owns regular bitmap first-fit claim traversal and typed thread-local claim
   callback handoff. Unsafe operations are limited to caller-proven bitmap
@@ -861,12 +881,13 @@ Operation IDs:
   page start, arena membership, slice start, slice offset, and address-range
   predicates derived from allocator-owned page metadata.
 - `SAFETY[AUDIT:internal-page-flag-owner-boundary]`: `src/internal/mod.rs`
-  owns page flags and owner-id projections. Unsafe operations use typed atomic
-  thread-id fields to read and update abandoned/interior-pointer state.
-- `SAFETY[AUDIT:internal-thread-free-boundary]`: `src/internal/mod.rs` owns
-  thread-free ownership-word helpers. Unsafe operations are limited to typed
-  atomic thread-free loads and ownership claims while preserving encoded head
-  and ownership bits.
+  and `src/internal/page_flags.rs` own page flags and owner-id projections.
+  Unsafe operations use typed atomic thread-id fields to read and update
+  abandoned/interior-pointer state.
+- `SAFETY[AUDIT:internal-thread-free-boundary]`: `src/internal/mod.rs` and
+  `src/internal/page_flags.rs` own thread-free ownership-word helpers. Unsafe
+  operations are limited to typed atomic thread-free loads and ownership claims
+  while preserving encoded head and ownership bits.
 - `SAFETY[AUDIT:internal-block-link-boundary]`: `src/internal/mod.rs` owns
   encoded free-list block links. Unsafe operations preserve pointer provenance,
   tracking gates, page keys, encoded/unencoded link reads and writes, and
@@ -1221,10 +1242,10 @@ Operation IDs:
   and array C++ new compatibility symbols for pointer-width-specific Itanium
   ABI variants. Unsafe operations are limited to forwarding to `mi_new`.
 - `SAFETY[AUDIT:raw-macro-header-forwarding-boundary]`: `src/raw/macros.rs`
-  owns header-shaped forwarding helpers used by raw macro compatibility layers.
-  Unsafe operations are limited to calling caller-supplied raw C function
-  pointers or forwarding to raw allocator exports without adding Rust ownership
-  guarantees.
+  and `src/raw/macros/header_forwarding.rs` own header-shaped forwarding helpers
+  used by raw macro compatibility layers. Unsafe operations are limited to
+  calling caller-supplied raw C function pointers or forwarding to raw allocator
+  exports without adding Rust ownership guarantees.
 - `SAFETY[AUDIT:raw-posix-errno-boundary]`: `src/raw/posix.rs` owns platform
   errno publication. Unsafe operations are limited to thread-local errno slot
   lookup and writes on supported libc targets.

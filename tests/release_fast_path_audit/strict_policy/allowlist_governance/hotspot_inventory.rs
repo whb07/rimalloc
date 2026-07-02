@@ -23,12 +23,12 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
     }
 
     for (path, expected) in [
-        ("src/internal/mod.rs", 57),
-        ("src/allocator/alloc.rs", 53),
-        ("src/allocator/page.rs", 51),
         ("src/allocator/aligned.rs", 50),
-        ("src/internal/bitmap.rs", 45),
-        ("src/raw/macros.rs", 32),
+        ("src/internal/mod.rs", 49),
+        ("src/allocator/alloc.rs", 46),
+        ("src/allocator/page.rs", 45),
+        ("src/internal/bitmap.rs", 37),
+        ("src/raw/macros.rs", 30),
     ] {
         assert_eq!(
             file_counts.get(path),
@@ -37,17 +37,17 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
         );
     }
     assert!(
-        file_counts.values().all(|count| *count <= 57),
+        file_counts.values().all(|count| *count <= 50),
         "strict-type allowlist has a new file hotspot above the documented cap"
     );
 
     for ((kind, path), expected) in [
-        (("raw-pointer-parameter", "src/allocator/alloc.rs"), 47),
-        (("raw-pointer-parameter", "src/allocator/page.rs"), 44),
-        (("raw-pointer-parameter", "src/internal/mod.rs"), 41),
-        (("bare-domain-usize", "src/internal/bitmap.rs"), 33),
-        (("bare-domain-usize", "src/raw/macros.rs"), 32),
+        (("raw-pointer-parameter", "src/allocator/alloc.rs"), 40),
+        (("raw-pointer-parameter", "src/allocator/page.rs"), 40),
+        (("raw-pointer-parameter", "src/internal/mod.rs"), 33),
+        (("bare-domain-usize", "src/raw/macros.rs"), 30),
         (("raw-pointer-parameter", "src/allocator/aligned.rs"), 30),
+        (("bare-domain-usize", "src/internal/bitmap.rs"), 25),
     ] {
         assert_eq!(
             kind_file_counts.get(&(kind, path)),
@@ -56,7 +56,7 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
         );
     }
 
-    for (domain, expected) in [("mi_theap_t", 111), ("mi_page_t", 110), ("mi_heap_t", 67)] {
+    for (domain, expected) in [("mi_page_t", 110), ("mi_theap_t", 109), ("mi_heap_t", 67)] {
         assert_eq!(
             raw_pointer_domains.get(domain),
             Some(&expected),
@@ -64,7 +64,7 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
         );
     }
     assert!(
-        raw_pointer_domains.values().all(|count| *count <= 111),
+        raw_pointer_domains.values().all(|count| *count <= 110),
         "strict-type allowlist has a new raw-pointer domain above the documented cap"
     );
 
@@ -72,20 +72,20 @@ fn strict_type_allowlist_hotspots_and_domains_stay_governed() {
         "TODO.md",
         &todo,
         &[
-            "largest strict-type allowlist file hotspots are `src/internal/mod.rs` with\n  57 active entries",
-            "`src/allocator/alloc.rs` with 53",
-            "`src/allocator/page.rs` with 51",
-            "`src/allocator/aligned.rs` with 50",
-            "`src/internal/bitmap.rs` with 45",
-            "`src/raw/macros.rs` with 32",
-            "`raw-pointer-parameter` in\n  `src/allocator/alloc.rs` with 47 active entries",
-            "`raw-pointer-parameter` in\n  `src/allocator/page.rs` with 44",
-            "`raw-pointer-parameter` in\n  `src/internal/mod.rs` with 41",
-            "`bare-domain-usize` in\n  `src/internal/bitmap.rs` with 33",
-            "`bare-domain-usize` in `src/raw/macros.rs`\n  with 32",
+            "largest strict-type allowlist file hotspots are `src/allocator/aligned.rs`\n  with 50 active entries",
+            "`src/internal/mod.rs` with 49",
+            "`src/allocator/alloc.rs` with 46",
+            "`src/allocator/page.rs` with 45",
+            "`src/internal/bitmap.rs` with 37",
+            "`src/raw/macros.rs` with 30",
+            "`raw-pointer-parameter` in\n  `src/allocator/alloc.rs` with 40 active entries",
+            "`raw-pointer-parameter` in\n  `src/allocator/page.rs` with 40",
+            "`raw-pointer-parameter` in\n  `src/internal/mod.rs` with 33",
+            "`bare-domain-usize` in `src/raw/macros.rs`\n  with 30",
             "`raw-pointer-parameter` in `src/allocator/aligned.rs` with 30",
-            "raw-pointer domains are `mi_theap_t` with 111 entries",
-            "`mi_page_t` with 110",
+            "`bare-domain-usize` in `src/internal/bitmap.rs` with 25",
+            "raw-pointer domains are `mi_page_t` with 110 entries",
+            "`mi_theap_t` with 109",
             "`mi_heap_t` with 67",
         ],
     );

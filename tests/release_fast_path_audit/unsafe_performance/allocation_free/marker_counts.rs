@@ -7,11 +7,16 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
     let unsafe_allowlist = sources.unsafe_allowlist.as_str();
     let internal = sources.internal.as_str();
     let alloc_rs = sources.alloc_rs.as_str();
+    let alloc_boundary_rs = format!(
+        "{alloc_rs}\n{}\n{}",
+        sources.alloc_cxx_new_rs, sources.alloc_string_path_rs
+    );
     let arena_rs = sources.arena_rs.as_str();
     let bitmap_rs = sources.bitmap_rs.as_str();
     let free_rs = sources.free_rs.as_str();
     let ptr_rs = sources.ptr_rs.as_str();
     let page_rs = sources.page_rs.as_str();
+    let page_boundary_rs = format!("{page_rs}\n{}", sources.page_stats_bin_rs);
     let page_bins_rs = sources.page_bins_rs.as_str();
     let stats_rs = sources.stats_rs.as_str();
     let alloc_aligned_rs = sources.alloc_aligned_rs.as_str();
@@ -74,7 +79,7 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         ("allocation-realloc-free-on-failure-boundary", 6),
         ("allocation-realloc-zeroing-boundary", 12),
         ("allocation-realloc-public-boundary", 6),
-        ("allocation-string-dup-boundary", 11),
+        ("allocation-string-dup-boundary", 10),
         ("allocation-realpath-boundary", 9),
         ("allocation-cxx-new-handler-boundary", 4),
         ("allocation-cxx-new-try-boundary", 9),
@@ -86,7 +91,7 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert!(
-            alloc_rs.matches(&marker).count() >= min_count,
+            alloc_boundary_rs.matches(&marker).count() >= min_count,
             "allocation unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
         );
     }
@@ -96,7 +101,7 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         "allocation-cxx-new-boundary",
     ] {
         assert!(
-            !alloc_rs.contains(&format!("SAFETY[AUDIT:{retired_audit_id}]")),
+            !alloc_boundary_rs.contains(&format!("SAFETY[AUDIT:{retired_audit_id}]")),
             "allocation unsafe boundary {retired_audit_id} should stay split into focused operation markers"
         );
     }
@@ -110,7 +115,7 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_calloc(")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_mallocn(")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_realloc(")
-            && alloc_rs.contains("pub unsafe extern \"C\" fn mi_strdup(")
+            && alloc_boundary_rs.contains("pub unsafe extern \"C\" fn mi_strdup(")
             && alloc_rs.contains("pub unsafe extern \"C\" fn mi_new(")
             && alloc_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_page_malloc_zero(")
             && alloc_rs.contains("pub(crate) unsafe fn mi_theap_realloc_req(")
@@ -139,13 +144,13 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert!(
-            page_rs.matches(&marker).count() >= min_count,
+            page_boundary_rs.matches(&marker).count() >= min_count,
             "page unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
         );
     }
     assert!(
-        !page_rs.contains("SAFETY[AUDIT:page-free-list-refill-boundary]")
-            && !page_rs.contains("SAFETY[AUDIT:page-queue-transition-boundary]"),
+        !page_boundary_rs.contains("SAFETY[AUDIT:page-free-list-refill-boundary]")
+            && !page_boundary_rs.contains("SAFETY[AUDIT:page-queue-transition-boundary]"),
         "page free-list and queue transitions should stay split into focused operation markers"
     );
     assert!(
@@ -162,7 +167,7 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
             && page_rs.contains("pub unsafe extern \"C\" fn mi_page_fresh_alloc(")
             && page_rs.contains("unsafe fn mi_huge_page_alloc_typed(")
             && page_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_page_retire(")
-            && page_rs.contains("pub unsafe extern \"C\" fn _mi_page_stats_bin(")
+            && page_boundary_rs.contains("pub unsafe extern \"C\" fn _mi_page_stats_bin(")
             && page_rs.contains("_mi_option_get_fast(mi_option_t::mi_option_page_max_candidates)")
             && page_rs.contains("__mi_stat_counter_increase("),
         "page allocation unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
@@ -206,6 +211,7 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
         internal,
         page_bins_rs,
         page_rs,
+        page_stats_bin_rs: sources.page_stats_bin_rs.as_str(),
         ptr_rs,
         stats_rs,
     });

@@ -10,6 +10,10 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let raw_macros_rs =
         fs::read_to_string(root.join("src/raw/macros.rs")).expect("read src/raw/macros.rs");
+    let raw_header_forwarding_rs =
+        fs::read_to_string(root.join("src/raw/macros/header_forwarding.rs"))
+            .expect("read src/raw/macros/header_forwarding.rs");
+    let raw_facade_rs = format!("{raw_macros_rs}\n{raw_header_forwarding_rs}");
     let unsafe_doc =
         fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read unsafe audit");
     let raw_macro_allocation_ids = [
@@ -43,7 +47,7 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
     for audit_id in raw_macro_allocation_ids {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert!(
-            raw_macros_rs.contains(&marker) && unsafe_doc.contains(&marker),
+            raw_facade_rs.contains(&marker) && unsafe_doc.contains(&marker),
             "raw macro allocation audit tag {audit_id} should be mirrored in source and docs"
         );
     }

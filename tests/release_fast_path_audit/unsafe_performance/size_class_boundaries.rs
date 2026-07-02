@@ -6,6 +6,7 @@ pub(super) struct SizeClassSources<'a> {
     pub(super) internal: &'a str,
     pub(super) page_bins_rs: &'a str,
     pub(super) page_rs: &'a str,
+    pub(super) page_stats_bin_rs: &'a str,
     pub(super) ptr_rs: &'a str,
     pub(super) stats_rs: &'a str,
 }
@@ -19,6 +20,7 @@ pub(super) fn assert_size_class_boundaries(sources: SizeClassSources<'_>) {
         internal,
         page_bins_rs,
         page_rs,
+        page_stats_bin_rs,
         ptr_rs,
         stats_rs,
     } = sources;
@@ -65,12 +67,12 @@ pub(super) fn assert_size_class_boundaries(sources: SizeClassSources<'_>) {
                 "block_size: crate::core_types::BlockSize,\n) -> *mut mi_page_queue_t {\n    unsafe {\n        let size = block_size.get();"
             )
             && internal.contains("crate::page::mi_bin_from_block_size(block_size).as_usize()")
-            && page_rs.contains("pub(crate) unsafe fn mi_page_bin_typed(")
-            && page_rs.contains(") -> crate::core_types::Bin")
-            && page_rs.contains("pub(crate) unsafe fn _mi_page_stats_bin_typed(")
-            && page_rs.contains(") -> crate::core_types::StatsBin")
+            && page_stats_bin_rs.contains("pub(crate) unsafe fn mi_page_bin_typed(")
+            && page_stats_bin_rs.contains(") -> crate::core_types::Bin")
+            && page_stats_bin_rs.contains("pub(crate) unsafe fn _mi_page_stats_bin_typed(")
+            && page_stats_bin_rs.contains(") -> crate::core_types::StatsBin")
             && page_rs.contains("let bin = mi_page_bin_typed(page).as_usize();")
-            && page_rs.contains("let bin = _mi_page_stats_bin_typed(page).as_usize();")
+            && page_stats_bin_rs.contains("let bin = _mi_page_stats_bin_typed(page).as_usize();")
             && page_rs.contains("let bin = mi_bin_from_block_size(block_size).as_usize();")
             && page_rs.contains("== mi_bin_from_block_size(crate::core_types::BlockSize::new_unchecked(\n                    mi_page_queue_block_size_raw(prev),")
             && !page_rs.contains("pub(crate) fn _mi_bin_typed(size: usize)")

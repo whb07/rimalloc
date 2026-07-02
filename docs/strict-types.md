@@ -100,7 +100,7 @@ boundary.
 
 ## Strict-Type Allowlist Governance
 
-The current `strict-type-allowlist.txt` snapshot has 634 active entries: 332 raw-pointer-parameter,
+The current `strict-type-allowlist.txt` snapshot has 632 active entries: 330 raw-pointer-parameter,
 220 bare-domain-usize, 40 metadata-reference, 23 pointer-usize-roundtrip, 14
 atomic-cast, and 5 heap-allocating-type entries. It has zero wildcard entries
 and zero removable entries; all current entries are classified as `permanent:`
@@ -108,11 +108,11 @@ compatibility or proof boundaries.
 
 Permanent hotspot families are the C-shaped raw pointer domains that preserve
 upstream allocator call shapes before typed helpers take over: `mi_theap_t` has
-111 entries, `mi_page_t` has 110 entries, and `mi_heap_t` has 67 entries. The
-largest file hotspots are `src/internal/mod.rs`, `src/allocator/alloc.rs`,
-`src/allocator/page.rs`, `src/allocator/aligned.rs`, `src/internal/bitmap.rs`,
-and `src/raw/macros.rs`; these are guarded by the release fast-path audit so
-new growth must be intentional.
+109 entries, `mi_page_t` has 110 entries, and `mi_heap_t` has 67 entries. The
+largest file hotspots are `src/allocator/aligned.rs`, `src/internal/mod.rs`,
+`src/allocator/alloc.rs`, `src/allocator/page.rs`, `src/internal/bitmap.rs`,
+and `src/raw/macros.rs`; these are guarded by the release fast-path audit so new
+growth must be intentional.
 
 Permanent reason-group caps are also guarded by the release fast-path audit.
 No permanent reason group exceeds 40 entries:
@@ -124,9 +124,9 @@ No permanent reason group exceeds 40 entries:
 and `scalar domain constructor boundary` (24) is a permanent scalar constructor/proof edge.
 
 Raw pointer file/domain caps are guarded separately:
-`src/internal/mod.rs`/`mi_page_t` at 33,
-`src/allocator/alloc.rs`/`mi_theap_t` at 30,
-`src/allocator/page.rs`/`mi_page_t` at 25,
+`src/allocator/alloc.rs`/`mi_theap_t` at 27,
+`src/internal/mod.rs`/`mi_page_t` at 25,
+`src/allocator/page.rs`/`mi_page_t` at 21,
 `src/allocator/thread_heap.rs`/`mi_theap_t` at 20,
 `src/allocator/free.rs`/`mi_page_t` at 19,
 and `src/allocator/page.rs`/`mi_theap_t` at 19.

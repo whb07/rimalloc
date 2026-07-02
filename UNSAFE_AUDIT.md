@@ -297,6 +297,11 @@ Operation IDs:
   builds stack-local arena metadata to exercise slice-range and arena-role
   constructors. The fixtures do not register with allocator globals and are
   used only while the stack-local records are live.
+- `SAFETY[AUDIT:typed-atomic-test-fixtures]`: `src/types/atomic/tests.rs`
+  builds stack-local atomic words, pointer cells, page/free-list metadata, once
+  state, and lock storage to exercise typed atomic wrappers. The fixtures use
+  atomic operations only, do not register with allocator globals, and remain
+  live for the duration of each wrapper call.
 - `SAFETY[AUDIT:typed-callback-test-fixtures]`: `src/types/callbacks/tests.rs`
   verifies callback wrapper layout, raw argument preservation, and storage
   pointer round trips using local callback function items and stack values.

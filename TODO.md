@@ -13,12 +13,15 @@ evidence.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 45 entries: 39 production, 3 test,
-  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 45.
+- `docs/unsafe-migration-allowlist.tsv` has 44 entries: 39 production, 2 test,
+  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 44.
 - The smallest remaining allowlisted test fixtures are reviewable:
-  `src/types/atomic/tests.rs` is 287 lines,
-  `src/types/scalar/tests.rs` is 412 lines, and
+  `src/types/scalar/tests.rs` is 412 lines and
   `src/types/ptr/tests.rs` is 618 lines.
+- `src/types/atomic/tests.rs` now uses
+  `SAFETY[AUDIT:typed-atomic-test-fixtures]` markers for stack-local atomic
+  words, pointer cells, page/free-list metadata, once state, and lock storage.
+  It is 356 lines with 16 local audit markers.
 - The smallest remaining allowlisted production files are narrow:
   `src/internal/random.rs` is 257 lines,
   `src/types/page.rs` is 258 lines,
@@ -68,18 +71,18 @@ Current review evidence:
 
 ## Issue: Atomic test fixtures still hide unsafe migration debt
 
-> **Comment:** `src/types/atomic/tests.rs` is the smallest remaining
-> allowlisted test file. It should be local proof code for stack-backed atomic
-> wrappers, not a file-level unsafe exception.
+> **Comment:** `src/types/atomic/tests.rs` was the smallest remaining
+> allowlisted test file. It now uses local proof markers for stack-backed atomic
+> wrappers instead of a file-level unsafe exception.
 
-- [ ] Migrate `src/types/atomic/tests.rs` from file-level unsafe allowlisting
+- [x] Migrate `src/types/atomic/tests.rs` from file-level unsafe allowlisting
       to local `SAFETY[AUDIT:typed-atomic-test-fixtures]` markers.
-- [ ] Keep fixtures stack-local and preserve the current ordering, ownership,
+- [x] Keep fixtures stack-local and preserve the current ordering, ownership,
       and layout proof intent.
-- [ ] Add matching `UNSAFE_AUDIT.md` and
+- [x] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [ ] Remove the file from `docs/unsafe-migration-allowlist.tsv`.
-- [ ] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP`.
+- [x] Remove the file from `docs/unsafe-migration-allowlist.tsv`.
+- [x] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP`.
 
 Verify: `cargo test types::atomic::tests --lib --all-features`,
 `scripts/check-unsafe-audit.py`, `scripts/check-unsafe-audit-evidence.py`,
@@ -175,7 +178,7 @@ full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/types/atomic/tests.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/types/atomic/tests.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/internal/random.rs` off the unsafe migration allowlist.
 3. [ ] Split the arena heap visit/delete/move/destroy cluster.
 4. [ ] Split one more `unsafe_performance.rs` assertion cluster.
@@ -183,7 +186,7 @@ full tests.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is below 45 entries and the cap is lowered
+- [x] The unsafe migration allowlist is below 45 entries and the cap is lowered
       with each migrated file.
 - [ ] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.

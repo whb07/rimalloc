@@ -15,12 +15,26 @@ fn macos_malloc_zone_override_stays_bounded_and_audited() {
         "macOS malloc-zone override should stay off the unsafe migration allowlist"
     );
     assert!(
-        macos_rs
-            .matches("SAFETY[AUDIT:macos-zone-override]")
-            .count()
-            >= 55,
-        "macOS malloc-zone override should keep local operation-level audit markers"
+        !macos_rs.contains("SAFETY[AUDIT:macos-zone-override]"),
+        "macOS malloc-zone override markers should stay split by operation"
     );
+    for (audit_id, exact_count) in [
+        ("macos-zone-layout-boundary", 5),
+        ("macos-zone-lookup-boundary", 16),
+        ("macos-zone-allocation-boundary", 22),
+        ("macos-zone-batch-boundary", 7),
+        ("macos-zone-fork-boundary", 9),
+        ("macos-zone-compat-boundary", 12),
+        ("macos-zone-interpose-boundary", 1),
+        ("macos-zone-init-boundary", 11),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert_eq!(
+            macos_rs.matches(&marker).count(),
+            exact_count,
+            "macOS malloc-zone marker {audit_id} should keep exact operation count"
+        );
+    }
     assert!(
         macos_rs.contains("pub static mut mi_malloc_zone: malloc_zone_t = malloc_zone_t {")
             && macos_rs.contains("zone_name: MI_MALLOC_ZONE_NAME.as_ptr().cast(),")

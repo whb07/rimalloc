@@ -875,19 +875,48 @@ Operation IDs:
   count and current-node helper shims. Unsafe operations are limited to
   primitive NUMA calls and retained C ABI wrappers while preserving nullable
   and fallback behavior.
-- `SAFETY[AUDIT:macos-zone-override]`: `src/platform/macos.rs` owns the
-  source-present macOS malloc-zone override boundary. Unsafe operations are
-  limited to Darwin malloc-zone callback signatures and imports, mutable
-  process-global zone metadata, nullable out-pointer writes, default-zone
-  ordering during process initialization, non-mimalloc zone forwarding, mimalloc
-  ownership queries, batch pointer-array reads/writes, fork-hook exports, and
-  no-op compatibility shims.
-- `SAFETY[AUDIT:platform-tls-primitives]`: `src/platform/mod.rs` owns
-  cross-platform primitive TLS and thread-heap dispatch. Unsafe operations are
-  limited to platform TLS declarations, Linux x86_64 initial-exec assembly,
-  Apple fixed-slot reads, dynamic TLS key lookups, raw default/cached
-  thread-heap get/set helpers, empty-thread-heap fallbacks, page-associated
-  thread-heap lookup, and allocator init/done compatibility shims.
+- `SAFETY[AUDIT:macos-zone-layout-boundary]`: `src/platform/macos.rs` owns the
+  source-present Darwin malloc-zone struct, static mimalloc zone metadata, and
+  malloc-zone import declarations. Unsafe operations are limited to raw C ABI
+  callback slots and process-global zone metadata with stable layout.
+- `SAFETY[AUDIT:macos-zone-lookup-boundary]`: `src/platform/macos.rs` owns
+  zone creation/default-zone/name/all-zones lookup shims, jumpstart
+  compatibility, pointer ownership queries, and usable-size forwarding.
+- `SAFETY[AUDIT:macos-zone-allocation-boundary]`: `src/platform/macos.rs` owns
+  malloc/calloc/valloc/free/realloc/memalign zone trampolines. Unsafe operations
+  are limited to mimalloc ownership checks, direct mimalloc dispatch, and
+  non-mimalloc callback forwarding with original pointers and sizes.
+- `SAFETY[AUDIT:macos-zone-batch-boundary]`: `src/platform/macos.rs` owns batch
+  malloc/free pointer-array traversal. Unsafe operations are limited to
+  caller-provided pointer-slot reads/writes, scalar zone trampoline dispatch,
+  and consumed-slot clearing.
+- `SAFETY[AUDIT:macos-zone-fork-boundary]`: `src/platform/macos.rs` owns
+  exported Darwin fork prepare/parent/child hooks and local no-op compatibility
+  helpers.
+- `SAFETY[AUDIT:macos-zone-compat-boundary]`: `src/platform/macos.rs` owns
+  malloc-zone compatibility no-ops and destroy forwarding for check, log,
+  print, pointer-info, register, unregister, printf, and non-mimalloc destroy
+  callbacks.
+- `SAFETY[AUDIT:macos-zone-interpose-boundary]`: `src/platform/macos.rs` owns
+  the Darwin interpose section entries for malloc-zone replacement/target
+  pairs.
+- `SAFETY[AUDIT:macos-zone-init-boundary]`: `src/platform/macos.rs` owns macOS
+  process initialization registration for the mimalloc zone, default-zone
+  ordering, purgeable-zone ordering, and constructor-section publication.
+- `SAFETY[AUDIT:platform-dynamic-tls-key-boundary]`: `src/platform/mod.rs` owns
+  Apple fixed-slot TLS reads, dynamic pthread/Win32 key lookups, and expansion
+  slot pointer selection without taking ownership of thread-heap metadata.
+- `SAFETY[AUDIT:platform-linux-tls-shim-boundary]`: `src/platform/mod.rs` owns
+  hidden Linux C TLS shim declarations, x86_64 initial-exec assembly loads and
+  stores, thread-pointer reads, empty thread-heap symbol loads, and Linux TLS
+  shim tests.
+- `SAFETY[AUDIT:platform-thread-heap-association-boundary]`:
+  `src/platform/mod.rs` owns default/cached thread-heap get/set helpers, empty
+  sentinel fallbacks, heap/thread-heap association lookup, and page-associated
+  thread-heap peeks.
+- `SAFETY[AUDIT:platform-allocator-shim-boundary]`: `src/platform/mod.rs` owns
+  redirected-query and allocator init/done C ABI compatibility shims, including
+  fast-malloc assembly symbols and nullable diagnostic out-pointer writes.
 - `SAFETY[AUDIT:internal-atomic-field-boundary]`: `src/internal/atomic.rs`
   owns scalar C-compatible atomic field views and load/store/RMW/CAS wrappers.
   Unsafe operations are limited to raw `AtomicUsize`/`AtomicIsize`/`AtomicI64`
@@ -940,18 +969,36 @@ Operation IDs:
   the allocator's C-compatible random boundary. The shims convert live context
   pointers to borrowed references once, keep ChaCha state updates in safe Rust,
   and use stack-local key buffers for primitive entropy reads.
-- `SAFETY[AUDIT:wasi-primitive-boundary]`: `src/platform/wasi.rs` owns the
-  bounded WASI primitive backend. Unsafe operations are limited to C import
-  declarations, `sbrk` memory growth, nullable primitive out-pointer conversion,
-  bounded C-string stderr and environment handling, no-op primitive range shims,
-  unsupported huge-page result publication, and thread/TLS compatibility shims.
-- `SAFETY[AUDIT:emscripten-primitive-boundary]`:
-  `src/platform/emscripten.rs` owns the bounded Emscripten primitive backend.
-  Unsafe operations are limited to Emscripten import declarations, emmalloc
-  allocation/free calls, nullable primitive out-pointer conversion, clock and
-  console calls, host stderr fallback C-string handling, unsupported environment
-  and huge-page shims, pthread key lifecycle, static key mutation, and fallback
-  thread-local association.
+- `SAFETY[AUDIT:wasi-memory-growth-boundary]`: `src/platform/wasi.rs` owns the
+  WASI `sbrk` import, checked linear-memory growth, primitive memory
+  initialization, primitive allocation, and no-op primitive free shim.
+- `SAFETY[AUDIT:wasi-range-primitive-boundary]`: `src/platform/wasi.rs` owns
+  commit/decommit/reset/reuse/protect no-op range shims, single-node NUMA
+  queries, and unsupported huge-page result publication through nullable
+  out-pointers.
+- `SAFETY[AUDIT:wasi-io-query-boundary]`: `src/platform/wasi.rs` owns process
+  info, stderr output, environment lookup imports and bounded C-string copying.
+- `SAFETY[AUDIT:wasi-thread-shim-boundary]`: `src/platform/wasi.rs` owns thread
+  init/done, default thread-heap association, threadpool, yield, and
+  compatibility allocation helper shims that do not dereference raw thread-heap
+  pointers.
+- `SAFETY[AUDIT:emscripten-import-boundary]`:
+  `src/platform/emscripten.rs` owns the Emscripten primitive import declarations
+  and pthread destructor callback signature.
+- `SAFETY[AUDIT:emscripten-memory-boundary]`:
+  `src/platform/emscripten.rs` owns primitive memory initialization,
+  emmalloc-backed allocation/free, nullable allocation out-pointers,
+  commit/decommit/reset/reuse/protect shims, and unsupported huge-page results.
+- `SAFETY[AUDIT:emscripten-clock-io-boundary]`:
+  `src/platform/emscripten.rs` owns NUMA constants, clock queries, process-info
+  fallback, console/stderr output, and unsupported environment lookup shims.
+- `SAFETY[AUDIT:emscripten-pthread-key-boundary]`:
+  `src/platform/emscripten.rs` owns pthread default-heap key lifecycle,
+  destructor forwarding, static key mutation, teardown, and thread-local heap
+  association.
+- `SAFETY[AUDIT:emscripten-thread-shim-boundary]`:
+  `src/platform/emscripten.rs` owns threadpool and scheduler-yield compatibility
+  shims.
 - `SAFETY[AUDIT:arena-debug-render]`: `src/allocator/arena/debug.rs` renders
   arena diagnostics by reading arena/page metadata discovered through the
   current sub-process registry, page map lookup, and typed memid views. The

@@ -24,7 +24,7 @@ const PTHREAD_KEY_INVALID: usize = usize::MAX;
 type pthread_key_t = usize;
 
 #[cfg(target_os = "emscripten")]
-// SAFETY[AUDIT:emscripten-primitive-boundary]: declares Emscripten primitive
+// SAFETY[AUDIT:emscripten-import-boundary]: declares Emscripten primitive
 // imports only; callers validate pointers, sizes, and fallback behavior locally.
 unsafe extern "C" {
     fn emmalloc_free(p: *mut c_void);
@@ -34,7 +34,7 @@ unsafe extern "C" {
     fn getentropy(buf: *mut c_void, len: usize) -> c_int;
     fn pthread_key_create(
         key: *mut pthread_key_t,
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: the pthread destructor
+        // SAFETY[AUDIT:emscripten-import-boundary]: the pthread destructor
         // callback uses the C ABI and receives the associated thread heap value.
         dtor: Option<unsafe extern "C" fn(*mut c_void)>,
     ) -> c_int;
@@ -53,11 +53,11 @@ static mut _mi_heap_default_key: pthread_key_t = PTHREAD_KEY_INVALID;
 ///
 /// `config`, when non-null, must point to writable `mi_os_mem_config_t` storage
 /// owned by the primitive initialization caller.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: C callers may pass a nullable
+// SAFETY[AUDIT:emscripten-memory-boundary]: C callers may pass a nullable
 // config out-pointer; non-null storage is initialized with primitive constants.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: the function contract
+    // SAFETY[AUDIT:emscripten-memory-boundary]: the function contract
     // requires any non-null config pointer to be writable config storage.
     let Some(config) = (unsafe { config.as_mut() }) else {
         return;
@@ -73,7 +73,7 @@ pub unsafe extern "C" fn _mi_prim_mem_init(config: *mut mi_os_mem_config_t) {
 ///
 /// `addr` must be either null/unused for `size == 0`, or a pointer previously
 /// returned by the Emscripten primitive allocator for a compatible allocation.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: this C ABI primitive free shim
+// SAFETY[AUDIT:emscripten-memory-boundary]: this C ABI primitive free shim
 // delegates to emmalloc only for non-empty Emscripten allocations.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int {
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int 
     }
     #[cfg(target_os = "emscripten")]
     {
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: non-empty frees are for
+        // SAFETY[AUDIT:emscripten-memory-boundary]: non-empty frees are for
         // pointers returned by the Emscripten primitive allocator.
         unsafe { emmalloc_free(addr) };
     }
@@ -97,7 +97,7 @@ pub unsafe extern "C" fn _mi_prim_free(addr: *mut c_void, size: usize) -> c_int 
 ///
 /// `is_large`, `is_zero`, and `addr`, when non-null, must be valid writable
 /// out-pointers for the duration of the call.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: C callers provide nullable
+// SAFETY[AUDIT:emscripten-memory-boundary]: C callers provide nullable
 // out-pointers and allocation parameters; the backend publishes only emmalloc or
 // fallback allocation results.
 #[inline]
@@ -114,12 +114,12 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     let _ = hint_addr;
     let _ = commit;
     let _ = allow_large;
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: non-null out-pointers are
+    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null out-pointers are
     // caller-provided writable slots for primitive allocation result flags.
     if let Some(is_large) = unsafe { is_large.as_mut() } {
         *is_large = false;
     }
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: non-null out-pointers are
+    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null out-pointers are
     // caller-provided writable slots for primitive allocation result flags.
     if let Some(is_zero) = unsafe { is_zero.as_mut() } {
         *is_zero = false;
@@ -129,10 +129,10 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     }
     #[cfg(target_os = "emscripten")]
     {
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: alignment is clamped to
+        // SAFETY[AUDIT:emscripten-memory-boundary]: alignment is clamped to
         // emmalloc's minimum and the returned pointer is checked for null.
         let p = unsafe { emmalloc_memalign(try_alignment, size) };
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: non-null `addr` is
+        // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `addr` is
         // caller-provided writable storage for the allocation result pointer.
         if let Some(addr) = unsafe { addr.as_mut() } {
             *addr = p;
@@ -143,7 +143,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
     {
         let _ = size;
         let _ = try_alignment;
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: non-null `addr` is
+        // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `addr` is
         // caller-provided writable storage for the fallback null pointer.
         if let Some(addr) = unsafe { addr.as_mut() } {
             *addr = core::ptr::null_mut();
@@ -157,7 +157,7 @@ pub unsafe extern "C" fn _mi_prim_alloc(
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer. `is_zero`, when non-null, must be a valid writable
 /// out-pointer.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: commit is a compatibility no-op
+// SAFETY[AUDIT:emscripten-memory-boundary]: commit is a compatibility no-op
 // and writes only the nullable zero-fill out-pointer when supplied.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_commit(
@@ -167,7 +167,7 @@ pub unsafe extern "C" fn _mi_prim_commit(
 ) -> c_int {
     let _ = addr;
     let _ = size;
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: non-null `is_zero` is a
+    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `is_zero` is a
     // caller-provided writable zero-fill result slot.
     if let Some(is_zero) = unsafe { is_zero.as_mut() } {
         *is_zero = false;
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn _mi_prim_commit(
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer. `needs_recommit`, when non-null, must be a valid writable
 /// out-pointer.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: decommit is a compatibility
+// SAFETY[AUDIT:emscripten-memory-boundary]: decommit is a compatibility
 // no-op and writes only the nullable recommit out-pointer when supplied.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_decommit(
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn _mi_prim_decommit(
 ) -> c_int {
     let _ = addr;
     let _ = size;
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: non-null `needs_recommit` is
+    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `needs_recommit` is
     // a caller-provided writable recommit result slot.
     if let Some(needs_recommit) = unsafe { needs_recommit.as_mut() } {
         *needs_recommit = false;
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn _mi_prim_decommit(
 ///
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: reset is a C ABI compatibility
+// SAFETY[AUDIT:emscripten-memory-boundary]: reset is a C ABI compatibility
 // no-op over a caller-supplied primitive allocation range.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> c_int {
@@ -215,7 +215,7 @@ pub unsafe extern "C" fn _mi_prim_reset(addr: *mut c_void, size: usize) -> c_int
 ///
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: reuse is a C ABI compatibility
+// SAFETY[AUDIT:emscripten-memory-boundary]: reuse is a C ABI compatibility
 // no-op over a caller-supplied primitive allocation range.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> c_int {
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn _mi_prim_reuse(addr: *mut c_void, size: usize) -> c_int
 ///
 /// `addr..addr + size` must describe an allocation range managed by the
 /// primitive layer.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: protect is a C ABI compatibility
+// SAFETY[AUDIT:emscripten-memory-boundary]: protect is a C ABI compatibility
 // no-op over a caller-supplied primitive allocation range and protection flag.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protect: bool) -> c_int {
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn _mi_prim_protect(addr: *mut c_void, size: usize, protec
 ///
 /// `is_zero` and `addr`, when non-null, must be valid writable out-pointers for
 /// the duration of the call.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: huge OS pages are unsupported
+// SAFETY[AUDIT:emscripten-memory-boundary]: huge OS pages are unsupported
 // here, so nullable result out-pointers are initialized to failure values.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
@@ -255,12 +255,12 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     let _ = hint_addr;
     let _ = size;
     let _ = numa_node;
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: non-null `is_zero` is a
+    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `is_zero` is a
     // caller-provided writable huge-page result slot.
     if let Some(is_zero) = unsafe { is_zero.as_mut() } {
         *is_zero = true;
     }
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: non-null `addr` is
+    // SAFETY[AUDIT:emscripten-memory-boundary]: non-null `addr` is
     // caller-provided writable storage for the unsupported result pointer.
     if let Some(addr) = unsafe { addr.as_mut() } {
         *addr = core::ptr::null_mut();
@@ -272,7 +272,7 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
 ///
 /// Must be called only in primitive-layer contexts where reading the current
 /// NUMA node is permitted.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: Emscripten exposes a single
+// SAFETY[AUDIT:emscripten-clock-io-boundary]: Emscripten exposes a single
 // primitive NUMA domain in this backend.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
@@ -283,7 +283,7 @@ pub unsafe extern "C" fn _mi_prim_numa_node() -> usize {
 ///
 /// Must be called only in primitive-layer contexts where reading the process
 /// NUMA topology is permitted.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: Emscripten exposes a single
+// SAFETY[AUDIT:emscripten-clock-io-boundary]: Emscripten exposes a single
 // primitive NUMA domain in this backend.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
@@ -294,13 +294,13 @@ pub unsafe extern "C" fn _mi_prim_numa_node_count() -> usize {
 ///
 /// Must be called only in primitive-layer contexts where querying the platform
 /// clock is permitted.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: clock queries use the
+// SAFETY[AUDIT:emscripten-clock-io-boundary]: clock queries use the
 // Emscripten date import when available and a non-Emscripten host fallback.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
     #[cfg(target_os = "emscripten")]
     {
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: Emscripten date import
+        // SAFETY[AUDIT:emscripten-clock-io-boundary]: Emscripten date import
         // returns process time in milliseconds and does not retain pointers.
         unsafe { emscripten_date_now() as mi_msecs_t }
     }
@@ -317,7 +317,7 @@ pub unsafe extern "C" fn _mi_prim_clock_now() -> mi_msecs_t {
 ///
 /// `pinfo`, when non-null, must point to writable process-info storage owned by
 /// the caller.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: process-info collection is
+// SAFETY[AUDIT:emscripten-clock-io-boundary]: process-info collection is
 // unsupported in this bounded backend and does not dereference the output pointer.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
@@ -328,7 +328,7 @@ pub unsafe extern "C" fn _mi_prim_process_info(pinfo: *mut mi_process_info_t) {
 ///
 /// `msg` must be either null or point to a valid NUL-terminated C string for
 /// the duration of the call.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: console output accepts nullable C
+// SAFETY[AUDIT:emscripten-clock-io-boundary]: console output accepts nullable C
 // strings and writes either through Emscripten console or host stderr fallback.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
@@ -337,13 +337,13 @@ pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
     }
     #[cfg(target_os = "emscripten")]
     {
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: `msg` was checked
+        // SAFETY[AUDIT:emscripten-clock-io-boundary]: `msg` was checked
         // non-null and the contract requires a NUL-terminated C string.
         unsafe { emscripten_console_error(msg) };
     }
     #[cfg(not(target_os = "emscripten"))]
     {
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: `msg` was checked
+        // SAFETY[AUDIT:emscripten-clock-io-boundary]: `msg` was checked
         // non-null and the contract requires a NUL-terminated C string.
         let bytes = unsafe { CStr::from_ptr(msg) }.to_bytes();
         let mut stderr = io::stderr().lock();
@@ -356,7 +356,7 @@ pub unsafe extern "C" fn _mi_prim_out_stderr(msg: *const c_char) {
 ///
 /// `name` must be a valid NUL-terminated C string when non-null. `result`, when
 /// non-null, must point to a writable buffer of `result_size` bytes.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: environment lookup is unsupported
+// SAFETY[AUDIT:emscripten-clock-io-boundary]: environment lookup is unsupported
 // in this bounded backend and never dereferences its raw C buffers.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_getenv(
@@ -374,14 +374,14 @@ pub unsafe extern "C" fn _mi_prim_getenv(
 ///
 /// `value`, when non-null, must be a thread heap pointer previously associated
 /// with the Emscripten pthread destructor key.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: pthread destructors receive the
+// SAFETY[AUDIT:emscripten-pthread-key-boundary]: pthread destructors receive the
 // raw thread heap pointer previously associated with the default-heap key.
 #[inline]
 pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
     if value.is_null() {
         return;
     }
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: non-null `value` is the
+    // SAFETY[AUDIT:emscripten-pthread-key-boundary]: non-null `value` is the
     // thread heap pointer installed by `_mi_prim_thread_associate_default_theap`.
     unsafe { crate::internal::_mi_thread_done(value.cast::<mi_theap_t>()) };
 }
@@ -390,28 +390,28 @@ pub unsafe extern "C" fn mi_pthread_done(value: *mut c_void) {
 ///
 /// Must be called during primitive thread initialization while no Emscripten
 /// default-heap key is active for this process.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: initializes the process-global
+// SAFETY[AUDIT:emscripten-pthread-key-boundary]: initializes the process-global
 // pthread default-heap key once and records the fallback key state.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: reading the process-global
+    // SAFETY[AUDIT:emscripten-pthread-key-boundary]: reading the process-global
     // key is serialized by primitive thread initialization.
     let key_is_invalid = unsafe { _mi_heap_default_key == PTHREAD_KEY_INVALID };
     crate::internal::mi_assert_internal!(key_is_invalid);
     #[cfg(target_os = "emscripten")]
     {
         let mut key = PTHREAD_KEY_INVALID;
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: `key` is local writable
+        // SAFETY[AUDIT:emscripten-pthread-key-boundary]: `key` is local writable
         // storage and the destructor has the expected pthread C ABI.
         if unsafe { pthread_key_create(&mut key, Some(mi_pthread_done)) } == 0 {
-            // SAFETY[AUDIT:emscripten-primitive-boundary]: publishing the key is
+            // SAFETY[AUDIT:emscripten-pthread-key-boundary]: publishing the key is
             // part of the serialized primitive thread initialization path.
             unsafe { _mi_heap_default_key = key };
         }
     }
     #[cfg(not(target_os = "emscripten"))]
     {
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: non-Emscripten tests use
+        // SAFETY[AUDIT:emscripten-pthread-key-boundary]: non-Emscripten tests use
         // `0` as the initialized fallback key sentinel.
         unsafe { _mi_heap_default_key = 0 };
     }
@@ -421,17 +421,17 @@ pub unsafe extern "C" fn _mi_prim_thread_init_auto_done() {
 ///
 /// Must be called during primitive thread teardown or process teardown after
 /// `_mi_prim_thread_init_auto_done` has initialized the key.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: tears down the process-global
+// SAFETY[AUDIT:emscripten-pthread-key-boundary]: tears down the process-global
 // pthread default-heap key and clears fallback TLS state.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: key teardown owns the
+    // SAFETY[AUDIT:emscripten-pthread-key-boundary]: key teardown owns the
     // process-global key state and snapshots it before platform deletion.
     let key = unsafe { _mi_heap_default_key };
     if key != PTHREAD_KEY_INVALID {
         #[cfg(target_os = "emscripten")]
         {
-            // SAFETY[AUDIT:emscripten-primitive-boundary]: `key` was the
+            // SAFETY[AUDIT:emscripten-pthread-key-boundary]: `key` was the
             // initialized pthread key snapshot for this teardown.
             let _ = unsafe { pthread_key_delete(key) };
         }
@@ -439,7 +439,7 @@ pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
         {
             MI_EM_PTHREAD_DEFAULT_THEAP.with(|value| value.set(ptr::null_mut()));
         }
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: teardown publishes the
+        // SAFETY[AUDIT:emscripten-pthread-key-boundary]: teardown publishes the
         // invalid sentinel after platform/fallback state is cleared.
         unsafe { _mi_heap_default_key = PTHREAD_KEY_INVALID };
     }
@@ -449,17 +449,17 @@ pub unsafe extern "C" fn _mi_prim_thread_done_auto_done() {
 ///
 /// `theap` must be null or a valid thread heap pointer whose lifetime covers
 /// subsequent primitive thread-done callbacks.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: associates a nullable default
+// SAFETY[AUDIT:emscripten-pthread-key-boundary]: associates a nullable default
 // thread heap pointer with the initialized pthread key or fallback TLS cell.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_theap_t) {
-    // SAFETY[AUDIT:emscripten-primitive-boundary]: association snapshots the
+    // SAFETY[AUDIT:emscripten-pthread-key-boundary]: association snapshots the
     // process-global key before publishing the thread-local heap pointer.
     let key = unsafe { _mi_heap_default_key };
     if key != PTHREAD_KEY_INVALID {
         #[cfg(target_os = "emscripten")]
         {
-            // SAFETY[AUDIT:emscripten-primitive-boundary]: `key` is initialized
+            // SAFETY[AUDIT:emscripten-pthread-key-boundary]: `key` is initialized
             // and `theap` is the caller-provided thread heap association value.
             let _ = unsafe { pthread_setspecific(key, theap.cast_const().cast()) };
         }
@@ -473,7 +473,7 @@ pub unsafe extern "C" fn _mi_prim_thread_associate_default_theap(theap: *mut mi_
 /// # Safety
 ///
 /// Must be called only from primitive thread-state queries.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: Emscripten reports no internal
+// SAFETY[AUDIT:emscripten-thread-shim-boundary]: Emscripten reports no internal
 // threadpool membership through this compatibility query.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
@@ -484,13 +484,13 @@ pub unsafe extern "C" fn _mi_prim_thread_is_in_threadpool() -> bool {
 ///
 /// Must be called only in contexts where yielding the current thread is
 /// permitted by the embedding runtime.
-// SAFETY[AUDIT:emscripten-primitive-boundary]: yielding delegates to the
+// SAFETY[AUDIT:emscripten-thread-shim-boundary]: yielding delegates to the
 // Emscripten scheduler when available or Rust's host thread yield fallback.
 #[inline]
 pub unsafe extern "C" fn _mi_prim_thread_yield() {
     #[cfg(target_os = "emscripten")]
     {
-        // SAFETY[AUDIT:emscripten-primitive-boundary]: scheduler yield has no
+        // SAFETY[AUDIT:emscripten-thread-shim-boundary]: scheduler yield has no
         // pointer arguments and does not inspect allocator state.
         let _ = unsafe { sched_yield() };
     }

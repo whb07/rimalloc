@@ -9,12 +9,11 @@ plus two release-audit modules that block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 225 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 225 operation IDs with
-  507 automated evidence rows.
-- The largest source audit operation IDs are `macos-zone-override` with 83
-  markers, `free-path-boundary` with 69 markers,
-  `aligned-heap-allocation-boundary` with 68 markers,
+  mentions, and 242 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 242 operation IDs with
+  521 automated evidence rows.
+- The largest source audit operation IDs are `free-path-boundary` with 69
+  markers, `aligned-heap-allocation-boundary` with 68 markers,
   `aligned-realloc-boundary` with 67 markers, `page-map-register-boundary` with
   66 markers, `internal-atomic-field-boundary` with 65 markers,
   `os-memory-allocation-boundary` with 59 markers, and
@@ -24,13 +23,17 @@ Current review evidence:
   `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers,
   `typed-arena-subproc-pointer-test-fixtures` with 17 markers, and
   `typed-thread-heap-state-test-fixtures` with 15 markers.
-- The largest remaining medium clusters are `platform-tls-primitives` with 54
-  markers, `typed-atomic-domain` with 51 markers, `threadlocal-key-manager` and
-  `ffi-libc-helpers` with 50 markers each, `page-queue-transition-boundary`
-  with 49 markers, `emscripten-primitive-boundary` and
-  `init-thread-lifecycle-boundary` with 48 markers each,
-  `raw-macro-cxx-boundary` with 46 markers, `page-map-init-boundary` with 45
-  markers, and `wasi-primitive-boundary` with 42 markers.
+- The completed platform split left the largest new platform IDs at
+  `platform-thread-heap-association-boundary` with 32 markers,
+  `macos-zone-allocation-boundary` with 22 markers,
+  `emscripten-memory-boundary` with 20 markers, and
+  `macos-zone-lookup-boundary` with 16 markers.
+- The largest remaining medium clusters are `typed-atomic-domain` with 51
+  markers, `threadlocal-key-manager` and `ffi-libc-helpers` with 50 markers
+  each, `page-queue-transition-boundary` with 49 markers,
+  `init-thread-lifecycle-boundary` with 48 markers,
+  `raw-macro-cxx-boundary` with 46 markers, and `page-map-init-boundary` with
+  45 markers.
 - `strict-type-allowlist.txt` has 634 active entries: 335
   raw-pointer-parameter entries, 220 bare-domain `usize` entries, 40
   metadata-reference entries, 23 pointer/usize round-trip entries, 14
@@ -47,10 +50,11 @@ Current review evidence:
   `release_policy/api_surface.rs` at 523 lines,
   `release_policy/release_process.rs` at 504 lines,
   `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 426 lines,
+  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs`
+  at 421 lines,
   `interposition_exports.rs` at 413 lines,
   `unsafe_performance/os_memory.rs` at 403 lines, and
-  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs`
-  at 400 lines.
+  `allowance_inventory.rs` at 398 lines.
 - Full validation for the last completed item passed:
   `cargo fmt --all`, `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
@@ -80,18 +84,18 @@ full tests.
 
 ## Issue 2: Split macOS zone and platform primitive marker clusters
 
-> **Comment:** `macos-zone-override` has 83 markers, while adjacent platform
-> primitive clusters remain broad: `platform-tls-primitives` has 54 markers,
-> `emscripten-primitive-boundary` has 48, and `wasi-primitive-boundary` has 42.
+> **Comment:** `macos-zone-override` had 83 markers, while adjacent platform
+> primitive clusters remained broad: `platform-tls-primitives` had 54 markers,
+> `emscripten-primitive-boundary` had 48, and `wasi-primitive-boundary` had 42.
 
-- [ ] Split `macos-zone-override` into operation IDs for zone declarations,
+- [x] Split `macos-zone-override` into operation IDs for zone declarations,
       zone lookup/name helpers, allocation/free/realloc/memalign trampolines,
       batch allocation/free, fork hooks, interpose section publishing, and
       process initialization registration.
-- [ ] Split platform primitive markers where existing release-audit modules
+- [x] Split platform primitive markers where existing release-audit modules
       already distinguish TLS/thread-heap association, Emscripten primitives,
       WASI memory growth, and Unix/Windows primitive allocation behavior.
-- [ ] Preserve the raw platform ABI shape: no new heap allocation, no dynamic
+- [x] Preserve the raw platform ABI shape: no new heap allocation, no dynamic
       dispatch, no panicking path, and no broad wrapper that changes the
       interposition or platform callback contract.
 
@@ -163,7 +167,7 @@ tests.
 ## Suggested implementation order
 
 1. [x] Split typed pointer and heap proof-fixture audit clusters.
-2. [ ] Split macOS zone and platform primitive marker clusters.
+2. [x] Split macOS zone and platform primitive marker clusters.
 3. [ ] Split free-path and aligned allocation marker clusters.
 4. [ ] Split page-map registration and internal atomic marker clusters.
 5. [ ] Split largest release-audit modules and lower the module cap.
@@ -171,9 +175,9 @@ tests.
 ## Definition of done for this backlog
 
 - [ ] No source audit operation ID has more than 60 source markers.
-- [ ] The largest remaining platform, free/aligned allocation, page-map, and
-      atomic clusters listed above are split into narrower review units with
-      separate docs, evidence rows, and release-audit guards.
+- [ ] The largest remaining free/aligned allocation, page-map, and atomic
+      clusters listed above are split into narrower review units with separate
+      docs, evidence rows, and release-audit guards.
 - [ ] Release-audit modules are split enough to lower the module cap to 600
       lines without weakening coverage.
 - [ ] The strict-type wildcard guard remains at exactly one retained

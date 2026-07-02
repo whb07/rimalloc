@@ -15,12 +15,22 @@ fn wasi_primitive_backend_stays_bounded_and_audited() {
         "WASI primitive backend should stay off the unsafe migration allowlist"
     );
     assert!(
-        wasi_rs
-            .matches("SAFETY[AUDIT:wasi-primitive-boundary]")
-            .count()
-            >= 40,
-        "WASI primitive backend should keep local operation-level audit markers"
+        !wasi_rs.contains("SAFETY[AUDIT:wasi-primitive-boundary]"),
+        "WASI primitive backend markers should stay split by operation"
     );
+    for (audit_id, exact_count) in [
+        ("wasi-memory-growth-boundary", 13),
+        ("wasi-range-primitive-boundary", 12),
+        ("wasi-io-query-boundary", 11),
+        ("wasi-thread-shim-boundary", 6),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert_eq!(
+            wasi_rs.matches(&marker).count(),
+            exact_count,
+            "WASI primitive marker {audit_id} should keep exact operation count"
+        );
+    }
     assert!(
         wasi_rs.contains("fn getenv(name: *const c_char) -> *const c_char;")
             && wasi_rs.contains("#[cfg(target_os = \"wasi\")]")
@@ -189,12 +199,23 @@ fn emscripten_primitive_backend_stays_bounded_and_audited() {
         "Emscripten primitive backend should stay off the unsafe migration allowlist"
     );
     assert!(
-        emscripten_rs
-            .matches("SAFETY[AUDIT:emscripten-primitive-boundary]")
-            .count()
-            >= 45,
-        "Emscripten primitive backend should keep local operation-level audit markers"
+        !emscripten_rs.contains("SAFETY[AUDIT:emscripten-primitive-boundary]"),
+        "Emscripten primitive backend markers should stay split by operation"
     );
+    for (audit_id, exact_count) in [
+        ("emscripten-import-boundary", 2),
+        ("emscripten-memory-boundary", 20),
+        ("emscripten-clock-io-boundary", 9),
+        ("emscripten-pthread-key-boundary", 14),
+        ("emscripten-thread-shim-boundary", 3),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert_eq!(
+            emscripten_rs.matches(&marker).count(),
+            exact_count,
+            "Emscripten primitive marker {audit_id} should keep exact operation count"
+        );
+    }
     for import in [
         "fn emmalloc_free(p: *mut c_void);",
         "fn emmalloc_memalign(alignment: usize, size: usize) -> *mut c_void;",

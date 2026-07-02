@@ -20,13 +20,26 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
     assert!(
         !unsafe_allowlist
             .lines()
-            .any(|line| line.starts_with("src/platform/mod.rs\t"))
-            && prim_rs
-                .matches("SAFETY[AUDIT:platform-tls-primitives]")
-                .count()
-                >= 54,
+            .any(|line| line.starts_with("src/platform/mod.rs\t")),
         "platform TLS primitive boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
+    assert!(
+        !prim_rs.contains("SAFETY[AUDIT:platform-tls-primitives]"),
+        "platform TLS primitive markers should stay split by operation"
+    );
+    for (audit_id, exact_count) in [
+        ("platform-dynamic-tls-key-boundary", 3),
+        ("platform-linux-tls-shim-boundary", 11),
+        ("platform-thread-heap-association-boundary", 32),
+        ("platform-allocator-shim-boundary", 8),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert_eq!(
+            prim_rs.matches(&marker).count(),
+            exact_count,
+            "platform TLS primitive marker {audit_id} should keep exact operation count"
+        );
+    }
     assert!(
         prim_rs.contains("pub const MI_TLS_MODEL_THREAD_LOCAL")
             && prim_rs.contains("pub const MI_TLS_MODEL_FIXED_SLOT")

@@ -1,25 +1,26 @@
 # TODO: Fresh Rust Idiom Follow-up Backlog
 
-Fresh-eyes review after finishing the prior backlog on `master`. The last pass
-improved the release-audit split, narrowed one strict-type allowance, moved
-arena diagnostics behind clearer helpers, and extracted deferred-free callback
-state out of the page translation unit. The remaining work is still the same
-kind of cleanup: shrink broad exceptions, keep hot paths stable, and split
-translated review units only at boundaries with clear invariants.
+Fresh-eyes review after completing the previous TODO backlog on `master`. The
+last pass lowered the unsafe migration cap to 58, removed one stale strict-type
+allowance, split a release-audit boundary module, and moved page count helpers
+out of `page.rs`. The next pass should keep the same discipline: reduce broad
+exceptions, preserve allocator hot-path shape, and split translated code only at
+cohesive boundaries with clear invariants.
 
-Review evidence:
+Current review evidence:
 
 - `docs/unsafe-migration-allowlist.tsv` still has 58 entries: 44 production,
   11 test, and 3 translation files.
-- The smallest allowlisted test files are good next migration candidates:
+- The smallest remaining allowlisted test fixtures are still reviewable:
   `src/types/arena/tests.rs` is 109 lines,
   `src/types/freelist_wrappers/tests.rs` is 119 lines,
-  `src/types/callbacks/tests.rs` is 135 lines, and
-  `src/types/layout/tests.rs` is 139 lines.
+  `src/types/callbacks/tests.rs` is 135 lines,
+  `src/types/layout/tests.rs` is 139 lines, and
+  `src/types/page_states/tests.rs` is 151 lines.
 - `strict-type-allowlist.txt` has 95 entries; 6 are still marked `remove:`.
-  The removable entries are broad `bare-domain-usize` allowances for
-  `alloc`, `aligned`, `arena`, `bitmap`, `internal`, and `page`.
-- The largest source review units are still large:
+  The remaining broad `bare-domain-usize` allowances are for `alloc`,
+  `aligned`, `arena`, `bitmap`, `internal`, and `page`.
+- The largest production review units are still translated-style modules:
   `src/allocator/arena.rs` is 4,613 lines,
   `src/allocator/page.rs` is 3,220 lines,
   `src/internal/bitmap.rs` is 2,604 lines,
@@ -27,169 +28,138 @@ Review evidence:
   `src/allocator/init.rs` is 2,339 lines,
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
-- `tests/release_fast_path_audit.rs` is split, but the largest child modules are
-  still review-heavy: root is 2,862 lines,
+- `src/allocator/page/counts.rs` is 264 lines and now owns 25
+  `SAFETY[AUDIT:page-count-accessors]` markers. The split improved module
+  shape, but the repeated marker cluster is still noisy.
+- `src/allocator/arena/debug.rs` is 620 lines and still owns 34
+  `SAFETY[AUDIT:arena-debug-render]` markers around diagnostic metadata reads.
+- The release audit is split, but its largest units remain close to the guard:
+  `tests/release_fast_path_audit.rs` is 2,864 lines,
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,877 lines, and
   `tests/release_fast_path_audit/release_policy.rs` is 2,291 lines.
-- `src/allocator/arena/debug.rs` is 625 lines and still has 34
-  `SAFETY[AUDIT:arena-debug-render]` markers. It no longer needs a
-  `metadata-reference` strict-type allowance for `ArenaDebugView::prefix`.
-- `src/allocator/page/deferred.rs` is a clean 139-line module, and
-  `src/allocator/page/counts.rs` now owns the 264-line page/page-queue count
-  accessor boundary. `src/allocator/page.rs` still mixes queue movement,
-  free-list extension, fresh allocation, retirement, and generic allocation.
-- `scripts/check-ffi-boundary.py`, `scripts/check-no-allocation-audit.py`,
-  `scripts/check-unsafe-audit.py`, `scripts/check-unsafe-audit-evidence.py`,
-  `scripts/check-unsafe-inventory.py`, and `scripts/check-strict-types.py` all
-  pass after the deferred-free split.
 
-## Issue: Unsafe migration allowlist still has small reviewable entries
+## Issue: Unsafe migration allowlist still has small test fixtures
 
-> **Comment:** The current allowlist still includes small test fixtures where
-> unsafe operations are local and do not need assembly evidence. Migrating a few
-> of those keeps reducing legacy exception surface without touching allocator hot
-> paths.
+> **Comment:** The remaining test-only unsafe fixtures are small enough to audit
+> directly. Migrating them reduces legacy exception surface without changing
+> production allocator behavior.
 
-- [x] Inventory the four smallest allowlisted test files and confirm their
-      unsafe operations are stack-local fixtures or wrapper proof helpers.
-- [x] Migrate at least two of those files to operation-level
+- [ ] Re-rank the smallest allowlisted test files by proof complexity.
+- [ ] Migrate at least two local fixture files to operation-level
       `SAFETY[AUDIT:*]` markers.
-- [x] Add `UNSAFE_AUDIT.md` operation entries and
-      `docs/unsafe-audit-evidence.tsv` rows for the new IDs.
-- [x] Remove the migrated files from `docs/unsafe-migration-allowlist.tsv` and
+- [ ] Add matching entries to `UNSAFE_AUDIT.md` and
+      `docs/unsafe-audit-evidence.tsv`.
+- [ ] Remove the migrated files from `docs/unsafe-migration-allowlist.tsv` and
       lower `ALLOWLIST_ENTRY_CAP`.
-- [x] Keep the audit output category split visible so test-only progress does
-      not obscure production unsafe debt.
-  - Evidence: `src/types/freelist/tests.rs` now carries
-    `SAFETY[AUDIT:typed-freelist-test-fixtures]` for stack-local block metadata
-    and raw link helper fixtures, and `src/types/padding/tests.rs` now carries
-    `SAFETY[AUDIT:typed-padding-test-fixtures]` for stack-local padding records,
-    byte buffers, and non-dereferenced canary witnesses. Both files were removed
-    from `docs/unsafe-migration-allowlist.tsv`, `ALLOWLIST_ENTRY_CAP` is now 58,
-    and `scripts/check-unsafe-audit.py` reports 58 legacy files across
-    production, test, and translation categories.
-- Verify: `scripts/check-unsafe-audit.py`,
-  `scripts/check-unsafe-audit-evidence.py`,
-  `scripts/check-unsafe-inventory.py`, release audit, full clippy, and full
-  tests.
+- [ ] Keep the audit category split visible so test progress does not hide
+      production unsafe debt.
 
-## Issue: Strict-type removable entries remain broad file-level allowances
+Verify: `scripts/check-unsafe-audit.py`,
+`scripts/check-unsafe-audit-evidence.py`,
+`scripts/check-unsafe-inventory.py`,
+`cargo test --test release_fast_path_audit --all-features`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features`.
 
-> **Comment:** The removable strict-type entries are still file-level
-> `bare-domain-usize` allowances. The next pass should reduce one broad
-> allowance to typed wrappers or symbol-level compatibility entries, starting
-> away from the allocation/free fast path when possible.
+## Issue: Page count accessors repeat the same unsafe proof too often
 
-- [x] Re-rank the seven `remove:` entries by hot-path risk and number of current
-      checker hits.
-- [x] Prefer `src/internal/mod.rs`, `src/internal/bitmap.rs`, or another
-      helper-heavy file before touching `alloc`, `aligned`, `free`, or `page`.
-- [x] Replace one broad file-level `bare-domain-usize` entry with typed domain
-      wrappers or narrower symbol-level entries.
-- [x] Lower `REMOVE_ENTRY_CAP` in `scripts/check-strict-types.py`.
-- [x] Preserve public C/platform ABI signatures and documented raw helper
-      boundaries.
-  - Evidence: removing the broad `bare-domain-usize` entry for
-    `src/allocator/free.rs` produced zero current strict-type checker hits, so
-    the stale removable allowance was deleted. `scripts/check-strict-types.py`
-    now caps removable entries at 6, with the remaining broad entries limited
-    to `alloc`, `aligned`, `arena`, `bitmap`, `internal`, and `page`.
-- Verify: `scripts/check-strict-types.py`, release audit, full clippy, full
-  tests, and assembly capture for any changed hot path.
+> **Comment:** Moving page count accessors into `page/counts.rs` made the
+> boundary clearer, but 25 repeated `page-count-accessors` markers in 264 lines
+> still reads like a mechanical translation. The next pass should consolidate
+> proof at small helpers or typed views without changing the caller-facing inline
+> shape.
 
-## Issue: Arena diagnostics still expose too many raw metadata reads
+- [ ] Group the count accessors by shared raw field invariant.
+- [ ] Introduce narrow safe helpers or typed local views where they reduce
+      repeated unsafe blocks without adding allocation or dynamic dispatch.
+- [ ] Keep current `#[inline]` behavior for hot count accessors.
+- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, and
+      `docs/unsafe-inventory.md` if marker IDs or counts change.
+- [ ] Preserve the existing `crate::page` re-export surface.
 
-> **Comment:** `ArenaDebugView` improved the render path, but the module still
-> has repeated safety markers. The diagnostic view now owns the prefix proof
-> without returning broad raw metadata references to callers.
+Verify: focused page tests, `scripts/check-unsafe-audit.py`,
+`scripts/check-unsafe-audit-evidence.py`,
+`scripts/check-unsafe-inventory.py`,
+`cargo test --test release_fast_path_audit --all-features`, full clippy, and
+full tests.
 
-- [x] Inventory `ArenaDebugView::prefix` callers and the remaining
-      `SAFETY[AUDIT:arena-debug-render]` marker clusters.
-- [x] Replace broad prefix borrowing with narrower accessors or copy-out views
-      for the specific fields used by diagnostics.
-- [x] Remove the `metadata-reference|src/allocator/arena/debug.rs` strict-type
-      allowance if the checker no longer needs it.
-- [x] Reduce the `arena-debug-render` marker count while keeping operation-level
-      safety proof at the helper that performs the raw read.
-- [x] Keep `mi_debug_show_arenas` and `mi_arenas_print` ABI-compatible and
-      allocation-free.
-  - Evidence: `ArenaDebugView` now builds an `ArenaDebugPrefixSnapshot` in its
-    audited constructor instead of returning `&MiArenaPrefix` from `prefix()`.
-    The field-specific accessors read that copy-out view, the
-    `metadata-reference` allowlist entry for `src/allocator/arena/debug.rs` was
-    removed, `scripts/check-strict-types.py` passes without a replacement
-    allowance, and the repeated `arena-debug-render` marker count is down to
-    34 while the exported debug C ABI functions remain unchanged.
-- Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
-  `scripts/check-no-allocation-audit.py`, release audit, full clippy, and full
-  tests.
+## Issue: Strict-type removable entries are still broad
 
-## Issue: Release fast-path audit split is still uneven
+> **Comment:** The remaining `remove:` entries are file-level
+> `bare-domain-usize` allowances. The next cleanup should eliminate or narrow
+> one broad allowance by adding typed scalar domains around helper code that is
+> not a C ABI boundary.
 
-> **Comment:** The release audit now has child modules, but
-> `unsafe_performance.rs` is still nearly 3,000 lines. More of its structural
-> assertions can move into domain modules without weakening the coverage.
+- [ ] Re-rank the 6 removable entries by checker hits and hot-path risk.
+- [ ] Prefer `src/internal/mod.rs`, `src/internal/bitmap.rs`, or another
+      helper-heavy area before touching allocation/free fast paths.
+- [ ] Replace one broad file-level allowance with typed wrappers or narrower
+      symbol-level compatibility entries.
+- [ ] Lower `REMOVE_ENTRY_CAP` in `scripts/check-strict-types.py`.
+- [ ] Preserve C ABI signatures, raw helper compatibility, and measured hot
+      call shape.
 
-- [x] Inventory large assertion clusters in
-      `tests/release_fast_path_audit/unsafe_performance.rs`, especially callback
-      boundaries, strict-type migration guards, and allocation-layout checks.
-- [x] Move one cohesive cluster into a new child module under
-      `tests/release_fast_path_audit/unsafe_performance/`.
-- [x] Keep shared source-reading helpers in the parent and avoid duplicating
-      slicing utilities.
-- [x] Tighten the release-audit size guard if the split gives enough margin.
-- [x] Preserve the 67-test release audit count and all existing assertions.
-  - Evidence: the page-map, safe pointer lookup, heap area, main heap predicate,
-    meta-page classification, and deferred-free callback boundary assertions now
-    live in
-    `tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs`.
-    `unsafe_performance.rs` dropped to 2,870 lines, the new child module is 160
-    lines, the shared source reads stay in the parent, the module size guard is
-    tightened to 3,000 lines, and the release audit still runs 67 tests.
-- Verify: `cargo test --test release_fast_path_audit --all-features`,
-  `git diff --check`, full clippy, and full tests.
+Verify: `scripts/check-strict-types.py`,
+`cargo test --test release_fast_path_audit --all-features`,
+`cargo clippy --workspace --all-targets --all-features`, and
+`cargo test --workspace --all-targets --all-features`.
 
-## Issue: Page module still mixes queue, count, and allocation policy
+## Issue: Release fast-path audit still has large child modules
 
-> **Comment:** Extracting deferred-free state was a good first production split,
-> but `page.rs` remains a large translated unit. The next split should keep
-> avoiding hot-path reshaping and move a cohesive queue/count helper cluster.
+> **Comment:** The release audit split is working, but `unsafe_performance.rs`
+> remains close to the 3,000-line guard. Another cohesive assertion cluster can
+> move into a child module so the audit stays reviewable as new checks are added.
 
-- [x] Inventory page queue count helpers, queue movement helpers, and queue
-      validation helpers in `src/allocator/page.rs`.
-- [x] Pick one low-risk queue/count cluster with a small public surface and a
-      clear ownership invariant.
-- [x] Move it into a documented `src/allocator/page/*.rs` module while
-      preserving existing `#[inline]` and `#[inline(never)]` behavior.
-- [x] Update release-audit source-path assertions, strict-type allowances,
-      unsafe inventory, and boundary scripts after the move.
-- [x] Keep allocator ABI, symbol exports, and benchmark-critical call shape
-      unchanged.
-  - Evidence: page/page-queue count accessors moved to
-    `src/allocator/page/counts.rs` with their existing inline attributes and
-    `crate::page` re-exports preserved for callers. `src/allocator/page.rs`
-    dropped to 3,220 lines, the new count module is 264 lines, the strict-type
-    checker maps the split file back to the existing page raw-metadata boundary,
-    and `SAFETY[AUDIT:page-count-accessors]` documents the moved unsafe field
-    access without adding a legacy unsafe allowlist entry.
-- Verify: focused page/release tests, API inventory, public symbol checks, full
-  clippy, and full tests.
+- [ ] Inventory large assertion clusters in
+      `tests/release_fast_path_audit/unsafe_performance.rs` and
+      `tests/release_fast_path_audit/release_policy.rs`.
+- [ ] Move one cohesive cluster into a child module under
+      `tests/release_fast_path_audit/`.
+- [ ] Keep source-reading helpers shared instead of duplicating file-slicing
+      utilities.
+- [ ] Preserve the current release-audit test coverage and tighten guards if
+      the split creates enough margin.
+- [ ] Update `tests/release_fast_path_audit/todo_backlog.rs` when the measured
+      evidence changes.
+
+Verify: `cargo test --test release_fast_path_audit --all-features`,
+`git diff --check`, full clippy, and full tests.
+
+## Issue: Large allocator translation units still need boundary splits
+
+> **Comment:** `arena.rs` and `page.rs` are still the biggest production review
+> units. The next split should move one small, cohesive, non-hot helper cluster
+> into a submodule while preserving ABI, symbol names, and fast-path code shape.
+
+- [ ] Re-scan `src/allocator/arena.rs` and `src/allocator/page.rs` for helper
+      clusters with narrow ownership invariants.
+- [ ] Pick a low-risk cluster away from allocation/free inner loops unless the
+      boundary already has release-audit coverage.
+- [ ] Move the cluster into an existing or new allocator submodule with private
+      implementation details and explicit re-exports only where needed.
+- [ ] Update source-path assertions, strict-type path aliases, unsafe audit
+      evidence, and generated unsafe inventory after the move.
+- [ ] Preserve allocator ABI, public symbols, and benchmark-critical inline
+      behavior.
+
+Verify: `scripts/check-ffi-boundary.py`, `scripts/check-api-inventory.py`,
+`scripts/check-public-abi.py`, focused release/page or arena tests, full
+clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Shrink the unsafe migration allowlist using small test fixtures.
-2. [x] Reduce one broad removable strict-type entry.
-3. [x] Tighten arena diagnostic metadata access.
-4. [x] Split one more release-audit unsafe/performance cluster.
-5. [x] Split one page queue/count helper cluster.
+1. [ ] Shrink the unsafe migration allowlist using small test fixtures.
+2. [ ] Consolidate repeated page count accessor safety proof.
+3. [ ] Remove or narrow one broad strict-type `usize` allowance.
+4. [ ] Split one more release-audit assertion cluster.
+5. [ ] Split one production allocator helper boundary.
 
 ## Definition of done for this backlog
 
-- [x] The unsafe migration allowlist is below 60 entries and the cap is lowered.
-- [x] The strict-type removable-entry count is below 7 and capped lower.
-- [x] Arena diagnostics no longer need a broad metadata-reference allowance for
-      `ArenaDebugView::prefix`.
-- [x] Release fast-path audit modules are smaller and guarded against growing
-      back into large review units.
-- [x] A second page submodule owns a clear page queue/count boundary without API,
-      ABI, or hot-path performance drift.
+- [ ] The unsafe migration allowlist is below 58 entries and the cap is lowered.
+- [ ] The page count accessor marker cluster is smaller or justified by a
+      narrower helper proof.
+- [ ] The strict-type removable-entry count is below 6 and capped lower.
+- [ ] The largest release-audit child module has more guard margin.
+- [ ] One large allocator translation unit is smaller without API, ABI, or
+      hot-path performance drift.

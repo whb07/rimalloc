@@ -14,8 +14,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 26 entries: 23 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 26.
+- `docs/unsafe-migration-allowlist.tsv` has 25 entries: 22 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 25.
 - The completed pass moved `src/ffi/abi.rs`, `src/allocator/arena_meta.rs`,
   `src/platform/wasi.rs`, `src/platform/emscripten.rs`, and
   `src/types/atomic.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -25,15 +25,19 @@ Current review evidence:
   `reallocarr` pointer-slot updates, wide-string duplication, environment
   duplication, and aligned/product allocation shims, and is off the unsafe
   migration allowlist.
+- `src/lib.rs` now uses 13 crate-root `SAFETY[AUDIT:global-alloc]` and
+  `SAFETY[AUDIT:panic-boundary]` markers for `GlobalAlloc` trait methods,
+  allocation forwarding blocks, the no-std panic handler, the abort extern, and
+  the personality export, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files are
-  `src/lib.rs` at 398 lines with 21 `unsafe` hits and 8 local markers,
   `src/ffi/libc.rs` at 518 lines with 46 `unsafe` hits and 0 local markers,
   `src/allocator/threadlocal.rs` at 579 lines with 42 `unsafe` hits and 0 local
-  markers, and
+  markers,
   `src/allocator/heap.rs` at 604 lines with 93 `unsafe` hits and 0 local
-  markers, and
+  markers,
   `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits and 0 local
-  markers.
+  markers, and
+  `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits.
 - After the current remaining TODO items, the next smallest remaining
   allowlisted production files are
   `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits,
@@ -100,22 +104,22 @@ and full tests.
 
 ## Issue: Crate root still uses a file-level unsafe allowance
 
-> **Comment:** `src/lib.rs` already has local markers for `GlobalAlloc` and the
-> no-std panic boundary, but the file remains allowlisted. The remaining work
-> should close crate-root unsafe-attribute and extern coverage without widening
-> the public Rust API or adding new compatibility aliases.
+> **Comment:** `src/lib.rs` had local markers for `GlobalAlloc` and the no-std
+> panic boundary, but still needed crate-root unsafe-attribute and extern
+> coverage without widening the public Rust API or adding new compatibility
+> aliases.
 
-- [ ] Cover every crate-root unsafe operation with the existing
+- [x] Cover every crate-root unsafe operation with the existing
       `SAFETY[AUDIT:global-alloc]` or `SAFETY[AUDIT:panic-boundary]` operation
       IDs, adding a new ID only if a distinct crate-root boundary is truly
       needed.
-- [ ] Preserve the curated public facade, crate-private translated aliases,
+- [x] Preserve the curated public facade, crate-private translated aliases,
       `GlobalAlloc` null-on-failure behavior, over-alignment routing, and
       no-std Linux abort behavior.
-- [ ] Keep release-audit checks that implementation modules stay private, raw
+- [x] Keep release-audit checks that implementation modules stay private, raw
       calls remain unsafe to downstream users, and the panic/no-unwind policy is
       unchanged.
-- [ ] Add matching unsafe audit/evidence entries if needed, remove `src/lib.rs`
+- [x] Add matching unsafe audit/evidence entries if needed, remove `src/lib.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower the cap.
 
@@ -202,7 +206,7 @@ clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/raw/posix.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/lib.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/lib.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/ffi/libc.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/threadlocal.rs` off the unsafe migration
        allowlist.

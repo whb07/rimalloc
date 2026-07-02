@@ -324,6 +324,8 @@ pub struct MiMalloc;
 // process allocator. Each unsafe trait method delegates to mimalloc while
 // preserving Rust's `GlobalAlloc` null-on-failure and caller-layout contract.
 unsafe impl core::alloc::GlobalAlloc for MiMalloc {
+    // SAFETY[AUDIT:global-alloc]: the trait method preserves the caller-owned
+    // layout contract before selecting the matching mimalloc allocation path.
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         // SAFETY[AUDIT:global-alloc]: `GlobalAlloc` callers provide a valid
         // non-zero `Layout`; over-aligned requests use mimalloc's aligned path.
@@ -336,6 +338,8 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         }
     }
 
+    // SAFETY[AUDIT:global-alloc]: the zeroed trait method has the same layout
+    // contract as `alloc` and only changes the selected mimalloc entry point.
     unsafe fn alloc_zeroed(&self, layout: core::alloc::Layout) -> *mut u8 {
         // SAFETY[AUDIT:global-alloc]: same layout contract as `alloc`, with
         // the zeroing path selected before returning to the caller.
@@ -348,12 +352,16 @@ unsafe impl core::alloc::GlobalAlloc for MiMalloc {
         }
     }
 
+    // SAFETY[AUDIT:global-alloc]: the trait caller supplies the live pointer
+    // and original layout; mimalloc owns the matching deallocation boundary.
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: core::alloc::Layout) {
         // SAFETY[AUDIT:global-alloc]: `GlobalAlloc` requires `ptr` to be a
         // live allocation from this allocator with its original layout.
         unsafe { free::mi_free(ptr.cast()) }
     }
 
+    // SAFETY[AUDIT:global-alloc]: reallocation keeps the trait's caller-owned
+    // pointer/layout contract and routes over-aligned layouts explicitly.
     unsafe fn realloc(
         &self,
         ptr: *mut u8,
@@ -390,6 +398,8 @@ unsafe extern "C" {
 }
 
 #[cfg(all(not(test), target_os = "linux", not(feature = "std")))]
+// SAFETY[AUDIT:panic-boundary]: this no-std export satisfies the runtime
+// personality symbol by aborting instead of unwinding across the boundary.
 #[unsafe(no_mangle)]
 extern "C" fn rust_eh_personality() {
     // SAFETY[AUDIT:panic-boundary]: no_std builds abort if an unwinding

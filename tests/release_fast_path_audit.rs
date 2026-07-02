@@ -433,6 +433,8 @@ fn crate_root_exposes_only_curated_rust_facade() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
     let raw_rs = fs::read_to_string(root.join("src/raw/mod.rs")).expect("read src/raw/mod.rs");
+    let unsafe_allowlist = fs::read_to_string(root.join("docs/unsafe-migration-allowlist.tsv"))
+        .expect("read unsafe migration allowlist");
 
     assert!(
         lib_rs.contains("pub mod raw;")
@@ -444,6 +446,15 @@ fn crate_root_exposes_only_curated_rust_facade() {
             && lib_rs.contains("InitializedAllocation")
             && lib_rs.contains("StatsSnapshot"),
         "crate root should expose the raw facade, unsafe-adjacent callbacks, and finalized safe Rust allocator facade"
+    );
+
+    assert!(
+        !unsafe_allowlist.contains("src/lib.rs")
+            && lib_rs.matches("SAFETY[AUDIT:global-alloc]").count() >= 9
+            && lib_rs.matches("SAFETY[AUDIT:panic-boundary]").count() >= 4
+            && lib_rs.contains("#[unsafe(no_mangle)]")
+            && lib_rs.contains("unsafe extern \"C\""),
+        "crate-root unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
     );
 
     for module in ["abi", "headers", "mimalloc"] {

@@ -15,13 +15,14 @@ smaller audit modules, or symbol-level compatibility entries.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` still has 43 entries: 38 production,
-  2 test, and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 43.
-- The only remaining allowlisted test files are
-  `src/types/scalar/tests.rs`, which is 412 lines with 31 `unsafe { ... }`
-  sites and 0 local `SAFETY[AUDIT:*]` markers, and
-  `src/types/ptr/tests.rs`, which is 618 lines with 168 `unsafe { ... }`
-  sites and 0 local `SAFETY[AUDIT:*]` markers.
+- `docs/unsafe-migration-allowlist.tsv` now has 42 entries: 38 production,
+  1 test, and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 42.
+- `src/types/scalar/tests.rs` now uses
+  `SAFETY[AUDIT:typed-scalar-test-fixtures]` markers for 31 unchecked scalar
+  constructor fixtures and is off the unsafe migration allowlist.
+- The only remaining allowlisted test file is `src/types/ptr/tests.rs`, which
+  is 618 lines with 168 `unsafe { ... }` sites and 0 local
+  `SAFETY[AUDIT:*]` markers.
 - The smallest remaining allowlisted production file is
   `src/types/page.rs`, which is 258 lines with 5 `unsafe` hits and 0 local
   `SAFETY[AUDIT:*]` markers. Its existing tests in `src/types/page/tests.rs`
@@ -75,15 +76,15 @@ Current review evidence:
 > fixtures with concrete values, so they should be converted to local
 > operation-level proof markers instead of a file-level exception.
 
-- [ ] Add local `SAFETY[AUDIT:typed-scalar-test-fixtures]` markers to the
+- [x] Add local `SAFETY[AUDIT:typed-scalar-test-fixtures]` markers to the
       unchecked scalar constructor fixtures.
-- [ ] Keep the tests table-driven or direct; do not introduce allocations,
+- [x] Keep the tests table-driven or direct; do not introduce allocations,
       helper abstractions, or broader fixture state just to reduce comments.
-- [ ] Add matching `UNSAFE_AUDIT.md` and
+- [x] Add matching `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv` entries.
-- [ ] Remove `src/types/scalar/tests.rs` from
+- [x] Remove `src/types/scalar/tests.rs` from
       `docs/unsafe-migration-allowlist.tsv`.
-- [ ] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP`.
+- [x] Regenerate unsafe inventory and lower `ALLOWLIST_ENTRY_CAP`.
 
 Verify: `cargo test types::scalar::tests --lib --all-features`,
 `scripts/check-unsafe-audit.py`, `scripts/check-unsafe-audit-evidence.py`,
@@ -181,7 +182,7 @@ full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/types/scalar/tests.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/types/scalar/tests.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/types/ptr/tests.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/types/page.rs` off the unsafe migration allowlist.
 4. [ ] Split the page lifecycle/page-queue release-audit assertion cluster.

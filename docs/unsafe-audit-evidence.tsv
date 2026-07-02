@@ -60,6 +60,7 @@ typed-memid-test-fixtures	test	tests/release_fast_path_audit.rs	Checks memid vie
 typed-padding-metadata	test	src/types/padding/tests.rs	Exercises padding pointer construction, reads, writes, delta updates, and block-plus-usable-size pointer arithmetic.
 typed-padding-metadata	test	tests/release_fast_path_audit.rs	Checks production padding wrappers keep canary and delta fields private and route metadata access through PaddingPtr.
 typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-local padding metadata, canary witnesses, and padding pointer arithmetic fixtures.
+typed-scalar-test-fixtures	test	src/types/scalar/tests.rs	Exercises concrete unchecked scalar constructor fixtures, overflow assertions, and table-index boundary checks.
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.
 typed-page-test-fixtures	test	src/types/page/tests.rs	Exercises stack-local page metadata and registered-range witness fixture construction.
 typed-page-test-fixtures	test	tests/release_fast_path_audit.rs	Checks page flags, thread IDs, and registered-page range wrappers stay bounded to typed helper modules.

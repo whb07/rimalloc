@@ -41,4 +41,3 @@ src/types/page_states.rs	production	release-readiness	2026-09-30	legacy typed wr
 src/types/ptr.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
 src/types/ptr/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration
 src/types/scalar.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration
-src/types/scalar/tests.rs	test	release-readiness	2026-09-30	legacy typed wrapper test unsafe pending per-operation SAFETY marker migration

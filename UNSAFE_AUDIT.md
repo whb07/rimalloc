@@ -349,6 +349,11 @@ Operation IDs:
   builds stack-local padding records and byte buffers, plus non-dereferenced
   dangling pointer witnesses for canary hashing, to exercise padding wrapper
   reads, writes, and pointer arithmetic.
+- `SAFETY[AUDIT:typed-scalar-test-fixtures]`:
+  `src/types/scalar/tests.rs` uses concrete raw scalar values to exercise
+  unchecked constructor boundaries, overflow reporting, and table-index
+  domains. The fixtures never allocate, touch allocator metadata, or escape
+  the assertion that constructs them.
 - `SAFETY[AUDIT:typed-page-test-fixtures]`: `src/types/page/tests.rs` builds
   stack-local page metadata and synthetic page-map range witnesses to exercise
   typed page wrapper accessors. The fixtures are not registered with allocator

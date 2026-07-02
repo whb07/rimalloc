@@ -30,38 +30,54 @@ fn size_wrappers_return_typed_errors_for_checked_arithmetic() {
         Err(AllocSizeError::Overflow)
     );
 
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: this test uses a concrete raw
+    // size fixture only to exercise checked arithmetic on the wrapper.
     let effective = unsafe { EffectiveSize::new_unchecked(16) };
     assert_eq!(effective.checked_add(4).map(EffectiveSize::get), Ok(20));
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: the unchecked max-value fixture
+    // is used locally to verify overflow reporting and is never used to size an allocation.
     assert_eq!(
         unsafe { EffectiveSize::new_unchecked(usize::MAX) }.checked_add(1),
         Err(AllocSizeError::Overflow)
     );
 
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: the raw value is at least
+    // `MI_PADDING_SIZE`, matching the padded-size constructor precondition.
     let padded = unsafe { PaddedSize::new_unchecked(crate::types::MI_PADDING_SIZE + 16) };
     assert_eq!(
         padded.checked_add(4).map(PaddedSize::get),
         Ok(padded.get() + 4)
     );
     assert_eq!(padded.checked_sub_padding().map(RequestedSize::get), Ok(16));
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: this max-value fixture stays
+    // local to the overflow assertion and is not passed to allocator code.
     assert_eq!(
         unsafe { PaddedSize::new_unchecked(usize::MAX) }.checked_add(1),
         Err(AllocSizeError::Overflow)
     );
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: this deliberately undersized
+    // local fixture verifies checked padding subtraction reports overflow.
     assert_eq!(
         unsafe { PaddedSize::new_unchecked(1) }.checked_sub_padding(),
         Err(AllocSizeError::Overflow)
     );
 
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: the raw value is at least
+    // `MI_PADDING_SIZE`, matching the block-size constructor precondition.
     let block = unsafe { BlockSize::new_unchecked(crate::types::MI_PADDING_SIZE + 32) };
     assert_eq!(
         block.checked_add(4).map(BlockSize::get),
         Ok(block.get() + 4)
     );
     assert_eq!(block.checked_usable().map(UsableSize::get), Ok(32));
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: this max-value fixture stays
+    // local to the overflow assertion and is not passed to allocator code.
     assert_eq!(
         unsafe { BlockSize::new_unchecked(usize::MAX) }.checked_add(1),
         Err(AllocSizeError::Overflow)
     );
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: this deliberately undersized
+    // local fixture verifies checked usable-size subtraction reports overflow.
     assert_eq!(
         unsafe { BlockSize::new_unchecked(1) }.checked_usable(),
         Err(AllocSizeError::Overflow)
@@ -125,20 +141,50 @@ fn slice_index_reports_raw_u32_conversion_overflow() {
 
 #[test]
 fn unchecked_hot_path_constructors_preserve_valid_values() {
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `1` is a concrete non-zero
+    // effective-size fixture used only for wrapper round-trip testing.
     assert_eq!(unsafe { EffectiveSize::new_unchecked(1) }.get(), 1);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `1` is a local padded-size
+    // fixture used only to verify the unchecked constructor stores the value.
     assert_eq!(unsafe { PaddedSize::new_unchecked(1) }.get(), 1);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `1` is a local block-size
+    // fixture used only to verify the unchecked constructor stores the value.
     assert_eq!(unsafe { BlockSize::new_unchecked(1) }.get(), 1);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `1` is a local full-block-size
+    // fixture used only for wrapper round-trip testing.
     assert_eq!(unsafe { FullBlockSize::new_unchecked(1) }.get(), 1);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `64` is a non-zero power of two
+    // and satisfies the alignment constructor invariant.
     assert_eq!(unsafe { Alignment::new_unchecked(64) }.get(), 64);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `64` is a valid optional
+    // alignment fixture and is not used for allocation in this test.
     assert_eq!(unsafe { MaybeAlignment::new_unchecked(64) }.get(), 64);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `4096` is a concrete non-zero
+    // page-size fixture used only for wrapper round-trip testing.
     assert_eq!(unsafe { OsPageSize::new_unchecked(4096) }.get(), 4096);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `0` is within the page-map index
+    // table bounds for this constructor fixture.
     assert_eq!(unsafe { PageMapIndex::new_unchecked(0) }.get(), 0);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `0` is within the page-map
+    // sub-index table bounds for this constructor fixture.
     assert_eq!(unsafe { PageMapSubIndex::new_unchecked(0) }.get(), 0);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `0` is within the page-queue bin
+    // table bounds for this constructor fixture.
     assert_eq!(unsafe { Bin::new_unchecked(0) }.get(), 0);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `0` is within the stats-bin
+    // table bounds for this constructor fixture.
     assert_eq!(unsafe { StatsBin::new_unchecked(0) }.get(), 0);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `0` is within the direct-bin
+    // table bounds for this constructor fixture.
     assert_eq!(unsafe { DirectBin::new_unchecked(0) }.get(), 0);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `1` is a non-zero slice-count
+    // fixture used only for wrapper round-trip testing.
     assert_eq!(unsafe { SliceCount::new_unchecked(1) }.get(), 1);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `0` is within the arena table
+    // bounds for this constructor fixture.
     assert_eq!(unsafe { ArenaIndex::new_unchecked(0) }.get(), 0);
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: zero capacity is a local page
+    // capacity fixture and is not attached to live page metadata.
     assert_eq!(unsafe { PageCapacity::new_unchecked(0) }.get(), 0);
 }
 
@@ -181,6 +227,8 @@ fn scalar_constructor_boundaries_cover_overflow_and_limits() {
 #[test]
 fn block_size_usable_subtracts_padding_domain() {
     let raw = crate::types::MI_PADDING_SIZE + 64;
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `raw` includes the padding
+    // domain required by `BlockSize` and stays local to the wrapper test.
     let block = unsafe { BlockSize::new_unchecked(raw) };
     assert_eq!(block.usable().get(), 64);
 }
@@ -188,6 +236,8 @@ fn block_size_usable_subtracts_padding_domain() {
 #[test]
 fn full_block_size_preserves_block_size_domain() {
     let raw = crate::types::MI_PADDING_SIZE + 128;
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `raw` includes the padding
+    // domain required by `BlockSize` and stays local to the wrapper test.
     let block = unsafe { BlockSize::new_unchecked(raw) };
     assert_eq!(FullBlockSize::from_block_size(block).get(), raw);
 }
@@ -292,6 +342,8 @@ fn heartbeat_preserves_raw_value_and_wraps_on_increment() {
 
 #[test]
 fn os_page_size_preserves_nonzero_raw_value() {
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `4096` is a concrete non-zero
+    // OS page-size fixture used only for scalar wrapper testing.
     let page_size = unsafe { OsPageSize::new_unchecked(4096) };
     assert_eq!(page_size.get(), 4096);
 }
@@ -315,6 +367,8 @@ fn bin_rejects_indexes_outside_page_queue_table() {
     );
     assert!(Bin::new(crate::types::MI_BIN_COUNT as u16).is_none());
 
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `3` is within the page-queue
+    // bin table bounds checked above.
     let unchecked = unsafe { Bin::new_unchecked(3) };
     assert_eq!(unchecked.get(), 3);
 }
@@ -328,6 +382,8 @@ fn stats_bin_rejects_indexes_above_huge_bin() {
     );
     assert!(StatsBin::new((crate::stats::MI_BIN_HUGE + 1) as u16).is_none());
 
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `3` is within the stats-bin
+    // table bounds checked above.
     let unchecked = unsafe { StatsBin::new_unchecked(3) };
     assert_eq!(unchecked.as_usize(), 3);
 }
@@ -341,6 +397,8 @@ fn direct_bin_rejects_indexes_outside_direct_table() {
     );
     assert!(DirectBin::new(crate::types::MI_PAGES_DIRECT as u16).is_none());
 
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `3` is within the direct-page
+    // table bounds checked above.
     let unchecked = unsafe { DirectBin::new_unchecked(3) };
     assert_eq!(unchecked.as_usize(), 3);
 }
@@ -357,6 +415,8 @@ fn arena_index_rejects_indexes_outside_arena_table() {
     assert!(ArenaIndex::from_usize(crate::types::MI_MAX_ARENAS).is_none());
     assert!(ArenaIndex::from_usize(u16::MAX as usize + 1).is_none());
 
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: `3` is within the arena table
+    // bounds checked above.
     let unchecked = unsafe { ArenaIndex::new_unchecked(3) };
     assert_eq!(unchecked.get(), 3);
 }
@@ -367,6 +427,8 @@ fn maybe_alignment_accepts_zero_or_power_of_two() {
     assert_eq!(MaybeAlignment::new(64).map(MaybeAlignment::get), Some(64));
     assert!(MaybeAlignment::new(24).is_none());
 
+    // SAFETY[AUDIT:typed-scalar-test-fixtures]: this deliberately non-power-of-two
+    // optional alignment fixture stays local to the raw-domain preservation test.
     let unchecked = unsafe { MaybeAlignment::new_unchecked(24) };
     assert_eq!(unchecked.get(), 24);
 }

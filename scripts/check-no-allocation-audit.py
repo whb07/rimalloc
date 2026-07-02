@@ -22,6 +22,7 @@ CRITICAL_FILES = {
     "src/allocator/free.rs",
     "src/allocator/heap.rs",
     "src/allocator/init.rs",
+    "src/internal/bitmap/bfield.rs",
     "src/internal/mod.rs",
     "src/platform/os.rs",
     "src/allocator/page/deferred.rs",
@@ -52,6 +53,7 @@ ALLOCATING_HELPERS = {
 PATH_ALIASES = {
     "src/allocator/aligned.rs": ["src/alloc_aligned.rs"],
     "src/allocator/thread_heap.rs": ["src/theap.rs"],
+    "src/internal/bitmap/bfield.rs": ["src/bitmap.rs", "src/internal/bitmap.rs"],
     "src/internal/mod.rs": ["src/internal.rs"],
     "src/internal/bitmap.rs": ["src/bitmap.rs"],
     "src/platform/os.rs": ["src/os.rs"],

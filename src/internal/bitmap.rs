@@ -10,14 +10,11 @@
 )]
 
 use core::ffi::c_void;
-use core::hint::spin_loop;
 use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::arena::MI_ARENA_BCHUNK_BITS;
-use crate::bits::{
-    MI_SIZE_BITS, MI_SIZE_SHIFT, MI_SIZE_SIZE, mi_bsf, mi_bsr, mi_clz, mi_ctz, mi_popcount,
-};
+use crate::bits::{MI_SIZE_BITS, MI_SIZE_SHIFT, MI_SIZE_SIZE, mi_ctz, mi_popcount};
 use crate::core_types::{
     ArenaPtr, SliceCount, SliceIndex, SliceRange, ThreadLocalClaimCallback, ThreadSeq,
 };
@@ -48,6 +45,20 @@ use core::arch::x86_64::{
 
 pub const MI_BITMAP_H: usize = 1;
 pub const MI_OPT_SIMD: usize = 0;
+
+mod bfield;
+pub use bfield::{
+    mi_bfield_all_set, mi_bfield_clear_least_bit, mi_bfield_clz, mi_bfield_ctz, mi_bfield_one,
+    mi_bfield_popcount, mi_bfield_zero,
+};
+use bfield::{
+    mi_bfield_atomic_clear, mi_bfield_atomic_clear_mask, mi_bfield_atomic_clear_once_set,
+    mi_bfield_atomic_is_set, mi_bfield_atomic_is_xset, mi_bfield_atomic_is_xset_mask,
+    mi_bfield_atomic_popcount_mask, mi_bfield_atomic_set, mi_bfield_atomic_set_mask,
+    mi_bfield_atomic_setX, mi_bfield_atomic_try_clear_mask, mi_bfield_atomic_try_clear_mask_of,
+    mi_bfield_atomic_try_clearX, mi_bfield_find_highest_bit, mi_bfield_find_least_bit,
+    mi_bfield_foreach_bit, mi_bfield_mask,
+};
 
 #[cfg(all(
     any(target_arch = "x86", target_arch = "x86_64"),
@@ -209,263 +220,6 @@ pub unsafe fn mi_bbitmap_chunk_count(bbitmap: *const mi_bbitmap_t) -> usize {
 #[inline]
 pub unsafe fn mi_bbitmap_max_bits(bbitmap: *const mi_bbitmap_t) -> usize {
     unsafe { mi_bbitmap_chunk_count(bbitmap) * MI_BCHUNK_BITS }
-}
-
-#[inline]
-pub const fn mi_bfield_zero() -> mi_bfield_t {
-    0
-}
-
-#[inline]
-pub const fn mi_bfield_one() -> mi_bfield_t {
-    1
-}
-
-#[inline]
-pub const fn mi_bfield_all_set() -> mi_bfield_t {
-    !0usize
-}
-
-#[inline]
-pub const fn mi_bfield_clear_least_bit(x: mi_bfield_t) -> mi_bfield_t {
-    x & x.wrapping_sub(1)
-}
-
-#[inline]
-pub fn mi_bfield_ctz(x: mi_bfield_t) -> usize {
-    mi_ctz(x)
-}
-
-#[inline]
-pub fn mi_bfield_clz(x: mi_bfield_t) -> usize {
-    mi_clz(x)
-}
-
-#[inline]
-pub fn mi_bfield_popcount(x: mi_bfield_t) -> usize {
-    mi_popcount(x)
-}
-
-#[inline]
-fn mi_bfield_find_least_bit(x: mi_bfield_t, idx: &mut usize) -> bool {
-    mi_bsf(x, idx)
-}
-
-#[inline]
-fn mi_bfield_find_highest_bit(x: mi_bfield_t, idx: &mut usize) -> bool {
-    mi_bsr(x, idx)
-}
-
-#[inline]
-fn mi_bfield_foreach_bit(x: &mut mi_bfield_t, idx: &mut usize) -> bool {
-    let found = mi_bfield_find_least_bit(*x, idx);
-    *x = mi_bfield_clear_least_bit(*x);
-    found
-}
-
-#[inline]
-fn mi_bfield_mask(bit_count: usize, shiftl: usize) -> mi_bfield_t {
-    crate::internal::mi_debug_assert!(bit_count > 0);
-    crate::internal::mi_debug_assert!(shiftl < MI_BFIELD_BITS);
-    crate::internal::mi_debug_assert!(bit_count + shiftl <= MI_BFIELD_BITS);
-    let mask0 = if bit_count < MI_BFIELD_BITS {
-        (mi_bfield_one() << bit_count) - 1
-    } else {
-        mi_bfield_all_set()
-    };
-    mask0 << shiftl
-}
-
-#[inline]
-fn mi_bfield_atomic_set(b: &AtomicUsize, idx: usize) -> bool {
-    crate::internal::mi_debug_assert!(idx < MI_BFIELD_BITS);
-    let mask = mi_bfield_mask(1, idx);
-    let old = b.fetch_or(mask, Ordering::AcqRel);
-    (old & mask) == 0
-}
-
-#[inline]
-fn mi_bfield_atomic_clear(b: &AtomicUsize, idx: usize, all_clear: Option<&mut bool>) -> bool {
-    crate::internal::mi_debug_assert!(idx < MI_BFIELD_BITS);
-    let mask = mi_bfield_mask(1, idx);
-    let old = b.fetch_and(!mask, Ordering::AcqRel);
-    if let Some(all_clear) = all_clear {
-        *all_clear = (old & !mask) == 0;
-    }
-    (old & mask) == mask
-}
-
-#[inline]
-fn mi_bfield_atomic_clear_once_set(b: &AtomicUsize, idx: usize) {
-    crate::internal::mi_debug_assert!(idx < MI_BFIELD_BITS);
-    let mask = mi_bfield_mask(1, idx);
-    let mut old = b.load(Ordering::Relaxed);
-    loop {
-        if (old & mask) == 0 {
-            old = b.load(Ordering::Acquire);
-            while (old & mask) == 0 {
-                spin_loop();
-                old = b.load(Ordering::Acquire);
-            }
-        }
-        match b.compare_exchange_weak(old, old & !mask, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => return,
-            Err(next) => old = next,
-        }
-    }
-}
-
-#[inline]
-fn mi_bfield_atomic_set_mask(
-    b: &AtomicUsize,
-    mask: mi_bfield_t,
-    already_set: Option<&mut usize>,
-) -> bool {
-    crate::internal::mi_debug_assert!(mask != 0);
-    let mut old = b.load(Ordering::Relaxed);
-    while b
-        .compare_exchange_weak(old, old | mask, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
-        old = b.load(Ordering::Relaxed);
-    }
-    if let Some(already_set) = already_set {
-        *already_set = mi_bfield_popcount(old & mask);
-    }
-    (old & mask) == 0
-}
-
-#[inline]
-fn mi_bfield_atomic_clear_mask(
-    b: &AtomicUsize,
-    mask: mi_bfield_t,
-    all_clear: Option<&mut bool>,
-) -> bool {
-    crate::internal::mi_debug_assert!(mask != 0);
-    let mut old = b.load(Ordering::Relaxed);
-    while b
-        .compare_exchange_weak(old, old & !mask, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
-        old = b.load(Ordering::Relaxed);
-    }
-    if let Some(all_clear) = all_clear {
-        *all_clear = (old & !mask) == 0;
-    }
-    (old & mask) == mask
-}
-
-#[inline]
-fn mi_bfield_atomic_setX(b: &AtomicUsize, already_set: Option<&mut usize>) -> bool {
-    let old = b.swap(mi_bfield_all_set(), Ordering::Release);
-    if let Some(already_set) = already_set {
-        *already_set = mi_bfield_popcount(old);
-    }
-    old == 0
-}
-
-#[inline]
-fn mi_bfield_atomic_try_clear_mask_of(
-    b: &AtomicUsize,
-    mask: mi_bfield_t,
-    mut expect: mi_bfield_t,
-    all_clear: Option<&mut bool>,
-) -> bool {
-    crate::internal::mi_debug_assert!(mask != 0);
-    loop {
-        if (expect & mask) != mask {
-            if let Some(all_clear) = all_clear {
-                *all_clear = expect == 0;
-            }
-            return false;
-        }
-        match b.compare_exchange_weak(expect, expect & !mask, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => {
-                if let Some(all_clear) = all_clear {
-                    *all_clear = (expect & !mask) == 0;
-                }
-                return true;
-            }
-            Err(actual) => expect = actual,
-        }
-    }
-}
-
-#[inline]
-fn mi_bfield_atomic_try_clear_mask(
-    b: &AtomicUsize,
-    mask: mi_bfield_t,
-    all_clear: Option<&mut bool>,
-) -> bool {
-    crate::internal::mi_debug_assert!(mask != 0);
-    let expect = b.load(Ordering::Relaxed);
-    mi_bfield_atomic_try_clear_mask_of(b, mask, expect, all_clear)
-}
-
-#[inline]
-fn mi_bfield_atomic_try_clearX(b: &AtomicUsize, all_clear: Option<&mut bool>) -> bool {
-    let old = mi_bfield_all_set();
-    match b.compare_exchange(old, mi_bfield_zero(), Ordering::AcqRel, Ordering::Acquire) {
-        Ok(_) => {
-            if let Some(all_clear) = all_clear {
-                *all_clear = true;
-            }
-            true
-        }
-        Err(_) => false,
-    }
-}
-
-#[inline]
-fn mi_bfield_atomic_is_set(b: &AtomicUsize, idx: usize) -> bool {
-    crate::internal::mi_debug_assert!(idx < MI_BFIELD_BITS);
-    let x = b.load(Ordering::Acquire);
-    (x & mi_bfield_mask(1, idx)) != 0
-}
-
-#[inline]
-fn mi_bfield_atomic_is_clear(b: &AtomicUsize, idx: usize) -> bool {
-    crate::internal::mi_debug_assert!(idx < MI_BFIELD_BITS);
-    let x = b.load(Ordering::Acquire);
-    (x & mi_bfield_mask(1, idx)) == 0
-}
-
-#[inline]
-fn mi_bfield_atomic_is_xset(set: mi_xset_t, b: &AtomicUsize, idx: usize) -> bool {
-    if set {
-        mi_bfield_atomic_is_set(b, idx)
-    } else {
-        mi_bfield_atomic_is_clear(b, idx)
-    }
-}
-
-#[inline]
-fn mi_bfield_atomic_is_set_mask(b: &AtomicUsize, mask: mi_bfield_t) -> bool {
-    crate::internal::mi_debug_assert!(mask != 0);
-    let x = b.load(Ordering::Acquire);
-    (x & mask) == mask
-}
-
-#[inline]
-fn mi_bfield_atomic_is_clear_mask(b: &AtomicUsize, mask: mi_bfield_t) -> bool {
-    crate::internal::mi_debug_assert!(mask != 0);
-    let x = b.load(Ordering::Acquire);
-    (x & mask) == 0
-}
-
-#[inline]
-fn mi_bfield_atomic_is_xset_mask(set: mi_xset_t, b: &AtomicUsize, mask: mi_bfield_t) -> bool {
-    if set {
-        mi_bfield_atomic_is_set_mask(b, mask)
-    } else {
-        mi_bfield_atomic_is_clear_mask(b, mask)
-    }
-}
-
-#[inline]
-fn mi_bfield_atomic_popcount_mask(b: &AtomicUsize, mask: mi_bfield_t) -> usize {
-    let x = b.load(Ordering::Acquire);
-    mi_bfield_popcount(x & mask)
 }
 
 #[inline]

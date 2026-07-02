@@ -31,11 +31,13 @@ Current review evidence:
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 4,628 lines,
   `src/allocator/page.rs` is 3,109 lines,
-  `src/internal/bitmap.rs` is 2,604 lines,
+  `src/internal/bitmap.rs` is 2,358 lines,
   `src/allocator/alloc.rs` is 2,545 lines,
   `src/allocator/init.rs` is 2,339 lines,
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
+- `src/internal/bitmap/bfield.rs` is 271 lines and owns the bit-field atomic
+  helper layer that was previously embedded in `src/internal/bitmap.rs`.
 - `src/allocator/page/bins.rs` is 128 lines and owns the
   `SAFETY[AUDIT:page-bin-size-classes]` boundary for bin table lookup,
   unchecked `Bin` construction, and `mi_good_size` symbol routing.
@@ -170,15 +172,23 @@ Verify: `cargo test --test release_fast_path_audit --all-features`,
 > should move a cohesive helper cluster with clear ownership invariants and
 > existing audit coverage.
 
-- [ ] Re-scan `src/allocator/arena.rs`, `src/allocator/page.rs`, and
+- [x] Re-scan `src/allocator/arena.rs`, `src/allocator/page.rs`, and
       `src/internal/bitmap.rs` for low-risk helper clusters.
-- [ ] Prefer a non-hot or already-audited helper group with narrow imports.
-- [ ] Move the group into an existing or new submodule with explicit
+- [x] Prefer a non-hot or already-audited helper group with narrow imports.
+- [x] Move the group into an existing or new submodule with explicit
       re-exports only for current callers.
-- [ ] Update source-path assertions, strict-type aliases, unsafe audit evidence,
+- [x] Update source-path assertions, strict-type aliases, unsafe audit evidence,
       and generated unsafe inventory as needed.
-- [ ] Preserve C ABI symbols, public Rust facade shape, and benchmark-critical
+- [x] Preserve C ABI symbols, public Rust facade shape, and benchmark-critical
       inline behavior.
+  - Evidence: the bitmap bit-field helper layer moved to
+    `src/internal/bitmap/bfield.rs`. The parent `src/internal/bitmap.rs`
+    dropped from 2,604 to 2,358 lines, the new child module is 271 lines, the
+    existing `crate::bitmap::mi_bfield_*` helper names remain re-exported, and
+    the helper functions retain their original inline/atomic behavior.
+    `scripts/check-strict-types.py` now aliases the child back to the logical
+    bitmap strict-type allowance, and `scripts/check-no-allocation-audit.py`
+    scans the child as part of the no-allocation critical path.
 
 Verify: focused module tests, `scripts/check-ffi-boundary.py`,
 `scripts/check-api-inventory.py`, `scripts/check-public-abi.py`,
@@ -191,7 +201,7 @@ full tests.
 2. [x] Migrate one small production file off the unsafe migration allowlist.
 3. [x] Narrow or remove the page strict-type `usize` allowance.
 4. [x] Split one more release-audit assertion cluster.
-5. [ ] Split one more production helper boundary.
+5. [x] Split one more production helper boundary.
 
 ## Definition of done for this backlog
 
@@ -200,5 +210,5 @@ full tests.
       audit markers.
 - [x] One strict-type broad `remove:` allowance is narrowed or eliminated.
 - [x] The largest release-audit child module has more guard margin.
-- [ ] One large production translation unit is smaller without API, ABI, or
+- [x] One large production translation unit is smaller without API, ABI, or
       hot-path performance drift.

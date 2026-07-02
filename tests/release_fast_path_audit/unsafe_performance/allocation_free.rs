@@ -97,17 +97,40 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
     for (audit_id, min_count) in [
         ("allocation-platform-shim-boundary", 4),
         ("allocation-product-entry-boundary", 20),
-        ("allocation-heap-dispatch-boundary", 30),
+        ("allocation-small-dispatch-boundary", 7),
+        ("allocation-thread-heap-zero-boundary", 8),
+        ("allocation-public-malloc-boundary", 5),
+        ("allocation-zeroing-dispatch-boundary", 9),
+        ("allocation-calloc-dispatch-boundary", 5),
         ("allocation-layout-request-boundary", 10),
-        ("allocation-realloc-entry-boundary", 35),
+        ("allocation-realloc-thread-entry-boundary", 7),
+        ("allocation-realloc-product-boundary", 6),
+        ("allocation-realloc-free-on-failure-boundary", 6),
+        ("allocation-realloc-zeroing-boundary", 12),
+        ("allocation-realloc-public-boundary", 6),
         ("allocation-string-path-boundary", 20),
-        ("allocation-cxx-new-boundary", 30),
+        ("allocation-cxx-new-handler-boundary", 4),
+        ("allocation-cxx-new-try-boundary", 9),
+        ("allocation-cxx-new-public-boundary", 4),
+        ("allocation-cxx-new-product-boundary", 5),
+        ("allocation-cxx-new-aligned-boundary", 5),
+        ("allocation-cxx-new-realloc-boundary", 3),
         ("allocation-page-refill-boundary", 8),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert!(
             alloc_rs.matches(&marker).count() >= min_count,
             "allocation unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
+    for retired_audit_id in [
+        "allocation-heap-dispatch-boundary",
+        "allocation-realloc-entry-boundary",
+        "allocation-cxx-new-boundary",
+    ] {
+        assert!(
+            !alloc_rs.contains(&format!("SAFETY[AUDIT:{retired_audit_id}]")),
+            "allocation unsafe boundary {retired_audit_id} should stay split into focused operation markers"
         );
     }
     assert!(

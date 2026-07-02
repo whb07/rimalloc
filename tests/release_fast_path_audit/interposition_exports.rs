@@ -36,9 +36,21 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
                 .count()
                 >= 15
             && override_rs
-                .matches("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
+                .matches("SAFETY[AUDIT:raw-macro-fast-override-boundary]")
                 .count()
-                >= 35
+                >= 3
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-macos-interpose-boundary]")
+                .count()
+                >= 5
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-windows-crt-boundary]")
+                .count()
+                >= 14
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-windows-aligned-boundary]")
+                .count()
+                >= 14
             && !override_rs.contains("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
             && override_rs
                 .matches("SAFETY[AUDIT:raw-macro-unix-core-boundary]")
@@ -97,6 +109,7 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
                 .matches("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")
                 .count()
                 >= 6
+            && !override_rs.contains("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
             && override_rs.contains("core::arch::global_asm!(")
             && override_rs.contains("mod unix_bootstrap")
             && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")

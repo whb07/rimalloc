@@ -402,33 +402,72 @@ Operation IDs:
   limited to checked count/size products, typed request construction,
   caller-provided usable-size out-pointers, and raw public allocation wrappers
   while preserving overflow and null/failure semantics.
-- `SAFETY[AUDIT:allocation-heap-dispatch-boundary]`:
-  `src/allocator/alloc.rs` owns thread-heap and heap allocation dispatch for
-  small, zeroed, calloc, and typed allocation requests. Unsafe operations are
-  limited to typed heap/thread-heap witnesses, usable-size out-pointers, page
-  free-list inspection, and tracking handoff while preserving no-allocation
-  hot paths.
+- `SAFETY[AUDIT:allocation-small-dispatch-boundary]`:
+  `src/allocator/alloc.rs` owns small allocation dispatch. Unsafe operations
+  are limited to typed thread-heap witnesses, requested-size domains, and
+  small size-class fast paths.
+- `SAFETY[AUDIT:allocation-thread-heap-zero-boundary]`:
+  `src/allocator/alloc.rs` owns thread-heap zero/allocation dispatch. Unsafe
+  operations validate layouts, optional huge alignment, usable out-pointers,
+  and generic fallback routing.
+- `SAFETY[AUDIT:allocation-public-malloc-boundary]`:
+  `src/allocator/alloc.rs` owns public malloc and heap malloc entrypoints.
+  Unsafe operations validate raw heap/thread-heap handles before typed
+  dispatch.
+- `SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]`:
+  `src/allocator/alloc.rs` owns zalloc entrypoints. Unsafe operations route
+  typed zeroing layout requests without hidden Rust allocation or dynamic
+  dispatch.
+- `SAFETY[AUDIT:allocation-calloc-dispatch-boundary]`:
+  `src/allocator/alloc.rs` owns calloc dispatch. Unsafe operations validate
+  checked products before zeroing allocation dispatch.
 - `SAFETY[AUDIT:allocation-layout-request-boundary]`:
   `src/allocator/alloc.rs` owns allocation request construction, layout
   padding, realloc-size validation, and old-block usable-size recovery. Unsafe
   operations are limited to caller-proven allocation pointers, typed layout
   witnesses, and bounded metadata queries while preserving realloc copy bounds.
-- `SAFETY[AUDIT:allocation-realloc-entry-boundary]`:
-  `src/allocator/alloc.rs` owns raw, thread-heap, and heap realloc-family entry
-  shims. Unsafe operations are limited to caller-proven allocation pointers,
-  typed old-allocation validation results, free-on-failure behavior, zero-tail
-  routing, and usable-size out-pointers while preserving C realloc-family
-  semantics.
+- `SAFETY[AUDIT:allocation-realloc-thread-entry-boundary]`:
+  `src/allocator/alloc.rs` owns thread-heap realloc entrypoints. Unsafe
+  operations validate old allocations and typed layout requests before core
+  realloc dispatch.
+- `SAFETY[AUDIT:allocation-realloc-product-boundary]`:
+  `src/allocator/alloc.rs` owns reallocn product paths. Unsafe operations
+  validate checked products and preserve raw pointer ownership semantics.
+- `SAFETY[AUDIT:allocation-realloc-free-on-failure-boundary]`:
+  `src/allocator/alloc.rs` owns reallocf paths. Unsafe operations preserve
+  free-on-failure behavior after typed request validation.
+- `SAFETY[AUDIT:allocation-realloc-zeroing-boundary]`:
+  `src/allocator/alloc.rs` owns rezalloc and recalloc paths. Unsafe operations
+  preserve zero-tail and checked calloc request semantics.
+- `SAFETY[AUDIT:allocation-realloc-public-boundary]`:
+  `src/allocator/alloc.rs` owns public realloc ABI entrypoints. Unsafe
+  operations preserve nullable pointer semantics, usable out-pointers, and heap
+  dispatch validation.
 - `SAFETY[AUDIT:allocation-string-path-boundary]`:
   `src/allocator/alloc.rs` owns strdup, strndup, and realpath allocation entry
   shims. Unsafe operations are limited to caller-proven C string/path pointers,
   bounded scans, heap/default thread-heap routing, path-max caching, and
   caller-owned output buffers while preserving C string and realpath behavior.
-- `SAFETY[AUDIT:allocation-cxx-new-boundary]`:
-  `src/allocator/alloc.rs` owns C++ new/new_nothrow compatibility entry shims
-  and retry loops. Unsafe operations are limited to optional new-handler lookup
-  and invocation, exported retry shims, aligned/new realloc wrappers, and
-  retained function-pointer shapes while preserving C++ abort/nothrow behavior.
+- `SAFETY[AUDIT:allocation-cxx-new-handler-boundary]`:
+  `src/allocator/alloc.rs` owns C++ new-handler lookup and invocation. Unsafe
+  operations preserve platform ABI function pointer shape and abort/nothrow
+  policy.
+- `SAFETY[AUDIT:allocation-cxx-new-try-boundary]`:
+  `src/allocator/alloc.rs` owns C++ new retry helpers and retained function
+  pointer shapes. Unsafe operations route allocation failures through the
+  new-handler policy.
+- `SAFETY[AUDIT:allocation-cxx-new-public-boundary]`:
+  `src/allocator/alloc.rs` owns public C++ new entrypoints. Unsafe operations
+  validate heap/thread dispatch before retrying allocation failure.
+- `SAFETY[AUDIT:allocation-cxx-new-product-boundary]`:
+  `src/allocator/alloc.rs` owns C++ new_n paths. Unsafe operations validate
+  checked products before typed allocation and retry dispatch.
+- `SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]`:
+  `src/allocator/alloc.rs` owns nothrow and aligned C++ new wrappers. Unsafe
+  operations preserve alignment validation and retry policy.
+- `SAFETY[AUDIT:allocation-cxx-new-realloc-boundary]`:
+  `src/allocator/alloc.rs` owns C++ new realloc wrappers. Unsafe operations
+  retry realloc-family requests through the new-handler policy.
 - `SAFETY[AUDIT:allocation-page-refill-boundary]`:
   `src/allocator/alloc.rs` owns page refill handoff, generic fallback
   allocation, guarded allocation, zeroing, and padding canary publication.
@@ -900,11 +939,19 @@ Operation IDs:
   operations are limited to bootstrap `mmap`/`munmap` declarations, header
   pointer reconstruction, sanitizer slot tracking, preloading handoffs, and
   fixtures that prove bootstrap ownership transfers to normal free/realloc.
-- `SAFETY[AUDIT:raw-macro-override-entry-boundary]`: `src/raw/macros.rs` owns
-  raw allocator override entry points, macOS interpose records, Windows CRT
-  override exports, and fast assembly aliases. Unsafe operations are limited to
-  exported ABI attributes, global/naked assembly, interpose records, foreign
-  target declarations, and raw forwarding to allocator entry points.
+- `SAFETY[AUDIT:raw-macro-fast-override-boundary]`: `src/raw/macros.rs` owns
+  fast override assembly aliases for C malloc/free and C++ new/delete
+  entrypoints. Unsafe operations are limited to naked/global assembly and symbol
+  aliases that forward to validated allocator entrypoints.
+- `SAFETY[AUDIT:raw-macro-macos-interpose-boundary]`: `src/raw/macros.rs` owns
+  macOS interpose tables and foreign target declarations. Unsafe operations
+  preserve replacement/target pairs for libc and C++ allocation APIs.
+- `SAFETY[AUDIT:raw-macro-windows-crt-boundary]`: `src/raw/macros.rs` owns
+  Windows CRT allocation exports. Unsafe operations forward raw ABI calls to
+  mimalloc while preserving ownership and null semantics.
+- `SAFETY[AUDIT:raw-macro-windows-aligned-boundary]`: `src/raw/macros.rs` owns
+  Windows aligned CRT allocation exports. Unsafe operations preserve alignment,
+  offset, msize, realloc, and recalloc forwarding contracts.
 - `SAFETY[AUDIT:raw-macro-unix-core-boundary]`: `src/raw/macros.rs` owns Unix
   malloc/calloc/realloc/free export shims. Unsafe operations are limited to
   exported C ABI wrappers that forward into the audited Unix bootstrap-aware

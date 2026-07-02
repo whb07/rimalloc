@@ -295,7 +295,7 @@ mod unix_bootstrap {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(all(mi_c_malloc_fast, not(mi_cxx_shim_linked)))]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-fast-override-boundary]: fast override assembly preserves C malloc/free and C++ new/delete ABI entrypoints.
 #[unsafe(naked)]
 #[unsafe(export_name = "_Znwm")]
 pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
@@ -325,14 +325,14 @@ pub unsafe extern "C" fn mi_cxx_new_fast_64(_size: usize) -> *mut c_void {
 }
 
 #[cfg(all(mi_c_malloc_fast, not(mi_cxx_shim_linked)))]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-fast-override-boundary]: fast override assembly preserves C malloc/free and C++ new/delete ABI entrypoints.
 core::arch::global_asm!(".globl _Znam", ".type _Znam,@function", ".set _Znam, _Znwm",);
 
 // Keep the fast override entrypoints on the validated cache-line layout. The
 // sized-delete stubs below remove an extra Rust call frame; this pad avoids
 // regressing Redis while preserving the larson win from the stubs.
 #[cfg(all(not(windows), mi_c_malloc_fast))]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-fast-override-boundary]: fast override assembly preserves C malloc/free and C++ new/delete ABI entrypoints.
 core::arch::global_asm!(
     ".fill 0x30,1,0x90",
     ".globl free",
@@ -532,7 +532,7 @@ pub struct mi_interpose_s {
     pub target: *const c_void,
 }
 
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-macos-interpose-boundary]: macOS interpose tables preserve replacement/target symbol pairs for libc and C++ allocation APIs.
 unsafe impl Sync for mi_interpose_s {}
 
 #[cfg(all(target_os = "macos", mi_osx_interpose))]
@@ -545,7 +545,7 @@ macro_rules! MI_INTERPOSE_FUN {
     };
 }
 
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-macos-interpose-boundary]: macOS interpose tables preserve replacement/target symbol pairs for libc and C++ allocation APIs.
 unsafe extern "C" {
     pub fn vfree(p: *mut c_void);
     pub fn malloc_size(p: *const c_void) -> usize;
@@ -553,7 +553,7 @@ unsafe extern "C" {
 }
 
 #[cfg(all(target_os = "macos", mi_osx_interpose))]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-macos-interpose-boundary]: macOS interpose tables preserve replacement/target symbol pairs for libc and C++ allocation APIs.
 unsafe extern "C" {
     fn strndup(s: *const c_char, n: usize) -> *mut c_char;
     fn aligned_alloc(alignment: usize, size: usize) -> *mut c_void;
@@ -578,7 +578,7 @@ unsafe extern "C" {
 
 #[cfg(all(target_os = "macos", mi_osx_interpose))]
 #[used]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-macos-interpose-boundary]: macOS interpose tables preserve replacement/target symbol pairs for libc and C++ allocation APIs.
 #[unsafe(link_section = "__DATA,__interpose")]
 pub static _mi_interposes: [mi_interpose_s; 12] = [
     MI_INTERPOSE_FUN!(malloc, crate::mimalloc::mi_malloc),
@@ -607,7 +607,7 @@ pub static _mi_interposes_10_15: [mi_interpose_s; 1] = [MI_INTERPOSE_FUN!(
 
 #[cfg(all(target_os = "macos", mi_osx_interpose))]
 #[used]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-macos-interpose-boundary]: macOS interpose tables preserve replacement/target symbol pairs for libc and C++ allocation APIs.
 #[unsafe(link_section = "__DATA,__interpose")]
 pub static _mi_cxx_interposes: [mi_interpose_s; 8] = [
     MI_INTERPOSE_FUN!(_ZdlPv, crate::mimalloc::mi_free),
@@ -713,7 +713,7 @@ pub unsafe fn mi_aligned_alloc_forward(alignment: usize, size: usize) -> *mut c_
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _expand(block: *mut c_void, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_expand(block, size) }
@@ -722,7 +722,7 @@ pub unsafe extern "C" fn _expand(block: *mut c_void, size: usize) -> *mut c_void
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _msize_base(block: *mut c_void) -> usize {
     unsafe { crate::mimalloc::mi_malloc_size(block) }
@@ -731,7 +731,7 @@ pub unsafe extern "C" fn _msize_base(block: *mut c_void) -> usize {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _msize(block: *mut c_void) -> usize {
     unsafe { crate::mimalloc::mi_malloc_size(block) }
@@ -740,7 +740,7 @@ pub unsafe extern "C" fn _msize(block: *mut c_void) -> usize {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _free_base(block: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(block) }
@@ -749,7 +749,7 @@ pub unsafe extern "C" fn _free_base(block: *mut c_void) {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free(block: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(block) }
@@ -758,7 +758,7 @@ pub unsafe extern "C" fn free(block: *mut c_void) {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
@@ -767,7 +767,7 @@ pub unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _malloc_base(size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc(size) }
@@ -776,7 +776,7 @@ pub unsafe extern "C" fn _malloc_base(size: usize) -> *mut c_void {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _realloc_base(block: *mut c_void, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_realloc(block, size) }
@@ -785,7 +785,7 @@ pub unsafe extern "C" fn _realloc_base(block: *mut c_void, size: usize) -> *mut 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn realloc(block: *mut c_void, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_realloc(block, size) }
@@ -794,7 +794,7 @@ pub unsafe extern "C" fn realloc(block: *mut c_void, size: usize) -> *mut c_void
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _calloc_base(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
@@ -803,7 +803,7 @@ pub unsafe extern "C" fn _calloc_base(count: usize, size: usize) -> *mut c_void 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_calloc(count, size) }
@@ -812,21 +812,21 @@ pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut c_void {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _recalloc_base(
     block: *mut c_void,
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
     unsafe { crate::mimalloc::mi_recalloc(block, count, size) }
 }
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-crt-boundary]: Windows CRT allocation exports forward raw ABI calls to mimalloc ownership-preserving entrypoints.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _recalloc(block: *mut c_void, count: usize, size: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_recalloc(block, count, size) }
@@ -835,7 +835,7 @@ pub unsafe extern "C" fn _recalloc(block: *mut c_void, count: usize, size: usize
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_free(block: *mut c_void) {
     unsafe { crate::mimalloc::mi_free(block) }
@@ -844,7 +844,7 @@ pub unsafe extern "C" fn _aligned_free(block: *mut c_void) {
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_malloc(size: usize, alignment: usize) -> *mut c_void {
     unsafe { crate::mimalloc::mi_malloc_aligned(size, alignment) }
@@ -853,21 +853,21 @@ pub unsafe extern "C" fn _aligned_malloc(size: usize, alignment: usize) -> *mut 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_offset_malloc(
     size: usize,
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
     unsafe { crate::mimalloc::mi_malloc_aligned_at(size, alignment, offset) }
 }
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_msize(
     block: *mut c_void,
@@ -876,14 +876,14 @@ pub unsafe extern "C" fn _aligned_msize(
 ) -> usize {
     crate::internal::MI_UNUSED(&alignment);
     crate::internal::MI_UNUSED(&offset);
-    // SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
     unsafe { crate::mimalloc::mi_malloc_size(block) }
 }
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_offset_realloc(
     block: *mut c_void,
@@ -891,14 +891,14 @@ pub unsafe extern "C" fn _aligned_offset_realloc(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
     unsafe { crate::mimalloc::mi_realloc_aligned_at(block, size, alignment, offset) }
 }
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_offset_recalloc(
     block: *mut c_void,
@@ -907,28 +907,28 @@ pub unsafe extern "C" fn _aligned_offset_recalloc(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
     unsafe { crate::mimalloc::mi_recalloc_aligned_at(block, count, size, alignment, offset) }
 }
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_realloc(
     block: *mut c_void,
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
     unsafe { crate::mimalloc::mi_realloc_aligned(block, size, alignment) }
 }
 
 /// # Safety
 /// This compatibility wrapper has the same safety contract as the C/C++/libc allocation API it forwards to.
 #[cfg(windows)]
-// SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+// SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn _aligned_recalloc(
     block: *mut c_void,
@@ -936,7 +936,7 @@ pub unsafe extern "C" fn _aligned_recalloc(
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:raw-macro-override-entry-boundary]: raw facade shims preserve C/C++/libc allocation ABI, interposition, bootstrap tracking, and forwarding contracts.
+    // SAFETY[AUDIT:raw-macro-windows-aligned-boundary]: Windows aligned CRT exports preserve alignment, offset, and recalloc forwarding contracts.
     unsafe { crate::mimalloc::mi_recalloc_aligned(block, count, size, alignment) }
 }
 

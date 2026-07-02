@@ -101,7 +101,10 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
         fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read unsafe audit");
     let raw_macro_allocation_ids = [
         "raw-macro-bootstrap-boundary",
-        "raw-macro-override-entry-boundary",
+        "raw-macro-fast-override-boundary",
+        "raw-macro-macos-interpose-boundary",
+        "raw-macro-windows-crt-boundary",
+        "raw-macro-windows-aligned-boundary",
         "raw-macro-unix-core-boundary",
         "raw-macro-unix-string-boundary",
         "raw-macro-unix-realloc-boundary",

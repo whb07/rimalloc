@@ -23,10 +23,23 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
     for audit_id in [
         "allocation-platform-shim-boundary",
         "allocation-product-entry-boundary",
-        "allocation-realloc-entry-boundary",
+        "allocation-realloc-thread-entry-boundary",
+        "allocation-realloc-product-boundary",
+        "allocation-realloc-free-on-failure-boundary",
+        "allocation-realloc-zeroing-boundary",
+        "allocation-realloc-public-boundary",
         "allocation-string-path-boundary",
-        "allocation-cxx-new-boundary",
-        "allocation-heap-dispatch-boundary",
+        "allocation-cxx-new-handler-boundary",
+        "allocation-cxx-new-try-boundary",
+        "allocation-cxx-new-public-boundary",
+        "allocation-cxx-new-product-boundary",
+        "allocation-cxx-new-aligned-boundary",
+        "allocation-cxx-new-realloc-boundary",
+        "allocation-small-dispatch-boundary",
+        "allocation-thread-heap-zero-boundary",
+        "allocation-public-malloc-boundary",
+        "allocation-zeroing-dispatch-boundary",
+        "allocation-calloc-dispatch-boundary",
         "allocation-layout-request-boundary",
         "allocation-page-refill-boundary",
         "free-raw-export-boundary",
@@ -83,51 +96,46 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         assert_focused_evidence(audit_id, PAGE_ARENA_FOCUSED_PATH);
     }
 
-    for (audit_id, focused_path) in [
-        (
-            "raw-macro-bootstrap-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
-        (
-            "raw-macro-override-entry-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
-        (
-            "raw-macro-override-entry-boundary",
+    const RAW_FACADE_FOCUSED_PATH: &str =
+        "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs";
+    for audit_id in [
+        "raw-macro-bootstrap-boundary",
+        "raw-macro-fast-override-boundary",
+        "raw-macro-macos-interpose-boundary",
+        "raw-macro-windows-crt-boundary",
+        "raw-macro-windows-aligned-boundary",
+        "raw-macro-unix-core-boundary",
+        "raw-macro-unix-string-boundary",
+        "raw-macro-unix-realloc-boundary",
+        "raw-macro-unix-aligned-posix-boundary",
+        "raw-macro-unix-product-realloc-boundary",
+        "raw-macro-wasi-libc-boundary",
+        "raw-macro-linux-libc-boundary",
+        "raw-macro-allocation-query-boundary",
+    ] {
+        assert_focused_evidence(audit_id, RAW_FACADE_FOCUSED_PATH);
+    }
+    for audit_id in [
+        "raw-macro-fast-override-boundary",
+        "raw-macro-macos-interpose-boundary",
+    ] {
+        assert_focused_evidence(
+            audit_id,
+            "tests/release_fast_path_audit/interposition_exports.rs",
+        );
+    }
+    for audit_id in [
+        "raw-macro-macos-interpose-boundary",
+        "raw-macro-windows-crt-boundary",
+        "raw-macro-windows-aligned-boundary",
+    ] {
+        assert_focused_evidence(
+            audit_id,
             "tests/release_fast_path_audit/release_policy/api_surface.rs",
-        ),
-        (
-            "raw-macro-unix-core-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
-        (
-            "raw-macro-unix-string-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
-        (
-            "raw-macro-unix-realloc-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
-        (
-            "raw-macro-unix-aligned-posix-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
-        (
-            "raw-macro-unix-product-realloc-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
-        (
-            "raw-macro-wasi-libc-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
-        (
-            "raw-macro-linux-libc-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
-        (
-            "raw-macro-allocation-query-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/raw_facade.rs",
-        ),
+        );
+    }
+
+    for (audit_id, focused_path) in [
         ("raw-macro-cxx-delete-boundary", RAW_CXX_FOCUSED_PATH),
         ("raw-macro-cxx-array-delete-boundary", RAW_CXX_FOCUSED_PATH),
         ("raw-macro-cxx-aligned-boundary", RAW_CXX_FOCUSED_PATH),
@@ -316,11 +324,24 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
     let tracked_ids = [
         "allocation-platform-shim-boundary",
         "allocation-product-entry-boundary",
-        "allocation-heap-dispatch-boundary",
+        "allocation-small-dispatch-boundary",
+        "allocation-thread-heap-zero-boundary",
+        "allocation-public-malloc-boundary",
+        "allocation-zeroing-dispatch-boundary",
+        "allocation-calloc-dispatch-boundary",
         "allocation-layout-request-boundary",
-        "allocation-realloc-entry-boundary",
+        "allocation-realloc-thread-entry-boundary",
+        "allocation-realloc-product-boundary",
+        "allocation-realloc-free-on-failure-boundary",
+        "allocation-realloc-zeroing-boundary",
+        "allocation-realloc-public-boundary",
         "allocation-string-path-boundary",
-        "allocation-cxx-new-boundary",
+        "allocation-cxx-new-handler-boundary",
+        "allocation-cxx-new-try-boundary",
+        "allocation-cxx-new-public-boundary",
+        "allocation-cxx-new-product-boundary",
+        "allocation-cxx-new-aligned-boundary",
+        "allocation-cxx-new-realloc-boundary",
         "allocation-page-refill-boundary",
         "free-raw-export-boundary",
         "free-validation-boundary",
@@ -343,7 +364,10 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         "aligned-realloc-global-export-boundary",
         "aligned-realloc-heap-export-boundary",
         "raw-macro-bootstrap-boundary",
-        "raw-macro-override-entry-boundary",
+        "raw-macro-fast-override-boundary",
+        "raw-macro-macos-interpose-boundary",
+        "raw-macro-windows-crt-boundary",
+        "raw-macro-windows-aligned-boundary",
         "raw-macro-unix-core-boundary",
         "raw-macro-unix-string-boundary",
         "raw-macro-unix-realloc-boundary",

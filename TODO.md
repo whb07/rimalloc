@@ -9,15 +9,13 @@ release-audit modules that now block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,899 unsafe
-  mentions, and 359 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 359 operation IDs with
-  764 automated evidence rows.
-- No source audit operation ID is over 37 source markers. The largest remaining
-  source ID is `allocation-realloc-entry-boundary` with 37 markers.
-  `init-subproc-heap-association-boundary`, `raw-macro-override-entry-boundary`,
-  and `typed-page-state-domain` have 36 markers each,
-  `typed-heap-thread-tld-pointer-test-fixtures` has 35 markers,
-  `allocation-heap-dispatch-boundary` has 34 markers, and
+  mentions, and 375 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 375 operation IDs with
+  810 automated evidence rows.
+- No source audit operation ID is over 36 source markers. The largest remaining
+  source IDs are `init-subproc-heap-association-boundary` and
+  `typed-page-state-domain` with 36 markers each.
+  `typed-heap-thread-tld-pointer-test-fixtures` has 35 markers, while
   `init-subproc-registry-boundary`, `platform-thread-heap-association-boundary`,
   and `windows-virtual-memory-boundary` have 32 markers each.
 - `strict-type-allowlist.txt` has 631 active entries: 332
@@ -42,13 +40,13 @@ Current review evidence:
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   release-audit module-size guard discovers 91 module files recursively and
   enforces a 500-line cap. The largest release-audit modules are:
-  `release_policy/security/unsafe_audit_evidence.rs` at 456 lines,
+  `release_policy/security/unsafe_audit_evidence.rs` at 480 lines,
+  `interposition_exports.rs` at 457 lines,
   `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 448 lines,
-  `interposition_exports.rs` at 444 lines,
-  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines,
-  `unsafe_performance/allocation_free.rs` at 409 lines, and
+  `unsafe_performance/allocation_free.rs` at 432 lines,
+  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines, and
   `unsafe_performance/os_memory.rs` at 409 lines.
-- Full validation for Issue 2 passed: `cargo fmt --all`,
+- Full validation for Issue 3 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -101,20 +99,21 @@ formatting, full clippy, and full tests.
 
 ## Issue 3: Split allocation entry and raw override audit clusters
 
-`allocation-realloc-entry-boundary` has 37 markers,
-`allocation-heap-dispatch-boundary` has 34, `allocation-cxx-new-boundary` has
-30, and `raw-macro-override-entry-boundary` has 36. These IDs still combine
-public C ABI shims, thread-heap dispatch, heap dispatch, typed request creation,
-zeroing, realloc failure/free policy, C++ new handlers, Windows override
-exports, Unix override exports, and interpose tables.
+> **Comment:** Completed. The broad allocation heap-dispatch, realloc, C++ new,
+> and raw override IDs are gone from allocator source. Allocation dispatch is
+> split across small, thread-heap zeroing, public malloc, zalloc, and calloc
+> IDs. Realloc is split across thread-entry, product, free-on-failure, zeroing,
+> and public ABI IDs. C++ new and raw override markers are split by handler,
+> retry, product/aligned/realloc, fast override assembly, macOS interpose, and
+> Windows CRT families.
 
-- [ ] Split `allocation-realloc-entry-boundary` into realloc request parsing,
+- [x] Split `allocation-realloc-entry-boundary` into realloc request parsing,
       reallocn/recalloc product checks, reallocf free-on-failure, zeroing
       variants, heap-specific variants, and public C ABI forwarding IDs.
-- [ ] Split `allocation-heap-dispatch-boundary` into default thread-heap
+- [x] Split `allocation-heap-dispatch-boundary` into default thread-heap
       dispatch, borrowed heap dispatch, small allocation fast paths, zeroing
       dispatch, and allocation product/request helpers.
-- [ ] Split `allocation-cxx-new-boundary` and `raw-macro-override-entry-boundary`
+- [x] Split `allocation-cxx-new-boundary` and `raw-macro-override-entry-boundary`
       by ABI family so C++ new/delete, Unix exports, Windows exports, bootstrap
       forwarding, and interpose tables are reviewed independently.
 
@@ -168,12 +167,12 @@ no-allocation audit, full formatting, full clippy, and full tests.
 ## Issue 6: Split release-audit modules over 400 lines and lower the cap
 
 The recursive module-size guard now enforces 500 lines. The next bottleneck is
-the 400-line band: `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs`
-at 448, `interposition_exports.rs` at 444,
-`release_policy/security/unsafe_audit_evidence.rs` at 456,
+the 400-line band: `release_policy/security/unsafe_audit_evidence.rs` at 480,
+`interposition_exports.rs` at 457,
+`unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 448,
+`unsafe_performance/allocation_free.rs` at 432,
 `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at
-421, and `unsafe_performance/allocation_free.rs` and
-`unsafe_performance/os_memory.rs` at 409 each.
+421, and `unsafe_performance/os_memory.rs` at 409.
 
 - [ ] Split `process_lifecycle.rs`, `interposition_exports.rs`,
       `unix_wasi_emscripten.rs`, `allocation_free.rs`, and `os_memory.rs` into
@@ -192,7 +191,7 @@ formatting, full clippy, and full tests.
 
 1. [x] Split options output and diagnostic audit clusters.
 2. [x] Split arena registry and purge audit clusters.
-3. [ ] Split allocation entry and raw override audit clusters.
+3. [x] Split allocation entry and raw override audit clusters.
 4. [ ] Split typed page-state and subproc association audit clusters.
 5. [ ] Tighten strict-type allowlist hotspots.
 6. [ ] Split release-audit modules over 400 lines and lower the cap.

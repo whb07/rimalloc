@@ -84,9 +84,15 @@ file:
 - `SAFETY[AUDIT:raw-macro-bootstrap-boundary]`: Unix bootstrap allocation
   tracking in `src/raw/macros.rs`, including mmap-backed bootstrap blocks,
   preloading handoffs, and free/realloc ownership transfer.
-- `SAFETY[AUDIT:raw-macro-override-entry-boundary]`: allocator override entry
-  points in `src/raw/macros.rs`, including fast assembly aliases, macOS
-  interpose records, and Windows CRT override exports.
+- `SAFETY[AUDIT:raw-macro-fast-override-boundary]`: fast override assembly
+  aliases in `src/raw/macros.rs` for C malloc/free and C++ new/delete ABI
+  entrypoints.
+- `SAFETY[AUDIT:raw-macro-macos-interpose-boundary]`: macOS interpose tables
+  and foreign allocation target declarations in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-windows-crt-boundary]`: Windows CRT allocation
+  exports in `src/raw/macros.rs`.
+- `SAFETY[AUDIT:raw-macro-windows-aligned-boundary]`: Windows aligned CRT
+  allocation exports in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-unix-core-boundary]`: Unix malloc/calloc/realloc/free
   export shims in `src/raw/macros.rs`.
 - `SAFETY[AUDIT:raw-macro-unix-string-boundary]`: Unix strdup/strndup forwarding
@@ -197,17 +203,42 @@ file:
   pathconf/realpath, and errno platform shims in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-product-entry-boundary]`: calloc, mallocn, and
   usable-size product allocation entry shims in `src/allocator/alloc.rs`.
-- `SAFETY[AUDIT:allocation-heap-dispatch-boundary]`: thread-heap and heap
-  allocation dispatch in `src/allocator/alloc.rs` for small, zeroed, calloc,
-  and typed allocation requests.
+- `SAFETY[AUDIT:allocation-small-dispatch-boundary]`: small allocation dispatch
+  in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-thread-heap-zero-boundary]`: thread-heap zero and
+  allocation dispatch in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-public-malloc-boundary]`: public malloc and heap
+  malloc entrypoints in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]`: zalloc entrypoints in
+  `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-calloc-dispatch-boundary]`: calloc dispatch in
+  `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-layout-request-boundary]`: layout padding, request
   construction, and realloc-size validation in `src/allocator/alloc.rs`.
-- `SAFETY[AUDIT:allocation-realloc-entry-boundary]`: raw, thread-heap, and
-  heap realloc-family entry shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-realloc-thread-entry-boundary]`: thread-heap realloc
+  entrypoints in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-realloc-product-boundary]`: reallocn product paths
+  in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-realloc-free-on-failure-boundary]`: reallocf paths
+  in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-realloc-zeroing-boundary]`: rezalloc and recalloc
+  paths in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-realloc-public-boundary]`: public realloc ABI
+  entrypoints in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-string-path-boundary]`: strdup, strndup, and
   realpath allocation entry shims in `src/allocator/alloc.rs`.
-- `SAFETY[AUDIT:allocation-cxx-new-boundary]`: C++ new/new_nothrow retry and
-  new-handler compatibility shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-cxx-new-handler-boundary]`: C++ new-handler lookup
+  and invocation in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-cxx-new-try-boundary]`: C++ new retry helpers in
+  `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-cxx-new-public-boundary]`: public C++ new entrypoints
+  in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-cxx-new-product-boundary]`: C++ new_n product paths
+  in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]`: nothrow and aligned C++
+  new paths in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-cxx-new-realloc-boundary]`: C++ new realloc wrappers
+  in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-page-refill-boundary]`: page refill handoff,
   generic fallback allocation, guarded allocation, zeroing, and padding canary
   publication in `src/allocator/alloc.rs`.

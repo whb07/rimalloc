@@ -19,7 +19,10 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
 
     let raw_macro_marker_minimums = [
         ("raw-macro-bootstrap-boundary", 15),
-        ("raw-macro-override-entry-boundary", 35),
+        ("raw-macro-fast-override-boundary", 3),
+        ("raw-macro-macos-interpose-boundary", 5),
+        ("raw-macro-windows-crt-boundary", 14),
+        ("raw-macro-windows-aligned-boundary", 14),
         ("raw-macro-unix-core-boundary", 4),
         ("raw-macro-unix-string-boundary", 4),
         ("raw-macro-unix-realloc-boundary", 2),
@@ -108,7 +111,10 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
             && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-libc-forwarding-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-bootstrap-boundary]")
-            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-fast-override-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-macos-interpose-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-windows-crt-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-windows-aligned-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-core-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-string-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-unix-realloc-boundary]")
@@ -123,6 +129,7 @@ pub(super) fn assert_bootstrap_and_query_boundaries(sources: &UnsafePerformanceS
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-nothrow-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-new-boundary]")
             && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-header-forwarding-boundary]")
+            && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-override-entry-boundary]")
             && !raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-cxx-boundary]")
             && raw_macros_rs.contains("core::arch::global_asm!(")
             && raw_macros_rs.contains("mod unix_bootstrap")

@@ -467,7 +467,7 @@ unsafe fn mi_theap_malloc_zero_req(
     huge_alignment: crate::core_types::MaybeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
     unsafe {
         let requested = layout.requested();
         let size = requested.get();
@@ -501,7 +501,7 @@ unsafe fn mi_theap_malloc_small_zero(
     zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
     unsafe {
         if MI_THEAP_INITASNULL && !theap.is_null() {
             let Some(theap) = _mi_theap_or_default_typed(theap) else {
@@ -535,7 +535,7 @@ unsafe fn mi_theap_malloc_small_zero_typed(
     zeroed: crate::core_types::Zeroed,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
     unsafe { mi_theap_malloc_small_zero_nonnull(theap, size, zeroed, usable) }
 }
 
@@ -548,7 +548,7 @@ unsafe fn mi_heap_borrowed_theap_local(heap: BorrowedHeap) -> Option<ThreadHeapL
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
     unsafe {
@@ -564,7 +564,7 @@ pub unsafe extern "C" fn mi_malloc_small(size: usize) -> *mut c_void {
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -579,7 +579,7 @@ pub unsafe extern "C" fn mi_theap_malloc_small(theap: *mut mi_theap_t, size: usi
 
 /// # Safety
 /// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -595,7 +595,7 @@ unsafe fn mi_heap_malloc_small_typed(
     heap: BorrowedHeap,
     size: crate::core_types::RequestedSize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-small-dispatch-boundary]: small allocation dispatch routes typed thread heaps through bounded size-class fast paths.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
@@ -616,7 +616,7 @@ unsafe fn mi_theap_malloc_zero_nonnull_lazy(
     huge_alignment: crate::core_types::MaybeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-thread-heap-zero-boundary]: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
     unsafe {
         let layout = match zeroed {
             crate::core_types::Zeroed::No => crate::core_types::LayoutRequest::malloc(size.get()),
@@ -634,7 +634,7 @@ unsafe fn mi_theap_malloc_zero_nonnull_lazy(
     }
 }
 
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-thread-heap-zero-boundary]: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
 #[inline(always)]
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     theap: *mut mi_theap_t,
@@ -643,7 +643,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero_ex(
     huge_alignment: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-thread-heap-zero-boundary]: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
     unsafe {
         crate::internal::mi_assert!((huge_alignment & 1) == 0);
         let Some(huge_alignment) = maybe_alignment_or_report(huge_alignment) else {
@@ -681,7 +681,7 @@ unsafe fn _mi_theap_malloc_zero_ex_typed(
     huge_alignment: crate::core_types::MaybeAlignment,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-thread-heap-zero-boundary]: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
     unsafe {
         let requested = layout.requested();
         let size = requested.get();
@@ -698,7 +698,7 @@ unsafe fn _mi_theap_malloc_zero_ex_typed(
     }
 }
 
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-thread-heap-zero-boundary]: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
     theap: *mut mi_theap_t,
@@ -706,7 +706,7 @@ pub(crate) unsafe extern "C" fn _mi_theap_malloc_zero(
     zero: bool,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-thread-heap-zero-boundary]: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
     unsafe {
         if theap.is_null() && MI_THEAP_INITASNULL {
             return _mi_theap_malloc_zero_ex(theap, size, zero, 0, usable);
@@ -726,7 +726,7 @@ unsafe fn _mi_theap_malloc_zero_typed(
     layout: crate::core_types::LayoutRequest,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-thread-heap-zero-boundary]: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
     unsafe { _mi_theap_malloc_zero_ex_typed(theap, layout, no_alignment(), usable) }
 }
 
@@ -739,7 +739,7 @@ static MI_THEAP_MALLOC_ZERO_EX_KEEP: unsafe extern "C" fn(
     *mut usize,
 ) -> *mut c_void = _mi_theap_malloc_zero_ex;
 
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-thread-heap-zero-boundary]: thread-heap zero/allocation dispatch validates layouts and optional huge alignment before generic fallback.
 #[used]
 static MI_THEAP_MALLOC_ZERO_KEEP: unsafe extern "C" fn(
     *mut mi_theap_t,
@@ -751,7 +751,7 @@ static MI_THEAP_MALLOC_ZERO_KEEP: unsafe extern "C" fn(
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_malloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -772,13 +772,13 @@ unsafe fn mi_theap_malloc_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
     unsafe { _mi_theap_malloc_zero_typed(theap, layout, ptr::null_mut()) }
 }
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
 #[cfg_attr(not(mi_c_malloc_fast), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
     unsafe { mi_theap_malloc(_mi_theap_default(), size) }
@@ -786,7 +786,7 @@ pub unsafe extern "C" fn mi_malloc(size: usize) -> *mut c_void {
 
 /// # Safety
 /// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_malloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -804,7 +804,7 @@ unsafe fn mi_heap_malloc_typed(
     heap: BorrowedHeap,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-public-malloc-boundary]: public malloc entrypoints validate raw heap/thread-heap handles before typed dispatch.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
@@ -815,7 +815,7 @@ unsafe fn mi_heap_malloc_typed(
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
     unsafe {
@@ -831,7 +831,7 @@ pub unsafe extern "C" fn mi_zalloc_small(size: usize) -> *mut c_void {
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -857,7 +857,7 @@ pub unsafe extern "C" fn mi_theap_zalloc_small(theap: *mut mi_theap_t, size: usi
 
 /// # Safety
 /// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc_small(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -873,7 +873,7 @@ unsafe fn mi_heap_zalloc_small_typed(
     heap: BorrowedHeap,
     size: crate::core_types::RequestedSize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
@@ -890,7 +890,7 @@ unsafe fn mi_heap_zalloc_small_typed(
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_zalloc(theap: *mut mi_theap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -911,13 +911,13 @@ unsafe fn mi_theap_zalloc_typed(
     theap: ThreadHeapLocal,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
     unsafe { _mi_theap_malloc_zero_typed(theap, layout, ptr::null_mut()) }
 }
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_zalloc(size: usize) -> *mut c_void {
     unsafe { _mi_theap_malloc_zero(_mi_theap_default(), size, true, ptr::null_mut()) }
@@ -925,7 +925,7 @@ pub unsafe extern "C" fn mi_zalloc(size: usize) -> *mut c_void {
 
 /// # Safety
 /// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_zalloc(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -943,7 +943,7 @@ unsafe fn mi_heap_zalloc_typed(
     heap: BorrowedHeap,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-zeroing-dispatch-boundary]: zeroing allocation entrypoints route typed layout requests without hidden allocation or dynamic dispatch.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
@@ -955,14 +955,14 @@ unsafe fn mi_heap_zalloc_typed(
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-calloc-dispatch-boundary]: calloc entrypoints validate checked products before zeroing allocation dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_calloc(
     theap: *mut mi_theap_t,
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-calloc-dispatch-boundary]: calloc entrypoints validate checked products before zeroing allocation dispatch.
     unsafe {
         if theap.is_null() && MI_THEAP_INITASNULL {
             return match calloc_request_or_report(count, size) {
@@ -984,7 +984,7 @@ unsafe fn mi_theap_calloc_typed(
     theap: ThreadHeapLocal,
     req: crate::core_types::CallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-calloc-dispatch-boundary]: calloc entrypoints validate checked products before zeroing allocation dispatch.
     unsafe { mi_theap_calloc_req(theap, req) }
 }
 
@@ -992,7 +992,7 @@ unsafe fn mi_theap_calloc_req(
     theap: ThreadHeapLocal,
     req: crate::core_types::CallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-calloc-dispatch-boundary]: calloc entrypoints validate checked products before zeroing allocation dispatch.
     unsafe { mi_theap_zalloc_typed(theap, req.layout()) }
 }
 
@@ -1000,7 +1000,7 @@ unsafe fn mi_theap_calloc_req_lazy(
     theap: *mut mi_theap_t,
     req: crate::core_types::CallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-heap-dispatch-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-calloc-dispatch-boundary]: calloc entrypoints validate checked products before zeroing allocation dispatch.
     unsafe { mi_theap_zalloc(theap, req.layout().requested().get()) }
 }
 
@@ -1477,14 +1477,14 @@ pub(crate) unsafe fn mi_realloc_request_from_user(
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-thread-entry-boundary]: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_theap_realloc(
     theap: *mut mi_theap_t,
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-thread-entry-boundary]: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
     unsafe {
         let Some(layout) = malloc_layout_or_report(newsize, false) else {
             return ptr::null_mut();
@@ -1523,7 +1523,7 @@ unsafe fn mi_theap_realloc_typed(
     theap: ThreadHeapLocal,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-thread-entry-boundary]: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
     unsafe {
         mi_theap_realloc_validated_core(
             theap,
@@ -1540,7 +1540,7 @@ pub(crate) unsafe fn mi_theap_realloc_req(
     theap: *mut mi_theap_t,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-thread-entry-boundary]: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
     unsafe { mi_theap_realloc_request_raw(theap, req, ptr::null_mut(), ptr::null_mut()) }
 }
 
@@ -1550,7 +1550,7 @@ pub(crate) unsafe fn mi_theap_realloc_layout(
     p: *mut c_void,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-thread-entry-boundary]: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
     unsafe {
         let Some(old) = mi_realloc_old_from_ptr(p, ptr::null_mut()) else {
             return ptr::null_mut();
@@ -1575,7 +1575,7 @@ unsafe fn mi_theap_realloc_request(
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-thread-entry-boundary]: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
     unsafe {
         mi_theap_realloc_validated_core(
             theap,
@@ -1594,7 +1594,7 @@ unsafe fn mi_theap_realloc_request_raw(
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-thread-entry-boundary]: thread-heap realloc entrypoints validate old allocations and typed layout requests before core dispatch.
     unsafe {
         let Some(theap) = _mi_theap_or_default_typed(theap) else {
             return ptr::null_mut();
@@ -1616,7 +1616,7 @@ unsafe fn mi_theap_reallocn_req(
     crate::internal::mi_debug_assert!(
         product.layout().requested().get() == req.new_layout().requested().get()
     );
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-product-boundary]: reallocn paths validate checked products and preserve raw pointer ownership semantics.
     unsafe { mi_theap_realloc_typed(theap, req) }
 }
 
@@ -1625,7 +1625,7 @@ unsafe fn mi_theap_reallocn_req_raw(
     p: *mut c_void,
     req: crate::core_types::AllocProduct,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-product-boundary]: reallocn paths validate checked products and preserve raw pointer ownership semantics.
     unsafe {
         let Some(realloc_req) = mi_realloc_request_from_ptr(p, req.layout(), ptr::null_mut())
         else {
@@ -1650,7 +1650,7 @@ unsafe fn mi_theap_reallocf_req(
     theap: ThreadHeapLocal,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-free-on-failure-boundary]: reallocf paths preserve free-on-failure behavior after typed request validation.
     unsafe {
         let p = req.ptr().map(|ptr| ptr.as_ptr()).unwrap_or(ptr::null_mut());
         let newp = mi_theap_realloc_typed(theap, req);
@@ -1666,7 +1666,7 @@ unsafe fn mi_theap_reallocf_req_raw(
     p: *mut c_void,
     layout: crate::core_types::LayoutRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-free-on-failure-boundary]: reallocf paths preserve free-on-failure behavior after typed request validation.
     unsafe {
         let Some(req) = mi_realloc_request_from_ptr(p, layout, ptr::null_mut()) else {
             return ptr::null_mut();
@@ -1689,7 +1689,7 @@ unsafe fn mi_theap_rezalloc(
     theap: ThreadHeapLocal,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
     unsafe { mi_theap_realloc_typed(theap, req) }
 }
 
@@ -1698,7 +1698,7 @@ unsafe fn mi_theap_recalloc(
     req: crate::core_types::CallocRequest,
     realloc_req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
     unsafe { mi_theap_recalloc_req(theap, req, realloc_req) }
 }
 
@@ -1707,7 +1707,7 @@ unsafe fn mi_theap_recalloc_req(
     req: crate::core_types::CallocRequest,
     realloc_req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
     unsafe {
         crate::internal::mi_debug_assert!(
             req.layout().requested().get() == realloc_req.new_layout().requested().get()
@@ -1721,7 +1721,7 @@ unsafe fn mi_theap_recalloc_raw(
     p: *mut c_void,
     req: crate::core_types::CallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
     unsafe {
         let Some(realloc_req) = mi_realloc_request_from_ptr(p, req.layout(), ptr::null_mut())
         else {
@@ -1744,7 +1744,7 @@ unsafe fn mi_theap_recalloc_raw(
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-public-boundary]: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe {
@@ -1758,7 +1758,7 @@ pub unsafe extern "C" fn mi_realloc(p: *mut c_void, newsize: usize) -> *mut c_vo
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-product-boundary]: reallocn paths validate checked products and preserve raw pointer ownership semantics.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reallocn(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     unsafe {
@@ -1773,7 +1773,7 @@ pub unsafe extern "C" fn mi_reallocn(p: *mut c_void, count: usize, size: usize) 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator. Non-null usable outputs
 /// must be writable for one `usize` each.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-public-boundary]: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_urealloc(
     p: *mut c_void,
@@ -1781,7 +1781,7 @@ pub unsafe extern "C" fn mi_urealloc(
     usable_pre: *mut usize,
     usable_post: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-public-boundary]: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
     unsafe {
         _mi_theap_realloc_zero(
             _mi_theap_default(),
@@ -1796,7 +1796,7 @@ pub unsafe extern "C" fn mi_urealloc(
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-free-on-failure-boundary]: reallocf paths preserve free-on-failure behavior after typed request validation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_reallocf(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe {
@@ -1813,7 +1813,7 @@ pub unsafe extern "C" fn mi_reallocf(p: *mut c_void, newsize: usize) -> *mut c_v
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_rezalloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe {
@@ -1827,7 +1827,7 @@ pub unsafe extern "C" fn mi_rezalloc(p: *mut c_void, newsize: usize) -> *mut c_v
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_recalloc(p: *mut c_void, count: usize, size: usize) -> *mut c_void {
     unsafe {
@@ -1841,14 +1841,14 @@ pub unsafe extern "C" fn mi_recalloc(p: *mut c_void, count: usize, size: usize) 
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-public-boundary]: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_realloc(
     heap: *mut mi_heap_t,
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-public-boundary]: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return core::ptr::null_mut();
@@ -1867,7 +1867,7 @@ unsafe fn mi_heap_realloc_typed(
     heap: BorrowedHeap,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-public-boundary]: public realloc ABI entrypoints preserve nullable pointer semantics and heap dispatch validation.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return core::ptr::null_mut();
@@ -1879,7 +1879,7 @@ unsafe fn mi_heap_realloc_typed(
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-product-boundary]: reallocn paths validate checked products and preserve raw pointer ownership semantics.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_reallocn(
     heap: *mut mi_heap_t,
@@ -1887,7 +1887,7 @@ pub unsafe extern "C" fn mi_heap_reallocn(
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-product-boundary]: reallocn paths validate checked products and preserve raw pointer ownership semantics.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -1907,7 +1907,7 @@ unsafe fn mi_heap_reallocn_typed(
     product: crate::core_types::AllocProduct,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-product-boundary]: reallocn paths validate checked products and preserve raw pointer ownership semantics.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
@@ -1919,14 +1919,14 @@ unsafe fn mi_heap_reallocn_typed(
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-free-on-failure-boundary]: reallocf paths preserve free-on-failure behavior after typed request validation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_reallocf(
     heap: *mut mi_heap_t,
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-free-on-failure-boundary]: reallocf paths preserve free-on-failure behavior after typed request validation.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return core::ptr::null_mut();
@@ -1948,7 +1948,7 @@ unsafe fn mi_heap_reallocf_typed(
     heap: BorrowedHeap,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-free-on-failure-boundary]: reallocf paths preserve free-on-failure behavior after typed request validation.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return core::ptr::null_mut();
@@ -1960,14 +1960,14 @@ unsafe fn mi_heap_reallocf_typed(
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_rezalloc(
     heap: *mut mi_heap_t,
     p: *mut c_void,
     newsize: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -1986,7 +1986,7 @@ unsafe fn mi_heap_rezalloc_typed(
     heap: BorrowedHeap,
     req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
@@ -1998,7 +1998,7 @@ unsafe fn mi_heap_rezalloc_typed(
 /// # Safety
 /// `heap` must be a valid heap pointer. `p` must be null or a pointer previously returned by this
 /// allocator.
-// SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_recalloc(
     heap: *mut mi_heap_t,
@@ -2006,7 +2006,7 @@ pub unsafe extern "C" fn mi_heap_recalloc(
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -2027,7 +2027,7 @@ unsafe fn mi_heap_recalloc_typed(
     req: crate::core_types::CallocRequest,
     realloc_req: crate::core_types::ReallocRequest,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-realloc-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-realloc-zeroing-boundary]: rezalloc and recalloc paths preserve zero-tail and checked calloc request semantics.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
@@ -2233,17 +2233,17 @@ pub unsafe extern "C" fn mi_realpath(
     unsafe { mi_theap_realpath(_mi_theap_default(), fname, resolved_name) }
 }
 
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-handler-boundary]: C++ new-handler lookup and invocation preserve platform ABI and abort/nothrow policy.
 type StdNewHandler = Option<unsafe extern "C" fn()>;
 
 #[cfg(all(unix, not(target_os = "wasi")))]
 unsafe fn mi_get_new_handler() -> StdNewHandler {
     unsafe {
-        // SAFETY[AUDIT:allocation-cxx-new-boundary]: the optional C++ new-handler
+        // SAFETY[AUDIT:allocation-cxx-new-handler-boundary]: C++ new-handler lookup and invocation preserve platform ABI and abort/nothrow policy.
         // lookup preserves the platform ABI function-pointer shape.
         type GetNewHandler = unsafe extern "C" fn() -> StdNewHandler;
 
-        // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+        // SAFETY[AUDIT:allocation-cxx-new-handler-boundary]: C++ new-handler lookup and invocation preserve platform ABI and abort/nothrow policy.
         unsafe extern "C" {
             fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
         }
@@ -2270,7 +2270,7 @@ unsafe fn mi_get_new_handler() -> StdNewHandler {
 }
 
 unsafe fn mi_try_new_handler(nothrow: bool) -> bool {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-handler-boundary]: C++ new-handler lookup and invocation preserve platform ABI and abort/nothrow policy.
     unsafe {
         let h = mi_get_new_handler();
         if let Some(h) = h {
@@ -2286,14 +2286,14 @@ unsafe fn mi_try_new_handler(nothrow: bool) -> bool {
     }
 }
 
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn mi_theap_try_new(
     theap: *mut mi_theap_t,
     size: usize,
     nothrow: bool,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
     unsafe {
         let mut p = mi_theap_malloc(theap, size);
         while p.is_null() && mi_try_new_handler(nothrow) {
@@ -2303,20 +2303,20 @@ pub(crate) unsafe extern "C" fn mi_theap_try_new(
     }
 }
 
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
 #[inline(never)]
 unsafe extern "C" fn mi_try_new(size: usize, nothrow: bool) -> *mut c_void {
     unsafe { mi_theap_try_new(_mi_theap_default(), size, nothrow) }
 }
 
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
 #[inline(never)]
 unsafe extern "C" fn mi_heap_try_new(
     heap: *mut mi_heap_t,
     size: usize,
     nothrow: bool,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -2331,7 +2331,7 @@ unsafe fn mi_heap_try_new_typed(
     size: crate::core_types::RequestedSize,
     nothrow: bool,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
     unsafe {
         let Some(theap) = mi_heap_borrowed_theap_local(heap) else {
             return ptr::null_mut();
@@ -2340,7 +2340,7 @@ unsafe fn mi_heap_try_new_typed(
     }
 }
 
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-public-boundary]: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
 pub(crate) unsafe extern "C" fn mi_theap_alloc_new(
     theap: *mut mi_theap_t,
     size: usize,
@@ -2357,7 +2357,7 @@ pub(crate) unsafe extern "C" fn mi_theap_alloc_new(
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-public-boundary]: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
     unsafe { mi_theap_alloc_new(_mi_theap_default(), size) }
@@ -2365,7 +2365,7 @@ pub unsafe extern "C" fn mi_new(size: usize) -> *mut c_void {
 
 /// # Safety
 /// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-public-boundary]: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_alloc_new(heap: *mut mi_heap_t, size: usize) -> *mut c_void {
     unsafe {
@@ -2381,7 +2381,7 @@ unsafe fn mi_heap_alloc_new_typed(
     heap: BorrowedHeap,
     size: crate::core_types::RequestedSize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-public-boundary]: public C++ new entrypoints validate heap/thread dispatch before retrying allocation failure.
     unsafe {
         let Ok(layout) = crate::core_types::LayoutRequest::malloc(size.get()) else {
             return mi_heap_try_new_typed(heap, size, false);
@@ -2399,13 +2399,13 @@ unsafe fn mi_theap_alloc_new_n(
     theap: *mut mi_theap_t,
     req: crate::core_types::AllocProduct,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
     unsafe { mi_theap_alloc_new(theap, req.total().get()) }
 }
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_n(count: usize, size: usize) -> *mut c_void {
     unsafe {
@@ -2421,14 +2421,14 @@ pub unsafe extern "C" fn mi_new_n(count: usize, size: usize) -> *mut c_void {
 
 /// # Safety
 /// `heap` must be a valid heap pointer. Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_alloc_new_n(
     heap: *mut mi_heap_t,
     count: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
     unsafe {
         let Some(heap) = BorrowedHeap::from_allocation_raw(heap) else {
             return ptr::null_mut();
@@ -2447,7 +2447,7 @@ unsafe fn mi_heap_alloc_new_n_typed(
     heap: BorrowedHeap,
     req: crate::core_types::AllocProduct,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-product-boundary]: C++ new_n paths validate checked products before typed allocation and retry dispatch.
     unsafe {
         let p = mi_heap_malloc_typed(heap, req.layout());
         if mi_unlikely(p.is_null()) {
@@ -2460,7 +2460,7 @@ unsafe fn mi_heap_alloc_new_n_typed(
 
 /// # Safety
 /// Returned memory must be released through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
     unsafe {
@@ -2476,7 +2476,7 @@ pub unsafe extern "C" fn mi_new_nothrow(size: usize) -> *mut c_void {
 /// # Safety
 /// `alignment` must be valid for the aligned allocation API. Returned memory must be released
 /// through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_aligned(size: usize, alignment: usize) -> *mut c_void {
     unsafe {
@@ -2491,7 +2491,7 @@ unsafe fn mi_new_aligned_typed(
     size: crate::core_types::RequestedSize,
     alignment: crate::core_types::Alignment,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
     unsafe {
         let mut p: *mut c_void;
         loop {
@@ -2506,7 +2506,7 @@ unsafe fn mi_new_aligned_typed(
 /// # Safety
 /// `alignment` must be valid for the aligned allocation API. Returned memory must be released
 /// through this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_aligned_nothrow(size: usize, alignment: usize) -> *mut c_void {
     unsafe {
@@ -2521,7 +2521,7 @@ unsafe fn mi_new_aligned_nothrow_typed(
     size: crate::core_types::RequestedSize,
     alignment: crate::core_types::Alignment,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-aligned-boundary]: nothrow and aligned C++ new paths preserve alignment validation and retry policy.
     unsafe {
         let mut p: *mut c_void;
         loop {
@@ -2535,7 +2535,7 @@ unsafe fn mi_new_aligned_nothrow_typed(
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-realloc-boundary]: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_realloc(p: *mut c_void, newsize: usize) -> *mut c_void {
     unsafe {
@@ -2551,14 +2551,14 @@ pub unsafe extern "C" fn mi_new_realloc(p: *mut c_void, newsize: usize) -> *mut 
 
 /// # Safety
 /// `p` must be null or a pointer previously returned by this allocator.
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-realloc-boundary]: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_new_reallocn(
     p: *mut c_void,
     newcount: usize,
     size: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-cxx-new-realloc-boundary]: C++ new realloc wrappers retry realloc-family requests through the new-handler policy.
     unsafe {
         match alloc_product_or_report(newcount, size) {
             Some(req) => mi_new_realloc(p, req.total().get()),
@@ -2570,17 +2570,17 @@ pub unsafe extern "C" fn mi_new_reallocn(
     }
 }
 
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
 #[used]
 static MI_THEAP_TRY_NEW_KEEP: unsafe extern "C" fn(*mut mi_theap_t, usize, bool) -> *mut c_void =
     mi_theap_try_new;
 
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: retain the C++ nothrow allocation
+// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
 // shim function pointer shape for release-audit source checks.
 #[used]
 static MI_TRY_NEW_KEEP: unsafe extern "C" fn(usize, bool) -> *mut c_void = mi_try_new;
 
-// SAFETY[AUDIT:allocation-cxx-new-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-cxx-new-try-boundary]: C++ new retry helpers route allocation failures through the new-handler policy.
 #[used]
 static MI_HEAP_TRY_NEW_KEEP: unsafe extern "C" fn(*mut mi_heap_t, usize, bool) -> *mut c_void =
     mi_heap_try_new;

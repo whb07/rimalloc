@@ -27,6 +27,28 @@ pub(super) fn assert_arena_helper_boundaries(
             "arena debug helper boundary marker missing: {marker}"
         );
     }
+    for (audit_id, min_count) in [
+        ("arena-debug-snapshot-boundary", 6),
+        ("arena-debug-page-state-boundary", 7),
+        ("arena-debug-buffer-boundary", 9),
+        ("arena-debug-chunk-render-boundary", 4),
+        ("arena-debug-registry-walk-boundary", 8),
+    ] {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        assert!(
+            arena_debug_rs.matches(&marker).count() >= min_count,
+            "arena debug boundary {audit_id} should retain at least {min_count} local operation markers"
+        );
+    }
+    assert!(
+        !arena_debug_rs.contains("SAFETY[AUDIT:arena-debug-render]")
+            && arena_debug_rs.contains("SAFETY[AUDIT:arena-debug-snapshot-boundary]")
+            && arena_debug_rs.contains("SAFETY[AUDIT:arena-debug-page-state-boundary]")
+            && arena_debug_rs.contains("SAFETY[AUDIT:arena-debug-buffer-boundary]")
+            && arena_debug_rs.contains("SAFETY[AUDIT:arena-debug-chunk-render-boundary]")
+            && arena_debug_rs.contains("SAFETY[AUDIT:arena-debug-registry-walk-boundary]"),
+        "arena debug audit markers should stay split by diagnostic operation family"
+    );
 
     let claim_start = arena_rs
         .find("unsafe fn mi_arena_try_claim_abandoned_at(")

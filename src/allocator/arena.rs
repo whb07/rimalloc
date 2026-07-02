@@ -151,14 +151,14 @@ pub extern "C" fn mi_arena_min_size() -> usize {
 
 /// # Safety
 /// `subproc` must point to a valid `mi_subproc_t`.
-// SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+// SAFETY[AUDIT:arena-registry-count-index-boundary]: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usize {
     let Some(subproc) = SubprocPtr::new(subproc) else {
         crate::internal::mi_assert_internal!(false);
         return 0;
     };
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-count-index-boundary]: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
     unsafe { mi_arenas_get_count_typed(subproc) }
 }
 
@@ -186,7 +186,7 @@ unsafe fn mi_arena_range_is_after_info_slices(
 
 unsafe fn mi_heap_arena_pages(heap: BorrowedHeap, arena: ArenaPtr) -> *mut mi_arena_pages_t {
     let arena = arena.as_ptr();
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-heap-page-table-boundary]: heap arena-page table access validates arena indexes and bitmap ownership for page metadata lookup.
     let arena_idx = unsafe { mi_arena_index(arena) };
     unsafe { mi_heap_arena_page_cell(heap, arena_idx).load_acquire() }.cast::<mi_arena_pages_t>()
 }
@@ -198,7 +198,7 @@ unsafe fn mi_page_arena_pages(
     parena_pages: *mut *mut mi_arena_pages_t,
 ) -> *mut mi_arena_t {
     let page = page.as_ptr();
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-heap-page-table-boundary]: heap arena-page table access validates arena indexes and bitmap ownership for page metadata lookup.
     crate::internal::mi_assert_internal!(unsafe { mi_page_is_owned(page) });
     let arena = unsafe { mi_arena_from_memid((*page).memid, slice_index, slice_count) };
     crate::internal::mi_assert_internal!(!arena.is_null());
@@ -212,7 +212,7 @@ unsafe fn mi_page_arena_pages(
         crate::internal::mi_assert_internal!(!arena_pages.is_null());
         crate::internal::mi_assert_internal!(
             slice_index.is_null()
-                // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+                // SAFETY[AUDIT:arena-heap-page-table-boundary]: heap arena-page table access validates arena indexes and bitmap ownership for page metadata lookup.
                 || unsafe { mi_bitmap_is_setN((*arena_pages).pages, *slice_index, 1) }
         );
         unsafe { *parena_pages = arena_pages };
@@ -224,7 +224,7 @@ unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page: PagePtr) -
     let borrowed_heap = heap;
     let arena = arena.as_ptr();
     let page = page.as_ptr();
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-heap-page-table-boundary]: heap arena-page table access validates arena indexes and bitmap ownership for page metadata lookup.
     let arena_idx = unsafe { mi_arena_index(arena) };
     let arena_pages = unsafe { mi_heap_arena_page_cell(borrowed_heap, arena_idx).load_acquire() }
         .cast::<MiArenaPagesPrefix>();
@@ -232,7 +232,7 @@ unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page: PagePtr) -
         crate::core_types::MemIdView::Arena(a) => {
             a.arena.as_ptr() == arena
                 && !arena_pages.is_null()
-                // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+                // SAFETY[AUDIT:arena-heap-page-table-boundary]: heap arena-page table access validates arena indexes and bitmap ownership for page metadata lookup.
                 && unsafe { mi_bitmap_is_setN((*arena_pages).pages, a.range.start().0, 1) }
         }
         _ => false,
@@ -703,7 +703,7 @@ unsafe fn mi_arena_try_alloc_at(
 
 /// # Safety
 /// `subproc` must point to a valid `mi_subproc_t`, and `idx` must be in range.
-// SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+// SAFETY[AUDIT:arena-registry-count-index-boundary]: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arena_from_index(
     subproc: *mut mi_subproc_t,
@@ -717,19 +717,19 @@ pub unsafe extern "C" fn mi_arena_from_index(
         crate::internal::mi_assert_internal!(false);
         return ptr::null_mut();
     };
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-count-index-boundary]: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
     crate::internal::mi_assert_internal!(idx < unsafe { mi_arenas_get_count_typed(subproc_ptr) });
     unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) }
 }
 
-// SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+// SAFETY[AUDIT:arena-registry-count-index-boundary]: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_arena_t) -> mi_arena_id_t = ids::mi_arena_id_from_arena;
 
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_subproc_t) -> usize = mi_arenas_get_count;
 
-// SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+// SAFETY[AUDIT:arena-registry-count-index-boundary]: arena count/index lookup validates subproc pointers and typed arena indexes before C ABI exposure.
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_subproc_t, usize) -> *mut mi_arena_t = mi_arena_from_index;
 
@@ -740,7 +740,7 @@ unsafe fn mi_arena_start_idx(
 ) -> ArenaIndex {
     let arena_cycle = arena_cycle.get() as usize;
     let heap = heap.ptr().as_ptr().cast::<MiHeapPrefix>();
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-start-index-boundary]: arena iteration start indexes are derived from typed heap/thread sequence domains and bounded arena counts.
     let subproc = unsafe { (*heap).subproc.cast::<MiSubprocPrefix>() };
     let hseq = crate::core_types::HeapSeq::new(unsafe { (*heap).heap_seq });
     let hcount = unsafe { (*subproc).heap_count.load(Ordering::Relaxed) };
@@ -748,7 +748,7 @@ unsafe fn mi_arena_start_idx(
         return unsafe { ArenaIndex::new_unchecked(0) };
     }
     if hseq.get() == 0 || hcount <= 1 || arena_cycle > 0x8FF {
-        // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+        // SAFETY[AUDIT:arena-registry-start-index-boundary]: arena iteration start indexes are derived from typed heap/thread sequence domains and bounded arena counts.
         return unsafe { ArenaIndex::new_unchecked((tseq.get() % arena_cycle) as u16) };
     }
 
@@ -765,7 +765,7 @@ unsafe fn mi_arena_start_idx(
         start
     };
     crate::internal::mi_assert_internal!(start < arena_cycle);
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-start-index-boundary]: arena iteration start indexes are derived from typed heap/thread sequence domains and bounded arena counts.
     unsafe { ArenaIndex::new_unchecked(start as u16) }
 }
 
@@ -774,7 +774,7 @@ unsafe fn mi_arena_numa_node(arena: *const mi_arena_t) -> crate::core_types::Num
 }
 
 unsafe fn mi_arena_set_numa_node(arena: *mut mi_arena_t, numa_node: crate::core_types::NumaNode) {
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-suitability-boundary]: arena suitability checks keep pinned, requested-arena, and NUMA predicates separate from table mutation.
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).numa_node = numa_node.get();
     }
@@ -788,7 +788,7 @@ unsafe fn mi_arena_is_suitable_ex(
     allow_pinned: crate::core_types::AllowPinned,
 ) -> bool {
     let arena_raw = arena.as_ptr();
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-suitability-boundary]: arena suitability checks keep pinned, requested-arena, and NUMA predicates separate from table mutation.
     if !allow_pinned.get() && unsafe { (*arena_raw.cast::<MiArenaPrefix>()).memid.is_pinned } {
         return false;
     }
@@ -796,7 +796,7 @@ unsafe fn mi_arena_is_suitable_ex(
         return false;
     }
     if req_arena.is_none() {
-        // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+        // SAFETY[AUDIT:arena-registry-suitability-boundary]: arena suitability checks keep pinned, requested-arena, and NUMA predicates separate from table mutation.
         let arena_numa = unsafe { mi_arena_numa_node(arena_raw) };
         let numa_suitable = arena_numa.is_suitable_for(numa_node);
         if match_numa.get() {
@@ -819,7 +819,7 @@ unsafe fn mi_forall_arenas<F>(
     F: FnMut(ArenaPtr) -> bool,
 {
     let heap = heap.ptr();
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-iteration-boundary]: arena iteration loads typed subproc table cells and stops on visitor decisions without mutating registry state.
     let Some(subproc) = (unsafe { heap.subproc() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
@@ -830,7 +830,7 @@ unsafe fn mi_forall_arenas<F>(
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-iteration-boundary]: arena iteration loads typed subproc table cells and stops on visitor decisions without mutating registry state.
     let start = unsafe {
         mi_arena_start_idx(BorrowedHeap::new_unchecked(heap), tseq, arena_cycle_idx).get() as usize
     };
@@ -854,7 +854,7 @@ unsafe fn mi_forall_arenas<F>(
                 crate::internal::mi_assert_internal!(false);
                 continue;
             };
-            // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+            // SAFETY[AUDIT:arena-registry-iteration-boundary]: arena iteration loads typed subproc table cells and stops on visitor decisions without mutating registry state.
             let Some(arena) = (unsafe { subproc.arena(arena_idx) }) else {
                 continue;
             };
@@ -877,7 +877,7 @@ unsafe fn mi_forall_suitable_arenas<F>(
 ) where
     F: FnMut(ArenaPtr) -> bool,
 {
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-iteration-boundary]: arena iteration loads typed subproc table cells and stops on visitor decisions without mutating registry state.
     unsafe {
         mi_forall_arenas(heap, req_arena, tseq, |arena| {
             !mi_arena_is_suitable_ex(
@@ -1059,21 +1059,21 @@ unsafe fn mi_arena_pages_alloc(
 unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
     let subproc_ptr = subproc;
     let subproc = subproc.as_ptr();
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-destroy-boundary]: unsafe arena teardown clears subproc table cells and arena counts while preserving OS-owned arena release rules.
     let arena_count = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
     for i in 0..arena_count {
         let Some(arena_idx) = ArenaIndex::from_usize(i) else {
             crate::internal::mi_assert_internal!(false);
             continue;
         };
-        // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+        // SAFETY[AUDIT:arena-registry-destroy-boundary]: unsafe arena teardown clears subproc table cells and arena counts while preserving OS-owned arena release rules.
         let arena = unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) };
         if !arena.is_null() {
             unsafe {
                 mi_subproc_arena_cell(subproc, arena_idx)
                     .store(ptr::null_mut(), crate::core_types::MemoryOrder::Release);
             }
-            // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+            // SAFETY[AUDIT:arena-registry-destroy-boundary]: unsafe arena teardown clears subproc table cells and arena counts while preserving OS-owned arena release rules.
             if mi_memid_is_os(unsafe { (*arena.cast::<MiArenaPrefix>()).memid }) {
                 unsafe {
                     crate::internal::_mi_os_free_ex(
@@ -1090,7 +1090,7 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
         }
     }
     let mut expected = arena_count;
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-destroy-boundary]: unsafe arena teardown clears subproc table cells and arena counts while preserving OS-owned arena release rules.
     let _ = unsafe {
         crate::core_types::AtomicUsizeField(
             ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
@@ -1102,14 +1102,14 @@ unsafe fn mi_arenas_unsafe_destroy(subproc: SubprocPtr) {
 /// # Safety
 /// Caller must ensure `subproc` is valid and destruction is only used in the same narrow cases
 /// as the original C implementation.
-// SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+// SAFETY[AUDIT:arena-registry-destroy-boundary]: unsafe arena teardown clears subproc table cells and arena counts while preserving OS-owned arena release rules.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_arenas_unsafe_destroy_all(subproc: *mut mi_subproc_t) {
     let Some(subproc) = SubprocPtr::new(subproc) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-destroy-boundary]: unsafe arena teardown clears subproc table cells and arena counts while preserving OS-owned arena release rules.
     unsafe { mi_arenas_unsafe_destroy(subproc) };
 }
 
@@ -1120,32 +1120,32 @@ unsafe fn mi_arenas_add(
 ) -> bool {
     let subproc = subproc.as_ptr();
     let arena = arena_ptr.as_ptr();
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
     crate::internal::mi_assert_internal!(unsafe { arena_ptr.slice_count() }.get() > 0);
     if !arena_id.is_null() {
         unsafe { *arena_id = _mi_arena_id_none() };
     }
 
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
     let mut count = unsafe { mi_arenas_get_count_typed(SubprocPtr::new_unchecked(subproc)) };
     for i in 0..count {
         let Some(arena_idx) = ArenaIndex::from_usize(i) else {
             crate::internal::mi_assert_internal!(false);
             continue;
         };
-        // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+        // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
         if unsafe { mi_arena_from_index_typed(SubprocPtr::new_unchecked(subproc), arena_idx) }
             .is_null()
         {
             unsafe { arena_ptr.set_index(arena_idx) };
             let mut expected = ptr::null_mut::<mi_arena_t>();
-            // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+            // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
             if unsafe {
                 mi_subproc_arena_cell(subproc, arena_idx)
                     .compare_exchange_release(&mut expected, arena)
             } {
                 if !arena_id.is_null() {
-                    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+                    // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
                     unsafe { *arena_id = mi_arena_id_from_arena_typed(arena_ptr) };
                 }
                 return true;
@@ -1155,7 +1155,7 @@ unsafe fn mi_arenas_add(
 
     while count < MI_MAX_ARENAS {
         let next_count = count + 1;
-        // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+        // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
         if unsafe {
             crate::core_types::AtomicUsizeField(
                 ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).arena_count).cast::<usize>(),
@@ -1166,14 +1166,14 @@ unsafe fn mi_arenas_add(
                 crate::internal::mi_assert_internal!(false);
                 continue;
             };
-            // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+            // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
             unsafe { arena_ptr.set_index(arena_idx) };
             let mut expected = ptr::null_mut::<mi_arena_t>();
             if unsafe {
                 mi_subproc_arena_cell(subproc, arena_idx)
                     .compare_exchange_release(&mut expected, arena)
             } {
-                // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+                // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
                 unsafe {
                     __mi_stat_counter_increase(
                         ptr::addr_of_mut!(
@@ -1185,7 +1185,7 @@ unsafe fn mi_arenas_add(
                     )
                 };
                 if !arena_id.is_null() {
-                    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+                    // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
                     unsafe { *arena_id = mi_arena_id_from_arena_typed(arena_ptr) };
                 }
                 return true;
@@ -1193,7 +1193,7 @@ unsafe fn mi_arenas_add(
         }
     }
 
-    // SAFETY[AUDIT:arena-registry-boundary]: arena registry and subproc table access uses typed indexes, atomic cells, and heap arena-page tables to preserve ownership.
+    // SAFETY[AUDIT:arena-registry-add-boundary]: arena registration publishes typed arena indexes through atomic subproc cells and rolls back failed publication.
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).arena_idx = 0;
         (*arena.cast::<MiArenaPrefix>()).subproc = ptr::null_mut();
@@ -3276,13 +3276,13 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
     let arena = arena.as_ptr();
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-schedule-boundary]: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
     let delay = unsafe { mi_arena_purge_delay() };
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } || delay < 0 || _mi_preloading()
     {
         return;
     }
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-schedule-boundary]: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
     crate::internal::mi_assert_internal!(unsafe {
         mi_bbitmap_is_clearN(
             (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -3291,14 +3291,14 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
         )
     });
     if delay == 0 {
-        // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+        // SAFETY[AUDIT:arena-purge-schedule-boundary]: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
         unsafe { mi_arena_purge(arena_ptr, range) };
         return;
     }
 
     let expire = crate::stats::_mi_clock_now() + delay as i64;
     let mut expire0 = 0i64;
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-schedule-boundary]: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
     if unsafe {
         crate::core_types::AtomicI64Field(
             ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
@@ -3306,7 +3306,7 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
         .compare_exchange_acq_rel(&mut expire0, expire)
     } {
         crate::internal::mi_assert_internal!(expire0 == 0);
-        // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+        // SAFETY[AUDIT:arena-purge-schedule-boundary]: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
         let subproc = unsafe { (*arena.cast::<MiArenaPrefix>()).subproc };
         unsafe {
             crate::core_types::AtomicI64Field(
@@ -3315,7 +3315,7 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
             .compare_exchange_acq_rel(&mut expire0, expire)
         };
     }
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-schedule-boundary]: purge scheduling records delayed purge windows and purge bitmaps under typed arena/subproc state.
     unsafe {
         mi_bitmap_setN(
             (*arena.cast::<MiArenaPrefix>()).slices_purge,
@@ -3328,13 +3328,13 @@ unsafe fn mi_arena_schedule_purge(arena: ArenaPtr, range: crate::core_types::Sli
 
 /// # Safety
 /// Internal arena free path matching the C ABI.
-// SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+// SAFETY[AUDIT:arena-purge-free-dispatch-boundary]: arena free dispatch validates memid ranges, marks free slices, and schedules purge without changing allocation ownership rules.
 pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, memid: mi_memid_t) {
     if p.is_null() || size == 0 {
         return;
     }
 
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-free-dispatch-boundary]: arena free dispatch validates memid ranges, marks free slices, and schedules purge without changing allocation ownership rules.
     unsafe { mi_track_mem_undefined(p, size) };
     match crate::core_types::MemId::view(memid) {
         crate::core_types::MemIdView::Os(_) => {
@@ -3350,13 +3350,13 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
             crate::internal::mi_assert_internal!(size.is_multiple_of(MI_ARENA_SLICE_SIZE));
             crate::internal::mi_assert_internal!(slice_count * MI_ARENA_SLICE_SIZE == size);
             crate::internal::mi_assert_internal!(
-                // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+                // SAFETY[AUDIT:arena-purge-free-dispatch-boundary]: arena free dispatch validates memid ranges, marks free slices, and schedules purge without changing allocation ownership rules.
                 slice_end <= unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
             );
             crate::internal::mi_assert_internal!(unsafe {
                 mi_arena_range_is_after_info_slices(arena_ptr, range)
             });
-            // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+            // SAFETY[AUDIT:arena-purge-free-dispatch-boundary]: arena free dispatch validates memid ranges, marks free slices, and schedules purge without changing allocation ownership rules.
             if !unsafe { mi_arena_range_is_after_info_slices(arena_ptr, range) }
                 || slice_end > unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
             {
@@ -3370,7 +3370,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
                 return;
             }
 
-            // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+            // SAFETY[AUDIT:arena-purge-free-dispatch-boundary]: arena free dispatch validates memid ranges, marks free slices, and schedules purge without changing allocation ownership rules.
             if !unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
                 unsafe { mi_arena_schedule_purge(ArenaPtr::new_unchecked(arena), range) };
             }
@@ -3393,7 +3393,7 @@ pub(crate) unsafe extern "C" fn _mi_arenas_free(p: *mut c_void, size: usize, mem
             }
         }
         crate::core_types::MemIdView::Meta(_) => {
-            // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+            // SAFETY[AUDIT:arena-purge-free-dispatch-boundary]: arena free dispatch validates memid ranges, marks free slices, and schedules purge without changing allocation ownership rules.
             unsafe { _mi_meta_free(p, size, memid) };
         }
         crate::core_types::MemIdView::None(_)
@@ -3415,7 +3415,7 @@ unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) 
     let arena = arena.as_ptr();
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-direct-boundary]: direct arena purge updates committed-slice bitmaps around OS purge/decommit handoff.
     crate::internal::mi_assert_internal!(!unsafe {
         (*arena.cast::<MiArenaPrefix>()).memid.is_pinned
     });
@@ -3428,14 +3428,14 @@ unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) 
     });
 
     let size = mi_size_of_slices(slice_count);
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-direct-boundary]: direct arena purge updates committed-slice bitmaps around OS purge/decommit handoff.
     let p = unsafe {
         mi_arena_slice_start(ArenaPtr::new_unchecked(arena), range.start())
             .as_ptr()
             .cast::<c_void>()
     };
     let mut already_committed = 0usize;
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-direct-boundary]: direct arena purge updates committed-slice bitmaps around OS purge/decommit handoff.
     unsafe {
         mi_bitmap_setN(
             (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -3445,7 +3445,7 @@ unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) 
         )
     };
     let all_committed = already_committed == slice_count;
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-direct-boundary]: direct arena purge updates committed-slice bitmaps around OS purge/decommit handoff.
     let needs_recommit = unsafe {
         crate::internal::_mi_os_purge_ex(
             p,
@@ -3458,7 +3458,7 @@ unsafe fn mi_arena_purge(arena: ArenaPtr, range: crate::core_types::SliceRange) 
     };
 
     if needs_recommit || !all_committed {
-        // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+        // SAFETY[AUDIT:arena-purge-direct-boundary]: direct arena purge updates committed-slice bitmaps around OS purge/decommit handoff.
         unsafe {
             mi_bitmap_clearN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -3476,7 +3476,7 @@ unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::Sl
     let slice_index = range.start_usize();
     let slice_count = range.count_usize();
     crate::internal::mi_assert!(slice_count < MI_BCHUNK_BITS);
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-range-boundary]: range purge claims free-slice runs, falls back to single-slice ranges, and restores free bitmap state.
     if unsafe {
         mi_bbitmap_try_clearNC(
             (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -3484,7 +3484,7 @@ unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::Sl
             slice_count,
         )
     } {
-        // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+        // SAFETY[AUDIT:arena-purge-range-boundary]: range purge claims free-slice runs, falls back to single-slice ranges, and restores free bitmap state.
         let decommitted = unsafe { mi_arena_purge(ArenaPtr::new_unchecked(arena), range) };
         crate::internal::mi_assert_internal!(
             !decommitted
@@ -3496,7 +3496,7 @@ unsafe fn mi_arena_try_purge_range(arena: ArenaPtr, range: crate::core_types::Sl
                     )
                 }
         );
-        // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+        // SAFETY[AUDIT:arena-purge-range-boundary]: range purge claims free-slice runs, falls back to single-slice ranges, and restores free bitmap state.
         unsafe {
             mi_bbitmap_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -3515,7 +3515,7 @@ unsafe fn mi_arena_try_purge_visit(
     range: crate::core_types::SliceRange,
     vinfo: &mut mi_purge_visit_info_t,
 ) -> bool {
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-range-boundary]: range purge claims free-slice runs, falls back to single-slice ranges, and restores free bitmap state.
     if unsafe { mi_arena_try_purge_range(arena, range) } {
         vinfo.any_purged = true;
         vinfo.all_purged = true;
@@ -3526,7 +3526,7 @@ unsafe fn mi_arena_try_purge_visit(
                 vinfo.all_purged = false;
                 continue;
             };
-            // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+            // SAFETY[AUDIT:arena-purge-range-boundary]: range purge claims free-slice runs, falls back to single-slice ranges, and restores free bitmap state.
             let purged = unsafe { mi_arena_try_purge_range(arena, single) };
             vinfo.any_purged = vinfo.any_purged || purged;
             vinfo.all_purged = vinfo.all_purged && purged;
@@ -3535,7 +3535,7 @@ unsafe fn mi_arena_try_purge_visit(
     true
 }
 
-// SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+// SAFETY[AUDIT:arena-purge-visitor-boundary]: purge visitor ABI validates raw slice ranges and callback state before forwarding typed purge work.
 unsafe extern "C" fn mi_arena_try_purge_visitor(
     slice_index: usize,
     slice_count: usize,
@@ -3551,20 +3551,20 @@ unsafe extern "C" fn mi_arena_try_purge_visitor(
         crate::internal::mi_assert_internal!(false);
         return true;
     };
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-visitor-boundary]: purge visitor ABI validates raw slice ranges and callback state before forwarding typed purge work.
     let Some(vinfo) = (unsafe { arg.cast::<mi_purge_visit_info_t>().as_mut() }) else {
         crate::internal::mi_assert_internal!(false);
         return true;
     };
 
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-visitor-boundary]: purge visitor ABI validates raw slice ranges and callback state before forwarding typed purge work.
     unsafe { mi_arena_try_purge_visit(arena_ptr, range, vinfo) }
 }
 
 unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c_int {
     let arena_ptr = arena;
     let arena = arena.as_ptr();
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-expire-policy-boundary]: purge expiration policy reads and clears delayed purge clocks while accounting purge attempts.
     if unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned } {
         return -1;
     }
@@ -3584,14 +3584,14 @@ unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c
         }
     }
 
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-expire-policy-boundary]: purge expiration policy reads and clears delayed purge clocks while accounting purge attempts.
     unsafe {
         crate::core_types::AtomicI64Field(
             ptr::addr_of_mut!((*arena.cast::<MiArenaPrefix>()).purge_expire).cast::<i64>(),
         )
         .store(0, crate::core_types::MemoryOrder::Release)
     };
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-expire-policy-boundary]: purge expiration policy reads and clears delayed purge clocks while accounting purge attempts.
     unsafe {
         __mi_stat_counter_increase_mt(
             ptr::addr_of_mut!(
@@ -3605,13 +3605,13 @@ unsafe fn mi_arena_try_purge(arena: ArenaPtr, now: mi_msecs_t, force: bool) -> c
 
     let mut vinfo = mi_purge_visit_info_t {
         now,
-        // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+        // SAFETY[AUDIT:arena-purge-expire-policy-boundary]: purge expiration policy reads and clears delayed purge clocks while accounting purge attempts.
         delay: unsafe { mi_arena_purge_delay() },
         all_purged: true,
         any_purged: false,
     };
     let minslices = mi_slice_count_of_size(unsafe { _mi_os_minimal_purge_size() });
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-expire-policy-boundary]: purge expiration policy reads and clears delayed purge clocks while accounting purge attempts.
     unsafe {
         _mi_bitmap_forall_setc_rangesn(
             (*arena.cast::<MiArenaPrefix>()).slices_purge,
@@ -3633,14 +3633,14 @@ unsafe fn mi_arenas_try_purge(
 ) {
     let subproc_ptr = subproc;
     let subproc = subproc.as_ptr();
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
     let delay = unsafe { mi_arena_purge_delay() };
     if _mi_preloading() || delay <= 0 {
         return;
     }
 
     let now = crate::stats::_mi_clock_now();
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
     let arenas_expire = unsafe {
         crate::core_types::AtomicI64Field(
             ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire).cast::<i64>(),
@@ -3651,7 +3651,7 @@ unsafe fn mi_arenas_try_purge(
         return;
     }
 
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
     let max_arena = unsafe { mi_arenas_get_count_typed(subproc_ptr) };
     if max_arena == 0 {
         return;
@@ -3660,7 +3660,7 @@ unsafe fn mi_arenas_try_purge(
     static PURGE_GUARD: mi_atomic_guard_t = AtomicUsize::new(0);
     crate::atomic::mi_atomic_guard!(ptr::addr_of!(PURGE_GUARD).cast_mut(), {
         if arenas_expire > now {
-            // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+            // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
             unsafe {
                 crate::core_types::AtomicI64Field(
                     ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
@@ -3689,7 +3689,7 @@ unsafe fn mi_arenas_try_purge(
                 crate::internal::mi_assert_internal!(false);
                 continue;
             };
-            // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+            // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
             let arena = unsafe { mi_arena_from_index_typed(subproc_ptr, arena_idx) };
             if !arena.is_null() {
                 let purged =
@@ -3707,7 +3707,7 @@ unsafe fn mi_arenas_try_purge(
             }
         }
         if all_visited && !any_purged {
-            // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+            // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
             unsafe {
                 crate::core_types::AtomicI64Field(
                     ptr::addr_of_mut!((*subproc.cast::<MiSubprocPrefix>()).purge_expire)
@@ -3721,13 +3721,13 @@ unsafe fn mi_arenas_try_purge(
 
 /// # Safety
 /// Purges scheduled arena ranges for the current thread-local context.
-// SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+// SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
 pub(crate) unsafe extern "C" fn _mi_arenas_collect(
     force_purge: bool,
     visit_all: bool,
     tld: *mut mi_tld_t,
 ) {
-    // SAFETY[AUDIT:arena-purge-boundary]: arena purge and collection traversals update purge bitmaps, elapsed timing, stats, and OS decommit state under arena locks.
+    // SAFETY[AUDIT:arena-purge-collect-guard-boundary]: arena collection uses the global purge guard and bounded arena visitation to update subproc purge state.
     unsafe {
         mi_arenas_try_purge(
             force_purge,

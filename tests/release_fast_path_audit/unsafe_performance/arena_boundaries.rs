@@ -11,7 +11,13 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
 
     let focused_markers = [
         "SAFETY[AUDIT:arena-slice-boundary]",
-        "SAFETY[AUDIT:arena-registry-boundary]",
+        "SAFETY[AUDIT:arena-registry-count-index-boundary]",
+        "SAFETY[AUDIT:arena-heap-page-table-boundary]",
+        "SAFETY[AUDIT:arena-registry-start-index-boundary]",
+        "SAFETY[AUDIT:arena-registry-suitability-boundary]",
+        "SAFETY[AUDIT:arena-registry-iteration-boundary]",
+        "SAFETY[AUDIT:arena-registry-destroy-boundary]",
+        "SAFETY[AUDIT:arena-registry-add-boundary]",
         "SAFETY[AUDIT:arena-slice-allocation-boundary]",
         "SAFETY[AUDIT:arena-initialization-boundary]",
         "SAFETY[AUDIT:arena-reserve-growth-boundary]",
@@ -27,7 +33,13 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
         "SAFETY[AUDIT:arena-page-reabandon-unabandon-boundary]",
         "SAFETY[AUDIT:arena-heap-page-publication-boundary]",
         "SAFETY[AUDIT:arena-page-ownership-transition-boundary]",
-        "SAFETY[AUDIT:arena-purge-boundary]",
+        "SAFETY[AUDIT:arena-purge-schedule-boundary]",
+        "SAFETY[AUDIT:arena-purge-free-dispatch-boundary]",
+        "SAFETY[AUDIT:arena-purge-direct-boundary]",
+        "SAFETY[AUDIT:arena-purge-range-boundary]",
+        "SAFETY[AUDIT:arena-purge-visitor-boundary]",
+        "SAFETY[AUDIT:arena-purge-expire-policy-boundary]",
+        "SAFETY[AUDIT:arena-purge-collect-guard-boundary]",
     ];
     let marker_total = focused_markers
         .into_iter()
@@ -35,7 +47,13 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
         .sum::<usize>();
     for (audit_id, min_count) in [
         ("arena-slice-boundary", 31),
-        ("arena-registry-boundary", 37),
+        ("arena-registry-count-index-boundary", 6),
+        ("arena-heap-page-table-boundary", 5),
+        ("arena-registry-start-index-boundary", 3),
+        ("arena-registry-suitability-boundary", 3),
+        ("arena-registry-iteration-boundary", 4),
+        ("arena-registry-destroy-boundary", 6),
+        ("arena-registry-add-boundary", 10),
         ("arena-slice-allocation-boundary", 30),
         ("arena-initialization-boundary", 17),
         ("arena-reserve-growth-boundary", 11),
@@ -51,7 +69,13 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
         ("arena-page-reabandon-unabandon-boundary", 23),
         ("arena-heap-page-publication-boundary", 3),
         ("arena-page-ownership-transition-boundary", 6),
-        ("arena-purge-boundary", 38),
+        ("arena-purge-schedule-boundary", 6),
+        ("arena-purge-free-dispatch-boundary", 6),
+        ("arena-purge-direct-boundary", 5),
+        ("arena-purge-range-boundary", 5),
+        ("arena-purge-visitor-boundary", 3),
+        ("arena-purge-expire-policy-boundary", 5),
+        ("arena-purge-collect-guard-boundary", 8),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
         assert!(
@@ -67,6 +91,8 @@ pub(super) fn assert_arena_region_boundaries(sources: BoundarySources<'_>) {
             && !arena_rs.contains("SAFETY[AUDIT:arena-region-boundary]")
             && !arena_rs.contains("SAFETY[AUDIT:arena-allocation-boundary]")
             && !arena_rs.contains("SAFETY[AUDIT:arena-page-lifecycle-boundary]")
+            && !arena_rs.contains("SAFETY[AUDIT:arena-registry-boundary]")
+            && !arena_rs.contains("SAFETY[AUDIT:arena-purge-boundary]")
             && marker_total >= 340
             && focused_markers
                 .into_iter()

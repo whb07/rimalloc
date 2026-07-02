@@ -492,12 +492,32 @@ Operation IDs:
   caller-proven arena pointers, typed `SliceIndex`/`SliceRange` witnesses,
   bounded metadata projection, and address containment arithmetic while
   preserving arena bounds and slice alignment.
-- `SAFETY[AUDIT:arena-registry-boundary]`: `src/allocator/arena.rs` owns
-  subproc arena tables, arena indexes, arena iteration, heap arena-page table
-  lookup, NUMA suitability, and unsafe arena teardown. Unsafe operations are
-  limited to typed arena/subproc/heap pointers, `ArenaIndex` construction,
-  atomic arena table cells, and C ABI registry shims while preserving subproc
-  synchronization and arena ownership.
+- `SAFETY[AUDIT:arena-registry-count-index-boundary]`:
+  `src/allocator/arena.rs` owns public arena count/index lookups and C ABI
+  registry shims. Unsafe operations are limited to validating subproc pointers,
+  converting caller indexes into `ArenaIndex`, and loading typed arena table
+  cells.
+- `SAFETY[AUDIT:arena-heap-page-table-boundary]`:
+  `src/allocator/arena.rs` owns heap arena-page table lookup for page metadata
+  queries. Unsafe operations are limited to typed heap/page/arena pointers,
+  arena index lookup, and bitmap ownership checks.
+- `SAFETY[AUDIT:arena-registry-start-index-boundary]`:
+  `src/allocator/arena.rs` owns arena iteration start-index selection. Unsafe
+  operations are limited to reading heap/subproc sequence fields and creating
+  bounded `ArenaIndex` values.
+- `SAFETY[AUDIT:arena-registry-suitability-boundary]`:
+  `src/allocator/arena.rs` owns arena suitability predicates. Unsafe operations
+  are limited to read-only pinned, requested-arena, and NUMA checks.
+- `SAFETY[AUDIT:arena-registry-iteration-boundary]`:
+  `src/allocator/arena.rs` owns read-only arena iteration. Unsafe operations
+  load typed subproc table cells and stop on visitor decisions without mutating
+  registry state.
+- `SAFETY[AUDIT:arena-registry-destroy-boundary]`:
+  `src/allocator/arena.rs` owns unsafe arena teardown. Unsafe operations clear
+  subproc arena table cells, release OS-owned arenas, and reset arena counts.
+- `SAFETY[AUDIT:arena-registry-add-boundary]`: `src/allocator/arena.rs` owns
+  arena registration. Unsafe operations publish typed arena indexes through
+  atomic subproc cells, update arena stats, and roll back failed publication.
 - `SAFETY[AUDIT:arena-slice-allocation-boundary]`:
   `src/allocator/arena.rs` owns arena slice allocation, arena commit/reuse,
   slice bitmap mutation, memid creation, and allocation metadata publication.
@@ -580,12 +600,31 @@ Operation IDs:
   transitions. Unsafe operations are limited to page metadata owner fields,
   thread-free ownership words, and page-map registration while preserving page
   metadata invariants before ownership becomes visible.
-- `SAFETY[AUDIT:arena-purge-boundary]`: `src/allocator/arena.rs` owns arena
-  purge scheduling, purge traversal callbacks, arena collection, arena free,
-  and OS decommit/reset handoff. Unsafe operations are limited to purge bitmap
-  traversal, elapsed-time decisions, typed arena/slice witnesses, OS purge
-  primitives, and C ABI collection shims while preserving purge ordering,
-  stats accounting, and lock discipline.
+- `SAFETY[AUDIT:arena-purge-schedule-boundary]`:
+  `src/allocator/arena.rs` owns delayed purge scheduling. Unsafe operations
+  update arena/subproc purge clocks and purge bitmaps after validating arena
+  and slice-range state.
+- `SAFETY[AUDIT:arena-purge-free-dispatch-boundary]`:
+  `src/allocator/arena.rs` owns arena free dispatch into purge scheduling.
+  Unsafe operations validate memid ranges, mark free slices, and preserve
+  OS/meta free forwarding semantics.
+- `SAFETY[AUDIT:arena-purge-direct-boundary]`: `src/allocator/arena.rs` owns
+  direct purge/decommit work. Unsafe operations update committed-slice bitmaps
+  around `_mi_os_purge_ex` and restore commit state when the OS requires it.
+- `SAFETY[AUDIT:arena-purge-range-boundary]`: `src/allocator/arena.rs` owns
+  range purge attempts. Unsafe operations claim free-slice ranges, fall back to
+  single-slice ranges, and restore free bitmap state.
+- `SAFETY[AUDIT:arena-purge-visitor-boundary]`: `src/allocator/arena.rs` owns
+  purge traversal callback ABI validation. Unsafe operations validate raw slice
+  ranges and callback state before forwarding typed purge work.
+- `SAFETY[AUDIT:arena-purge-expire-policy-boundary]`:
+  `src/allocator/arena.rs` owns per-arena purge expiration policy. Unsafe
+  operations read/clear delayed purge clocks, count purge attempts, and visit
+  purge bitmap ranges.
+- `SAFETY[AUDIT:arena-purge-collect-guard-boundary]`:
+  `src/allocator/arena.rs` owns subproc-wide arena collection. Unsafe
+  operations use the global purge guard, bounded arena visitation, and
+  subproc purge clock updates.
 - `SAFETY[AUDIT:internal-bitmap-simd-boundary]`: `src/internal/bitmap.rs`
   owns optional AVX2 bitmap helper shims. Unsafe operations are limited to
   target-feature-gated intrinsic calls for zero/ones vector setup and bitmap
@@ -1274,11 +1313,25 @@ Operation IDs:
 - `SAFETY[AUDIT:emscripten-thread-shim-boundary]`:
   `src/platform/emscripten.rs` owns threadpool and scheduler-yield compatibility
   shims.
-- `SAFETY[AUDIT:arena-debug-render]`: `src/allocator/arena/debug.rs` renders
-  arena diagnostics by reading arena/page metadata discovered through the
-  current sub-process registry, page map lookup, and typed memid views. The
-  helpers are diagnostic-only, keep output in stack-local byte buffers, and do
-  not allocate, publish, or mutate allocator ownership state.
+- `SAFETY[AUDIT:arena-debug-snapshot-boundary]`:
+  `src/allocator/arena/debug.rs` owns read-only arena diagnostic snapshots.
+  Unsafe operations copy allocator-owned arena prefix fields and slice bitmap
+  pointers into local diagnostic views.
+- `SAFETY[AUDIT:arena-debug-page-state-boundary]`:
+  `src/allocator/arena/debug.rs` owns diagnostic page-state classification.
+  Unsafe operations read page metadata, committed sizes, page ownership state,
+  and arena memid slices for display only.
+- `SAFETY[AUDIT:arena-debug-buffer-boundary]`:
+  `src/allocator/arena/debug.rs` owns bounded diagnostic output buffers.
+  Unsafe operations write stack-local byte buffers, emit ANSI color codes, and
+  convert validated byte ranges to UTF-8 lines.
+- `SAFETY[AUDIT:arena-debug-chunk-render-boundary]`:
+  `src/allocator/arena/debug.rs` owns chunk/page bitfield rendering. Unsafe
+  operations read binned chunk maps and bfields for diagnostic display only.
+- `SAFETY[AUDIT:arena-debug-registry-walk-boundary]`:
+  `src/allocator/arena/debug.rs` owns arena diagnostic registry walking and
+  C-shaped printer exports. Unsafe operations load the current subproc arena
+  table through typed indexes before printing.
 - `SAFETY[AUDIT:arena-meta-allocator]`: `src/allocator/arena_meta.rs` owns
   arena metadata block allocation and free. Unsafe operations are limited to
   checked meta block-count construction, typed `MemId::<MetaMem>` packaging,

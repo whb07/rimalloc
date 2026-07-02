@@ -233,10 +233,20 @@ file:
   `src/allocator/arena.rs`. The boundary covers slice indexes, range
   projection, area/containment queries, info-slice sizing, and arena bitmap
   layout.
-- `SAFETY[AUDIT:arena-registry-boundary]`: arena registry and subproc table
-  access in `src/allocator/arena.rs`. The boundary covers arena indexes,
-  subproc arena cells, heap arena-page tables, NUMA suitability, arena
-  iteration, and unsafe arena teardown.
+- `SAFETY[AUDIT:arena-registry-count-index-boundary]`: arena count/index lookup
+  and C ABI registry shims in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-heap-page-table-boundary]`: heap arena-page table lookup
+  and bitmap ownership checks in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-registry-start-index-boundary]`: bounded arena iteration
+  start-index selection in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-registry-suitability-boundary]`: pinned, requested-arena,
+  and NUMA suitability predicates in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-registry-iteration-boundary]`: read-only arena iteration
+  through typed subproc table cells in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-registry-destroy-boundary]`: unsafe arena teardown and
+  subproc table clearing in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-registry-add-boundary]`: arena registration and atomic
+  subproc table publication in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-slice-allocation-boundary]`: arena slice allocation,
   commit/reuse, slice bitmap mutation, memid creation, and allocation metadata
   publication in `src/allocator/arena.rs`.
@@ -277,9 +287,32 @@ file:
   publication and rollback during page allocation in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-ownership-transition-boundary]`: owner-word and
   page-map visibility transitions in `src/allocator/arena.rs`.
-- `SAFETY[AUDIT:arena-purge-boundary]`: arena purge and collection in
-  `src/allocator/arena.rs`. The boundary covers purge scheduling, purge bitmap
-  traversal, arena collection/free, OS purge/decommit handoff, and purge stats.
+- `SAFETY[AUDIT:arena-purge-schedule-boundary]`: delayed purge scheduling and
+  purge bitmap publication in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-purge-free-dispatch-boundary]`: arena free dispatch into
+  purge scheduling and OS/meta free forwarding in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-purge-direct-boundary]`: direct OS purge/decommit handoff
+  and committed-slice bitmap updates in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-purge-range-boundary]`: purge range claiming, single-slice
+  fallback, and free bitmap restoration in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-purge-visitor-boundary]`: purge visitor C ABI range/state
+  validation in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-purge-expire-policy-boundary]`: per-arena purge expiration
+  policy, purge attempt accounting, and bitmap traversal in
+  `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-purge-collect-guard-boundary]`: subproc-wide arena
+  collection under the global purge guard in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-debug-snapshot-boundary]`: read-only arena diagnostic
+  snapshots in `src/allocator/arena/debug.rs`.
+- `SAFETY[AUDIT:arena-debug-page-state-boundary]`: page-state classification
+  for arena diagnostics in `src/allocator/arena/debug.rs`.
+- `SAFETY[AUDIT:arena-debug-buffer-boundary]`: bounded stack-buffer output and
+  ANSI diagnostic line rendering in `src/allocator/arena/debug.rs`.
+- `SAFETY[AUDIT:arena-debug-chunk-render-boundary]`: chunk and page bitfield
+  rendering in `src/allocator/arena/debug.rs`.
+- `SAFETY[AUDIT:arena-debug-registry-walk-boundary]`: current subproc arena
+  registry walking and C-shaped debug printer exports in
+  `src/allocator/arena/debug.rs`.
 - `SAFETY[AUDIT:internal-bitmap-simd-boundary]`: optional AVX2 bitmap helper
   intrinsics in `src/internal/bitmap.rs`.
 - `SAFETY[AUDIT:internal-bitmap-metadata-boundary]`: bitmap sizing,

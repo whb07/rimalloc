@@ -8,18 +8,18 @@ release-audit modules that now block a lower module-size cap.
 
 Current review evidence:
 
-- `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 343 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 343 operation IDs with
-  731 automated evidence rows.
-- No source audit operation ID is over 38 source markers. The largest remaining
-  source IDs are `arena-purge-boundary` with 38 markers,
-  `allocation-realloc-entry-boundary` and `arena-registry-boundary` with 37
-  markers each, `init-subproc-heap-association-boundary`,
-  `raw-macro-override-entry-boundary`, and `typed-page-state-domain` with 36
-  markers each, `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers,
-  and `allocation-heap-dispatch-boundary` and `arena-debug-render` with 34
-  markers each.
+- `scripts/check-unsafe-audit.py` covers 82 source files, 5,899 unsafe
+  mentions, and 359 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 359 operation IDs with
+  764 automated evidence rows.
+- No source audit operation ID is over 37 source markers. The largest remaining
+  source ID is `allocation-realloc-entry-boundary` with 37 markers.
+  `init-subproc-heap-association-boundary`, `raw-macro-override-entry-boundary`,
+  and `typed-page-state-domain` have 36 markers each,
+  `typed-heap-thread-tld-pointer-test-fixtures` has 35 markers,
+  `allocation-heap-dispatch-boundary` has 34 markers, and
+  `init-subproc-registry-boundary`, `platform-thread-heap-association-boundary`,
+  and `windows-virtual-memory-boundary` have 32 markers each.
 - `strict-type-allowlist.txt` has 631 active entries: 332
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -48,7 +48,7 @@ Current review evidence:
   `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs` at 421 lines,
   `unsafe_performance/allocation_free.rs` at 409 lines, and
   `unsafe_performance/os_memory.rs` at 409 lines.
-- Full validation for Issue 1 passed: `cargo fmt --all`,
+- Full validation for Issue 2 passed: `cargo fmt --all`,
   `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
@@ -76,19 +76,22 @@ unsafe evidence scripts, full formatting, full clippy, and full tests.
 
 ## Issue 2: Split arena registry and purge audit clusters
 
-`arena-purge-boundary` has 38 markers and `arena-registry-boundary` has 37
-markers in `src/allocator/arena.rs`. They still group registry lookup,
-subprocess arena tables, heap arena-page tables, suitability iteration, arena
-add/destroy paths, purge scheduling, purge visitation, elapsed timing, purge
-bitmap updates, OS decommit, and collection guards.
+> **Comment:** Completed. The broad arena registry, purge, and debug render IDs
+> are gone from allocator source. Arena registry markers are split across
+> count/index lookup, heap arena-page tables, start-index selection,
+> suitability, iteration, destroy, and add IDs. Purge markers are split across
+> scheduling, free dispatch, direct OS purge, range purge, visitor, expiration
+> policy, and collect-guard IDs. Arena debug rendering is split across
+> snapshots, page-state reads, buffer writes, chunk rendering, and registry
+> walking.
 
-- [ ] Split `arena-registry-boundary` by operation: arena count/index lookup,
+- [x] Split `arena-registry-boundary` by operation: arena count/index lookup,
       heap arena-page table lookup, suitability tests, arena iteration, add,
       destroy, and subproc table access.
-- [ ] Split `arena-purge-boundary` by operation: purge scheduling, direct purge,
+- [x] Split `arena-purge-boundary` by operation: purge scheduling, direct purge,
       range purge, purge visitor traversal, elapsed/force policy, OS
       decommit/reset, and global collect guard behavior.
-- [ ] Include nearby `arena-debug-render`, `arena-slice-boundary`, and
+- [x] Include nearby `arena-debug-render`, `arena-slice-boundary`, and
       `arena-slice-allocation-boundary` markers where the same edit surface can
       be split without touching unrelated allocator behavior.
 
@@ -188,7 +191,7 @@ formatting, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Split options output and diagnostic audit clusters.
-2. [ ] Split arena registry and purge audit clusters.
+2. [x] Split arena registry and purge audit clusters.
 3. [ ] Split allocation entry and raw override audit clusters.
 4. [ ] Split typed page-state and subproc association audit clusters.
 5. [ ] Tighten strict-type allowlist hotspots.

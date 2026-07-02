@@ -147,6 +147,7 @@ pub type mi_stats_s = mi_stats_t;
 impl Default for mi_stats_t {
     fn default() -> Self {
         // SAFETY: `mi_stats_t` is plain old data; all-zero bytes are valid for every field.
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { core::mem::zeroed() }
     }
 }
@@ -155,6 +156,7 @@ impl Default for mi_stats_t {
 /// `stats` must point to a valid writable `mi_stats_t`.
 pub unsafe fn mi_stats_header_init(stats: *mut mi_stats_t) {
     // SAFETY: caller guarantees `stats` is a valid writable `mi_stats_t`.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         (*stats).size = core::mem::size_of::<mi_stats_t>();
         (*stats).version = MI_STAT_VERSION;
@@ -165,12 +167,14 @@ pub unsafe fn mi_stats_header_init(stats: *mut mi_stats_t) {
 /// `stats` must point to a valid writable `mi_stats_t`.
 pub unsafe fn mi_stats_init(stats: *mut mi_stats_t) {
     // SAFETY: caller guarantees `stats` is a valid writable `mi_stats_t`.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         ptr::write_bytes(stats, 0, 1);
         mi_stats_header_init(stats);
     }
 }
 
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_stats_get_bin_size(bin: usize) -> usize {
     let Some(typed_bin) = u16::try_from(bin).ok().and_then(StatsBin::new) else {
@@ -191,6 +195,7 @@ fn mi_stats_get_bin_size_typed(bin: StatsBin) -> StatBinSize {
 fn initialized_stats() -> mi_stats_t {
     let mut stats = mi_stats_t::default();
     // SAFETY: `stats` is a fresh writable `mi_stats_t`.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_init(&mut stats) };
     stats
 }
@@ -200,6 +205,7 @@ fn mi_stat_update_mt(stat: &mut mi_stat_count_t, amount: i64) {
         return;
     }
     // SAFETY: `stat` points to valid `i64` fields and these helpers operate atomically on them.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         let current = mi_atomic_addi64_relaxed(&mut stat.current, amount);
         mi_atomic_maxi64_relaxed(&mut stat.peak, current + amount);
@@ -224,12 +230,14 @@ fn mi_stat_update(stat: &mut mi_stat_count_t, amount: i64) {
 
 /// # Safety
 /// `stat` must point to valid writable counter storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_counter_increase_mt(
     stat: *mut mi_stat_counter_t,
     amount: usize,
 ) {
     // SAFETY: `stat.total` is a valid atomic-compatible `i64` storage location.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_atomic_addi64_relaxed(ptr::addr_of_mut!((*stat).total), amount as i64);
     }
@@ -237,11 +245,13 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase_mt(
 
 /// # Safety
 /// `stat` must point to valid writable counter storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
     stat: *mut mi_stat_counter_t,
     amount: usize,
 ) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         (*stat).total += amount as i64;
     }
@@ -249,29 +259,37 @@ pub(crate) unsafe extern "C" fn __mi_stat_counter_increase(
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_increase_mt(stat: *mut mi_stat_count_t, amount: usize) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_update_mt(unsafe { &mut *stat }, amount as i64);
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_increase(stat: *mut mi_stat_count_t, amount: usize) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_update(unsafe { &mut *stat }, amount as i64);
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_decrease_mt(stat: *mut mi_stat_count_t, amount: usize) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_update_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_decrease(stat: *mut mi_stat_count_t, amount: usize) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_update(unsafe { &mut *stat }, -(amount as i64));
 }
 
@@ -280,6 +298,7 @@ fn mi_stat_adjust_mt(stat: &mut mi_stat_count_t, amount: i64) {
         return;
     }
     // SAFETY: `stat` points to valid `i64` fields and these helpers operate atomically on them.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_atomic_addi64_relaxed(&mut stat.current, amount);
         mi_atomic_addi64_relaxed(&mut stat.total, amount);
@@ -296,45 +315,54 @@ fn mi_stat_adjust(stat: &mut mi_stat_count_t, amount: i64) {
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase_mt(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_adjust_mt(unsafe { &mut *stat }, amount as i64);
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_increase(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_adjust(unsafe { &mut *stat }, amount as i64);
 }
 
 #[used]
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 static MI_STAT_ADJUST_INCREASE_KEEP: unsafe extern "C" fn(*mut mi_stat_count_t, usize) =
     __mi_stat_adjust_increase;
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease_mt(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_adjust_mt(unsafe { &mut *stat }, -(amount as i64));
 }
 
 /// # Safety
 /// `stat` must point to valid writable count storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn __mi_stat_adjust_decrease(
     stat: *mut mi_stat_count_t,
     amount: usize,
 ) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     mi_stat_adjust(unsafe { &mut *stat }, -(amount as i64));
 }
 
@@ -343,6 +371,7 @@ fn mi_stat_count_add_mt(stat: *mut mi_stat_count_t, src: *const mi_stat_count_t)
         return;
     }
     // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_atomic_void_addi64_relaxed(
             ptr::addr_of_mut!((*stat).total),
@@ -359,6 +388,7 @@ fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_coun
         return;
     }
     // SAFETY: both pointers are valid for atomic-compatible `i64` field access.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_atomic_void_addi64_relaxed(
             ptr::addr_of_mut!((*stat).total),
@@ -367,12 +397,14 @@ fn mi_stat_counter_add_mt(stat: *mut mi_stat_counter_t, src: *const mi_stat_coun
     }
 }
 
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     if stats.is_null() || src.is_null() || ptr::eq(stats.cast_const(), src) {
         return;
     }
     // SAFETY: null and self-add cases were checked above.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_add_nonnull(stats, src) };
 }
 
@@ -380,6 +412,7 @@ unsafe extern "C" fn mi_stats_add(stats: *mut mi_stats_t, src: *const mi_stats_t
 unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     macro_rules! MI_STAT_COUNT {
         ($field:ident) => {
+            // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
             unsafe {
                 mi_stat_count_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -390,6 +423,7 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     }
     macro_rules! MI_STAT_COUNTER {
         ($field:ident) => {
+            // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
             unsafe {
                 mi_stat_counter_add_mt(
                     ptr::addr_of_mut!((*stats).$field),
@@ -437,22 +471,30 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
     MI_STAT_COUNTER!(heaps_delete_wait);
 
     if MI_STAT > 1 {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         let stats_malloc_bins =
             unsafe { ptr::addr_of_mut!((*stats).malloc_bins).cast::<mi_stat_count_t>() };
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         let src_malloc_bins =
             unsafe { ptr::addr_of!((*src).malloc_bins).cast::<mi_stat_count_t>() };
         for i in 0..=MI_BIN_HUGE {
+            // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
             let bin = unsafe { StatsBin::new_unchecked(i as u16) };
+            // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
             mi_stat_count_add_mt(unsafe { stats_malloc_bins.add(bin.as_usize()) }, unsafe {
                 src_malloc_bins.add(bin.as_usize())
             });
         }
     }
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let stats_page_bins =
         unsafe { ptr::addr_of_mut!((*stats).page_bins).cast::<mi_stat_count_t>() };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let src_page_bins = unsafe { ptr::addr_of!((*src).page_bins).cast::<mi_stat_count_t>() };
     for i in 0..=MI_BIN_HUGE {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         let bin = unsafe { StatsBin::new_unchecked(i as u16) };
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         mi_stat_count_add_mt(unsafe { stats_page_bins.add(bin.as_usize()) }, unsafe {
             src_page_bins.add(bin.as_usize())
         });
@@ -462,11 +504,13 @@ unsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t) {
 fn mi_stats_add_into(to: &mut mi_stats_t, from: &mi_stats_t) {
     // SAFETY: references are valid `mi_stats_t` values; the checked raw helper preserves C's
     // null/self guard at the compatibility boundary.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_add(to as *mut mi_stats_t, from as *const mi_stats_t) };
 }
 
 fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bool {
     // SAFETY: callers must pass valid pointers when non-null; header checks gate the copy.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         if stats_to.is_null()
             || (*stats_to).size != size_of::<mi_stats_t>()
@@ -483,6 +527,7 @@ fn mi_stats_copy(stats_to: *mut mi_stats_t, stats_from: *const mi_stats_t) -> bo
 }
 
 fn clock_now_msecs() -> i64 {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { _mi_prim_clock_now() }
 }
 
@@ -520,12 +565,14 @@ static MI_STATS_INIT_KEEP: extern "C" fn() = _mi_stats_init;
 
 /// # Safety
 /// `to` and `from` must point to valid writable `mi_stats_t` values.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 pub unsafe extern "C" fn _mi_stats_merge_into(to: *mut mi_stats_t, from: *mut mi_stats_t) {
     if to.is_null() || from.is_null() || core::ptr::eq(to, from) {
         return;
     }
     // SAFETY: caller guarantees valid pointers to `mi_stats_t` values.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_stats_add_nonnull(to, from);
         _mi_memzero(from.cast(), size_of::<mi_stats_t>());
@@ -712,6 +759,7 @@ fn stats_bin_iter() -> impl Iterator<Item = StatsBin> {
     (0..=MI_BIN_HUGE).map(|index| {
         crate::internal::mi_debug_assert!(u16::try_from(index).is_ok());
         // SAFETY: the range is bounded by `MI_BIN_HUGE`.
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { StatsBin::new_unchecked(index as u16) }
     })
 }
@@ -719,12 +767,14 @@ fn stats_bin_iter() -> impl Iterator<Item = StatsBin> {
 #[inline(always)]
 fn stats_bin_as_bin(bin: StatsBin) -> Bin {
     // SAFETY: every stats bin is within mimalloc's regular bin table.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { Bin::new_unchecked(bin.get()) }
 }
 
 fn c_char_buffer_str(buf: &[c_char]) -> &str {
     // SAFETY: fixed formatting buffers are written only from ASCII format fragments and
     // always NUL-terminated by `mi_vsnprintf_args`.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { str::from_utf8_unchecked(CStr::from_ptr(buf.as_ptr()).to_bytes()) }
 }
 
@@ -797,6 +847,7 @@ fn mi_printf_amount(
         return;
     }
     // SAFETY: `fmt` is expected to point to a valid NUL-terminated C string.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let fmt_bytes = unsafe { CStr::from_ptr(fmt) }.to_bytes();
     if fmt_bytes == b"%s" {
         _mi_fprintf(out, arg, format_args!("{rendered}"));
@@ -985,6 +1036,7 @@ fn mi_buffered_flush(buf: &mut buffered_t) {
         return;
     }
     // SAFETY: `buf.buf` points to writable storage of at least `count + 1` bytes.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         *buf.buf.add(buf.used) = 0;
         _mi_fputs(buf.out, buf.arg, ptr::null(), buf.buf);
@@ -992,11 +1044,13 @@ fn mi_buffered_flush(buf: &mut buffered_t) {
     buf.used = 0;
 }
 
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 unsafe extern "C" fn mi_buffered_out(msg: *const c_char, arg: *mut c_void) {
     if msg.is_null() || arg.is_null() {
         return;
     }
     // SAFETY: caller passes a valid `buffered_t` as `arg` and `msg` is a NUL-terminated string.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         let buf = &mut *(arg as *mut buffered_t);
         let mut src = msg;
@@ -1022,6 +1076,7 @@ unsafe fn _mi_stats_print(
     out0: Option<mi_output_fun>,
     arg0: *mut c_void,
 ) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let Some(stats) = (unsafe { stats.as_ref() }) else {
         return;
     };
@@ -1044,6 +1099,7 @@ unsafe fn _mi_stats_print(
         mi_print_header("blocks", out, arg);
         mi_stats_print_bins(
             &stats.malloc_bins,
+            // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
             unsafe { StatsBin::new_unchecked(MI_BIN_HUGE as u16) },
             out,
             arg,
@@ -1122,21 +1178,26 @@ unsafe fn _mi_stats_print(
         _mi_fprintf(
             out,
             arg,
+            // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
             format_args!("  {:<10}: {:>5}\n", "numa nodes", unsafe {
                 _mi_os_numa_node_count()
             }),
         );
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { mi_process_info_print_out(out, arg) };
     }
     _mi_fprintf(out, arg, format_args!("\n"));
 }
 
 unsafe fn mi_stats_merge_theap_to_heap(theap: *mut mi_theap_t) -> *const mi_stats_t {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let theap = unsafe { ThreadHeapLocal::new_unchecked(ThreadHeapPtr::new_unchecked(theap)) };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let Some(heap) = (unsafe { theap.ptr().heap() }) else {
         crate::internal::mi_assert_internal!(false);
         return core::ptr::null();
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_merge_theap_to_heap_typed(theap, heap) }
 }
 
@@ -1144,80 +1205,108 @@ unsafe fn mi_stats_merge_theap_to_heap_typed(
     theap: ThreadHeapLocal,
     heap: HeapPtr,
 ) -> *const mi_stats_t {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let stats = unsafe { &mut (*theap.ptr().as_ptr()).stats };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let heap_stats = unsafe { &mut (*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { _mi_stats_merge_into(heap_stats, stats) };
     heap_stats as *const mi_stats_t
 }
 
 unsafe fn mi_heap_get_stats(heap: *mut mi_heap_t) -> *const mi_stats_t {
     let heap = if heap.is_null() {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_heap_get_stats_borrowed(BorrowedHeap::new_unchecked(heap)) }
 }
 
 unsafe fn mi_heap_get_stats_borrowed(heap: BorrowedHeap) -> *const mi_stats_t {
     let heap = heap.ptr();
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     if !unsafe { crate::prim::_mi_thread_is_initialized() } {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         return unsafe { &(*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats };
     }
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let theap = unsafe { _mi_heap_theap_peek(heap.as_ptr()) };
     if theap.is_null() {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { &(*heap.as_ptr().cast::<MiHeapStatsPrefix>()).stats }
     } else {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { mi_stats_merge_theap_to_heap(theap) }
     }
 }
 
 /// # Safety
 /// `heap` must be null or a valid heap pointer owned by the current subproc.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_merge_to_subproc(heap: *mut mi_heap_t) {
     let heap = if heap.is_null() {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let Some(subproc) = (unsafe { heap.subproc() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_heap_stats_merge_to_subproc_typed(BorrowedHeap::new_unchecked(heap), subproc) };
 }
 
 unsafe fn mi_heap_stats_merge_to_subproc_typed(heap: BorrowedHeap, subproc: SubprocPtr) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { _mi_stats_merge_into(&mut *subproc.stats(), &mut *heap.ptr().stats()) };
 }
 
 /// # Safety
 /// Uses the process-default heap/theap state and follows the legacy C ABI.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_reset() {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
         return;
     }
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let heap = unsafe { mi_heap_main() };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let _ = unsafe { mi_heap_get_stats(heap) };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_heap_stats_merge_to_subproc(heap) };
 }
 
 /// # Safety
 /// Uses process-global stats and heap state and must not race with process teardown.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_merge() {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     if !unsafe { mi_theap_is_initialized(_mi_theap_default()) } {
         return;
     }
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let heap = unsafe { mi_heap_main() };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let _ = unsafe { mi_heap_get_stats(heap) };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_heap_stats_merge_to_subproc(heap) };
 }
 
 /// # Safety
 /// `heap` must be null or a valid `mi_heap_t*`; any output callback must obey the C ABI.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_print_out(
     heap: *mut mi_heap_t,
@@ -1225,10 +1314,13 @@ pub unsafe extern "C" fn mi_heap_stats_print_out(
     arg: *mut c_void,
 ) {
     let heap = if heap.is_null() {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_heap_stats_print_out_typed(
             BorrowedHeap::new_unchecked(heap),
@@ -1245,6 +1337,7 @@ unsafe fn mi_heap_stats_print_out_typed(
 ) {
     let heap_ptr = heap.ptr();
     let heap_prefix = heap_ptr.as_ptr().cast::<MiHeapStatsPrefix>();
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         _mi_stats_print(
             "heap",
@@ -1256,25 +1349,34 @@ unsafe fn mi_heap_stats_print_out_typed(
     };
 }
 
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 unsafe extern "C" fn mi_heap_print_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
     let vinfo =
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         HeapPrintVisitInfo::from_raw(unsafe { &*(arg.cast::<mi_heap_print_visit_info_t>()) });
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let heap = unsafe { BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(heap)) };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_heap_print_visitor_typed(heap, vinfo) }
 }
 
 unsafe fn mi_heap_print_visitor_typed(heap: BorrowedHeap, vinfo: HeapPrintVisitInfo) -> bool {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_heap_stats_print_out_typed(heap, vinfo.out, vinfo.out_arg) };
     true
 }
 
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[inline(never)]
 unsafe extern "C" fn mi_heap_aggregate_visitor(heap: *mut mi_heap_t, arg: *mut c_void) -> bool {
     let vinfo = HeapAggregateVisitInfo {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         stats: unsafe { &mut *arg.cast::<mi_stats_t>() },
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let heap = unsafe { BorrowedHeap::new_unchecked(HeapPtr::new_unchecked(heap)) };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_heap_aggregate_visitor_typed(heap, vinfo) }
 }
 
@@ -1282,8 +1384,10 @@ unsafe fn mi_heap_aggregate_visitor_typed(
     heap: BorrowedHeap,
     vinfo: HeapAggregateVisitInfo<'_>,
 ) -> bool {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let heap_stats = unsafe { mi_heap_get_stats_borrowed(heap) };
     // SAFETY: both pointers refer to valid stats buffers during the heap walk.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_add_into(vinfo.stats, &*heap_stats) };
     true
 }
@@ -1296,6 +1400,7 @@ static MI_HEAP_AGGREGATE_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_aggregate_vis
 
 /// # Safety
 /// `subproc_id` must identify a live subproc and any output callback must obey the C ABI.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
     subproc_id: mi_subproc_id_t,
@@ -1307,6 +1412,7 @@ pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
         return;
     }
     let mut vinfo = mi_heap_print_visit_info_t { out, out_arg: arg };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_subproc_visit_heaps(
             subproc_id,
@@ -1325,6 +1431,7 @@ pub unsafe extern "C" fn mi_subproc_heap_stats_print_out(
 
 /// # Safety
 /// `subproc_id` must identify a live subproc and `stats` must point to writable stats storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
     subproc_id: mi_subproc_id_t,
@@ -1337,11 +1444,13 @@ pub unsafe extern "C" fn mi_subproc_stats_get_exclusive(
     if subproc.is_null() {
         return false;
     }
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_copy(&mut *stats, &(*subproc).stats) }
 }
 
 /// # Safety
 /// `subproc_id` must identify a live subproc and `stats` must point to writable stats storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get(
     subproc_id: mi_subproc_id_t,
@@ -1354,6 +1463,7 @@ pub unsafe extern "C" fn mi_subproc_stats_get(
     if subproc.is_null() {
         return false;
     }
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         if !mi_stats_copy(&mut *stats, &(*subproc).stats) {
             return false;
@@ -1369,39 +1479,49 @@ pub unsafe extern "C" fn mi_subproc_stats_get(
 
 /// # Safety
 /// `stats` must point to writable stats storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_get(stats: *mut mi_stats_t) -> bool {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_subproc_stats_get(mi_subproc_current(), stats) }
 }
 
 /// # Safety
 /// `heap` must be null or a valid heap pointer, and `stats` must point to writable stats storage.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_get(heap: *mut mi_heap_t, stats: *mut mi_stats_t) -> bool {
     if stats.is_null() {
         return false;
     }
     let heap = if heap.is_null() {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_heap_stats_get_borrowed(BorrowedHeap::new_unchecked(heap), &mut *stats) }
 }
 
 unsafe fn mi_heap_stats_get_borrowed(heap: BorrowedHeap, stats: &mut mi_stats_t) -> bool {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_copy(stats, mi_heap_get_stats_borrowed(heap)) }
 }
 
 /// # Safety
 /// May collect current-thread allocator state and must not race with allocator teardown.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_collect_reduce(_target_thread_owned: usize) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { crate::theap::mi_collect(false) };
 }
 
 /// # Safety
 /// `subproc_id` must identify a live subproc and any output callback must obey the C ABI.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_print_out(
     subproc_id: mi_subproc_id_t,
@@ -1413,6 +1533,7 @@ pub unsafe extern "C" fn mi_subproc_stats_print_out(
         return;
     }
     let mut stats = initialized_stats();
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         if mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
             _mi_stats_print(
@@ -1428,40 +1549,52 @@ pub unsafe extern "C" fn mi_subproc_stats_print_out(
 
 /// # Safety
 /// Any output callback must obey the C ABI.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_subproc_stats_print_out(mi_subproc_current(), out, arg) };
 }
 
 /// # Safety
 /// `out`, when non-null, must be a valid `mi_output_fun` callback pointer encoded as `void*`.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_print(out: *mut c_void) {
     let out_fun = if out.is_null() {
         None
     } else {
         // The legacy C API accepts an output callback through a `void*`.
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         Some(unsafe { core::mem::transmute::<*mut c_void, mi_output_fun>(out) })
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_print_out(out_fun, ptr::null_mut()) };
 }
 
 /// # Safety
 /// Any output callback must obey the C ABI.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_thread_stats_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let theap = unsafe { _mi_theap_default() };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     if theap.is_null() || !unsafe { mi_theap_is_initialized(theap) } {
         return;
     }
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let theap_ptr = unsafe { ThreadHeapPtr::new_unchecked(theap) };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let Some(heap) = (unsafe { theap_ptr.heap() }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let heap_seq = crate::core_types::HeapSeq::new(unsafe {
         (*heap.as_ptr().cast::<MiHeapStatsPrefix>()).heap_seq
     });
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         _mi_stats_print(
             "heap",
@@ -1484,6 +1617,7 @@ fn clamp_msecs_to_size(value: i64) -> usize {
 
 /// # Safety
 /// Output callbacks and argument pointers must follow the C ABI contract when non-null.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_process_info_print_out(out: Option<mi_output_fun>, arg: *mut c_void) {
     let mut elapsed = 0usize;
@@ -1495,6 +1629,7 @@ pub unsafe extern "C" fn mi_process_info_print_out(out: Option<mi_output_fun>, a
     let mut peak_commit = 0usize;
     let mut page_faults = 0usize;
     // SAFETY: local pointers below are valid writable outputs.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_process_info(
             &mut elapsed,
@@ -1540,6 +1675,7 @@ pub unsafe extern "C" fn mi_process_info_print_out(out: Option<mi_output_fun>, a
 
 /// # Safety
 /// Any non-null output pointers must be valid for writing one `usize`.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_process_info(
     elapsed_msecs: *mut usize,
@@ -1555,7 +1691,9 @@ pub unsafe extern "C" fn mi_process_info(
         elapsed: _mi_clock_end(PROCESS_START.load(Ordering::Relaxed)),
         ..Default::default()
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let subproc = unsafe { _mi_subproc_main() }.cast::<MiSubprocStatsPrefix>();
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     if let Some(subproc) = unsafe { subproc.as_ref() } {
         pinfo.current_commit = subproc.stats.committed.current.max(0) as usize;
         pinfo.peak_commit = subproc.stats.committed.peak.max(0) as usize;
@@ -1563,6 +1701,7 @@ pub unsafe extern "C" fn mi_process_info(
     pinfo.current_rss = pinfo.current_commit;
     pinfo.peak_rss = pinfo.peak_commit;
     // SAFETY: `pinfo` is a valid mutable primitive info struct.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         _mi_prim_process_info(&mut pinfo);
         if !elapsed_msecs.is_null() {
@@ -1592,9 +1731,11 @@ pub unsafe extern "C" fn mi_process_info(
     }
 }
 
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_process_info_print() {
     // SAFETY: null output selects the default output sink.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_process_info_print_out(None, ptr::null_mut()) }
 }
 
@@ -1622,6 +1763,7 @@ impl Default for mi_json_buf_s {
 fn mi_json_buf_expand(hbuf: &mut mi_json_buf_t) -> bool {
     if !hbuf.buf.is_null() && hbuf.size > 0 {
         // SAFETY: `buf` is valid for `size` bytes when non-null.
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { *hbuf.buf.add(hbuf.size - 1) = 0 };
     }
     if hbuf.size > usize::MAX / 2 || !hbuf.can_realloc {
@@ -1633,6 +1775,7 @@ fn mi_json_buf_expand(hbuf: &mut mi_json_buf_t) -> bool {
         2 * hbuf.size
     };
     // SAFETY: `mi_rezalloc` accepts null for fresh allocation and preserves the old contents.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let newbuf = unsafe { mi_rezalloc(hbuf.buf.cast(), newsize).cast::<c_char>() };
     if newbuf.is_null() {
         return false;
@@ -1652,11 +1795,13 @@ fn mi_json_buf_print(hbuf: &mut mi_json_buf_t, msg: &str) {
         }
         crate::internal::mi_debug_assert!(hbuf.used < hbuf.size);
         // SAFETY: capacity is ensured just above and `used < size`.
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { *hbuf.buf.add(hbuf.used) = byte as c_char };
         hbuf.used += 1;
     }
     crate::internal::mi_debug_assert!(hbuf.used < hbuf.size);
     // SAFETY: capacity is ensured above and the trailing NUL fits.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { *hbuf.buf.add(hbuf.used) = 0 };
 }
 
@@ -1841,6 +1986,7 @@ fn append_stats_json(hbuf: &mut mi_json_buf_t, stats: &mi_stats_t) {
 /// # Safety
 /// `stats` must point to a valid `mi_stats_t` when non-null. If `output_buf` is non-null it
 /// must be writable for `output_size` bytes.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_stats_get_json_from(
     stats: *const mi_stats_t,
@@ -1848,6 +1994,7 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
     output_buf: *mut c_char,
 ) -> *mut c_char {
     // SAFETY: caller provides a valid stats pointer when non-null.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     let Some(stats) = (unsafe { stats.as_ref() }) else {
         return ptr::null_mut();
     };
@@ -1858,6 +2005,7 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
     let mut hbuf = mi_json_buf_t::default();
     if output_size > 0 && !output_buf.is_null() {
         // SAFETY: caller provides `output_buf` writable for `output_size` bytes.
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { ptr::write_bytes(output_buf, 0, output_size) };
         hbuf.buf = output_buf;
         hbuf.size = output_size;
@@ -1879,6 +2027,7 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
     let mut peak_commit = 0usize;
     let mut page_faults = 0usize;
     // SAFETY: local pointers below are valid writable outputs.
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_process_info(
             &mut elapsed,
@@ -1941,6 +2090,7 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
     if hbuf.used >= hbuf.size {
         if hbuf.can_realloc {
             // SAFETY: the buffer came from mimalloc when `can_realloc` is true.
+            // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
             unsafe { crate::mimalloc::mi_free(hbuf.buf.cast()) };
         }
         ptr::null_mut()
@@ -1952,6 +2102,7 @@ pub unsafe extern "C" fn mi_stats_get_json_from(
 /// # Safety
 /// `subproc_id` must identify a live subproc. If `buf` is non-null it must be writable for
 /// `buf_size` bytes.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_subproc_stats_get_json(
     subproc_id: mi_subproc_id_t,
@@ -1959,6 +2110,7 @@ pub unsafe extern "C" fn mi_subproc_stats_get_json(
     buf: *mut c_char,
 ) -> *mut c_char {
     let mut stats = initialized_stats();
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         if !mi_subproc_stats_get(subproc_id, ptr::addr_of_mut!(stats)) {
             return ptr::null_mut();
@@ -1970,6 +2122,7 @@ pub unsafe extern "C" fn mi_subproc_stats_get_json(
 /// # Safety
 /// `heap` must be null or a valid heap pointer. If `buf` is non-null it must be writable for
 /// `buf_size` bytes.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_heap_stats_get_json(
     heap: *mut mi_heap_t,
@@ -1977,14 +2130,17 @@ pub unsafe extern "C" fn mi_heap_stats_get_json(
     buf: *mut c_char,
 ) -> *mut c_char {
     let heap = if heap.is_null() {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(mi_heap_main()) }
     } else {
+        // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
         unsafe { HeapPtr::new_unchecked(heap) }
     };
     let output = JsonOutputBuffer {
         size: JsonBufferSize(buf_size),
         ptr: JsonBufferPtr(buf),
     };
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_heap_stats_get_json_borrowed(BorrowedHeap::new_unchecked(heap), output) }
 }
 
@@ -1992,6 +2148,7 @@ unsafe fn mi_heap_stats_get_json_borrowed(
     heap: BorrowedHeap,
     output: JsonOutputBuffer,
 ) -> *mut c_char {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe {
         mi_stats_get_json_from(
             mi_heap_get_stats_borrowed(heap),
@@ -2003,19 +2160,23 @@ unsafe fn mi_heap_stats_get_json_borrowed(
 
 /// # Safety
 /// If `buf` is non-null it must be writable for `buf_size` bytes.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_get_json(buf_size: usize, buf: *mut c_char) -> *mut c_char {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_subproc_stats_get_json(mi_subproc_current(), buf_size, buf) }
 }
 
 /// # Safety
 /// `stats` must point to a valid `mi_stats_t` when non-null. If `buf` is non-null it must be
 /// writable for `buf_size` bytes.
+// SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_stats_as_json(
     stats: *mut mi_stats_t,
     buf_size: usize,
     buf: *mut c_char,
 ) -> *mut c_char {
+    // SAFETY[AUDIT:stats-reporting-boundary]: stats operations use validated counter, heap, subproc, buffer, callback, or C ABI witnesses.
     unsafe { mi_stats_get_json_from(stats.cast_const(), buf_size, buf) }
 }

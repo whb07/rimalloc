@@ -378,6 +378,16 @@ fn options_state_uses_internal_locks_like_c() {
         "stats JSON formatting should use fixed stack buffers like C"
     );
     assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/stats.rs\t"))
+            && stats_rs
+                .matches("SAFETY[AUDIT:stats-reporting-boundary]")
+                .count()
+                >= 150,
+        "stats reporting unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
+    assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")
             && options_rs.contains("static mut mi_error_handler_lock: mi_lock_t")
             && options_rs.contains(

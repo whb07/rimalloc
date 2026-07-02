@@ -257,6 +257,15 @@ Operation IDs:
   primitive stderr forwarding, callback invocation, environment lookup, and
   raw C ABI option exports while preserving no allocator allocation in
   primitive output paths.
+- `SAFETY[AUDIT:stats-reporting-boundary]`: `src/allocator/stats.rs` owns
+  counter updates, stats merge/reset/copy, formatted stats output, process
+  info, JSON output buffers, heap/subproc aggregation visitors, and raw C stats
+  exports. Unsafe operations are limited to POD zero initialization, atomic
+  counter field access, raw stats merge/copy helpers, checked bin indexes,
+  callback output buffers, heap/subproc witness construction, process-info
+  out-pointers, JSON buffer allocation/free, legacy callback pointer
+  transmutation, and C ABI shims while preserving counter semantics, output
+  buffer bounds, and allocator recursion constraints.
 - `SAFETY[AUDIT:owned-allocation]`: `src/safe/allocation.rs` owns non-zero
   allocations through move-only wrappers. Slice views and copies are bounded by
   the stored layout, and `Drop` releases live blocks exactly once.

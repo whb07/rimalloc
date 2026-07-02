@@ -1216,12 +1216,13 @@ fn free_path_internals_are_not_dynamic_exports() {
         ) && stats_rs.contains(
             "#[inline(never)]\nunsafe fn mi_stats_add_nonnull(stats: *mut mi_stats_t, src: *const mi_stats_t)"
         ) && stats_rs.contains(
-            "mi_stat_count_add_mt(\n                    ptr::addr_of_mut!((*stats).$field),\n                    ptr::addr_of!((*src).$field),"
+            "mi_stat_count_add_mt(\n                    ptr::addr_of_mut!((*stats).$field),\n                    ptr::addr_of!((*src).$field),\n                )"
         ) && stats_rs.contains(
-            "mi_stat_counter_add_mt(\n                    ptr::addr_of_mut!((*stats).$field),\n                    ptr::addr_of!((*src).$field),"
+            "mi_stat_counter_add_mt(\n                    ptr::addr_of_mut!((*stats).$field),\n                    ptr::addr_of!((*src).$field),\n                )"
         ) && stats_rs.contains(
-            "if MI_STAT > 1 {\n        let stats_malloc_bins ="
+            "if MI_STAT > 1 {\n        // SAFETY[AUDIT:stats-reporting-boundary]"
         )
+            && stats_rs.contains("let stats_malloc_bins =")
             && stats_rs.contains("for i in 0..=MI_BIN_HUGE")
             && stats_rs.contains("let stats_page_bins =")
             && !stats_rs.contains("&mut stats.$field")

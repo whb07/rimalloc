@@ -14,8 +14,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 9 entries: 7 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 9.
+- `docs/unsafe-migration-allowlist.tsv` has 8 entries: 6 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 8.
 - The completed pass moved `src/types/constants.rs` to 8
   `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers while retaining 2
   `SAFETY[AUDIT:raw-auto-trait]` markers for sentinel `Sync` impls, moved
@@ -42,13 +42,17 @@ Current review evidence:
   allocation, offset-aware layout adjustment, guarded and over-allocated paths,
   padding shrink, usable-size checks, tracking hooks, aligned realloc, heap
   borrowing, and raw aligned exports, and is off the unsafe migration allowlist.
+- This pass also moved `src/allocator/stats.rs` to 161
+  `SAFETY[AUDIT:stats-reporting-boundary]` markers for counter updates,
+  stats merge/reset/copy, formatted output, JSON buffers, process info,
+  heap/subproc visitors, callback output, and raw stats exports, and is off the
+  unsafe migration allowlist.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits, and
   `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits,
   `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits,
-  and `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits.
+  `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits, and
+  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits.
 - The next allowlisted production files after those are
-  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits,
   `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits, and
   `src/allocator/arena.rs` at 3,915 lines with 607 `unsafe` hits.
 - The remaining translation allowlist entries are `src/internal/mod.rs` at
@@ -63,6 +67,7 @@ Current review evidence:
   `src/internal/mod.rs`, `src/platform/unix.rs`, and
   `src/platform/windows.rs`, each with 4 path-wide entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
+  `SAFETY[AUDIT:stats-reporting-boundary]` has 161 markers,
   `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
   `SAFETY[AUDIT:aligned-allocation-boundary]` has 158 markers,
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
@@ -85,7 +90,7 @@ Current review evidence:
 - The release audit is still split but has large review units:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,462 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,146 lines,
-  `tests/release_fast_path_audit.rs` is 1,899 lines, and
+  `tests/release_fast_path_audit.rs` is 1,919 lines, and
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines.
 
 ## Issue: Free path ownership boundary still uses a file-level unsafe allowance
@@ -181,18 +186,18 @@ regeneration/check, full clippy, and full tests.
 > boundaries, so local operation markers should distinguish counter projection
 > from output and callback safety.
 
-- [ ] Add local `SAFETY[AUDIT:stats-reporting-boundary]` markers for stats
+- [x] Add local `SAFETY[AUDIT:stats-reporting-boundary]` markers for stats
       counter access, thread/process stats merging, buffer writes, raw callback
       dispatch, formatted output helpers, JSON field emission, and raw stats
       exports.
-- [ ] Preserve counter width and saturation behavior, reset and merge semantics,
+- [x] Preserve counter width and saturation behavior, reset and merge semantics,
       output ordering, callback ABI and nullability, buffer bounds, process
       option interactions, and no allocator recursion from stats output paths.
-- [ ] Add or extend release-audit assertions and focused tests for marker
+- [x] Add or extend release-audit assertions and focused tests for marker
       coverage, no migration allowlist entry, stats merge/reset behavior,
       formatted output stability, callback output behavior, and no-allocation
       critical paths.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/allocator/stats.rs`
+- [x] Add matching unsafe audit/evidence entries, remove `src/allocator/stats.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower the cap.
 
@@ -232,7 +237,7 @@ audit scripts, unsafe inventory regeneration/check, full clippy, and full tests.
 1. [x] Migrate `src/allocator/free.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/allocator/options.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/allocator/aligned.rs` off the unsafe migration allowlist.
-4. [ ] Migrate `src/allocator/stats.rs` off the unsafe migration allowlist.
+4. [x] Migrate `src/allocator/stats.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/raw/macros.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog

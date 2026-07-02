@@ -23,6 +23,8 @@ fn memkind_code_maps_known_and_unknown_values() {
 #[test]
 fn os_memid_round_trips_through_view() {
     let mut byte = 0u8;
+    // SAFETY[AUDIT:typed-memid-test-fixtures]: `byte` is stack-local storage
+    // used only as an opaque OS-memory pointer witness for this test.
     let base = unsafe { OsMemPtr::new_unchecked((&mut byte as *mut u8).cast::<c_void>()) };
     let normal = MemId::<OsMem>::os(
         Some(base),
@@ -64,6 +66,8 @@ fn os_memid_round_trips_through_view() {
 #[test]
 fn os_remap_memid_round_trips_through_view() {
     let mut byte = 0u8;
+    // SAFETY[AUDIT:typed-memid-test-fixtures]: `byte` is stack-local storage
+    // used only as an opaque OS-remap pointer witness for this test.
     let base = unsafe { OsMemPtr::new_unchecked((&mut byte as *mut u8).cast::<c_void>()) };
     let memid = MemId::<OsMem>::os_remap(
         Some(base),
@@ -87,6 +91,8 @@ fn os_remap_memid_round_trips_through_view() {
 #[test]
 fn external_and_meta_memids_round_trip_through_view() {
     let mut byte = 0u8;
+    // SAFETY[AUDIT:typed-memid-test-fixtures]: `byte` is stack-local storage
+    // used only as an opaque external-memory pointer witness for this test.
     let base = unsafe { OsMemPtr::new_unchecked((&mut byte as *mut u8).cast::<c_void>()) };
     let external = MemId::<ExternalMem>::external(
         Some(base),
@@ -123,8 +129,12 @@ fn external_and_meta_memids_round_trip_through_view() {
 
 #[test]
 fn arena_memid_round_trips_slice_metadata() {
-    let mut arena = MaybeUninit::<crate::types::mi_arena_t>::uninit();
+    let mut arena = MaybeUninit::<crate::types::mi_arena_t>::zeroed();
+    // SAFETY[AUDIT:typed-memid-test-fixtures]: `arena` is stack-local arena
+    // metadata, and the pointer remains valid while this test builds views.
     let arena_ptr = unsafe { ArenaPtr::new_unchecked(arena.as_mut_ptr()) };
+    // SAFETY[AUDIT:typed-memid-test-fixtures]: the test has unique access to
+    // the stack-local arena metadata before constructing the slice range.
     unsafe {
         arena_ptr.set_slice_count(crate::core_types::SliceCount::from_usize(32).unwrap());
     }
@@ -163,6 +173,8 @@ fn heap_main_memid_round_trips_through_view() {
 
 #[test]
 fn memid_view_returns_unknown_for_null_meta_or_arena_union_pointers() {
+    // SAFETY[AUDIT:typed-memid-test-fixtures]: these raw memids are local
+    // invalid-view fixtures that are never published to allocator state.
     let null_meta = crate::internal::mi_memid_t {
         mem: crate::internal::mi_memid_mem_t {
             meta: crate::internal::mi_memid_meta_info_t {
@@ -202,9 +214,11 @@ fn memid_view_returns_unknown_for_null_meta_or_arena_union_pointers() {
 
 #[test]
 fn memid_view_returns_unknown_for_invalid_arena_slice_range() {
-    let mut arena = MaybeUninit::<crate::types::mi_arena_t>::uninit();
+    let mut arena = MaybeUninit::<crate::types::mi_arena_t>::zeroed();
     let arena = arena.as_mut_ptr();
 
+    // SAFETY[AUDIT:typed-memid-test-fixtures]: these raw memids use a
+    // stack-local arena pointer only to exercise invalid range rejection.
     let zero_count = crate::internal::mi_memid_t {
         mem: crate::internal::mi_memid_mem_t {
             arena: crate::internal::mi_memid_arena_info_t {

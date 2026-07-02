@@ -303,6 +303,10 @@ Operation IDs:
 - `SAFETY[AUDIT:typed-layout-test-fixtures]`: `src/types/layout/tests.rs`
   uses concrete valid unchecked scalar values and non-dereferenced dangling
   pointer witnesses to exercise layout, realloc, and flag packing invariants.
+- `SAFETY[AUDIT:typed-memid-test-fixtures]`: `src/types/memid/tests.rs`
+  builds stack-local OS, meta, arena, and raw memid fixtures to exercise typed
+  memid constructors and unknown-view rejection. The fixtures are not
+  published to allocator globals or exposed through wider helper visibility.
 - `SAFETY[AUDIT:typed-padding-metadata]`: `src/types/padding.rs` confines raw
   padding metadata pointer construction, reads, and writes to `PaddingPtr`.
   Callers supply block pointers whose usable-size boundary is followed by live

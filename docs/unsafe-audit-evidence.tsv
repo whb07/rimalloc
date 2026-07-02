@@ -46,6 +46,8 @@ typed-freelist-test-fixtures	test	src/types/freelist/tests.rs	Exercises stack-lo
 typed-freelist-wrapper-test-fixtures	test	src/types/freelist_wrappers/tests.rs	Exercises stack-local page/block metadata for encoded pointer, block tag, available-list, and local-list wrapper fixtures.
 typed-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises stack-local heap, thread-heap, and TLD metadata plus real heap allocation/deletion witness checks.
 typed-layout-test-fixtures	test	src/types/layout/tests.rs	Exercises concrete valid unchecked scalar values and non-dereferenced pointer witnesses for layout/realloc request fixtures.
+typed-memid-test-fixtures	test	src/types/memid/tests.rs	Exercises stack-local OS, meta, arena, and raw memid fixtures through typed MemId constructors and view rejection cases.
+typed-memid-test-fixtures	test	tests/release_fast_path_audit.rs	Checks memid views keep raw layout private and retain unknown-view rejection cases.
 typed-padding-metadata	test	src/types/padding/tests.rs	Exercises padding pointer construction, reads, writes, delta updates, and block-plus-usable-size pointer arithmetic.
 typed-padding-metadata	test	tests/release_fast_path_audit.rs	Checks production padding wrappers keep canary and delta fields private and route metadata access through PaddingPtr.
 typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-local padding metadata, canary witnesses, and padding pointer arithmetic fixtures.

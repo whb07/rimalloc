@@ -53,14 +53,18 @@ Current review evidence:
   `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 23 markers.
 - The release audit still has large review units:
   `tests/release_fast_path_audit.rs` is 2,893 lines,
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,561 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,374 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines, and
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
-  is 662 lines.
-- `tests/release_fast_path_audit/unsafe_performance.rs` still carries a large
-  page lifecycle and page-queue assertion block around `_mi_page_free`,
+  is 662 lines. The new
+  `tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs` module
+  is 243 lines.
+- `tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs` now owns
+  the page lifecycle/page-queue assertion block around `_mi_page_free`,
   `_mi_page_abandon`, `_mi_page_free_collect`, `_mi_page_unfull`,
-  `_mi_page_retire`, `_mi_page_queue_is_valid`, and queue transition helpers.
+  `_mi_page_retire`, `_mi_page_queue_is_valid`, queue transition helpers, and
+  the typed page count/validation child modules. It receives borrowed source
+  strings from `unsafe_performance.rs`.
 - `strict-type-allowlist.txt` has 0 remaining `remove:` entries and
   `REMOVE_ENTRY_CAP` is 0, but `src/allocator/page.rs` still has path-wide
   raw-pointer entries for `mi_page_t`, `mi_block_t`, and `mi_theap_t`.
@@ -143,17 +147,17 @@ clippy, and full tests.
 > high-signal split is the page lifecycle/page-queue assertion cluster, which is
 > cohesive and already uses borrowed source strings in `unsafe_performance.rs`.
 
-- [ ] Move the page lifecycle and page-queue assertion cluster into a new module
+- [x] Move the page lifecycle and page-queue assertion cluster into a new module
       under `tests/release_fast_path_audit/unsafe_performance/`.
-- [ ] Pass borrowed source strings into the new assertion helper rather than
+- [x] Pass borrowed source strings into the new assertion helper rather than
       re-reading large files.
-- [ ] Keep coverage for `_mi_page_free`, `_mi_page_abandon`,
+- [x] Keep coverage for `_mi_page_free`, `_mi_page_abandon`,
       `_mi_page_free_collect`, `_mi_page_unfull`, `_mi_page_retire`,
       `_mi_page_queue_is_valid`, page queue transition helpers, and the typed
       page count/validation child modules.
-- [ ] Update `RELEASE_AUDIT_MODULES` and this TODO evidence with the new module
+- [x] Update `RELEASE_AUDIT_MODULES` and this TODO evidence with the new module
       and line counts.
-- [ ] Preserve release-audit behavior and avoid weakening source assertions
+- [x] Preserve release-audit behavior and avoid weakening source assertions
       while moving them.
 
 Verify: `cargo test --test release_fast_path_audit --all-features`,
@@ -185,7 +189,7 @@ full tests.
 1. [x] Migrate `src/types/scalar/tests.rs` off the unsafe migration allowlist.
 2. [x] Migrate `src/types/ptr/tests.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/types/page.rs` off the unsafe migration allowlist.
-4. [ ] Split the page lifecycle/page-queue release-audit assertion cluster.
+4. [x] Split the page lifecycle/page-queue release-audit assertion cluster.
 5. [ ] Narrow broad page strict-type entries after the existing child splits.
 
 ## Definition of done for this backlog
@@ -194,6 +198,6 @@ full tests.
 - [x] No test files remain in `docs/unsafe-migration-allowlist.tsv`.
 - [x] `src/types/page.rs` is covered by operation-level audit markers and
       evidence instead of a file-level migration exception.
-- [ ] One more release-audit assertion cluster has a dedicated module.
+- [x] One more release-audit assertion cluster has a dedicated module.
 - [ ] Page strict-type documentation is narrower where existing child modules
       provide concrete boundaries.

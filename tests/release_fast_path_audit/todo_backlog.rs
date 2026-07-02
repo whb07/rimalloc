@@ -12,12 +12,11 @@ fn rust_idiom_backlog_tracks_current_work() {
     let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
     let required_headings = [
         "# TODO: Fresh Rust Idiom Follow-up Backlog",
-        "## Issue: Unsafe migration allowlist should keep shrinking",
-        "## Issue: Strict-type allowlist still has removable file-level entries",
-        "## Issue: Production module-level allowances hide local intent",
-        "## Issue: Safe facade tests are mixed into the facade module",
-        "## Issue: Release fast-path audit is too large and brittle",
-        "## Issue: Large translated modules still need smaller review boundaries",
+        "## Issue: Unsafe migration allowlist still has small reviewable entries",
+        "## Issue: Strict-type removable entries remain broad file-level allowances",
+        "## Issue: Arena diagnostics still expose too many raw metadata reads",
+        "## Issue: Release fast-path audit split is still uneven",
+        "## Issue: Page module still mixes queue, count, and allocation policy",
         "## Definition of done for this backlog",
     ];
 
@@ -33,8 +32,10 @@ fn rust_idiom_backlog_tracks_current_work() {
         "62 entries: 44 production,\n  15 test, and 3 translation files",
         "strict-type-allowlist.txt",
         "95 entries; 8 are still marked `remove:`",
-        "`src/safe/mod.rs` is now 40 lines",
-        "`tests/release_fast_path_audit.rs` is now split into",
+        "`src/allocator/arena.rs` is 4,613 lines",
+        "`src/allocator/arena/debug.rs`",
+        "`tests/release_fast_path_audit.rs` is split",
+        "`tests/release_fast_path_audit/unsafe_performance.rs` is 3,645 lines",
     ];
 
     for evidence in required_evidence {

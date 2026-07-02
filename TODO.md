@@ -1,224 +1,156 @@
 # TODO: Fresh Rust Idiom Follow-up Backlog
 
-Fresh-eyes review after completing the previous Rust idiom and release-readiness
-backlog. The crate now has stronger audit gates, but the next visible issues
-are still translation residue, broad exception surfaces, and oversized review
-units.
+Fresh-eyes review after completing the previous TODO backlog on `master`. The
+crate is in better shape: the release audit is split, the safe facade test suite
+is out of the facade, and arena diagnostics are no longer embedded in the main
+arena translation unit. The next issues are narrower: keep shrinking broad
+exception surfaces, make the new arena diagnostics module less raw-pointer
+heavy, and continue splitting large translated modules without touching hot
+paths casually.
 
 Review evidence:
 
 - `docs/unsafe-migration-allowlist.tsv` still has 62 entries: 44 production,
   15 test, and 3 translation files.
 - `strict-type-allowlist.txt` has 95 entries; 8 are still marked `remove:`.
-  Those removable entries are broad `bare-domain-usize` file allowances.
-- The largest source files remain hard to review as Rust modules:
+  Those removable entries are broad `bare-domain-usize` file allowances in
+  allocator, bitmap, and internal translation units.
+- The largest Rust source files are still difficult review units:
   `src/allocator/arena.rs` is 4,613 lines, `src/allocator/page.rs` is 3,539
   lines, `src/internal/bitmap.rs` is 2,604 lines,
   `src/allocator/alloc.rs` is 2,545 lines, `src/allocator/init.rs` is 2,339
-  lines, and `src/platform/windows.rs` is 2,191 lines. Arena diagnostics now
-  live in `src/allocator/arena/debug.rs` as a 504-line child module.
-- `tests/release_fast_path_audit.rs` is now split into a 2,961-line root
-  harness plus focused modules for release policy (2,291 lines), TODO backlog
-  checks (76 lines), and unsafe/performance checks (3,645 lines).
-- `src/safe/mod.rs` is now 40 lines and only wires the facade modules,
-  re-exports, failure-injection test helper, and `src/safe/tests.rs`; the moved
-  safe facade test suite is 1,150 lines.
-- Small production modules still carry crate-level allowances where they are
-  permanent compatibility shims, such as `src/allocator/static_alloc.rs` and
-  translated C-name modules. `src/internal/provenance.rs`,
-  `src/allocator/tracking.rs`, and `src/internal/bits.rs` no longer carry broad
-  `dead_code` module allowances.
+  lines, `src/raw/macros.rs` is 2,223 lines, and
+  `src/platform/windows.rs` is 2,191 lines.
+- `tests/release_fast_path_audit.rs` is split, but the split is still uneven:
+  the root harness is 2,961 lines and
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 3,645 lines.
+- `src/allocator/arena/debug.rs` is a clear 504-line diagnostic module, but it
+  now carries many repeated `SAFETY[AUDIT:arena-debug-render]` comments around
+  direct arena/page metadata reads. That is audited, but not yet pleasant Rust.
+- `scripts/check-ffi-boundary.py`, `scripts/check-unsafe-audit.py`,
+  `scripts/check-unsafe-audit-evidence.py`, and
+  `scripts/check-unsafe-inventory.py` all pass after the latest split.
 
-## Issue: Unsafe migration allowlist should keep shrinking
+## Issue: Unsafe migration allowlist still has small reviewable entries
 
-> **Comment:** The allowlist is now categorized and capped, but 64 entries is
-> still too high. The next reduction should target small typed-wrapper modules
-> where safety invariants are local and reviewable, not hot allocator paths that
-> need assembly evidence.
+> **Comment:** The migration allowlist stayed capped at 62 after the arena
+> diagnostic split. The next reduction should again avoid hot allocation/free
+> paths and instead target small typed-wrapper or test-only files where the
+> safety proof is local.
 
-- [x] Pick the smallest production typed-wrapper files still on
-      `docs/unsafe-migration-allowlist.tsv`.
-- [x] Add specific `SAFETY[AUDIT:*]` tags and `UNSAFE_AUDIT.md` entries for
-      each remaining unsafe operation in those files.
-- [x] Remove the migrated files from the unsafe migration allowlist and lower
+- [ ] Inventory the 15 test entries and the smallest production typed-wrapper
+      entries still on `docs/unsafe-migration-allowlist.tsv`.
+- [ ] Pick at least two low-risk files whose unsafe operations can receive
+      operation-level `SAFETY[AUDIT:*]` tags without assembly evidence.
+- [ ] Add `UNSAFE_AUDIT.md` entries and
+      `docs/unsafe-audit-evidence.tsv` rows for each new operation ID.
+- [ ] Remove the migrated files from the allowlist and lower
       `ALLOWLIST_ENTRY_CAP` in `scripts/check-unsafe-audit.py`.
-- [x] Keep test allowlist entries separate from production entries so test
-      fixture unsafe does not hide production debt.
-- [x] Avoid hot allocator files until the change has behavior, assembly, and
-      benchmark evidence.
-  - Evidence: `src/types/freelist.rs` and `src/types/validation.rs` now carry
-    operation-level `SAFETY[AUDIT:typed-freelist]` and
-    `SAFETY[AUDIT:typed-free-validation]` tags with matching
-    `UNSAFE_AUDIT.md` and `docs/unsafe-audit-evidence.tsv` entries. Both files
-    were removed from `docs/unsafe-migration-allowlist.tsv`, and the unsafe
-    migration cap is now 62 entries. No hot allocator file was touched.
+- [ ] Keep production, test, and translation categories visible in the audit
+      output so test fixtures do not hide production debt.
 - Verify: `scripts/check-unsafe-audit.py`,
   `scripts/check-unsafe-audit-evidence.py`,
   `scripts/check-unsafe-inventory.py`, focused release audit, full clippy, and
   full tests.
 
-## Issue: Strict-type allowlist still has removable file-level entries
+## Issue: Strict-type removable entries remain broad file-level allowances
 
-> **Comment:** `strict-type-allowlist.txt` still permits nine broad
-> `bare-domain-usize` file entries with `remove:` dispositions. These are the
-> next places where the translation still feels C-shaped: raw byte counts,
-> indexes, and alignment values flow through non-ABI helpers longer than they
-> should.
+> **Comment:** The strict-type allowlist still has eight `remove:` entries.
+> These broad file-level allowances are useful while translating, but they hide
+> which helpers are genuinely ABI-shaped and which are just carrying raw
+> `usize` out of habit.
 
-- [x] Inventory all nine `remove:` entries and rank them by risk, hot-path
-      sensitivity, and expected code churn.
-- [x] Start with low-risk internal helpers such as `src/allocator/arena_meta.rs`
-      or `src/allocator/threadlocal.rs` before touching `arena`, `page`, or
-      allocation hot paths.
-- [x] Replace broad file-level entries with symbol-level entries, typed scalar
-      wrappers, or checked constructor boundaries where that improves clarity
-      without changing codegen on hot paths.
-- [x] Add a strict-type audit cap for removable entries so the count cannot
-      grow silently.
-- [x] Preserve permanent ABI/platform entries where raw `usize` is the correct
-      public or external contract.
-  - Evidence: `src/allocator/threadlocal.rs` now uses local transparent
-    `ThreadLocalSlotIndex`, `ThreadLocalSlotCount`, and
-    `ThreadLocalKeyVersion` wrappers for dynamic TLS table/key helpers. The
-    broad `bare-domain-usize` remove entry for that file was deleted, the
-    checker now caps removable entries at 8, and the OS memid helper takes
-    `ReservedBytes` directly at its single call site.
-- Verify: `scripts/check-strict-types.py`, release fast-path audit, full
-  clippy, full tests, and assembly capture for any touched hot path.
+- [ ] Re-inventory the eight `remove:` entries and rank them by hot-path risk,
+      expected churn, and ability to preserve code shape.
+- [ ] Start with `src/allocator/arena_meta.rs`, `src/bitmap.rs`, or another
+      low-risk non-hot helper before touching `alloc`, `free`, `page`, or arena
+      allocation paths.
+- [ ] Replace one broad file-level entry with typed wrappers or symbol-level
+      strict-type entries.
+- [ ] Lower the removable-entry cap in `scripts/check-strict-types.py`.
+- [ ] Preserve raw `usize` at public ABI and platform boundaries where that is
+      the correct contract.
+- Verify: `scripts/check-strict-types.py`, focused release audit, full clippy,
+  full tests, and assembly capture for any touched hot path.
 
-## Issue: Production module-level allowances hide local intent
+## Issue: Arena diagnostics still expose too many raw metadata reads
 
-> **Comment:** Some small production modules still use broad crate-level
-> allowances for dead code or C-style names. Several are compatibility shims,
-> but broad allowances make it difficult to distinguish intentionally retained
-> C parity from leftovers.
+> **Comment:** Moving arena diagnostics into `src/allocator/arena/debug.rs` made
+> the module boundary clear, but the implementation still repeats direct prefix
+> casts and close-range safety comments. A small diagnostic-only helper layer
+> would make the invariants easier to review without moving allocation logic.
 
-- [x] Inventory production crate-level allowances and split small modules into
-      permanent compatibility shims versus removable translated residue.
-- [x] Localize `dead_code` allowances to individual constants or functions in
-      `src/internal/provenance.rs`, `src/allocator/static_alloc.rs`,
-      `src/allocator/tracking.rs`, and `src/internal/bits.rs` where possible.
-- [x] Prefer `cfg` gates or actual call-site ownership over suppressing unused
-      code.
-- [x] Add or tighten an audit test that caps broad production module-level
-      allowances and documents permanent exceptions.
-- [x] Leave large translated allocator modules alone unless the allowance
-      change is obviously local and behavior-neutral.
-  - Evidence: `src/internal/provenance.rs` no longer needs `dead_code`,
-    `src/internal/bits.rs` keeps only C naming allowances, and
-    `src/allocator/tracking.rs` moved retained C tracking hooks to item-level
-    `dead_code` allowances. `src/allocator/static_alloc.rs` remains a documented
-    permanent aggregate-build-unit shim because localizing 19 sentinel constants
-    would make the file less clear. The release audit now separately checks
-    total `dead_code` allowances and broad module-level `#![allow(dead_code)]`
-    compatibility shims.
-- Verify: focused allowance audit, `cargo clippy --workspace --all-targets
-  --all-features`, and full tests.
+- [ ] Identify repeated arena/page metadata reads in
+      `src/allocator/arena/debug.rs`, especially `MiArenaPrefix` field access,
+      page classification, and slice bitmap reads.
+- [ ] Add tiny diagnostic helper functions or local wrapper types that name the
+      invariant being read while keeping the module diagnostic-only.
+- [ ] Reduce repeated `SAFETY[AUDIT:arena-debug-render]` marker noise by moving
+      proofs to the smallest helper boundaries that actually perform unsafe
+      reads.
+- [ ] Keep `mi_debug_show_arenas` and `mi_arenas_print` ABI-compatible and
+      classified by `scripts/check-ffi-boundary.py`.
+- [ ] Keep the module out of allocation hot paths and free of Rust allocation
+      helpers.
+- Verify: `scripts/check-ffi-boundary.py`,
+  `scripts/check-unsafe-audit.py`,
+  `scripts/check-unsafe-audit-evidence.py`, release audit, full clippy, and full
+  tests.
 
-## Issue: Safe facade tests are mixed into the facade module
+## Issue: Release fast-path audit split is still uneven
 
-> **Comment:** `src/safe/mod.rs` should read like the public facade. The
-> current in-file test module is useful, but it makes the facade harder to
-> scan and keeps process-global fixtures next to production re-exports.
+> **Comment:** Splitting the release audit helped, but
+> `unsafe_performance.rs` is still 3,645 lines and the root harness remains
+> 2,961 lines. This is better than the original monolith, but future review
+> would be easier with smaller domain modules and stricter size guards.
 
-- [x] Move the safe facade test module into `src/safe/tests.rs` or focused
-      test submodules without changing the public safe facade.
-- [x] Keep `failure_injection` private to tests and preserve the serialized
-      locks for process-global options and callback registration.
-- [x] Keep safe facade source files free of new backend imports and local
-      Clippy allowances.
-- [x] Update `scripts/check-safe-boundary.py` and release audit checks only if
-      the test-file move changes their inventory assumptions.
-- [x] Confirm callback, heap, allocation, options, stats, and process-info
-      tests still run under the expected feature sets.
-  - Evidence: the full safe facade test suite now lives in `src/safe/tests.rs`;
-    `src/safe/mod.rs` keeps only facade wiring plus the cfg(test)
-    `failure_injection` helper. `scripts/check-safe-boundary.py` and
-    `scripts/check-layer-boundaries.py` exclude the test-only module from
-    production safe facade inventories, while `scripts/check-safe-api-features.sh`
-    confirms the moved tests across default, std, secure, guarded,
-    track-valgrind, and track-asan compile/test modes.
-- Verify: `scripts/check-safe-boundary.py`, `scripts/check-layer-boundaries.py`,
-  `scripts/check-safe-api-features.sh`, focused safe tests, full clippy, and
-  full tests.
+- [ ] Split `tests/release_fast_path_audit/unsafe_performance.rs` into smaller
+      modules such as hot-path codegen, private ABI/export boundaries,
+      typed-domain migration, and allocator metadata invariants.
+- [ ] Move root-harness tests into child modules where they have a clear domain
+      owner.
+- [ ] Keep shared source-reading helpers in the root and avoid duplicating file
+      slicing utilities.
+- [ ] Tighten `release_audit_harness_stays_split` so no child module can grow
+      past the new review threshold.
+- [ ] Preserve all existing assertion coverage while moving tests.
+- Verify: `cargo test --test release_fast_path_audit --all-features`,
+  `git diff --check`, full clippy, and full tests.
 
-## Issue: Release fast-path audit is too large and brittle
+## Issue: Page module still mixes queue, count, and allocation policy
 
-> **Comment:** The release audit is valuable, but the formerly 8,845-line
-> integration test made review and future edits harder than necessary. It also
-> hardcoded the TODO backlog shape, which created churn every time the backlog
-> was rewritten.
+> **Comment:** `src/allocator/page.rs` remains a 3,539-line translated unit. The
+> next production split should avoid allocator fast-path churn and start with a
+> small, cohesive page-queue or count-domain cluster.
 
-- [x] Split `tests/release_fast_path_audit.rs` into domain-focused modules
-      such as API shape, docs/release policy, unsafe/performance, platform, and
-      TODO backlog checks.
-- [x] Keep shared helpers in one place and avoid duplicating file-read and
-      source-slicing utilities across modules.
-- [x] Make the TODO backlog audit check the current title, issue headings, and
-      measurable evidence without asserting stale completed backlog details.
-- [x] Add a line-count or module-count guard so the monolithic test file does
-      not grow back.
-- [x] Preserve existing assertion coverage while moving tests.
-  - Evidence: the integration-test root keeps the shared source-reading and
-    source-slicing helpers plus the API/platform harness checks, while
-    `tests/release_fast_path_audit/release_policy.rs`,
-    `tests/release_fast_path_audit/todo_backlog.rs`, and
-    `tests/release_fast_path_audit/unsafe_performance.rs` hold the moved
-    domains. The TODO audit now loops over required headings and measurable
-    evidence strings, and `release_audit_harness_stays_split` caps the root at
-    3,500 lines and each child module at 4,200 lines.
-- Verify: `cargo test --test release_fast_path_audit --all-features`, full
-  clippy, and full tests.
-
-## Issue: Large translated modules still need smaller review boundaries
-
-> **Comment:** The previous split improved `memid`, but several huge modules
-> still read like translated C translation units. The next split should be
-> conservative: move a small invariant cluster first, preserve inlining, and
-> prove no API/ABI drift.
-
-- [x] Inventory candidate clusters in `src/allocator/arena.rs`,
-      `src/allocator/page.rs`, `src/internal/bitmap.rs`, and
-      `src/allocator/init.rs`.
-- [x] Pick one low-risk cluster with clear ownership, such as arena metadata
-      helpers, page-map/page-queue glue, or initialization state helpers.
-- [x] Add module docs that state the invariant owned by the new module.
-- [x] Preserve hot-path `#[inline]` behavior and translated C parity where it
-      matters.
-- [x] Update audit scripts, path aliases, and generated evidence paths after
-      any move.
-  - Evidence: the cold arena diagnostic/rendering cluster moved from
-    `src/allocator/arena.rs` into `src/allocator/arena/debug.rs`, with module
-    docs stating that it reads arena/page metadata for reporting only and must
-    not participate in allocation fast paths or mutate allocator ownership
-    state. The C diagnostic exports remain `#[no_mangle]` in a classified ABI
-    boundary file, `docs/unsafe-inventory.md` was regenerated, and
-    `SAFETY[AUDIT:arena-debug-render]` plus release-audit checks keep the moved
-    unsafe diagnostics out of the legacy migration allowlist. No allocation hot
-    path was moved or retuned.
-- Verify: module inventory checks, API inventory, ABI/symbol checks if public
-  paths are touched, release assembly capture for hot paths, full clippy, and
-  full tests.
+- [ ] Inventory candidate clusters in `src/allocator/page.rs`, especially page
+      queue count helpers, queue movement helpers, and deferred-free callback
+      registration.
+- [ ] Pick one low-risk cluster with clear ownership and minimal public surface.
+- [ ] Add module docs that state the invariant owned by the new module.
+- [ ] Preserve existing `#[inline]`/`#[inline(never)]` behavior and C helper
+      boundaries.
+- [ ] Update release-audit path assertions, unsafe inventory, and boundary
+      scripts after the move.
+- Verify: focused page tests, release audit, API inventory, ABI/symbol checks
+  if exported paths move, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Shrink small typed-wrapper unsafe allowlist entries.
-2. [x] Cap and reduce removable strict-type allowlist entries.
-3. [x] Localize small production module-level allowances.
-4. [x] Move safe facade tests out of `src/safe/mod.rs`.
-5. [x] Split the release fast-path audit into domain modules.
-6. [x] Split one additional low-risk translated module cluster.
+1. [ ] Shrink the unsafe migration allowlist with small reviewable files.
+2. [ ] Reduce one removable strict-type file-level allowance.
+3. [ ] Consolidate unsafe arena diagnostic metadata reads.
+4. [ ] Split the uneven release-audit unsafe/performance module further.
+5. [ ] Split one low-risk page module cluster.
 
 ## Definition of done for this backlog
 
-- [x] The unsafe migration allowlist is below 64 entries and the cap is lowered.
-- [x] The strict-type allowlist has fewer than 9 `remove:` entries and the
-      removable-entry count is capped.
-- [x] Small production module-level allowances are localized or documented as
-      permanent compatibility shims.
-- [x] `src/safe/mod.rs` contains the facade and test wiring only, not the full
-      safe facade test suite.
-- [x] The release fast-path audit is split into reviewable modules without
-      losing coverage.
-- [x] At least one more translated module boundary is improved without API,
-      ABI, or hot-path performance drift.
+- [ ] The unsafe migration allowlist is below 62 entries and the cap is lowered.
+- [ ] The strict-type allowlist has fewer than 8 `remove:` entries and the
+      removable-entry count is capped lower.
+- [ ] `src/allocator/arena/debug.rs` has clearer diagnostic helper boundaries
+      and fewer repeated local safety-marker comments.
+- [ ] Release fast-path audit modules are smaller and guarded against growing
+      back into large review units.
+- [ ] At least one page-module boundary is improved without API, ABI, or
+      hot-path performance drift.

@@ -47,22 +47,30 @@ pub(super) fn assert_page_map_and_deferred_boundaries(sources: BoundarySources<'
             "{internal_name} should stay crate-internal instead of a dynamic export"
         );
     }
-    for (audit_id, min_count) in [
-        ("page-map-global-boundary", 10),
-        ("page-map-init-boundary", 40),
-        ("page-map-teardown-boundary", 10),
-        ("page-map-register-boundary", 60),
-        ("page-map-lookup-boundary", 15),
+    for (audit_id, expected_count) in [
+        ("page-map-global-boundary", 12),
+        ("page-map-init-boundary", 45),
+        ("page-map-teardown-boundary", 13),
+        ("page-map-commit-boundary", 5),
+        ("page-map-page-register-boundary", 14),
+        ("page-map-range-register-boundary", 6),
+        ("page-map-page-unregister-boundary", 15),
+        ("page-map-range-unregister-boundary", 10),
+        ("page-map-submap-publication-boundary", 9),
+        ("page-map-range-primitive-boundary", 5),
+        ("page-map-lookup-boundary", 19),
     ] {
         let marker = format!("SAFETY[AUDIT:{audit_id}]");
-        assert!(
-            page_map.matches(&marker).count() >= min_count,
-            "page-map unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
+        assert_eq!(
+            page_map.matches(&marker).count(),
+            expected_count,
+            "page-map unsafe boundary {audit_id} should retain exactly {expected_count} local operation markers"
         );
     }
     assert!(
         !unsafe_allowlist.contains("src/allocator/page_map.rs")
             && !page_map.contains("SAFETY[AUDIT:page-map-boundary]")
+            && !page_map.contains("SAFETY[AUDIT:page-map-register-boundary]")
             && page_map.contains("pub(crate) static mut _mi_page_map")
             && page_map.contains("static mut mi_page_map_max_address")
             && page_map.contains("static mut mi_page_map_memid")

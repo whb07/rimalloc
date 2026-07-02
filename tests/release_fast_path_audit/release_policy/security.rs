@@ -162,6 +162,27 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         assert_focused_evidence(audit_id, ALLOCATION_FREE_FOCUSED_PATH);
     }
 
+    const LOCAL_BOUNDARIES_FOCUSED_PATH: &str =
+        "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs";
+    const PAGE_ARENA_FOCUSED_PATH: &str =
+        "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs";
+    for audit_id in [
+        "page-map-global-boundary",
+        "page-map-init-boundary",
+        "page-map-teardown-boundary",
+        "page-map-commit-boundary",
+        "page-map-page-register-boundary",
+        "page-map-range-register-boundary",
+        "page-map-page-unregister-boundary",
+        "page-map-range-unregister-boundary",
+        "page-map-submap-publication-boundary",
+        "page-map-range-primitive-boundary",
+        "page-map-lookup-boundary",
+    ] {
+        assert_focused_evidence(audit_id, LOCAL_BOUNDARIES_FOCUSED_PATH);
+        assert_focused_evidence(audit_id, PAGE_ARENA_FOCUSED_PATH);
+    }
+
     for (audit_id, focused_path) in [
         (
             "raw-macro-bootstrap-boundary",
@@ -246,46 +267,6 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         (
             "os-memory-numa-boundary",
             "tests/release_fast_path_audit/unsafe_performance/os_memory.rs",
-        ),
-        (
-            "page-map-global-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
-        ),
-        (
-            "page-map-init-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
-        ),
-        (
-            "page-map-teardown-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
-        ),
-        (
-            "page-map-register-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
-        ),
-        (
-            "page-map-lookup-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs",
-        ),
-        (
-            "page-map-global-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
-        ),
-        (
-            "page-map-init-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
-        ),
-        (
-            "page-map-teardown-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
-        ),
-        (
-            "page-map-register-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
-        ),
-        (
-            "page-map-lookup-boundary",
-            "tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs",
         ),
         (
             "stats-counter-boundary",
@@ -462,7 +443,13 @@ fn unsafe_audit_evidence_prefers_focused_release_audit_modules() {
         "page-map-global-boundary",
         "page-map-init-boundary",
         "page-map-teardown-boundary",
-        "page-map-register-boundary",
+        "page-map-commit-boundary",
+        "page-map-page-register-boundary",
+        "page-map-range-register-boundary",
+        "page-map-page-unregister-boundary",
+        "page-map-range-unregister-boundary",
+        "page-map-submap-publication-boundary",
+        "page-map-range-primitive-boundary",
         "page-map-lookup-boundary",
         "stats-counter-boundary",
         "stats-counter-merge-boundary",

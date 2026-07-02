@@ -80,17 +80,27 @@ fn options_state_uses_internal_locks_like_c() {
             && atomic_rs.contains("pub unsafe extern \"C\" fn _mi_atomic_once_release"),
         "internal atomic facade should stay covered by local operation markers without a migration allowlist entry"
     );
-    for (marker, minimum_count) in [
-        ("internal-atomic-field-boundary", 65),
-        ("internal-atomic-platform-lock-boundary", 20),
-        ("internal-atomic-guard-once-boundary", 12),
+    assert!(
+        !atomic_rs.contains("SAFETY[AUDIT:internal-atomic-field-boundary]"),
+        "internal atomic field boundary should be split into focused operation IDs"
+    );
+    for (marker, expected_count) in [
+        ("internal-atomic-raw-view-boundary", 5),
+        ("internal-atomic-load-store-boundary", 12),
+        ("internal-atomic-fetch-boundary", 22),
+        ("internal-atomic-cas-boundary", 17),
+        ("internal-atomic-exchange-boundary", 4),
+        ("internal-atomic-max-boundary", 2),
+        ("internal-atomic-volatile-delta-boundary", 3),
         ("internal-atomic-pointer-boundary", 6),
+        ("internal-atomic-guard-once-boundary", 12),
+        ("internal-atomic-platform-lock-boundary", 20),
     ] {
         let needle = format!("SAFETY[AUDIT:{marker}]");
         let count = atomic_rs.matches(needle.as_str()).count();
-        assert!(
-            count >= minimum_count,
-            "internal atomic audit marker `{marker}` should have at least {minimum_count} source markers, found {count}"
+        assert_eq!(
+            count, expected_count,
+            "internal atomic audit marker `{marker}` should have exactly {expected_count} source markers"
         );
     }
     assert!(

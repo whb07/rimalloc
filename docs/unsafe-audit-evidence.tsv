@@ -420,10 +420,26 @@ platform-dynamic-tls-key-boundary	test	tests/release_fast_path_audit/unsafe_perf
 platform-linux-tls-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks Linux TLS C shim declarations, x86_64 fast-path assembly, empty-sentinel loads, and shim tests.
 platform-thread-heap-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks default/cached thread-heap lookup, setters, empty fallbacks, heap association, and page-associated peeks.
 platform-allocator-shim-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries/thread_tls.rs	Checks redirected-query and allocator init/done C ABI shims, including nullable diagnostic out-pointers.
-internal-atomic-field-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar internal atomic marker coverage, memory order mappings, migration allowlist removal, and option/process lock dependencies.
-internal-atomic-field-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
-internal-atomic-field-boundary	script	scripts/check-atomic-ordering-audit.py	Checks mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
-internal-atomic-field-boundary	script	scripts/check-unsafe-audit.py	Checks scalar internal atomic unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-raw-view-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks raw scalar atomic view marker coverage and migration allowlist removal.
+internal-atomic-raw-view-boundary	script	scripts/check-unsafe-audit.py	Checks raw scalar atomic view unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-load-store-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar load/store marker coverage and central memory-order mapping.
+internal-atomic-load-store-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
+internal-atomic-load-store-boundary	script	scripts/check-atomic-ordering-audit.py	Checks load/store mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
+internal-atomic-load-store-boundary	script	scripts/check-unsafe-audit.py	Checks scalar load/store unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-fetch-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar fetch arithmetic and bitwise marker coverage and memory-order mapping.
+internal-atomic-fetch-boundary	script	scripts/check-atomic-ordering-audit.py	Checks fetch mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
+internal-atomic-fetch-boundary	script	scripts/check-unsafe-audit.py	Checks scalar fetch unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-cas-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar compare-exchange marker coverage, expected-slot updates, and memory-order mapping.
+internal-atomic-cas-boundary	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks C-compatible mi_memory_order_e stays confined to the atomic facade while typed wrappers use MemoryOrder/Ordering.
+internal-atomic-cas-boundary	script	scripts/check-atomic-ordering-audit.py	Checks compare-exchange mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
+internal-atomic-cas-boundary	script	scripts/check-unsafe-audit.py	Checks scalar compare-exchange unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-exchange-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar exchange marker coverage and memory-order mapping.
+internal-atomic-exchange-boundary	script	scripts/check-atomic-ordering-audit.py	Checks exchange mi_memory_order_e mappings against ATOMIC_ORDERING_AUDIT.md.
+internal-atomic-exchange-boundary	script	scripts/check-unsafe-audit.py	Checks scalar exchange unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-max-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks scalar max-loop marker coverage and compare-exchange loop shape.
+internal-atomic-max-boundary	script	scripts/check-unsafe-audit.py	Checks scalar max-loop unsafe operations retain operation-level SAFETY markers and source audit coverage.
+internal-atomic-volatile-delta-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks volatile addend marker coverage and relaxed i64 update shape.
+internal-atomic-volatile-delta-boundary	script	scripts/check-unsafe-audit.py	Checks volatile addend unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-atomic-pointer-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks pointer-sized internal atomic marker coverage and pointer CAS/load/store/exchange helper shape.
 internal-atomic-pointer-boundary	script	scripts/check-unsafe-audit.py	Checks pointer-sized atomic unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-atomic-guard-once-boundary	test	tests/release_fast_path_audit/primitive_options.rs	Checks guard/once internal atomic marker coverage and typed guard/once entry/release helper shape.
@@ -439,9 +455,27 @@ page-map-init-boundary	script	scripts/check-unsafe-audit.py	Checks page-map init
 page-map-teardown-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map teardown marker coverage and local unsafe destroy helper shape.
 page-map-teardown-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks recorded memid and submap teardown behavior remain bounded by typed page-map helpers.
 page-map-teardown-boundary	script	scripts/check-unsafe-audit.py	Checks page-map teardown unsafe operations retain operation-level SAFETY markers and source audit coverage.
-page-map-register-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map register/unregister marker coverage and local C ABI boundaries.
-page-map-register-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks RegisteredPageRange witnesses, range set/clear helpers, and sub-index writes.
-page-map-register-boundary	script	scripts/check-unsafe-audit.py	Checks page-map register unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-commit-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map commit marker coverage and local registration/unregistration C ABI boundaries.
+page-map-commit-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks typed page-map index/count commit witnesses before range mutation.
+page-map-commit-boundary	script	scripts/check-unsafe-audit.py	Checks page-map commit unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-page-register-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map page-registration marker coverage and local C ABI boundary shape.
+page-map-page-register-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks typed page witnesses, page-map index derivation, and RegisteredPageRange setup.
+page-map-page-register-boundary	script	scripts/check-unsafe-audit.py	Checks page-map page-registration unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-range-register-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map range-registration marker coverage and local helper shape.
+page-map-range-register-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks RegisteredPageRange witnesses, range set helpers, and sub-index writes.
+page-map-range-register-boundary	script	scripts/check-unsafe-audit.py	Checks page-map range-registration unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-page-unregister-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map page-unregistration marker coverage and local C ABI boundary shape.
+page-map-page-unregister-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks registered page witnesses and typed range clearing setup.
+page-map-page-unregister-boundary	script	scripts/check-unsafe-audit.py	Checks page-map page-unregistration unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-range-unregister-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map range-unregistration marker coverage and raw range clear boundary shape.
+page-map-range-unregister-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks typed index/sub-index/count witnesses and bounded range clear helpers.
+page-map-range-unregister-boundary	script	scripts/check-unsafe-audit.py	Checks page-map range-unregistration unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-submap-publication-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map submap publication marker coverage and growth-lock boundary shape.
+page-map-submap-publication-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks AtomicPtrField publication, zeroed submap allocation, and failed-CAS cleanup.
+page-map-submap-publication-boundary	script	scripts/check-unsafe-audit.py	Checks page-map submap publication unsafe operations retain operation-level SAFETY markers and source audit coverage.
+page-map-range-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks page-map range primitive marker coverage and local helper shape.
+page-map-range-primitive-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks typed range set/clear primitives and submap boundary advancement.
+page-map-range-primitive-boundary	script	scripts/check-unsafe-audit.py	Checks page-map range primitive unsafe operations retain operation-level SAFETY markers and source audit coverage.
 page-map-lookup-boundary	test	tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs	Checks safe pointer lookup, heap-region query, marker coverage, and migration allowlist removal.
 page-map-lookup-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_arena_behavior.rs	Checks page-map lookup helpers preserve typed index/sub-index/range witnesses.
 page-map-lookup-boundary	script	scripts/check-unsafe-audit.py	Checks page-map lookup unsafe operations retain operation-level SAFETY markers and source audit coverage.

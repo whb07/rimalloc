@@ -9,14 +9,15 @@ plus two release-audit modules that block a lower module-size cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 258 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 258 operation IDs with
-  555 automated evidence rows.
-- The largest source audit operation IDs are `page-map-register-boundary` with
-  66 markers, `internal-atomic-field-boundary` with 65 markers,
-  `os-memory-allocation-boundary` with 59 markers, and
-  `arena-heap-page-visitors` and `init-thread-heap-tls-boundary` with 56 markers
-  each.
+  mentions, and 270 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 270 operation IDs with
+  589 automated evidence rows.
+- The largest source audit operation IDs are `os-memory-allocation-boundary`
+  with 59 markers, `arena-heap-page-visitors` and
+  `init-thread-heap-tls-boundary` with 56 markers each,
+  `typed-atomic-domain` with 51 markers, `threadlocal-key-manager` and
+  `ffi-libc-helpers` with 50 markers each, and
+  `page-queue-transition-boundary` with 49 markers.
 - The completed typed fixture split left the largest new fixture IDs at
   `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers,
   `typed-arena-subproc-pointer-test-fixtures` with 17 markers, and
@@ -32,12 +33,17 @@ Current review evidence:
   `aligned-global-allocation-export-boundary` with 17 markers, and
   `aligned-realloc-request-boundary` and
   `aligned-heap-allocation-export-boundary` with 15 markers each.
-- The largest remaining medium clusters are `typed-atomic-domain` with 51
-  markers, `threadlocal-key-manager` and `ffi-libc-helpers` with 50 markers
-  each, `page-queue-transition-boundary` with 49 markers,
-  `init-thread-lifecycle-boundary` with 48 markers,
-  `raw-macro-cxx-boundary` with 46 markers, and `page-map-init-boundary` with
-  45 markers.
+- The completed page-map/atomic split left the largest split IDs at
+  `internal-atomic-fetch-boundary` with 22 markers,
+  `page-map-lookup-boundary` with 19 markers,
+  `internal-atomic-cas-boundary` with 17 markers,
+  `page-map-page-unregister-boundary` with 15 markers, and
+  `page-map-page-register-boundary` with 14 markers.
+- The largest remaining medium clusters are `init-thread-lifecycle-boundary`
+  with 48 markers, `raw-macro-cxx-boundary` with 46 markers,
+  `page-map-init-boundary` with 45 markers,
+  `options-message-output-boundary` with 39 markers, and
+  `arena-purge-boundary` with 38 markers.
 - `strict-type-allowlist.txt` has 634 active entries: 335
   raw-pointer-parameter entries, 220 bare-domain `usize` entries, 40
   metadata-reference entries, 23 pointer/usize round-trip entries, 14
@@ -49,8 +55,8 @@ Current review evidence:
   module cap is still 700 lines; the largest modules are
   `unsafe_performance/page_arena_behavior.rs` at 656 lines,
   `release_policy/docs_and_linking.rs` at 633 lines,
-  `release_policy/security.rs` at 597 lines,
   `datatype_acceptance/strict_type.rs` at 592 lines,
+  `release_policy/security.rs` at 584 lines,
   `release_policy/api_surface.rs` at 523 lines,
   `release_policy/release_process.rs` at 504 lines,
   `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 426 lines,
@@ -130,18 +136,18 @@ unsafe evidence scripts, full formatting, full clippy, and full tests.
 
 ## Issue 4: Split page-map registration and internal atomic marker clusters
 
-> **Comment:** `page-map-register-boundary` has 66 markers and
-> `internal-atomic-field-boundary` has 65. Both now have typed wrappers, but the
+> **Comment:** `page-map-register-boundary` had 66 markers and
+> `internal-atomic-field-boundary` had 65. Both now have typed wrappers, but the
 > audit IDs still group several distinct operations.
 
-- [ ] Split `page-map-register-boundary` into operation IDs for unsafe destroy,
+- [x] Split `page-map-register-boundary` into operation IDs for unsafe destroy,
       page registration/unregistration, range registration/unregistration,
       lookup, commit, submap allocation/publication, and range set/clear
       primitives.
-- [ ] Split `internal-atomic-field-boundary` into operation IDs for raw
+- [x] Split `internal-atomic-field-boundary` into operation IDs for raw
       pointer-to-atomic views, usize/isize/i64 load/store, fetch arithmetic,
       compare-exchange families, exchange, max loops, and volatile delta reads.
-- [ ] Update release-audit evidence so page-map typed range witnesses and
+- [x] Update release-audit evidence so page-map typed range witnesses and
       atomic memory-order mapping guards cover each split operation ID.
 
 Verify: page-map tests, atomic ordering audit, primitive options release-audit
@@ -173,13 +179,13 @@ tests.
 1. [x] Split typed pointer and heap proof-fixture audit clusters.
 2. [x] Split macOS zone and platform primitive marker clusters.
 3. [x] Split free-path and aligned allocation marker clusters.
-4. [ ] Split page-map registration and internal atomic marker clusters.
+4. [x] Split page-map registration and internal atomic marker clusters.
 5. [ ] Split largest release-audit modules and lower the module cap.
 
 ## Definition of done for this backlog
 
-- [ ] No source audit operation ID has more than 60 source markers.
-- [ ] The largest remaining page-map and atomic clusters listed above are split
+- [x] No source audit operation ID has more than 60 source markers.
+- [x] The largest remaining page-map and atomic clusters listed above are split
       into narrower review units with separate docs, evidence rows, and
       release-audit guards.
 - [ ] Release-audit modules are split enough to lower the module cap to 600

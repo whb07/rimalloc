@@ -981,11 +981,35 @@ Operation IDs:
 - `SAFETY[AUDIT:platform-allocator-shim-boundary]`: `src/platform/mod.rs` owns
   redirected-query and allocator init/done C ABI compatibility shims, including
   fast-malloc assembly symbols and nullable diagnostic out-pointer writes.
-- `SAFETY[AUDIT:internal-atomic-field-boundary]`: `src/internal/atomic.rs`
-  owns scalar C-compatible atomic field views and load/store/RMW/CAS wrappers.
-  Unsafe operations are limited to raw `AtomicUsize`/`AtomicIsize`/`AtomicI64`
-  views over caller-proven storage, memory-order mapping helpers, expected-slot
-  updates, volatile addend reads, and scalar atomic helper forwarding.
+- `SAFETY[AUDIT:internal-atomic-raw-view-boundary]`:
+  `src/internal/atomic.rs` owns raw scalar storage reinterpretation as atomic
+  views. Unsafe operations are limited to caller-proven
+  `AtomicUsize`/`AtomicIsize`/`AtomicI64` shared references for the duration of
+  one atomic operation.
+- `SAFETY[AUDIT:internal-atomic-load-store-boundary]`:
+  `src/internal/atomic.rs` owns scalar load/store helpers. Unsafe operations are
+  limited to caller-proven scalar atomic storage and central memory-order
+  mapping for `usize` and `i64` loads/stores.
+- `SAFETY[AUDIT:internal-atomic-fetch-boundary]`:
+  `src/internal/atomic.rs` owns scalar fetch arithmetic and bitwise helpers.
+  Unsafe operations are limited to caller-proven scalar atomic storage,
+  fetch-add/sub/and/or operations, and simple forwarding helpers.
+- `SAFETY[AUDIT:internal-atomic-cas-boundary]`: `src/internal/atomic.rs` owns
+  scalar compare-exchange helpers. Unsafe operations are limited to
+  caller-proven atomic storage, caller-provided expected slots, memory-order
+  mapping, and writing the observed value back on failed CAS.
+- `SAFETY[AUDIT:internal-atomic-exchange-boundary]`:
+  `src/internal/atomic.rs` owns scalar exchange helpers. Unsafe operations are
+  limited to caller-proven scalar atomic storage and central memory-order
+  mapping for swap operations.
+- `SAFETY[AUDIT:internal-atomic-max-boundary]`: `src/internal/atomic.rs` owns
+  the relaxed i64 maximum helper. Unsafe operations are limited to
+  caller-proven i64 atomic storage and the compare-exchange loop that publishes
+  a larger value.
+- `SAFETY[AUDIT:internal-atomic-volatile-delta-boundary]`:
+  `src/internal/atomic.rs` owns the void-add volatile addend helper. Unsafe
+  operations are limited to reading the caller-provided volatile delta and
+  applying it to caller-proven i64 atomic storage when nonzero.
 - `SAFETY[AUDIT:internal-atomic-pointer-boundary]`: `src/internal/atomic.rs`
   owns pointer-sized atomic helpers. Unsafe operations are limited to
   pointer-to-`usize` atomic representation, pointer CAS expected-slot updates,
@@ -1004,19 +1028,48 @@ Operation IDs:
   page span/index projection. Unsafe operations are limited to allocator
   lifecycle synchronized global reads/writes and typed page metadata witnesses.
 - `SAFETY[AUDIT:page-map-init-boundary]`: `src/allocator/page_map.rs` owns
-  32-bit and non-32-bit page-map initialization, reserve/commit setup, null
-  sentinel publication, and lazy submap growth. Unsafe operations are limited
-  to OS reserve/commit calls, typed index/count witnesses, lock-protected
-  submap allocation, and acquire/release publication.
+  32-bit and non-32-bit page-map initialization, reserve/commit setup, initial
+  submap setup, and null sentinel publication. Unsafe operations are limited to
+  OS reserve/commit calls, typed index/count witnesses, and acquire/release
+  publication of initialization state.
 - `SAFETY[AUDIT:page-map-teardown-boundary]`: `src/allocator/page_map.rs` owns
   page-map unsafe destroy paths. Unsafe operations are limited to lifecycle
   exclusive global reads, recorded memid witnesses, submap iteration, and OS
   free calls while preserving teardown after all users are gone.
-- `SAFETY[AUDIT:page-map-register-boundary]`: `src/allocator/page_map.rs` owns
-  page register, unregister, unregister-range, and range set/clear helpers.
-  Unsafe operations are limited to raw page validation, typed page range
-  witnesses, committed-range checks, sub-index writes, and
-  `RegisteredPageRange` construction.
+- `SAFETY[AUDIT:page-map-commit-boundary]`: `src/allocator/page_map.rs` owns
+  page-map commit checks used by registration, unregistration, and range
+  primitives. Unsafe operations are limited to caller-provided out slots and
+  typed top-level index/count witnesses before reading or mutating page-map
+  slots.
+- `SAFETY[AUDIT:page-map-page-register-boundary]`:
+  `src/allocator/page_map.rs` owns page registration entry points and typed
+  page registration setup. Unsafe operations are limited to raw page validation,
+  page-alignment checks, lazy initialization checks, page-map index derivation,
+  and typed page witnesses.
+- `SAFETY[AUDIT:page-map-range-register-boundary]`:
+  `src/allocator/page_map.rs` owns registered page-range witness construction
+  after range publication. Unsafe operations are limited to typed page-map
+  index/sub-index/count witnesses, byte/submap range writes, rollback on
+  failure, and `RegisteredPageRange` construction.
+- `SAFETY[AUDIT:page-map-page-unregister-boundary]`:
+  `src/allocator/page_map.rs` owns page unregistration entry points and typed
+  page unregister setup. Unsafe operations are limited to raw page validation,
+  initialized map checks, page-alignment checks, page-map index derivation, and
+  registered-range witnesses.
+- `SAFETY[AUDIT:page-map-range-unregister-boundary]`:
+  `src/allocator/page_map.rs` owns registered range clearing and raw range
+  unregister helpers. Unsafe operations are limited to typed index/sub-index
+  and slice-count witnesses, C-compatible null-base no-op checks, and bounded
+  byte/submap range clears.
+- `SAFETY[AUDIT:page-map-submap-publication-boundary]`:
+  `src/allocator/page_map.rs` owns lock-protected submap allocation and
+  publication. Unsafe operations are limited to growth-lock acquisition,
+  acquire loads of top-level slots, zeroed OS allocation, CAS publication, and
+  freeing unneeded submaps after publication races.
+- `SAFETY[AUDIT:page-map-range-primitive-boundary]`:
+  `src/allocator/page_map.rs` owns non-32-bit range set/clear primitives.
+  Unsafe operations are limited to typed top-level/sub-index witnesses, submap
+  slot writes/clears, and bounded advancement across submap boundaries.
 - `SAFETY[AUDIT:page-map-lookup-boundary]`: `src/allocator/page_map.rs` owns
   arbitrary-pointer page lookup and heap-region queries. Unsafe operations are
   limited to nullable input handling, committed index checks, submap reads, and

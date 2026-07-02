@@ -393,7 +393,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_init() -> bool {
 /// `subproc` must point to the live sub-process owning the page-map memory.
 /// No concurrent page-map users may remain.
 #[cfg(target_pointer_width = "32")]
-// SAFETY[AUDIT:page-map-register-boundary]: unsafe destroy runs after page-map users are
+// SAFETY[AUDIT:page-map-teardown-boundary]: unsafe destroy runs after page-map users are
 // quiesced and owns global pointer/memid teardown.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_subproc_t) {
@@ -423,7 +423,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unsafe_destroy(subproc: *mut mi_sub
 /// `page` must point to a live page whose page area and slice metadata are
 /// initialized and stable for registration.
 #[cfg(target_pointer_width = "32")]
-// SAFETY[AUDIT:page-map-register-boundary]: C ABI registration validates the raw page
+// SAFETY[AUDIT:page-map-page-register-boundary]: C ABI registration validates the raw page
 // pointer into `PagePtr` before touching page-map state.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
@@ -432,7 +432,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
         crate::internal::mi_assert_internal!(false);
         return false;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: `PagePtr` proves non-null page metadata
+    // SAFETY[AUDIT:page-map-page-register-boundary]: `PagePtr` proves non-null page metadata
     // for the typed registration path.
     unsafe { mi_page_map_register_typed(page) }
 }
@@ -440,7 +440,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
 #[cfg(target_pointer_width = "32")]
 unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
     let page_raw = page.as_ptr();
-    // SAFETY[AUDIT:page-map-register-boundary]: typed page metadata exposes a stable
+    // SAFETY[AUDIT:page-map-page-register-boundary]: typed page metadata exposes a stable
     // slice start for page-alignment validation.
     crate::internal::mi_assert_internal!(unsafe {
         _mi_is_aligned(
@@ -448,21 +448,21 @@ unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
             MI_PAGE_ALIGN,
         )
     });
-    // SAFETY[AUDIT:page-map-register-boundary]: lazy initialization is serialized by
+    // SAFETY[AUDIT:page-map-page-register-boundary]: lazy initialization is serialized by
     // allocator lifecycle before registration proceeds.
     if unsafe { _mi_page_map }.is_null() && !unsafe { _mi_page_map_init() } {
         return false;
     }
-    // SAFETY[AUDIT:page-map-register-boundary]: initialized page-map base must exist
+    // SAFETY[AUDIT:page-map-page-register-boundary]: initialized page-map base must exist
     // after successful lazy initialization.
     crate::internal::mi_assert!(!(unsafe { _mi_page_map }).is_null());
-    // SAFETY[AUDIT:page-map-register-boundary]: typed page metadata is converted once
+    // SAFETY[AUDIT:page-map-page-register-boundary]: typed page metadata is converted once
     // into page-map index and slice-count domains.
     let Some((idx, _page_start, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
         crate::internal::mi_assert_internal!(false);
         return false;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: typed index/count witnesses bound the
+    // SAFETY[AUDIT:page-map-page-register-boundary]: typed index/count witnesses bound the
     // 32-bit byte-map range registration.
     let Some(registered) = (unsafe { mi_page_map_register_range_typed(page, idx, slice_count) })
     else {
@@ -480,21 +480,21 @@ unsafe fn mi_page_map_register_range_typed(
     idx: crate::core_types::PageMapIndex,
     slice_count: crate::core_types::SliceCount,
 ) -> Option<RegisteredPageRange> {
-    // SAFETY[AUDIT:page-map-register-boundary]: range commit is bounded by the typed
+    // SAFETY[AUDIT:page-map-commit-boundary]: range commit is bounded by the typed
     // index and slice-count domain.
     if !unsafe { mi_page_map_ensure_committed(idx, slice_count) } {
         return None;
     }
     for i in 0..slice_count.get() as usize {
         crate::internal::mi_assert_internal!(i < 128);
-        // SAFETY[AUDIT:page-map-register-boundary]: each registration byte is inside the
+        // SAFETY[AUDIT:page-map-range-register-boundary]: each registration byte is inside the
         // committed range described by `idx` and `slice_count`.
         unsafe { *_mi_page_map.add(idx.get() + i) = (i + 1) as u8 };
     }
-    // SAFETY[AUDIT:page-map-register-boundary]: 32-bit page map has a single sub-index
+    // SAFETY[AUDIT:page-map-range-register-boundary]: 32-bit page map has a single sub-index
     // domain, so zero is the only valid sub-index witness.
     let sub_idx = unsafe { crate::core_types::PageMapSubIndex::new_unchecked(0) };
-    // SAFETY[AUDIT:page-map-register-boundary]: range bytes were just registered for the
+    // SAFETY[AUDIT:page-map-range-register-boundary]: range bytes were just registered for the
     // page, so the witness matches the published page-map state.
     Some(unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) })
 }
@@ -504,7 +504,7 @@ unsafe fn mi_page_map_register_range_typed(
 /// `page` must point to a previously registered live page whose slice metadata
 /// remains valid for unregistering.
 #[cfg(target_pointer_width = "32")]
-// SAFETY[AUDIT:page-map-register-boundary]: C ABI unregister validates the raw page into
+// SAFETY[AUDIT:page-map-page-unregister-boundary]: C ABI unregister validates the raw page into
 // a typed page witness before clearing the registered range.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
@@ -512,36 +512,36 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: typed page witness scopes the unregister
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: typed page witness scopes the unregister
     // path to previously registered page metadata.
     unsafe { mi_page_map_unregister_typed(page) };
 }
 
 #[cfg(target_pointer_width = "32")]
 unsafe fn mi_page_map_unregister_typed(page: PagePtr) {
-    // SAFETY[AUDIT:page-map-register-boundary]: unregister requires an initialized global
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: unregister requires an initialized global
     // page-map base before deriving a range.
     crate::internal::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
-    // SAFETY[AUDIT:page-map-register-boundary]: typed page metadata is converted into the
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: typed page metadata is converted into the
     // 32-bit registration index and slice-count domains.
     let Some((idx, _page_start, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: zero sub-index is the 32-bit witness for
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: zero sub-index is the 32-bit witness for
     // the registered page range.
     let sub_idx = unsafe { crate::core_types::PageMapSubIndex::new_unchecked(0) };
-    // SAFETY[AUDIT:page-map-register-boundary]: the page was previously registered for
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: the page was previously registered for
     // this derived range, producing a valid unregister witness.
     let registered = unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) };
-    // SAFETY[AUDIT:page-map-register-boundary]: unregister witness bounds the byte range
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: unregister witness bounds the byte range
     // clear.
     unsafe { mi_page_map_unregister_range_typed(registered) };
 }
 
 #[cfg(target_pointer_width = "32")]
 unsafe fn mi_page_map_unregister_range_typed(registered: RegisteredPageRange) {
-    // SAFETY[AUDIT:page-map-register-boundary]: registered range witness bounds the
+    // SAFETY[AUDIT:page-map-range-unregister-boundary]: registered range witness bounds the
     // committed 32-bit byte-map region that is cleared.
     unsafe {
         _mi_memzero(
@@ -556,7 +556,7 @@ unsafe fn mi_page_map_unregister_range_typed(registered: RegisteredPageRange) {
 /// `start..start + size` must describe a page-map range previously registered
 /// or otherwise safe to clear during allocator teardown.
 #[cfg(target_pointer_width = "32")]
-// SAFETY[AUDIT:page-map-register-boundary]: C ABI range unregister validates raw start
+// SAFETY[AUDIT:page-map-range-unregister-boundary]: C ABI range unregister validates raw start
 // and size into typed page-map index/count domains before clearing.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
@@ -570,12 +570,12 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: typed index/count bounds the commit check
+    // SAFETY[AUDIT:page-map-commit-boundary]: typed index/count bounds the commit check
     // for the 32-bit byte-map range.
     if !unsafe { mi_page_map_ensure_committed(index, slice_count) } {
         return;
     }
-    // SAFETY[AUDIT:page-map-register-boundary]: committed typed range is cleared from the
+    // SAFETY[AUDIT:page-map-range-unregister-boundary]: committed typed range is cleared from the
     // byte-map backing store.
     unsafe {
         _mi_memzero(
@@ -590,7 +590,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
 /// `p` may be null or arbitrary. The page map must be initialized and not
 /// concurrently destroyed while this lookup runs.
 #[cfg(target_pointer_width = "32")]
-// SAFETY[AUDIT:page-map-register-boundary]: safe pointer lookup accepts arbitrary input
+// SAFETY[AUDIT:page-map-lookup-boundary]: safe pointer lookup accepts arbitrary input
 // and converts a registered range witness back to the page pointer.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_safe_ptr_page(p: *const c_void) -> *mut mi_page_t {
@@ -928,31 +928,31 @@ unsafe fn mi_page_map_ensure_submap_at(
     idx: crate::core_types::PageMapIndex,
     submap: *mut mi_submap_t,
 ) -> bool {
-    // SAFETY[AUDIT:page-map-register-boundary]: caller provides a writable null out slot
+    // SAFETY[AUDIT:page-map-commit-boundary]: caller provides a writable null out slot
     // for the published or newly allocated submap.
     crate::internal::mi_assert_internal!(!submap.is_null() && unsafe { (*submap).is_null() });
     let mut sub = ptr::null_mut();
-    // SAFETY[AUDIT:page-map-register-boundary]: typed top-level index bounds the commit
+    // SAFETY[AUDIT:page-map-commit-boundary]: typed top-level index bounds the commit
     // check and initial submap slot load.
     if !unsafe { mi_page_map_ensure_committed(idx, &mut sub) } {
         return false;
     }
     if sub.is_null() {
-        // SAFETY[AUDIT:page-map-register-boundary]: global page-map growth lock protects
+        // SAFETY[AUDIT:page-map-submap-publication-boundary]: global page-map growth lock protects
         // submap allocation/publication for this slot.
         unsafe { mi_lock_acquire(&raw mut mi_page_map_lock) };
-        // SAFETY[AUDIT:page-map-register-boundary]: typed index bounds the top-level slot
+        // SAFETY[AUDIT:page-map-submap-publication-boundary]: typed index bounds the top-level slot
         // reinterpreted as an audited atomic pointer field.
         let atomic_submap =
             crate::core_types::AtomicPtrField(unsafe { _mi_page_map.add(idx.get()) });
-        // SAFETY[AUDIT:page-map-register-boundary]: acquire load observes any submap
+        // SAFETY[AUDIT:page-map-submap-publication-boundary]: acquire load observes any submap
         // published for this top-level slot.
         sub = unsafe { atomic_submap.load(crate::core_types::MemoryOrder::Acquire) };
         if sub.is_null() {
-            // SAFETY[AUDIT:page-map-register-boundary]: local memid starts empty and will
+            // SAFETY[AUDIT:page-map-submap-publication-boundary]: local memid starts empty and will
             // be filled by the OS zero-allocation helper on success.
             let mut memid = unsafe { _mi_memid_none() };
-            // SAFETY[AUDIT:page-map-register-boundary]: allocates a zeroed submap-sized
+            // SAFETY[AUDIT:page-map-submap-publication-boundary]: allocates a zeroed submap-sized
             // backing range for publication in exactly one top-level slot.
             let new_sub = unsafe { _mi_os_zalloc(MI_PAGE_MAP_SUB_SIZE, &raw mut memid) }
                 .cast::<*mut mi_page_t>();
@@ -962,10 +962,10 @@ unsafe fn mi_page_map_ensure_submap_at(
                 ));
             } else {
                 let mut expect: mi_submap_t = ptr::null_mut();
-                // SAFETY[AUDIT:page-map-register-boundary]: CAS publishes the new submap
+                // SAFETY[AUDIT:page-map-submap-publication-boundary]: CAS publishes the new submap
                 // only if the slot remained null under the growth lock.
                 if !unsafe { atomic_submap.compare_exchange_acq_rel(&mut expect, new_sub) } {
-                    // SAFETY[AUDIT:page-map-register-boundary]: failed publication means
+                    // SAFETY[AUDIT:page-map-submap-publication-boundary]: failed publication means
                     // another submap owns the slot, so the new backing range is freed.
                     unsafe { _mi_os_free(new_sub.cast::<c_void>(), MI_PAGE_MAP_SUB_SIZE, memid) };
                     sub = expect;
@@ -974,14 +974,14 @@ unsafe fn mi_page_map_ensure_submap_at(
                 }
             }
         }
-        // SAFETY[AUDIT:page-map-register-boundary]: releases the global page-map growth
+        // SAFETY[AUDIT:page-map-submap-publication-boundary]: releases the global page-map growth
         // lock after slot publication or failed allocation.
         unsafe { mi_lock_release(&raw mut mi_page_map_lock) };
         if sub.is_null() {
             return false;
         }
     }
-    // SAFETY[AUDIT:page-map-register-boundary]: non-null submap is published to the
+    // SAFETY[AUDIT:page-map-submap-publication-boundary]: non-null submap is published to the
     // caller-provided out slot.
     unsafe { *submap = sub };
     true
@@ -999,14 +999,14 @@ unsafe fn mi_page_map_set_range_prim(
     while slice_count > 0 {
         let mut map_sub_idx = sub_idx;
         let mut sub: mi_submap_t = ptr::null_mut();
-        // SAFETY[AUDIT:page-map-register-boundary]: typed top-level index and out slot
+        // SAFETY[AUDIT:page-map-commit-boundary]: typed top-level index and out slot
         // bound submap commit/allocation before page publication.
         if !unsafe { mi_page_map_ensure_submap_at(idx, &mut sub) } {
             return false;
         }
         crate::internal::mi_assert_internal!(!sub.is_null());
         while slice_count > 0 && map_sub_idx.get() < MI_PAGE_MAP_SUB_COUNT {
-            // SAFETY[AUDIT:page-map-register-boundary]: typed sub-index bounds the write
+            // SAFETY[AUDIT:page-map-range-primitive-boundary]: typed sub-index bounds the write
             // inside the published submap slot range.
             unsafe { *sub.add(map_sub_idx.get()) = page };
             slice_count -= 1;
@@ -1021,7 +1021,7 @@ unsafe fn mi_page_map_set_range_prim(
                 return false;
             };
             idx = next_idx;
-            // SAFETY[AUDIT:page-map-register-boundary]: advancing to the next top-level
+            // SAFETY[AUDIT:page-map-range-primitive-boundary]: advancing to the next top-level
             // submap resets to the first valid sub-index.
             sub_idx = unsafe { crate::core_types::PageMapSubIndex::new_unchecked(0) };
         }
@@ -1039,14 +1039,14 @@ unsafe fn mi_page_map_clear_range_prim(
     while slice_count > 0 {
         let mut map_sub_idx = sub_idx;
         let mut sub: mi_submap_t = ptr::null_mut();
-        // SAFETY[AUDIT:page-map-register-boundary]: typed top-level index and out slot
+        // SAFETY[AUDIT:page-map-range-primitive-boundary]: typed top-level index and out slot
         // bound submap commit/allocation before clearing entries.
         if !unsafe { mi_page_map_ensure_submap_at(idx, &mut sub) } {
             return false;
         }
         crate::internal::mi_assert_internal!(!sub.is_null());
         while slice_count > 0 && map_sub_idx.get() < MI_PAGE_MAP_SUB_COUNT {
-            // SAFETY[AUDIT:page-map-register-boundary]: typed sub-index bounds the clear
+            // SAFETY[AUDIT:page-map-range-primitive-boundary]: typed sub-index bounds the clear
             // inside the published submap slot range.
             unsafe { *sub.add(map_sub_idx.get()) = ptr::null_mut() };
             slice_count -= 1;
@@ -1061,7 +1061,7 @@ unsafe fn mi_page_map_clear_range_prim(
                 return false;
             };
             idx = next_idx;
-            // SAFETY[AUDIT:page-map-register-boundary]: advancing to the next top-level
+            // SAFETY[AUDIT:page-map-range-primitive-boundary]: advancing to the next top-level
             // submap resets to the first valid sub-index.
             sub_idx = unsafe { crate::core_types::PageMapSubIndex::new_unchecked(0) };
         }
@@ -1076,7 +1076,7 @@ unsafe fn mi_page_map_set_range(
     sub_idx: crate::core_types::PageMapSubIndex,
     slice_count: crate::core_types::SliceCount,
 ) -> bool {
-    // SAFETY[AUDIT:page-map-register-boundary]: typed range bounds every submap write; on
+    // SAFETY[AUDIT:page-map-range-register-boundary]: typed range bounds every submap write; on
     // failure, the same typed range is cleared for rollback.
     if !unsafe { mi_page_map_set_range_prim(page, idx, sub_idx, slice_count) } {
         unsafe { mi_page_map_clear_range_prim(idx, sub_idx, slice_count) };
@@ -1091,7 +1091,7 @@ unsafe fn mi_page_map_clear_range(
     sub_idx: crate::core_types::PageMapSubIndex,
     slice_count: crate::core_types::SliceCount,
 ) -> bool {
-    // SAFETY[AUDIT:page-map-register-boundary]: typed range bounds the submap clear
+    // SAFETY[AUDIT:page-map-range-unregister-boundary]: typed range bounds the submap clear
     // operation.
     unsafe { mi_page_map_clear_range_prim(idx, sub_idx, slice_count) }
 }
@@ -1101,7 +1101,7 @@ unsafe fn mi_page_map_clear_range(
 /// `page` must point to a live page whose page area and slice metadata are
 /// initialized and stable for registration.
 #[cfg(not(target_pointer_width = "32"))]
-// SAFETY[AUDIT:page-map-register-boundary]: C ABI registration validates the raw page
+// SAFETY[AUDIT:page-map-page-register-boundary]: C ABI registration validates the raw page
 // pointer into `PagePtr` before touching page-map state.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> bool {
@@ -1110,7 +1110,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
         crate::internal::mi_assert_internal!(false);
         return false;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: `PagePtr` proves non-null page metadata
+    // SAFETY[AUDIT:page-map-page-register-boundary]: `PagePtr` proves non-null page metadata
     // for the typed registration path.
     unsafe { mi_page_map_register_typed(page) }
 }
@@ -1118,7 +1118,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_register(page: *mut mi_page_t) -> b
 #[cfg(not(target_pointer_width = "32"))]
 unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
     let page_raw = page.as_ptr();
-    // SAFETY[AUDIT:page-map-register-boundary]: typed page metadata exposes a stable
+    // SAFETY[AUDIT:page-map-page-register-boundary]: typed page metadata exposes a stable
     // slice start for page-alignment validation.
     crate::internal::mi_assert_internal!(unsafe {
         _mi_is_aligned(
@@ -1126,21 +1126,21 @@ unsafe fn mi_page_map_register_typed(page: PagePtr) -> bool {
             MI_PAGE_ALIGN,
         )
     });
-    // SAFETY[AUDIT:page-map-register-boundary]: lazy initialization is serialized by
+    // SAFETY[AUDIT:page-map-page-register-boundary]: lazy initialization is serialized by
     // allocator lifecycle before registration proceeds.
     if unsafe { _mi_page_map }.is_null() && !unsafe { _mi_page_map_init() } {
         return false;
     }
-    // SAFETY[AUDIT:page-map-register-boundary]: initialized page-map base must exist
+    // SAFETY[AUDIT:page-map-page-register-boundary]: initialized page-map base must exist
     // after successful lazy initialization.
     crate::internal::mi_assert!(!(unsafe { _mi_page_map }).is_null());
-    // SAFETY[AUDIT:page-map-register-boundary]: typed page metadata is converted once
+    // SAFETY[AUDIT:page-map-page-register-boundary]: typed page metadata is converted once
     // into page-map index, sub-index, and slice-count domains.
     let Some((idx, sub_idx, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
         crate::internal::mi_assert_internal!(false);
         return false;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: typed index/sub-index/count witnesses
+    // SAFETY[AUDIT:page-map-page-register-boundary]: typed index/sub-index/count witnesses
     // bound the non-32-bit submap range registration.
     let Some(registered) =
         (unsafe { mi_page_map_register_range_typed(page, idx, sub_idx, slice_count) })
@@ -1161,12 +1161,12 @@ unsafe fn mi_page_map_register_range_typed(
     sub_idx: crate::core_types::PageMapSubIndex,
     slice_count: crate::core_types::SliceCount,
 ) -> Option<RegisteredPageRange> {
-    // SAFETY[AUDIT:page-map-register-boundary]: typed index/sub-index/count witnesses
+    // SAFETY[AUDIT:page-map-range-register-boundary]: typed index/sub-index/count witnesses
     // bound all submap slot writes for the page.
     if !unsafe { mi_page_map_set_range(page, idx, sub_idx, slice_count) } {
         return None;
     }
-    // SAFETY[AUDIT:page-map-register-boundary]: the range was just registered for this
+    // SAFETY[AUDIT:page-map-range-register-boundary]: the range was just registered for this
     // page, so the witness matches the published page-map state.
     let registered = unsafe {
         crate::core_types::RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count)
@@ -1179,7 +1179,7 @@ unsafe fn mi_page_map_register_range_typed(
 /// `page` must point to a previously registered live page whose slice metadata
 /// remains valid for unregistering.
 #[cfg(not(target_pointer_width = "32"))]
-// SAFETY[AUDIT:page-map-register-boundary]: C ABI unregister validates the raw page into
+// SAFETY[AUDIT:page-map-page-unregister-boundary]: C ABI unregister validates the raw page into
 // a typed page witness before clearing the registered range.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
@@ -1187,18 +1187,18 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister(page: *mut mi_page_t) {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: typed page witness scopes the unregister
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: typed page witness scopes the unregister
     // path to previously registered page metadata.
     unsafe { mi_page_map_unregister_typed(page) };
 }
 
 #[cfg(not(target_pointer_width = "32"))]
 unsafe fn mi_page_map_unregister_typed(page: PagePtr) {
-    // SAFETY[AUDIT:page-map-register-boundary]: unregister requires an initialized global
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: unregister requires an initialized global
     // page-map base before deriving a range.
     crate::internal::mi_assert_internal!(!(unsafe { _mi_page_map }).is_null());
     let page_raw = page.as_ptr();
-    // SAFETY[AUDIT:page-map-register-boundary]: typed page metadata exposes a stable
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: typed page metadata exposes a stable
     // slice start for page-alignment validation.
     crate::internal::mi_assert_internal!(unsafe {
         _mi_is_aligned(
@@ -1206,28 +1206,28 @@ unsafe fn mi_page_map_unregister_typed(page: PagePtr) {
             MI_PAGE_ALIGN,
         )
     });
-    // SAFETY[AUDIT:page-map-register-boundary]: null base check preserves C-compatible
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: null base check preserves C-compatible
     // no-op behavior if teardown already cleared the map.
     if unsafe { _mi_page_map }.is_null() {
         return;
     }
-    // SAFETY[AUDIT:page-map-register-boundary]: typed page metadata is converted into the
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: typed page metadata is converted into the
     // non-32-bit registration index/sub-index/count domains.
     let Some((idx, sub_idx, slice_count)) = (unsafe { mi_page_map_get_idx(page) }) else {
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: the page was previously registered for
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: the page was previously registered for
     // this derived range, producing a valid unregister witness.
     let registered = unsafe { RegisteredPageRange::new_unchecked(page, idx, sub_idx, slice_count) };
-    // SAFETY[AUDIT:page-map-register-boundary]: unregister witness bounds the submap
+    // SAFETY[AUDIT:page-map-page-unregister-boundary]: unregister witness bounds the submap
     // range clear.
     unsafe { mi_page_map_unregister_range_typed(registered) };
 }
 
 #[cfg(not(target_pointer_width = "32"))]
 unsafe fn mi_page_map_unregister_range_typed(registered: RegisteredPageRange) {
-    // SAFETY[AUDIT:page-map-register-boundary]: registered range witness bounds the
+    // SAFETY[AUDIT:page-map-range-unregister-boundary]: registered range witness bounds the
     // submap range that is cleared.
     unsafe {
         mi_page_map_clear_range(
@@ -1243,11 +1243,11 @@ unsafe fn mi_page_map_unregister_range_typed(registered: RegisteredPageRange) {
 /// `start..start + size` must describe a page-map range previously registered
 /// or otherwise safe to clear during allocator teardown.
 #[cfg(not(target_pointer_width = "32"))]
-// SAFETY[AUDIT:page-map-register-boundary]: C ABI range unregister validates raw start
+// SAFETY[AUDIT:page-map-range-unregister-boundary]: C ABI range unregister validates raw start
 // and size into typed page-map index/sub-index/count domains before clearing.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void, size: usize) {
-    // SAFETY[AUDIT:page-map-register-boundary]: null base check preserves C-compatible
+    // SAFETY[AUDIT:page-map-range-unregister-boundary]: null base check preserves C-compatible
     // no-op behavior if teardown already cleared the map.
     if unsafe { _mi_page_map }.is_null() {
         return;
@@ -1258,7 +1258,7 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
         return;
     };
     let mut sub_idx = 0usize;
-    // SAFETY[AUDIT:page-map-register-boundary]: raw start and stack-local sub-index out
+    // SAFETY[AUDIT:page-map-range-unregister-boundary]: raw start and stack-local sub-index out
     // pointer are converted to typed page-map domains below.
     let idx = unsafe { _mi_page_map_index(start.cast_const(), &mut sub_idx) };
     let Some(idx) = mi_page_map_index(idx) else {
@@ -1269,12 +1269,12 @@ pub(crate) unsafe extern "C" fn _mi_page_map_unregister_range(start: *mut c_void
         crate::internal::mi_assert_internal!(false);
         return;
     };
-    // SAFETY[AUDIT:page-map-register-boundary]: typed index/sub-index/count witnesses
+    // SAFETY[AUDIT:page-map-range-unregister-boundary]: typed index/sub-index/count witnesses
     // bound the non-32-bit range clear.
     unsafe { mi_page_map_clear_range(idx, sub_idx, slice_count) };
 }
 
-// SAFETY[AUDIT:page-map-register-boundary]: retained function pointer keeps the local C
+// SAFETY[AUDIT:page-map-range-unregister-boundary]: retained function pointer keeps the local C
 // ABI range-unregister boundary linked without exporting it dynamically.
 #[used]
 static MI_PAGE_MAP_UNREGISTER_RANGE_KEEP: unsafe extern "C" fn(*mut c_void, usize) =

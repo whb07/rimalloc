@@ -273,11 +273,17 @@ file:
   `SAFETY[AUDIT:windows-random-boundary]`, and
   `SAFETY[AUDIT:windows-dynamic-import-boundary]`: Windows primitive backend
   and translated ETW helper slices in `src/platform/windows.rs`.
-- `SAFETY[AUDIT:internal-atomic-field-boundary]`,
+- `SAFETY[AUDIT:internal-atomic-raw-view-boundary]`,
+- `SAFETY[AUDIT:internal-atomic-load-store-boundary]`,
+- `SAFETY[AUDIT:internal-atomic-fetch-boundary]`,
+- `SAFETY[AUDIT:internal-atomic-cas-boundary]`,
+- `SAFETY[AUDIT:internal-atomic-exchange-boundary]`,
+- `SAFETY[AUDIT:internal-atomic-max-boundary]`,
+- `SAFETY[AUDIT:internal-atomic-volatile-delta-boundary]`,
   `SAFETY[AUDIT:internal-atomic-pointer-boundary]`,
   `SAFETY[AUDIT:internal-atomic-guard-once-boundary]`, and
   `SAFETY[AUDIT:internal-atomic-platform-lock-boundary]`: internal atomic
-  scalar, pointer, guard/once, and lock facade slices in
+  raw-view, scalar operation, pointer, guard/once, and lock facade slices in
   `src/internal/atomic.rs`.
 - `SAFETY[AUDIT:unsafe-callback]`: unsafe-adjacent callback guards. Unsafe guard construction
   registers a trampoline with a borrowed callback context, stores the previous

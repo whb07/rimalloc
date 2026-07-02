@@ -817,10 +817,10 @@ pub unsafe extern "C" fn mi_atomic_storei64_explicit(p: *mut i64, x: i64, mo: mi
 /// # Safety
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
-// SAFETY[AUDIT:internal-atomic-fetch-boundary]: C ABI relaxed i64 add preserves the raw
+// SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]: C ABI relaxed i64 add preserves the raw
 // pointer atomic contract.
 pub unsafe extern "C" fn mi_atomic_addi64_relaxed(p: *mut i64, add: i64) -> i64 {
-    // SAFETY[AUDIT:internal-atomic-fetch-boundary]: caller-proven raw storage is viewed
+    // SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]: caller-proven raw storage is viewed
     // as `AtomicI64` for one fetch-add operation.
     unsafe { atomic_i64(p) }.fetch_add(add, Ordering::Relaxed)
 }
@@ -863,10 +863,10 @@ pub unsafe extern "C" fn mi_atomic_maxi64_relaxed(p: *mut i64, x: i64) {
 /// # Safety
 ///
 /// `p` must point to valid `i64` storage that is only accessed atomically.
-// SAFETY[AUDIT:internal-atomic-fetch-boundary]: C ABI acq_rel i64 add preserves the raw
+// SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]: C ABI acq_rel i64 add preserves the raw
 // pointer atomic contract.
 pub unsafe extern "C" fn mi_atomic_addi64_acq_rel(p: *mut i64, i: i64) {
-    // SAFETY[AUDIT:internal-atomic-fetch-boundary]: caller-proven raw storage is viewed
+    // SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]: caller-proven raw storage is viewed
     // as `AtomicI64` for one acq_rel fetch-add operation.
     unsafe { atomic_i64(p) }.fetch_add(i, Ordering::AcqRel);
 }
@@ -906,10 +906,10 @@ pub unsafe extern "C" fn mi_atomic_casi64_strong_acq_rel(
 /// # Safety
 ///
 /// `p` must point to valid `isize` storage that is only accessed atomically.
-// SAFETY[AUDIT:internal-atomic-fetch-boundary]: C ABI isize add preserves the raw
+// SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]: C ABI isize add preserves the raw
 // pointer atomic contract.
 pub unsafe extern "C" fn mi_atomic_addi(p: *mut isize, add: isize) -> isize {
-    // SAFETY[AUDIT:internal-atomic-fetch-boundary]: caller-proven raw storage is viewed
+    // SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]: caller-proven raw storage is viewed
     // as `AtomicIsize` for one acq_rel fetch-add operation.
     unsafe { atomic_isize(p) }.fetch_add(add, Ordering::AcqRel)
 }
@@ -917,10 +917,10 @@ pub unsafe extern "C" fn mi_atomic_addi(p: *mut isize, add: isize) -> isize {
 /// # Safety
 ///
 /// `p` must point to valid `isize` storage that is only accessed atomically.
-// SAFETY[AUDIT:internal-atomic-fetch-boundary]: C ABI isize sub preserves the raw
+// SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]: C ABI isize sub preserves the raw
 // pointer atomic contract.
 pub unsafe extern "C" fn mi_atomic_subi(p: *mut isize, sub: isize) -> isize {
-    // SAFETY[AUDIT:internal-atomic-fetch-boundary]: caller-proven raw storage is viewed
+    // SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]: caller-proven raw storage is viewed
     // as `AtomicIsize` for one acq_rel fetch-sub operation.
     unsafe { atomic_isize(p) }.fetch_sub(sub, Ordering::AcqRel)
 }

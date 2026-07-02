@@ -1179,32 +1179,32 @@ pub unsafe extern "C" fn _mi_os_alloc_aligned(
     p
 }
 
-// SAFETY[AUDIT:os-memory-public-export-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-retained-wrapper-boundary]: retained OS wrapper statics preserve C ABI symbol reachability without changing ownership.
 #[used]
 static MI_OS_PAGE_SIZE_KEEP: unsafe extern "C" fn() -> usize = _mi_os_page_size;
 #[used]
 static MI_OS_GUARD_PAGE_SIZE_KEEP: unsafe extern "C" fn() -> usize = _mi_os_guard_page_size;
-// SAFETY[AUDIT:os-memory-public-export-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-retained-wrapper-boundary]: retained OS wrapper statics preserve C ABI symbol reachability without changing ownership.
 #[used]
 static MI_OS_SECURE_GUARD_PAGE_SIZE_KEEP: unsafe extern "C" fn() -> usize =
     _mi_os_secure_guard_page_size;
-// SAFETY[AUDIT:os-memory-public-export-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-retained-wrapper-boundary]: retained OS wrapper statics preserve C ABI symbol reachability without changing ownership.
 #[used]
 static MI_OS_ALLOC_KEEP: unsafe extern "C" fn(usize, *mut mi_memid_t) -> *mut c_void = _mi_os_alloc;
 #[used]
 static MI_OS_FREE_KEEP: unsafe extern "C" fn(*mut c_void, usize, mi_memid_t) = _mi_os_free;
-// SAFETY[AUDIT:os-memory-public-export-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-retained-wrapper-boundary]: retained OS wrapper statics preserve C ABI symbol reachability without changing ownership.
 #[used]
 static MI_OS_REUSE_KEEP: unsafe extern "C" fn(*mut c_void, usize) = _mi_os_reuse;
-// SAFETY[AUDIT:os-memory-public-export-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-retained-wrapper-boundary]: retained OS wrapper statics preserve C ABI symbol reachability without changing ownership.
 #[used]
 static MI_OS_PURGE_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> bool = _mi_os_purge;
 #[used]
 static MI_OS_PROTECT_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> bool = _mi_os_protect;
-// SAFETY[AUDIT:os-memory-public-export-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-retained-wrapper-boundary]: retained OS wrapper statics preserve C ABI symbol reachability without changing ownership.
 #[used]
 static MI_OS_UNPROTECT_KEEP: unsafe extern "C" fn(*mut c_void, usize) -> bool = _mi_os_unprotect;
-// SAFETY[AUDIT:os-memory-public-export-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-retained-wrapper-boundary]: retained OS wrapper statics preserve C ABI symbol reachability without changing ownership.
 #[used]
 static MI_OS_SECURE_GUARD_PAGE_SET_AT_KEEP: unsafe extern "C" fn(*mut c_void, mi_memid_t) -> bool =
     _mi_os_secure_guard_page_set_at;
@@ -1213,13 +1213,13 @@ static MI_OS_SECURE_GUARD_PAGE_SET_BEFORE_KEEP: unsafe extern "C" fn(
     *mut c_void,
     mi_memid_t,
 ) -> bool = _mi_os_secure_guard_page_set_before;
-// SAFETY[AUDIT:os-memory-public-export-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-retained-wrapper-boundary]: retained OS wrapper statics preserve C ABI symbol reachability without changing ownership.
 #[used]
 static MI_OS_SECURE_GUARD_PAGE_RESET_AT_KEEP: unsafe extern "C" fn(
     *mut c_void,
     mi_memid_t,
 ) -> bool = _mi_os_secure_guard_page_reset_at;
-// SAFETY[AUDIT:os-memory-public-export-boundary]: OS memory callers preserve memid, page-size, alignment, and out-pointer contracts.
+// SAFETY[AUDIT:os-memory-retained-wrapper-boundary]: retained OS wrapper statics preserve C ABI symbol reachability without changing ownership.
 #[used]
 static MI_OS_SECURE_GUARD_PAGE_RESET_BEFORE_KEEP: unsafe extern "C" fn(
     *mut c_void,

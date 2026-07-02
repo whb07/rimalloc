@@ -222,6 +222,7 @@ pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySource
             && page_rs.contains("mod counts;")
             && page_rs.contains("mod validation;")
             && page_counts_rs.contains("SAFETY[AUDIT:page-count-accessors]")
+            && page_counts_rs.contains("SAFETY[AUDIT:page-queue-count-accessors]")
             && page_validation_rs.contains("SAFETY[AUDIT:page-validation-helpers]")
             && page_validation_rs.contains("pub unsafe fn mi_page_block_at(")
             && page_validation_rs.contains("pub unsafe fn _mi_page_is_valid(")

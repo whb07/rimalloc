@@ -546,7 +546,7 @@ unsafe fn mi_arena_try_alloc_at(
     }
 
     if commit {
-        // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+        // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
         let already_committed = unsafe {
             mi_bitmap_popcountN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -556,7 +556,7 @@ unsafe fn mi_arena_try_alloc_at(
         };
         if already_committed < slice_count {
             let mut commit_zero = false;
-            // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+            // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
             if !unsafe {
                 mi_arena_commit(
                     arena_ptr,
@@ -566,7 +566,7 @@ unsafe fn mi_arena_try_alloc_at(
                     crate::internal::mi_committed_bytes_of_slices(slice_count - already_committed),
                 )
             } {
-                // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+                // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
                 unsafe {
                     mi_bbitmap_setN(
                         (*arena.cast::<MiArenaPrefix>()).slices_free,
@@ -579,7 +579,7 @@ unsafe fn mi_arena_try_alloc_at(
             if commit_zero {
                 allocation.memid.initially_zero = true;
             }
-            // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+            // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
             unsafe {
                 mi_bitmap_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -590,7 +590,7 @@ unsafe fn mi_arena_try_alloc_at(
             };
             if MI_DEBUG > 1
                 && allocation.memid.initially_zero
-                // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+                // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
                 && !unsafe { mi_mem_is_zero(p, mi_size_of_slices(slice_count)) }
             {
                 crate::options::_mi_error_message_fmt(
@@ -600,13 +600,13 @@ unsafe fn mi_arena_try_alloc_at(
                 allocation.memid.initially_zero = false;
             }
         } else {
-            // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+            // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
             unsafe { _mi_os_reuse(p, mi_size_of_slices(slice_count)) };
             if unsafe { _mi_os_has_overcommit() }
                 && touched_slices > 0
                 && !unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned }
             {
-                // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+                // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
                 unsafe {
                     __mi_stat_increase_mt(
                         &mut (*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed,
@@ -616,7 +616,7 @@ unsafe fn mi_arena_try_alloc_at(
             }
         }
 
-        // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+        // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -627,13 +627,13 @@ unsafe fn mi_arena_try_alloc_at(
         allocation.memid.initially_committed = true;
 
         if allocation.memid.initially_zero {
-            // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+            // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
             unsafe { mi_track_mem_defined(p, slice_count * MI_ARENA_SLICE_SIZE) };
         } else {
             unsafe { mi_track_mem_undefined(p, slice_count * MI_ARENA_SLICE_SIZE) };
         }
     } else {
-        // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+        // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
         allocation.memid.initially_committed = unsafe {
             mi_bitmap_is_setN(
                 (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -643,7 +643,7 @@ unsafe fn mi_arena_try_alloc_at(
         };
         if !allocation.memid.initially_committed {
             let mut already_committed_count = 0usize;
-            // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+            // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
             unsafe {
                 mi_bitmap_setN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -652,7 +652,7 @@ unsafe fn mi_arena_try_alloc_at(
                     &mut already_committed_count,
                 )
             };
-            // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+            // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
             unsafe {
                 mi_bitmap_clearN(
                     (*arena.cast::<MiArenaPrefix>()).slices_committed,
@@ -660,7 +660,7 @@ unsafe fn mi_arena_try_alloc_at(
                     slice_count,
                 )
             };
-            // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+            // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
             unsafe {
                 __mi_stat_adjust_decrease_mt(
                     ptr::addr_of_mut!((*(*arena.cast::<MiArenaPrefix>()).subproc).stats.committed),
@@ -679,7 +679,7 @@ unsafe fn mi_arena_try_alloc_at(
         )
     });
     if commit {
-        // SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]: arena slice allocation updates free/dirty/committed bitmaps, memid state, commit accounting, and allocation metadata consistently.
+        // SAFETY[AUDIT:arena-slice-commit-accounting-boundary]: arena slice allocation updates committed bitmaps, commit accounting, reuse state, and tracking consistently.
         crate::internal::mi_assert_internal!(unsafe {
             mi_bitmap_is_setN(
                 (*allocation.arena.as_ptr().cast::<MiArenaPrefix>()).slices_committed,
@@ -2050,7 +2050,7 @@ unsafe fn mi_heap_ensure_arena_pages_from_raw(
 ) -> *mut mi_arena_pages_t {
     crate::internal::mi_assert_internal!(!arena.is_null());
     crate::internal::mi_assert_internal!(!heap.is_null());
-    // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
+    // SAFETY[AUDIT:arena-abandoned-page-table-boundary]: abandoned-page lookup maintains per-heap arena-page tables before ownership transfer.
     let arena_idx = unsafe { mi_arena_index(arena) };
     unsafe {
         mi_heap_ensure_arena_pages(
@@ -2069,13 +2069,13 @@ unsafe fn mi_heap_ensure_arena_pages(
     let heap_raw = heap.ptr().as_ptr();
     let arena_raw = arena.as_ptr();
 
-    // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
+    // SAFETY[AUDIT:arena-abandoned-page-table-boundary]: abandoned-page lookup maintains per-heap arena-page tables before ownership transfer.
     let mut arena_pages = unsafe { mi_heap_arena_pages(heap, arena) };
     if arena_pages.is_null() {
         unsafe { mi_lock_acquire(heap.ptr().arena_pages_lock()) };
         arena_pages = unsafe { mi_heap_arena_pages(heap, arena) };
         if arena_pages.is_null() {
-            // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
+            // SAFETY[AUDIT:arena-abandoned-page-table-boundary]: abandoned-page lookup maintains per-heap arena-page tables before ownership transfer.
             if unsafe { _mi_is_heap_main(heap_raw) } {
                 arena_pages =
                     unsafe { ptr::addr_of_mut!((*arena_raw.cast::<MiArenaPrefix>()).pages_main) };
@@ -2085,20 +2085,20 @@ unsafe fn mi_heap_ensure_arena_pages(
                     crate::core_types::SliceRange::new(0, slice_count.get() as usize, arena)
                 else {
                     crate::internal::mi_assert_internal!(false);
-                    // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
+                    // SAFETY[AUDIT:arena-abandoned-page-table-boundary]: abandoned-page lookup maintains per-heap arena-page tables before ownership transfer.
                     unsafe { mi_lock_release(heap.ptr().arena_pages_lock()) };
                     return ptr::null_mut();
                 };
                 let (alloc_size, bitmap_base) = unsafe { mi_arena_pages_size(slice_count) };
                 arena_pages =
-                    // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
+                    // SAFETY[AUDIT:arena-abandoned-page-table-boundary]: abandoned-page lookup maintains per-heap arena-page tables before ownership transfer.
                     unsafe { mi_arena_pages_alloc(arena, range, alloc_size, bitmap_base) };
             }
             unsafe { mi_heap_arena_page_cell(heap, arena_idx).store_release(arena_pages.cast()) };
         }
         unsafe { mi_lock_release(heap.ptr().arena_pages_lock()) };
     }
-    // SAFETY[AUDIT:arena-abandoned-boundary]: abandoned-page claim and reclaim walks heap arena-page tables and remote-free state before transferring page ownership.
+    // SAFETY[AUDIT:arena-abandoned-page-table-boundary]: abandoned-page lookup maintains per-heap arena-page tables before ownership transfer.
     if unsafe { _mi_is_heap_main(heap_raw) } {
         crate::internal::mi_assert!(!arena_pages.is_null());
     }
@@ -2389,7 +2389,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     let os_align = block_alignment_raw > MI_PAGE_MAX_OVERALLOC_ALIGN;
     let slice_count_usize = slice_count.get() as usize;
     let alloc_size = mi_size_of_slices(slice_count_usize);
-    // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+    // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
     let mut memid = unsafe { _mi_memid_none() };
     let slice_start = unsafe {
         mi_arenas_page_alloc_fresh_area(
@@ -2413,14 +2413,14 @@ unsafe fn mi_arenas_page_alloc_fresh(
 
     if let crate::core_types::MemIdView::Arena(a) = crate::core_types::MemId::view(memid) {
         let arena = a.arena.as_ptr();
-        // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+        // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
         if unsafe { !(*arena.cast::<MiArenaPrefix>()).pages_meta.is_null() } {
             let page_meta = unsafe {
                 (*arena.cast::<MiArenaPrefix>())
                     .pages_meta
                     .add(a.range.start().0)
             };
-            // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+            // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
             crate::internal::mi_assert_internal!(unsafe { (*page_meta).block_size == 0 });
             if block_size_raw > MI_SMALL_SIZE_MAX || MI_PAGE_META_ALIGNED_FREE_SMALL == 0 {
                 page = page_meta;
@@ -2432,7 +2432,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
                 {
                     block_start += block_size_raw;
                 }
-                // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+                // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
                 unsafe {
                     crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>())
                 };
@@ -2441,7 +2441,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     }
     if page.is_null() {
         page = slice_start.cast::<mi_page_t>();
-        // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+        // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
         block_start = unsafe { mi_page_block_start(block_size, os_align) };
     }
 
@@ -2454,7 +2454,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
         }
         commit_size = crate::core_types::CommittedBytes::new(commit_size_raw);
         let mut is_zero = false;
-        // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+        // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
         if !unsafe {
             let (arena_ptr, range) = match crate::core_types::MemId::view(memid) {
                 crate::core_types::MemIdView::Arena(a) => (a.arena, a.range),
@@ -2472,19 +2472,19 @@ unsafe fn mi_arenas_page_alloc_fresh(
                 crate::core_types::CommittedBytes::new(0),
             )
         } {
-            // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+            // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
             unsafe { _mi_arenas_free(slice_start.cast(), alloc_size, memid) };
             return ptr::null_mut();
         }
     }
     if !memid.initially_zero && !page_meta_is_separate {
-        // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+        // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
         unsafe { crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>()) };
     }
 
     if memid.initially_committed {
         if memid.initially_zero {
-            // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+            // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
             unsafe {
                 mi_track_mem_defined(slice_start.cast(), slice_count_usize * MI_ARENA_SLICE_SIZE)
             };
@@ -2497,7 +2497,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
     if MI_DEBUG > 1
         && memid.initially_zero
         && memid.initially_committed
-        // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+        // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
         && !unsafe { mi_mem_is_zero(slice_start.cast(), page_noguard_size) }
     {
         crate::options::_mi_error_message_fmt(
@@ -2506,7 +2506,7 @@ unsafe fn mi_arenas_page_alloc_fresh(
         );
         memid.initially_zero = false;
         if block_start > 0 {
-            // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+            // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
             unsafe { crate::internal::_mi_memzero_aligned(page.cast(), size_of::<mi_page_t>()) };
         }
     }
@@ -2517,20 +2517,20 @@ unsafe fn mi_arenas_page_alloc_fresh(
     };
     crate::internal::mi_assert_internal!(reserved > 0 && u16::try_from(reserved).is_ok());
 
-    // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+    // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
     unsafe {
         crate::page::mi_page_set_reserved_count(
             page,
             crate::core_types::ReservedBlockCount::new(reserved as u16),
         )
     };
-    // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+    // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
     unsafe { (*page).page_start = slice_start.add(block_start) };
     unsafe { (*page).block_size = block_size_raw };
     unsafe { crate::page::mi_page_set_slice_committed(page, commit_size) };
     unsafe { (*page).memid = memid };
     unsafe { (*page).free_is_zero = memid.initially_zero };
-    // SAFETY[AUDIT:arena-page-fresh-boundary]: fresh arena page setup reserves slices, commits initial memory, initializes metadata, and preserves page alignment/layout invariants.
+    // SAFETY[AUDIT:arena-page-fresh-metadata-boundary]: fresh arena page setup initializes metadata, commit state, and layout counters.
     crate::internal::mi_assert_internal!(unsafe { (*page).free.is_null() });
     crate::internal::mi_assert_internal!(
         page_meta_is_separate == unsafe { mi_page_meta_is_separated(page) }

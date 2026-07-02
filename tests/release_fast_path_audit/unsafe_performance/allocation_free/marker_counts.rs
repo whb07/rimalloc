@@ -102,7 +102,8 @@ pub(super) fn assert_allocator_allocation_and_free_boundaries(sources: &UnsafePe
     );
     for (audit_id, min_count) in [
         ("allocation-platform-shim-boundary", 4),
-        ("allocation-product-entry-boundary", 20),
+        ("allocation-product-entry-boundary", 12),
+        ("allocation-usable-size-entry-boundary", 9),
         ("allocation-small-dispatch-boundary", 7),
         ("allocation-thread-heap-zero-boundary", 8),
         ("allocation-public-malloc-boundary", 5),

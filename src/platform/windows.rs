@@ -1391,7 +1391,7 @@ unsafe fn win_virtual_alloc(
 
     let mut p = null_mut();
     if (large_only
-        // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+        // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
         || (unsafe { _mi_os_canuse_large_page(size, try_alignment) }
             && mi_option_is_enabled(mi_option_t::mi_option_allow_large_os_pages)))
         && allow_large
@@ -1408,7 +1408,7 @@ unsafe fn win_virtual_alloc(
             );
         } else {
             if !is_large.is_null() {
-                // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+                // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
                 unsafe {
                     *is_large = true;
                 }
@@ -1427,7 +1427,7 @@ unsafe fn win_virtual_alloc(
 
     if p.is_null() {
         if !is_large.is_null() {
-            // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+            // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
             unsafe {
                 *is_large = (flags & MEM_LARGE_PAGES) != 0;
             }
@@ -1445,13 +1445,13 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
     numa_node: i32,
 ) -> *mut c_void {
     let flags = MEM_LARGE_PAGES | MEM_COMMIT | MEM_RESERVE;
-    // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+    // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
     unsafe {
         win_enable_large_os_pages(null_mut());
     }
 
     let mut params = [MI_MEM_EXTENDED_PARAMETER::default(); 3];
-    // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+    // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
     if let Some(nt_allocate_virtual_memory_ex) = unsafe { pNtAllocateVirtualMemoryEx }
         && MI_HUGE_PAGES_AVAILABLE.load(Ordering::Acquire) != 0
     {
@@ -1467,7 +1467,7 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
         }
         let mut psize = size;
         let mut base = hint_addr;
-        // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+        // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
         let err = unsafe {
             nt_allocate_virtual_memory_ex(
                 GetCurrentProcess(),
@@ -1489,13 +1489,13 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
         ));
     }
     if numa_node >= 0
-        // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+        // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
         && let Some(virtual_alloc2) = unsafe { pVirtualAlloc2 }
     {
         params[0].Type.bits =
             MI_MEM_EXTENDED_PARAMETER_TYPE_E::MiMemExtendedParameterNumaNode as DWORD64;
         params[0].Arg.ULong = numa_node as DWORD;
-        // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+        // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
         return unsafe {
             virtual_alloc2(
                 GetCurrentProcess(),
@@ -1508,7 +1508,7 @@ unsafe fn _mi_prim_alloc_huge_os_pagesx(
             )
         };
     }
-    // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+    // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
     unsafe { VirtualAlloc(hint_addr, size, flags, PAGE_READWRITE) }
 }
 
@@ -1521,13 +1521,13 @@ pub unsafe extern "C" fn _mi_prim_alloc_huge_os_pages(
     addr: *mut *mut c_void,
 ) -> i32 {
     if !is_zero.is_null() {
-        // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+        // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
         unsafe {
             *is_zero = true;
         }
     }
     if addr.is_null() {
-        // SAFETY[AUDIT:windows-large-page-boundary]: Windows large/huge-page primitives preserve privilege, page-size, fallback, NUMA hint, and out-pointer contracts.
+        // SAFETY[AUDIT:windows-huge-page-allocation-boundary]: Windows huge-page allocation preserves large-page fallback, NUMA hint, and out-pointer contracts.
         return unsafe { GetLastError() as i32 };
     }
     unsafe {

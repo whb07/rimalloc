@@ -402,8 +402,11 @@ Operation IDs:
   `src/allocator/init.rs` owns default thread-heap initialization for main and
   non-main thread entry.
 - `SAFETY[AUDIT:init-thread-done-cleanup-boundary]`: `src/allocator/init.rs`
-  owns thread-local heap cleanup, abandon/free loops, cleanup waiting, and
-  default/cached/main TLS reset during thread teardown.
+  owns thread-local heap cleanup, abandon/free loops, and cleanup waiting
+  during thread teardown.
+- `SAFETY[AUDIT:init-thread-done-tls-reset-boundary]`:
+  `src/allocator/init.rs` owns default/cached/main TLS reset and empty
+  thread-heap sentinel checks around thread teardown.
 - `SAFETY[AUDIT:init-thread-init-entry-boundary]`: `src/allocator/init.rs`
   owns public thread initialization entry, process init dependency, initialized
   checks, and thread stat increases.
@@ -454,10 +457,13 @@ Operation IDs:
   failure reporting.
 - `SAFETY[AUDIT:allocation-product-entry-boundary]`:
   `src/allocator/alloc.rs` owns product-sized allocation entry shims for
-  calloc, mallocn, and usable-size allocation exports. Unsafe operations are
-  limited to checked count/size products, typed request construction,
-  caller-provided usable-size out-pointers, and raw public allocation wrappers
-  while preserving overflow and null/failure semantics.
+  calloc and mallocn. Unsafe operations are limited to checked count/size
+  products, typed request construction, and raw public allocation wrappers while
+  preserving overflow and null/failure semantics.
+- `SAFETY[AUDIT:allocation-usable-size-entry-boundary]`:
+  `src/allocator/alloc.rs` owns usable-size allocation exports and good-size
+  wrappers. Unsafe operations are limited to nullable caller-provided usable-size
+  out-pointers and typed layout routing.
 - `SAFETY[AUDIT:allocation-small-dispatch-boundary]`:
   `src/allocator/alloc.rs` owns small allocation dispatch. Unsafe operations
   are limited to typed thread-heap witnesses, requested-size domains, and
@@ -638,8 +644,11 @@ Operation IDs:
 - `SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]`:
   `src/allocator/arena.rs` owns core arena slice allocation bitmap updates,
   memid creation, and allocation metadata publication. Unsafe operations are
-  limited to typed arena/range/layout witnesses and free/dirty/committed
-  bitmaps while preserving allocation ownership.
+  limited to typed arena/range/layout witnesses and free/dirty bitmaps while
+  preserving allocation ownership.
+- `SAFETY[AUDIT:arena-slice-commit-accounting-boundary]`:
+  `src/allocator/arena.rs` owns committed-slice bitmap updates, commit/reuse
+  accounting, and memory tracking during arena slice allocation.
 - `SAFETY[AUDIT:arena-slice-allocation-dispatch-boundary]`:
   `src/allocator/arena.rs` owns arena allocation search and dispatch. Unsafe
   operations borrow registry entries and allocation metadata through validated
@@ -673,17 +682,22 @@ Operation IDs:
   memid publication, arena registration, and OS release on failure while
   preserving timeout, interleave, and reserved-page reporting semantics.
 - `SAFETY[AUDIT:arena-abandoned-boundary]`: `src/allocator/arena.rs` owns
-  abandoned-page ownership claim/release, heap arena-page bitmap lookup, and
-  thread-local abandoned-page claim callbacks. Unsafe operations are limited to
-  typed abandoned-page witnesses, remote-free collection, callback ABI
-  arguments, and heap arena-page bitmap cells while preserving page ownership
-  transfer and abandoned-count semantics.
+  abandoned-page ownership claim/release and thread-local abandoned-page claim
+  callbacks. Unsafe operations are limited to typed abandoned-page witnesses,
+  remote-free collection, and callback ABI arguments while preserving page
+  ownership transfer and abandoned-count semantics.
+- `SAFETY[AUDIT:arena-abandoned-page-table-boundary]`:
+  `src/allocator/arena.rs` owns heap arena-page table lookup, lazy table
+  allocation, publication, and main-heap table assertions used by abandoned-page
+  search.
 - `SAFETY[AUDIT:arena-page-fresh-boundary]`:
   `src/allocator/arena.rs` owns fresh arena-backed page memory reservation,
-  initial commit, page metadata placement, and page layout setup. Unsafe
-  operations are limited to typed page/block/slice witnesses, arena memid
-  projection, OS fallback handoff, and metadata initialization while preserving
-  page alignment and reserved-block invariants.
+  arena memid projection, and OS fallback handoff. Unsafe operations are limited
+  to typed page/block/slice witnesses while preserving page alignment.
+- `SAFETY[AUDIT:arena-page-fresh-metadata-boundary]`:
+  `src/allocator/arena.rs` owns fresh page metadata placement, initial commit,
+  zeroing checks, reserved-count publication, and page layout setup while
+  preserving reserved-block invariants.
 - `SAFETY[AUDIT:arena-page-regular-boundary]`:
   `src/allocator/arena.rs` owns regular size-class page allocation and
   abandoned-page reuse during allocation. Unsafe operations are limited to
@@ -1305,11 +1319,13 @@ Operation IDs:
   owns Windows TEB thread-pool probing. Unsafe operations read TEB thread-pool
   data only after Windows-version and null checks.
 - `SAFETY[AUDIT:windows-large-page-boundary]`: `src/platform/windows.rs` owns
-  Windows large and huge page privilege enablement, page-size probing, large
-  allocation attempts, huge-page fallback, and large-allocation out-pointers.
-  Unsafe operations are limited to token privilege calls, dynamic large-page
-  function calls, large-page atomic fallback state, and caller-provided result
-  writes.
+  Windows large-page privilege enablement and page-size probing. Unsafe
+  operations are limited to token privilege calls, dynamic large-page function
+  calls, and cached page-size/result writes.
+- `SAFETY[AUDIT:windows-huge-page-allocation-boundary]`:
+  `src/platform/windows.rs` owns Windows large/huge page allocation attempts,
+  huge-page fallback, NUMA allocation hints, large-page fallback state, and
+  caller-provided result writes.
 - `SAFETY[AUDIT:windows-numa-boundary]`: `src/platform/windows.rs` owns Windows
   NUMA helpers and NUMA hints used by huge allocations. Unsafe operations are
   limited to dynamic NUMA API calls, processor-number queries, node masks,
@@ -1382,9 +1398,12 @@ Operation IDs:
   Unsafe operations are limited to good-size normalization, primitive
   allocation dispatch, and nullable memid output behavior.
 - `SAFETY[AUDIT:os-memory-public-export-boundary]`: `src/platform/os.rs` owns
-  retained local helper shims and public C ABI OS allocation wrappers. Unsafe
-  operations are limited to nullable output pointers, wrapper forwarding, and
-  exported symbol compatibility without taking ownership beyond the C contract.
+  public C ABI OS allocation wrappers. Unsafe operations are limited to nullable
+  output pointers, wrapper forwarding, and exported symbol compatibility without
+  taking ownership beyond the C contract.
+- `SAFETY[AUDIT:os-memory-retained-wrapper-boundary]`: `src/platform/os.rs`
+  owns retained local helper statics that keep translated C ABI OS wrapper
+  symbols reachable without changing ownership or allocation behavior.
 - `SAFETY[AUDIT:os-memory-huge-page-boundary]`: `src/platform/os.rs` owns huge
   OS page detection, reservation, claiming, and aligned huge allocation.
   Unsafe operations are limited to primitive huge-page calls, arena claim
@@ -1403,8 +1422,10 @@ Operation IDs:
   compatibility, pointer ownership queries, and usable-size forwarding.
 - `SAFETY[AUDIT:macos-zone-allocation-boundary]`: `src/platform/macos.rs` owns
   malloc/calloc/valloc/free/realloc/memalign zone trampolines. Unsafe operations
-  are limited to mimalloc ownership checks, direct mimalloc dispatch, and
-  non-mimalloc callback forwarding with original pointers and sizes.
+  are limited to mimalloc ownership checks and direct mimalloc dispatch.
+- `SAFETY[AUDIT:macos-zone-foreign-forwarding-boundary]`:
+  `src/platform/macos.rs` owns non-mimalloc zone callback forwarding with
+  original zone pointers, allocation pointers, and requested sizes.
 - `SAFETY[AUDIT:macos-zone-batch-boundary]`: `src/platform/macos.rs` owns batch
   malloc/free pointer-array traversal. Unsafe operations are limited to
   caller-provided pointer-slot reads/writes, scalar zone trampoline dispatch,
@@ -1462,7 +1483,11 @@ Operation IDs:
 - `SAFETY[AUDIT:internal-atomic-fetch-boundary]`:
   `src/internal/atomic.rs` owns scalar fetch arithmetic and bitwise helpers.
   Unsafe operations are limited to caller-proven scalar atomic storage,
-  fetch-add/sub/and/or operations, and simple forwarding helpers.
+  `usize` fetch-add/sub/and/or operations, and simple forwarding helpers.
+- `SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]`:
+  `src/internal/atomic.rs` owns `i64` and `isize` fetch arithmetic helpers.
+  Unsafe operations are limited to caller-proven integer atomic storage and the
+  fixed relaxed/acq-rel orderings used by translated C helpers.
 - `SAFETY[AUDIT:internal-atomic-cas-boundary]`: `src/internal/atomic.rs` owns
   scalar compare-exchange helpers. Unsafe operations are limited to
   caller-proven atomic storage, caller-provided expected slots, memory-order
@@ -1717,10 +1742,13 @@ Operation IDs:
   constructor. Unit tests cover inverted bounds, sampling decisions, disabled
   sampling, and exposed typed fields.
 - `SAFETY[AUDIT:page-count-accessors]`: `src/allocator/page/counts.rs`
-  centralizes page and page-queue count field access. Callers supply live
-  allocator-owned page or queue metadata, and the helpers route raw metadata
-  through `PagePtr` and `PageQueuePtr` before typed counter arithmetic or
-  publication.
+  centralizes page count field access. Callers supply live allocator-owned page
+  metadata, and the helpers route raw metadata through `PagePtr` before typed
+  counter arithmetic or publication.
+- `SAFETY[AUDIT:page-queue-count-accessors]`:
+  `src/allocator/page/counts.rs` centralizes page-queue count and sentinel-size
+  field access. Callers supply live allocator-owned queue metadata, and helpers
+  route raw metadata through `PageQueuePtr` before typed counter publication.
 - `SAFETY[AUDIT:page-flag-owner-accessors]`:
   `src/allocator/page/flags.rs` centralizes page flag, huge-page, full-queue,
   abandoned-page, and thread-heap owner access. Callers supply allocator-owned
@@ -1822,6 +1850,9 @@ Operation IDs:
 - `SAFETY[AUDIT:typed-callback-test-fixtures]`: `src/types/callbacks/tests.rs`
   verifies callback wrapper layout, raw argument preservation, and storage
   pointer round trips using local callback function items and stack values.
+- `SAFETY[AUDIT:typed-callback-invocation-test-fixtures]`:
+  `src/types/callbacks/tests.rs` verifies local C ABI callback invocation
+  fixtures and stack-local opaque argument writes for callback wrappers.
 - `SAFETY[AUDIT:typed-freelist-test-fixtures]`:
   `src/types/freelist/tests.rs` builds stack-local block metadata and opaque
   pointer words to exercise `ThreadFreeWord`, encoded-link, and raw link helper
@@ -2041,9 +2072,13 @@ Operation IDs:
   globals and are used only for local invariant tests.
 - `SAFETY[AUDIT:typed-page-queue-test-fixtures]`:
   `src/types/page_queues/tests.rs` builds stack-local page and page-queue
-  metadata to exercise normal, huge, full, linked, unlinked, and mismatched
-  queue/page witnesses. The fixtures are not registered with allocator globals
-  and are used only while the local records are live.
+  metadata to exercise normal, huge, and full queue classification. The fixtures
+  are not registered with allocator globals and are used only while the local
+  records are live.
+- `SAFETY[AUDIT:typed-page-queue-membership-test-fixtures]`:
+  `src/types/page_queues/tests.rs` builds stack-local page and page-queue
+  metadata to exercise linked, unlinked, mismatched, normal, and full
+  queue/page witnesses.
 - `SAFETY[AUDIT:typed-page-queue-domain]`: `src/types/page_queues.rs` owns
   typed page-queue witness construction and transitions. Unsafe operations are
   limited to reading initialized queue metadata, delegating membership and

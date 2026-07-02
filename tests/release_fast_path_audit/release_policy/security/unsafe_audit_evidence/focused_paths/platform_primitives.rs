@@ -58,6 +58,10 @@ pub(super) fn assert_platform_primitive_focused_evidence(evidence: &str) {
             OS_MEMORY_FOCUSED_PATH,
         ),
         ("os-memory-public-export-boundary", OS_MEMORY_FOCUSED_PATH),
+        (
+            "os-memory-retained-wrapper-boundary",
+            OS_MEMORY_FOCUSED_PATH,
+        ),
         ("os-memory-huge-page-boundary", OS_MEMORY_FOCUSED_PATH),
         ("os-memory-numa-boundary", OS_MEMORY_FOCUSED_PATH),
         ("unix-ffi-import-boundary", UNIX_PRIMITIVE_FOCUSED_PATH),
@@ -93,6 +97,10 @@ pub(super) fn assert_platform_primitive_focused_evidence(evidence: &str) {
         ),
         (
             "windows-large-page-boundary",
+            WINDOWS_PRIMITIVE_FOCUSED_PATH,
+        ),
+        (
+            "windows-huge-page-allocation-boundary",
             WINDOWS_PRIMITIVE_FOCUSED_PATH,
         ),
         ("windows-numa-boundary", WINDOWS_PRIMITIVE_FOCUSED_PATH),

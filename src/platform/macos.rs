@@ -330,10 +330,10 @@ pub unsafe extern "C" fn zone_size(zone: *mut malloc_zone_t, p: *const c_void) -
         // to mimalloc usable-size lookup.
         unsafe { crate::mimalloc::mi_usable_size(p) }
     } else if !unsafe { is_mimalloc_zone(zone) } {
-        // SAFETY[AUDIT:macos-zone-allocation-boundary]: non-mimalloc zone forwarding reads
+        // SAFETY[AUDIT:macos-zone-foreign-forwarding-boundary]: non-mimalloc zone forwarding reads
         // only the caller-provided zone callback slot.
         match unsafe { (*zone).size } {
-            // SAFETY[AUDIT:macos-zone-allocation-boundary]: forwarding preserves the
+            // SAFETY[AUDIT:macos-zone-foreign-forwarding-boundary]: forwarding preserves the
             // original zone pointer and pointer argument.
             Some(size_fn) => unsafe { size_fn(zone, p) },
             None => 0,
@@ -401,7 +401,7 @@ pub unsafe extern "C" fn zone_free(zone: *mut malloc_zone_t, p: *mut c_void) {
     } else if !unsafe { is_mimalloc_zone(zone) }
         && let Some(free_fn) = unsafe { (*zone).free }
     {
-        // SAFETY[AUDIT:macos-zone-allocation-boundary]: non-mimalloc pointers are forwarded
+        // SAFETY[AUDIT:macos-zone-foreign-forwarding-boundary]: non-mimalloc pointers are forwarded
         // to the provided zone's free callback without changing ownership.
         unsafe { free_fn(zone, p) };
     }
@@ -427,10 +427,10 @@ pub unsafe extern "C" fn zone_realloc(
         // pointer reallocation with the requested new size.
         unsafe { crate::mimalloc::mi_realloc(p, newsize) }
     } else if !unsafe { is_mimalloc_zone(zone) } {
-        // SAFETY[AUDIT:macos-zone-allocation-boundary]: non-mimalloc zone forwarding reads
+        // SAFETY[AUDIT:macos-zone-foreign-forwarding-boundary]: non-mimalloc zone forwarding reads
         // only the caller-provided zone callback slot.
         match unsafe { (*zone).realloc } {
-            // SAFETY[AUDIT:macos-zone-allocation-boundary]: forwarding preserves the
+            // SAFETY[AUDIT:macos-zone-foreign-forwarding-boundary]: forwarding preserves the
             // original zone pointer, allocation pointer, and requested size.
             Some(realloc_fn) => unsafe { realloc_fn(zone, p, newsize) },
             None => null_mut(),

@@ -1101,7 +1101,7 @@ unsafe fn mi_heap_calloc_typed(
 
 /// # Safety
 /// If `usable` is non-null it must be writable for one `usize`.
-// SAFETY[AUDIT:allocation-product-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-usable-size-entry-boundary]: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_umalloc_small(size: usize, usable: *mut usize) -> *mut c_void {
     unsafe {
@@ -1116,7 +1116,7 @@ pub unsafe extern "C" fn mi_umalloc_small(size: usize, usable: *mut usize) -> *m
 
 /// # Safety
 /// If `usable` is non-null it must be writable for one `usize`.
-// SAFETY[AUDIT:allocation-product-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-usable-size-entry-boundary]: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_uzalloc_small(size: usize, usable: *mut usize) -> *mut c_void {
     unsafe {
@@ -1132,14 +1132,14 @@ pub unsafe extern "C" fn mi_uzalloc_small(size: usize, usable: *mut usize) -> *m
 /// # Safety
 /// `theap` must be null only when lazy thread-heap initialization is enabled, or otherwise valid.
 /// If `usable` is non-null it must be writable for one `usize`.
-// SAFETY[AUDIT:allocation-product-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-usable-size-entry-boundary]: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_theap_umalloc(
     theap: *mut mi_theap_t,
     size: usize,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-product-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-usable-size-entry-boundary]: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
     unsafe {
         if theap.is_null() && MI_THEAP_INITASNULL {
             return _mi_theap_malloc_zero_ex(theap, size, false, 0, usable);
@@ -1159,13 +1159,13 @@ unsafe fn mi_theap_umalloc_typed(
     layout: crate::core_types::LayoutRequest,
     usable: *mut usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:allocation-product-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+    // SAFETY[AUDIT:allocation-usable-size-entry-boundary]: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
     unsafe { _mi_theap_malloc_zero_typed(theap, layout, usable) }
 }
 
 /// # Safety
 /// If `usable` is non-null it must be writable for one `usize`.
-// SAFETY[AUDIT:allocation-product-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-usable-size-entry-boundary]: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_umalloc(size: usize, usable: *mut usize) -> *mut c_void {
     unsafe { mi_theap_umalloc(_mi_theap_default(), size, usable) }
@@ -1173,7 +1173,7 @@ pub unsafe extern "C" fn mi_umalloc(size: usize, usable: *mut usize) -> *mut c_v
 
 /// # Safety
 /// If `usable` is non-null it must be writable for one `usize`.
-// SAFETY[AUDIT:allocation-product-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-usable-size-entry-boundary]: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_void {
     unsafe { _mi_theap_malloc_zero_ex(_mi_theap_default(), size, true, 0, usable) }
@@ -1181,7 +1181,7 @@ pub unsafe extern "C" fn mi_uzalloc(size: usize, usable: *mut usize) -> *mut c_v
 
 /// # Safety
 /// If `usable` is non-null it must be writable for one `usize`.
-// SAFETY[AUDIT:allocation-product-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-usable-size-entry-boundary]: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_ucalloc(count: usize, size: usize, usable: *mut usize) -> *mut c_void {
     unsafe {
@@ -1193,7 +1193,7 @@ pub unsafe extern "C" fn mi_ucalloc(count: usize, size: usize, usable: *mut usiz
     }
 }
 
-// SAFETY[AUDIT:allocation-product-entry-boundary]: allocation raw pointers, layouts, padding, tracking, ABI, and fixtures preserve mimalloc ownership and hot-path invariants.
+// SAFETY[AUDIT:allocation-usable-size-entry-boundary]: usable-size allocation exports preserve nullable usable out-pointers and typed layout routing.
 #[unsafe(no_mangle)]
 pub extern "C" fn mi_malloc_good_size(size: usize) -> usize {
     mi_good_size_typed(crate::core_types::RequestedSize::new(size)).get()

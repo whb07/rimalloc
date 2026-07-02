@@ -2189,9 +2189,9 @@ unsafe fn _mi_thread_init_theap_default() -> *mut mi_theap_t {
 }
 
 unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
-    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
+    // SAFETY[AUDIT:init-thread-done-tls-reset-boundary]: thread cleanup resets default, cached, and main TLS state around heap teardown.
     let empty = unsafe { _mi_theap_empty_get() };
-    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
+    // SAFETY[AUDIT:init-thread-done-tls-reset-boundary]: thread cleanup resets default, cached, and main TLS state around heap teardown.
     unsafe {
         _mi_theap_default_set(empty);
         _mi_theap_cached_set(empty);
@@ -2253,12 +2253,12 @@ unsafe fn mi_thread_theaps_done(tld: *mut mi_tld_t) {
         }
     }
 
-    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
+    // SAFETY[AUDIT:init-thread-done-tls-reset-boundary]: thread cleanup resets default, cached, and main TLS state around heap teardown.
     crate::internal::mi_assert_internal!(unsafe { crate::prim::_mi_theap_default() } == empty);
-    // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
+    // SAFETY[AUDIT:init-thread-done-tls-reset-boundary]: thread cleanup resets default, cached, and main TLS state around heap teardown.
     crate::internal::mi_assert_internal!(!unsafe {
         crate::internal::mi_theap_is_initialized(empty)
-    }); // SAFETY[AUDIT:init-thread-done-cleanup-boundary]: thread cleanup drains local heaps and resets TLS under subproc lifecycle ordering.
+    }); // SAFETY[AUDIT:init-thread-done-tls-reset-boundary]: thread cleanup resets default, cached, and main TLS state around heap teardown.
 }
 
 #[unsafe(no_mangle)]

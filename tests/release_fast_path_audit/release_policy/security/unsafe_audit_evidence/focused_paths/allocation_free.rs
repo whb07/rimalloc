@@ -11,6 +11,7 @@ pub(super) fn assert_allocation_free_focused_evidence(evidence: &str) {
     for audit_id in [
         "allocation-platform-shim-boundary",
         "allocation-product-entry-boundary",
+        "allocation-usable-size-entry-boundary",
         "allocation-realloc-thread-entry-boundary",
         "allocation-realloc-product-boundary",
         "allocation-realloc-free-on-failure-boundary",

@@ -50,7 +50,8 @@ fn options_state_uses_internal_locks_like_c() {
     for (marker, expected_count) in [
         ("internal-atomic-raw-view-boundary", 5),
         ("internal-atomic-load-store-boundary", 12),
-        ("internal-atomic-fetch-boundary", 22),
+        ("internal-atomic-fetch-boundary", 14),
+        ("internal-atomic-integer-fetch-boundary", 8),
         ("internal-atomic-cas-boundary", 17),
         ("internal-atomic-exchange-boundary", 4),
         ("internal-atomic-max-boundary", 2),

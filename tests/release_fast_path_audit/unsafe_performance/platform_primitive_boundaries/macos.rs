@@ -21,7 +21,8 @@ fn macos_malloc_zone_override_stays_bounded_and_audited() {
     for (audit_id, exact_count) in [
         ("macos-zone-layout-boundary", 5),
         ("macos-zone-lookup-boundary", 16),
-        ("macos-zone-allocation-boundary", 22),
+        ("macos-zone-allocation-boundary", 17),
+        ("macos-zone-foreign-forwarding-boundary", 5),
         ("macos-zone-batch-boundary", 7),
         ("macos-zone-fork-boundary", 9),
         ("macos-zone-compat-boundary", 12),

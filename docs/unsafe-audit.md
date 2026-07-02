@@ -62,6 +62,14 @@ file:
   `SAFETY[AUDIT:typed-thread-local-heap-test-fixtures]` cover
   `src/types/heap/tests.rs` main, owned, borrowed, thread-heap state, and
   thread-local promotion witnesses independently.
+- `SAFETY[AUDIT:typed-callback-test-fixtures]` and
+  `SAFETY[AUDIT:typed-callback-invocation-test-fixtures]` cover callback
+  wrapper layout/storage fixtures separately from local C ABI invocation
+  fixtures in `src/types/callbacks/tests.rs`.
+- `SAFETY[AUDIT:typed-page-queue-test-fixtures]` and
+  `SAFETY[AUDIT:typed-page-queue-membership-test-fixtures]` cover page-queue
+  classification fixtures separately from linked/unlinked membership fixtures
+  in `src/types/page_queues/tests.rs`.
 
 ## Boundary Audit Tags
 
@@ -175,7 +183,8 @@ file:
   `SAFETY[AUDIT:init-thread-done-entry-boundary]`,
   `SAFETY[AUDIT:init-thread-done-dispatch-boundary]`,
   `SAFETY[AUDIT:init-thread-init-default-heap-boundary]`,
-  `SAFETY[AUDIT:init-thread-done-cleanup-boundary]`, and
+  `SAFETY[AUDIT:init-thread-done-cleanup-boundary]`,
+  `SAFETY[AUDIT:init-thread-done-tls-reset-boundary]`, and
   `SAFETY[AUDIT:init-thread-init-entry-boundary]`: focused thread identity,
   init, done, cleanup, and stat-update boundaries in `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-thread-heap-empty-sentinel-boundary]`,
@@ -232,7 +241,9 @@ file:
 - `SAFETY[AUDIT:allocation-platform-shim-boundary]`: allocation-local abort,
   pathconf/realpath, and errno platform shims in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-product-entry-boundary]`: calloc, mallocn, and
-  usable-size product allocation entry shims in `src/allocator/alloc.rs`.
+  checked product allocation entry shims in `src/allocator/alloc.rs`.
+- `SAFETY[AUDIT:allocation-usable-size-entry-boundary]`: usable-size
+  allocation exports and good-size wrappers in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-small-dispatch-boundary]`: small allocation dispatch
   in `src/allocator/alloc.rs`.
 - `SAFETY[AUDIT:allocation-thread-heap-zero-boundary]`: thread-heap zero and
@@ -314,10 +325,11 @@ file:
 - `SAFETY[AUDIT:arena-registry-add-boundary]`: arena registration and atomic
   subproc table publication in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-slice-commit-boundary]`,
-  `SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]`, and
+  `SAFETY[AUDIT:arena-slice-allocation-bitmaps-boundary]`,
+  `SAFETY[AUDIT:arena-slice-commit-accounting-boundary]`, and
   `SAFETY[AUDIT:arena-slice-allocation-dispatch-boundary]`: arena slice commit,
-  bitmap mutation, memid publication, and allocation search/dispatch in
-  `src/allocator/arena.rs`.
+  bitmap mutation, commit accounting, memid publication, and allocation
+  search/dispatch in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-initialization-boundary]`: arena metadata
   initialization, guard-page setup, bitmap layout, page metadata table setup,
   and registry insertion in `src/allocator/arena.rs`.
@@ -333,10 +345,14 @@ file:
   `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-abandoned-boundary]`: abandoned-page claim/reclaim in
   `src/allocator/arena.rs`. The boundary covers abandoned ownership transfer,
-  heap arena-page bitmap lookup, remote-free collection, and thread-local claim
-  callbacks.
+  remote-free collection, and thread-local claim callbacks.
+- `SAFETY[AUDIT:arena-abandoned-page-table-boundary]`: heap arena-page table
+  lookup, lazy allocation, and publication for abandoned-page search in
+  `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-fresh-boundary]`: fresh arena-backed page
-  reservation, commit, metadata placement, and layout setup in
+  reservation, memid projection, and OS fallback in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-fresh-metadata-boundary]`: fresh page metadata
+  placement, initial commit, zeroing checks, and layout counters in
   `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-regular-boundary]`: regular size-class page
   allocation and abandoned-page reuse in `src/allocator/arena.rs`.
@@ -394,6 +410,9 @@ file:
 - `SAFETY[AUDIT:arena-debug-registry-walk-boundary]`: current subproc arena
   registry walking and C-shaped debug printer exports in
   `src/allocator/arena/debug.rs`.
+- `SAFETY[AUDIT:page-count-accessors]` and
+  `SAFETY[AUDIT:page-queue-count-accessors]`: page metadata counters and
+  page-queue counter/sentinel helpers in `src/allocator/page/counts.rs`.
 - `SAFETY[AUDIT:internal-bitmap-simd-boundary]`: optional AVX2 bitmap helper
   intrinsics in `src/internal/bitmap.rs`.
 - `SAFETY[AUDIT:internal-bitmap-metadata-boundary]`: bitmap sizing,
@@ -461,14 +480,23 @@ file:
   `SAFETY[AUDIT:windows-fls-thread-boundary]`,
   `SAFETY[AUDIT:windows-teb-threadpool-boundary]`,
   `SAFETY[AUDIT:windows-large-page-boundary]`,
+  `SAFETY[AUDIT:windows-huge-page-allocation-boundary]`,
   `SAFETY[AUDIT:windows-numa-boundary]`,
   `SAFETY[AUDIT:windows-etw-boundary]`,
   `SAFETY[AUDIT:windows-random-boundary]`, and
   `SAFETY[AUDIT:windows-dynamic-import-boundary]`: Windows primitive backend
   and translated ETW helper slices in `src/platform/windows.rs`.
+- `SAFETY[AUDIT:os-memory-public-export-boundary]` and
+  `SAFETY[AUDIT:os-memory-retained-wrapper-boundary]`: public OS allocation
+  wrappers and retained C ABI wrapper statics in `src/platform/os.rs`.
+- `SAFETY[AUDIT:macos-zone-allocation-boundary]` and
+  `SAFETY[AUDIT:macos-zone-foreign-forwarding-boundary]`: mimalloc zone
+  allocation trampolines and foreign-zone callback forwarding in
+  `src/platform/macos.rs`.
 - `SAFETY[AUDIT:internal-atomic-raw-view-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-load-store-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-fetch-boundary]`,
+- `SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-cas-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-exchange-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-max-boundary]`,

@@ -170,7 +170,8 @@ pub(super) fn assert_os_wrapper_boundaries(sources: &UnsafePerformanceSources) {
         ("os-memory-memid-provenance-boundary", 6),
         ("os-memory-zeroing-boundary", 5),
         ("os-memory-request-allocation-boundary", 2),
-        ("os-memory-public-export-boundary", 21),
+        ("os-memory-public-export-boundary", 12),
+        ("os-memory-retained-wrapper-boundary", 9),
         ("os-memory-huge-page-boundary", 10),
         ("os-memory-numa-boundary", 6),
     ] {

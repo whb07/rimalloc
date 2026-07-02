@@ -10,7 +10,7 @@ Current review evidence:
 - `docs/unsafe-migration-allowlist.tsv` has 0 translation entries and no
   production entries. `ALLOWLIST_ENTRY_CAP` is 0.
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe mentions,
-  and 81 operation IDs.
+  and 86 operation IDs.
 - `strict-type-allowlist.txt` has 413 entries: 242 raw-pointer-parameter
   entries, 123 bare-domain `usize` entries, 19 pointer/usize round-trip
   entries, 25 metadata-reference entries, 2 atomic-cast entries, and
@@ -30,7 +30,6 @@ Current review evidence:
   2 path-wide entries. The targeted platform, allocator, and internal files no
   longer have strict-type wildcard entries.
 - The largest source unsafe audit marker clusters are still too broad:
-  `SAFETY[AUDIT:arena-region-boundary]` has 340 markers,
   `SAFETY[AUDIT:init-lifecycle-boundary]` has 277 markers,
   `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers,
   `SAFETY[AUDIT:allocation-entry-boundary]` has 166 markers,
@@ -40,8 +39,13 @@ Current review evidence:
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
   `SAFETY[AUDIT:os-memory-boundary]` has 136 markers, and
   `SAFETY[AUDIT:windows-primitive-boundary]` has 114 markers.
+- The arena audit cluster is now split into `arena-page-lifecycle-boundary`
+  with 107 markers, `arena-allocation-boundary` with 105 markers,
+  `arena-purge-boundary` with 38 markers, `arena-registry-boundary` with
+  37 markers, `arena-slice-boundary` with 31 markers, and
+  `arena-abandoned-boundary` with 22 markers.
 - The release audit is split, but the largest review units are still heavy:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,567 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,544 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
   `tests/release_fast_path_audit.rs` is 1,935 lines,
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,222 lines,
@@ -128,16 +132,16 @@ release fast-path audit, full clippy, and full tests.
 > claiming, heap page tables, purge traversal, and page lifecycle shims. That is
 > too broad to review well.
 
-- [ ] Split arena markers into narrower operation IDs for registry/subproc table
+- [x] Split arena markers into narrower operation IDs for registry/subproc table
       access, slice/range projection, arena allocation/reservation, abandoned
       page claim/reclaim, purge traversal, and page lifecycle handoff.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, and
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, and
       `docs/unsafe-audit-evidence.tsv` so each new operation ID has distinct
       invariants and evidence.
-- [ ] Move the arena release-audit assertions out of the monolithic
+- [x] Move the arena release-audit assertions out of the monolithic
       `unsafe_performance.rs` test into focused arena modules that guard marker
       counts, helper shape, and ownership transfer behavior.
-- [ ] Preserve arena index bounds, NUMA fields, memid ownership, abandoned-page
+- [x] Preserve arena index bounds, NUMA fields, memid ownership, abandoned-page
       semantics, purge ordering, subproc locking, OS memory interaction, and C
       ABI callback signatures.
 
@@ -194,7 +198,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 1. [x] Make strict-type line-pattern checks item-aware.
 2. [x] Narrow platform strict-type wildcard allowances.
 3. [x] Narrow allocator and internal strict-type wildcard allowances.
-4. [ ] Split the arena audit operation cluster.
+4. [x] Split the arena audit operation cluster.
 5. [ ] Split the initialization lifecycle audit cluster.
 6. [ ] Shrink release-audit review units and lower line caps.
 

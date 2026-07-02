@@ -58,10 +58,21 @@ allocation-entry-boundary	script	scripts/check-unsafe-audit.py	Checks allocation
 page-allocation-boundary	test	src/allocator/page.rs	Exercises page bin classification characterization and page helper unit coverage in the page module.
 page-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks page marker coverage, migration allowlist removal, local helper shape, queue/free-list/refill helpers, huge-page allocation, and no-allocation hot-path evidence.
 page-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks page allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
-arena-region-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena marker coverage, migration allowlist removal, raw helper shape, typed arena/slice/memid routing, abandoned-page bitmap paths, purge state, and page lifecycle shims.
-arena-region-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs	Checks arena page allocation/free/abandon shims preserve the C-shaped local helper boundaries used by page lifecycle code.
-arena-region-boundary	test	tests/original_main_override_static.rs	Exercises arena purge, heap walking, huge allocation, and static override behavior through arena-backed paths.
-arena-region-boundary	script	scripts/check-unsafe-audit.py	Checks arena region unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-slice-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks arena slice/range marker coverage, area/containment helpers, info-slice sizing, bitmap layout, and typed slice/index routing.
+arena-slice-boundary	script	scripts/check-unsafe-audit.py	Checks arena slice unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-registry-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks arena registry marker coverage, subproc table access, heap arena-page table lookup, NUMA suitability, and arena index guards.
+arena-registry-boundary	script	scripts/check-unsafe-audit.py	Checks arena registry unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-allocation-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks arena allocation marker coverage, arena reserve paths, memid creation, slice bitmap updates, OS allocation fallback, and lock discipline.
+arena-allocation-boundary	test	tests/original_main_override_static.rs	Exercises arena-backed huge allocation, managed OS memory, and static override behavior through allocation/reservation paths.
+arena-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks arena allocation unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-abandoned-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks abandoned-page marker coverage, claim callbacks, heap arena-page bitmap lookup, remote-free collection, and ownership transfer.
+arena-abandoned-boundary	script	scripts/check-unsafe-audit.py	Checks arena abandoned-page unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-page-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks arena page lifecycle marker coverage, page allocation/free/abandon/reabandon/unabandon shims, memid ownership, and heap arena-page publication.
+arena-page-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/page_lifecycle.rs	Checks arena page allocation/free/abandon shims preserve the C-shaped local helper boundaries used by page lifecycle code.
+arena-page-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks arena page lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
+arena-purge-boundary	test	tests/release_fast_path_audit/unsafe_performance/arena_boundaries.rs	Checks arena purge marker coverage, purge scheduling, purge bitmap traversal, arena collection/free, OS purge/decommit handoff, and purge stats.
+arena-purge-boundary	test	tests/original_main_override_static.rs	Exercises arena purge and heap walking behavior through arena-backed paths.
+arena-purge-boundary	script	scripts/check-unsafe-audit.py	Checks arena purge unsafe operations retain operation-level SAFETY markers and source audit coverage.
 internal-bitmap-boundary	test	src/internal/bitmap.rs	Exercises bitmap set/clear accounting, binned-bitmap find/clear behavior, empty requests, and traversal callback fixtures.
 internal-bitmap-boundary	test	tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs	Checks bitmap marker coverage, migration allowlist removal, helper shape, typed arena/range callbacks, out-of-range release branches, and binned first-fit wrappers.
 internal-bitmap-boundary	script	scripts/check-strict-types.py	Checks bitmap strict-type allowlist coverage remains explicit for translated C bitmap aliases.

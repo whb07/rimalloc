@@ -73,11 +73,29 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   extension, generic refill, page queue movement, retire/free/abandon
   transitions, stat gates, huge-page allocation, raw page helper exports, and
   no-allocation hot paths.
-- `SAFETY[AUDIT:arena-region-boundary]`: arena region management in
-  `src/allocator/arena.rs`. The boundary covers arena registry state, slice
-  maps, abandoned-page bitmap claims, arena allocation/free, purge traversal,
-  page lifecycle shims, subproc arena tables, raw arena exports, and OS-memory
-  handoff.
+- `SAFETY[AUDIT:arena-slice-boundary]`: arena slice/range projection in
+  `src/allocator/arena.rs`. The boundary covers slice indexes, range
+  projection, area/containment queries, info-slice sizing, and arena bitmap
+  layout.
+- `SAFETY[AUDIT:arena-registry-boundary]`: arena registry and subproc table
+  access in `src/allocator/arena.rs`. The boundary covers arena indexes,
+  subproc arena cells, heap arena-page tables, NUMA suitability, arena
+  iteration, and unsafe arena teardown.
+- `SAFETY[AUDIT:arena-allocation-boundary]`: arena allocation and OS
+  reservation in `src/allocator/arena.rs`. The boundary covers slice bitmap
+  allocation, arena initialization, reserve growth, OS-memory fallback, public
+  reserve/manage APIs, and huge-page reservation.
+- `SAFETY[AUDIT:arena-abandoned-boundary]`: abandoned-page claim/reclaim in
+  `src/allocator/arena.rs`. The boundary covers abandoned ownership transfer,
+  heap arena-page bitmap lookup, remote-free collection, and thread-local claim
+  callbacks.
+- `SAFETY[AUDIT:arena-page-lifecycle-boundary]`: arena-backed page lifecycle in
+  `src/allocator/arena.rs`. The boundary covers fresh/regular/singleton page
+  allocation, page free/abandon/reabandon/unabandon shims, page memid
+  ownership, and heap arena-page publication.
+- `SAFETY[AUDIT:arena-purge-boundary]`: arena purge and collection in
+  `src/allocator/arena.rs`. The boundary covers purge scheduling, purge bitmap
+  traversal, arena collection/free, OS purge/decommit handoff, and purge stats.
 - `SAFETY[AUDIT:internal-bitmap-boundary]`: internal bitmap and binned-bitmap
   operations in `src/internal/bitmap.rs`. The boundary covers chunk/field
   projection, bit set/clear/search loops, arena traversal callbacks, typed

@@ -257,14 +257,42 @@ Operation IDs:
   state witnesses; arena page allocation/free handoff; and C ABI helper shims
   while preserving queue ownership, used/capacity counters, stats gates, and
   no-allocation hot-path constraints.
-- `SAFETY[AUDIT:arena-region-boundary]`: `src/allocator/arena.rs` owns arena
-  registry state, slice maps, abandoned-page bitmap claims, arena allocation
-  and free, purge scheduling/traversal, page alloc/free/abandon/unabandon
-  shims, subproc arena tables, and raw arena exports. Unsafe operations are
-  limited to caller-proven arena, heap, page, slice, and OS-memory pointers;
-  typed arena/slice/memid witnesses; bitmap visitor callbacks; page lifecycle
-  handoff; and C ABI helper shims while preserving arena ownership,
-  subproc table synchronization, memid provenance, and purge semantics.
+- `SAFETY[AUDIT:arena-slice-boundary]`: `src/allocator/arena.rs` owns arena
+  slice/range projection, arena area queries, containment checks, info-slice
+  sizing, and arena bitmap layout. Unsafe operations are limited to
+  caller-proven arena pointers, typed `SliceIndex`/`SliceRange` witnesses,
+  bounded metadata projection, and address containment arithmetic while
+  preserving arena bounds and slice alignment.
+- `SAFETY[AUDIT:arena-registry-boundary]`: `src/allocator/arena.rs` owns
+  subproc arena tables, arena indexes, arena iteration, heap arena-page table
+  lookup, NUMA suitability, and unsafe arena teardown. Unsafe operations are
+  limited to typed arena/subproc/heap pointers, `ArenaIndex` construction,
+  atomic arena table cells, and C ABI registry shims while preserving subproc
+  synchronization and arena ownership.
+- `SAFETY[AUDIT:arena-allocation-boundary]`: `src/allocator/arena.rs` owns
+  arena slice allocation, arena initialization, arena reserve growth,
+  OS-memory fallback, public reserve/manage APIs, and huge-page reservation.
+  Unsafe operations are limited to typed allocation layout/memid witnesses,
+  arena slice bitmaps, OS commit/allocation primitives, and raw C ABI shims
+  while preserving commit accounting, zeroing, NUMA, and fallback semantics.
+- `SAFETY[AUDIT:arena-abandoned-boundary]`: `src/allocator/arena.rs` owns
+  abandoned-page ownership claim/release, heap arena-page bitmap lookup, and
+  thread-local abandoned-page claim callbacks. Unsafe operations are limited to
+  typed abandoned-page witnesses, remote-free collection, callback ABI
+  arguments, and heap arena-page bitmap cells while preserving page ownership
+  transfer and abandoned-count semantics.
+- `SAFETY[AUDIT:arena-page-lifecycle-boundary]`: `src/allocator/arena.rs`
+  owns arena-backed page allocation, fresh/regular/singleton page setup,
+  page free/abandon/reabandon/unabandon shims, and heap arena-page publication.
+  Unsafe operations are limited to typed page-state witnesses, arena memid
+  projection, page queue/lifecycle handoff, and C ABI helper shims while
+  preserving page ownership, queue membership, and abandoned-count updates.
+- `SAFETY[AUDIT:arena-purge-boundary]`: `src/allocator/arena.rs` owns arena
+  purge scheduling, purge traversal callbacks, arena collection, arena free,
+  and OS decommit/reset handoff. Unsafe operations are limited to purge bitmap
+  traversal, elapsed-time decisions, typed arena/slice witnesses, OS purge
+  primitives, and C ABI collection shims while preserving purge ordering,
+  stats accounting, and lock discipline.
 - `SAFETY[AUDIT:internal-bitmap-boundary]`: `src/internal/bitmap.rs` owns
   bitmap and binned-bitmap chunk maps, bit scanning, set/clear mutation,
   first-fit claim loops, arena traversal callbacks, and AVX2 bitmap helper

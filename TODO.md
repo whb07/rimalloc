@@ -1,12 +1,11 @@
 # TODO: Fresh Rust Idiom Follow-up Backlog
 
-Fresh-eyes review after completing the previous TODO backlog on `master` at
-`9d63307`. The last pass migrated `src/platform/macos.rs`,
-`src/platform/mod.rs`, `src/internal/atomic.rs`,
-`src/allocator/page_map.rs`, and `src/types/scalar.rs` off the unsafe
-migration allowlist while preserving platform ABI shape, TLS fast paths,
-atomic ordering, page-map lookup, scalar wrapper layout, and allocator
-hot-path constraints.
+Fresh-eyes review after completing the previous active TODO backlog on
+`master` at `33a8f2d`. That pass migrated `src/types/constants.rs`,
+`src/allocator/thread_heap.rs`, `src/platform/unix.rs`, `src/platform/os.rs`,
+and `src/types/ptr.rs` off the unsafe migration allowlist while preserving raw
+ABI layout, thread-heap lifecycle behavior, Unix and OS memory boundaries, typed
+pointer layout, and allocator hot-path constraints.
 
 The next pass should keep the same discipline: retire one measurable exception
 at a time, prefer local operation-level proof markers over file allowances, and
@@ -17,62 +16,38 @@ Current review evidence:
 
 - `docs/unsafe-migration-allowlist.tsv` has 12 entries: 10 production and
   2 translation files. `ALLOWLIST_ENTRY_CAP` is 12.
-- The completed pass moved `src/platform/macos.rs`, `src/platform/mod.rs`,
-  `src/internal/atomic.rs`, `src/allocator/page_map.rs`, and
-  `src/types/scalar.rs` to local `SAFETY[AUDIT:*]` operation markers with
-  evidence rows and no migration allowlist entries.
-- The current pass moved `src/types/constants.rs` to 8
-  `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers for raw callback typedef
-  declarations while retaining 2 `SAFETY[AUDIT:raw-auto-trait]` markers for
-  sentinel `Sync` impls, and is off the unsafe migration allowlist.
-- The current pass moved `src/allocator/thread_heap.rs` to 71
-  `SAFETY[AUDIT:thread-heap-lifecycle]` markers for visitor callback
-  invocation, area metadata initialization, fast-divisor out-pointer writes,
-  page/block traversal, page validation/collection, stats merging,
-  collect/default-switching shims, thread-heap init/create/free/delete,
-  refcount updates, random next, and arena-memory cleanup, and is off the
-  unsafe migration allowlist.
-- The current pass moved `src/platform/unix.rs` to 90
-  `SAFETY[AUDIT:unix-primitive-backend]` markers for libc/syscall imports,
-  proc/sys probes, sysconf memory sizing, mmap/free/commit/decommit/reset/
-  protect paths, huge-page and NUMA syscalls, process-info writes, stderr
-  output, environment lookup, random source fallbacks, pthread TLS destructor
-  registration, and scheduler yield, and is off the unsafe migration allowlist.
-- The current pass moved `src/platform/os.rs` to 136
-  `SAFETY[AUDIT:os-memory-boundary]` markers for memory config, subproc stats
-  projection, page-size and alignment queries, aligned hints, guard-page
-  callbacks, commit/decommit/reset/reuse/purge/protect/free paths, aligned
-  allocation and trimming, zero-state publication, huge-page claim/free, NUMA
-  helpers, and raw OS shims, and is off the unsafe migration allowlist.
-- The current pass moved `src/types/ptr.rs` to 161
-  `SAFETY[AUDIT:typed-pointer-accessors]` markers for pointer wrapper
-  construction, raw field reads/writes, atomic field projections, encoded
-  free-list links, page/block address arithmetic, heap/thread-heap/TLD/arena/
-  subproc/page-queue accessors, scalar narrowing, lock pointer projections, and
-  lint-touch function-pointer references, and is off the unsafe migration
-  allowlist.
+- The completed pass moved `src/types/constants.rs` to 8
+  `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers while retaining 2
+  `SAFETY[AUDIT:raw-auto-trait]` markers for sentinel `Sync` impls, moved
+  `src/allocator/thread_heap.rs` to 71
+  `SAFETY[AUDIT:thread-heap-lifecycle]` markers, moved
+  `src/platform/unix.rs` to 90 `SAFETY[AUDIT:unix-primitive-backend]` markers,
+  moved `src/platform/os.rs` to 136 `SAFETY[AUDIT:os-memory-boundary]`
+  markers, and moved `src/types/ptr.rs` to 161
+  `SAFETY[AUDIT:typed-pointer-accessors]` markers.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits, and
-  `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits, and
-  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits, and
+  `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits,
+  `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits,
+  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits,
   `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits, and
   `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits.
 - The next allowlisted production files after those are
-  `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits, and
-  `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits, and
-  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits, and
+  `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits,
+  `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits,
+  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits,
   `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits, and
   `src/allocator/arena.rs` at 3,915 lines with 607 `unsafe` hits.
-- `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
-  `symbol = *` entries. The largest categories are 150 raw-pointer-parameter
+- The remaining translation allowlist entries are `src/internal/mod.rs` at
+  1,533 lines with 163 `unsafe` hits, and `src/platform/windows.rs` at
+  2,191 lines with 214 `unsafe` hits.
+- `strict-type-allowlist.txt` has 280 entries: 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
   entries, 8 metadata-reference entries, 2 atomic-cast entries, and
   2 heap-allocating-type entries. `REMOVE_ENTRY_CAP` remains 0.
-- The broadest path-wide strict-type clusters are
-  `src/allocator/aligned.rs`, `src/allocator/stats.rs`,
-  `src/allocator/thread_heap.rs`, `src/internal/mod.rs`,
-  `src/platform/unix.rs`, and `src/platform/windows.rs`, each with
-  4 path-wide entries.
+- The broadest path-wide strict-type clusters are `src/allocator/aligned.rs`,
+  `src/allocator/stats.rs`, `src/allocator/thread_heap.rs`,
+  `src/internal/mod.rs`, `src/platform/unix.rs`, and
+  `src/platform/windows.rs`, each with 4 path-wide entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
   `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
@@ -90,186 +65,171 @@ Current review evidence:
   `SAFETY[AUDIT:typed-atomic-domain]` has 51 markers,
   `SAFETY[AUDIT:ffi-libc-helpers]` has 50 markers, and
   `SAFETY[AUDIT:threadlocal-key-manager]` has 50 markers.
-- The largest production review units remain translated-style modules:
-  `src/allocator/arena.rs` is 3,915 lines,
-  `src/allocator/page.rs` is 2,801 lines,
-  `src/allocator/alloc.rs` is 2,559 lines,
-  `src/internal/bitmap.rs` is 2,358 lines,
-  `src/allocator/init.rs` is 2,339 lines,
-  `src/raw/macros.rs` is 2,223 lines, and
-  `src/platform/windows.rs` is 2,191 lines.
 - The release audit is still split but has large review units:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,433 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,146 lines,
   `tests/release_fast_path_audit.rs` is 1,899 lines, and
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines.
 
-## Issue: Raw layout callback typedefs still use a file-level unsafe allowance
+## Issue: Free path ownership boundary still uses a file-level unsafe allowance
 
-> **Comment:** `src/types/constants.rs` is the raw C layout substrate. Its
-> previously unmarked unsafe operations were ABI declarations: raw
-> `unsafe extern "C" fn` callback typedefs used by raw/public C compatibility
-> APIs. The sentinel `Sync` impls already have local `raw-auto-trait` markers,
-> and this pass locally classified the callback typedef declarations so the file
-> no longer needs a migration allowance.
+> **Comment:** `src/allocator/free.rs` owns user-pointer-to-page lookup,
+> ownership validation, local and remote free routing, delayed-free publication,
+> guard-page handling, double-free checks, padding shrink, abandon handling, and
+> raw free/realloc-adjacent shims. This should be migrated before larger
+> allocator files because it is a compact hot-path boundary with clear existing
+> behavior tests.
 
-- [x] Add local `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers for deferred
-      free, output, error, heap visit, block visit, commit, claim, and forall-set
-      callback typedef declarations while retaining the existing
-      `SAFETY[AUDIT:raw-auto-trait]` markers for sentinel `Sync` impls.
-- [x] Preserve `repr(C)` layout definitions, raw callback typedef names and
-      signatures, documented nullability/lifetime/threading/reentrancy/unwind
-      contracts, raw `mi_*` aliases, and the separation between raw typedefs
-      and typed callback wrappers.
-- [x] Add or extend release-audit assertions for callback typedef marker
-      coverage, raw typedef names, no typed wrapper leakage into
-      `src/types/constants.rs`, sentinel-only `Sync` impls, and no migration
-      allowlist entry.
-- [x] Add matching unsafe audit/evidence entries, remove
-      `src/types/constants.rs` from the unsafe migration allowlist, regenerate
-      unsafe inventory, and lower the cap.
+- [ ] Add local `SAFETY[AUDIT:free-path-boundary]` markers for page lookup,
+      block ownership checks, free-list link writes, delayed-free and
+      cross-thread publication, guard-page validation, padding shrink, small and
+      huge page free paths, and raw public free shims.
+- [ ] Preserve typed pointer wrappers, page ownership and segment invariants,
+      double-free detection, abandoned-page semantics, memory-ordering choices,
+      delayed-free retry behavior, usable-size accounting, and the absence of
+      allocator allocation or dynamic dispatch on free hot paths.
+- [ ] Add or extend release-audit assertions and focused tests for marker
+      coverage, no migration allowlist entry, local free, remote free,
+      guarded free, invalid/double-free rejection, huge allocation free, and
+      no-allocation critical paths.
+- [ ] Add matching unsafe audit/evidence entries, remove `src/allocator/free.rs`
+      from the unsafe migration allowlist, regenerate unsafe inventory, and
+      lower the cap.
 
-Verify: constants/raw-layout tests, callback ABI release audit, unsafe audit
-scripts, unsafe inventory regeneration/check, full clippy, and full tests.
+Verify: free-path release audit, allocation boundary cases, no-allocation
+critical-path tests, unsafe audit scripts, unsafe inventory regeneration/check,
+full clippy, and full tests.
 
-## Issue: Thread-heap lifecycle still uses a file-level unsafe allowance
+## Issue: Options, output, and callback state still use a file-level unsafe allowance
 
-> **Comment:** `src/allocator/thread_heap.rs` owns thread-heap visitation,
-> collection, default switching, initialization, creation, refcounting, free,
-> delete, and random/arena-memory cleanup paths. These paths are shaped by typed
-> heap/thread-heap witnesses, and this pass moved the remaining unsafe
-> operations from a dated file allowance to local operation markers.
+> **Comment:** `src/allocator/options.rs` owns option descriptors, environment
+> and string parsing, process-global option mutation, output/error callbacks,
+> recursion guards, and raw C option exports. It is smaller than most remaining
+> allocator files and has many C-shaped operations that should be classified
+> locally instead of hidden behind a file allowance.
 
-- [x] Add local `SAFETY[AUDIT:thread-heap-lifecycle]` markers for visitor
-      callback invocation, area metadata initialization, fast-divisor out-pointer
-      writes, page/block traversal, page validation/collection, stats merging,
-      collect/default-switching shims, thread-heap init/create/free/delete,
-      refcount updates, random next, and arena-memory cleanup.
-- [x] Preserve `ThreadHeapLocal`, `ThreadHeapPtr`, `HeapPtr`, `TldPtr`, and
-      callback wrapper boundaries; default-thread-heap semantics; lock ordering;
-      refcount acquire/release behavior; page ownership checks; and no heap
-      allocation or dynamic dispatch on lifecycle hot paths.
-- [x] Add or extend release-audit assertions and focused tests for area/block
-      visitation, page validation/collection, stats merge, collect/default
-      switching, init/create/delete/free ordering, refcount transitions, and
-      marker coverage without a migration allowlist entry.
-- [x] Add matching unsafe audit/evidence entries, remove
-      `src/allocator/thread_heap.rs` from the unsafe migration allowlist,
+- [ ] Add local `SAFETY[AUDIT:options-callback-boundary]` markers for raw option
+      descriptor access, C string conversion, environment reads, option
+      load/store helpers, output/error callback pointer publication, recursive
+      message guard access, stderr fallback writes, and raw option exports.
+- [ ] Preserve option defaults, option name aliases, environment variable
+      parsing, atomic ordering and locking, callback ABI signatures, callback
+      nullability, recursion behavior, message formatting, and no allocator
+      allocation in primitive output paths.
+- [ ] Add or extend release-audit assertions and focused tests for marker
+      coverage, no migration allowlist entry, option descriptor shape, raw
+      option exports, callback locking, recursion guards, stderr fallback, and
+      environment parsing behavior.
+- [ ] Add matching unsafe audit/evidence entries, remove
+      `src/allocator/options.rs` from the unsafe migration allowlist,
       regenerate unsafe inventory, and lower the cap.
 
-Verify: thread-heap/lifecycle release audit, focused thread-heap tests, unsafe
+Verify: option/callback release audit, option parsing tests, callback/output
+tests, unsafe audit scripts, unsafe inventory regeneration/check, full clippy,
+and full tests.
+
+## Issue: Aligned allocation boundary still uses a file-level unsafe allowance
+
+> **Comment:** `src/allocator/aligned.rs` owns alignment-sensitive allocation,
+> aligned realloc, offset-aware layout adjustment, usable-size preservation,
+> over-allocation trimming, and original-allocation pointer recovery. It is a
+> hot path, so migration needs explicit marker proof plus existing
+> no-allocation/performance evidence before removing the file allowance.
+
+- [ ] Add local `SAFETY[AUDIT:aligned-allocation-boundary]` markers for aligned
+      allocation entry points, offset and alignment validation, allocation-size
+      rounding, guard-page and OS fallback paths, aligned realloc movement,
+      usable-size queries, original pointer recovery, and raw aligned exports.
+- [ ] Preserve alignment and offset contracts, overflow handling, zero-size and
+      huge-size behavior, in-place realloc behavior, allocation ownership
+      transfer, layout metadata reads/writes, error paths, and no dynamic
+      dispatch on aligned allocation hot paths.
+- [ ] Add or extend release-audit assertions and focused tests for marker
+      coverage, no migration allowlist entry, alignment/offset edge cases,
+      realloc preservation, usable-size behavior, original pointer recovery,
+      and benchmark or no-allocation hot-path evidence.
+- [ ] Add matching unsafe audit/evidence entries, remove
+      `src/allocator/aligned.rs` from the unsafe migration allowlist,
+      regenerate unsafe inventory, and lower the cap.
+
+Verify: aligned allocation/reallocation tests, allocation boundary cases,
+release audit performance checks, unsafe audit scripts, unsafe inventory
+regeneration/check, full clippy, and full tests.
+
+## Issue: Stats reporting boundary still uses a file-level unsafe allowance
+
+> **Comment:** `src/allocator/stats.rs` owns per-thread and process stats
+> counters, stats merging, formatted stats output, JSON-ish output paths, raw
+> output callbacks, and C export shims. It mixes accounting state with C callback
+> boundaries, so local operation markers should distinguish counter projection
+> from output and callback safety.
+
+- [ ] Add local `SAFETY[AUDIT:stats-reporting-boundary]` markers for stats
+      counter access, thread/process stats merging, buffer writes, raw callback
+      dispatch, formatted output helpers, JSON field emission, and raw stats
+      exports.
+- [ ] Preserve counter width and saturation behavior, reset and merge semantics,
+      output ordering, callback ABI and nullability, buffer bounds, process
+      option interactions, and no allocator recursion from stats output paths.
+- [ ] Add or extend release-audit assertions and focused tests for marker
+      coverage, no migration allowlist entry, stats merge/reset behavior,
+      formatted output stability, callback output behavior, and no-allocation
+      critical paths.
+- [ ] Add matching unsafe audit/evidence entries, remove `src/allocator/stats.rs`
+      from the unsafe migration allowlist, regenerate unsafe inventory, and
+      lower the cap.
+
+Verify: stats release audit, stats output tests, no-allocation critical-path
+tests, unsafe audit scripts, unsafe inventory regeneration/check, full clippy,
+and full tests.
+
+## Issue: Raw macro allocation facade still uses a file-level unsafe allowance
+
+> **Comment:** `src/raw/macros.rs` is a raw C compatibility facade for
+> allocator entry points, override macros, bootstrap tracking, and C-header-like
+> allocation functions. It remains mechanically translated in shape, but the
+> unsafe boundary can still be documented with operation markers while preserving
+> public macro/API compatibility.
+
+- [ ] Add local `SAFETY[AUDIT:raw-macro-allocation-boundary]` markers for raw
+      allocation, calloc, realloc, aligned allocation, free, usable-size,
+      override, bootstrap, and C-header compatibility entry points generated or
+      shaped by the macro facade.
+- [ ] Preserve exported raw names and signatures, feature/cfg behavior,
+      bootstrap allocation tracking, weak/override symbol semantics, C allocator
+      ownership rules, null and zero-size behavior, panic/unwind containment,
+      and no safe wrapper leakage into the raw facade.
+- [ ] Add or extend release-audit assertions and focused tests for marker
+      coverage, no migration allowlist entry, raw symbol/signature parity,
+      override cfg shape, bootstrap behavior, raw free/realloc ownership, and
+      allocation boundary behavior.
+- [ ] Add matching unsafe audit/evidence entries, remove `src/raw/macros.rs`
+      from the unsafe migration allowlist, regenerate unsafe inventory, and
+      lower the cap.
+
+Verify: raw macro/facade release audit, raw allocation boundary tests, unsafe
 audit scripts, unsafe inventory regeneration/check, full clippy, and full tests.
-
-## Issue: Unix primitive backend still uses a file-level unsafe allowance
-
-> **Comment:** `src/platform/unix.rs` is the Unix primitive backend. Its unsafe
-> operations cover libc/syscall imports, overcommit and transparent huge-page
-> detection, `mmap`/`munmap`/`madvise`/`mprotect`, huge-page and NUMA probes,
-> process info, stderr writes, environment lookup, random-byte fallback, TLS
-> auto-done hooks, and scheduler yield. This pass moved those boundaries from a
-> dated file allowance to local operation markers.
-
-- [x] Add local `SAFETY[AUDIT:unix-primitive-backend]` markers for extern
-      declarations, libc wrappers, proc/sys file reads, sysconf memory sizing,
-      mmap allocation/free/commit/decommit/reset/protect paths, huge-page and
-      NUMA syscalls, process-info writes, stderr output, environment scanning,
-      random source fallbacks, pthread TLS destructor registration, and yield.
-- [x] Preserve Linux/macOS/BSD cfg shape, syscall parity, `MAP_FAILED` handling,
-      overcommit/THP detection, aligned mmap hint behavior, large-page fallback,
-      preloading safeguards, bounded environment scans, partial-write handling,
-      random-byte fallback ordering, TLS destructor semantics, and no allocator
-      allocation inside primitive helpers.
-- [x] Add or extend release-audit assertions and parity checks for Unix syscall
-      shape, mmap/free/commit/decommit/reset/protect behavior, NUMA and process
-      info probes, environment/random helpers, TLS auto-done hooks, and marker
-      coverage without a migration allowlist entry.
-- [x] Add matching unsafe audit/evidence entries, remove `src/platform/unix.rs`
-      from the unsafe migration allowlist, regenerate unsafe inventory, and
-      lower the cap.
-
-Verify: Unix primitive release audit, Unix syscall parity script where
-available, unsafe audit scripts, unsafe inventory regeneration/check, full
-clippy, and full tests.
-
-## Issue: OS memory boundary still uses a file-level unsafe allowance
-
-> **Comment:** `src/platform/os.rs` bridges typed allocator policy to primitive
-> OS memory operations. Its unsafe operations cover global memory config,
-> page-size and alignment queries, aligned hint generation, guard pages, commit,
-> decommit, reset, reuse, purge, protect/unprotect, free, aligned allocation,
-> zeroing, huge pages, NUMA, and raw test/export shims. This pass moved those
-> boundaries from a dated file allowance to local operation markers.
-
-- [x] Add local `SAFETY[AUDIT:os-memory-boundary]` markers for memory config
-      access, subproc stats projection, page-size/large-page/good-size queries,
-      aligned-hint randomization, guard-page commit/decommit callbacks, OS
-      commit/decommit/reset/reuse/purge/protect/free paths, aligned allocation
-      and trimming, zero-state publication, huge-page claim/free, NUMA helpers,
-      and raw public OS shims.
-- [x] Preserve memid commit/zero/pinned semantics, over-allocation trimming,
-      partial-free behavior, subproc stat accounting, arena commit callback
-      handling, out-pointer writes, alignment/page-size invariants, huge-page
-      fallback behavior, and no allocator recursion from OS memory helpers.
-- [x] Add or extend release-audit assertions and focused tests for OS config,
-      page sizes, aligned hints, guard pages, commit/decommit/reset/reuse/purge,
-      aligned allocation/free, memid zeroing, huge-page/NUMA behavior, and
-      marker coverage without a migration allowlist entry.
-- [x] Add matching unsafe audit/evidence entries, remove `src/platform/os.rs`
-      from the unsafe migration allowlist, regenerate unsafe inventory, and
-      lower the cap.
-
-Verify: OS memory release audit, allocation boundary tests, unsafe audit
-scripts, unsafe inventory regeneration/check, full clippy, and full tests.
-
-## Issue: Typed pointer accessors still use a file-level unsafe allowance
-
-> **Comment:** `src/types/ptr.rs` is a typed pointer/accessor substrate. Its
-> unsafe operations cover non-null wrapper construction, raw field reads/writes,
-> atomic field projections, encoded free-list links, page/heap/thread-heap/TLD/
-> arena and subproc accessors, page-queue accessors, exposed-address checks, and
-> lint-touch fixtures. This pass moved those boundaries from a dated file
-> allowance to local operation markers.
-
-- [x] Add local `SAFETY[AUDIT:typed-pointer-accessors]` markers for pointer
-      wrapper constructors, field reads/writes, atomic cell projections,
-      encoded free-list link reads/writes, page start and contains-user
-      arithmetic, heap/thread-heap/TLD/arena/subproc/page-queue accessors,
-      count/index scalar narrowing, lock pointer projections, and lint-touch
-      fixture function-pointer references.
-- [x] Preserve `repr(transparent)` pointer wrapper layout, `Option` niche
-      behavior, typed scalar validation, provenance helper use, free-list
-      encoding contracts, atomic field ordering boundaries, raw metadata
-      ownership rules, no heap allocation, and no dynamic dispatch.
-- [x] Add or extend release-audit assertions and focused tests for pointer
-      wrapper layout/niche behavior, representative page/block/heap/theap/TLD/
-      arena/subproc/page-queue accessors, encoded-link helpers, exposed-address
-      helpers, and marker coverage without a migration allowlist entry.
-- [x] Add matching unsafe audit/evidence entries, remove `src/types/ptr.rs` from
-      the unsafe migration allowlist, regenerate unsafe inventory, and lower the
-      cap.
-
-Verify: `cargo test types::ptr::tests --all-features`, datatype acceptance
-release audit, unsafe audit scripts, unsafe inventory regeneration/check, full
-clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Migrate `src/types/constants.rs` off the unsafe migration allowlist.
-2. [x] Migrate `src/allocator/thread_heap.rs` off the unsafe migration
-       allowlist.
-3. [x] Migrate `src/platform/unix.rs` off the unsafe migration allowlist.
-4. [x] Migrate `src/platform/os.rs` off the unsafe migration allowlist.
-5. [x] Migrate `src/types/ptr.rs` off the unsafe migration allowlist.
+1. [ ] Migrate `src/allocator/free.rs` off the unsafe migration allowlist.
+2. [ ] Migrate `src/allocator/options.rs` off the unsafe migration allowlist.
+3. [ ] Migrate `src/allocator/aligned.rs` off the unsafe migration allowlist.
+4. [ ] Migrate `src/allocator/stats.rs` off the unsafe migration allowlist.
+5. [ ] Migrate `src/raw/macros.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog
 
-- [x] The unsafe migration allowlist cap is lowered after each migrated file.
-- [x] `src/types/constants.rs`, `src/allocator/thread_heap.rs`,
-      `src/platform/unix.rs`, `src/platform/os.rs`, and `src/types/ptr.rs` are
-      covered by operation-level audit markers and evidence instead of
-      file-level migration exceptions.
-- [x] Raw callback typedefs, thread-heap lifecycle behavior, Unix primitive
-      behavior, OS memory semantics, pointer wrapper layout, and allocator
-      hot-path performance constraints remain unchanged.
-- [x] Release-audit TODO guards track the active backlog and measurable
+- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
+- [ ] `src/allocator/free.rs`, `src/allocator/options.rs`,
+      `src/allocator/aligned.rs`, `src/allocator/stats.rs`, and
+      `src/raw/macros.rs` are covered by operation-level audit markers and
+      evidence instead of file-level migration exceptions.
+- [ ] Free routing, option/callback behavior, aligned allocation layout, stats
+      output semantics, raw macro facade compatibility, and allocator hot-path
+      performance constraints remain unchanged.
+- [ ] Release-audit TODO guards track the active backlog and measurable
       evidence.
+- [ ] Before considering the backlog complete, rescan the codebase with fresh
+      eyes, rewrite `TODO.md` with the next set of concrete issues, and set a
+      new goal to work through that refreshed backlog.

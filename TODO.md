@@ -1,63 +1,37 @@
-# TODO: Fresh Rust Idiom Follow-up Backlog
+# TODO: Strict-Type and Audit Granularity Backlog
 
-Fresh-eyes review after completing the unsafe-audit migration pass on `master`
-at `da44c1a`. That pass moved `src/allocator/free.rs`,
-`src/allocator/options.rs`, `src/allocator/aligned.rs`,
-`src/allocator/stats.rs`, and `src/raw/macros.rs` off the unsafe migration
-allowlist with local operation markers, audit evidence, release-audit guards,
-and full validation.
-
-This follow-up pass has now also moved `src/allocator/init.rs`,
-`src/internal/bitmap.rs`, `src/allocator/alloc.rs`, and
-`src/allocator/page.rs`, `src/allocator/arena.rs`, and
-`src/internal/mod.rs`, and `src/platform/windows.rs` off the unsafe migration
-allowlist with local operation markers, audit evidence, release-audit guards,
-and focused behavior tests.
-
-This pass has retired every file-level unsafe migration allowance while
-preserving raw ABI shape, allocator ownership, synchronization, platform
-behavior, and hot-path code shape. Before closing the loop, rescan the codebase
-with fresh eyes and rewrite this backlog with the next concrete issues.
+Fresh-eyes review after completing the unsafe migration allowlist on `master` at
+`da60fc0`. The file-level unsafe migration work is done; the next mechanical
+translation debt is now in broad strict-type allowances, broad unsafe operation
+IDs, and large release-audit review units.
 
 Current review evidence:
 
 - `docs/unsafe-migration-allowlist.tsv` has 0 translation entries and no
   production entries. `ALLOWLIST_ENTRY_CAP` is 0.
-- The just-completed pass moved `src/allocator/free.rs` to 69
-  `SAFETY[AUDIT:free-path-boundary]` markers, `src/allocator/options.rs` to 76
-  `SAFETY[AUDIT:options-callback-boundary]` markers,
-  `src/allocator/aligned.rs` to 158
-  `SAFETY[AUDIT:aligned-allocation-boundary]` markers,
-  `src/allocator/stats.rs` to 161
-  `SAFETY[AUDIT:stats-reporting-boundary]` markers, and
-  `src/raw/macros.rs` to 178
-  `SAFETY[AUDIT:raw-macro-allocation-boundary]` markers.
-- The current pass moved `src/allocator/init.rs` to 277
-  `SAFETY[AUDIT:init-lifecycle-boundary]` markers and
-  `src/internal/bitmap.rs` to 71
-  `SAFETY[AUDIT:internal-bitmap-boundary]` markers,
-  `src/allocator/alloc.rs` to 166
-  `SAFETY[AUDIT:allocation-entry-boundary]` markers, and
-  `src/allocator/page.rs` to 102
-  `SAFETY[AUDIT:page-allocation-boundary]` markers. It also moved
-  `src/allocator/arena.rs` to 340
-  `SAFETY[AUDIT:arena-region-boundary]` markers and
-  `src/internal/mod.rs` to 76
-  `SAFETY[AUDIT:internal-translation-boundary]` markers. It also moved
-  `src/platform/windows.rs` to 114
-  `SAFETY[AUDIT:windows-primitive-boundary]` markers.
-- No unsafe migration allowlist entries remain.
-- `strict-type-allowlist.txt` still has 280 entries: 150 raw-pointer-parameter
+- `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe mentions,
+  and 81 operation IDs.
+- `strict-type-allowlist.txt` has 280 entries: 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
   entries, 8 metadata-reference entries, 2 atomic-cast entries, and
   2 heap-allocating-type entries. `REMOVE_ENTRY_CAP` remains 0.
-- The broadest path-wide strict-type clusters are `src/allocator/aligned.rs`,
-  `src/internal/mod.rs`, `src/platform/unix.rs`, `src/platform/windows.rs`,
-  `src/allocator/stats.rs`, and `src/allocator/thread_heap.rs`, each with
-  4 path-wide entries. `src/allocator/alloc.rs` and
-  `src/allocator/init.rs` each still have 3 path-wide entries; both are no
-  longer on the unsafe migration allowlist.
-- The largest unsafe audit marker clusters remain broad enough to split later:
+- 75 strict-type entries still use symbol `*`: 29 raw-pointer-parameter
+  entries, 21 bare-domain `usize` entries, 13 pointer/usize round-trip entries,
+  8 metadata-reference entries, 2 heap-allocating-type entries, and
+  2 atomic-cast entries.
+- `scripts/check-strict-types.py` already checks raw-pointer and bare-domain
+  function signatures by symbol, but `require_no_pattern` currently calls
+  `is_allowed` with `symbol="*"`. That keeps metadata-reference,
+  pointer/usize-roundtrip, heap-allocating-type, atomic-cast, and
+  dynamic-dispatch findings broader than they need to be.
+- The broadest path-wide strict-type clusters are `src/platform/windows.rs`,
+  `src/platform/unix.rs`, `src/internal/mod.rs`,
+  `src/allocator/thread_heap.rs`, `src/allocator/stats.rs`, and
+  `src/allocator/aligned.rs`, each with 4 path-wide entries.
+  `src/platform/wasi.rs`, `src/platform/os.rs`, `src/allocator/init.rs`,
+  `src/allocator/free.rs`, and `src/allocator/alloc.rs` each still have
+  3 path-wide entries.
+- The largest source unsafe audit marker clusters are still too broad:
   `SAFETY[AUDIT:arena-region-boundary]` has 340 markers,
   `SAFETY[AUDIT:init-lifecycle-boundary]` has 277 markers,
   `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers,
@@ -66,21 +40,9 @@ Current review evidence:
   `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
   `SAFETY[AUDIT:aligned-allocation-boundary]` has 158 markers,
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
-  `SAFETY[AUDIT:os-memory-boundary]` has 136 markers,
-  `SAFETY[AUDIT:windows-primitive-boundary]` has 114 markers,
-  `SAFETY[AUDIT:internal-atomic-facade]` has 103 markers,
-  `SAFETY[AUDIT:page-allocation-boundary]` has 102 markers,
-  `SAFETY[AUDIT:unix-primitive-backend]` has 90 markers,
-  `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
-  `SAFETY[AUDIT:macos-zone-override]` has 83 markers,
-  `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
-  `SAFETY[AUDIT:options-callback-boundary]` has 76 markers,
-  `SAFETY[AUDIT:internal-translation-boundary]` has 76 markers,
-  `SAFETY[AUDIT:thread-heap-lifecycle]` has 71 markers,
-  `SAFETY[AUDIT:internal-bitmap-boundary]` has 71 markers,
-  `SAFETY[AUDIT:raw-posix-compat]` has 70 markers, and
-  `SAFETY[AUDIT:free-path-boundary]` has 69 markers.
-- The release audit is split but still has large review units:
+  `SAFETY[AUDIT:os-memory-boundary]` has 136 markers, and
+  `SAFETY[AUDIT:windows-primitive-boundary]` has 114 markers.
+- The release audit is split, but the largest review units are still heavy:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,567 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
   `tests/release_fast_path_audit.rs` is 1,935 lines,
@@ -90,224 +52,165 @@ Current review evidence:
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
   is 831 lines.
 
-## Completed: Process initialization boundary moved off the file-level unsafe allowance
+## Issue 1: Make strict-type line-pattern checks item-aware
 
-> **Comment:** `src/allocator/init.rs` owns process and thread initialization,
-> teardown, preloading state, subproc identity, default heap association,
-> at-exit/constructor hooks, random reinitialization, CPU feature setup, and
-> option/stat lifecycle entry points. It now has local operation markers,
-> evidence rows, and lifecycle release-audit guards instead of a file-level
-> migration allowance.
+> **Comment:** The strict-type checker can only narrow some checks today.
+> Raw-pointer and bare-domain parameters are symbol-aware, but line-pattern
+> checks still use file-level `*` allowances. That makes the allowlist look more
+> permanent and less reviewable than the code warrants.
 
-- [x] Add local `SAFETY[AUDIT:init-lifecycle-boundary]` markers for process
-      init/done, thread init/done, subproc main/current/id conversion, preloading
-      state, default thread-heap association, allocator constructor/destructor
-      hooks, random and CPU feature initialization, and raw lifecycle exports.
-- [x] Preserve idempotent process initialization, thread-local main-heap TLS,
-      subproc identity mapping, weak random reinitialization, preloading gates,
-      option/stat init order, abort/no-unwind behavior, and no allocator
-      allocation before initialization is safe.
-- [x] Add or extend release-audit assertions and focused tests for marker
-      coverage, no migration allowlist entry, lifecycle helper shape,
-      preloading behavior, default heap TLS behavior, constructor/destructor
-      cfg shape, and random/CPU initialization order.
-- [x] Add matching unsafe audit/evidence entries, remove
-      `src/allocator/init.rs` from the unsafe migration allowlist, regenerate
-      unsafe inventory, and lower the cap.
+- [ ] Teach `scripts/check-strict-types.py` to identify the containing Rust item
+      for line-based findings, including free functions, associated functions,
+      extern blocks, statics, consts, and impl methods.
+- [ ] Use the detected item name when checking metadata-reference,
+      pointer-usize-roundtrip, heap-allocating-type, atomic-cast, and
+      dynamic-dispatch entries; keep a deliberate fallback for module-level or
+      extern-block findings.
+- [ ] Preserve the existing checker behavior for raw ABI boundaries and
+      translated C compatibility shims; do not create false positives for cfg
+      branches, test modules, macro definitions, or source comments.
+- [ ] Add focused checker tests or release-audit assertions that prove new
+      line-pattern allowlist entries can be symbol-level and that new broad
+      `*` entries need explicit justification.
 
-Verify: lifecycle release audit, runtime-gate tests, original lifecycle/override
-tests, unsafe audit scripts, unsafe inventory regeneration/check, full clippy,
-and full tests.
+Verify: `scripts/check-strict-types.py`, release fast-path TODO/datatype audit
+tests, full formatting, full clippy, and full tests.
 
-## Completed: Internal bitmap boundary moved off the file-level unsafe allowance
+## Issue 2: Narrow platform strict-type wildcard allowances
 
-> **Comment:** `src/internal/bitmap.rs` owns translated bitmap field access,
-> bit scanning, claim/clear loops, and arena bitmap traversal helpers. It now
-> has local operation markers, evidence rows, release-audit guards, and focused
-> tests instead of a file-level migration allowance.
+> **Comment:** Platform primitives are legitimate raw compatibility boundaries,
+> but the current wildcard entries hide which functions actually need the raw
+> pointer, metadata-reference, pointer/integer, byte-count, and heap-allocating
+> allowances.
 
-- [x] Add local `SAFETY[AUDIT:internal-bitmap-boundary]` markers for bitmap
-      field pointer projection, bit index arithmetic, claim/clear mutation,
-      visited-range callbacks, arena bitmap helper entry points, and local test
-      fixtures.
-- [x] Preserve bit ordering, field width, bounds checks, first-fit search
-      behavior, arena callback contracts, empty/full handling, and no hidden
-      allocation or dynamic dispatch in bitmap search paths.
-- [x] Add or extend release-audit assertions and focused tests for marker
-      coverage, no migration allowlist entry, bit claim/clear behavior,
-      out-of-range rejection, arena callback traversal, and strict-type bitmap
-      aliases.
-- [x] Add matching unsafe audit/evidence entries, remove
-      `src/internal/bitmap.rs` from the unsafe migration allowlist, regenerate
-      unsafe inventory, and lower the cap.
+- [ ] Replace broad strict-type entries for `src/platform/windows.rs` with
+      symbol/domain entries for TLS/FLS association, virtual-memory byte counts,
+      ETW/metadata callbacks, environment string conversion, and dynamic import
+      helpers.
+- [ ] Replace broad strict-type entries for `src/platform/unix.rs` with
+      symbol/domain entries for TLS association, mmap/madvise byte counts,
+      metadata scanning, and alignment/provenance checks.
+- [ ] Narrow the matching platform entries in `src/platform/wasi.rs` and
+      `src/platform/os.rs` where the checker can now name the responsible
+      function or item.
+- [ ] Add release-audit guards that reject accidental new platform wildcard
+      strict-type entries unless they are explicitly documented ABI shims.
 
-Verify: bitmap unit tests, bitmap release-audit module, strict-type checker,
-unsafe audit scripts, unsafe inventory regeneration/check, full clippy, and full
-tests.
+Verify: strict-type checker, platform primitive release-audit tests,
+no-allocation audit, full clippy, and full tests.
 
-## Completed: Hot allocation entry boundary moved off the file-level unsafe allowance
+## Issue 3: Narrow allocator and internal strict-type wildcard allowances
 
-> **Comment:** `src/allocator/alloc.rs` owns malloc/calloc/realloc/product
-> allocation paths, heap and thread-heap dispatch, zeroing behavior, allocation
-> request construction, padding/provenance decisions, and raw allocation exports.
-> It now has local operation markers, evidence rows, release-audit guards, and
-> focused allocation behavior coverage instead of a file-level migration
-> allowance.
+> **Comment:** Several hot allocator files still carry path-wide strict-type
+> allowances even after the unsafe migration allowlist was removed. The next
+> pass should convert those allowances to named helper boundaries without
+> perturbing hot-path code shape.
 
-- [x] Add local `SAFETY[AUDIT:allocation-entry-boundary]` markers for malloc,
-      calloc, realloc, recalloc, reallocf/reallocn, heap allocation, thread-heap
-      allocation, product overflow, zero-size behavior, padding/provenance
-      recovery, new/new-nothrow shims, and raw allocation exports.
-- [x] Preserve null/zero-size behavior, overflow detection, allocation failure
-      semantics, realloc copy bounds, old-pointer validation, guarded and
-      aligned handoff behavior, heap ownership, no hidden Rust allocation, and
-      no dynamic dispatch on hot allocation paths.
-- [x] Add or extend release-audit assertions and focused tests for marker
-      coverage, no migration allowlist entry, product overflow, realloc
-      preservation, raw export signatures, no-allocation critical paths, and
-      assembly/benchmark evidence for fast allocation helpers.
-- [x] Add matching unsafe audit/evidence entries, remove
-      `src/allocator/alloc.rs` from the unsafe migration allowlist, regenerate
-      unsafe inventory, and lower the cap.
+- [ ] Narrow `src/allocator/aligned.rs` wildcard entries for raw heap/thread-heap
+      parameters, guarded block handoff, and alignment/provenance arithmetic to
+      the specific allocation and padding helpers that need them.
+- [ ] Narrow `src/internal/mod.rs` wildcard entries for page/block helper
+      parameters, thread-heap dispatch, metadata references, and packed-pointer
+      conversions to named helper items.
+- [ ] Narrow `src/allocator/stats.rs` and `src/allocator/thread_heap.rs`
+      wildcard entries to the stats aggregation, heap lifecycle, page visitor,
+      and area visitor helpers that need raw compatibility.
+- [ ] Add release-audit assertions that the targeted files no longer gain broad
+      strict-type wildcards while preserving existing no-allocation and assembly
+      expectations for allocation/free hot paths.
 
-Verify: allocation boundary tests, property/fuzz allocation sequences,
-no-allocation critical-path tests, release fast-path audit, unsafe audit scripts,
-unsafe inventory regeneration/check, full clippy, and full tests.
+Verify: strict-type checker, datatype acceptance audit, no-allocation audit,
+release fast-path audit, full clippy, and full tests.
 
-## Completed: Page allocation boundary moved off the file-level unsafe allowance
+## Issue 4: Split the arena audit operation cluster
 
-> **Comment:** `src/allocator/page.rs` owns page-local allocation, generic
-> malloc refill, page queues, free-list use, stats gates, direct/normal/huge bin
-> selection, retire/extend paths, and typed page helper integration. It now has
-> local operation markers, evidence rows, and release-audit guards instead of a
-> file-level migration allowance.
+> **Comment:** `SAFETY[AUDIT:arena-region-boundary]` now covers 340 source
+> markers across arena registry state, slice math, OS allocation, abandoned-page
+> claiming, heap page tables, purge traversal, and page lifecycle shims. That is
+> too broad to review well.
 
-- [x] Add local `SAFETY[AUDIT:page-allocation-boundary]` markers for page-local
-      malloc, generic refill, queue lookup, free-list pop/push, bin selection,
-      retire/extend transitions, page stats updates, huge/small page handling,
-      and raw page allocation exports.
-- [x] Preserve direct and normal bin classification, release-gated stats writes,
-      page queue invariants, used/capacity counters, free-list ownership, retire
-      and extend behavior, no hidden allocation, and force-inline/noinline
-      performance annotations already guarded by release-audit tests.
-- [x] Add or extend release-audit assertions and focused tests for marker
-      coverage, no migration allowlist entry, generic malloc helper shape,
-      page stats gates, bin classification, page queue invariants, and
-      no-allocation/performance evidence.
-- [x] Add matching unsafe audit/evidence entries, remove
-      `src/allocator/page.rs` from the unsafe migration allowlist, regenerate
-      unsafe inventory, and lower the cap.
+- [ ] Split arena markers into narrower operation IDs for registry/subproc table
+      access, slice/range projection, arena allocation/reservation, abandoned
+      page claim/reclaim, purge traversal, and page lifecycle handoff.
+- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, and
+      `docs/unsafe-audit-evidence.tsv` so each new operation ID has distinct
+      invariants and evidence.
+- [ ] Move the arena release-audit assertions out of the monolithic
+      `unsafe_performance.rs` test into focused arena modules that guard marker
+      counts, helper shape, and ownership transfer behavior.
+- [ ] Preserve arena index bounds, NUMA fields, memid ownership, abandoned-page
+      semantics, purge ordering, subproc locking, OS memory interaction, and C
+      ABI callback signatures.
 
-Verify: page/bin unit tests, runtime-gate tests, release fast-path audit,
-no-allocation critical-path tests, unsafe audit scripts, unsafe inventory
-regeneration/check, full clippy, and full tests.
+Verify: arena/page lifecycle release audits, arena metadata tests, unsafe audit
+scripts, unsafe evidence scripts, unsafe inventory regeneration/check, full
+clippy, and full tests.
 
-## Completed: Arena region boundary moved off the file-level unsafe allowance
+## Issue 5: Split the initialization lifecycle audit cluster
 
-> **Comment:** `src/allocator/arena.rs` is the largest remaining production
-> allowlist entry. It owns arena registry state, abandoned page claims, slice
-> mapping, arena allocation/free, purge traversal, page alloc/free/abandon
-> shims, and subproc arena tables. It now has local operation markers, evidence
-> rows, and release-audit guards instead of a file-level migration allowance.
+> **Comment:** `SAFETY[AUDIT:init-lifecycle-boundary]` has 277 source markers
+> across subproc identity, process init/done, thread init/done, TLS, guarded
+> setup, options/stat setup, random reinitialization, CPU feature detection, and
+> constructor/destructor hooks. Those are separate invariants.
 
-- [x] Add local `SAFETY[AUDIT:arena-region-boundary]` markers for arena table
-      access, arena metadata initialization, slice index/range projection,
-      abandoned-page bitmap traversal, purge visitors, arena alloc/free,
-      page alloc/free/abandon/unabandon/reabandon shims, and raw arena exports.
-- [x] Preserve arena index bounds, NUMA fields, memid ownership, abandoned-page
-      claim/reclaim semantics, purge ordering, subproc arena table locking,
-      page ownership transfer, OS memory interaction, and C ABI callback
-      signatures.
-- [x] Add or extend release-audit assertions and focused tests for marker
-      coverage, no migration allowlist entry, arena id/memid helpers, bitmap
-      visitor shape, heap page visitor integration, page lifecycle shims, and
-      arena purge/allocation behavior.
-- [x] Add matching unsafe audit/evidence entries, remove
-      `src/allocator/arena.rs` from the unsafe migration allowlist, regenerate
-      unsafe inventory, and lower the cap.
+- [ ] Split init markers into narrower operation IDs for subproc identity and
+      main heap access, process lifecycle, thread/TLS lifecycle, guarded/options
+      setup, random/CPU initialization, and platform constructor/destructor
+      hooks.
+- [ ] Update audit docs and evidence rows with separate invariants for each
+      lifecycle operation ID.
+- [ ] Split lifecycle release-audit assertions so process, thread/TLS, subproc,
+      and CPU/random checks are reviewable independently.
+- [ ] Preserve idempotent initialization, preloading gates, default heap TLS,
+      subproc ID mapping, option/stat initialization order, random reseeding,
+      no-unwind behavior, and no hidden allocator allocation before init is
+      safe.
 
-Verify: arena/page lifecycle release audits, arena metadata tests, original
-arena/static override tests, unsafe audit scripts, unsafe inventory
-regeneration/check, full clippy, and full tests.
+Verify: lifecycle release audits, runtime-gate tests, original lifecycle and
+override tests, unsafe audit scripts, unsafe evidence scripts, full clippy, and
+full tests.
 
-## Completed: Internal translation boundary moved off the file-level unsafe allowance
+## Issue 6: Shrink release-audit review units and lower line caps
 
-> **Comment:** `src/internal/mod.rs` is a translation compatibility layer for
-> internal helper macros, layout helpers, block/page pointer helpers, tracking
-> gates, and packed-pointer/provenance conversions. It is not as hot as alloc or
-> page, but it still hid translated C helper unsafety behind a file allowance.
-> It now has local operation markers, evidence rows, and release-audit guards
-> instead of a file-level migration allowance.
+> **Comment:** The release audit is doing useful work, but some modules are now
+> large enough that future changes become hard to review. Splitting tests by
+> boundary also helps keep later audit and strict-type changes focused.
 
-- [x] Add local `SAFETY[AUDIT:internal-translation-boundary]` markers for raw
-      block/page helper access, packed pointer conversion, metadata references,
-      internal layout and tracking helpers, debug/runtime gates, and translated
-      compatibility shims.
-- [x] Preserve packed-pointer encoding, page/block helper contracts, debug assert
-      gating, huge-allocation stats gates, valgrind/ASan tracking behavior,
-      provenance helper use, and strict-type boundaries.
-- [x] Add or extend release-audit assertions and focused tests for marker
-      coverage, no migration allowlist entry, runtime gate behavior,
-      strict-type pointer/metadata aliases, packed-pointer round trips, and
-      no broad lint/unsafe allowances.
-- [x] Add matching unsafe audit/evidence entries, remove `src/internal/mod.rs`
-      from the unsafe migration allowlist, regenerate unsafe inventory, and
-      lower the cap.
+- [ ] Split `tests/release_fast_path_audit/unsafe_performance.rs` into focused
+      modules for allocator allocation/free, arena/page behavior, OS memory, raw
+      facade checks, and shared helpers.
+- [ ] Split `tests/release_fast_path_audit/release_policy.rs` into policy
+      modules that match the documentation areas they guard.
+- [ ] Split or reorganize `tests/release_fast_path_audit/datatype_acceptance.rs`
+      so strict-type, layout, provenance, callbacks, and page-state acceptance
+      checks can be reviewed independently.
+- [ ] Lower the release-audit line-count guard after the split so the root and
+      module caps catch future growth before files reach the current 2,000-line
+      scale.
 
-Verify: runtime-gate tests, datatype acceptance tests, strict-type checker,
-unsafe audit scripts, unsafe inventory regeneration/check, full clippy, and full
-tests.
-
-## Completed: Windows primitive translation boundary moved off the file-level unsafe allowance
-
-> **Comment:** `src/platform/windows.rs` is the last platform translation
-> allowance. It owns Windows virtual memory, process information, timing,
-> randomness, environment, dynamic library, huge-page, and thread/TLS primitive
-> bindings. It was migrated last because validation is more cfg-sensitive on
-> non-Windows hosts. It now has local operation markers, evidence rows, and
-> release-audit guards instead of a file-level migration allowance.
-
-- [x] Add local `SAFETY[AUDIT:windows-primitive-boundary]` markers for Windows
-      API declarations, virtual memory allocation/free/protect, commit/reset,
-      process info, timing, randomness, environment lookup, dynamic library
-      probes, huge pages, console/stderr output, and thread/TLS primitives.
-- [x] Preserve Windows ABI signatures, null/error conventions, page-size and
-      allocation granularity semantics, overcommit/virtual-reserve behavior,
-      huge-page feature gates, dynamic symbol lookup behavior, and non-Windows
-      cfg isolation.
-- [x] Add or extend release-audit assertions and cfg-focused tests for marker
-      coverage, no migration allowlist entry, Windows primitive symbol shape,
-      platform documentation, and non-Windows build stability.
-- [x] Add matching unsafe audit/evidence entries, remove
-      `src/platform/windows.rs` from the unsafe migration allowlist, regenerate
-      unsafe inventory, and lower the cap to zero.
-
-Verify: platform primitive release audits, cfg/build checks available on the
-host, unsafe audit scripts, unsafe inventory regeneration/check, full clippy,
-and full tests.
+Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Migrate `src/allocator/init.rs` off the unsafe migration allowlist.
-2. [x] Migrate `src/internal/bitmap.rs` off the unsafe migration allowlist.
-3. [x] Migrate `src/allocator/alloc.rs` off the unsafe migration allowlist.
-4. [x] Migrate `src/allocator/page.rs` off the unsafe migration allowlist.
-5. [x] Migrate `src/allocator/arena.rs` off the unsafe migration allowlist.
-6. [x] Migrate `src/internal/mod.rs` off the unsafe migration allowlist.
-7. [x] Migrate `src/platform/windows.rs` off the unsafe migration allowlist.
+1. [ ] Make strict-type line-pattern checks item-aware.
+2. [ ] Narrow platform strict-type wildcard allowances.
+3. [ ] Narrow allocator and internal strict-type wildcard allowances.
+4. [ ] Split the arena audit operation cluster.
+5. [ ] Split the initialization lifecycle audit cluster.
+6. [ ] Shrink release-audit review units and lower line caps.
 
 ## Definition of done for this backlog
 
-- [x] The unsafe migration allowlist cap is lowered after each migrated file and
-      reaches zero when the final entry is removed.
-- [x] The completed init, bitmap, allocation, page, arena, internal, and Windows
-      migrations are covered by operation-level audit markers, source audit
-      entries, evidence rows, release-audit guards, and focused behavior tests
-      instead of file-level migration exceptions.
-- [x] Allocator initialization, bitmap traversal, allocation hot paths, page
-      allocation, arena ownership, internal translation helpers, and Windows
-      platform primitives preserve their raw ABI contracts and performance
-      constraints.
-- [ ] After the final item, rescan the codebase with fresh eyes for the next
-      class of mechanical-translation debt, rewrite `TODO.md`, and set the next
-      goal before closing the loop.
+- [ ] The strict-type checker can enforce symbol-level entries for line-pattern
+      findings and has release-audit coverage for that behavior.
+- [ ] The targeted platform, allocator, and internal strict-type wildcard
+      entries are replaced by named symbol/domain allowances or are explicitly
+      documented as true ABI/module boundaries.
+- [ ] The arena and initialization operation IDs are split into narrower audit
+      IDs with separate docs, evidence, and release-audit guards.
+- [ ] The large release-audit modules are split enough to lower the line-count
+      caps without weakening coverage.
+- [ ] For every completed item, run `cargo fmt --all`,
+      `cargo clippy --workspace --all-targets --all-features`, and
+      `cargo test --workspace --all-targets --all-features`; also run the
+      relevant audit scripts before committing and pushing to `origin/master`.

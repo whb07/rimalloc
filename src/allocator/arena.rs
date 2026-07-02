@@ -112,8 +112,14 @@ const MI_LARGE_PAGE_SLICE_COUNT: crate::core_types::SliceCount = {
 const ENOMEM: c_int = 12;
 
 mod debug;
+mod ids;
 mod prefix;
 
+pub(crate) use ids::{_mi_arena_from_id, _mi_arena_id_none, _mi_arena_memid_is_suitable};
+use ids::{
+    mi_arena_from_memid, mi_arena_id_from_arena_typed, mi_arena_is_suitable, mi_memid_create_arena,
+    mi_memid_is_os, mi_page_full_size, mi_page_memid_is_arena,
+};
 use prefix::{
     MiArenaPagesPrefix, MiArenaPrefix, MiHeapPrefix, MiSubprocPrefix, mi_arena_from_index_typed,
     mi_arena_index, mi_arena_pages_t, mi_heap_abandoned_count, mi_heap_arena_page_cell,
@@ -564,83 +570,6 @@ pub extern "C" fn mi_arena_min_size() -> usize {
 }
 
 /// # Safety
-/// Matches the C internal API and returns the null arena-id sentinel.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_arena_id_none() -> mi_arena_id_t {
-    ptr::null_mut()
-}
-
-/// # Safety
-/// `id` must be either null or a valid top-level `mi_arena_t*`.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_arena_from_id(id: mi_arena_id_t) -> *mut mi_arena_t {
-    let arena = id.cast::<mi_arena_t>();
-    crate::internal::mi_assert_internal!(
-        arena.is_null() || unsafe { (*arena.cast::<MiArenaPrefix>()).parent.is_null() }
-    );
-    arena
-}
-
-#[used]
-static MI_ARENA_ID_NONE_KEEP: unsafe extern "C" fn() -> mi_arena_id_t = _mi_arena_id_none;
-
-#[used]
-static MI_ARENA_FROM_ID_KEEP: unsafe extern "C" fn(mi_arena_id_t) -> *mut mi_arena_t =
-    _mi_arena_from_id;
-
-/// # Safety
-/// `arena` must be null or a valid top-level `mi_arena_t*`.
-#[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
-pub unsafe extern "C" fn mi_arena_id_from_arena(arena: *mut mi_arena_t) -> mi_arena_id_t {
-    let Some(arena) = ArenaPtr::new(arena) else {
-        return unsafe { _mi_arena_id_none() };
-    };
-    unsafe { mi_arena_id_from_arena_typed(arena) }
-}
-
-unsafe fn mi_arena_id_from_arena_typed(arena: ArenaPtr) -> mi_arena_id_t {
-    crate::internal::mi_assert_internal!(unsafe { arena.parent().is_none() });
-    arena.as_ptr().cast::<c_void>()
-}
-
-unsafe fn mi_arena_is_suitable(arena: ArenaPtr, req_arena: Option<ArenaPtr>) -> bool {
-    if req_arena.is_some_and(|req_arena| arena.as_ptr() == req_arena.as_ptr()) {
-        return true;
-    }
-    if req_arena.is_none() && !unsafe { arena.is_exclusive() } {
-        return true;
-    }
-    let parent = unsafe { arena.parent() };
-    parent.is_some_and(|parent| {
-        req_arena.is_some_and(|req_arena| parent.as_ptr() == req_arena.as_ptr())
-    })
-}
-
-unsafe fn mi_arena_memid_is_suitable_typed(
-    memid: crate::core_types::MemIdView,
-    request_arena: Option<ArenaPtr>,
-) -> bool {
-    match memid {
-        crate::core_types::MemIdView::Arena(a) => unsafe {
-            mi_arena_is_suitable(a.arena, request_arena)
-        },
-        _ => false,
-    }
-}
-
-/// # Safety
-/// `memid` and `request_arena` must follow the internal arena allocation invariants.
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_arena_memid_is_suitable(
-    memid: mi_memid_t,
-    request_arena: *mut mi_arena_t,
-) -> bool {
-    let request_arena = ArenaPtr::new(request_arena);
-    let memid = crate::core_types::MemId::view(memid);
-    unsafe { mi_arena_memid_is_suitable_typed(memid, request_arena) }
-}
-
-/// # Safety
 /// `subproc` must point to a valid `mi_subproc_t`.
 #[cfg_attr(not(feature = "c-abi"), unsafe(no_mangle))]
 pub unsafe extern "C" fn mi_arenas_get_count(subproc: *mut mi_subproc_t) -> usize {
@@ -702,14 +631,6 @@ unsafe fn mi_page_arena_pages(
         unsafe { *parena_pages = arena_pages };
     }
     arena
-}
-
-#[inline]
-unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool {
-    matches!(
-        crate::core_types::MemId::view(unsafe { (*page).memid }),
-        crate::core_types::MemIdView::Arena(_)
-    )
 }
 
 unsafe fn mi_heap_has_page(heap: BorrowedHeap, arena: ArenaPtr, page: PagePtr) -> bool {
@@ -946,110 +867,6 @@ pub unsafe extern "C" fn mi_arena_contains(arena_id: mi_arena_id_t, p: *const c_
     }
 }
 
-unsafe fn mi_memid_create_arena(
-    arena: *mut mi_arena_t,
-    range: crate::core_types::SliceRange,
-) -> mi_memid_t {
-    let slice_index = range.start_usize();
-    let slice_count = range.count_usize();
-    crate::internal::mi_assert_internal!(slice_count > 0);
-    crate::internal::mi_assert_internal!(
-        slice_index < unsafe { (*arena.cast::<MiArenaPrefix>()).slice_count }
-    );
-    crate::core_types::MemId::<crate::core_types::ArenaMem>::arena(
-        unsafe { crate::core_types::ArenaPtr::new_unchecked(arena) },
-        range,
-        crate::core_types::InitiallyCommitted(false),
-        crate::core_types::InitiallyZero(false),
-        crate::core_types::Pinned(unsafe { (*arena.cast::<MiArenaPrefix>()).memid.is_pinned }),
-    )
-    .into_raw()
-}
-
-unsafe fn mi_arena_from_memid(
-    memid: mi_memid_t,
-    slice_index: *mut usize,
-    slice_count: *mut usize,
-) -> *mut mi_arena_t {
-    let Some((arena, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else {
-        return core::ptr::null_mut();
-    };
-    if !slice_index.is_null() {
-        unsafe { *slice_index = range.start_usize() };
-    }
-    if !slice_count.is_null() {
-        unsafe { *slice_count = range.count_usize() };
-    }
-    arena.as_ptr()
-}
-
-unsafe fn mi_arena_range_from_memid(
-    memid: mi_memid_t,
-) -> Option<(crate::core_types::ArenaPtr, crate::core_types::SliceRange)> {
-    match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::Arena(a) => Some((a.arena, a.range)),
-        _ => {
-            crate::internal::mi_assert_internal!(false);
-            None
-        }
-    }
-}
-
-fn mi_memid_is_os(memid: mi_memid_t) -> bool {
-    matches!(
-        crate::core_types::MemId::view(memid),
-        crate::core_types::MemIdView::Os(_)
-    )
-}
-
-unsafe fn mi_page_full_size(page: PagePtr) -> crate::core_types::ReservedBytes {
-    let page_raw = page.as_ptr();
-    let memid = unsafe { (*page_raw).memid };
-    match crate::core_types::MemId::view(memid) {
-        crate::core_types::MemIdView::Arena(arena_memid) => {
-            let range = arena_memid.range;
-            crate::core_types::ReservedBytes::new(range.count_usize() * MI_ARENA_SLICE_SIZE)
-        }
-        crate::core_types::MemIdView::Os(os) => {
-            let base = os
-                .base
-                .map(|p| p.as_ptr())
-                .unwrap_or(core::ptr::null_mut())
-                .cast::<u8>();
-            let os_size = os.size;
-
-            let page_ptr = page_raw.cast::<u8>();
-            crate::internal::mi_assert_internal!(base <= page_ptr);
-            let presize = unsafe { page_ptr.offset_from(base) };
-            crate::internal::mi_assert_internal!(os_size.get() as isize >= presize);
-            if presize > os_size.get() as isize {
-                crate::core_types::ReservedBytes::new(0)
-            } else {
-                crate::core_types::ReservedBytes::new(os_size.get() - presize as usize)
-            }
-        }
-        crate::core_types::MemIdView::External(external) => {
-            let base = external
-                .base
-                .map(|p| p.as_ptr())
-                .unwrap_or(core::ptr::null_mut())
-                .cast::<u8>();
-            let os_size = external.size.get();
-
-            let page_ptr = page_raw.cast::<u8>();
-            crate::internal::mi_assert_internal!(base <= page_ptr);
-            let presize = unsafe { page_ptr.offset_from(base) };
-            crate::internal::mi_assert_internal!(os_size as isize >= presize);
-            if presize > os_size as isize {
-                crate::core_types::ReservedBytes::new(0)
-            } else {
-                crate::core_types::ReservedBytes::new(os_size - presize as usize)
-            }
-        }
-        _ => crate::core_types::ReservedBytes::new(0),
-    }
-}
-
 unsafe fn mi_arena_try_alloc_at(
     arena: ArenaPtr,
     slice_count: crate::core_types::SliceCount,
@@ -1269,7 +1086,7 @@ pub unsafe extern "C" fn mi_arena_from_index(
 }
 
 #[cfg(feature = "c-abi")]
-const _: unsafe extern "C" fn(*mut mi_arena_t) -> mi_arena_id_t = mi_arena_id_from_arena;
+const _: unsafe extern "C" fn(*mut mi_arena_t) -> mi_arena_id_t = ids::mi_arena_id_from_arena;
 
 #[cfg(feature = "c-abi")]
 const _: unsafe extern "C" fn(*mut mi_subproc_t) -> usize = mi_arenas_get_count;

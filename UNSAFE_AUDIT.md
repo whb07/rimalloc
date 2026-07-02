@@ -49,6 +49,9 @@ Per-file review:
   page, bitmap, and memid metadata selected from the current sub-process arena
   registry and write only stack-local render buffers before sending text to the
   raw diagnostic output path.
+- `src/allocator/arena/ids.rs`: arena id and memid helpers own the raw
+  arena-id shims, top-level arena validation, typed memid range extraction, and
+  page-size classification used by arena allocation/free paths.
 - `src/allocator/arena/prefix.rs`: arena, heap, and sub-process prefix layouts
   remain private to `allocator::arena`; accessors require typed heap/subproc
   witnesses or checked arena/bin indexes before returning typed atomic fields.
@@ -221,6 +224,12 @@ Operation IDs:
   current sub-process registry, page map lookup, and typed memid views. The
   helpers are diagnostic-only, keep output in stack-local byte buffers, and do
   not allocate, publish, or mutate allocator ownership state.
+- `SAFETY[AUDIT:arena-id-memid-helpers]`:
+  `src/allocator/arena/ids.rs` keeps raw arena-id ABI shims and memid
+  classification behind typed `ArenaPtr`, `SliceRange`, `MemIdView`, and
+  `PagePtr` witnesses. Unsafe operations are limited to arena prefix reads,
+  validated out-pointer writes, and page/base pointer offset checks for
+  allocator-owned memid ranges.
 - `SAFETY[AUDIT:arena-prefix-accessors]`:
   `src/allocator/arena/prefix.rs` centralizes heap, arena, sub-process, and
   arena-page prefix accessors. Callers supply allocator-owned metadata plus

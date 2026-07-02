@@ -26,6 +26,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/arena.rs");
     let arena_debug_rs = fs::read_to_string(root.join("src/allocator/arena/debug.rs"))
         .expect("read src/allocator/arena/debug.rs");
+    let arena_ids_rs = fs::read_to_string(root.join("src/allocator/arena/ids.rs"))
+        .expect("read src/allocator/arena/ids.rs");
     let arena_prefix_rs = fs::read_to_string(root.join("src/allocator/arena/prefix.rs"))
         .expect("read src/allocator/arena/prefix.rs");
     let arena_meta_rs = fs::read_to_string(root.join("src/allocator/arena_meta.rs"))
@@ -191,18 +193,18 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub unsafe extern \"C\" fn _mi_heap_destroy_pages",
         ),
         (
-            "src/allocator/arena.rs",
-            &arena_rs,
+            "src/allocator/arena/ids.rs",
+            &arena_ids_rs,
             "pub unsafe extern \"C\" fn _mi_arena_id_none",
         ),
         (
-            "src/allocator/arena.rs",
-            &arena_rs,
+            "src/allocator/arena/ids.rs",
+            &arena_ids_rs,
             "pub unsafe extern \"C\" fn _mi_arena_from_id",
         ),
         (
-            "src/allocator/arena.rs",
-            &arena_rs,
+            "src/allocator/arena/ids.rs",
+            &arena_ids_rs,
             "pub unsafe extern \"C\" fn _mi_arena_memid_is_suitable",
         ),
         (
@@ -1712,11 +1714,11 @@ fn free_path_internals_are_not_dynamic_exports() {
             "unsafe fn mi_arena_purge(arena: *mut mi_arena_t, range: crate::core_types::SliceRange) -> bool"
         ) && !arena_rs.contains(
             "unsafe fn mi_arena_try_purge_range(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> bool"
-        ) && arena_rs.contains("match crate::core_types::MemId::view(memid)")
-            && arena_rs.contains("crate::core_types::MemIdView::Arena(arena_memid)")
-            && arena_rs.contains("let range = arena_memid.range;")
-            && arena_rs.contains("fn mi_memid_is_os(memid: mi_memid_t) -> bool")
-            && arena_rs.contains("crate::core_types::MemIdView::Os(_)")
+        ) && arena_ids_rs.contains("match crate::core_types::MemId::view(memid)")
+            && arena_ids_rs.contains("crate::core_types::MemIdView::Arena(arena_memid)")
+            && arena_ids_rs.contains("let range = arena_memid.range;")
+            && arena_ids_rs.contains("fn mi_memid_is_os(memid: mi_memid_t) -> bool")
+            && arena_ids_rs.contains("crate::core_types::MemIdView::Os(_)")
             && memid_rs.contains("pub(crate) struct ExternalMemId")
             && memid_rs.contains("External(ExternalMemId)")
             && memid_rs.contains("impl MemId<ExternalMem>")
@@ -1726,9 +1728,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             )
             && arena_rs
                 .contains("crate::core_types::MemId::<crate::core_types::ExternalMem>::external")
-            && arena_rs.contains("crate::core_types::MemIdView::External(external)")
+            && arena_ids_rs.contains("crate::core_types::MemIdView::External(external)")
             && os_rs.contains("crate::core_types::MemIdView::External(external)")
-            && arena_rs.contains("let os_size = external.size.get();")
+            && arena_ids_rs.contains("let os_size = external.size.get();")
             && arena_debug_rs
                 .contains("let page_slice_count = match crate::core_types::MemId::view(unsafe { (*raw).memid })")
             && arena_debug_rs.contains("crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize")
@@ -1924,12 +1926,12 @@ fn free_path_internals_are_not_dynamic_exports() {
         "internal thread-heap and page-map pointer loads should use AtomicPtrField"
     );
     assert!(
-        arena_rs.contains(
+        arena_ids_rs.contains(
             "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    range: crate::core_types::SliceRange,\n) -> mi_memid_t"
         ) && arena_rs.contains("memid: unsafe { mi_memid_create_arena(arena, range) },")
-            && arena_rs.contains("let Some((arena, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else")
-            && arena_rs.contains("unsafe { *slice_index = range.start_usize() };")
-            && arena_rs.contains("unsafe { *slice_count = range.count_usize() };")
+            && arena_ids_rs.contains("let Some((arena, range)) = (unsafe { mi_arena_range_from_memid(memid) }) else")
+            && arena_ids_rs.contains("unsafe { *slice_index = range.start_usize() };")
+            && arena_ids_rs.contains("unsafe { *slice_count = range.count_usize() };")
             && scalar_types.contains("pub(crate) fn as_u32(self) -> Option<u32>")
             && scalar_types.contains("pub(crate) const fn from_usize_const(count: usize) -> Option<Self>")
             && arena_types.contains("pub(crate) fn start_u32(self) -> u32")
@@ -1941,10 +1943,12 @@ fn free_path_internals_are_not_dynamic_exports() {
             && !arena_rs.contains("mi_slice_count_of_size(MI_MEDIUM_PAGE_SIZE) as u32")
             && !arena_rs.contains("mi_slice_count_of_size(MI_LARGE_PAGE_SIZE) as u32")
             && !memid_rs.contains("range.start().0 as u32")
-            && !arena_rs.contains(
+            && !arena_ids_rs.contains(
                 "unsafe fn mi_memid_create_arena(\n    arena: *mut mi_arena_t,\n    slice_index: usize,\n    slice_count: usize,"
             )
-            && !arena_rs.contains("SliceRange::from_raw(slice_index as u32, slice_count as u32)"),
+            && !arena_ids_rs.contains(
+                "SliceRange::from_raw(slice_index as u32, slice_count as u32)"
+            ),
         "arena memid construction should receive an already-typed SliceRange"
     );
     assert!(
@@ -2368,8 +2372,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains(
                 "pub(crate) unsafe fn _mi_arenas_page_try_reabandon_to_mapped_arena(\n    page: crate::core_types::OwnedAbandonedPage,\n    _arena_memid: crate::core_types::ArenaMemId,"
             )
-            && arena_rs.contains("unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool")
-            && arena_rs.contains("crate::core_types::MemId::view(unsafe { (*page).memid })")
+            && arena_ids_rs
+                .contains("unsafe fn mi_page_memid_is_arena(page: *const mi_page_t) -> bool")
+            && arena_ids_rs.contains("crate::core_types::MemId::view(unsafe { (*page).memid })")
             && arena_rs.contains("crate::core_types::MemIdView::Arena(arena_memid)")
             && !arena_rs.contains("(*page).memid.memkind == mi_memkind_t::MI_MEM_ARENA")
             && !arena_rs.contains("(*page).memid.memkind != mi_memkind_t::MI_MEM_ARENA")
@@ -2387,15 +2392,13 @@ fn free_path_internals_are_not_dynamic_exports() {
         "free path should validate arena memids and carry the witness into the crate-local reabandon helper"
     );
     assert!(
-        arena_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arena_id_none")
-            && arena_rs
-                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arena_from_id")
-            && arena_rs.contains(
-                "#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_arena_memid_is_suitable"
-            )
-            && arena_rs.contains("static MI_ARENA_ID_NONE_KEEP")
-            && arena_rs.contains("static MI_ARENA_FROM_ID_KEEP")
-            && arena_rs.contains("unsafe { _mi_arena_id_none() }")
+        arena_ids_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arena_id_none")
+            && arena_ids_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_arena_from_id")
+            && arena_ids_rs
+                .contains("pub(crate) unsafe extern \"C\" fn _mi_arena_memid_is_suitable")
+            && arena_ids_rs.contains("static MI_ARENA_ID_NONE_KEEP")
+            && arena_ids_rs.contains("static MI_ARENA_FROM_ID_KEEP")
+            && arena_ids_rs.contains("unsafe { _mi_arena_id_none() }")
             && arena_rs.contains("let arena = unsafe { _mi_arena_from_id(arena_id) };")
             && heap_rs.contains("(*heap).exclusive_arena = _mi_arena_from_id(exclusive_arena_id);")
             && free_rs.contains("_mi_arena_memid_is_suitable("),

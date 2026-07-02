@@ -25,9 +25,9 @@ Current review evidence:
   `src/internal/guarded.rs` is 244 lines, and
   `src/types/callbacks.rs` is 255 lines, and
   `src/types/page.rs` is 258 lines.
-- `strict-type-allowlist.txt` has 94 entries; 5 are still marked `remove:`.
+- `strict-type-allowlist.txt` has 104 entries; 4 are still marked `remove:`.
   The remaining broad `bare-domain-usize` allowances are for `alloc`,
-  `aligned`, `bitmap`, `internal`, and `page`.
+  `aligned`, `bitmap`, and `internal`.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 4,628 lines,
   `src/allocator/page.rs` is 3,109 lines,
@@ -115,16 +115,23 @@ release audit, full clippy, and full tests.
 > narrowed to true raw ABI and C-parity helper boundaries instead of masking the
 > entire module.
 
-- [ ] Run `scripts/check-strict-types.py` after temporarily removing
+- [x] Run `scripts/check-strict-types.py` after temporarily removing
       `bare-domain-usize|src/allocator/page.rs|*|usize` to identify live hits.
-- [ ] Classify each hit as ABI, hot C-parity helper, test-only, or migratable
+- [x] Classify each hit as ABI, hot C-parity helper, test-only, or migratable
       typed domain.
-- [ ] Replace the file-wide allowance with symbol-level entries or typed
+- [x] Replace the file-wide allowance with symbol-level entries or typed
       scalar wrappers where practical.
-- [ ] Keep `src/allocator/page/bins.rs` and `src/allocator/page/counts.rs`
+- [x] Keep `src/allocator/page/bins.rs` and `src/allocator/page/counts.rs`
       strict-type aliases accurate.
-- [ ] Lower or tighten the strict-type removable-entry guard if the broad page
+- [x] Lower or tighten the strict-type removable-entry guard if the broad page
       allowance is removed.
+  - Evidence: the file-wide
+    `bare-domain-usize|src/allocator/page.rs|*|usize` allowance was replaced
+    with symbol-level entries for the remaining page and bin raw-size
+    compatibility helpers, including `mi_page_list_count`,
+    `mi_page_block_at`, `mi_page_free_list_extend`, `mi_huge_page_alloc`,
+    `mi_find_page`, `mi_bin_impl`, `_mi_page_stats_bin`, and the `upstream_bin4`
+    characterization test. `REMOVE_ENTRY_CAP` is now 4.
 
 Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
 `scripts/check-api-inventory.py`, `scripts/check-public-abi.py`, release audit,
@@ -174,7 +181,7 @@ full tests.
 
 1. [x] Migrate two small test fixtures off the unsafe migration allowlist.
 2. [x] Migrate one small production file off the unsafe migration allowlist.
-3. [ ] Narrow or remove the page strict-type `usize` allowance.
+3. [x] Narrow or remove the page strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
 5. [ ] Split one more production helper boundary.
 
@@ -183,7 +190,7 @@ full tests.
 - [x] The unsafe migration allowlist is below 56 entries and the cap is lowered.
 - [x] At least one production allowlisted file is covered by operation-level
       audit markers.
-- [ ] One strict-type broad `remove:` allowance is narrowed or eliminated.
+- [x] One strict-type broad `remove:` allowance is narrowed or eliminated.
 - [ ] The largest release-audit child module has more guard margin.
 - [ ] One large production translation unit is smaller without API, ABI, or
       hot-path performance drift.

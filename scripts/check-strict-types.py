@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ALLOWLIST = ROOT / "strict-type-allowlist.txt"
-REMOVE_ENTRY_CAP = 5
+REMOVE_ENTRY_CAP = 4
 
 RAW_BOUNDARY_FILES = {
     "src/ffi/abi.rs",

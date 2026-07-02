@@ -74,6 +74,11 @@ raw-layout-abi-typedefs	test	tests/release_fast_path_audit/datatype_acceptance.r
 raw-layout-abi-typedefs	script	scripts/check-unsafe-audit.py	Checks raw callback typedef unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-macro-boundary	script	scripts/check-ffi-boundary.py	Checks raw macro boundary files retain their required audit tags.
 raw-macro-boundary	test	tests/header_macro_expansion.rs	Exercises macro expansion through public raw paths and unsafe call sites.
+raw-macro-allocation-boundary	test	src/raw/macros.rs	Exercises Unix bootstrap allocation tracking, usable-size, realloc, and free ownership fixtures.
+raw-macro-allocation-boundary	test	tests/header_macro_expansion.rs	Exercises downstream header macro expansion and raw allocation call boundaries.
+raw-macro-allocation-boundary	test	tests/release_fast_path_audit.rs	Checks raw macro facade marker coverage, migration allowlist removal, override assembly, and exported allocation shim shape.
+raw-macro-allocation-boundary	test	tests/release_fast_path_audit/release_policy.rs	Checks raw macro policy documentation and source audit tags stay mirrored.
+raw-macro-allocation-boundary	script	scripts/check-unsafe-audit.py	Checks raw macro allocation facade unsafe operations retain operation-level SAFETY markers and source audit coverage.
 raw-posix-compat	test	tests/compat_exports.rs	Exercises POSIX out-pointer and errno-style behavior for mi_posix_memalign, mi_reallocarray, mi_reallocarr, mbsdup, dupenv_s, and related compatibility exports.
 raw-posix-compat	test	tests/release_fast_path_audit.rs	Checks src/raw/posix.rs keeps product allocation typed, raw POSIX compatibility exports present, and operation-level audit markers local.
 unix-primitive-backend	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks Unix primitive helper shape, mmap/syscall/env/random/thread boundaries, marker coverage, and migration allowlist removal.

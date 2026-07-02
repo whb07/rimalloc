@@ -284,6 +284,14 @@ Operation IDs:
 - `SAFETY[AUDIT:raw-macro-boundary]`: `src/ffi/abi.rs` and
   `src/ffi/headers.rs` expose raw C-header macro compatibility without adding
   Rust ownership guarantees; callers inherit the documented raw ABI contract.
+- `SAFETY[AUDIT:raw-macro-allocation-boundary]`: `src/raw/macros.rs` owns the
+  raw allocation override facade for C, C++, libc, WASI, Linux libc, macOS
+  interposition, fast assembly aliases, bootstrap allocation tracking, and
+  header-shaped forwarding helpers. Unsafe operations are limited to exported
+  ABI attributes, foreign allocation declarations, platform interpose records,
+  assembly override entry points, bootstrap `mmap`/`munmap` tracking, raw
+  forwarding to allocator exports, C++ operator symbol shims, and test fixtures
+  that exercise bootstrap allocation ownership.
 - `SAFETY[AUDIT:raw-posix-compat]`: `src/raw/posix.rs` owns POSIX and
   libc-adjacent raw compatibility helpers. Unsafe operations are limited to
   errno slot publication, environment lookup, raw allocation forwarding,

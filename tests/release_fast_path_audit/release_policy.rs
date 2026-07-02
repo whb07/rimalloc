@@ -538,6 +538,8 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
     let abi_doc = fs::read_to_string(root.join("docs/abi.md")).expect("read docs/abi.md");
     let headers_rs = fs::read_to_string(root.join("src/ffi/headers.rs")).expect("read headers.rs");
     let lib_rs = fs::read_to_string(root.join("src/lib.rs")).expect("read src/lib.rs");
+    let raw_macros_rs =
+        fs::read_to_string(root.join("src/raw/macros.rs")).expect("read src/raw/macros.rs");
     let unsafe_doc =
         fs::read_to_string(root.join("docs/unsafe-audit.md")).expect("read unsafe audit");
 
@@ -545,8 +547,10 @@ fn raw_macro_unsafe_boundary_policy_stays_documented() {
         abi_rs.contains("SAFETY[AUDIT:raw-macro-boundary]")
             && headers_rs.contains("SAFETY[AUDIT:raw-macro-boundary]")
             && unsafe_doc.contains("SAFETY[AUDIT:raw-macro-boundary]")
+            && raw_macros_rs.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
+            && unsafe_doc.contains("SAFETY[AUDIT:raw-macro-allocation-boundary]")
             && abi_doc.contains("## Raw Macro Unsafe Boundary"),
-        "raw macro unsafe-boundary audit tag should be mirrored in source and docs"
+        "raw macro unsafe-boundary audit tags should be mirrored in source and docs"
     );
     assert!(
         abi_doc.contains("Typed allocation macros in `src/ffi/abi.rs`")

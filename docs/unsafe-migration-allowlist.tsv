@@ -6,4 +6,3 @@ src/allocator/page.rs	production	release-readiness	2026-09-30	hot page-allocatio
 src/internal/bitmap.rs	production	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
 src/internal/mod.rs	translation	release-readiness	2026-09-30	legacy translated internal macros and layout helpers pending per-operation SAFETY marker migration
 src/platform/windows.rs	translation	release-readiness	2026-09-30	legacy translated Windows ABI and platform unsafe pending per-operation SAFETY marker migration
-src/raw/macros.rs	production	release-readiness	2026-09-30	legacy raw facade unsafe pending per-operation SAFETY marker migration

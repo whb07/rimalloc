@@ -684,6 +684,22 @@ fn interpose_linux_malloc_override_uses_c_tls_fast_path() {
         .expect("read src/allocator/threadlocal.rs");
 
     assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/raw/macros.rs\t"))
+            && override_rs
+                .matches("SAFETY[AUDIT:raw-macro-allocation-boundary]")
+                .count()
+                >= 170
+            && override_rs.contains("core::arch::global_asm!(")
+            && override_rs.contains("pub unsafe extern \"C\" fn mi_cxx_new_fast_64")
+            && override_rs.contains("pub unsafe fn mi_unix_malloc(")
+            && override_rs.contains("pub unsafe extern \"C\" fn mi_unix_malloc_export")
+            && override_rs.contains("pub unsafe extern \"C\" fn mi_wasi_libc_malloc_export")
+            && override_rs.contains("pub unsafe extern \"C\" fn mi_linux_libc_malloc_export"),
+        "raw macro allocation facade unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
+    assert!(
         cargo_toml.contains("crate-type = [\"rlib\"]")
             && cargo_toml.contains("c-abi = []")
             && cargo_toml.contains("cxx-overrides = [\"c-abi\"]")

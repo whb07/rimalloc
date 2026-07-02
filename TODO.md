@@ -14,8 +14,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 8 entries: 6 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 8.
+- `docs/unsafe-migration-allowlist.tsv` has 7 entries: 5 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 7.
 - The completed pass moved `src/types/constants.rs` to 8
   `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers while retaining 2
   `SAFETY[AUDIT:raw-auto-trait]` markers for sentinel `Sync` impls, moved
@@ -47,14 +47,19 @@ Current review evidence:
   stats merge/reset/copy, formatted output, JSON buffers, process info,
   heap/subproc visitors, callback output, and raw stats exports, and is off the
   unsafe migration allowlist.
+- This pass also moved `src/raw/macros.rs` to 178
+  `SAFETY[AUDIT:raw-macro-allocation-boundary]` markers for raw allocation
+  forwarding, C/C++/libc/WASI/Linux override exports, fast assembly aliases,
+  macOS interpose records, bootstrap allocation tracking, usable-size and
+  realloc ownership, and stack-local bootstrap tests, and is off the unsafe
+  migration allowlist.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits,
   `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits,
   `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits, and
-  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits.
-- The next allowlisted production files after those are
-  `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits, and
-  `src/allocator/arena.rs` at 3,915 lines with 607 `unsafe` hits.
+  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits, and
+  `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits.
+- The next allowlisted production file after those is `src/allocator/arena.rs`
+  at 3,915 lines with 607 `unsafe` hits.
 - The remaining translation allowlist entries are `src/internal/mod.rs` at
   1,533 lines with 163 `unsafe` hits, and `src/platform/windows.rs` at
   2,191 lines with 214 `unsafe` hits.
@@ -67,6 +72,7 @@ Current review evidence:
   `src/internal/mod.rs`, `src/platform/unix.rs`, and
   `src/platform/windows.rs`, each with 4 path-wide entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
+  `SAFETY[AUDIT:raw-macro-allocation-boundary]` has 178 markers,
   `SAFETY[AUDIT:stats-reporting-boundary]` has 161 markers,
   `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
   `SAFETY[AUDIT:aligned-allocation-boundary]` has 158 markers,
@@ -88,9 +94,9 @@ Current review evidence:
   `SAFETY[AUDIT:ffi-libc-helpers]` has 50 markers, and
   `SAFETY[AUDIT:threadlocal-key-manager]` has 50 markers.
 - The release audit is still split but has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,462 lines,
-  `tests/release_fast_path_audit/release_policy.rs` is 2,146 lines,
-  `tests/release_fast_path_audit.rs` is 1,919 lines, and
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,463 lines,
+  `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
+  `tests/release_fast_path_audit.rs` is 1,935 lines, and
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines.
 
 ## Issue: Free path ownership boundary still uses a file-level unsafe allowance
@@ -213,19 +219,19 @@ and full tests.
 > unsafe boundary can still be documented with operation markers while preserving
 > public macro/API compatibility.
 
-- [ ] Add local `SAFETY[AUDIT:raw-macro-allocation-boundary]` markers for raw
+- [x] Add local `SAFETY[AUDIT:raw-macro-allocation-boundary]` markers for raw
       allocation, calloc, realloc, aligned allocation, free, usable-size,
       override, bootstrap, and C-header compatibility entry points generated or
       shaped by the macro facade.
-- [ ] Preserve exported raw names and signatures, feature/cfg behavior,
+- [x] Preserve exported raw names and signatures, feature/cfg behavior,
       bootstrap allocation tracking, weak/override symbol semantics, C allocator
       ownership rules, null and zero-size behavior, panic/unwind containment,
       and no safe wrapper leakage into the raw facade.
-- [ ] Add or extend release-audit assertions and focused tests for marker
+- [x] Add or extend release-audit assertions and focused tests for marker
       coverage, no migration allowlist entry, raw symbol/signature parity,
       override cfg shape, bootstrap behavior, raw free/realloc ownership, and
       allocation boundary behavior.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/raw/macros.rs`
+- [x] Add matching unsafe audit/evidence entries, remove `src/raw/macros.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower the cap.
 
@@ -238,16 +244,16 @@ audit scripts, unsafe inventory regeneration/check, full clippy, and full tests.
 2. [x] Migrate `src/allocator/options.rs` off the unsafe migration allowlist.
 3. [x] Migrate `src/allocator/aligned.rs` off the unsafe migration allowlist.
 4. [x] Migrate `src/allocator/stats.rs` off the unsafe migration allowlist.
-5. [ ] Migrate `src/raw/macros.rs` off the unsafe migration allowlist.
+5. [x] Migrate `src/raw/macros.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
-- [ ] `src/allocator/free.rs`, `src/allocator/options.rs`,
+- [x] The unsafe migration allowlist cap is lowered after each migrated file.
+- [x] `src/allocator/free.rs`, `src/allocator/options.rs`,
       `src/allocator/aligned.rs`, `src/allocator/stats.rs`, and
       `src/raw/macros.rs` are covered by operation-level audit markers and
       evidence instead of file-level migration exceptions.
-- [ ] Free routing, option/callback behavior, aligned allocation layout, stats
+- [x] Free routing, option/callback behavior, aligned allocation layout, stats
       output semantics, raw macro facade compatibility, and allocator hot-path
       performance constraints remain unchanged.
 - [ ] Release-audit TODO guards track the active backlog and measurable

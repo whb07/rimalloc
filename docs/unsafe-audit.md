@@ -55,6 +55,11 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   allocation macros and C header override macros expand to unsafe raw C-shaped
   calls without internal unsafe blocks, so the downstream expansion site must
   provide the unsafe boundary.
+- `SAFETY[AUDIT:raw-macro-allocation-boundary]`: raw allocation override facade
+  in `src/raw/macros.rs`. Export attributes, C++ operator symbols, libc/WASI
+  aliases, macOS interpose records, assembly overrides, and bootstrap
+  allocation tracking preserve the raw C allocation ABI and do not add Rust
+  ownership guarantees.
 - `SAFETY[AUDIT:unsafe-callback]`: unsafe-adjacent callback guards. Unsafe guard construction
   registers a trampoline with a borrowed callback context, stores the previous
   registration, restores that previous registration on drop, and catches Rust

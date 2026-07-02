@@ -2506,7 +2506,8 @@ fn phase6_dead_code_allowances_stay_intentional() {
         ("src/allocator/alloc.rs", 1),
         ("src/allocator/aligned.rs", 1),
         ("src/raw/macros.rs", 1),
-        ("src/allocator/arena.rs", 14),
+        ("src/allocator/arena.rs", 1),
+        ("src/allocator/arena/debug.rs", 13),
         ("src/allocator/arena_meta.rs", 1),
         ("src/internal/atomic.rs", 1),
         ("src/internal/bitmap.rs", 1),
@@ -2599,7 +2600,8 @@ fn phase6_clippy_allowances_stay_intentional() {
     collect_rs_sources(root, &src, &mut sources);
 
     let expected = BTreeMap::from([
-        (("src/allocator/arena.rs", "too_many_arguments"), 5),
+        (("src/allocator/arena.rs", "too_many_arguments"), 4),
+        (("src/allocator/arena/debug.rs", "too_many_arguments"), 1),
         (("src/internal/bitmap.rs", "many_single_char_names"), 1),
         (("src/allocator/free.rs", "absurd_extreme_comparisons"), 1),
         (("src/ffi/libc.rs", "many_single_char_names"), 2),
@@ -2793,8 +2795,9 @@ fn phase6_c_compat_allowances_stay_intentional() {
         (("src/raw/macros.rs", "non_camel_case_types"), 1),
         (("src/raw/macros.rs", "non_snake_case"), 1),
         (("src/raw/macros.rs", "non_upper_case_globals"), 1),
-        (("src/allocator/arena.rs", "non_camel_case_types"), 6),
+        (("src/allocator/arena.rs", "non_camel_case_types"), 4),
         (("src/allocator/arena.rs", "non_upper_case_globals"), 1),
+        (("src/allocator/arena/debug.rs", "non_camel_case_types"), 2),
         (("src/allocator/arena_meta.rs", "non_camel_case_types"), 1),
         (("src/allocator/arena_meta.rs", "non_upper_case_globals"), 1),
         (("src/internal/atomic.rs", "non_camel_case_types"), 1),

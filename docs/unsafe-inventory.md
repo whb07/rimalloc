@@ -39,7 +39,8 @@ verify the source inventory after each supported advisory build mode checks.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `src/allocator/aligned.rs` | 217 | 131 | 57 | 0 | 0 | 29 | 0 |
 | `src/allocator/alloc.rs` | 333 | 134 | 141 | 5 | 0 | 48 | 0 |
-| `src/allocator/arena.rs` | 795 | 633 | 140 | 2 | 0 | 17 | 0 |
+| `src/allocator/arena/debug.rs` | 63 | 51 | 10 | 0 | 0 | 2 | 0 |
+| `src/allocator/arena.rs` | 732 | 582 | 130 | 2 | 0 | 15 | 0 |
 | `src/allocator/arena_meta.rs` | 21 | 12 | 9 | 0 | 0 | 0 | 0 |
 | `src/allocator/bench_diagnostics.rs` | 8 | 3 | 2 | 0 | 0 | 3 | 0 |
 | `src/allocator/free.rs` | 121 | 60 | 54 | 0 | 0 | 3 | 2 |

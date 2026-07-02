@@ -45,6 +45,10 @@ Per-file review:
 - `src/arena.rs`: arena metadata pointers are derived from registered arena
   ranges and bitmap/page ownership checks. Slice allocation, purge, commit, and
   free paths update shared state through audited atomics and locks.
+- `src/allocator/arena/debug.rs`: arena diagnostics read allocator-owned arena,
+  page, bitmap, and memid metadata selected from the current sub-process arena
+  registry and write only stack-local render buffers before sending text to the
+  raw diagnostic output path.
 - `src/arena_meta.rs`: arena metadata page stack operations publish and reclaim
   metadata pages through the audited atomic stack discipline.
 - `src/atomic.rs`: raw atomic pointer casts are centralized here and mapped to
@@ -128,6 +132,9 @@ Per-file review:
 - `src/safe/allocations.rs`, `src/safe/heaps.rs`, and `src/safe/stats.rs`:
   Rust-facing wrappers keep unsafe allocator, heap, and statistics calls behind
   documented ownership and lifetime boundaries.
+- `src/safe/tests.rs`: safe-facade tests exercise the unsafe wrapper boundaries
+  under serialized process-global callback and option state without widening the
+  production safe API.
 - `src/unsafe_callbacks.rs`: unsafe-adjacent borrowed callback guards keep
   process-global callback registration, restoration, panic containment, and
   borrowed `FnMut` lifetime requirements in an explicit namespace.
@@ -187,6 +194,11 @@ Operation IDs:
 - `SAFETY[AUDIT:raw-macro-boundary]`: `src/ffi/abi.rs` and
   `src/ffi/headers.rs` expose raw C-header macro compatibility without adding
   Rust ownership guarantees; callers inherit the documented raw ABI contract.
+- `SAFETY[AUDIT:arena-debug-render]`: `src/allocator/arena/debug.rs` renders
+  arena diagnostics by reading arena/page metadata discovered through the
+  current sub-process registry, page map lookup, and typed memid views. The
+  helpers are diagnostic-only, keep output in stack-local byte buffers, and do
+  not allocate, publish, or mutate allocator ownership state.
 - `SAFETY[AUDIT:safe-heap]`: `src/safe/heap.rs` ties heap allocations to the
   owning heap lifetime, prevents main-heap deletion through owned heap handles,
   and keeps raw heap/block calls behind wrapper ownership checks.

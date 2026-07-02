@@ -12,13 +12,14 @@ Review evidence:
 - `strict-type-allowlist.txt` has 95 entries; 8 are still marked `remove:`.
   Those removable entries are broad `bare-domain-usize` file allowances.
 - The largest source files remain hard to review as Rust modules:
-  `src/allocator/arena.rs` is 5,071 lines, `src/allocator/page.rs` is 3,539
+  `src/allocator/arena.rs` is 4,613 lines, `src/allocator/page.rs` is 3,539
   lines, `src/internal/bitmap.rs` is 2,604 lines,
   `src/allocator/alloc.rs` is 2,545 lines, `src/allocator/init.rs` is 2,339
-  lines, and `src/platform/windows.rs` is 2,191 lines.
-- `tests/release_fast_path_audit.rs` is now split into a 2,958-line root
+  lines, and `src/platform/windows.rs` is 2,191 lines. Arena diagnostics now
+  live in `src/allocator/arena/debug.rs` as a 504-line child module.
+- `tests/release_fast_path_audit.rs` is now split into a 2,961-line root
   harness plus focused modules for release policy (2,291 lines), TODO backlog
-  checks (76 lines), and unsafe/performance checks (3,636 lines).
+  checks (76 lines), and unsafe/performance checks (3,645 lines).
 - `src/safe/mod.rs` is now 40 lines and only wires the facade modules,
   re-exports, failure-injection test helper, and `src/safe/tests.rs`; the moved
   safe facade test suite is 1,150 lines.
@@ -176,16 +177,25 @@ Review evidence:
 > conservative: move a small invariant cluster first, preserve inlining, and
 > prove no API/ABI drift.
 
-- [ ] Inventory candidate clusters in `src/allocator/arena.rs`,
+- [x] Inventory candidate clusters in `src/allocator/arena.rs`,
       `src/allocator/page.rs`, `src/internal/bitmap.rs`, and
       `src/allocator/init.rs`.
-- [ ] Pick one low-risk cluster with clear ownership, such as arena metadata
+- [x] Pick one low-risk cluster with clear ownership, such as arena metadata
       helpers, page-map/page-queue glue, or initialization state helpers.
-- [ ] Add module docs that state the invariant owned by the new module.
-- [ ] Preserve hot-path `#[inline]` behavior and translated C parity where it
+- [x] Add module docs that state the invariant owned by the new module.
+- [x] Preserve hot-path `#[inline]` behavior and translated C parity where it
       matters.
-- [ ] Update audit scripts, path aliases, and generated evidence paths after
+- [x] Update audit scripts, path aliases, and generated evidence paths after
       any move.
+  - Evidence: the cold arena diagnostic/rendering cluster moved from
+    `src/allocator/arena.rs` into `src/allocator/arena/debug.rs`, with module
+    docs stating that it reads arena/page metadata for reporting only and must
+    not participate in allocation fast paths or mutate allocator ownership
+    state. The C diagnostic exports remain `#[no_mangle]` in a classified ABI
+    boundary file, `docs/unsafe-inventory.md` was regenerated, and
+    `SAFETY[AUDIT:arena-debug-render]` plus release-audit checks keep the moved
+    unsafe diagnostics out of the legacy migration allowlist. No allocation hot
+    path was moved or retuned.
 - Verify: module inventory checks, API inventory, ABI/symbol checks if public
   paths are touched, release assembly capture for hot paths, full clippy, and
   full tests.
@@ -197,7 +207,7 @@ Review evidence:
 3. [x] Localize small production module-level allowances.
 4. [x] Move safe facade tests out of `src/safe/mod.rs`.
 5. [x] Split the release fast-path audit into domain modules.
-6. [ ] Split one additional low-risk translated module cluster.
+6. [x] Split one additional low-risk translated module cluster.
 
 ## Definition of done for this backlog
 
@@ -210,5 +220,5 @@ Review evidence:
       safe facade test suite.
 - [x] The release fast-path audit is split into reviewable modules without
       losing coverage.
-- [ ] At least one more translated module boundary is improved without API,
+- [x] At least one more translated module boundary is improved without API,
       ABI, or hot-path performance drift.

@@ -1,6 +1,8 @@
 audit_id	type	path	detail
 c-header-macro-reentry	script	scripts/check-ffi-boundary.py	Checks C header macro boundary files retain the required audit tags.
 c-header-macro-reentry	test	tests/header_macro_expansion.rs	Exercises downstream C header macro expansion and feature gating.
+arena-debug-render	test	tests/release_fast_path_audit.rs	Checks arena diagnostics stay in src/allocator/arena/debug.rs and retain typed arena/page/memid boundary markers.
+arena-debug-render	script	scripts/check-ffi-boundary.py	Checks moved arena diagnostic C exports remain in a classified ABI boundary file.
 global-alloc	test	tests/mimalloc_global_alloc.rs	Exercises GlobalAlloc alignment, reallocation preservation, and facade traits.
 global-alloc	test	tests/mimalloc_global_allocator_std.rs	Exercises MiMalloc as the process global allocator under std.
 owned-allocation	test	src/safe/tests.rs	Exercises safe owned Allocation construction, resize, initialization, and drop paths.

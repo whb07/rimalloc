@@ -12,6 +12,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/alloc.rs");
     let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
         .expect("read src/allocator/arena.rs");
+    let arena_debug_rs = fs::read_to_string(root.join("src/allocator/arena/debug.rs"))
+        .expect("read src/allocator/arena/debug.rs");
     let arena_meta_rs = fs::read_to_string(root.join("src/allocator/arena_meta.rs"))
         .expect("read src/allocator/arena_meta.rs");
     let atomic_rs = fs::read_to_string(root.join("src/internal/atomic.rs"))
@@ -138,7 +140,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && free_rs.contains("Some(registered.page())")
             && heap_rs.contains("let page: *mut mi_page_t = unsafe { _mi_safe_ptr_page(p) };")
             && heap_rs.contains("let page = _mi_safe_ptr_page(p);")
-            && arena_rs.contains("let page = unsafe { _mi_safe_ptr_page(start) };"),
+            && arena_debug_rs.contains("let page = unsafe { _mi_safe_ptr_page(start) };"),
         "safe pointer page lookup should keep C's _mi_safe_ptr_page local call boundary while typed validation requires a registered-page witness"
     );
     assert!(
@@ -176,7 +178,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_meta_rs.contains("static MI_META_IS_META_PAGE_KEEP")
             && arena_meta_rs.contains("mi_meta_pages.load(Ordering::Acquire)")
             && arena_meta_rs.contains("mpage = mi_meta_page_next(mpage);")
-            && arena_rs.contains("} else if unsafe { _mi_meta_is_meta_page(start) }"),
+            && arena_debug_rs.contains("} else if unsafe { _mi_meta_is_meta_page(start) }"),
         "meta page debug classification should keep C's _mi_meta_is_meta_page helper boundary"
     );
     assert!(
@@ -1987,16 +1989,23 @@ fn free_path_internals_are_not_dynamic_exports() {
         "#[inline(never)]\nunsafe fn mi_arena_page_at_slice(",
         "#[inline(never)]\nunsafe fn mi_arenas_page_singleton_alloc(",
         "#[inline(never)]\nunsafe fn mi_arena_purge(",
-        "#[inline(never)]\nunsafe fn mi_debug_show_chunks(",
         "static MI_ARENA_SLICE_START_KEEP",
         "static MI_ARENA_PAGE_AT_SLICE_KEEP",
         "static MI_ARENAS_PAGE_SINGLETON_ALLOC_KEEP",
         "static MI_ARENA_PURGE_KEEP",
-        "static MI_DEBUG_SHOW_CHUNKS_KEEP",
     ] {
         assert!(
             arena_rs.contains(marker),
             "arena helper boundary marker missing: {marker}"
+        );
+    }
+    for marker in [
+        "#[inline(never)]\nunsafe fn mi_debug_show_chunks(",
+        "static MI_DEBUG_SHOW_CHUNKS_KEEP",
+    ] {
+        assert!(
+            arena_debug_rs.contains(marker),
+            "arena debug helper boundary marker missing: {marker}"
         );
     }
     let claim_start = arena_rs
@@ -2026,7 +2035,7 @@ fn free_path_internals_are_not_dynamic_exports() {
             "unsafe fn mi_arena_page_at_slice(\n    arena: ArenaPtr,\n    slice_index: crate::core_types::SliceIndex,"
         ) && arena_rs.contains("unsafe fn mi_heap_visit_page_at_index(\n    slice_index: SliceIndex,")
             && arena_rs.contains("unsafe fn mi_arena_try_claim_abandoned_at(\n    slice_index: SliceIndex,")
-            && arena_rs.contains("    slice_index: SliceIndex,\n    pbit_of_page:")
+            && arena_debug_rs.contains("    slice_index: SliceIndex,\n    pbit_of_page:")
             && arena_rs.contains("mi_heap_visit_page_at_index(SliceIndex::new(slice_index), arena, arg)")
             && arena_rs.contains(
                 "mi_arena_try_claim_abandoned_at(SliceIndex::new(slice_index), arena, keep_abandoned)"
@@ -2079,8 +2088,8 @@ fn free_path_internals_are_not_dynamic_exports() {
             && arena_rs.contains("crate::core_types::MemIdView::External(external)")
             && os_rs.contains("crate::core_types::MemIdView::External(external)")
             && arena_rs.contains("let os_size = external.size.get();")
-            && arena_rs.contains("bit_of_page = match crate::core_types::MemId::view(unsafe { (*page).memid })")
-            && arena_rs.contains("crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize")
+            && arena_debug_rs.contains("bit_of_page = match crate::core_types::MemId::view(unsafe { (*page).memid })")
+            && arena_debug_rs.contains("crate::core_types::MemIdView::Arena(a) => a.range.count_usize() as isize")
             && os_rs.contains("external.size.get()")
             && os_rs.contains("let MemIdView::Os(memid) = MemId::view(memid) else")
             && memid_rs.contains("pub(crate) fn os_huge(")

@@ -52,6 +52,8 @@ fn free_path_internals_are_not_dynamic_exports() {
         .expect("read src/allocator/options.rs");
     let page_rs =
         fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
+        .expect("read src/allocator/page/deferred.rs");
     let random_rs = fs::read_to_string(root.join("src/internal/random.rs"))
         .expect("read src/internal/random.rs");
     let stats_rs = fs::read_to_string(root.join("src/allocator/stats.rs"))
@@ -184,24 +186,24 @@ fn free_path_internals_are_not_dynamic_exports() {
         "meta page debug classification should keep C's _mi_meta_is_meta_page helper boundary"
     );
     assert!(
-        page_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_deferred_free(")
-            && page_rs.contains("let heartbeat = mi_theap_increment_heartbeat(theap);")
-            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .load(crate::core_types::MemoryOrder::Acquire);")
-            && page_rs.contains(
+        deferred_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_deferred_free(")
+            && deferred_rs.contains("let heartbeat = mi_theap_increment_heartbeat(theap);")
+            && deferred_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .load(crate::core_types::MemoryOrder::Acquire);")
+            && deferred_rs.contains(
                 "let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);"
             )
-            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n                .load(crate::core_types::MemoryOrder::Acquire);")
-            && page_rs
+            && deferred_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))\n                .load(crate::core_types::MemoryOrder::Acquire);")
+            && deferred_rs
                 .contains("let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);")
-            && page_rs.contains(".store(arg.as_ptr(), crate::core_types::MemoryOrder::Release);")
-            && page_rs.contains("let f = callback.storage_ptr();")
-            && page_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .store(f, crate::core_types::MemoryOrder::Release);")
-            && !page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free))")
-            && !page_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_arg))")
-            && !page_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_arg)")
-            && !page_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_free)")
-            && !page_rs.contains("fun(force, heartbeat.get(), arg);")
-            && page_rs.contains("callback.invoke(force, heartbeat, arg);")
+            && deferred_rs.contains(".store(arg.as_ptr(), crate::core_types::MemoryOrder::Release);")
+            && deferred_rs.contains("let f = callback.storage_ptr();")
+            && deferred_rs.contains("crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))\n            .store(f, crate::core_types::MemoryOrder::Release);")
+            && !deferred_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_free))")
+            && !deferred_rs.contains("mi_atomic_load_ptr_acquire(ptr::addr_of!(deferred_arg))")
+            && !deferred_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_arg)")
+            && !deferred_rs.contains("mi_atomic_store_ptr_release(ptr::addr_of_mut!(deferred_free)")
+            && !deferred_rs.contains("fun(force, heartbeat.get(), arg);")
+            && deferred_rs.contains("callback.invoke(force, heartbeat, arg);")
             && page_rs.contains("_mi_deferred_free(theap, false);")
             && theap_rs.contains("_mi_deferred_free(theap, force);"),
         "deferred free callback dispatch should keep C's _mi_deferred_free helper boundary"
@@ -339,9 +341,9 @@ fn free_path_internals_are_not_dynamic_exports() {
             "pub unsafe extern \"C\" fn _mi_page_init",
         ),
         (
-            "src/allocator/page.rs",
-            &page_rs,
-            "pub unsafe extern \"C\" fn _mi_deferred_free",
+            "src/allocator/page/deferred.rs",
+            &deferred_rs,
+            "pub(crate) unsafe extern \"C\" fn _mi_deferred_free",
         ),
         ("src/ffi/libc.rs", &libc_rs, "pub(crate) fn _mi_snprintf"),
         (

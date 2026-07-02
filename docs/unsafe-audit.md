@@ -122,7 +122,7 @@ release artifact script in `docs/unsafe-audit-evidence.tsv`.
   globals in `mimalloc-3.3.2/src/page.c:889-905`, and invokes the callback from
   `_mi_deferred_free` in `mimalloc-3.3.2/src/page.c:892-901`. The Rust
   translation mirrors the atomic global registration and invocation in
-  `src/page.rs:3114-3185`. Invocation is suppressed for reentry on a given
+  `src/allocator/page/deferred.rs`. Invocation is suppressed for reentry on a given
   thread heap via `theap->tld->recurse`, but the process-global callback can be
   reached by allocator activity on different thread heaps.
 - Decision: borrowed `FnMut` callback guards cannot remain safe under the

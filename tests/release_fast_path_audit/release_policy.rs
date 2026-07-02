@@ -713,8 +713,8 @@ fn public_callback_abi_inventory_stays_documented() {
     let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
     let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
         .expect("read src/allocator/options.rs");
-    let page_rs =
-        fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
+        .expect("read src/allocator/page/deferred.rs");
     let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
         .expect("read src/allocator/arena.rs");
 
@@ -797,7 +797,7 @@ fn public_callback_abi_inventory_stays_documented() {
     assert!(
         options_rs.contains("pub extern \"C\" fn mi_register_output")
             && options_rs.contains("pub extern \"C\" fn mi_register_error")
-            && page_rs.contains("pub unsafe extern \"C\" fn mi_register_deferred_free")
+            && deferred_rs.contains("pub unsafe extern \"C\" fn mi_register_deferred_free")
             && arena_rs.contains("pub unsafe extern \"C\" fn mi_manage_memory")
             && abi_doc.contains("mi_claim_fun_t")
             && abi_doc.contains("mi_forall_set_fun_t")
@@ -816,8 +816,8 @@ fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
         .expect("read core_types/callbacks.rs");
     let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
         .expect("read src/allocator/options.rs");
-    let page_rs =
-        fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
+        .expect("read src/allocator/page/deferred.rs");
     let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
         .expect("read src/allocator/arena.rs");
     let theap_rs = fs::read_to_string(root.join("src/allocator/thread_heap.rs"))
@@ -867,13 +867,13 @@ fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
             "pub extern \"C\" fn mi_register_error",
         ),
         (
-            "src/allocator/page.rs",
-            page_rs.as_str(),
+            "src/allocator/page/deferred.rs",
+            deferred_rs.as_str(),
             "pub(crate) unsafe extern \"C\" fn _mi_deferred_free",
         ),
         (
-            "src/allocator/page.rs",
-            page_rs.as_str(),
+            "src/allocator/page/deferred.rs",
+            deferred_rs.as_str(),
             "pub unsafe extern \"C\" fn mi_register_deferred_free",
         ),
         (

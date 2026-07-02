@@ -17,9 +17,10 @@ dynamic TLS storage follows the C baseline's `mi_rezalloc`,
   Debug-only invalid-pointer diagnostics may format borrowed static C strings
   through `format_args!`, but the default supported path has `MI_DEBUG=0` and
   does not allocate through Rust's global allocator.
-- `src/page.rs`, `src/arena.rs`, and `src/arena_meta.rs`: page extension,
-  free-list, arena, huge-object, and metadata allocation paths use OS, arena, or
-  mimalloc metadata helpers. They do not use `Box`, `Vec`, `String`, `format!`,
+- `src/page.rs`, `src/allocator/page/deferred.rs`, `src/arena.rs`, and
+  `src/arena_meta.rs`: page extension, free-list, deferred-free callback,
+  arena, huge-object, and metadata allocation paths use OS, arena, or mimalloc
+  metadata helpers. They do not use `Box`, `Vec`, `String`, `format!`,
   `CString`, or `std::alloc`.
 - `src/heap.rs`, `src/theap.rs`, `src/init.rs`, and `src/threadlocal.rs`: heap,
   theap, subprocess, process/thread, and dynamic TLS metadata now avoid Rust

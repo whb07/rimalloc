@@ -38,14 +38,17 @@ use crate::track::{
 };
 use crate::types::{
     MI_BIN_FULL, MI_ENABLE_LARGE_PAGES, MI_LARGE_MAX_OBJ_WSIZE, MI_PAGE_MIN_COMMIT_SIZE,
-    MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_deferred_free_fun, mi_page_flags_t, mi_page_queue_t,
-    mi_page_t, mi_theap_t,
+    MI_SMALL_SIZE_MAX, MI_STAT, mi_block_t, mi_page_flags_t, mi_page_queue_t, mi_page_t,
+    mi_theap_t,
 };
 
 pub use crate::types::MI_PADDING_SIZE;
 
-static mut deferred_free: *mut c_void = ptr::null_mut();
-static mut deferred_arg: *mut c_void = ptr::null_mut();
+mod deferred;
+pub use deferred::mi_register_deferred_free;
+pub(crate) use deferred::{
+    _mi_deferred_free, registered_deferred_free_callback, restore_deferred_free_callback,
+};
 
 pub const MI_OS_PAGE_SIZE: usize = 4096;
 pub const MI_SMALL_PAGE_SIZE: usize = MI_ARENA_SLICE_SIZE;
@@ -3104,106 +3107,6 @@ unsafe fn mi_find_free_page_typed(
             mi_page_queue_find_free_ex_typed(theap, queue, block_size, true)
         }
     }
-}
-
-/// # Safety
-/// `theap` must point to writable thread-heap metadata.
-#[inline(always)]
-unsafe fn mi_theap_increment_heartbeat(theap: *mut mi_theap_t) -> crate::core_types::Heartbeat {
-    unsafe {
-        let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        mi_theap_increment_heartbeat_typed(theap)
-    }
-}
-
-/// # Safety
-/// `theap` must identify writable local thread-heap metadata.
-#[inline(always)]
-unsafe fn mi_theap_increment_heartbeat_typed(
-    theap: crate::core_types::ThreadHeapLocal,
-) -> crate::core_types::Heartbeat {
-    unsafe {
-        let heartbeat = theap.ptr().heartbeat().increment_wrapping();
-        theap.ptr().set_heartbeat(heartbeat);
-        heartbeat
-    }
-}
-
-#[inline(never)]
-pub(crate) unsafe extern "C" fn _mi_deferred_free(theap: *mut mi_theap_t, force: bool) {
-    unsafe {
-        let heartbeat = mi_theap_increment_heartbeat(theap);
-        let fun_ptr = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
-            .load(crate::core_types::MemoryOrder::Acquire);
-        let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);
-        let theap = crate::core_types::ThreadHeapLocal::new_unchecked(
-            crate::core_types::ThreadHeapPtr::new_unchecked(theap),
-        );
-        mi_deferred_free_typed(theap, force, heartbeat, callback);
-    }
-}
-
-/// # Safety
-/// `theap` must identify the live local thread heap whose deferred-free callback
-/// is being dispatched.
-#[inline(always)]
-unsafe fn mi_deferred_free_typed(
-    theap: crate::core_types::ThreadHeapLocal,
-    force: bool,
-    heartbeat: crate::core_types::Heartbeat,
-    callback: crate::core_types::DeferredFreeCallback,
-) {
-    unsafe {
-        let theap_raw = theap.ptr().as_ptr();
-        if callback.is_some() && !(*(*theap_raw).tld).recurse {
-            (*(*theap_raw).tld).recurse = true;
-            let arg = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
-                .load(crate::core_types::MemoryOrder::Acquire);
-            let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);
-            callback.invoke(force, heartbeat, arg);
-            (*(*theap_raw).tld).recurse = false;
-        }
-    }
-}
-
-/// # Safety
-/// `fn_`, when present, must remain callable for the lifetime of its registration. `arg` is stored
-/// opaquely and passed back to that callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mi_register_deferred_free(
-    fn_: Option<mi_deferred_free_fun>,
-    arg: *mut c_void,
-) {
-    unsafe {
-        let callback = crate::core_types::DeferredFreeCallback::new(fn_);
-        let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);
-        crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
-            .store(arg.as_ptr(), crate::core_types::MemoryOrder::Release);
-        let f = callback.storage_ptr();
-        crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
-            .store(f, crate::core_types::MemoryOrder::Release);
-    }
-}
-
-pub(crate) unsafe fn registered_deferred_free_callback()
--> (Option<mi_deferred_free_fun>, *mut c_void) {
-    unsafe {
-        let fun_ptr = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_free))
-            .load(crate::core_types::MemoryOrder::Acquire);
-        let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);
-        let arg = crate::core_types::AtomicPtrField(ptr::addr_of_mut!(deferred_arg))
-            .load(crate::core_types::MemoryOrder::Acquire);
-        (callback.raw(), arg)
-    }
-}
-
-pub(crate) unsafe fn restore_deferred_free_callback(
-    snapshot: (Option<mi_deferred_free_fun>, *mut c_void),
-) {
-    let (fun, arg) = snapshot;
-    unsafe { mi_register_deferred_free(fun, arg) };
 }
 
 #[inline]

@@ -2012,8 +2012,8 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
     let abi_rs = fs::read_to_string(root.join("src/ffi/abi.rs")).expect("read src/ffi/abi.rs");
     let options_rs = fs::read_to_string(root.join("src/allocator/options.rs"))
         .expect("read src/allocator/options.rs");
-    let page_rs =
-        fs::read_to_string(root.join("src/allocator/page.rs")).expect("read src/allocator/page.rs");
+    let deferred_rs = fs::read_to_string(root.join("src/allocator/page/deferred.rs"))
+        .expect("read src/allocator/page/deferred.rs");
     let arena_rs = fs::read_to_string(root.join("src/allocator/arena.rs"))
         .expect("read src/allocator/arena.rs");
     let init_rs =
@@ -2064,10 +2064,10 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && abi_rs.contains("visitor: Option<mi_heap_visit_fun>")
             && !types_rs.contains("CallbackArg")
             && !abi_rs.contains("CallbackArg")
-            && page_rs.contains(
+            && deferred_rs.contains(
                 "let callback = crate::core_types::DeferredFreeCallback::from_storage_ptr(fun_ptr);"
             )
-            && page_rs
+            && deferred_rs
                 .contains("let arg = crate::core_types::DeferredFreeCallbackArg::from_raw(arg);")
             && options_rs.contains(
                 "fn mi_out_get_default(parg: Option<&mut OutputCallbackArg>) -> OutputCallback"

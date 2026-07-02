@@ -12,21 +12,21 @@ Review evidence:
 
 - `docs/unsafe-migration-allowlist.tsv` still has 60 entries: 44 production,
   13 test, and 3 translation files.
-- `strict-type-allowlist.txt` has 94 entries; 7 are still marked `remove:`.
+- `strict-type-allowlist.txt` has 97 entries; 7 are still marked `remove:`.
   Those removable entries are broad `bare-domain-usize` file allowances in
   allocator, bitmap, and internal translation units.
 - The largest Rust source files are still difficult review units:
-  `src/allocator/arena.rs` is 4,613 lines, `src/allocator/page.rs` is 3,539
+  `src/allocator/arena.rs` is 4,613 lines, `src/allocator/page.rs` is 3,442
   lines, `src/internal/bitmap.rs` is 2,604 lines,
   `src/allocator/alloc.rs` is 2,545 lines, `src/allocator/init.rs` is 2,339
   lines, `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
 - `tests/release_fast_path_audit.rs` is split, but the split is still uneven:
   the root harness is 2,862 lines and
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,981 lines, with
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,983 lines, with
   runtime gates in a 102-line child module and lifecycle-boundary audit in a
   700-line nested module.
-- `src/allocator/arena/debug.rs` is a clear 504-line diagnostic module, but it
+- `src/allocator/arena/debug.rs` is a clear 600-line diagnostic module, but it
   now carries many repeated `SAFETY[AUDIT:arena-debug-render]` comments around
   direct arena/page metadata reads. That is audited, but not yet pleasant Rust.
 - `scripts/check-ffi-boundary.py`, `scripts/check-unsafe-audit.py`,
@@ -142,7 +142,7 @@ Review evidence:
     local-boundary assertions moved into
     `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`.
     The root harness is down from 2,961 to 2,862 lines, the unsafe-performance
-    parent module is down from 3,646 to 2,981 lines, release audit coverage
+    parent module is down from 3,646 to 2,983 lines, release audit coverage
     remains 67 tests after splitting the root runtime gates, and
     `release_audit_harness_stays_split` now caps each listed child module at
     3,200 lines, including the runtime and nested lifecycle modules.
@@ -155,15 +155,23 @@ Review evidence:
 > next production split should avoid allocator fast-path churn and start with a
 > small, cohesive page-queue or count-domain cluster.
 
-- [ ] Inventory candidate clusters in `src/allocator/page.rs`, especially page
+- [x] Inventory candidate clusters in `src/allocator/page.rs`, especially page
       queue count helpers, queue movement helpers, and deferred-free callback
       registration.
-- [ ] Pick one low-risk cluster with clear ownership and minimal public surface.
-- [ ] Add module docs that state the invariant owned by the new module.
-- [ ] Preserve existing `#[inline]`/`#[inline(never)]` behavior and C helper
+- [x] Pick one low-risk cluster with clear ownership and minimal public surface.
+- [x] Add module docs that state the invariant owned by the new module.
+- [x] Preserve existing `#[inline]`/`#[inline(never)]` behavior and C helper
       boundaries.
-- [ ] Update release-audit path assertions, unsafe inventory, and boundary
+- [x] Update release-audit path assertions, unsafe inventory, and boundary
       scripts after the move.
+  - Evidence: deferred-free callback registration and dispatch moved from
+    `src/allocator/page.rs` into `src/allocator/page/deferred.rs`, a 139-line
+    module that owns the process-global callback slots, heartbeat bump, and
+    thread-heap reentry guard. `page.rs` is down from 3,539 to 3,442 lines and
+    re-exports the same crate/public C helper paths. `scripts/check-ffi-boundary.py`,
+    `scripts/check-no-allocation-audit.py`, `scripts/check-strict-types.py`,
+    `UNSAFE_AUDIT.md`, `NO_ALLOCATION_AUDIT.md`, and
+    `docs/unsafe-inventory.md` now classify the new module explicitly.
 - Verify: focused page tests, release audit, API inventory, ABI/symbol checks
   if exported paths move, full clippy, and full tests.
 
@@ -173,7 +181,7 @@ Review evidence:
 2. [x] Reduce one removable strict-type file-level allowance.
 3. [x] Consolidate unsafe arena diagnostic metadata reads.
 4. [x] Split the uneven release-audit unsafe/performance module further.
-5. [ ] Split one low-risk page module cluster.
+5. [x] Split one low-risk page module cluster.
 
 ## Definition of done for this backlog
 
@@ -184,5 +192,5 @@ Review evidence:
       and fewer repeated local safety-marker comments.
 - [x] Release fast-path audit modules are smaller and guarded against growing
       back into large review units.
-- [ ] At least one page-module boundary is improved without API, ABI, or
+- [x] At least one page-module boundary is improved without API, ABI, or
       hot-path performance drift.

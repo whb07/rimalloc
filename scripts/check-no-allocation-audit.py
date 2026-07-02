@@ -24,6 +24,7 @@ CRITICAL_FILES = {
     "src/allocator/init.rs",
     "src/internal/mod.rs",
     "src/platform/os.rs",
+    "src/allocator/page/deferred.rs",
     "src/allocator/page.rs",
     "src/allocator/page_map.rs",
     "src/allocator/thread_heap.rs",

@@ -104,6 +104,10 @@ Per-file review:
   abandonment, and reclaim paths operate on pages selected by heap/theap queues
   and size classes. Encoded block links and thread-free state follow C page
   invariants.
+- `src/allocator/page/deferred.rs`: deferred-free callback registration and
+  dispatch owns the process-global callback slots and increments the local
+  thread heap heartbeat before invoking the callback under the C-compatible
+  reentry guard.
 - `src/page_map.rs`: page-map submap publication and lookup bounds-check indexes
   against the C page-map layout and uses audited atomics for concurrent install.
 - `src/prim.rs`: primitive facade forwards to platform implementations through
@@ -199,6 +203,11 @@ Operation IDs:
   current sub-process registry, page map lookup, and typed memid views. The
   helpers are diagnostic-only, keep output in stack-local byte buffers, and do
   not allocate, publish, or mutate allocator ownership state.
+- `SAFETY[AUDIT:deferred-free-callback-state]`:
+  `src/allocator/page/deferred.rs` owns the C-compatible deferred-free callback
+  globals, publishes callback and argument with release stores, reads them with
+  acquire loads, and invokes callbacks only after bumping the local thread heap
+  heartbeat and setting the per-thread-heap reentry guard.
 - `SAFETY[AUDIT:safe-heap]`: `src/safe/heap.rs` ties heap allocations to the
   owning heap lifetime, prevents main-heap deletion through owned heap handles,
   and keeps raw heap/block calls behind wrapper ownership checks.

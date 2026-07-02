@@ -1,6 +1,9 @@
+#[path = "focused_paths/allocation_free.rs"]
+mod allocation_free;
+#[path = "focused_paths/datatype_fixtures.rs"]
+mod datatype_fixtures;
+
 pub(super) fn assert_focused_evidence_paths(evidence: &str) {
-    const ALLOCATION_FREE_FOCUSED_PATH: &str =
-        "tests/release_fast_path_audit/unsafe_performance/allocation_free/marker_counts.rs";
     let assert_focused_evidence = |audit_id: &str, focused_path: &str| {
         let row_prefix = format!("{audit_id}\ttest\t{focused_path}\t");
         assert!(
@@ -9,66 +12,7 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
         );
     };
 
-    for audit_id in [
-        "allocation-platform-shim-boundary",
-        "allocation-product-entry-boundary",
-        "allocation-realloc-thread-entry-boundary",
-        "allocation-realloc-product-boundary",
-        "allocation-realloc-free-on-failure-boundary",
-        "allocation-realloc-zeroing-boundary",
-        "allocation-realloc-public-boundary",
-        "allocation-string-path-boundary",
-        "allocation-cxx-new-handler-boundary",
-        "allocation-cxx-new-try-boundary",
-        "allocation-cxx-new-public-boundary",
-        "allocation-cxx-new-product-boundary",
-        "allocation-cxx-new-aligned-boundary",
-        "allocation-cxx-new-realloc-boundary",
-        "allocation-small-dispatch-boundary",
-        "allocation-thread-heap-zero-boundary",
-        "allocation-public-malloc-boundary",
-        "allocation-zeroing-dispatch-boundary",
-        "allocation-calloc-dispatch-boundary",
-        "allocation-layout-request-boundary",
-        "allocation-page-refill-boundary",
-        "page-free-list-collect-boundary",
-        "page-free-list-extend-boundary",
-        "page-fresh-allocation-boundary",
-        "page-queue-search-refill-boundary",
-        "page-queue-full-transition-boundary",
-        "page-queue-free-release-boundary",
-        "page-queue-retire-boundary",
-        "page-queue-abandon-boundary",
-        "page-queue-reclaim-boundary",
-        "page-queue-validation-boundary",
-        "page-queue-direct-cache-boundary",
-        "page-queue-link-mutation-boundary",
-        "page-queue-append-boundary",
-        "page-huge-allocation-boundary",
-        "page-stats-public-boundary",
-        "free-raw-export-boundary",
-        "free-validation-boundary",
-        "free-padding-boundary",
-        "free-usable-size-boundary",
-        "free-stats-boundary",
-        "free-local-list-boundary",
-        "free-remote-list-boundary",
-        "free-route-dispatch-boundary",
-        "free-abandoned-page-boundary",
-        "aligned-padding-boundary",
-        "aligned-thread-heap-allocation-boundary",
-        "aligned-page-allocation-boundary",
-        "aligned-calloc-product-boundary",
-        "aligned-global-allocation-export-boundary",
-        "aligned-heap-allocation-export-boundary",
-        "aligned-realloc-request-boundary",
-        "aligned-realloc-copy-boundary",
-        "aligned-recalloc-product-boundary",
-        "aligned-realloc-global-export-boundary",
-        "aligned-realloc-heap-export-boundary",
-    ] {
-        assert_focused_evidence(audit_id, ALLOCATION_FREE_FOCUSED_PATH);
-    }
+    allocation_free::assert_allocation_free_focused_evidence(evidence);
 
     const LOCAL_BOUNDARIES_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs";
@@ -84,8 +28,6 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
     const EMSCRIPTEN_PRIMITIVE_FOCUSED_PATH: &str = "tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/emscripten.rs";
     const RAW_CXX_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/unsafe_performance/raw_facade/cxx_compat.rs";
-    const DATATYPE_FIXTURE_FOCUSED_PATH: &str =
-        "tests/release_fast_path_audit/datatype_acceptance/fixture_audit.rs";
     const STRICT_TYPE_FOCUSED_PATH: &str =
         "tests/release_fast_path_audit/datatype_acceptance/strict_type.rs";
     for audit_id in [
@@ -102,24 +44,7 @@ pub(super) fn assert_focused_evidence_paths(evidence: &str) {
     ] {
         assert_focused_evidence(audit_id, WINDOWS_PRIMITIVE_FOCUSED_PATH);
     }
-    for audit_id in [
-        "typed-page-pointer-test-fixtures",
-        "typed-block-pointer-test-fixtures",
-        "typed-heap-pointer-test-fixtures",
-        "typed-thread-heap-pointer-test-fixtures",
-        "typed-tld-pointer-test-fixtures",
-        "typed-pointer-address-test-fixtures",
-        "typed-arena-subproc-pointer-test-fixtures",
-        "typed-page-queue-pointer-test-fixtures",
-        "typed-provenance-pointer-test-fixtures",
-        "typed-main-heap-test-fixtures",
-        "typed-owned-heap-test-fixtures",
-        "typed-borrowed-heap-test-fixtures",
-        "typed-thread-heap-state-test-fixtures",
-        "typed-thread-local-heap-test-fixtures",
-    ] {
-        assert_focused_evidence(audit_id, DATATYPE_FIXTURE_FOCUSED_PATH);
-    }
+    datatype_fixtures::assert_datatype_fixture_focused_evidence(evidence);
     for audit_id in [
         "page-map-global-boundary",
         "page-map-32bit-commit-bitmap-boundary",

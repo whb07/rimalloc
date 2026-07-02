@@ -53,14 +53,18 @@ Current review evidence:
 - The largest raw-pointer domains are `mi_theap_t` with 111 entries,
   `mi_page_t` with 110, and `mi_heap_t` with 67.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 107 module files recursively and
-  enforces a 400-line cap. The largest release-audit modules are:
-  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 399 lines,
-  `allowance_inventory.rs` at 398 lines,
-  `interposition_exports/linux_override.rs` at 384 lines,
-  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 380 lines,
-  `unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367 lines,
-  and `primitive_options.rs` at 326 lines.
+  release-audit module-size guard discovers 118 module files recursively and
+  enforces a 320-line cap. The largest release-audit modules are:
+  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 308 lines,
+  `release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 305 lines,
+  `release_policy/callbacks.rs` at 303 lines,
+  `release_policy/api_surface/raw_facade.rs` at 302 lines,
+  `unsafe_performance/platform_primitive_boundaries/windows.rs` at 299 lines,
+  and `unsafe_performance/thread_stats.rs` at 284 lines.
+- Issue 4 split release-audit checks into 11 focused child modules covering
+  allowance families, thread-TLS reclaim helpers, Linux raw marker inventory,
+  focused evidence groups, MemId dispatch, primitive stats policy, and thread
+  stats marker inventory.
 - Full validation for the previous backlog passed after Issue 6: `cargo fmt
   --all`, `cargo clippy --workspace --all-targets --all-features`, `cargo test
   --workspace --all-targets --all-features`, `cargo test --test
@@ -129,16 +133,16 @@ full formatting, full clippy, and full tests.
 
 ## Issue 4: Split release-audit modules over 320 lines
 
-The release-audit cap is now 400 lines. The next reviewability step is a
-320-line cap, blocked by five modules.
+The release-audit cap is now 320 lines. The previous 400-line cap was blocked by
+large dispatcher modules that mixed independent assertion families.
 
-- [ ] Split `allowance_inventory.rs` by allowance family so package lints,
+- [x] Split `allowance_inventory.rs` by allowance family so package lints,
       phase6 unsafe-op allowances, clippy allowances, dead-code allowances, and
       C compatibility allowances are independently reviewable.
-- [ ] Split `thread_tls.rs`, `interposition_exports/linux_override.rs`, and
+- [x] Split `thread_tls.rs`, `interposition_exports/linux_override.rs`, and
       `page_arena_behavior/memid_arena_dispatch.rs` by existing assertion
       groups without changing the release checks they perform.
-- [ ] Split `primitive_options.rs` enough to lower the recursive release-audit
+- [x] Split `primitive_options.rs` enough to lower the recursive release-audit
       module cap from 400 to 320 while preserving measured TODO checks.
 
 Verify: release fast-path audit, TODO guard, unsafe audit scripts, strict-type
@@ -149,18 +153,18 @@ checks, no-allocation audit, full formatting, full clippy, and full tests.
 1. [x] Repoint unsafe audit evidence to focused modules.
 2. [x] Split remaining source audit IDs over 32 markers.
 3. [x] Lower the source audit marker cap to 28.
-4. [ ] Split release-audit modules over 320 lines.
+4. [x] Split release-audit modules over 320 lines.
 
 ## Definition of done for this backlog
 
 - [x] Evidence rows for operation-specific audit IDs cite focused child modules
       instead of aggregate release-audit dispatchers.
 - [x] No source audit operation ID has more than 28 source markers.
-- [ ] Release-audit modules are split enough to lower the recursive module cap
+- [x] Release-audit modules are split enough to lower the recursive module cap
       to 320 lines without weakening discovery or measured TODO checks.
-- [ ] Strict-type wildcard coverage remains at zero retained wildcards.
-- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [ ] For every completed item, run `cargo fmt --all`,
+- [x] Strict-type wildcard coverage remains at zero retained wildcards.
+- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [x] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

@@ -60,13 +60,16 @@ fn rust_idiom_backlog_tracks_current_work() {
         "`src/internal/bitmap.rs` with 45",
         "`src/raw/macros.rs` with 32",
         "release-audit root harness is 247 lines under a 300-line root cap",
-        "release-audit module-size guard discovers 107 module files recursively and\n  enforces a 400-line cap",
-        "largest release-audit modules are:\n  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 399 lines",
-        "`allowance_inventory.rs` at 398 lines",
-        "`interposition_exports/linux_override.rs` at 384 lines",
-        "`release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 380",
-        "`unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367 lines",
-        "`primitive_options.rs` at 326 lines",
+        "release-audit module-size guard discovers 118 module files recursively and\n  enforces a 320-line cap",
+        "largest release-audit modules are:\n  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 308 lines",
+        "`release_policy/security/unsafe_audit_evidence/focused_paths.rs` at 305",
+        "`release_policy/callbacks.rs` at 303 lines",
+        "`release_policy/api_surface/raw_facade.rs` at 302 lines",
+        "`unsafe_performance/platform_primitive_boundaries/windows.rs` at 299 lines",
+        "`unsafe_performance/thread_stats.rs` at 284 lines",
+        "Issue 4 split release-audit checks into 11 focused child modules",
+        "allowance families, thread-TLS reclaim helpers, Linux raw marker inventory",
+        "MemId dispatch, primitive stats policy, and thread\n  stats marker inventory",
         "Full validation for the previous backlog passed after Issue 6",
         "Move evidence rows for split parent modules to the child module that owns\n      the assertion",
         "Tighten the release-audit evidence guard so parent dispatcher paths are\n      accepted only for genuinely harness-wide policy checks",
@@ -83,12 +86,12 @@ fn rust_idiom_backlog_tracks_current_work() {
         "1. [x] Repoint unsafe audit evidence to focused modules.",
         "2. [x] Split remaining source audit IDs over 32 markers.",
         "3. [x] Lower the source audit marker cap to 28.",
-        "4. [ ] Split release-audit modules over 320 lines.",
+        "4. [x] Split release-audit modules over 320 lines.",
         "[x] Evidence rows for operation-specific audit IDs cite focused child modules",
         "No source audit operation ID has more than 28 source markers",
         "recursive module cap\n      to 320 lines",
-        "Strict-type wildcard coverage remains at zero retained wildcards",
-        "`TODO.md` and its release-audit guard reflect the current measured counts",
+        "[x] Strict-type wildcard coverage remains at zero retained wildcards",
+        "[x] `TODO.md` and its release-audit guard reflect the current measured counts",
         "For every completed item, run `cargo fmt --all`",
     ];
 
@@ -140,7 +143,7 @@ fn release_audit_harness_stays_split() {
             .count();
 
         assert!(
-            line_count <= 400,
+            line_count <= 320,
             "release fast-path audit module {} should stay reviewable; found {line_count} lines",
             path.display()
         );

@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "primitive_options/stats.rs"]
+mod stats;
+
 #[test]
 fn stderr_output_routes_through_platform_primitive() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -152,65 +155,7 @@ fn options_state_uses_internal_locks_like_c() {
             "libc helper boundary {audit_id} should retain at least {min_count} local operation markers"
         );
     }
-    assert!(
-        !stats_rs.contains("fn format_amount(mut n: i64, unit: i64) -> String")
-            && !stats_rs.contains("format!(\"{n}   \"")
-            && !stats_rs.contains("format!(\"{n}   {suffix:<3}\"")
-            && !stats_rs.contains("format!(\"{magnitude}i{suffix}\"")
-            && !stats_rs.contains("format!(\"{magnitude}{suffix}\"")
-            && !stats_rs.contains("format!(\"{whole}.{frac1} {unitdesc:<3}\"")
-            && !stats_rs.contains("let label = format!(\"bin{pagekind:>2}  {i:>3}\");")
-            && !stats_rs.contains("String::new()")
-            && !stats_rs.contains("to_string_lossy")
-            && stats_rs.contains("fn format_amount(buf: &mut [c_char; 32], mut n: i64, unit: i64)")
-            && stats_rs.contains("let mut buf = [0 as c_char; 32];")
-            && stats_rs.contains("let mut label = [0 as c_char; 64];")
-            && stats_rs.contains("format_amount(&mut buf, n, unit);")
-            && stats_rs.contains("CStr::from_ptr(fmt) }.to_bytes()"),
-        "stats amount formatting should stay on stack buffers like C"
-    );
-    assert!(
-        !stats_rs.contains("&format!(\n            \"{prefix}{")
-            && !stats_rs.contains("&format!(\"  \\\"{name}\\\": \")")
-            && !stats_rs.contains("&format!(\"  \\\"{name}\\\": {val},\\n\")")
-            && !stats_rs.contains("&format!(\n            \"    \\\"{name}\\\": {val}")
-            && stats_rs.contains("fn c_char_buffer_str(buf: &[c_char]) -> &str")
-            && stats_rs.contains("let mut buf = [0 as c_char; 128];")
-            && stats_rs.contains("mi_json_buf_print(hbuf, c_char_buffer_str(&buf));"),
-        "stats JSON formatting should use fixed stack buffers like C"
-    );
-    for (audit_id, min_count) in [
-        ("stats-init-bin-boundary", 4),
-        ("stats-counter-update-boundary", 23),
-        ("stats-counter-accumulate-boundary", 3),
-        ("stats-counter-merge-boundary", 14),
-        ("stats-clock-boundary", 1),
-        ("stats-heap-merge-boundary", 14),
-        ("stats-public-merge-boundary", 16),
-        ("stats-heap-visitor-boundary", 16),
-        ("stats-public-export-boundary", 14),
-        ("stats-output-boundary", 25),
-        ("stats-process-info-boundary", 6),
-        ("stats-json-boundary", 18),
-    ] {
-        let marker = format!("SAFETY[AUDIT:{audit_id}]");
-        assert!(
-            stats_rs.matches(&marker).count() >= min_count,
-            "stats unsafe boundary {audit_id} should retain at least {min_count} local operation markers"
-        );
-    }
-    assert!(
-        !unsafe_allowlist
-            .lines()
-            .any(|line| line.starts_with("src/allocator/stats.rs\t"))
-            && !stats_rs.contains("SAFETY[AUDIT:stats-reporting-boundary]")
-            && !stats_rs.contains("SAFETY[AUDIT:stats-counter-boundary]"),
-        "stats unsafe boundaries should stay split, covered by local operation markers, and free of migration allowlist entries"
-    );
-    assert!(
-        !stats_rs.contains("SAFETY[AUDIT:stats-merge-boundary]"),
-        "stats merge boundaries should remain split into focused operation markers"
-    );
+    stats::assert_stats_format_and_markers(&unsafe_allowlist, &stats_rs);
     assert!(
         options_rs.contains("static mut options_lock: mi_lock_t")
             && options_rs.contains("static mut mi_error_handler_lock: mi_lock_t")

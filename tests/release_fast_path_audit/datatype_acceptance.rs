@@ -711,10 +711,13 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
             && !allowlist_rs.contains(
                 "pointer-usize-roundtrip|src/types/freelist_wrappers.rs|*|encoded-pointer|"
             )
-            && allowlist_rs
-                .contains("pointer-usize-roundtrip|src/internal/mod.rs|*|packed-pointer|")
+            && !allowlist_rs.contains("pointer-usize-roundtrip|src/internal/mod.rs|*|")
             && allowlist_rs.contains(
-                "pointer-usize-roundtrip|src/allocator/aligned.rs|*|alignment/provenance|"
+                "pointer-usize-roundtrip|src/internal/mod.rs|mi_page_slice_offset_of|packed-pointer|"
+            )
+            && !allowlist_rs.contains("pointer-usize-roundtrip|src/allocator/aligned.rs|*|")
+            && allowlist_rs.contains(
+                "pointer-usize-roundtrip|src/allocator/aligned.rs|mi_theap_malloc_zero_aligned_at_overalloc|alignment/provenance|"
             )
             && allowlist_rs
                 .contains("pointer-usize-roundtrip|src/allocator/alloc.rs|*|padding/provenance|")
@@ -740,7 +743,9 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
             && strict_check_rs
                 .contains("message=\"broad raw metadata reference outside typed field helpers\"")
             && allowlist_rs.contains("metadata-reference|src/allocator/free.rs|*|mi_page_t|")
-            && allowlist_rs.contains("metadata-reference|src/allocator/stats.rs|*|mi_heap_t|")
+            && !allowlist_rs.contains("metadata-reference|src/allocator/stats.rs|*|")
+            && allowlist_rs
+                .contains("metadata-reference|src/allocator/stats.rs|mi_heap_stats_get|mi_heap_t|")
             && allowlist_rs.contains("metadata-reference|src/types/atomic.rs|*|atomic-field|")
             && ptr_core_rs.contains("let raw = self.as_ptr();")
             && ptr_core_rs.contains("ptr::read(ptr::addr_of!((*raw).block_size))")
@@ -788,6 +793,10 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
         "src/platform/unix.rs",
         "src/platform/wasi.rs",
         "src/platform/os.rs",
+        "src/allocator/aligned.rs",
+        "src/internal/mod.rs",
+        "src/allocator/stats.rs",
+        "src/allocator/thread_heap.rs",
     ] {
         assert!(
             !allowlist_rs.lines().any(|line| {
@@ -815,10 +824,26 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
         "bare-domain-usize|src/platform/unix.rs|unix_mmap_prim_aligned|usize|",
         "bare-domain-usize|src/platform/wasi.rs|mi_wasi_try_alloc|usize|",
         "bare-domain-usize|src/platform/os.rs|mi_os_alloc_aligned_ex|usize|",
+        "raw-pointer-parameter|src/allocator/aligned.rs|mi_padding_shrink_call|mi_block_t|",
+        "raw-pointer-parameter|src/allocator/aligned.rs|mi_theap_malloc_zero_aligned_at|mi_theap_t|",
+        "raw-pointer-parameter|src/allocator/aligned.rs|mi_heap_realloc_aligned|mi_heap_t|",
+        "pointer-usize-roundtrip|src/allocator/aligned.rs|mi_theap_realloc_zero_aligned_at_req|alignment/provenance|",
+        "raw-pointer-parameter|src/internal/mod.rs|_mi_malloc_generic|mi_theap_t|",
+        "raw-pointer-parameter|src/internal/mod.rs|mi_page_block_size|mi_page_t|",
+        "raw-pointer-parameter|src/internal/mod.rs|mi_block_nextx|mi_block_t|",
+        "pointer-usize-roundtrip|src/internal/mod.rs|mi_page_slice_offset_of|packed-pointer|",
+        "raw-pointer-parameter|src/allocator/stats.rs|mi_stats_merge_theap_to_heap|mi_theap_t|",
+        "raw-pointer-parameter|src/allocator/stats.rs|mi_heap_stats_get_json|mi_heap_t|",
+        "metadata-reference|src/allocator/stats.rs|__mi_stat_increase_mt|mi_heap_t|",
+        "bare-domain-usize|src/allocator/stats.rs|mi_stats_get_bin_size_from_raw|usize|",
+        "raw-pointer-parameter|src/allocator/thread_heap.rs|_mi_heap_area_init|mi_page_t|",
+        "raw-pointer-parameter|src/allocator/thread_heap.rs|_mi_theap_create|mi_heap_t|",
+        "raw-pointer-parameter|src/allocator/thread_heap.rs|mi_theap_collect_ex|mi_theap_t|",
+        "pointer-usize-roundtrip|src/allocator/thread_heap.rs|mi_theap_area_visit_blocks_typed|area-visitor|",
     ] {
         assert!(
             allowlist_rs.contains(required),
-            "platform strict-type allowlist should retain symbol-level entry {required}"
+            "strict-type allowlist should retain symbol-level entry {required}"
         );
     }
     let callbacks_rs = audit_sources.source("src/types/callbacks.rs");

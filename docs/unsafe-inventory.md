@@ -25,7 +25,7 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5844 |
+| `unsafe_mentions` | 5845 |
 | `unsafe_blocks` | 3422 |
 | `unsafe_fns` | 1999 |
 | `unsafe_extern_blocks` | 44 |
@@ -101,7 +101,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/types/heap/tests.rs` | 56 | 56 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/heap.rs` | 43 | 15 | 28 | 0 | 0 | 0 | 0 |
 | `src/types/layout/tests.rs` | 9 | 9 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/layout.rs` | 20 | 12 | 8 | 0 | 0 | 0 | 0 |
+| `src/types/layout.rs` | 21 | 12 | 8 | 0 | 0 | 0 | 0 |
 | `src/types/memid/tests.rs` | 5 | 5 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/memid.rs` | 5 | 5 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/padding/tests.rs` | 11 | 11 | 0 | 0 | 0 | 0 | 0 |

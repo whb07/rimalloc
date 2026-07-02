@@ -57,6 +57,8 @@ typed-freelist-wrappers	test	src/types/freelist_wrappers/tests.rs	Exercises enco
 typed-freelist-wrapper-test-fixtures	test	src/types/freelist_wrappers/tests.rs	Exercises stack-local page/block metadata for encoded pointer, block tag, available-list, and local-list wrapper fixtures.
 typed-heap-domain	test	src/types/heap/tests.rs	Exercises main, owned, borrowed, initialized, uninitialized, deleted, and local thread-heap witness classification.
 typed-heap-test-fixtures	test	src/types/heap/tests.rs	Exercises stack-local heap, thread-heap, and TLD metadata plus real heap allocation/deletion witness checks.
+typed-layout-domain	test	src/types/layout/tests.rs	Exercises layout normalization, checked product constructors, realloc witnesses, preserve-byte bounds, and generic flag packing.
+typed-layout-domain	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks allocation layout wrappers stay typed and preserve the documented TYPES_SPEC contract.
 typed-layout-test-fixtures	test	src/types/layout/tests.rs	Exercises concrete valid unchecked scalar values and non-dereferenced pointer witnesses for layout/realloc request fixtures.
 typed-memid-view	test	src/types/memid/tests.rs	Exercises OS, external, meta, arena, heap-main, and invalid raw memid view classification.
 typed-memid-view	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks MemId::view owns union-arm reads and maps unknown or corrupt discriminants to Unknown.

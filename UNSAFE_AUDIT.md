@@ -350,9 +350,15 @@ Operation IDs:
   from valid thread-heap records, promoting initialized thread heaps to local
   witnesses after thread-id checks, and packaging transparent heap/subproc
   role witnesses without allocation.
-- `SAFETY[AUDIT:typed-layout-test-fixtures]`: `src/types/layout/tests.rs`
-  uses concrete valid unchecked scalar values and non-dereferenced dangling
-  pointer witnesses to exercise layout, realloc, and flag packing invariants.
+- `SAFETY[AUDIT:typed-layout-domain]`: `src/types/layout.rs` owns allocation
+  layout, product, realloc, and packed generic-flag request construction.
+  Unsafe operations are limited to unchecked scalar constructors after local
+  validation, checked multiplication handoff, validated old-allocation
+  packaging, and raw flag-word wrapping without allocation.
+- `SAFETY[AUDIT:typed-layout-test-fixtures]`: `src/types/layout/tests.rs` and
+  the `src/types/layout.rs` lint-touch helper use concrete valid unchecked
+  scalar values and non-dereferenced dangling pointer witnesses to exercise
+  layout, realloc, and flag packing invariants.
 - `SAFETY[AUDIT:typed-memid-view]`: `src/types/memid.rs` owns typed
   interpretation of the raw `mi_memid_t` union. Unsafe operations are limited
   to reading the `os`, `meta`, or `arena` union arm after matching the

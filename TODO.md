@@ -13,14 +13,18 @@ strict-type entries, or smaller review units.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 35 entries: 32 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 35.
+- `docs/unsafe-migration-allowlist.tsv` has 34 entries: 31 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 34.
 - `src/types/memid.rs` now uses 4
   `SAFETY[AUDIT:typed-memid-view]` markers for discriminant-gated union reads,
   plus a `SAFETY[AUDIT:typed-memid-test-fixtures]` marker for its lint-touch
   fixture, and is off the unsafe migration allowlist.
+- `src/types/layout.rs` now uses 16
+  `SAFETY[AUDIT:typed-layout-domain]` markers for unchecked layout/product,
+  old-allocation, and flag constructors, plus 2
+  `SAFETY[AUDIT:typed-layout-test-fixtures]` markers for lint-touch fixtures,
+  and is off the unsafe migration allowlist.
 - The remaining low-risk typed-wrapper migration targets are
-  `src/types/layout.rs` at 533 lines with 20 `unsafe` hits and 0 local markers,
   `src/types/page_states.rs` at 473 lines with 60 `unsafe` hits and 0 local
   markers, and `src/types/atomic.rs` at 755 lines with 101 `unsafe` hits and
   0 local markers.
@@ -88,14 +92,14 @@ full tests.
 > constructor boundaries after local validation, not arbitrary translated C
 > logic.
 
-- [ ] Add local `SAFETY[AUDIT:typed-layout-domain]` markers for unchecked
+- [x] Add local `SAFETY[AUDIT:typed-layout-domain]` markers for unchecked
       effective-size, maybe-alignment, padded-layout, checked-product,
       validated old-allocation, and generic flag construction.
-- [ ] Preserve the current small `Copy` request/value shape, `#[inline]`
+- [x] Preserve the current small `Copy` request/value shape, `#[inline]`
       boundaries, and allocation-free hot-path behavior.
-- [ ] Keep checked public constructors returning `LayoutError`; do not replace
+- [x] Keep checked public constructors returning `LayoutError`; do not replace
       ordinary validation with panics or unchecked casts.
-- [ ] Add matching unsafe audit/evidence entries, remove the file from the
+- [x] Add matching unsafe audit/evidence entries, remove the file from the
       unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -150,7 +154,7 @@ full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/types/memid.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/types/layout.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/types/layout.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/types/page_states.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/bench_diagnostics.rs` off the unsafe migration
        allowlist.

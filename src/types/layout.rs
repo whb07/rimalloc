@@ -101,11 +101,15 @@ impl LayoutRequest {
         // requested size for API-visible accounting, but never build a zero
         // `PaddedSize`.
         let eff_size = requested.effective_size();
-        // Unsafe is fine here as we've explicitly guarded against 0.
+        // SAFETY[AUDIT:typed-layout-domain]: `RequestedSize::effective_size`
+        // normalizes zero to the allocator minimum, so this effective size is
+        // nonzero.
         let effective = unsafe { EffectiveSize::new_unchecked(eff_size) };
         Self::from_parts(
             requested,
             effective,
+            // SAFETY[AUDIT:typed-layout-domain]: zero is the valid sentinel
+            // for "no explicit alignment" in `MaybeAlignment`.
             unsafe { MaybeAlignment::new_unchecked(0) },
             Zeroed::No,
         )
@@ -119,9 +123,13 @@ impl LayoutRequest {
 
     fn maybe_alignment_from_raw(alignment: usize) -> Result<MaybeAlignment, LayoutError> {
         if alignment == 0 {
+            // SAFETY[AUDIT:typed-layout-domain]: zero is the valid sentinel
+            // for "no explicit alignment" in `MaybeAlignment`.
             return Ok(unsafe { MaybeAlignment::new_unchecked(0) });
         }
         let alignment = Alignment::new(alignment).ok_or(LayoutError::AlignmentInvalid)?;
+        // SAFETY[AUDIT:typed-layout-domain]: `Alignment::new` accepted this
+        // nonzero power-of-two value, which is a valid `MaybeAlignment`.
         Ok(unsafe { MaybeAlignment::new_unchecked(alignment.get()) })
     }
 
@@ -157,6 +165,8 @@ impl LayoutRequest {
     /// `effective.get() + MI_PADDING_SIZE` must not overflow, and the caller
     /// must not need to preserve a distinct zero-size requested value.
     #[inline(always)]
+    // SAFETY[AUDIT:typed-layout-domain]: callers provide a nonzero
+    // `EffectiveSize` whose padding addition is valid for the allocation path.
     pub(crate) unsafe fn from_effective_unchecked(
         effective: EffectiveSize,
         zeroed: Zeroed,
@@ -166,6 +176,8 @@ impl LayoutRequest {
             requested,
             effective,
             padded: requested.padded_unchecked(),
+            // SAFETY[AUDIT:typed-layout-domain]: zero is the valid sentinel
+            // for "no explicit alignment" in `MaybeAlignment`.
             alignment: unsafe { MaybeAlignment::new_unchecked(0) },
             zeroed,
         }
@@ -176,6 +188,9 @@ impl LayoutRequest {
     /// # Safety
     /// `padded` must be the result of adding `MI_PADDING_SIZE` to the logical
     /// requested size for this allocation path.
+    // SAFETY[AUDIT:typed-layout-domain]: callers provide a padded allocator
+    // size whose logical requested component can be recovered by subtracting
+    // `MI_PADDING_SIZE`.
     pub(crate) unsafe fn from_padded_unchecked(padded: PaddedSize, zeroed: Zeroed) -> Self {
         crate::internal::mi_debug_assert!(
             padded.get() >= crate::types::MI_PADDING_SIZE,
@@ -185,8 +200,13 @@ impl LayoutRequest {
         let effective_size = RequestedSize::new(requested_size).effective_size();
         Self {
             requested: RequestedSize::new(requested_size),
+            // SAFETY[AUDIT:typed-layout-domain]: effective-size normalization
+            // always returns the allocator's nonzero minimum or the nonzero
+            // requested size.
             effective: unsafe { EffectiveSize::new_unchecked(effective_size) },
             padded,
+            // SAFETY[AUDIT:typed-layout-domain]: zero is the valid sentinel
+            // for "no explicit alignment" in `MaybeAlignment`.
             alignment: unsafe { MaybeAlignment::new_unchecked(0) },
             zeroed,
         }
@@ -218,7 +238,8 @@ pub(crate) struct CallocRequest {
 impl CallocRequest {
     pub(crate) fn new(count: usize, size: usize) -> Result<Self, LayoutError> {
         let total_size = count.checked_mul(size).ok_or(LayoutError::SizeOverflow)?;
-        // SAFETY: `total_size` was produced by `count.checked_mul(size)`.
+        // SAFETY[AUDIT:typed-layout-domain]: `total_size` was produced by
+        // `count.checked_mul(size)`.
         unsafe { Self::from_checked_total(count, size, total_size) }
     }
 
@@ -229,6 +250,8 @@ impl CallocRequest {
     /// `total_size` must be exactly `count * size` and that multiplication
     /// must not have overflowed.
     #[inline]
+    // SAFETY[AUDIT:typed-layout-domain]: callers provide the exact checked
+    // multiplication result that this request stores and forwards to zalloc.
     pub(crate) unsafe fn from_checked_total(
         count: usize,
         size: usize,
@@ -255,7 +278,8 @@ pub(crate) struct AllocProduct {
 impl AllocProduct {
     pub(crate) fn new(count: usize, size: usize) -> Result<Self, LayoutError> {
         let total_size = count.checked_mul(size).ok_or(LayoutError::SizeOverflow)?;
-        // SAFETY: `total_size` was produced by `count.checked_mul(size)`.
+        // SAFETY[AUDIT:typed-layout-domain]: `total_size` was produced by
+        // `count.checked_mul(size)`.
         unsafe { Self::from_checked_total(count, size, total_size) }
     }
 
@@ -266,6 +290,8 @@ impl AllocProduct {
     /// `total_size` must be exactly `count * size` and that multiplication
     /// must not have overflowed.
     #[inline]
+    // SAFETY[AUDIT:typed-layout-domain]: callers provide the exact checked
+    // multiplication result that this request stores and forwards to malloc.
     pub(crate) unsafe fn from_checked_total(
         count: usize,
         size: usize,
@@ -304,6 +330,8 @@ impl PreserveBytes {
 }
 
 impl OldAllocation {
+    // SAFETY[AUDIT:typed-layout-domain]: callers have already proven the user
+    // pointer, usable size, page, and block describe one allocation.
     unsafe fn new(ptr: UserPtr, usable: UsableSize, page: PagePtr, block: BlockPtr) -> Self {
         Self {
             ptr,
@@ -325,6 +353,8 @@ impl OldAllocation {
         page: PagePtr,
         block: BlockPtr,
     ) -> Self {
+        // SAFETY[AUDIT:typed-layout-domain]: this public unsafe constructor
+        // carries the same validated allocation proof into the private packer.
         unsafe { Self::new(ptr, usable, page, block) }
     }
 
@@ -428,6 +458,9 @@ impl MallocGenericFlags {
     /// Bit 0 must only encode the zeroing flag, and all high bits must be zero
     /// or a valid huge-alignment payload with bit 0 clear.
     #[inline(always)]
+    // SAFETY[AUDIT:typed-layout-domain]: callers provide a raw flag word with
+    // bit 0 reserved for zeroing and the remaining bits reserved for huge
+    // alignment.
     pub(crate) unsafe fn from_raw(raw: usize) -> Self {
         Self(raw)
     }
@@ -515,6 +548,9 @@ pub(super) fn __lint_touch() {
         let _ = req.item_size();
     }
     let _ = ItemCount::new(1).get();
+    // SAFETY[AUDIT:typed-layout-test-fixtures]: these non-dereferenced
+    // dangling pointers are lint-touch identity witnesses and are not exposed
+    // to allocator state.
     let old = unsafe {
         OldAllocation::from_validated_parts(
             UserPtr::new_unchecked(core::ptr::dangling_mut()),
@@ -524,6 +560,8 @@ pub(super) fn __lint_touch() {
         )
     };
     let _ = old.block();
+    // SAFETY[AUDIT:typed-layout-test-fixtures]: zero is a concrete valid flag
+    // fixture used only to keep accessors referenced for lint accounting.
     let flags = unsafe { MallocGenericFlags::from_raw(0) };
     let _ = flags.raw();
     let _ = flags.huge_alignment();

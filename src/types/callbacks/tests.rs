@@ -87,12 +87,18 @@ fn callback_wrappers_match_raw_layout() {
 
 #[test]
 fn callback_wrappers_preserve_raw_values() {
+    // SAFETY[AUDIT:typed-callback-test-fixtures]: this callback is a local
+    // test fixture with the C ABI shape required by `OutputCallback`.
     unsafe extern "C" fn output(msg: *const core::ffi::c_char, arg: *mut c_void) {
         let _ = (msg, arg);
     }
+    // SAFETY[AUDIT:typed-callback-test-fixtures]: this callback is a local
+    // test fixture with the C ABI shape required by `ErrorCallback`.
     unsafe extern "C" fn error(err: i32, arg: *mut c_void) {
         let _ = (err, arg);
     }
+    // SAFETY[AUDIT:typed-callback-test-fixtures]: this callback is a local
+    // test fixture with the C ABI shape required by `DeferredFreeCallback`.
     unsafe extern "C" fn deferred(force: bool, heartbeat: u64, arg: *mut c_void) {
         let _ = (force, heartbeat, arg);
     }
@@ -104,6 +110,8 @@ fn callback_wrappers_preserve_raw_values() {
     let deferred_callback = DeferredFreeCallback::new(Some(deferred));
     let deferred_storage = deferred_callback.storage_ptr();
     assert!(!deferred_storage.is_null());
+    // SAFETY[AUDIT:typed-callback-test-fixtures]: `deferred_storage` came from
+    // the live `deferred_callback` value above and is checked non-null.
     assert!(unsafe { DeferredFreeCallback::from_storage_ptr(deferred_storage) }.is_some());
     assert!(DeferredFreeCallback::none().storage_ptr().is_null());
 

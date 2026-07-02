@@ -9,12 +9,10 @@ cohesive boundaries with clear invariants.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` still has 58 entries: 44 production,
-  11 test, and 3 translation files.
+- `docs/unsafe-migration-allowlist.tsv` now has 56 entries: 44 production,
+  9 test, and 3 translation files.
 - The smallest remaining allowlisted test fixtures are still reviewable:
-  `src/types/arena/tests.rs` is 109 lines,
   `src/types/freelist_wrappers/tests.rs` is 119 lines,
-  `src/types/callbacks/tests.rs` is 135 lines,
   `src/types/layout/tests.rs` is 139 lines, and
   `src/types/page_states/tests.rs` is 151 lines.
 - `strict-type-allowlist.txt` has 95 entries; 6 are still marked `remove:`.
@@ -44,15 +42,22 @@ Current review evidence:
 > directly. Migrating them reduces legacy exception surface without changing
 > production allocator behavior.
 
-- [ ] Re-rank the smallest allowlisted test files by proof complexity.
-- [ ] Migrate at least two local fixture files to operation-level
+- [x] Re-rank the smallest allowlisted test files by proof complexity.
+- [x] Migrate at least two local fixture files to operation-level
       `SAFETY[AUDIT:*]` markers.
-- [ ] Add matching entries to `UNSAFE_AUDIT.md` and
+- [x] Add matching entries to `UNSAFE_AUDIT.md` and
       `docs/unsafe-audit-evidence.tsv`.
-- [ ] Remove the migrated files from `docs/unsafe-migration-allowlist.tsv` and
+- [x] Remove the migrated files from `docs/unsafe-migration-allowlist.tsv` and
       lower `ALLOWLIST_ENTRY_CAP`.
-- [ ] Keep the audit category split visible so test progress does not hide
+- [x] Keep the audit category split visible so test progress does not hide
       production unsafe debt.
+  - Evidence: `src/types/arena/tests.rs` now uses
+    `SAFETY[AUDIT:typed-arena-test-fixtures]` for stack-local arena metadata,
+    slice-range fixtures, and arena-role constructor proofs.
+    `src/types/callbacks/tests.rs` now uses
+    `SAFETY[AUDIT:typed-callback-test-fixtures]` for callback storage pointer
+    round trips. Both files were removed from
+    `docs/unsafe-migration-allowlist.tsv`, and `ALLOWLIST_ENTRY_CAP` is now 56.
 
 Verify: `scripts/check-unsafe-audit.py`,
 `scripts/check-unsafe-audit-evidence.py`,
@@ -156,7 +161,7 @@ clippy, and full tests.
 
 ## Definition of done for this backlog
 
-- [ ] The unsafe migration allowlist is below 58 entries and the cap is lowered.
+- [x] The unsafe migration allowlist is below 58 entries and the cap is lowered.
 - [ ] The page count accessor marker cluster is smaller or justified by a
       narrower helper proof.
 - [ ] The strict-type removable-entry count is below 6 and capped lower.

@@ -228,6 +228,13 @@ Operation IDs:
   non-null block pointers from packed thread-free words after masking the
   ownership bit. Miri provenance helpers retain the original pointer identity,
   and `BlockPtr` adds only the non-null wrapper invariant.
+- `SAFETY[AUDIT:typed-arena-test-fixtures]`: `src/types/arena/tests.rs`
+  builds stack-local arena metadata to exercise slice-range and arena-role
+  constructors. The fixtures do not register with allocator globals and are
+  used only while the stack-local records are live.
+- `SAFETY[AUDIT:typed-callback-test-fixtures]`: `src/types/callbacks/tests.rs`
+  verifies callback wrapper layout, raw argument preservation, and storage
+  pointer round trips using local callback function items and stack values.
 - `SAFETY[AUDIT:typed-freelist-test-fixtures]`:
   `src/types/freelist/tests.rs` builds stack-local block metadata and opaque
   pointer words to exercise `ThreadFreeWord`, encoded-link, and raw link helper

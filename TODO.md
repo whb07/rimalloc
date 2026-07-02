@@ -12,7 +12,7 @@ Review evidence:
 
 - `docs/unsafe-migration-allowlist.tsv` still has 60 entries: 44 production,
   13 test, and 3 translation files.
-- `strict-type-allowlist.txt` has 95 entries; 8 are still marked `remove:`.
+- `strict-type-allowlist.txt` has 94 entries; 7 are still marked `remove:`.
   Those removable entries are broad `bare-domain-usize` file allowances in
   allocator, bitmap, and internal translation units.
 - The largest Rust source files are still difficult review units:
@@ -68,16 +68,22 @@ Review evidence:
 > which helpers are genuinely ABI-shaped and which are just carrying raw
 > `usize` out of habit.
 
-- [ ] Re-inventory the eight `remove:` entries and rank them by hot-path risk,
+- [x] Re-inventory the eight `remove:` entries and rank them by hot-path risk,
       expected churn, and ability to preserve code shape.
-- [ ] Start with `src/allocator/arena_meta.rs`, `src/bitmap.rs`, or another
+- [x] Start with `src/allocator/arena_meta.rs`, `src/bitmap.rs`, or another
       low-risk non-hot helper before touching `alloc`, `free`, `page`, or arena
       allocation paths.
-- [ ] Replace one broad file-level entry with typed wrappers or symbol-level
+- [x] Replace one broad file-level entry with typed wrappers or symbol-level
       strict-type entries.
-- [ ] Lower the removable-entry cap in `scripts/check-strict-types.py`.
-- [ ] Preserve raw `usize` at public ABI and platform boundaries where that is
+- [x] Lower the removable-entry cap in `scripts/check-strict-types.py`.
+- [x] Preserve raw `usize` at public ABI and platform boundaries where that is
       the correct contract.
+  - Evidence: `src/allocator/arena_meta.rs` now converts internal meta block
+    indexes and counts into `BlockIndex`/`NonZeroU32` before calling helper
+    boundaries. The raw `usize` size parameters remain only on the C-shaped
+    `_mi_meta_zalloc` and `_mi_meta_free` contracts, the broad
+    `arena_meta.rs` strict-type allowlist entry was removed, and
+    `scripts/check-strict-types.py` now caps removable entries at 7.
 - Verify: `scripts/check-strict-types.py`, focused release audit, full clippy,
   full tests, and assembly capture for any touched hot path.
 
@@ -146,7 +152,7 @@ Review evidence:
 ## Suggested implementation order
 
 1. [x] Shrink the unsafe migration allowlist with small reviewable files.
-2. [ ] Reduce one removable strict-type file-level allowance.
+2. [x] Reduce one removable strict-type file-level allowance.
 3. [ ] Consolidate unsafe arena diagnostic metadata reads.
 4. [ ] Split the uneven release-audit unsafe/performance module further.
 5. [ ] Split one low-risk page module cluster.
@@ -154,7 +160,7 @@ Review evidence:
 ## Definition of done for this backlog
 
 - [x] The unsafe migration allowlist is below 62 entries and the cap is lowered.
-- [ ] The strict-type allowlist has fewer than 8 `remove:` entries and the
+- [x] The strict-type allowlist has fewer than 8 `remove:` entries and the
       removable-entry count is capped lower.
 - [ ] `src/allocator/arena/debug.rs` has clearer diagnostic helper boundaries
       and fewer repeated local safety-marker comments.

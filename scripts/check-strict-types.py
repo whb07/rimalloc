@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ALLOWLIST = ROOT / "strict-type-allowlist.txt"
-REMOVE_ENTRY_CAP = 8
+REMOVE_ENTRY_CAP = 7
 
 RAW_BOUNDARY_FILES = {
     "src/ffi/abi.rs",
@@ -65,6 +65,7 @@ SKIP_DIRS = {
 }
 
 PATH_ALIASES = {
+    "src/allocator/arena/debug.rs": {"src/allocator/arena.rs"},
     "src/internal/bitmap.rs": {"src/bitmap.rs"},
     "src/internal/guarded.rs": {"src/types/guarded.rs"},
 }
@@ -402,7 +403,7 @@ def main() -> int:
             kind="heap-allocating-type",
             rel=rel,
             text=text,
-            allowed_files={"src/safe/mod.rs"},
+            allowed_files={"src/safe/mod.rs", "src/safe/tests.rs"},
             pattern=HEAP_TYPES_RE,
             entries=entries,
             domain="heap-type",

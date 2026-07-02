@@ -43,19 +43,29 @@ pub struct mi_meta_page_s {
 pub type mi_meta_page_t = mi_meta_page_s;
 
 #[inline]
+fn meta_block_index(raw: usize) -> BlockIndex {
+    crate::internal::mi_assert_internal!(raw <= u32::MAX as usize);
+    BlockIndex(raw as u32)
+}
+
+#[inline]
+fn meta_block_count(block_count: usize) -> NonZeroU32 {
+    crate::internal::mi_assert_internal!(block_count > 0 && block_count <= u32::MAX as usize);
+    unsafe { NonZeroU32::new_unchecked(block_count as u32) }
+}
+
+#[inline]
 unsafe fn mi_meta_memid(
     mpage: *mut mi_meta_page_t,
-    block_idx: usize,
-    block_count: usize,
+    block_index: BlockIndex,
+    block_count: NonZeroU32,
 ) -> mi_memid_t {
     unsafe {
         crate::internal::mi_assert_internal!(!mpage.is_null());
-        crate::internal::mi_assert_internal!(block_idx <= u32::MAX as usize);
-        crate::internal::mi_assert_internal!(block_count <= u32::MAX as usize);
         MemId::<MetaMem>::meta(
             core::ptr::NonNull::new_unchecked(mpage.cast()),
-            BlockIndex(block_idx as u32),
-            NonZeroU32::new_unchecked(block_count as u32),
+            block_index,
+            block_count,
         )
         .into_raw()
     }
@@ -96,7 +106,11 @@ pub unsafe fn mi_meta_page_next(mpage: *mut mi_meta_page_t) -> *mut mi_meta_page
 /// `mpage` must point to a live meta page, and `block_idx` must be within the
 /// page's meta block range.
 #[inline]
-pub unsafe fn mi_meta_block_start(mpage: *mut mi_meta_page_t, block_idx: usize) -> *mut c_void {
+pub unsafe fn mi_meta_block_start(
+    mpage: *mut mi_meta_page_t,
+    block_index: BlockIndex,
+) -> *mut c_void {
+    let block_idx = block_index.0 as usize;
     let guard_size = unsafe { _mi_os_secure_guard_page_size() };
     crate::internal::mi_assert_internal!(_mi_is_aligned(
         unsafe { mpage.cast::<u8>().sub(guard_size).cast() },
@@ -199,6 +213,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
         }
         let block_count = _mi_divide_up(size, MI_META_BLOCK_SIZE);
         crate::internal::mi_assert_internal!(block_count > 0 && block_count < MI_BCHUNK_BITS);
+        let meta_block_count = meta_block_count(block_count);
 
         let mpage0 = mi_meta_pages.load(Ordering::Acquire);
         let mut mpage = mpage0;
@@ -210,8 +225,9 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
                 block_count,
                 ptr::addr_of_mut!(block_idx),
             ) {
-                *pmemid = mi_meta_memid(mpage, block_idx, block_count);
-                return mi_meta_block_start(mpage, block_idx);
+                let block_index = meta_block_index(block_idx);
+                *pmemid = mi_meta_memid(mpage, block_index, meta_block_count);
+                return mi_meta_block_start(mpage, block_index);
             }
             mpage = mi_meta_page_next(mpage);
         }
@@ -229,8 +245,9 @@ pub(crate) unsafe extern "C" fn _mi_meta_zalloc(
                 block_count,
                 ptr::addr_of_mut!(block_idx),
             ) {
-                *pmemid = mi_meta_memid(mpage, block_idx, block_count);
-                return mi_meta_block_start(mpage, block_idx);
+                let block_index = meta_block_index(block_idx);
+                *pmemid = mi_meta_memid(mpage, block_index, meta_block_count);
+                return mi_meta_block_start(mpage, block_index);
             }
         }
 
@@ -250,6 +267,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid
         if let crate::core_types::MemIdView::Meta(meta) = crate::core_types::MemId::view(memid) {
             let block_count = meta.block_count.get() as usize;
             let block_idx = meta.block_index.0 as usize;
+            let block_index = meta.block_index;
             let mpage = meta.meta_page.as_ptr().cast::<mi_meta_page_t>();
             crate::internal::mi_assert_internal!(
                 _mi_divide_up(size, MI_META_BLOCK_SIZE) == block_count
@@ -264,7 +282,7 @@ pub(crate) unsafe extern "C" fn _mi_meta_free(p: *mut c_void, size: usize, memid
                 block_count
             ));
             _mi_memzero_aligned(
-                mi_meta_block_start(mpage, block_idx),
+                mi_meta_block_start(mpage, block_index),
                 block_count * MI_META_BLOCK_SIZE,
             );
             mi_bbitmap_setN(

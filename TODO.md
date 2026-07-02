@@ -1,23 +1,23 @@
 # TODO: Next Strict-Type and Audit Granularity Backlog
 
-Fresh-eyes review after completing the release-audit split on `master` at
-`d85e616`. The previous backlog is complete and pushed. The next mechanical
-translation debt is in stale audit evidence paths, remaining strict-type
-wildcard allowances, broad unsafe operation IDs, and a root release-audit
-harness that is still close to its cap.
+Fresh-eyes review after refreshing audit evidence on `master` at `53db80e`.
+The previous backlog is complete and pushed. The next mechanical translation
+debt is in remaining strict-type wildcard allowances, broad unsafe operation
+IDs, and a root release-audit harness that is still close to its cap.
 
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` still covers 82 source files, 5,893 unsafe
   mentions, and 91 operation IDs. The migration allowlist remains empty.
-- `strict-type-allowlist.txt` has 45 wildcard entries left: 14
-  raw-pointer-parameter entries, 16 bare-domain `usize` entries, 7
-  pointer/usize round-trip entries, 5 metadata-reference entries, 2 atomic-cast
+- `strict-type-allowlist.txt` has 26 wildcard entries left: 4
+  raw-pointer-parameter entries, 13 bare-domain `usize` entries, 4
+  pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
   entries, and 1 heap-allocating-type entry.
-- The remaining wildcard-heavy paths are `src/allocator/alloc.rs`,
-  `src/allocator/free.rs`, and `src/allocator/init.rs` with 3 entries each;
-  `src/bitmap.rs`, `src/allocator/page_map.rs`, `src/types/ptr.rs`,
-  `src/allocator/options.rs`, and `src/types/arena.rs` with 2 entries each.
+- No remaining path has more than one wildcard entry; the residual path-level
+  entries are public/raw ABI, platform ABI, proof-fixture, or typed-domain
+  constructor boundaries such as `src/allocator/heap.rs`,
+  `src/platform/mod.rs`, `src/raw/macros.rs`, `src/types/layout.rs`,
+  `src/safe/allocation.rs`, and `src/types/atomic.rs`.
 - The largest remaining unsafe audit marker clusters are
   `raw-macro-allocation-boundary` with 178 markers,
   `allocation-entry-boundary` with 166 markers,
@@ -62,14 +62,14 @@ full formatting, full clippy, and full tests.
 > **Comment:** The checker is item-aware now, but the highest-risk allocator
 > paths still retain path-level strict-type entries.
 
-- [ ] Replace wildcard strict-type entries in `src/allocator/alloc.rs`,
+- [x] Replace wildcard strict-type entries in `src/allocator/alloc.rs`,
       `src/allocator/free.rs`, and `src/allocator/init.rs` with named helper or
       documented ABI-boundary entries wherever the checker can identify the
       responsible item.
-- [ ] Narrow the remaining paired wildcard entries in `src/bitmap.rs`,
+- [x] Narrow the remaining paired wildcard entries in `src/bitmap.rs`,
       `src/allocator/page_map.rs`, `src/types/ptr.rs`,
       `src/allocator/options.rs`, and `src/types/arena.rs`.
-- [ ] Preserve true public ABI, platform ABI, proof-fixture, and typed-domain
+- [x] Preserve true public ABI, platform ABI, proof-fixture, and typed-domain
       constructor boundaries as explicit documented exceptions instead of
       broad accidental fallbacks.
 
@@ -149,7 +149,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Refresh audit evidence paths after the release-audit split.
-2. [ ] Narrow the remaining allocator/init strict-type wildcards.
+2. [x] Narrow the remaining allocator/init strict-type wildcards.
 3. [ ] Split the raw macro allocation audit cluster.
 4. [ ] Split allocation, aligned allocation, stats, page-map, and OS audit
        clusters.
@@ -160,7 +160,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 - [x] Unsafe audit evidence rows point at the focused tests that actually guard
       each operation ID.
-- [ ] Remaining strict-type wildcard entries are either narrowed to named items
+- [x] Remaining strict-type wildcard entries are either narrowed to named items
       or documented as true ABI, public API, fixture, or typed-constructor
       boundaries.
 - [ ] The largest unsafe audit operation IDs are split into narrower review

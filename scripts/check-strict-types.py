@@ -53,7 +53,7 @@ BARE_DOMAIN_PARAM_RE = re.compile(
     re.DOTALL,
 )
 CORE_TYPES_DEAD_CODE_RE = re.compile(r"#\s*!\s*\[\s*allow\s*\(\s*dead_code\s*\)\s*\]")
-FN_ITEM_RE = re.compile(r"\bfn\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>{}]*)?\(")
+FN_ITEM_RE = re.compile(r"\bfn\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>{}]*>)?\(")
 STATIC_OR_CONST_ITEM_RE = re.compile(
     r"^\s*(?:(?:pub|pub\([^)]*\)|pub\s*\([^)]*\))\s+)?"
     r"(?:static|const)\s+(?:mut\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b"
@@ -258,9 +258,20 @@ def item_context_for(
 
 
 def has_item_body_after(code: str, start: int) -> bool:
-    semicolon = code.find(";", start)
     opening = code.find("{", start)
-    return opening != -1 and (semicolon == -1 or opening < semicolon)
+    return opening != -1 and not has_top_level_semicolon(code, start, opening)
+
+
+def has_top_level_semicolon(code: str, start: int, end: int | None = None) -> bool:
+    square_depth = 0
+    for ch in code[start:end]:
+        if ch == "[":
+            square_depth += 1
+        elif ch == "]" and square_depth > 0:
+            square_depth -= 1
+        elif ch == ";" and square_depth == 0:
+            return True
+    return False
 
 
 def static_or_const_initializer_tail(code: str, start: int) -> str:
@@ -318,7 +329,7 @@ def item_contexts_by_line(text: str) -> dict[int, ItemContext]:
                 )
                 if has_item_body_after(code, fn_match.start()):
                     opened_item = context
-                elif ";" not in code[fn_match.start() :]:
+                elif not has_top_level_semicolon(code, fn_match.start()):
                     pending_item = context
             elif static_match is not None:
                 context = item_context_for(
@@ -348,11 +359,15 @@ def item_contexts_by_line(text: str) -> dict[int, ItemContext]:
 
         opens_item = opened_item is not None
         opens_impl = opened_impl_type is not None
-        if pending_item is not None and "{" in code and ";" not in code.split("{", 1)[0]:
+        if (
+            pending_item is not None
+            and "{" in code
+            and not has_top_level_semicolon(code, 0, code.find("{"))
+        ):
             opened_item = pending_item
             opens_item = True
             pending_item = None
-        if pending_item is not None and ";" in code:
+        if pending_item is not None and has_top_level_semicolon(code, 0):
             pending_item = None
         if pending_impl_type is not None and "{" in code:
             opened_impl_type = pending_impl_type
@@ -485,6 +500,11 @@ fn free_function(ptr: *const usize) -> usize {
     ptr as usize
 }
 
+fn generic_function<T>(ptr: [*const T; 1]) -> usize {
+    let p = ptr[0];
+    p as usize
+}
+
 impl AtomicField {
     pub(crate) unsafe fn load(self) -> usize {
         self.ptr as *const AtomicUsize
@@ -507,10 +527,11 @@ static TABLE: [usize; 1] = [{
 """
     contexts = item_contexts_by_line(text)
     assert contexts[3].symbols == ("free_function",)
-    assert contexts[8].symbols == ("AtomicField::load", "load")
-    assert contexts[13].symbols == ("AtomicField::MASK", "MASK")
-    assert "imported" in contexts[18].symbols
-    assert contexts[23].symbols == ("TABLE",)
+    assert contexts[8].symbols == ("generic_function",)
+    assert contexts[13].symbols == ("AtomicField::load", "load")
+    assert contexts[18].symbols == ("AtomicField::MASK", "MASK")
+    assert "imported" in contexts[23].symbols
+    assert contexts[28].symbols == ("TABLE",)
 
     entries = [
         AllowEntry(
@@ -525,6 +546,14 @@ static TABLE: [usize; 1] = [{
             "pointer-usize-roundtrip",
             "src/example.rs",
             "AtomicField::MASK",
+            "provenance",
+            "test",
+            "permanent: self-test",
+        ),
+        AllowEntry(
+            "pointer-usize-roundtrip",
+            "src/example.rs",
+            "generic_function",
             "provenance",
             "test",
             "permanent: self-test",

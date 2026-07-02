@@ -317,11 +317,16 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
             && allowlist_rs.contains(
                 "pointer-usize-roundtrip|src/allocator/aligned.rs|mi_theap_malloc_zero_aligned_at_overalloc|alignment/provenance|"
             )
-            && allowlist_rs
-                .contains("pointer-usize-roundtrip|src/allocator/alloc.rs|*|padding/provenance|")
+            && !allowlist_rs.contains("pointer-usize-roundtrip|src/allocator/alloc.rs|*|")
+            && allowlist_rs.contains(
+                "pointer-usize-roundtrip|src/allocator/alloc.rs|_mi_page_malloc_zero_typed|padding/provenance|"
+            )
             && allowlist_rs
                 .contains("pointer-usize-roundtrip|src/types/freelist.rs|*|packed-thread-free|")
-            && allowlist_rs.contains("pointer-usize-roundtrip|src/allocator/free.rs|*|validation|")
+            && !allowlist_rs.contains("pointer-usize-roundtrip|src/allocator/free.rs|*|")
+            && allowlist_rs.contains(
+                "pointer-usize-roundtrip|src/allocator/free.rs|mi_validate_pointer|validation|"
+            )
             && !allowlist_rs.contains("pointer-usize-roundtrip|src/platform/os.rs|*|")
             && allowlist_rs.contains(
                 "pointer-usize-roundtrip|src/platform/os.rs|mi_os_page_align_areax|os-memory|"
@@ -340,7 +345,18 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
             && strict_check_rs.contains("domain=\"metadata\"")
             && strict_check_rs
                 .contains("message=\"broad raw metadata reference outside typed field helpers\"")
-            && allowlist_rs.contains("metadata-reference|src/allocator/free.rs|*|mi_page_t|")
+            && !allowlist_rs.contains("metadata-reference|src/bitmap.rs|*|")
+            && !allowlist_rs.contains("metadata-reference|src/internal/bitmap.rs|*|")
+            && !allowlist_rs.contains("metadata-reference|src/allocator/free.rs|*|")
+            && !allowlist_rs.contains("metadata-reference|src/allocator/options.rs|*|")
+            && allowlist_rs
+                .contains("metadata-reference|src/internal/bitmap.rs|mi_bitmap_setN|bitmap|")
+            && allowlist_rs.contains(
+                "metadata-reference|src/allocator/free.rs|mi_page_decode_padding|mi_page_t|"
+            )
+            && allowlist_rs.contains(
+                "metadata-reference|src/allocator/options.rs|with_options_table|options|"
+            )
             && !allowlist_rs.contains("metadata-reference|src/allocator/stats.rs|*|")
             && allowlist_rs
                 .contains("metadata-reference|src/allocator/stats.rs|mi_heap_stats_get|mi_heap_t|")
@@ -375,13 +391,15 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
             && strict_check_rs.contains("symbol=context.symbols")
             && strict_check_rs.contains("f\"{message} in {context.primary_symbol}\"")
             && strict_check_rs.contains("assert contexts[3].symbols == (\"free_function\",)")
+            && strict_check_rs.contains("assert contexts[8].symbols == (\"generic_function\",)")
             && strict_check_rs
-                .contains("assert contexts[8].symbols == (\"AtomicField::load\", \"load\")")
+                .contains("assert contexts[13].symbols == (\"AtomicField::load\", \"load\")")
             && strict_check_rs
-                .contains("assert contexts[13].symbols == (\"AtomicField::MASK\", \"MASK\")")
-            && strict_check_rs.contains("assert \"imported\" in contexts[18].symbols")
-            && strict_check_rs.contains("assert contexts[23].symbols == (\"TABLE\",)")
+                .contains("assert contexts[18].symbols == (\"AtomicField::MASK\", \"MASK\")")
+            && strict_check_rs.contains("assert \"imported\" in contexts[23].symbols")
+            && strict_check_rs.contains("assert contexts[28].symbols == (\"TABLE\",)")
             && strict_check_rs.contains("\"pointer-usize-roundtrip\"")
+            && strict_check_rs.contains("\"generic_function\"")
             && strict_check_rs.contains("\"AtomicField::load\"")
             && strict_check_rs.contains("strict-type self-test failed"),
         "strict-type line-pattern checks should use item-aware symbols and self-test symbol-level line-pattern allowlist entries"
@@ -395,6 +413,15 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
         "src/internal/mod.rs",
         "src/allocator/stats.rs",
         "src/allocator/thread_heap.rs",
+        "src/allocator/alloc.rs",
+        "src/allocator/free.rs",
+        "src/allocator/init.rs",
+        "src/allocator/page_map.rs",
+        "src/allocator/options.rs",
+        "src/bitmap.rs",
+        "src/internal/bitmap.rs",
+        "src/types/arena.rs",
+        "src/types/ptr.rs",
     ] {
         assert!(
             !allowlist_rs.lines().any(|line| {
@@ -438,6 +465,27 @@ pub(super) fn assert_strict_type_and_provenance_acceptance(
         "raw-pointer-parameter|src/allocator/thread_heap.rs|_mi_theap_create|mi_heap_t|",
         "raw-pointer-parameter|src/allocator/thread_heap.rs|mi_theap_collect_ex|mi_theap_t|",
         "pointer-usize-roundtrip|src/allocator/thread_heap.rs|mi_theap_area_visit_blocks_typed|area-visitor|",
+        "raw-pointer-parameter|src/allocator/alloc.rs|mi_theap_malloc|mi_theap_t|",
+        "raw-pointer-parameter|src/allocator/alloc.rs|mi_heap_malloc|mi_heap_t|",
+        "pointer-usize-roundtrip|src/allocator/alloc.rs|_mi_page_malloc_zero_typed|padding/provenance|",
+        "bare-domain-usize|src/allocator/alloc.rs|malloc_layout_or_report|usize|",
+        "raw-pointer-parameter|src/allocator/free.rs|_mi_free_generic|mi_page_t|",
+        "metadata-reference|src/allocator/free.rs|mi_page_decode_padding|mi_page_t|",
+        "pointer-usize-roundtrip|src/allocator/free.rs|mi_validate_pointer|validation|",
+        "raw-pointer-parameter|src/allocator/init.rs|_mi_thread_done|mi_theap_t|",
+        "raw-pointer-parameter|src/allocator/init.rs|_mi_subproc_to_id|mi_subproc_t|",
+        "raw-pointer-parameter|src/allocator/init.rs|_mi_is_heap_main|mi_heap_t|",
+        "raw-pointer-parameter|src/allocator/page_map.rs|_mi_page_map_register|mi_page_t|",
+        "raw-pointer-parameter|src/allocator/page_map.rs|_mi_page_map_unsafe_destroy|mi_subproc_t|",
+        "raw-pointer-parameter|src/internal/bitmap.rs|_mi_bitmap_forall_set|mi_arena_t|",
+        "metadata-reference|src/internal/bitmap.rs|mi_bitmap_setN|bitmap|",
+        "bare-domain-usize|src/internal/bitmap.rs|mi_bitmap_setN|usize|",
+        "raw-pointer-parameter|src/types/ptr.rs|new|mi_page_t|",
+        "bare-domain-usize|src/types/ptr.rs|checked_byte_add|usize|",
+        "metadata-reference|src/allocator/options.rs|with_options_table|options|",
+        "bare-domain-usize|src/allocator/options.rs|option_value_load|usize|",
+        "bare-domain-usize|src/types/arena.rs|new|usize|",
+        "pointer-usize-roundtrip|src/types/arena.rs|SliceRange::from_raw|slice-index|",
     ] {
         assert!(
             allowlist_rs.contains(required),

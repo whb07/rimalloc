@@ -240,6 +240,14 @@ Operation IDs:
   publication, abandoned-page collect/reclaim/reabandon decisions, usable-size
   shims, and raw C ABI free exports while preserving allocator ownership and
   no-allocation hot-path constraints.
+- `SAFETY[AUDIT:options-callback-boundary]`: `src/allocator/options.rs` owns
+  option descriptors, output/error callback state, recursion guards,
+  environment parsing, diagnostic output, option raw exports, and assert abort
+  shims. Unsafe operations are limited to extern C declarations, locked global
+  option/callback state, C string reads, bounded stack output buffers,
+  primitive stderr forwarding, callback invocation, environment lookup, and
+  raw C ABI option exports while preserving no allocator allocation in
+  primitive output paths.
 - `SAFETY[AUDIT:owned-allocation]`: `src/safe/allocation.rs` owns non-zero
   allocations through move-only wrappers. Slice views and copies are bounded by
   the stored layout, and `Drop` releases live blocks exactly once.

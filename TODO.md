@@ -14,8 +14,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 11 entries: 9 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 11.
+- `docs/unsafe-migration-allowlist.tsv` has 10 entries: 8 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 10.
 - The completed pass moved `src/types/constants.rs` to 8
   `SAFETY[AUDIT:raw-layout-abi-typedefs]` markers while retaining 2
   `SAFETY[AUDIT:raw-auto-trait]` markers for sentinel `Sync` impls, moved
@@ -32,8 +32,12 @@ Current review evidence:
   abandoned collect/reclaim/reabandon decisions, usable-size shims, raw C ABI
   free exports, and stack-local tests, and is off the unsafe migration
   allowlist.
+- This pass also moved `src/allocator/options.rs` to 76
+  `SAFETY[AUDIT:options-callback-boundary]` markers for option descriptors,
+  environment lookup, C string handling, output/error callback state, recursion
+  guards, diagnostic output, option raw exports, and assert abort shims, and is
+  off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits,
   `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits,
   `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits, and
   `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits.
@@ -63,6 +67,7 @@ Current review evidence:
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
   `SAFETY[AUDIT:macos-zone-override]` has 83 markers,
   `SAFETY[AUDIT:heap-lifecycle-boundary]` has 80 markers,
+  `SAFETY[AUDIT:options-callback-boundary]` has 76 markers,
   `SAFETY[AUDIT:thread-heap-lifecycle]` has 71 markers,
   `SAFETY[AUDIT:raw-posix-compat]` has 70 markers,
   `SAFETY[AUDIT:free-path-boundary]` has 69 markers,
@@ -115,19 +120,19 @@ full clippy, and full tests.
 > allocator files and has many C-shaped operations that should be classified
 > locally instead of hidden behind a file allowance.
 
-- [ ] Add local `SAFETY[AUDIT:options-callback-boundary]` markers for raw option
+- [x] Add local `SAFETY[AUDIT:options-callback-boundary]` markers for raw option
       descriptor access, C string conversion, environment reads, option
       load/store helpers, output/error callback pointer publication, recursive
       message guard access, stderr fallback writes, and raw option exports.
-- [ ] Preserve option defaults, option name aliases, environment variable
+- [x] Preserve option defaults, option name aliases, environment variable
       parsing, atomic ordering and locking, callback ABI signatures, callback
       nullability, recursion behavior, message formatting, and no allocator
       allocation in primitive output paths.
-- [ ] Add or extend release-audit assertions and focused tests for marker
+- [x] Add or extend release-audit assertions and focused tests for marker
       coverage, no migration allowlist entry, option descriptor shape, raw
       option exports, callback locking, recursion guards, stderr fallback, and
       environment parsing behavior.
-- [ ] Add matching unsafe audit/evidence entries, remove
+- [x] Add matching unsafe audit/evidence entries, remove
       `src/allocator/options.rs` from the unsafe migration allowlist,
       regenerate unsafe inventory, and lower the cap.
 
@@ -220,7 +225,7 @@ audit scripts, unsafe inventory regeneration/check, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/allocator/free.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/allocator/options.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/allocator/options.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/allocator/aligned.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/allocator/stats.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/raw/macros.rs` off the unsafe migration allowlist.

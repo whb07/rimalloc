@@ -395,6 +395,16 @@ fn options_state_uses_internal_locks_like_c() {
         "options state should use typed mimalloc lock guards and C abort primitives"
     );
     assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/allocator/options.rs\t"))
+            && options_rs
+                .matches("SAFETY[AUDIT:options-callback-boundary]")
+                .count()
+                >= 76,
+        "options/callback unsafe boundaries should stay covered by local operation markers without a migration allowlist entry"
+    );
+    assert!(
         atomic_rs.contains(
             "#[cfg(all(target_os = \"linux\", not(debug_assertions)))]\n#[link(name = \"pthread\")]"
         ) && atomic_rs.contains("fn pthread_mutex_trylock(mutex: *mut pthread_mutex_t)")

@@ -49,6 +49,10 @@ free-path-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Chec
 free-path-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation/free boundary cases for zero-size, realloc, calloc/product overflow, and freeable pointers.
 free-path-boundary	test	tests/no_allocation_critical_paths.rs	Checks allocator critical paths avoid routing through Rust's global allocator.
 free-path-boundary	script	scripts/check-unsafe-audit.py	Checks free-path unsafe operations retain operation-level SAFETY markers and source audit coverage.
+options-callback-boundary	test	tests/options_exports.rs	Exercises option and callback exports, callback mutation, and raw unknown option handling.
+options-callback-boundary	test	src/allocator/options.rs	Exercises assertion abort behavior and local option callback boundary fixtures.
+options-callback-boundary	test	tests/release_fast_path_audit.rs	Checks options state uses internal locks, primitive stderr routing, callback storage, and no migration allowlist entry.
+options-callback-boundary	script	scripts/check-unsafe-audit.py	Checks option/callback unsafe operations retain operation-level SAFETY markers and source audit coverage.
 owned-allocation	test	src/safe/tests.rs	Exercises safe owned Allocation construction, resize, initialization, and drop paths.
 owned-allocation	test	tests/allocation_boundary_cases.rs	Covers allocation boundary cases that the owned wrapper forwards to.
 panic-boundary	test	tests/ffi_panic_audit.rs	Checks production panic-abort policy and callback panic containment documentation.

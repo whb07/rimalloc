@@ -1,0 +1,17 @@
+pub(crate) struct BoundarySources<'a> {
+    pub(crate) alloc_rs: &'a str,
+    pub(crate) alloc_aligned_rs: &'a str,
+    pub(crate) arena_rs: &'a str,
+    pub(crate) atomic_types: &'a str,
+    pub(crate) free_rs: &'a str,
+    pub(crate) freelist_types: &'a str,
+    pub(crate) internal: &'a str,
+    pub(crate) page_counts_rs: &'a str,
+    pub(crate) page_flags_rs: &'a str,
+    pub(crate) page_queues_rs: &'a str,
+    pub(crate) page_rs: &'a str,
+    pub(crate) page_states_rs: &'a str,
+    pub(crate) page_stats_bin_rs: &'a str,
+    pub(crate) page_validation_rs: &'a str,
+    pub(crate) theap_rs: &'a str,
+}

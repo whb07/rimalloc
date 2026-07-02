@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "runtime_heap/threadlocal_runtime.rs"]
+mod threadlocal_runtime;
+
 pub(super) fn assert_runtime_heap_no_exports(sources: &UnsafePerformanceSources) {
     let alloc_rs = sources.alloc_rs.as_str();
     let heap_rs = sources.heap_rs.as_str();
@@ -7,6 +10,8 @@ pub(super) fn assert_runtime_heap_no_exports(sources: &UnsafePerformanceSources)
     let page_rs = sources.page_rs.as_str();
     let theap_rs = sources.theap_rs.as_str();
     let threadlocal_rs = sources.threadlocal_rs.as_str();
+
+    threadlocal_runtime::assert_threadlocal_runtime_no_exports(threadlocal_rs);
 
     for (source_name, source, internal_name) in [
         (
@@ -97,36 +102,6 @@ pub(super) fn assert_runtime_heap_no_exports(sources: &UnsafePerformanceSources)
         ("src/allocator/init.rs", init_rs, "fn _mi_subproc_heap_main"),
         ("src/allocator/init.rs", init_rs, "fn _mi_auto_process_init"),
         ("src/allocator/init.rs", init_rs, "fn _mi_auto_process_done"),
-        (
-            "src/allocator/threadlocal.rs",
-            threadlocal_rs,
-            "pub extern \"C\" fn _mi_thread_locals_init",
-        ),
-        (
-            "src/allocator/threadlocal.rs",
-            threadlocal_rs,
-            "pub extern \"C\" fn _mi_thread_locals_done",
-        ),
-        (
-            "src/allocator/threadlocal.rs",
-            threadlocal_rs,
-            "pub extern \"C\" fn _mi_thread_local_set",
-        ),
-        (
-            "src/allocator/threadlocal.rs",
-            threadlocal_rs,
-            "pub extern \"C\" fn _mi_thread_local_get",
-        ),
-        (
-            "src/allocator/threadlocal.rs",
-            threadlocal_rs,
-            "pub extern \"C\" fn _mi_thread_locals_thread_done",
-        ),
-        (
-            "src/allocator/threadlocal.rs",
-            threadlocal_rs,
-            "pub extern \"C\" fn _mi_thread_local_free",
-        ),
         (
             "src/allocator/heap.rs",
             heap_rs,

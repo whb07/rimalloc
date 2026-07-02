@@ -1,5 +1,7 @@
 use super::*;
 
+#[path = "typed_helpers/atomic_once.rs"]
+mod atomic_once;
 #[path = "typed_helpers/local_helpers.rs"]
 mod local_helpers;
 
@@ -18,6 +20,7 @@ pub(super) fn assert_typed_allocation_helpers(sources: &UnsafePerformanceSources
     let prim_rs = sources.prim_rs.as_str();
 
     local_helpers::assert_local_helper_boundaries(options_rs, free_rs, page_rs, heap_rs, prim_rs);
+    atomic_once::assert_atomic_once_boundaries(atomic_rs, atomic_types);
 
     assert!(
         alloc_rs
@@ -59,25 +62,6 @@ pub(super) fn assert_typed_allocation_helpers(sources: &UnsafePerformanceSources
             && !alloc_aligned_rs.contains("_mi_theap_get_free_small_page(theap, padsize)"),
         "page and aligned allocation should use typed padded-size helpers internally"
     );
-    assert!(
-        source_has_inline_never_function(
-            atomic_rs,
-            "pub unsafe extern \"C\" fn _mi_atomic_once_enter",
-        ) && source_has_inline_never_function(
-            atomic_rs,
-            "pub unsafe extern \"C\" fn _mi_atomic_once_release",
-        ) && atomic_types.contains("pub(crate) struct OnceGuard<'a>")
-            && atomic_types
-                .contains("pub(crate) unsafe fn try_enter(once: OnceStatePtr) -> Option<Self>")
-            && atomic_types.contains("impl Drop for OnceGuard<'_>")
-            && atomic_types.contains("crate::atomic::_mi_atomic_once_release(")
-            && atomic_rs.contains("_once: crate::core_types::OnceGuard<'static>")
-            && atomic_rs.contains("crate::core_types::OnceGuard::try_enter(state)")
-            && !atomic_rs.contains("once: *mut mi_atomic_once_t,\n}")
-            && !atomic_rs.contains("_mi_atomic_once_release(self.once);"),
-        "atomic once should keep C's enter/release helper boundaries and release through typed OnceGuard Drop"
-    );
-
     assert!(
         free_rs
             .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_page_ptr_unalign")

@@ -2,13 +2,12 @@
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
 `83d42e1`. The implemented source audit marker cap is 16, release-audit module
-cap is 200, strict-type file hotspots are capped at 45 active entries,
+cap is 190, strict-type file hotspots are capped at 45 active entries,
 kind/file hotspots at 30 entries, raw-pointer file/domain hotspots at 25
 entries, usize file/domain hotspots at 25 entries, and `src/allocator/page.rs`
 is split below the 2,800-line production module cap. The next
-mechanical-translation debt is concentrated in source-marker density,
-release-audit module size, strict-type hotspot groups, and the largest
-remaining translated production module.
+mechanical-translation debt is concentrated in strict-type hotspot groups and
+the largest remaining translated production module.
 
 Current review evidence:
 
@@ -72,18 +71,18 @@ Current review evidence:
   25 entries; the next useful
   usize file/domain cap is 24 entries.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  release-audit module-size guard discovers 174 module files recursively and
-  enforces a 200-line cap. The largest release-audit modules are:
-  `unsafe_performance/lifecycle_boundaries/thread_tls.rs` at 200 lines,
-  `unsafe_performance/page_lifecycle.rs` at 200 lines,
-  `unsafe_performance/page_arena_behavior/arena_page_allocation.rs` at 198 lines,
-  `unsafe_performance/page_arena_behavior/memid_arena_dispatch/memid_view/memory_kinds.rs` at 196 lines,
-  `unsafe_performance/os_memory/os_wrappers.rs` at 195 lines,
-  `unsafe_performance/allocation_free/typed_helpers.rs` at 193 lines,
-  `unsafe_performance/raw_facade/raw_override/runtime_heap.rs` at 193 lines,
-  and `datatype_acceptance/spec_reconciliation.rs` at 192 lines. No
-  release-audit module currently exceeds 200 lines, but eight modules still
-  exceed the next useful 190-line cap.
+  release-audit module-size guard discovers 183 module files recursively and
+  enforces a 190-line cap. The largest release-audit modules are:
+  `unsafe_performance/raw_facade/raw_override/os_random.rs` at 190 lines,
+  `unsafe_performance/os_memory/platform_helpers.rs` at 189 lines,
+  `unsafe_performance/page_lifecycle.rs` at 186 lines,
+  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten/wasi.rs` at 185 lines,
+  `todo_backlog.rs` at 185 lines,
+  `datatype_acceptance/strict_type_allowlist_inventory.rs` at 183 lines,
+  `strict_policy.rs` at 182 lines, and
+  `unsafe_performance/raw_facade/bootstrap_query.rs` at 181 lines. No
+  release-audit module currently exceeds 190 lines; the next useful recursive
+  module cap would be 180 lines.
 - Production source module size remains dominated by translated-C-shaped files:
   `src/allocator/arena.rs` at 3,159 lines, `src/allocator/init.rs` at 2,612,
   `src/allocator/page.rs` at 2,530, `src/internal/bitmap.rs` at 2,422,
@@ -114,12 +113,12 @@ full formatting, full clippy, and full tests.
 The release-audit recursive guard can move from 200 lines to 190 lines after
 splitting the largest assertion modules by invariant family.
 
-- [ ] Split `unsafe_performance/lifecycle_boundaries/thread_tls.rs` and
+- [x] Split `unsafe_performance/lifecycle_boundaries/thread_tls.rs` and
       `unsafe_performance/page_lifecycle.rs` below 190 lines.
-- [ ] Split the remaining modules above 190 lines by focused responsibility:
+- [x] Split the remaining modules above 190 lines by focused responsibility:
       arena page allocation, memid memory kinds, OS wrappers, allocation typed
       helpers, raw runtime heap overrides, and spec reconciliation.
-- [ ] Lower the recursive release-audit module cap from 200 to 190 and refresh
+- [x] Lower the recursive release-audit module cap from 200 to 190 and refresh
       measured TODO evidence.
 
 Verify: release fast-path audit, TODO guard, unsafe audit scripts, strict-type
@@ -168,14 +167,14 @@ strict-type checker, full formatting, full clippy, and full tests.
 ## Suggested implementation order
 
 1. [x] Lower the source audit marker cap to 16.
-2. [ ] Split release-audit modules over 190 lines.
+2. [x] Split release-audit modules over 190 lines.
 3. [ ] Tighten strict-type and permanent-reason hotspot caps.
 4. [ ] Split the next largest production module under 3,000 lines.
 
 ## Definition of done for this backlog
 
 - [x] No source audit operation ID has more than 16 source markers.
-- [ ] Release-audit modules are split enough to lower the recursive module cap
+- [x] Release-audit modules are split enough to lower the recursive module cap
       to 190 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type file hotspots are capped at 40 active entries, kind/file
       hotspots are capped at 25 active entries, raw-pointer file/domain hotspots

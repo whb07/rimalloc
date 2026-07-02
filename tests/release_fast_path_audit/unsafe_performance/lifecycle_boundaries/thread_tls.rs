@@ -4,6 +4,8 @@ use super::*;
 mod page_reclaim;
 #[path = "thread_tls/platform_tls.rs"]
 mod platform_tls;
+#[path = "thread_tls/thread_heap_runtime.rs"]
+mod thread_heap_runtime;
 
 pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
     let unsafe_allowlist = sources.unsafe_allowlist.as_str();
@@ -130,71 +132,9 @@ pub(super) fn assert_thread_tls_boundaries(sources: &UnsafePerformanceSources) {
             ),
         "arena page allocation should keep C's _mi_arenas_page_alloc local helper boundary"
     );
-    assert!(
-    stats_rs.contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_print_visitor")
-        && stats_rs
-            .contains("#[inline(never)]\nunsafe extern \"C\" fn mi_heap_aggregate_visitor")
-        && stats_rs.contains("static MI_HEAP_PRINT_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_print_visitor;")
-        && stats_rs.contains(
-            "static MI_HEAP_AGGREGATE_VISITOR_KEEP: mi_heap_visit_fun = mi_heap_aggregate_visitor;"
-        )
-        && stats_rs.contains("Some(mi_heap_print_visitor as mi_heap_visit_fun)")
-        && stats_rs.contains("Some(mi_heap_aggregate_visitor as mi_heap_visit_fun)"),
-    "heap stats visitors should keep C's local callback helper boundaries"
-);
-    assert!(
-    theap_rs.contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_incref")
-        && theap_rs.contains("unsafe fn _mi_theap_incref_typed(theap: ThreadHeapPtr)")
-        && theap_rs
-            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_decref")
-        && theap_rs.contains("#[inline(always)]\nunsafe fn mi_theap_decref_inline(theap: ThreadHeapPtr)")
-        && theap_rs.contains("mi_theap_decref_inline(ThreadHeapPtr::new_unchecked(theap));\n        true")
-        && theap_rs.contains("unsafe fn _mi_theap_delete_typed(theap: ThreadHeapPtr, acquire_tld_theaps_lock: bool)")
-        && theap_rs.contains("match theap.state()")
-        && theap_rs.contains("ThreadHeapState::Initialized(theap) | ThreadHeapState::Main(theap)")
-        && theap_rs.contains("ThreadHeapState::Uninitialized(_) | ThreadHeapState::Deleted(_) => return")
-        && !theap_rs.contains("    _mi_theap_decref(theap);\n    true"),
-    "_mi_theap_free should inline C's decref tail while incref/decref/delete use typed thread-heap wrappers below their raw shims"
-);
-    assert!(
-        theap_rs
-            .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_random_next")
-            && theap_rs
-                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_delete")
-            && theap_rs
-                .contains("#[inline(never)]\npub(crate) unsafe extern \"C\" fn _mi_theap_create")
-            && !theap_rs.contains("static MI_THEAP_RANDOM_NEXT_KEEP")
-            && theap_rs.contains("static MI_THEAP_CREATE_KEEP")
-            && theap_rs.contains("static MI_THEAP_DELETE_KEEP"),
-        "theap random/create/delete helpers should keep C's local helper boundaries without a random-next function pointer anchor"
-    );
-    assert!(
-        !unsafe_allowlist
-            .lines()
-            .any(|line| line.starts_with("src/allocator/thread_heap.rs\t"))
-            && !theap_rs.contains("SAFETY[AUDIT:thread-heap-lifecycle]"),
-        "thread-heap lifecycle unsafe boundaries should stay split without a migration allowlist entry"
-    );
-    for (audit_id, minimum) in [
-        ("thread-heap-visit-callback-boundary", 5),
-        ("thread-heap-area-block-boundary", 10),
-        ("thread-heap-page-visit-boundary", 13),
-        ("thread-heap-collect-boundary", 15),
-        ("thread-heap-default-boundary", 3),
-        ("thread-heap-create-boundary", 7),
-        ("thread-heap-random-boundary", 2),
-        ("thread-heap-refcount-boundary", 9),
-        ("thread-heap-delete-boundary", 7),
-    ] {
-        let marker = format!("SAFETY[AUDIT:{audit_id}]");
-        let count = theap_rs.matches(&marker).count();
-        assert!(
-            count >= minimum,
-            "thread-heap unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
-        );
-    }
-    assert!(
-        !theap_rs.contains("SAFETY[AUDIT:thread-heap-visit-boundary]"),
-        "thread-heap visitation markers should stay split by callback, area/block, and page-walk responsibility"
+    thread_heap_runtime::assert_thread_heap_runtime_boundaries(
+        unsafe_allowlist,
+        stats_rs,
+        theap_rs,
     );
 }

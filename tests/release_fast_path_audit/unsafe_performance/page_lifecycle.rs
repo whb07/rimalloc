@@ -1,23 +1,9 @@
 #[path = "page_lifecycle/release_abandon.rs"]
 mod release_abandon;
+#[path = "page_lifecycle/sources.rs"]
+mod sources;
 
-pub(super) struct BoundarySources<'a> {
-    pub(super) alloc_rs: &'a str,
-    pub(super) alloc_aligned_rs: &'a str,
-    pub(super) arena_rs: &'a str,
-    pub(super) atomic_types: &'a str,
-    pub(super) free_rs: &'a str,
-    pub(super) freelist_types: &'a str,
-    pub(super) internal: &'a str,
-    pub(super) page_counts_rs: &'a str,
-    pub(super) page_flags_rs: &'a str,
-    pub(super) page_queues_rs: &'a str,
-    pub(super) page_rs: &'a str,
-    pub(super) page_states_rs: &'a str,
-    pub(super) page_stats_bin_rs: &'a str,
-    pub(super) page_validation_rs: &'a str,
-    pub(super) theap_rs: &'a str,
-}
+pub(super) use sources::BoundarySources;
 
 pub(super) fn assert_page_lifecycle_and_queue_boundaries(sources: BoundarySources<'_>) {
     let BoundarySources {

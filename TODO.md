@@ -1,10 +1,10 @@
-# TODO: Next Audit Cluster and Harness Backlog
+# TODO: Next Audit Cluster, Strict-Type, and Harness Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`e44eabb`. The previous backlog is implemented, validated, committed, and
-pushed. The next mechanical translation debt is concentrated in source audit
-operation IDs that are still broad enough to hide unrelated unsafe invariants,
-plus two release-audit modules that block a lower module-size cap.
+`9e797a8`. The previous backlog is implemented, validated, committed, and
+pushed. The next mechanical-translation debt is concentrated in broad source
+audit operation IDs, strict-type allowlist hotspots, and release-audit modules
+that now block a lower module-size cap.
 
 Current review evidence:
 
@@ -12,195 +12,192 @@ Current review evidence:
   mentions, and 270 operation IDs. The migration allowlist remains empty.
 - `scripts/check-unsafe-audit-evidence.py` covers those 270 operation IDs with
   589 automated evidence rows.
-- The largest source audit operation IDs are `os-memory-allocation-boundary`
-  with 59 markers, `arena-heap-page-visitors` and
-  `init-thread-heap-tls-boundary` with 56 markers each,
-  `typed-atomic-domain` with 51 markers, `threadlocal-key-manager` and
-  `ffi-libc-helpers` with 50 markers each, and
-  `page-queue-transition-boundary` with 49 markers.
-- The completed typed fixture split left the largest new fixture IDs at
-  `typed-heap-thread-tld-pointer-test-fixtures` with 35 markers,
-  `typed-arena-subproc-pointer-test-fixtures` with 17 markers, and
-  `typed-thread-heap-state-test-fixtures` with 15 markers.
-- The completed platform split left the largest new platform IDs at
-  `platform-thread-heap-association-boundary` with 32 markers,
-  `macos-zone-allocation-boundary` with 22 markers,
-  `emscripten-memory-boundary` with 20 markers, and
-  `macos-zone-lookup-boundary` with 16 markers.
-- The completed free/aligned split left the largest new allocation IDs at
-  `free-validation-boundary` with 28 markers,
-  `aligned-realloc-heap-export-boundary` with 26 markers,
-  `aligned-global-allocation-export-boundary` with 17 markers, and
-  `aligned-realloc-request-boundary` and
-  `aligned-heap-allocation-export-boundary` with 15 markers each.
-- The completed page-map/atomic split left the largest split IDs at
-  `internal-atomic-fetch-boundary` with 22 markers,
-  `page-map-lookup-boundary` with 19 markers,
-  `internal-atomic-cas-boundary` with 17 markers,
-  `page-map-page-unregister-boundary` with 15 markers, and
-  `page-map-page-register-boundary` with 14 markers.
-- The largest remaining medium clusters are `init-thread-lifecycle-boundary`
-  with 48 markers, `raw-macro-cxx-boundary` with 46 markers,
-  `page-map-init-boundary` with 45 markers,
-  `options-message-output-boundary` with 39 markers, and
-  `arena-purge-boundary` with 38 markers.
+- No source audit operation ID is over 60 source markers. The largest remaining
+  source IDs are `os-memory-allocation-boundary` with 59 markers,
+  `init-thread-heap-tls-boundary` and `arena-heap-page-visitors` with 56 markers
+  each, `typed-atomic-domain` with 51 markers, `threadlocal-key-manager` and
+  `ffi-libc-helpers` with 50 markers each, `page-queue-transition-boundary`
+  with 49 markers, `init-thread-lifecycle-boundary` with 48 markers,
+  `raw-macro-cxx-boundary` with 46 markers, and `page-map-init-boundary` with
+  45 markers.
 - `strict-type-allowlist.txt` has 634 active entries: 335
-  raw-pointer-parameter entries, 220 bare-domain `usize` entries, 40
-  metadata-reference entries, 23 pointer/usize round-trip entries, 14
-  atomic-cast entries, and 2 heap-allocating-type entries.
+  raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
+  metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
+  entries, and 2 heap-allocating-type entries.
+- The largest strict-type allowlist file hotspots are `src/internal/mod.rs` with
+  57 active entries, `src/allocator/page.rs` with 54,
+  `src/allocator/alloc.rs` with 53, `src/allocator/aligned.rs` with 50,
+  `src/internal/bitmap.rs` with 45, and `src/raw/macros.rs` with 32. The largest
+  raw-pointer domains are `mi_theap_t` with 114 entries, `mi_page_t` with 110,
+  and `mi_heap_t` with 67.
 - `strict-type-allowlist.txt` has 1 retained wildcard entry, the
   `heap-allocating-type` Loom proof-model boundary in
   `src/types/atomic/concurrency_models.rs`. Strict-type wildcard guard: total=1; heap-allocating-type=1.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
-  module cap is now 600 lines; the largest modules are
+  release-audit module cap is 600 lines; the only modules over 500 lines are
   `datatype_acceptance/strict_type.rs` at 592 lines,
   `release_policy/security.rs` at 584 lines,
-  `release_policy/api_surface.rs` at 523 lines,
-  `release_policy/release_process.rs` at 504 lines,
-  `unsafe_performance/lifecycle_boundaries/process_lifecycle.rs` at 426 lines,
-  `unsafe_performance/platform_primitive_boundaries/unix_wasi_emscripten.rs`
-  at 421 lines,
-  `interposition_exports.rs` at 413 lines,
-  `unsafe_performance/os_memory.rs` at 403 lines,
-  `allowance_inventory.rs` at 398 lines, and
-  `unsafe_performance/allocation_free.rs` at 397 lines.
-- The completed release-audit split moved
-  `unsafe_performance/page_arena_behavior.rs` behind focused child modules; its
-  largest child is
-  `unsafe_performance/page_arena_behavior/memid_arena_dispatch.rs` at 367
-  lines. `release_policy/docs_and_linking.rs` is now a 10-line module with
-  docs child modules up to
-  `release_policy/docs_and_linking/c_migration_guidance.rs` at 172 lines.
-- Full validation for the last completed item passed:
-  `cargo fmt --all`, `cargo clippy --workspace --all-targets --all-features`,
+  `release_policy/api_surface.rs` at 523 lines, and
+  `release_policy/release_process.rs` at 504 lines.
+- Full validation for Issue 5 passed: `cargo fmt --all`,
+  `cargo clippy --workspace --all-targets --all-features`,
   `cargo test --workspace --all-targets --all-features`,
   `cargo test --test release_fast_path_audit --all-features`, unsafe audit
   scripts, strict-type checks, no-allocation audit, unsafe inventory
-  refresh/check, and `git diff --check`.
+  refresh/check, atomic ordering audit, and `git diff --check`.
 
-## Issue 1: Split typed pointer and heap proof-fixture audit clusters
+## Issue 1: Split OS memory and page-map initialization audit clusters
 
-> **Comment:** `typed-pointer-test-fixtures` had 87 markers in
-> `src/types/ptr/tests.rs`, and `typed-heap-test-fixtures` had 55 markers. These
-> were proof fixtures, but one operation ID per whole fixture file made pointer
-> family regressions harder to review.
+> **Comment:** `os-memory-allocation-boundary` has 59 markers and still mixes
+> reservation, commit/decommit, reset, free, remap, alignment, and memid work.
+> `page-map-init-boundary` has 45 markers and still mixes global map bootstrap,
+> submap allocation, initialization, and publication.
 
-- [x] Split `typed-pointer-test-fixtures` by pointer family and proof purpose:
-      page fields, block links, heap/thread-heap/TLD fields, arena/subproc
-      fields, page-queue fields, and exposed-address/provenance arithmetic.
-- [x] Split `typed-heap-test-fixtures` by ownership witness type: main heap,
-      owned heap, borrowed heap, thread-heap state, and thread-local promotion.
-- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
-      release-audit guards so each new proof-fixture operation ID is named and
-      counted independently.
+- [ ] Split `os-memory-allocation-boundary` by operation: reserve/commit,
+      decommit/reset, aligned allocation, free/release, remap/protect, large-page
+      handling, and memid/provenance helpers.
+- [ ] Split `page-map-init-boundary` by operation: global map bootstrap, submap
+      allocation/initialization, lazy publication, lookup base setup, and
+      teardown safety.
+- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`, evidence rows, and
+      release-audit guards so each new operation ID is named and counted
+      independently.
 
-Verify: pointer and heap type tests, datatype acceptance release-audit modules,
+Verify: OS memory tests, page-map tests, atomic ordering audit, unsafe audit
+scripts, unsafe evidence scripts, full formatting, full clippy, and full tests.
+
+## Issue 2: Split thread lifecycle and thread-local audit clusters
+
+> **Comment:** `init-thread-heap-tls-boundary` has 56 markers,
+> `threadlocal-key-manager` has 50 markers, and
+> `init-thread-lifecycle-boundary` has 48 markers. These still group unrelated
+> TLS storage, default-heap association, thread lifecycle, and cleanup paths.
+
+- [ ] Split `init-thread-heap-tls-boundary` into focused IDs for TLS lookup,
+      TLS publication, default heap association, main/static heap handling, and
+      thread-local teardown.
+- [ ] Split `init-thread-lifecycle-boundary` into focused IDs for thread init,
+      thread done, TLD initialization, TLD cleanup, abandoned-page handling, and
+      process/thread ordering checks.
+- [ ] Split `threadlocal-key-manager` into focused IDs for key creation,
+      key deletion, get/set operations, destructor callback handling, and
+      platform TLS shim behavior.
+
+Verify: lifecycle boundary release-audit modules, thread stats regression,
+interposition export checks, strict-type checks, unsafe audit scripts, unsafe
+evidence scripts, full formatting, full clippy, and full tests.
+
+## Issue 3: Split arena visitor and page queue audit clusters
+
+> **Comment:** `arena-heap-page-visitors` has 56 markers,
+> `page-queue-transition-boundary` has 49 markers, and
+> `internal-page-metadata-boundary` has 37 markers. They still hide several
+> independent page ownership and visitation invariants behind broad IDs.
+
+- [ ] Split `arena-heap-page-visitors` into focused IDs for block visitation,
+      abandoned-block visitation, heap page iteration, page delete/destroy,
+      page move/transfer, and visitor callback adapters.
+- [ ] Split `page-queue-transition-boundary` into focused IDs for normal queue
+      insertion/removal, full queue insertion/removal, abandoned queue
+      transitions, delayed-free collection, and queue statistic updates.
+- [ ] Split `internal-page-metadata-boundary` where release-audit guards already
+      distinguish page size/count fields, free-list fields, heap/thread-heap
+      ownership, and page flags.
+
+Verify: page lifecycle and page queue tests, arena heap-page visitor
+release-audit modules, strict-type checks, unsafe audit scripts, unsafe evidence
+scripts, full formatting, full clippy, and full tests.
+
+## Issue 4: Split atomic, FFI libc, and raw macro facade audit clusters
+
+> **Comment:** `typed-atomic-domain` has 51 markers,
+> `ffi-libc-helpers` has 50 markers, and `raw-macro-cxx-boundary` has 46
+> markers. Each now covers multiple helper families that reviewers need to audit
+> independently.
+
+- [ ] Split `typed-atomic-domain` by wrapper family: usize/isize/i64 fields,
+      pointer fields, page/thread-free atomics, arena-page atomics,
+      guard/once/lock wrappers, and volatile/ordering helpers.
+- [ ] Split `ffi-libc-helpers` by helper family: byte/string operations,
+      fixed-buffer formatting, output callback routing, environment/path helpers,
+      and no-allocation/no-unwind critical helpers.
+- [ ] Split `raw-macro-cxx-boundary` by C++ facade family: scalar new/delete,
+      array new/delete, nothrow variants, aligned variants, and heap-specific
+      wrappers.
+
+Verify: datatype acceptance strict-type modules, primitive option output tests,
+raw facade release-audit modules, interposition exports, no-allocation audit,
 unsafe audit scripts, unsafe evidence scripts, full formatting, full clippy, and
 full tests.
 
-## Issue 2: Split macOS zone and platform primitive marker clusters
+## Issue 5: Tighten strict-type allowlist hotspots
 
-> **Comment:** `macos-zone-override` had 83 markers, while adjacent platform
-> primitive clusters remained broad: `platform-tls-primitives` had 54 markers,
-> `emscripten-primitive-boundary` had 48, and `wasi-primitive-boundary` had 42.
+> **Comment:** The strict-type allowlist is symbol-level, but its largest file
+> hotspots still track broad translated-C domains: `src/internal/mod.rs` has 57
+> active entries, `src/allocator/page.rs` has 54, `src/allocator/alloc.rs` has
+> 53, and `src/allocator/aligned.rs` has 50.
 
-- [x] Split `macos-zone-override` into operation IDs for zone declarations,
-      zone lookup/name helpers, allocation/free/realloc/memalign trampolines,
-      batch allocation/free, fork hooks, interpose section publishing, and
-      process initialization registration.
-- [x] Split platform primitive markers where existing release-audit modules
-      already distinguish TLS/thread-heap association, Emscripten primitives,
-      WASI memory growth, and Unix/Windows primitive allocation behavior.
-- [x] Preserve the raw platform ABI shape: no new heap allocation, no dynamic
-      dispatch, no panicking path, and no broad wrapper that changes the
-      interposition or platform callback contract.
+- [ ] Add a release-audit guard that computes strict-type allowlist counts by
+      kind, file, kind/file pair, and raw-pointer domain, then checks the current
+      measured top entries against `TODO.md`.
+- [ ] Audit the top raw-pointer hotspots and replace any compatibility entries
+      that can be moved behind existing typed wrappers with narrower wrappers or
+      remove the now-unneeded allowlist entries.
+- [ ] Keep permanent allowlist entries symbol-level. Replace the final retained
+      wildcard with exact proof-model coverage if the checker can model the Loom
+      boundary without weakening hot-path heap-allocation detection; otherwise
+      keep the wildcard count explicitly documented.
 
-Verify: platform primitive release-audit modules, raw/interposition export
-tests, unsafe audit scripts, unsafe evidence scripts, full formatting, full
-clippy, and full tests.
+Verify: strict-type checker, datatype acceptance release-audit modules,
+no-allocation audit, full formatting, full clippy, and full tests.
 
-## Issue 3: Split free-path and aligned allocation marker clusters
+## Issue 6: Split release-audit modules over 500 lines and lower the cap
 
-> **Comment:** `free-path-boundary` had 69 markers,
-> `aligned-heap-allocation-boundary` had 68, and `aligned-realloc-boundary` had
-> 67. Each combines raw ABI shims, validation, padding, stats, local/remote
-> routing, and allocation/reallocation variants.
+> **Comment:** Issue 5 lowered the cap to 600. The next release-audit bottleneck
+> is now four files over 500 lines:
+> `datatype_acceptance/strict_type.rs` at 592,
+> `release_policy/security.rs` at 584,
+> `release_policy/api_surface.rs` at 523, and
+> `release_policy/release_process.rs` at 504.
 
-- [x] Split `free-path-boundary` by validation/double-free detection, padding
-      decode/shrink/check, usable-size queries, free stats, local free, remote
-      free, abandoned free, and public raw free shims.
-- [x] Split `aligned-heap-allocation-boundary` by aligned layout parsing,
-      over-allocation/padding setup, heap/default dispatch, malloc/zalloc/calloc
-      families, and public heap/global raw export shims.
-- [x] Split `aligned-realloc-boundary` by old-allocation validation, copy bounds,
-      realloc/rezalloc/recalloc product handling, heap/default dispatch, and
-      public raw export shims.
+- [ ] Split `datatype_acceptance/strict_type.rs` into focused modules for page
+      thread/free bit domains, pointer/freelist wrappers, atomic/provenance
+      guards, metadata-reference guards, strict-checker self-tests, and
+      allowlist inventory checks.
+- [ ] Split `release_policy/security.rs` into focused modules for advisory/CVE
+      policy, fuzz/reproducer policy, unsafe-audit evidence ownership,
+      hardening threat model, and memory-corruption triage.
+- [ ] Split `release_policy/api_surface.rs` and
+      `release_policy/release_process.rs` into topic modules matching their
+      existing tests, then lower the release-audit module cap from 600 to 500
+      without weakening coverage.
 
-Verify: allocation boundary tests, aligned export tests, no-allocation critical
-path tests, release fast-path allocation/free modules, unsafe audit scripts,
-unsafe evidence scripts, full formatting, full clippy, and full tests.
-
-## Issue 4: Split page-map registration and internal atomic marker clusters
-
-> **Comment:** `page-map-register-boundary` had 66 markers and
-> `internal-atomic-field-boundary` had 65. Both now have typed wrappers, but the
-> audit IDs still group several distinct operations.
-
-- [x] Split `page-map-register-boundary` into operation IDs for unsafe destroy,
-      page registration/unregistration, range registration/unregistration,
-      lookup, commit, submap allocation/publication, and range set/clear
-      primitives.
-- [x] Split `internal-atomic-field-boundary` into operation IDs for raw
-      pointer-to-atomic views, usize/isize/i64 load/store, fetch arithmetic,
-      compare-exchange families, exchange, max loops, and volatile delta reads.
-- [x] Update release-audit evidence so page-map typed range witnesses and
-      atomic memory-order mapping guards cover each split operation ID.
-
-Verify: page-map tests, atomic ordering audit, primitive options release-audit
-module, local boundary release-audit module, unsafe audit scripts, unsafe
-evidence scripts, full formatting, full clippy, and full tests.
-
-## Issue 5: Split largest release-audit modules and lower the module cap
-
-> **Comment:** The source audit clusters are now small enough that the largest
-> release-audit modules are the next reviewability bottleneck.
-  > `unsafe_performance/page_arena_behavior.rs` was 656 lines and
-  > `release_policy/docs_and_linking.rs` was 633 lines.
-
-- [x] Split `unsafe_performance/page_arena_behavior.rs` into focused modules for
-      memid/arena dispatch, page-map range witnesses, arena allocation/page
-      allocation, purge/clock/atomic behavior, and page-map atomic helpers.
-- [x] Split `release_policy/docs_and_linking.rs` into focused modules for public
-      docs/build-mode policy, feature/no-std docs, FFI linking artifacts, symbol
-      versioning, and C migration guidance.
-- [x] Once every release-audit module is below 600 lines, lower the release
-      audit module cap from 700 to 600 without weakening coverage.
-
-Verify: release fast-path audit, docs/linking release policy modules, unsafe
-audit scripts, unsafe evidence scripts, full formatting, full clippy, and full
-tests.
+Verify: release fast-path audit, docs/security/release policy modules,
+strict-type checks, unsafe audit scripts, unsafe evidence scripts, full
+formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Split typed pointer and heap proof-fixture audit clusters.
-2. [x] Split macOS zone and platform primitive marker clusters.
-3. [x] Split free-path and aligned allocation marker clusters.
-4. [x] Split page-map registration and internal atomic marker clusters.
-5. [x] Split largest release-audit modules and lower the module cap.
+1. [ ] Split OS memory and page-map initialization audit clusters.
+2. [ ] Split thread lifecycle and thread-local audit clusters.
+3. [ ] Split arena visitor and page queue audit clusters.
+4. [ ] Split atomic, FFI libc, and raw macro facade audit clusters.
+5. [ ] Tighten strict-type allowlist hotspots.
+6. [ ] Split release-audit modules over 500 lines and lower the cap.
 
 ## Definition of done for this backlog
 
-- [x] No source audit operation ID has more than 60 source markers.
-- [x] The largest remaining page-map and atomic clusters listed above are split
-      into narrower review units with separate docs, evidence rows, and
-      release-audit guards.
-- [x] Release-audit modules are split enough to lower the module cap to 600
+- [ ] No source audit operation ID has more than 40 source markers.
+- [ ] The largest source audit clusters listed above are split into narrower
+      review units with separate docs, evidence rows, and release-audit guards.
+- [ ] Strict-type allowlist hotspots are measured in release-audit coverage, and
+      any removed or retained entries have explicit symbol-level rationale.
+- [ ] Release-audit modules are split enough to lower the module cap to 500
       lines without weakening coverage.
-- [x] The strict-type wildcard guard remains at exactly one retained
-      proof-model wildcard unless `TODO.md` is updated with new measured
-      evidence.
-- [x] `TODO.md` and its release-audit guard reflect the current measured counts.
-- [x] For every completed item, run `cargo fmt --all`,
+- [ ] The strict-type wildcard guard either reaches zero retained wildcards or
+      remains explicitly documented with current measured evidence.
+- [ ] `TODO.md` and its release-audit guard reflect the current measured counts.
+- [ ] For every completed item, run `cargo fmt --all`,
       `cargo clippy --workspace --all-targets --all-features`, and
       `cargo test --workspace --all-targets --all-features`; also run the
       relevant audit scripts before committing and pushing to `origin/master`.

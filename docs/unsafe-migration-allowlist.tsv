@@ -11,4 +11,3 @@ src/internal/bitmap.rs	production	release-readiness	2026-09-30	legacy internal u
 src/internal/mod.rs	translation	release-readiness	2026-09-30	legacy translated internal macros and layout helpers pending per-operation SAFETY marker migration
 src/platform/windows.rs	translation	release-readiness	2026-09-30	legacy translated Windows ABI and platform unsafe pending per-operation SAFETY marker migration
 src/raw/macros.rs	production	release-readiness	2026-09-30	legacy raw facade unsafe pending per-operation SAFETY marker migration
-src/types/ptr.rs	production	release-readiness	2026-09-30	legacy typed wrapper unsafe pending per-operation SAFETY marker migration

@@ -493,7 +493,12 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
             && core_types_layout_tests_rs.contains("fn optional_pointer_wrappers_are_pointer_sized()")
             && core_types_layout_tests_rs.contains("fn witness_wrappers_match_pointer_layout()")
             && core_types_layout_tests_rs
-                .contains("fn packed_and_atomic_wrappers_match_raw_layout()"),
+                .contains("fn packed_and_atomic_wrappers_match_raw_layout()")
+            && !unsafe_migration_allowlist.contains("src/types/ptr.rs")
+            && ptr_core_rs
+                .matches("SAFETY[AUDIT:typed-pointer-accessors]")
+                .count()
+                >= 150,
         "hot strict-type wrappers should stay transparent, copyable where they carry copyable fast-path witnesses, inlineable, and covered by layout/niche tests"
     );
     assert!(

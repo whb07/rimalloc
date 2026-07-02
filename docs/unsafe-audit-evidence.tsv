@@ -117,6 +117,9 @@ typed-padding-metadata	test	src/types/padding/tests.rs	Exercises padding pointer
 typed-padding-metadata	test	tests/release_fast_path_audit.rs	Checks production padding wrappers keep canary and delta fields private and route metadata access through PaddingPtr.
 typed-padding-test-fixtures	test	src/types/padding/tests.rs	Exercises stack-local padding metadata, canary witnesses, and padding pointer arithmetic fixtures.
 typed-page-domain	test	src/types/page/tests.rs	Exercises thread-id flag classification, free-path branch classification, and registered page-range witness construction.
+typed-pointer-accessors	test	src/types/ptr/tests.rs	Exercises page, block, heap, thread-heap, TLD, arena, subproc, page-queue, encoded-link, and exposed-address pointer accessor fixtures.
+typed-pointer-accessors	test	tests/release_fast_path_audit/datatype_acceptance.rs	Checks pointer wrappers stay transparent, niche-sized, inlineable, locally audited, and off the migration allowlist.
+typed-pointer-accessors	script	scripts/check-unsafe-audit.py	Checks typed pointer accessor unsafe operations retain operation-level SAFETY markers and source audit coverage.
 typed-pointer-test-fixtures	test	src/types/ptr/tests.rs	Exercises stack-local allocator metadata pointer wrappers, raw field accessors, and exposed-address pointer arithmetic fixtures.
 typed-scalar-test-fixtures	test	src/types/scalar/tests.rs	Exercises concrete unchecked scalar constructor fixtures, overflow assertions, and table-index boundary checks.
 typed-freelist	test	tests/release_fast_path_audit.rs	Checks strict free-list wrappers stay bounded to typed helper modules.

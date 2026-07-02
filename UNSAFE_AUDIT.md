@@ -502,6 +502,13 @@ Operation IDs:
   construction. Unsafe operations are limited to unchecked constructors whose
   callers prove non-zero/thread-flag or page-map registration invariants before
   packaging those raw domains into transparent typed wrappers.
+- `SAFETY[AUDIT:typed-pointer-accessors]`: `src/types/ptr.rs` owns transparent
+  `NonNull` pointer wrappers and raw metadata accessors. Unsafe operations are
+  limited to caller-proven non-null construction, raw field reads/writes,
+  atomic field projections, encoded free-list link access, page/block address
+  arithmetic, heap/thread-heap/TLD/arena/subproc/page-queue accessors, scalar
+  narrowing after local assertions, lock pointer projections, and lint-touch
+  function-pointer references without allocation or dynamic dispatch.
 - `SAFETY[AUDIT:typed-pointer-test-fixtures]`: `src/types/ptr/tests.rs`
   builds stack-local page, block, heap, thread-heap, TLD, arena, subproc, and
   page-queue metadata to exercise pointer wrapper field accessors and exposed

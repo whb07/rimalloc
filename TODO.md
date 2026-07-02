@@ -15,8 +15,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 13 entries: 11 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 13.
+- `docs/unsafe-migration-allowlist.tsv` has 12 entries: 10 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 12.
 - The completed pass moved `src/platform/macos.rs`, `src/platform/mod.rs`,
   `src/internal/atomic.rs`, `src/allocator/page_map.rs`, and
   `src/types/scalar.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -44,18 +44,25 @@ Current review evidence:
   callbacks, commit/decommit/reset/reuse/purge/protect/free paths, aligned
   allocation and trimming, zero-state publication, huge-page claim/free, NUMA
   helpers, and raw OS shims, and is off the unsafe migration allowlist.
+- The current pass moved `src/types/ptr.rs` to 161
+  `SAFETY[AUDIT:typed-pointer-accessors]` markers for pointer wrapper
+  construction, raw field reads/writes, atomic field projections, encoded
+  free-list links, page/block address arithmetic, heap/thread-heap/TLD/arena/
+  subproc/page-queue accessors, scalar narrowing, lock pointer projections, and
+  lint-touch function-pointer references, and is off the unsafe migration
+  allowlist.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits,
   `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits, and
   `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits, and
   `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits, and
-  `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits.
+  `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits, and
+  `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits.
 - The next allowlisted production files after those are
-  `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits,
   `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits, and
   `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits, and
   `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits, and
-  `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits.
+  `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits, and
+  `src/allocator/arena.rs` at 3,915 lines with 607 `unsafe` hits.
 - `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
   `symbol = *` entries. The largest categories are 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
@@ -67,6 +74,7 @@ Current review evidence:
   `src/platform/unix.rs`, and `src/platform/windows.rs`, each with
   4 path-wide entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
+  `SAFETY[AUDIT:typed-pointer-accessors]` has 161 markers,
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
   `SAFETY[AUDIT:os-memory-boundary]` has 136 markers,
   `SAFETY[AUDIT:internal-atomic-facade]` has 103 markers,
@@ -91,10 +99,10 @@ Current review evidence:
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
 - The release audit is still split but has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,436 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,433 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,146 lines,
   `tests/release_fast_path_audit.rs` is 1,899 lines, and
-  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,126 lines.
+  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines.
 
 ## Issue: Raw layout callback typedefs still use a file-level unsafe allowance
 
@@ -215,28 +223,28 @@ scripts, unsafe inventory regeneration/check, full clippy, and full tests.
 
 ## Issue: Typed pointer accessors still use a file-level unsafe allowance
 
-> **Comment:** `src/types/ptr.rs` is a typed pointer/accessor substrate, but it
-> still has one of the densest unsafe surfaces in the crate. The unsafe
-> operations cover non-null wrapper construction, raw field reads/writes, atomic
-> field projections, encoded free-list links, page/heap/thread-heap/TLD/arena
-> and subproc accessors, page-queue accessors, exposed-address checks, and
-> lint-touch fixtures.
+> **Comment:** `src/types/ptr.rs` is a typed pointer/accessor substrate. Its
+> unsafe operations cover non-null wrapper construction, raw field reads/writes,
+> atomic field projections, encoded free-list links, page/heap/thread-heap/TLD/
+> arena and subproc accessors, page-queue accessors, exposed-address checks, and
+> lint-touch fixtures. This pass moved those boundaries from a dated file
+> allowance to local operation markers.
 
-- [ ] Add local `SAFETY[AUDIT:typed-pointer-accessors]` markers for pointer
+- [x] Add local `SAFETY[AUDIT:typed-pointer-accessors]` markers for pointer
       wrapper constructors, field reads/writes, atomic cell projections,
       encoded free-list link reads/writes, page start and contains-user
       arithmetic, heap/thread-heap/TLD/arena/subproc/page-queue accessors,
       count/index scalar narrowing, lock pointer projections, and lint-touch
       fixture function-pointer references.
-- [ ] Preserve `repr(transparent)` pointer wrapper layout, `Option` niche
+- [x] Preserve `repr(transparent)` pointer wrapper layout, `Option` niche
       behavior, typed scalar validation, provenance helper use, free-list
       encoding contracts, atomic field ordering boundaries, raw metadata
       ownership rules, no heap allocation, and no dynamic dispatch.
-- [ ] Add or extend release-audit assertions and focused tests for pointer
+- [x] Add or extend release-audit assertions and focused tests for pointer
       wrapper layout/niche behavior, representative page/block/heap/theap/TLD/
       arena/subproc/page-queue accessors, encoded-link helpers, exposed-address
       helpers, and marker coverage without a migration allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/types/ptr.rs` from
+- [x] Add matching unsafe audit/evidence entries, remove `src/types/ptr.rs` from
       the unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
@@ -251,17 +259,17 @@ clippy, and full tests.
        allowlist.
 3. [x] Migrate `src/platform/unix.rs` off the unsafe migration allowlist.
 4. [x] Migrate `src/platform/os.rs` off the unsafe migration allowlist.
-5. [ ] Migrate `src/types/ptr.rs` off the unsafe migration allowlist.
+5. [x] Migrate `src/types/ptr.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog
 
 - [x] The unsafe migration allowlist cap is lowered after each migrated file.
-- [ ] `src/types/constants.rs`, `src/allocator/thread_heap.rs`,
+- [x] `src/types/constants.rs`, `src/allocator/thread_heap.rs`,
       `src/platform/unix.rs`, `src/platform/os.rs`, and `src/types/ptr.rs` are
       covered by operation-level audit markers and evidence instead of
       file-level migration exceptions.
-- [ ] Raw callback typedefs, thread-heap lifecycle behavior, Unix primitive
+- [x] Raw callback typedefs, thread-heap lifecycle behavior, Unix primitive
       behavior, OS memory semantics, pointer wrapper layout, and allocator
       hot-path performance constraints remain unchanged.
-- [ ] Release-audit TODO guards track the active backlog and measurable
+- [x] Release-audit TODO guards track the active backlog and measurable
       evidence.

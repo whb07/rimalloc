@@ -74,16 +74,33 @@ file when such a module exists.
 - `SAFETY[AUDIT:raw-macro-header-forwarding-boundary]`: header-shaped raw
   forwarding helpers in `src/raw/macros.rs` that call raw function pointers or
   allocator exports without adding Rust ownership guarantees.
-- `SAFETY[AUDIT:init-subproc-boundary]`: subproc identity, subproc list
-  mutation, subproc ID conversion, main-subproc address resolution, main-heap
-  lookup, and subproc heap visitation in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-identity-boundary]`: subproc ID conversion,
+  current subproc lookup, and main subproc ID mapping in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-main-subproc-lifecycle-boundary]`: main subproc address
+  resolution and process-global main heap/subproc publication in
+  `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-registry-boundary]`: subproc creation, destruction,
+  list mutation, and metadata cleanup in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-heap-association-boundary]`: subproc main-heap
+  lookup, heap-to-subproc lookup, main heap predicates, and subproc heap
+  visitation in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-subproc-stats-count-boundary]`: subproc stats header,
+  stats merge, thread sequence, and thread/heap counter updates in
+  `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-process-boundary]`: process initialization and teardown in
   `src/allocator/init.rs`, including one-time state, preloading gates,
   allocator init/done callbacks, post-init option activation, and teardown
   ordering.
-- `SAFETY[AUDIT:init-thread-tls-boundary]`: thread initialization/teardown,
-  TLD allocation/free, default/cached thread-heap association, process-main
-  thread-heap TLS, and platform TLS slot/key setup in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-thread-lifecycle-boundary]`: thread initialization,
+  teardown, local thread-heap cleanup, and thread stat updates in
+  `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-thread-heap-tls-boundary]`: default, cached, empty, and
+  process-main thread-heap TLS association in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-platform-tls-boundary]`: Windows TLS slots, pthread keys,
+  and platform TLS setup/teardown in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-tld-lifecycle-boundary]`: TLD allocation/free, main/non-main
+  TLD setup, threadpool flag mutation, and TLD metadata counters in
+  `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-options-guarded-boundary]`: thread-heap option and
   guarded-allocation configuration in `src/allocator/init.rs`, including
   clamped option reads and bounded local thread-heap writes.

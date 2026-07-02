@@ -8,9 +8,9 @@ operation IDs and release-audit modules that are still close to the module cap.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 82 source files, 5,893 unsafe
-  mentions, and 123 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 123 operation IDs with
-  306 automated evidence rows.
+  mentions, and 130 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 130 operation IDs with
+  321 automated evidence rows.
 - `strict-type-allowlist.txt` still has 26 wildcard entries left: 4
   raw-pointer-parameter entries, 13 bare-domain `usize` entries, 4
   pointer/usize round-trip entries, 2 metadata-reference entries, 2 atomic-cast
@@ -21,14 +21,25 @@ Current review evidence:
   `src/platform/mod.rs`, `src/raw/macros.rs`, `src/types/layout.rs`,
   `src/safe/allocation.rs`, and `src/types/atomic.rs`.
 - The largest remaining unsafe audit marker clusters are
-  `init-thread-tls-boundary` with 129 markers,
   `windows-primitive-boundary` with 114 markers,
   `arena-page-lifecycle-boundary` with 107 markers,
   `arena-allocation-boundary` with 105 markers,
   `allocation-abi-entry-boundary` with 104 markers,
   `internal-atomic-facade` with 103 markers,
-  `page-allocation-boundary` with 102 markers, and
-  `init-subproc-boundary` with 102 markers.
+  `page-allocation-boundary` with 102 markers,
+  `unix-primitive-backend` with 90 markers, and
+  `typed-pointer-test-fixtures` with 87 markers.
+- The previous `init-thread-tls-boundary` aggregate is split into
+  `init-thread-heap-tls-boundary` with 56 markers,
+  `init-thread-lifecycle-boundary` with 48 markers,
+  `init-platform-tls-boundary` with 17 markers, and
+  `init-tld-lifecycle-boundary` with 7 markers. The previous
+  `init-subproc-boundary` aggregate is split into
+  `init-subproc-heap-association-boundary` with 36 markers,
+  `init-subproc-registry-boundary` with 32 markers,
+  `init-subproc-identity-boundary` with 16 markers,
+  `init-subproc-stats-count-boundary` with 12 markers, and
+  `init-main-subproc-lifecycle-boundary` with 6 markers.
 - The release-audit root harness is 247 lines under a 300-line root cap. The
   module cap is still 1,000 lines; the largest modules are
   `unsafe_performance/lifecycle_boundaries.rs` at 922 lines,
@@ -50,12 +61,12 @@ Current review evidence:
 > and cached thread-heap TLS, platform TLS slot/key setup, TLD allocation/free,
 > subproc identity, main-subproc state, and heap/subproc association.
 
-- [ ] Split `init-thread-tls-boundary` into thread lifecycle, thread-heap TLS,
+- [x] Split `init-thread-tls-boundary` into thread lifecycle, thread-heap TLS,
       platform TLS slot/key, and TLD allocation/free operation IDs.
-- [ ] Split `init-subproc-boundary` into subproc identity/registry,
+- [x] Split `init-subproc-boundary` into subproc identity/registry,
       main-subproc lifecycle, heap association, and subproc stats/count
       operation IDs.
-- [ ] Update `UNSAFE_AUDIT.md`, evidence rows, and focused release-audit guards
+- [x] Update `UNSAFE_AUDIT.md`, evidence rows, and focused release-audit guards
       for each new init operation ID.
 
 Verify: lifecycle stats exports, release fast-path audit lifecycle modules,
@@ -120,7 +131,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Split init thread/TLS and subproc audit clusters.
+1. [x] Split init thread/TLS and subproc audit clusters.
 2. [ ] Split page and arena allocation lifecycle clusters.
 3. [ ] Split platform and atomic facade audit clusters.
 4. [ ] Split remaining large release-audit modules and lower the module cap.

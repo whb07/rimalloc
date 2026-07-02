@@ -2,31 +2,55 @@ use super::*;
 
 fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist: &str) {
     let marker_total = [
-        "SAFETY[AUDIT:init-subproc-boundary]",
+        "SAFETY[AUDIT:init-main-subproc-lifecycle-boundary]",
+        "SAFETY[AUDIT:init-platform-tls-boundary]",
         "SAFETY[AUDIT:init-process-boundary]",
-        "SAFETY[AUDIT:init-thread-tls-boundary]",
+        "SAFETY[AUDIT:init-subproc-heap-association-boundary]",
+        "SAFETY[AUDIT:init-subproc-identity-boundary]",
+        "SAFETY[AUDIT:init-subproc-registry-boundary]",
+        "SAFETY[AUDIT:init-subproc-stats-count-boundary]",
+        "SAFETY[AUDIT:init-thread-heap-tls-boundary]",
+        "SAFETY[AUDIT:init-thread-lifecycle-boundary]",
         "SAFETY[AUDIT:init-options-guarded-boundary]",
         "SAFETY[AUDIT:init-random-cpu-boundary]",
+        "SAFETY[AUDIT:init-tld-lifecycle-boundary]",
         "SAFETY[AUDIT:init-platform-hooks-boundary]",
     ]
     .into_iter()
     .map(|marker| init_rs.matches(marker).count())
     .sum::<usize>();
+    let split_marker_minimums = [
+        ("init-main-subproc-lifecycle-boundary", 6),
+        ("init-platform-tls-boundary", 17),
+        ("init-subproc-heap-association-boundary", 36),
+        ("init-subproc-identity-boundary", 16),
+        ("init-subproc-registry-boundary", 32),
+        ("init-subproc-stats-count-boundary", 12),
+        ("init-thread-heap-tls-boundary", 56),
+        ("init-thread-lifecycle-boundary", 48),
+        ("init-tld-lifecycle-boundary", 7),
+    ];
 
     assert!(
         !unsafe_allowlist
             .lines()
             .any(|line| line.starts_with("src/allocator/init.rs\t"))
             && !init_rs.contains("SAFETY[AUDIT:init-lifecycle-boundary]")
+            && !init_rs.contains("SAFETY[AUDIT:init-subproc-boundary]")
+            && !init_rs.contains("SAFETY[AUDIT:init-thread-tls-boundary]")
             && marker_total >= 277,
         "init lifecycle unsafe boundaries should stay split into focused operation markers without a migration allowlist entry"
     );
+    for (audit_id, minimum) in split_marker_minimums {
+        let marker = format!("SAFETY[AUDIT:{audit_id}]");
+        let count = init_rs.matches(&marker).count();
+        assert!(
+            count >= minimum,
+            "init unsafe boundary {audit_id} should retain at least {minimum} local operation markers; found {count}"
+        );
+    }
     assert!(
-        init_rs
-            .matches("SAFETY[AUDIT:init-subproc-boundary]")
-            .count()
-            >= 102
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_main")
+        init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_main")
             && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_current")
             && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_new")
             && init_rs.contains("pub unsafe extern \"C\" fn mi_subproc_destroy")
@@ -34,13 +58,13 @@ fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist:
             && init_rs.contains("pub unsafe extern \"C\" fn mi_heap_main")
             && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_is_heap_main")
             && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_is_theap_main"),
-        "subproc identity and main-heap lookup markers should stay reviewable independently"
+        "subproc identity, registry, stats, and main-heap lookup markers should stay reviewable independently"
     );
     assert!(
         init_rs
             .matches("SAFETY[AUDIT:init-process-boundary]")
             .count()
-            >= 16
+            >= 17
             && init_rs.contains("pub unsafe extern \"C\" fn mi_process_init")
             && init_rs.contains("pub unsafe extern \"C\" fn mi_process_done")
             && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_auto_process_init")
@@ -52,11 +76,7 @@ fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist:
         "process init/teardown markers should preserve preloading gates and allocator lifecycle ordering"
     );
     assert!(
-        init_rs
-            .matches("SAFETY[AUDIT:init-thread-tls-boundary]")
-            .count()
-            >= 129
-            && init_rs.contains("pub unsafe extern \"C\" fn mi_thread_init")
+        init_rs.contains("pub unsafe extern \"C\" fn mi_thread_init")
             && init_rs.contains("pub unsafe extern \"C\" fn mi_thread_done")
             && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_thread_done")
             && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_theap_default_set")
@@ -64,7 +84,7 @@ fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe_allowlist:
             && init_rs.contains("fn mi_tls_slots_init()")
             && init_rs.contains("fn mi_tls_slots_done()")
             && init_rs.contains("crate::prim::_mi_theap_default_raw()"),
-        "thread and TLS lifecycle markers should preserve default/cached heap association and teardown"
+        "thread lifecycle, TLD, TLS slot, and thread-heap TLS markers should preserve default/cached heap association and teardown"
     );
     assert!(
         init_rs

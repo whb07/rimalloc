@@ -44,16 +44,31 @@ heap-lifecycle-boundary	test	tests/release_fast_path_audit/datatype_acceptance.r
 thread-heap-lifecycle	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread-heap visitation, collection, init/create/free/delete, refcount, random, cleanup, marker coverage, and migration allowlist removal.
 thread-heap-lifecycle	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching, routed heap thread-heap lookup, heap lifecycle, stats, and allocation smoke paths.
 thread-heap-lifecycle	script	scripts/check-unsafe-audit.py	Checks thread-heap lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-subproc-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc marker coverage, subproc ID mapping, typed main-subproc helpers, main-heap lookup, and heap visitor shape.
-init-subproc-boundary	script	scripts/check-unsafe-audit.py	Checks subproc init unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-identity-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc ID mapping, current/main subproc lookup, typed subproc wrappers, and raw default thread-heap inspection shape.
+init-subproc-identity-boundary	script	scripts/check-unsafe-audit.py	Checks subproc identity unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-main-subproc-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks main subproc address resolution, hidden local subproc symbol use, static main heap/subproc publication, and one-time main init shape.
+init-main-subproc-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks main subproc lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-registry-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc creation, destruction, lock-protected list mutation, registry teardown, metadata cleanup, and arena/page-map handoff shape.
+init-subproc-registry-boundary	script	scripts/check-unsafe-audit.py	Checks subproc registry unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-heap-association-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc main-heap lookup, heap-to-subproc prefix loads, main heap predicates, lazy main heap initialization, and heap visitor shape.
+init-subproc-heap-association-boundary	script	scripts/check-unsafe-audit.py	Checks subproc heap association unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-subproc-stats-count-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks subproc stats header initialization, thread sequence/count updates, and stats merge into the main subproc.
+init-subproc-stats-count-boundary	script	scripts/check-unsafe-audit.py	Checks subproc stats/count unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-process-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks process marker coverage, process init/done helper shape, preloading gates, allocator init/done callbacks, and teardown ordering.
 init-process-boundary	test	tests/release_fast_path_audit/runtime_gates.rs	Checks preloading state transitions, process init routing, and CPU feature setup order.
 init-process-boundary	test	src/allocator/init.rs	Exercises large-page process initialization.
 init-process-boundary	script	scripts/check-unsafe-audit.py	Checks process init unsafe operations retain operation-level SAFETY markers and source audit coverage.
-init-thread-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread/TLS marker coverage, default/cached thread-heap association, TLD allocation/free, TLS slot setup, and thread teardown shape.
-init-thread-tls-boundary	test	src/allocator/init.rs	Exercises Linux main-theap TLS locality fixtures.
-init-thread-tls-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching, routed heap thread-heap lookup, stats, and allocation smoke paths.
-init-thread-tls-boundary	script	scripts/check-unsafe-audit.py	Checks thread/TLS init unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks thread init/done marker coverage, default thread-heap initialization, local cleanup, and thread stat update shape.
+init-thread-lifecycle-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching, stats, allocation smoke paths, and lifecycle export calls.
+init-thread-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks thread lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-thread-heap-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks default/cached/main thread-heap TLS association, empty sentinel exposure, safe accessors, and no-allocation TLS switching shape.
+init-thread-heap-tls-boundary	test	src/allocator/init.rs	Exercises Linux main-theap TLS locality fixtures.
+init-thread-heap-tls-boundary	test	tests/lifecycle_stats_exports.rs	Exercises raw thread-heap default switching and routed heap thread-heap lookup paths.
+init-thread-heap-tls-boundary	script	scripts/check-unsafe-audit.py	Checks thread-heap TLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-platform-tls-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks Windows TLS slot, pthread key, slot set/free, and TLS one-time init/done shape.
+init-platform-tls-boundary	script	scripts/check-unsafe-audit.py	Checks platform TLS unsafe operations retain operation-level SAFETY markers and source audit coverage.
+init-tld-lifecycle-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks main/non-main TLD setup, TLD allocation/free, threadpool flag mutation, and subproc thread counter updates.
+init-tld-lifecycle-boundary	script	scripts/check-unsafe-audit.py	Checks TLD lifecycle unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-options-guarded-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks guarded/options marker coverage, helper shape, clamped option reads, compiler fences, and bounded thread-heap configuration writes.
 init-options-guarded-boundary	script	scripts/check-unsafe-audit.py	Checks guarded/options init unsafe operations retain operation-level SAFETY markers and source audit coverage.
 init-random-cpu-boundary	test	tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs	Checks random/CPU marker coverage, CPUID helper shape, popcount publication, CPU copy thresholds, and random reseeding.

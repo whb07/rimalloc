@@ -238,26 +238,54 @@ Operation IDs:
   boundaries. Unsafe operations stay at C ABI shims, callback invocations,
   page/block traversal, fast-divisor out-pointers, and caller-proven
   heap/thread-heap/TLD metadata transitions routed through typed wrappers.
-- `SAFETY[AUDIT:init-subproc-boundary]`: `src/allocator/init.rs` owns subproc
-  identity conversion, subproc list mutation, main subproc address resolution,
-  main-heap lookup, heap visitor dispatch, and subproc creation/destruction.
-  Unsafe operations are limited to caller-proven subproc IDs, typed
-  subproc/main-heap witness construction, lock-protected list updates, local
-  static subproc publication, and metadata cleanup while preserving subproc ID
-  mapping and main-heap association.
+- `SAFETY[AUDIT:init-subproc-identity-boundary]`: `src/allocator/init.rs` owns
+  subproc ID conversion and current/main subproc lookup. Unsafe operations are
+  limited to caller-proven subproc IDs, typed subproc witness construction, raw
+  default thread-heap inspection, and opaque ID mapping without forcing process
+  initialization.
+- `SAFETY[AUDIT:init-main-subproc-lifecycle-boundary]`: `src/allocator/init.rs`
+  owns process-main subproc address resolution and static main subproc/main heap
+  publication. Unsafe operations are limited to hidden local symbol address
+  resolution, static metadata initialization, and one-time main heap/subproc
+  association.
+- `SAFETY[AUDIT:init-subproc-registry-boundary]`: `src/allocator/init.rs` owns
+  subproc creation, destruction, list mutation, and metadata cleanup. Unsafe
+  operations are limited to lock-protected registry updates, metadata allocation
+  and free, arena/page-map teardown handoff, and heap destruction ordering.
+- `SAFETY[AUDIT:init-subproc-heap-association-boundary]`:
+  `src/allocator/init.rs` owns subproc-to-main-heap lookup, heap-to-subproc
+  lookup, main heap predicates, and subproc heap visitor dispatch. Unsafe
+  operations are limited to typed subproc/main-heap witness construction,
+  inline C-equivalent prefix loads, lazy main heap initialization, and
+  lock-protected heap visitation.
+- `SAFETY[AUDIT:init-subproc-stats-count-boundary]`: `src/allocator/init.rs`
+  owns subproc thread/heap counters and stats merges. Unsafe operations are
+  limited to typed subproc metadata access, stats header initialization,
+  per-subproc thread sequence/count updates, and merge into the main subproc
+  during teardown.
 - `SAFETY[AUDIT:init-process-boundary]`: `src/allocator/init.rs` owns
   process-global initialization and teardown. Unsafe operations are limited to
   one-time init state, preloading gates, allocator init/done callbacks,
   process-global metadata publication, post-init option activation, stats/OS
   setup ordering, and process teardown while preserving idempotent
   initialization and no-unwind lifecycle behavior.
-- `SAFETY[AUDIT:init-thread-tls-boundary]`: `src/allocator/init.rs` owns thread
-  initialization/teardown, default and cached thread-heap association,
-  process-main thread heap TLS, platform TLS slot/key setup, and TLD
-  allocation/free. Unsafe operations are limited to current-thread witnesses,
-  typed thread-heap/TLD wrappers, TLS slot/key reads and writes, and local
-  teardown paths while preserving default heap TLS and no hidden allocator
-  allocation before init is safe.
+- `SAFETY[AUDIT:init-thread-lifecycle-boundary]`: `src/allocator/init.rs` owns
+  public thread initialization and teardown. Unsafe operations are limited to
+  current-thread witnesses, default thread-heap initialization, local
+  thread-heap cleanup, stat updates, and C-equivalent fallback paths during
+  thread done/init.
+- `SAFETY[AUDIT:init-thread-heap-tls-boundary]`: `src/allocator/init.rs` owns
+  default, cached, empty, and process-main thread-heap TLS association. Unsafe
+  operations are limited to typed thread-heap wrappers, TLS reads and writes,
+  main-thread heap publication, and no-allocation default/cached switching.
+- `SAFETY[AUDIT:init-platform-tls-boundary]`: `src/allocator/init.rs` owns
+  platform TLS slot/key setup and teardown. Unsafe operations are limited to
+  one-time Windows TLS slot allocation/free, pthread key creation/deletion, and
+  process-global TLS metadata mutation.
+- `SAFETY[AUDIT:init-tld-lifecycle-boundary]`: `src/allocator/init.rs` owns TLD
+  allocation/free and per-thread TLD metadata. Unsafe operations are limited to
+  typed TLD/subproc witnesses, main/non-main TLD setup, threadpool flag
+  mutation, subproc thread counters, and metadata cleanup.
 - `SAFETY[AUDIT:init-options-guarded-boundary]`: `src/allocator/init.rs` owns
   thread-heap option and guarded-allocation configuration. Unsafe operations
   are limited to validated local thread-heap writes, clamped option reads,

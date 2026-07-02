@@ -1,13 +1,10 @@
 //! Mechanical translation of `include/mimalloc/track.h`.
 
-// Retains tracking mode constants and no-op hooks for builds without an active
-// tracking backend.
-#![allow(dead_code)]
-
 use core::ffi::c_void;
 
 use crate::core_types::TrackMode;
 
+#[allow(dead_code)]
 pub const MI_TRACK_H: () = ();
 
 pub(crate) const MI_TRACK_MODE: TrackMode = TrackMode::CURRENT;
@@ -17,8 +14,10 @@ pub const MI_TRACK_ETW: usize = 0;
 
 pub const MI_TRACK_ENABLED: usize = MI_TRACK_MODE.enabled_flag();
 
+#[allow(dead_code)]
 pub const MI_TRACK_HEAP_DESTROY: usize = MI_TRACK_MODE.heap_destroy_flag();
 
+#[allow(dead_code)]
 pub const MI_TRACK_TOOL: &str = MI_TRACK_MODE.tool_name();
 
 #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
@@ -118,6 +117,7 @@ pub unsafe fn mi_track_mem_noaccess(p: *mut c_void, size: usize) {
 /// `p..p + oldsize` must describe the old tracked allocation, and
 /// `p..p + newsize` must describe its resized range.
 #[inline]
+#[allow(dead_code)]
 pub unsafe fn mi_track_resize(p: *mut c_void, oldsize: usize, newsize: usize) {
     #[cfg(any(feature = "track-valgrind", feature = "track-asan"))]
     unsafe {
@@ -144,6 +144,7 @@ pub unsafe fn mi_track_align(p: *mut c_void, _alignedp: *mut c_void, offset: usi
 ///
 /// Must be called according to the allocator tracking backend lifecycle.
 #[inline]
+#[allow(dead_code)]
 pub unsafe fn mi_track_init() {}
 
 /// # Safety
@@ -151,6 +152,7 @@ pub unsafe fn mi_track_init() {}
 /// Must be called according to the allocator tracking backend lifecycle, after
 /// tracking users have stopped.
 #[inline]
+#[allow(dead_code)]
 pub unsafe fn mi_track_done() {}
 
 /// # Safety

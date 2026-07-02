@@ -22,10 +22,11 @@ Review evidence:
 - `src/safe/mod.rs` is 1,194 lines because it contains the facade module plus a
   large in-file test suite with process-global callback and failure-injection
   fixtures.
-- Small production modules still carry crate-level allowances such as
-  `#![allow(dead_code)]` or broad C-name allowances, including
-  `src/internal/provenance.rs`, `src/allocator/static_alloc.rs`,
-  `src/allocator/tracking.rs`, and `src/internal/bits.rs`.
+- Small production modules still carry crate-level allowances where they are
+  permanent compatibility shims, such as `src/allocator/static_alloc.rs` and
+  translated C-name modules. `src/internal/provenance.rs`,
+  `src/allocator/tracking.rs`, and `src/internal/bits.rs` no longer carry broad
+  `dead_code` module allowances.
 
 ## Issue: Unsafe migration allowlist should keep shrinking
 
@@ -91,17 +92,25 @@ Review evidence:
 > but broad allowances make it difficult to distinguish intentionally retained
 > C parity from leftovers.
 
-- [ ] Inventory production crate-level allowances and split small modules into
+- [x] Inventory production crate-level allowances and split small modules into
       permanent compatibility shims versus removable translated residue.
-- [ ] Localize `dead_code` allowances to individual constants or functions in
+- [x] Localize `dead_code` allowances to individual constants or functions in
       `src/internal/provenance.rs`, `src/allocator/static_alloc.rs`,
       `src/allocator/tracking.rs`, and `src/internal/bits.rs` where possible.
-- [ ] Prefer `cfg` gates or actual call-site ownership over suppressing unused
+- [x] Prefer `cfg` gates or actual call-site ownership over suppressing unused
       code.
-- [ ] Add or tighten an audit test that caps broad production module-level
+- [x] Add or tighten an audit test that caps broad production module-level
       allowances and documents permanent exceptions.
-- [ ] Leave large translated allocator modules alone unless the allowance
+- [x] Leave large translated allocator modules alone unless the allowance
       change is obviously local and behavior-neutral.
+  - Evidence: `src/internal/provenance.rs` no longer needs `dead_code`,
+    `src/internal/bits.rs` keeps only C naming allowances, and
+    `src/allocator/tracking.rs` moved retained C tracking hooks to item-level
+    `dead_code` allowances. `src/allocator/static_alloc.rs` remains a documented
+    permanent aggregate-build-unit shim because localizing 19 sentinel constants
+    would make the file less clear. The release audit now separately checks
+    total `dead_code` allowances and broad module-level `#![allow(dead_code)]`
+    compatibility shims.
 - Verify: focused allowance audit, `cargo clippy --workspace --all-targets
   --all-features`, and full tests.
 
@@ -170,7 +179,7 @@ Review evidence:
 
 1. [x] Shrink small typed-wrapper unsafe allowlist entries.
 2. [x] Cap and reduce removable strict-type allowlist entries.
-3. [ ] Localize small production module-level allowances.
+3. [x] Localize small production module-level allowances.
 4. [ ] Move safe facade tests out of `src/safe/mod.rs`.
 5. [ ] Split the release fast-path audit into domain modules.
 6. [ ] Split one additional low-risk translated module cluster.
@@ -180,7 +189,7 @@ Review evidence:
 - [x] The unsafe migration allowlist is below 64 entries and the cap is lowered.
 - [x] The strict-type allowlist has fewer than 9 `remove:` entries and the
       removable-entry count is capped.
-- [ ] Small production module-level allowances are localized or documented as
+- [x] Small production module-level allowances are localized or documented as
       permanent compatibility shims.
 - [ ] `src/safe/mod.rs` contains the facade and test wiring only, not the full
       safe facade test suite.

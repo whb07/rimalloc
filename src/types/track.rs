@@ -44,6 +44,7 @@ impl TrackMode {
     }
 
     #[inline(always)]
+    #[allow(dead_code)]
     pub(crate) const fn heap_destroy_flag(self) -> usize {
         match self {
             Self::Valgrind => 1,
@@ -52,6 +53,7 @@ impl TrackMode {
     }
 
     #[inline(always)]
+    #[allow(dead_code)]
     pub(crate) const fn tool_name(self) -> &'static str {
         match self {
             Self::Disabled => "none",

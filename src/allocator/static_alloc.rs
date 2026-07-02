@@ -1,8 +1,8 @@
 //! Mechanical translation of `src/static.c`.
 
-// `src/static.c` is an aggregate build unit for the original C static override
-// build. In the Rust crate the equivalent aggregation happens through `lib.rs`
-// module wiring instead of textual source inclusion.
+// Permanent compatibility shim: `src/static.c` was an aggregate C build unit.
+// The Rust crate wires modules through `lib.rs`; these sentinels document that
+// the static aggregate has no runtime implementation here.
 #![allow(dead_code)]
 
 pub const _DEFAULT_SOURCE: () = ();

@@ -137,6 +137,29 @@ fn dead_code_allowance_count(source: &str) -> usize {
         .count()
 }
 
+fn module_dead_code_allowance_count(source: &str) -> usize {
+    let mut count = 0;
+    let mut in_module_allow = false;
+    let mut has_dead_code = false;
+
+    for line in source.lines() {
+        if !in_module_allow && line.contains("#![allow") {
+            in_module_allow = true;
+            has_dead_code = line.contains("dead_code");
+        } else if in_module_allow {
+            has_dead_code |= line.contains("dead_code");
+        }
+
+        if in_module_allow && line.contains(']') {
+            count += usize::from(has_dead_code);
+            in_module_allow = false;
+            has_dead_code = false;
+        }
+    }
+
+    count
+}
+
 fn clippy_allowance_counts(sources: &[(String, String)]) -> BTreeMap<(&str, &str), usize> {
     let mut counts = BTreeMap::new();
     for (rel, source) in sources {
@@ -4775,10 +4798,15 @@ fn phase6_dead_code_allowances_stay_intentional() {
     collect_rs_sources(root, &src, &mut sources);
 
     let mut actual = BTreeMap::new();
+    let mut module_actual = BTreeMap::new();
     for (rel, source) in &sources {
         let count = dead_code_allowance_count(source);
         if count > 0 {
             actual.insert(rel.as_str(), count);
+        }
+        let module_count = module_dead_code_allowance_count(source);
+        if module_count > 0 {
+            module_actual.insert(rel.as_str(), module_count);
         }
     }
 
@@ -4790,7 +4818,6 @@ fn phase6_dead_code_allowances_stay_intentional() {
         ("src/allocator/arena_meta.rs", 1),
         ("src/internal/atomic.rs", 1),
         ("src/internal/bitmap.rs", 1),
-        ("src/internal/bits.rs", 1),
         ("src/types/freelist_wrappers.rs", 1),
         ("src/allocator/free.rs", 3),
         ("src/allocator/init.rs", 1),
@@ -4804,17 +4831,43 @@ fn phase6_dead_code_allowances_stay_intentional() {
         ("src/platform/unix.rs", 1),
         ("src/platform/wasi.rs", 1),
         ("src/platform/windows.rs", 3),
-        ("src/internal/provenance.rs", 1),
         ("src/allocator/static_alloc.rs", 1),
         ("src/allocator/stats.rs", 1),
         ("src/allocator/thread_heap.rs", 1),
-        ("src/allocator/tracking.rs", 1),
+        ("src/allocator/tracking.rs", 6),
+        ("src/types/constants.rs", 1),
+        ("src/types/track.rs", 2),
+    ]);
+    let expected_module_level = BTreeMap::from([
+        ("src/allocator/aligned.rs", 1),
+        ("src/raw/macros.rs", 1),
+        ("src/allocator/arena_meta.rs", 1),
+        ("src/internal/atomic.rs", 1),
+        ("src/internal/bitmap.rs", 1),
+        ("src/allocator/init.rs", 1),
+        ("src/internal/mod.rs", 1),
+        ("src/ffi/libc.rs", 1),
+        ("src/allocator/options.rs", 1),
+        ("src/allocator/page.rs", 1),
+        ("src/platform/mod.rs", 1),
+        ("src/platform/emscripten.rs", 1),
+        ("src/platform/macos.rs", 1),
+        ("src/platform/unix.rs", 1),
+        ("src/platform/wasi.rs", 1),
+        ("src/platform/windows.rs", 1),
+        ("src/allocator/static_alloc.rs", 1),
+        ("src/allocator/stats.rs", 1),
+        ("src/allocator/thread_heap.rs", 1),
         ("src/types/constants.rs", 1),
     ]);
 
     assert_eq!(
         actual, expected,
         "Phase 6 dead_code allowances should stay on the audited compatibility/scaffold allowlist"
+    );
+    assert_eq!(
+        module_actual, expected_module_level,
+        "broad module-level dead_code allowances should stay limited to permanent compatibility shims"
     );
     assert!(
         !actual.contains_key("src/lib.rs"),
@@ -4837,7 +4890,11 @@ fn phase6_dead_code_allowances_stay_intentional() {
         .collect();
     assert_eq!(
         core_type_allowances,
-        vec!["src/types/constants.rs", "src/types/freelist_wrappers.rs"],
+        vec![
+            "src/types/constants.rs",
+            "src/types/freelist_wrappers.rs",
+            "src/types/track.rs"
+        ],
         "core type dead_code allowances should remain item-level and explicitly justified"
     );
 }

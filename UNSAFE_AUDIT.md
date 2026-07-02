@@ -219,6 +219,11 @@ Operation IDs:
 - `SAFETY[AUDIT:raw-macro-boundary]`: `src/ffi/abi.rs` and
   `src/ffi/headers.rs` expose raw C-header macro compatibility without adding
   Rust ownership guarantees; callers inherit the documented raw ABI contract.
+- `SAFETY[AUDIT:random-context-boundaries]`: `src/internal/random.rs`
+  confines random context raw pointers and primitive entropy/clock calls to
+  the allocator's C-compatible random boundary. The shims convert live context
+  pointers to borrowed references once, keep ChaCha state updates in safe Rust,
+  and use stack-local key buffers for primitive entropy reads.
 - `SAFETY[AUDIT:arena-debug-render]`: `src/allocator/arena/debug.rs` renders
   arena diagnostics by reading arena/page metadata discovered through the
   current sub-process registry, page map lookup, and typed memid views. The

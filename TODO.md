@@ -13,8 +13,8 @@ evidence.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 44 entries: 39 production, 2 test,
-  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 44.
+- `docs/unsafe-migration-allowlist.tsv` has 43 entries: 38 production, 2 test,
+  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 43.
 - The smallest remaining allowlisted test fixtures are reviewable:
   `src/types/scalar/tests.rs` is 412 lines and
   `src/types/ptr/tests.rs` is 618 lines.
@@ -22,8 +22,11 @@ Current review evidence:
   `SAFETY[AUDIT:typed-atomic-test-fixtures]` markers for stack-local atomic
   words, pointer cells, page/free-list metadata, once state, and lock storage.
   It is 356 lines with 16 local audit markers.
+- `src/internal/random.rs` now uses
+  `SAFETY[AUDIT:random-context-boundaries]` markers for random context raw
+  pointer shims and primitive entropy/clock bridges. It is 282 lines with 12
+  local audit markers.
 - The smallest remaining allowlisted production files are narrow:
-  `src/internal/random.rs` is 257 lines,
   `src/types/page.rs` is 258 lines,
   `src/types/arena.rs` is 260 lines,
   `src/types/page_queues.rs` is 304 lines,
@@ -92,20 +95,20 @@ full tests.
 
 ## Issue: Random remains a small production unsafe allowlisted module
 
-> **Comment:** `src/internal/random.rs` is the smallest remaining production
-> allowlisted file. The unsafe operations are random-context raw pointer entry
-> points and primitive entropy/clock bridges, while the ChaCha state update
-> logic is ordinary safe Rust.
+> **Comment:** `src/internal/random.rs` was the smallest remaining production
+> allowlisted file. The unsafe operations are now local random-context raw
+> pointer entry points and primitive entropy/clock bridges, while the ChaCha
+> state update logic remains ordinary safe Rust.
 
-- [ ] Replace the file-level allowlist entry for `src/internal/random.rs` with
+- [x] Replace the file-level allowlist entry for `src/internal/random.rs` with
       operation-level `SAFETY[AUDIT:random-context-boundaries]` markers.
-- [ ] Keep ChaCha block generation allocation-free and preserve the current
+- [x] Keep ChaCha block generation allocation-free and preserve the current
       integer operations and inlining shape.
-- [ ] Keep raw C ABI shims narrow by converting pointers to references once and
+- [x] Keep raw C ABI shims narrow by converting pointers to references once and
       doing ordinary borrowed work after that point.
-- [ ] Add release-audit evidence for the random context entry points and the
+- [x] Add release-audit evidence for the random context entry points and the
       primitive entropy/clock bridge.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, generated
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, generated
       unsafe inventory, and lower `ALLOWLIST_ENTRY_CAP` again.
 
 Verify: random unit coverage if present, unsafe audit scripts,
@@ -179,7 +182,7 @@ full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/types/atomic/tests.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/internal/random.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/internal/random.rs` off the unsafe migration allowlist.
 3. [ ] Split the arena heap visit/delete/move/destroy cluster.
 4. [ ] Split one more `unsafe_performance.rs` assertion cluster.
 5. [ ] Narrow broad arena strict-type entries after the arena split.
@@ -188,7 +191,7 @@ full tests.
 
 - [x] The unsafe migration allowlist is below 45 entries and the cap is lowered
       with each migrated file.
-- [ ] One additional production allowlisted file is covered by operation-level
+- [x] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.
 - [ ] `src/allocator/arena.rs` is smaller again without API, ABI, or hot-path
       performance drift.

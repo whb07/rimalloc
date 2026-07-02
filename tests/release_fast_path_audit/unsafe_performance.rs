@@ -1065,6 +1065,10 @@ fn free_path_internals_are_not_dynamic_exports() {
         );
     }
     assert!(
+        random_rs.contains("SAFETY[AUDIT:random-context-boundaries]"),
+        "random context helper unsafe operations should retain operation-level audit markers"
+    );
+    assert!(
         !random_rs.contains("static MI_OS_RANDOM_WEAK_KEEP")
             && !random_rs.contains("static MI_RANDOM_SPLIT_KEEP")
             && !random_rs.contains("static MI_RANDOM_NEXT_KEEP")

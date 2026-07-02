@@ -25,8 +25,8 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5950 |
-| `unsafe_blocks` | 3528 |
+| `unsafe_mentions` | 5949 |
+| `unsafe_blocks` | 3527 |
 | `unsafe_fns` | 1999 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
@@ -70,7 +70,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/internal/memid.rs` | 2 | 0 | 2 | 0 | 0 | 0 | 0 |
 | `src/internal/mod.rs` | 163 | 88 | 74 | 1 | 0 | 0 | 0 |
 | `src/internal/provenance.rs` | 2 | 0 | 0 | 0 | 2 | 0 | 0 |
-| `src/internal/random.rs` | 14 | 9 | 5 | 0 | 0 | 0 | 0 |
+| `src/internal/random.rs` | 13 | 8 | 5 | 0 | 0 | 0 | 0 |
 | `src/lib.rs` | 21 | 8 | 4 | 1 | 1 | 1 | 0 |
 | `src/platform/emscripten.rs` | 35 | 12 | 22 | 1 | 0 | 0 | 0 |
 | `src/platform/macos.rs` | 97 | 46 | 45 | 1 | 0 | 5 | 0 |

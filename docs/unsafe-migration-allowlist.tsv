@@ -18,7 +18,6 @@ src/ffi/libc.rs	production	release-readiness	2026-09-30	legacy C compatibility u
 src/internal/atomic.rs	production	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
 src/internal/bitmap.rs	production	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
 src/internal/mod.rs	translation	release-readiness	2026-09-30	legacy translated internal macros and layout helpers pending per-operation SAFETY marker migration
-src/internal/random.rs	production	release-readiness	2026-09-30	legacy internal unsafe pending per-operation SAFETY marker migration
 src/lib.rs	production	release-readiness	2026-09-30	legacy facade unsafe pending per-operation SAFETY marker migration
 src/platform/emscripten.rs	production	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration
 src/platform/macos.rs	production	release-readiness	2026-09-30	legacy platform unsafe pending per-operation SAFETY marker migration

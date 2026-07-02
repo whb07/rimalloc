@@ -33,7 +33,7 @@ fn rust_idiom_backlog_tracks_current_work() {
         "docs/unsafe-migration-allowlist.tsv",
         "58 entries: 44 production,\n  11 test, and 3 translation files",
         "strict-type-allowlist.txt",
-        "97 entries; 7 are still marked `remove:`",
+        "96 entries; 6 are still marked `remove:`",
         "`src/allocator/arena.rs` is 4,613 lines",
         "`src/allocator/page.rs` is 3,442",
         "`src/allocator/arena/debug.rs`",

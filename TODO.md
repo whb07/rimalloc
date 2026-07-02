@@ -16,9 +16,9 @@ Review evidence:
   `src/types/freelist_wrappers/tests.rs` is 119 lines,
   `src/types/callbacks/tests.rs` is 135 lines, and
   `src/types/layout/tests.rs` is 139 lines.
-- `strict-type-allowlist.txt` has 97 entries; 7 are still marked `remove:`.
+- `strict-type-allowlist.txt` has 96 entries; 6 are still marked `remove:`.
   The removable entries are broad `bare-domain-usize` allowances for
-  `alloc`, `aligned`, `arena`, `bitmap`, `free`, `internal`, and `page`.
+  `alloc`, `aligned`, `arena`, `bitmap`, `internal`, and `page`.
 - The largest source review units are still large:
   `src/allocator/arena.rs` is 4,613 lines,
   `src/allocator/page.rs` is 3,442 lines,
@@ -79,15 +79,20 @@ Review evidence:
 > allowance to typed wrappers or symbol-level compatibility entries, starting
 > away from the allocation/free fast path when possible.
 
-- [ ] Re-rank the seven `remove:` entries by hot-path risk and number of current
+- [x] Re-rank the seven `remove:` entries by hot-path risk and number of current
       checker hits.
-- [ ] Prefer `src/internal/mod.rs`, `src/internal/bitmap.rs`, or another
+- [x] Prefer `src/internal/mod.rs`, `src/internal/bitmap.rs`, or another
       helper-heavy file before touching `alloc`, `aligned`, `free`, or `page`.
-- [ ] Replace one broad file-level `bare-domain-usize` entry with typed domain
+- [x] Replace one broad file-level `bare-domain-usize` entry with typed domain
       wrappers or narrower symbol-level entries.
-- [ ] Lower `REMOVE_ENTRY_CAP` in `scripts/check-strict-types.py`.
-- [ ] Preserve public C/platform ABI signatures and documented raw helper
+- [x] Lower `REMOVE_ENTRY_CAP` in `scripts/check-strict-types.py`.
+- [x] Preserve public C/platform ABI signatures and documented raw helper
       boundaries.
+  - Evidence: removing the broad `bare-domain-usize` entry for
+    `src/allocator/free.rs` produced zero current strict-type checker hits, so
+    the stale removable allowance was deleted. `scripts/check-strict-types.py`
+    now caps removable entries at 6, with the remaining broad entries limited
+    to `alloc`, `aligned`, `arena`, `bitmap`, `internal`, and `page`.
 - Verify: `scripts/check-strict-types.py`, release audit, full clippy, full
   tests, and assembly capture for any changed hot path.
 
@@ -152,7 +157,7 @@ Review evidence:
 ## Suggested implementation order
 
 1. [x] Shrink the unsafe migration allowlist using small test fixtures.
-2. [ ] Reduce one broad removable strict-type entry.
+2. [x] Reduce one broad removable strict-type entry.
 3. [ ] Tighten arena diagnostic metadata access.
 4. [ ] Split one more release-audit unsafe/performance cluster.
 5. [ ] Split one page queue/count helper cluster.
@@ -160,7 +165,7 @@ Review evidence:
 ## Definition of done for this backlog
 
 - [x] The unsafe migration allowlist is below 60 entries and the cap is lowered.
-- [ ] The strict-type removable-entry count is below 7 and capped lower.
+- [x] The strict-type removable-entry count is below 7 and capped lower.
 - [ ] Arena diagnostics no longer need a broad metadata-reference allowance for
       `ArenaDebugView::prefix`.
 - [ ] Release fast-path audit modules are smaller and guarded against growing

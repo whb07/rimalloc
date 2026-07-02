@@ -15,8 +15,8 @@ or allocation fast paths.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 14 entries: 12 production and
-  2 translation files. `ALLOWLIST_ENTRY_CAP` is 14.
+- `docs/unsafe-migration-allowlist.tsv` has 13 entries: 11 production and
+  2 translation files. `ALLOWLIST_ENTRY_CAP` is 13.
 - The completed pass moved `src/platform/macos.rs`, `src/platform/mod.rs`,
   `src/internal/atomic.rs`, `src/allocator/page_map.rs`, and
   `src/types/scalar.rs` to local `SAFETY[AUDIT:*]` operation markers with
@@ -38,18 +38,24 @@ Current review evidence:
   protect paths, huge-page and NUMA syscalls, process-info writes, stderr
   output, environment lookup, random source fallbacks, pthread TLS destructor
   registration, and scheduler yield, and is off the unsafe migration allowlist.
+- The current pass moved `src/platform/os.rs` to 136
+  `SAFETY[AUDIT:os-memory-boundary]` markers for memory config, subproc stats
+  projection, page-size and alignment queries, aligned hints, guard-page
+  callbacks, commit/decommit/reset/reuse/purge/protect/free paths, aligned
+  allocation and trimming, zero-state publication, huge-page claim/free, NUMA
+  helpers, and raw OS shims, and is off the unsafe migration allowlist.
 - The smallest remaining allowlisted production files with no local markers are
-  `src/platform/os.rs` at 1,614 lines with 200 `unsafe` hits,
   `src/types/ptr.rs` at 1,617 lines with 362 `unsafe` hits,
   `src/allocator/free.rs` at 1,621 lines with 121 `unsafe` hits, and
   `src/allocator/options.rs` at 1,715 lines with 79 `unsafe` hits, and
-  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits.
+  `src/allocator/aligned.rs` at 1,766 lines with 215 `unsafe` hits, and
+  `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits.
 - The next allowlisted production files after those are
-  `src/allocator/stats.rs` at 2,021 lines with 198 `unsafe` hits,
   `src/raw/macros.rs` at 2,223 lines with 383 `unsafe` hits,
   `src/allocator/init.rs` at 2,339 lines with 333 `unsafe` hits, and
   `src/internal/bitmap.rs` at 2,358 lines with 141 `unsafe` hits, and
-  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits.
+  `src/allocator/alloc.rs` at 2,559 lines with 333 `unsafe` hits, and
+  `src/allocator/page.rs` at 2,801 lines with 196 `unsafe` hits.
 - `strict-type-allowlist.txt` has 280 entries, including 75 path-wide
   `symbol = *` entries. The largest categories are 150 raw-pointer-parameter
   entries, 105 bare-domain `usize` entries, 13 pointer/usize round-trip
@@ -62,6 +68,7 @@ Current review evidence:
   4 path-wide entries.
 - The largest unsafe audit marker clusters remain broad enough to split later:
   `SAFETY[AUDIT:page-map-boundary]` has 153 markers,
+  `SAFETY[AUDIT:os-memory-boundary]` has 136 markers,
   `SAFETY[AUDIT:internal-atomic-facade]` has 103 markers,
   `SAFETY[AUDIT:unix-primitive-backend]` has 90 markers,
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
@@ -84,8 +91,8 @@ Current review evidence:
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
 - The release audit is still split but has large review units:
-  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,416 lines,
-  `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
+  `tests/release_fast_path_audit/unsafe_performance.rs` is 2,436 lines,
+  `tests/release_fast_path_audit/release_policy.rs` is 2,146 lines,
   `tests/release_fast_path_audit.rs` is 1,899 lines, and
   `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,126 lines.
 
@@ -182,23 +189,24 @@ clippy, and full tests.
 > OS memory operations. Its unsafe operations cover global memory config,
 > page-size and alignment queries, aligned hint generation, guard pages, commit,
 > decommit, reset, reuse, purge, protect/unprotect, free, aligned allocation,
-> zeroing, huge pages, NUMA, and raw test/export shims.
+> zeroing, huge pages, NUMA, and raw test/export shims. This pass moved those
+> boundaries from a dated file allowance to local operation markers.
 
-- [ ] Add local `SAFETY[AUDIT:os-memory-boundary]` markers for memory config
+- [x] Add local `SAFETY[AUDIT:os-memory-boundary]` markers for memory config
       access, subproc stats projection, page-size/large-page/good-size queries,
       aligned-hint randomization, guard-page commit/decommit callbacks, OS
       commit/decommit/reset/reuse/purge/protect/free paths, aligned allocation
       and trimming, zero-state publication, huge-page claim/free, NUMA helpers,
       and raw public OS shims.
-- [ ] Preserve memid commit/zero/pinned semantics, over-allocation trimming,
+- [x] Preserve memid commit/zero/pinned semantics, over-allocation trimming,
       partial-free behavior, subproc stat accounting, arena commit callback
       handling, out-pointer writes, alignment/page-size invariants, huge-page
       fallback behavior, and no allocator recursion from OS memory helpers.
-- [ ] Add or extend release-audit assertions and focused tests for OS config,
+- [x] Add or extend release-audit assertions and focused tests for OS config,
       page sizes, aligned hints, guard pages, commit/decommit/reset/reuse/purge,
       aligned allocation/free, memid zeroing, huge-page/NUMA behavior, and
       marker coverage without a migration allowlist entry.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/platform/os.rs`
+- [x] Add matching unsafe audit/evidence entries, remove `src/platform/os.rs`
       from the unsafe migration allowlist, regenerate unsafe inventory, and
       lower the cap.
 
@@ -242,7 +250,7 @@ clippy, and full tests.
 2. [x] Migrate `src/allocator/thread_heap.rs` off the unsafe migration
        allowlist.
 3. [x] Migrate `src/platform/unix.rs` off the unsafe migration allowlist.
-4. [ ] Migrate `src/platform/os.rs` off the unsafe migration allowlist.
+4. [x] Migrate `src/platform/os.rs` off the unsafe migration allowlist.
 5. [ ] Migrate `src/types/ptr.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog

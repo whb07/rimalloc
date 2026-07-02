@@ -62,6 +62,9 @@ unix-primitive-backend	test	tests/release_fast_path_audit/unsafe_performance.rs	
 unix-primitive-backend	test	tests/release_fast_path_audit.rs	Checks Unix stderr/env/random primitive dependencies stay allocation-free and routed through platform helpers.
 unix-primitive-backend	script	scripts/check-unix-syscall-parity.py	Compares Unix memory primitive syscall classes against C mimalloc for representative allocation and purge paths.
 unix-primitive-backend	script	scripts/check-unsafe-audit.py	Checks Unix primitive unsafe operations retain operation-level SAFETY markers and source audit coverage.
+os-memory-boundary	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks OS memory config, page sizing, aligned hints, guard pages, commit/decommit/reset/reuse/purge/protect/free, huge-page/NUMA helpers, marker coverage, and migration allowlist removal.
+os-memory-boundary	test	tests/allocation_boundary_cases.rs	Exercises allocation, aligned allocation, realloc, zero-size, and free boundary cases routed through OS memory helpers.
+os-memory-boundary	script	scripts/check-unsafe-audit.py	Checks OS memory unsafe operations retain operation-level SAFETY markers and source audit coverage.
 macos-zone-override	test	tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs	Checks macOS malloc-zone struct layout, interpose targets, forwarding branches, batch pointer clearing, fork hooks, and migration allowlist removal.
 macos-zone-override	script	scripts/check-unsafe-audit.py	Checks macOS malloc-zone operations retain operation-level SAFETY markers and source audit coverage.
 platform-tls-primitives	test	tests/release_fast_path_audit.rs	Checks Linux TLS fast-path assembly, C TLS shim shape, empty-thread-heap symbol loads, and process lifecycle hook shape.

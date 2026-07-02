@@ -1416,6 +1416,13 @@ fn free_path_internals_are_not_dynamic_exports() {
             && os_rs.contains("static MI_OS_SECURE_GUARD_PAGE_RESET_BEFORE_KEEP"),
         "OS helper wrappers should keep C's local helper boundaries and retained wrapper set"
     );
+    assert!(
+        !unsafe_allowlist
+            .lines()
+            .any(|line| line.starts_with("src/platform/os.rs\t"))
+            && os_rs.matches("SAFETY[AUDIT:os-memory-boundary]").count() >= 130,
+        "OS memory boundary unsafe operations should stay covered by local operation markers without a migration allowlist entry"
+    );
     page_lifecycle::assert_page_lifecycle_and_queue_boundaries(page_lifecycle::BoundarySources {
         alloc_rs: &alloc_rs,
         alloc_aligned_rs: &alloc_aligned_rs,

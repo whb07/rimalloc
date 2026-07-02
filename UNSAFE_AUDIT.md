@@ -262,6 +262,14 @@ Operation IDs:
   and NUMA syscalls, process-info writes, stderr writes, environment lookup,
   entropy fallbacks, pthread destructor keys, and scheduler yield while keeping
   primitive helpers allocation-free and C ABI compatible.
+- `SAFETY[AUDIT:os-memory-boundary]`: `src/platform/os.rs` owns the typed OS
+  memory boundary above the primitive backends. Unsafe operations are limited
+  to memory-config reads and writes, sub-process stats projection, page-size
+  and alignment queries, aligned hint generation, guard-page callbacks,
+  commit/decommit/reset/reuse/purge/protect/free paths, aligned allocation and
+  trimming, zero-state publication, huge-page claim/free, NUMA helpers, and raw
+  OS shims while preserving memid commit/zero/pinned semantics and avoiding
+  allocator recursion.
 - `SAFETY[AUDIT:macos-zone-override]`: `src/platform/macos.rs` owns the
   source-present macOS malloc-zone override boundary. Unsafe operations are
   limited to Darwin malloc-zone callback signatures and imports, mutable

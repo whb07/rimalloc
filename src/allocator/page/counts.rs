@@ -1,6 +1,6 @@
 use core::mem::size_of;
 
-use crate::core_types::PageQueuePtr;
+use crate::core_types::{PagePtr, PageQueuePtr};
 use crate::types::{mi_page_queue_t, mi_page_t};
 
 use super::MI_LARGE_MAX_OBJ_SIZE;
@@ -12,6 +12,15 @@ pub(super) unsafe fn page_queue_ptr(pq: *const mi_page_queue_t) -> PageQueuePtr 
     crate::internal::mi_assert_internal!(!pq.is_null());
     // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
     unsafe { PageQueuePtr::new_unchecked(pq.cast_mut()) }
+}
+
+/// # Safety
+/// `page` must be non-null and point to valid page metadata.
+#[inline(always)]
+unsafe fn page_ptr(page: *const mi_page_t) -> PagePtr {
+    crate::internal::mi_assert_internal!(!page.is_null());
+    // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
+    unsafe { PagePtr::new_unchecked(page.cast_mut()) }
 }
 
 /// # Safety
@@ -31,7 +40,6 @@ pub(super) unsafe fn mi_page_queue_block_size_raw(pq: *const mi_page_queue_t) ->
 /// `pq` must point to a valid `mi_page_queue_t`.
 // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
 pub unsafe extern "C" fn mi_page_queue_is_huge(pq: *const mi_page_queue_t) -> bool {
-    // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
     unsafe { mi_page_queue_block_size_raw(pq) == (MI_LARGE_MAX_OBJ_SIZE + size_of::<usize>()) }
 }
 
@@ -39,7 +47,6 @@ pub unsafe extern "C" fn mi_page_queue_is_huge(pq: *const mi_page_queue_t) -> bo
 /// `pq` must point to a valid `mi_page_queue_t`.
 // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
 pub unsafe extern "C" fn mi_page_queue_is_full(pq: *const mi_page_queue_t) -> bool {
-    // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
     unsafe {
         mi_page_queue_block_size_raw(pq) == (MI_LARGE_MAX_OBJ_SIZE + (2 * size_of::<usize>()))
     }
@@ -49,7 +56,6 @@ pub unsafe extern "C" fn mi_page_queue_is_full(pq: *const mi_page_queue_t) -> bo
 /// `pq` must point to a valid `mi_page_queue_t`.
 // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
 pub unsafe extern "C" fn mi_page_queue_is_special(pq: *const mi_page_queue_t) -> bool {
-    // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
     unsafe { mi_page_queue_block_size_raw(pq) > MI_LARGE_MAX_OBJ_SIZE }
 }
 
@@ -57,7 +63,6 @@ pub unsafe extern "C" fn mi_page_queue_is_special(pq: *const mi_page_queue_t) ->
 /// `pq` must point to a valid `mi_page_queue_t`.
 // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
 pub unsafe extern "C" fn mi_page_queue_count(pq: *const mi_page_queue_t) -> usize {
-    // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
     unsafe { mi_page_queue_count_typed(pq).get() }
 }
 
@@ -122,7 +127,7 @@ pub(crate) unsafe fn mi_page_used_count(
     page: *const mi_page_t,
 ) -> crate::core_types::UsedBlockCount {
     // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
-    unsafe { crate::core_types::UsedBlockCount::new((*page).used) }
+    unsafe { page_ptr(page).used() }
 }
 
 /// # Safety
@@ -133,9 +138,7 @@ pub(crate) unsafe fn mi_page_set_used_count(
     used: crate::core_types::UsedBlockCount,
 ) {
     // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
-    unsafe {
-        (*page).used = used.get();
-    }
+    unsafe { page_ptr(page).set_used(used) };
 }
 
 /// # Safety
@@ -188,7 +191,7 @@ pub(crate) unsafe fn mi_page_reserved_count(
     page: *const mi_page_t,
 ) -> crate::core_types::ReservedBlockCount {
     // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
-    unsafe { crate::core_types::ReservedBlockCount::new((*page).reserved) }
+    unsafe { page_ptr(page).reserved() }
 }
 
 /// # Safety
@@ -199,9 +202,7 @@ pub(crate) unsafe fn mi_page_set_reserved_count(
     reserved: crate::core_types::ReservedBlockCount,
 ) {
     // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
-    unsafe {
-        (*page).reserved = reserved.get();
-    }
+    unsafe { page_ptr(page).set_reserved(reserved) };
 }
 
 /// # Safety
@@ -211,16 +212,7 @@ pub(crate) unsafe fn mi_page_capacity_count(
     page: *const mi_page_t,
 ) -> crate::core_types::PageCapacity {
     // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
-    unsafe {
-        let used = mi_page_used_count(page);
-        let reserved = mi_page_reserved_count(page);
-        let capacity = (*page).capacity;
-        crate::internal::mi_assert_internal!(used.get() <= capacity);
-        crate::internal::mi_assert_internal!(capacity <= reserved.get());
-        // SAFETY: asserted above; release keeps the same raw read shape.
-        crate::core_types::PageCapacity::new(used, capacity, reserved)
-            .unwrap_or_else(|| crate::core_types::PageCapacity::new_unchecked(capacity))
-    }
+    unsafe { page_ptr(page).capacity() }
 }
 
 /// # Safety
@@ -231,9 +223,7 @@ pub(crate) unsafe fn mi_page_set_capacity_count(
     capacity: crate::core_types::PageCapacity,
 ) {
     // SAFETY[AUDIT:page-count-accessors]: Page queue/count helpers read and write allocator-owned page and queue metadata through typed counters.
-    unsafe {
-        (*page).capacity = capacity.get();
-    }
+    unsafe { page_ptr(page).set_capacity(capacity) };
 }
 
 /// # Safety
@@ -255,7 +245,7 @@ pub(super) unsafe fn mi_page_add_capacity_count(
             .unwrap_or_else(|| {
                 crate::internal::mi_assert_internal!(false);
                 crate::core_types::PageCapacity::new_unchecked(
-                    (*page).capacity.wrapping_add(extend),
+                    mi_page_capacity_count(page).get().wrapping_add(extend),
                 )
             });
         mi_page_set_capacity_count(page, capacity);

@@ -26,9 +26,9 @@ Current review evidence:
   `src/allocator/init.rs` is 2,339 lines,
   `src/raw/macros.rs` is 2,223 lines, and
   `src/platform/windows.rs` is 2,191 lines.
-- `src/allocator/page/counts.rs` is 264 lines and now owns 25
+- `src/allocator/page/counts.rs` is 254 lines and now owns 22
   `SAFETY[AUDIT:page-count-accessors]` markers. The split improved module
-  shape, but the repeated marker cluster is still noisy.
+  shape, and page field reads now route through `PagePtr` accessors.
 - `src/allocator/arena/debug.rs` is 620 lines and still owns 34
   `SAFETY[AUDIT:arena-debug-render]` markers around diagnostic metadata reads.
 - The release audit is split, but its largest units remain close to the guard:
@@ -74,13 +74,19 @@ Verify: `scripts/check-unsafe-audit.py`,
 > proof at small helpers or typed views without changing the caller-facing inline
 > shape.
 
-- [ ] Group the count accessors by shared raw field invariant.
-- [ ] Introduce narrow safe helpers or typed local views where they reduce
+- [x] Group the count accessors by shared raw field invariant.
+- [x] Introduce narrow safe helpers or typed local views where they reduce
       repeated unsafe blocks without adding allocation or dynamic dispatch.
-- [ ] Keep current `#[inline]` behavior for hot count accessors.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, and
+- [x] Keep current `#[inline]` behavior for hot count accessors.
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, and
       `docs/unsafe-inventory.md` if marker IDs or counts change.
-- [ ] Preserve the existing `crate::page` re-export surface.
+- [x] Preserve the existing `crate::page` re-export surface.
+  - Evidence: page count helpers now construct `PagePtr` once at the local
+    boundary and use typed `used`, `reserved`, `capacity`, `set_used`,
+    `set_reserved`, and `set_capacity` accessors instead of open-coded
+    `(*page).used`, `(*page).reserved`, and `(*page).capacity` reads/writes.
+    The marker count in `src/allocator/page/counts.rs` dropped from 25 to 22,
+    and the public `crate::page` helper names stayed unchanged.
 
 Verify: focused page tests, `scripts/check-unsafe-audit.py`,
 `scripts/check-unsafe-audit-evidence.py`,
@@ -162,7 +168,7 @@ clippy, and full tests.
 ## Definition of done for this backlog
 
 - [x] The unsafe migration allowlist is below 58 entries and the cap is lowered.
-- [ ] The page count accessor marker cluster is smaller or justified by a
+- [x] The page count accessor marker cluster is smaller or justified by a
       narrower helper proof.
 - [ ] The strict-type removable-entry count is below 6 and capped lower.
 - [ ] The largest release-audit child module has more guard margin.

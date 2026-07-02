@@ -178,11 +178,27 @@ impl PagePtr {
     }
 
     /// # Safety
+    /// The page pointer must refer to writable page metadata.
+    #[inline(always)]
+    pub(crate) unsafe fn set_capacity(self, capacity: PageCapacity) {
+        let raw = self.as_ptr();
+        unsafe { ptr::write(ptr::addr_of_mut!((*raw).capacity), capacity.get()) };
+    }
+
+    /// # Safety
     /// The page pointer must refer to initialized page metadata.
     #[inline(always)]
     pub(crate) unsafe fn reserved(self) -> ReservedBlockCount {
         let raw = self.as_ptr();
         ReservedBlockCount::new(unsafe { ptr::read(ptr::addr_of!((*raw).reserved)) })
+    }
+
+    /// # Safety
+    /// The page pointer must refer to writable page metadata.
+    #[inline(always)]
+    pub(crate) unsafe fn set_reserved(self, reserved: ReservedBlockCount) {
+        let raw = self.as_ptr();
+        unsafe { ptr::write(ptr::addr_of_mut!((*raw).reserved), reserved.get()) };
     }
 
     /// # Safety

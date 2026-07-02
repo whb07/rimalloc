@@ -25,9 +25,9 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5966 |
-| `unsafe_blocks` | 3553 |
-| `unsafe_fns` | 1990 |
+| `unsafe_mentions` | 5972 |
+| `unsafe_blocks` | 3556 |
+| `unsafe_fns` | 1993 |
 | `unsafe_extern_blocks` | 44 |
 | `unsafe_impls` | 16 |
 | `unsafe_attrs` | 231 |
@@ -47,7 +47,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/heap.rs` | 93 | 46 | 34 | 0 | 0 | 11 | 0 |
 | `src/allocator/init.rs` | 333 | 230 | 79 | 3 | 0 | 18 | 3 |
 | `src/allocator/options.rs` | 79 | 46 | 9 | 4 | 3 | 15 | 0 |
-| `src/allocator/page/counts.rs` | 42 | 21 | 21 | 0 | 0 | 0 | 0 |
+| `src/allocator/page/counts.rs` | 44 | 22 | 22 | 0 | 0 | 0 | 0 |
 | `src/allocator/page/deferred.rs` | 15 | 7 | 7 | 0 | 0 | 1 | 0 |
 | `src/allocator/page.rs` | 227 | 107 | 119 | 0 | 0 | 1 | 0 |
 | `src/allocator/page_map.rs` | 184 | 144 | 38 | 0 | 0 | 2 | 0 |
@@ -107,7 +107,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/types/page_states/tests.rs` | 9 | 9 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/page_states.rs` | 60 | 40 | 20 | 0 | 0 | 0 | 0 |
 | `src/types/ptr/tests.rs` | 191 | 191 | 0 | 0 | 0 | 0 | 0 |
-| `src/types/ptr.rs` | 358 | 141 | 217 | 0 | 0 | 0 | 0 |
+| `src/types/ptr.rs` | 362 | 143 | 219 | 0 | 0 | 0 | 0 |
 | `src/types/scalar/tests.rs` | 31 | 31 | 0 | 0 | 0 | 0 | 0 |
 | `src/types/scalar.rs` | 33 | 17 | 16 | 0 | 0 | 0 | 0 |
 | `src/types/validation/tests.rs` | 3 | 3 | 0 | 0 | 0 | 0 | 0 |

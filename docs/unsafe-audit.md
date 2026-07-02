@@ -50,10 +50,11 @@ file:
   `SAFETY[AUDIT:typed-tld-pointer-test-fixtures]`,
   `SAFETY[AUDIT:typed-pointer-address-test-fixtures]`,
   `SAFETY[AUDIT:typed-arena-subproc-pointer-test-fixtures]`,
+  `SAFETY[AUDIT:typed-arena-subproc-nullable-pointer-test-fixtures]`,
   `SAFETY[AUDIT:typed-page-queue-pointer-test-fixtures]`, and
   `SAFETY[AUDIT:typed-provenance-pointer-test-fixtures]` cover
   `src/types/ptr/tests.rs` stack-local metadata, encoded-link, heap,
-  thread-heap, TLD, raw field-address, accessor, queue, and
+  thread-heap, TLD, raw field-address, accessor, nullable accessor, queue, and
   exposed-address/provenance fixtures independently.
 - `SAFETY[AUDIT:typed-main-heap-test-fixtures]`,
   `SAFETY[AUDIT:typed-owned-heap-test-fixtures]`,
@@ -184,10 +185,11 @@ file:
 - `SAFETY[AUDIT:init-subproc-stats-count-boundary]`: subproc stats header,
   stats merge, thread sequence, and thread/heap counter updates in
   `src/allocator/init.rs`.
-- `SAFETY[AUDIT:init-process-boundary]`: process initialization and teardown in
-  `src/allocator/init.rs`, including one-time state, preloading gates,
-  allocator init/done callbacks, post-init option activation, and teardown
-  ordering.
+- `SAFETY[AUDIT:init-process-boundary]` and
+  `SAFETY[AUDIT:init-process-validation-boundary]`: process initialization and
+  teardown in `src/allocator/init.rs`, including one-time state, preloading
+  gates, allocator init/done callbacks, post-init option activation,
+  validation, and teardown ordering.
 - `SAFETY[AUDIT:init-thread-identity-boundary]`,
   `SAFETY[AUDIT:init-thread-done-entry-boundary]`,
   `SAFETY[AUDIT:init-thread-done-dispatch-boundary]`,
@@ -198,14 +200,17 @@ file:
   init, done, cleanup, and stat-update boundaries in `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-thread-heap-empty-sentinel-boundary]`,
   `SAFETY[AUDIT:init-thread-heap-main-tls-boundary]`,
+  `SAFETY[AUDIT:init-thread-heap-main-safe-boundary]`,
   `SAFETY[AUDIT:init-thread-heap-main-static-boundary]`,
   `SAFETY[AUDIT:init-thread-default-heap-association-boundary]`,
+  `SAFETY[AUDIT:init-thread-default-heap-publication-boundary]`,
   `SAFETY[AUDIT:init-thread-cached-heap-association-boundary]`, and
   `SAFETY[AUDIT:init-thread-heap-safe-access-boundary]`: focused default,
   cached, empty, safe-access, and process-main thread-heap TLS association
   boundaries in `src/allocator/init.rs`.
-- `SAFETY[AUDIT:init-platform-tls-boundary]`: Windows TLS slots, pthread keys,
-  and platform TLS setup/teardown in `src/allocator/init.rs`.
+- `SAFETY[AUDIT:init-platform-tls-boundary]` and
+  `SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]`: Windows TLS slots,
+  pthread keys, and platform TLS setup/teardown in `src/allocator/init.rs`.
 - `SAFETY[AUDIT:init-tld-lifecycle-boundary]`: TLD allocation/free, main/non-main
   TLD setup, threadpool flag mutation, and TLD metadata counters in
   `src/allocator/init.rs`.
@@ -343,7 +348,8 @@ file:
   `SAFETY[AUDIT:arena-slice-allocation-dispatch-boundary]`: arena slice commit,
   bitmap mutation, commit accounting, memid publication, and allocation
   search/dispatch in `src/allocator/arena.rs`.
-- `SAFETY[AUDIT:arena-initialization-boundary]`: arena metadata
+- `SAFETY[AUDIT:arena-initialization-boundary]` and
+  `SAFETY[AUDIT:arena-initialization-page-table-boundary]`: arena metadata
   initialization, guard-page setup, bitmap layout, page metadata table setup,
   and registry insertion in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-reserve-growth-boundary]`: reserve growth, retry
@@ -385,9 +391,10 @@ file:
 - `SAFETY[AUDIT:arena-page-free-release-boundary]`: arena page free page-map,
   bitmap, separated metadata, and backing-slice release in
   `src/allocator/arena.rs`.
-- `SAFETY[AUDIT:arena-page-abandon-boundary]`: arena page abandon shims,
-  abandoned bitmap publication, owner-id updates, heap-list updates, and stat
-  accounting in `src/allocator/arena.rs`.
+- `SAFETY[AUDIT:arena-page-abandon-boundary]` and
+  `SAFETY[AUDIT:arena-page-abandon-os-list-boundary]`: arena page abandon
+  shims, abandoned bitmap publication, owner-id updates, heap-list updates, OS
+  abandoned-list linking, and stat accounting in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-reabandon-boundary]`: reabandon shims and
   abandoned-page republication in `src/allocator/arena.rs`.
 - `SAFETY[AUDIT:arena-page-unabandon-entry-boundary]`: unabandon entry
@@ -511,15 +518,17 @@ file:
 - `SAFETY[AUDIT:os-memory-public-export-boundary]` and
   `SAFETY[AUDIT:os-memory-retained-wrapper-boundary]`: public OS allocation
   wrappers and retained C ABI wrapper statics in `src/platform/os.rs`.
-- `SAFETY[AUDIT:macos-zone-allocation-boundary]` and
+- `SAFETY[AUDIT:macos-zone-allocation-boundary]`,
+  `SAFETY[AUDIT:macos-zone-size-query-boundary]`, and
   `SAFETY[AUDIT:macos-zone-foreign-forwarding-boundary]`: mimalloc zone
-  allocation trampolines and foreign-zone callback forwarding in
+  allocation trampolines, size queries, and foreign-zone callback forwarding in
   `src/platform/macos.rs`.
 - `SAFETY[AUDIT:internal-atomic-raw-view-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-load-store-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-fetch-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-integer-fetch-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-cas-boundary]`,
+- `SAFETY[AUDIT:internal-atomic-i64-cas-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-exchange-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-max-boundary]`,
 - `SAFETY[AUDIT:internal-atomic-volatile-delta-boundary]`,
@@ -545,10 +554,12 @@ file:
   allocation semantics are designed.
 - `SAFETY[AUDIT:panic-boundary]`: no-std panic/personality shims and aborting
   assertion paths. These paths must not allocate or unwind.
-- `SAFETY[AUDIT:safe-heap]`: safe heap wrappers. Owned heaps delete exactly
-  once on drop, main-heap handles never delete the main heap, and heap-tied
-  allocations carry the heap borrow lifetime so safe code cannot delete a heap
-  while its safe allocations are live.
+- `SAFETY[AUDIT:safe-heap]` and
+  `SAFETY[AUDIT:safe-heap-test-fixtures]`: safe heap wrappers and fixture-only
+  allocation initialization. Owned heaps delete exactly once on drop, main-heap
+  handles never delete the main heap, and heap-tied allocations carry the heap
+  borrow lifetime so safe code cannot delete a heap while its safe allocations
+  are live.
 - `SAFETY[AUDIT:raw-auto-trait]`: retained raw C-layout auto-trait impls.
   These are limited to `Sync` for immutable sentinel static types required by
   translated C parity. Live allocator state remains raw-pointer state and must

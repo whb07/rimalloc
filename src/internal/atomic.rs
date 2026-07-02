@@ -875,17 +875,17 @@ pub unsafe extern "C" fn mi_atomic_addi64_acq_rel(p: *mut i64, i: i64) {
 ///
 /// `p` and `exp` must point to valid `i64` storage that is only accessed
 /// atomically for this compare-exchange operation.
-// SAFETY[AUDIT:internal-atomic-cas-boundary]: C ABI i64 strong CAS reads and updates
+// SAFETY[AUDIT:internal-atomic-i64-cas-boundary]: C ABI i64 strong CAS reads and updates
 // the caller-provided expected slot according to the C atomic contract.
 pub unsafe extern "C" fn mi_atomic_casi64_strong_acq_rel(
     p: *mut i64,
     exp: *mut i64,
     des: i64,
 ) -> bool {
-    // SAFETY[AUDIT:internal-atomic-cas-boundary]: caller-provided expected storage is
+    // SAFETY[AUDIT:internal-atomic-i64-cas-boundary]: caller-provided expected storage is
     // readable for the current comparison value.
     let current = unsafe { *exp };
-    // SAFETY[AUDIT:internal-atomic-cas-boundary]: caller-proven raw storage is viewed
+    // SAFETY[AUDIT:internal-atomic-i64-cas-boundary]: caller-proven raw storage is viewed
     // as `AtomicI64` for one compare-exchange operation.
     match unsafe { atomic_i64(p) }.compare_exchange(
         current,
@@ -895,7 +895,7 @@ pub unsafe extern "C" fn mi_atomic_casi64_strong_acq_rel(
     ) {
         Ok(_) => true,
         Err(actual) => {
-            // SAFETY[AUDIT:internal-atomic-cas-boundary]: failed CAS writes the actual
+            // SAFETY[AUDIT:internal-atomic-i64-cas-boundary]: failed CAS writes the actual
             // value back to the caller-provided expected slot.
             unsafe { *exp = actual };
             false

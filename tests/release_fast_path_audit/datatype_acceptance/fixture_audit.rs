@@ -46,7 +46,13 @@ pub(super) fn assert_typed_fixture_audit_splits(audit_sources: &DatatypeAcceptan
             "src/types/ptr/tests.rs",
             ptr_tests_rs,
             "typed-arena-subproc-pointer-test-fixtures",
-            17,
+            15,
+        ),
+        (
+            "src/types/ptr/tests.rs",
+            ptr_tests_rs,
+            "typed-arena-subproc-nullable-pointer-test-fixtures",
+            2,
         ),
         (
             "src/types/ptr/tests.rs",

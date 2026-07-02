@@ -476,7 +476,7 @@ pub unsafe extern "C" fn mi_uzalloc_aligned(
 /// # Safety
 /// `alignment` must be valid for aligned allocation. Returned memory must be released through this
 /// allocator.
-// SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+// SAFETY[AUDIT:aligned-global-calloc-export-boundary]: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_calloc_aligned_at(
     count: usize,
@@ -484,21 +484,21 @@ pub unsafe extern "C" fn mi_calloc_aligned_at(
     alignment: usize,
     offset: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+    // SAFETY[AUDIT:aligned-global-calloc-export-boundary]: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
     unsafe { mi_theap_calloc_aligned_at(_mi_theap_default(), count, size, alignment, offset) }
 }
 
 /// # Safety
 /// `alignment` must be valid for aligned allocation. Returned memory must be released through this
 /// allocator.
-// SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+// SAFETY[AUDIT:aligned-global-calloc-export-boundary]: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_calloc_aligned(
     count: usize,
     size: usize,
     alignment: usize,
 ) -> *mut c_void {
-    // SAFETY[AUDIT:aligned-global-allocation-export-boundary]: global aligned allocation exports forward raw C ABI inputs into checked aligned requests.
+    // SAFETY[AUDIT:aligned-global-calloc-export-boundary]: global aligned calloc exports forward count/size/alignment inputs into checked calloc requests.
     unsafe { mi_theap_calloc_aligned(_mi_theap_default(), count, size, alignment) }
 }
 

@@ -2,7 +2,9 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
     let marker_total = [
         "SAFETY[AUDIT:init-main-subproc-lifecycle-boundary]",
         "SAFETY[AUDIT:init-platform-tls-boundary]",
+        "SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]",
         "SAFETY[AUDIT:init-process-boundary]",
+        "SAFETY[AUDIT:init-process-validation-boundary]",
         "SAFETY[AUDIT:init-subproc-prefix-boundary]",
         "SAFETY[AUDIT:init-subproc-main-heap-load-boundary]",
         "SAFETY[AUDIT:init-subproc-main-heap-export-boundary]",
@@ -26,8 +28,10 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
         "SAFETY[AUDIT:init-thread-init-entry-boundary]",
         "SAFETY[AUDIT:init-thread-heap-empty-sentinel-boundary]",
         "SAFETY[AUDIT:init-thread-heap-main-tls-boundary]",
+        "SAFETY[AUDIT:init-thread-heap-main-safe-boundary]",
         "SAFETY[AUDIT:init-thread-heap-main-static-boundary]",
         "SAFETY[AUDIT:init-thread-default-heap-association-boundary]",
+        "SAFETY[AUDIT:init-thread-default-heap-publication-boundary]",
         "SAFETY[AUDIT:init-thread-cached-heap-association-boundary]",
         "SAFETY[AUDIT:init-thread-heap-safe-access-boundary]",
         "SAFETY[AUDIT:init-options-guarded-boundary]",
@@ -40,7 +44,8 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
     .sum::<usize>();
     let split_marker_minimums = [
         ("init-main-subproc-lifecycle-boundary", 6),
-        ("init-platform-tls-boundary", 17),
+        ("init-platform-tls-boundary", 7),
+        ("init-platform-tls-windows-slot-boundary", 10),
         ("init-subproc-prefix-boundary", 1),
         ("init-subproc-main-heap-load-boundary", 5),
         ("init-subproc-main-heap-export-boundary", 8),
@@ -63,9 +68,11 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
         ("init-thread-done-tls-reset-boundary", 5),
         ("init-thread-init-entry-boundary", 6),
         ("init-thread-heap-empty-sentinel-boundary", 3),
-        ("init-thread-heap-main-tls-boundary", 17),
+        ("init-thread-heap-main-tls-boundary", 9),
+        ("init-thread-heap-main-safe-boundary", 8),
         ("init-thread-heap-main-static-boundary", 1),
-        ("init-thread-default-heap-association-boundary", 17),
+        ("init-thread-default-heap-association-boundary", 14),
+        ("init-thread-default-heap-publication-boundary", 3),
         ("init-thread-cached-heap-association-boundary", 11),
         ("init-thread-heap-safe-access-boundary", 7),
         ("init-tld-lifecycle-boundary", 7),
@@ -108,7 +115,11 @@ pub(super) fn assert_init_lifecycle_markers(init_rs: &str, prim_rs: &str, unsafe
         init_rs
             .matches("SAFETY[AUDIT:init-process-boundary]")
             .count()
-            >= 17
+            >= 16
+            && init_rs
+                .matches("SAFETY[AUDIT:init-process-validation-boundary]")
+                .count()
+                >= 1
             && init_rs.contains("pub unsafe extern \"C\" fn mi_process_init")
             && init_rs.contains("pub unsafe extern \"C\" fn mi_process_done")
             && init_rs.contains("pub(crate) unsafe extern \"C\" fn _mi_auto_process_init")

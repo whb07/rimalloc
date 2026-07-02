@@ -442,14 +442,14 @@ fn heap_zeroed_allocation_and_resize_preserve_ownership() {
 
     let mut allocation = zeroed.into_allocation();
     for idx in 0..allocation.len() {
-        // SAFETY[AUDIT:safe-heap]: `idx` stays within the live heap
+        // SAFETY[AUDIT:safe-heap-test-fixtures]: `idx` stays within the live heap
         // allocation and the test owns unique mutable access.
         unsafe { allocation.as_mut_ptr().add(idx).write(idx as u8) };
     }
     let grown = allocation
         .resize(Layout::from_size_align(32, 8).expect("layout"))
         .expect("grow");
-    // SAFETY[AUDIT:safe-heap]: the grown heap allocation is live and the
+    // SAFETY[AUDIT:safe-heap-test-fixtures]: the grown heap allocation is live and the
     // prefix length is the initialized prefix written above.
     let bytes = unsafe { core::slice::from_raw_parts(grown.as_ptr(), 16) };
     assert_eq!(bytes, (0u8..16).collect::<Vec<_>>().as_slice());
@@ -561,7 +561,7 @@ fn maybe_uninit_heap_views_initialize_without_raw_pointer_loop() {
         slot.write((idx + 10) as u8);
     }
 
-    // SAFETY[AUDIT:safe-heap]: the loop above initializes every byte in
+    // SAFETY[AUDIT:safe-heap-test-fixtures]: the loop above initializes every byte in
     // the heap allocation before the initialized transition.
     let initialized = unsafe { allocation.assume_initialized() };
     assert_eq!(initialized.as_bytes(), &[10, 11, 12, 13, 14, 15]);
@@ -604,7 +604,7 @@ fn main_heap_allocations_outlive_temporary_handle() {
     }
 
     allocation.as_uninit_slice_mut()[0].write(42);
-    // SAFETY[AUDIT:safe-heap]: the single live byte was initialized before
+    // SAFETY[AUDIT:safe-heap-test-fixtures]: the single live byte was initialized before
     // the initialized transition.
     let initialized = unsafe { allocation.assume_initialized() };
     assert_eq!(initialized.as_bytes()[0], 42);

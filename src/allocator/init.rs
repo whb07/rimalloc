@@ -1468,7 +1468,7 @@ unsafe extern "C" {
     fn pthread_key_delete(key: mi_thread_local_t) -> i32;
 }
 
-// SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+// SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
 #[cfg(windows)]
 unsafe extern "system" {
     fn TlsAlloc() -> u32;
@@ -1482,12 +1482,12 @@ unsafe fn mi_win_tls_slot_alloc(
     extended: *mut usize,
     raw_index: *mut u32,
 ) -> bool {
-    // SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+    // SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
     let index = unsafe { TlsAlloc() };
-    // SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+    // SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
     unsafe { raw_index.write(index) };
     if index == TLS_OUT_OF_INDEXES {
-        // SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+        // SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
         unsafe {
             extended.write(0);
             slot.write(0);
@@ -1497,7 +1497,7 @@ unsafe fn mi_win_tls_slot_alloc(
         .ok()
         .is_some_and(|i| i < MI_TLS_DIRECT_SLOTS)
     {
-        // SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+        // SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
         unsafe {
             extended.write(0);
             slot.write(index as usize + MI_TLS_DIRECT_FIRST);
@@ -1507,14 +1507,14 @@ unsafe fn mi_win_tls_slot_alloc(
         .ok()
         .is_some_and(|i| i < MI_TLS_DIRECT_SLOTS + MI_TLS_EXPANSION_SLOTS - 1)
     {
-        // SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+        // SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
         unsafe {
             extended.write(index as usize - MI_TLS_DIRECT_SLOTS);
             slot.write(MI_TLS_EXPANSION_SLOT);
         }
         true
     } else {
-        // SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+        // SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
         unsafe {
             _mi_error_message_fmt(
                 Errno::EFAULT,
@@ -1531,10 +1531,10 @@ unsafe fn mi_win_tls_slot_alloc(
 
 #[cfg(windows)]
 unsafe fn mi_win_tls_slot_free(raw_index: *mut u32) {
-    // SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+    // SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
     let index = unsafe { raw_index.read() };
     if index != TLS_OUT_OF_INDEXES {
-        // SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+        // SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
         unsafe {
             let _ = TlsFree(index);
             raw_index.write(TLS_OUT_OF_INDEXES);
@@ -1552,7 +1552,7 @@ unsafe fn mi_win_tls_slot_set(slot: usize, extended_slot: usize, value: *mut c_v
         crate::prim::mi_prim_tls_slot_set(slot, value);
     } else {
         crate::internal::mi_assert_internal!(extended_slot < MI_TLS_EXPANSION_SLOTS);
-        // SAFETY[AUDIT:init-platform-tls-boundary]: platform TLS slot/key setup and teardown use process-global TLS metadata under one-time init.
+        // SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]: Windows TLS slot setup and teardown use process-global TLS metadata under one-time init.
         let _ = unsafe { TlsSetValue((extended_slot + MI_TLS_DIRECT_SLOTS) as u32, value) };
     }
 }
@@ -1793,7 +1793,7 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
             theap_raw.cast(),
         );
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_WIN32 {
-        // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
+        // SAFETY[AUDIT:init-thread-default-heap-publication-boundary]: default thread-heap publication writes the validated local heap pointer into the selected TLS backend.
         unsafe {
             mi_win_tls_slot_set(
                 _mi_theap_default_slot,
@@ -1804,7 +1804,7 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
     // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
     } else if crate::prim::MI_TLS_MODEL_DYNAMIC_PTHREADS && unsafe { _mi_theap_default_key } != 0 {
         let _ = crate::threadlocal::_mi_thread_local_set(
-            // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
+            // SAFETY[AUDIT:init-thread-default-heap-publication-boundary]: default thread-heap publication writes the validated local heap pointer into the selected TLS backend.
             unsafe { _mi_theap_default_key },
             theap_raw.cast(),
         );
@@ -1812,7 +1812,7 @@ unsafe fn _mi_theap_default_set_typed(theap: ThreadHeapLocal, theap_old: Option<
 
     // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
     if unsafe { crate::internal::mi_theap_is_initialized(theap_raw) } {
-        // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
+        // SAFETY[AUDIT:init-thread-default-heap-publication-boundary]: default thread-heap publication writes the validated local heap pointer into the selected TLS backend.
         unsafe { crate::prim::_mi_prim_thread_associate_default_theap(theap_raw) };
         // SAFETY[AUDIT:init-thread-default-heap-association-boundary]: default thread-heap association validates local ownership before TLS publication.
         if unsafe { _mi_is_heap_main(crate::internal::_mi_theap_heap(theap_raw)) } {
@@ -1941,21 +1941,21 @@ pub(crate) unsafe extern "C" fn _mi_theap_default_safe() -> *mut mi_theap_t {
 static MI_THEAP_DEFAULT_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t =
     _mi_theap_default_safe;
 
-// SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
+// SAFETY[AUDIT:init-thread-heap-main-safe-boundary]: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
 /// # Safety
 /// Returns the process main theap, ensuring the default path initialized it first.
 #[inline(never)]
 pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     let mut theap = mi_theap_main_tls_peek();
     if theap.is_null() {
-        // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
+        // SAFETY[AUDIT:init-thread-heap-main-safe-boundary]: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
         unsafe { crate::mimalloc::mi_thread_init() };
-        // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
+        // SAFETY[AUDIT:init-thread-heap-main-safe-boundary]: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
         theap = unsafe { crate::prim::_mi_theap_default() };
         crate::internal::mi_assert_internal!(!theap.is_null());
-        // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
+        // SAFETY[AUDIT:init-thread-heap-main-safe-boundary]: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
         if unsafe { crate::internal::mi_theap_is_initialized(theap) }
-            // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
+            // SAFETY[AUDIT:init-thread-heap-main-safe-boundary]: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
         {
             mi_theap_main_tls_set(ThreadHeapPtr::new(theap));
@@ -1963,15 +1963,15 @@ pub(crate) unsafe extern "C" fn _mi_theap_main_safe() -> *mut mi_theap_t {
     }
     crate::internal::mi_assert_internal!(
         !theap.is_null()
-            // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
+            // SAFETY[AUDIT:init-thread-heap-main-safe-boundary]: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
             && unsafe { crate::internal::mi_theap_is_initialized(theap) }
-            // SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
+            // SAFETY[AUDIT:init-thread-heap-main-safe-boundary]: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
             && unsafe { crate::internal::_mi_is_heap_main(crate::internal::_mi_theap_heap(theap)) }
     );
     theap
 }
 
-// SAFETY[AUDIT:init-thread-heap-main-tls-boundary]: main thread-heap TLS access publishes only typed thread-heap pointers.
+// SAFETY[AUDIT:init-thread-heap-main-safe-boundary]: main thread-heap safe accessor initializes and validates main heap TLS before returning it.
 #[used]
 static MI_THEAP_MAIN_SAFE_KEEP: unsafe extern "C" fn() -> *mut mi_theap_t = _mi_theap_main_safe;
 
@@ -2577,7 +2577,7 @@ mod tests {
     fn auto_process_init_initializes_large_page_config() {
         // SAFETY[AUDIT:init-process-boundary]: process init/teardown uses one-time state, preloading gates, and allocator lifecycle witnesses.
         unsafe { super::_mi_auto_process_init() };
-        // SAFETY[AUDIT:init-process-boundary]: process init validation uses process-global initialization witnesses before platform state checks.
+        // SAFETY[AUDIT:init-process-validation-boundary]: process init validation uses process-global initialization witnesses before platform state checks.
         assert!(unsafe { crate::os::_mi_os_canuse_large_page(1 << 30, 2 << 20) });
     }
 

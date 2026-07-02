@@ -627,7 +627,7 @@ fn subproc_ptr_field_helpers_read_and_write_subproc_fields() {
         assert_eq!(subproc.stats(), ptr::addr_of_mut!((*raw_subproc).stats));
     }
 
-    // SAFETY[AUDIT:typed-arena-subproc-pointer-test-fixtures]: clearing nullable fields
+    // SAFETY[AUDIT:typed-arena-subproc-nullable-pointer-test-fixtures]: clearing nullable fields
     // mutates only the stack-local subproc fixture.
     unsafe {
         subproc.set_arena(arena_index, None);
@@ -635,7 +635,7 @@ fn subproc_ptr_field_helpers_read_and_write_subproc_fields() {
         subproc.set_heaps(None);
     }
 
-    // SAFETY[AUDIT:typed-arena-subproc-pointer-test-fixtures]: the nullable fields were just
+    // SAFETY[AUDIT:typed-arena-subproc-nullable-pointer-test-fixtures]: the nullable fields were just
     // cleared and the subproc fixture remains live.
     unsafe {
         assert!(subproc.arena(arena_index).is_none());

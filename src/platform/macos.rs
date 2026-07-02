@@ -319,14 +319,14 @@ pub unsafe extern "C" fn mi_malloc_jumpstart(_cookie: uintptr_t) -> c_int {
 /// `zone`, when used for forwarding, must point to a valid malloc zone object.
 /// `p` must be null or an allocation pointer accepted by either mimalloc or the
 /// forwarded zone.
-// SAFETY[AUDIT:macos-zone-allocation-boundary]: zone-size preserves mimalloc ownership
+// SAFETY[AUDIT:macos-zone-size-query-boundary]: zone-size preserves mimalloc ownership
 // detection before forwarding non-mimalloc pointers to the supplied zone.
 #[inline]
 pub unsafe extern "C" fn zone_size(zone: *mut malloc_zone_t, p: *const c_void) -> usize {
-    // SAFETY[AUDIT:macos-zone-allocation-boundary]: ownership queries accept null or
+    // SAFETY[AUDIT:macos-zone-size-query-boundary]: ownership queries accept null or
     // allocator pointers and do not mutate the allocation.
     if unsafe { mi_any_heap_contains(p) } {
-        // SAFETY[AUDIT:macos-zone-allocation-boundary]: mimalloc-owned pointers are routed
+        // SAFETY[AUDIT:macos-zone-size-query-boundary]: mimalloc-owned pointers are routed
         // to mimalloc usable-size lookup.
         unsafe { crate::mimalloc::mi_usable_size(p) }
     } else if !unsafe { is_mimalloc_zone(zone) } {

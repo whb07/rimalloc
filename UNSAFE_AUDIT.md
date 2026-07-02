@@ -430,6 +430,10 @@ Operation IDs:
   process-global metadata publication, post-init option activation, stats/OS
   setup ordering, and process teardown while preserving idempotent
   initialization and no-unwind lifecycle behavior.
+- `SAFETY[AUDIT:init-process-validation-boundary]`:
+  `src/allocator/init.rs` owns process initialization validation. Unsafe
+  operations are limited to post-init main-heap witness checks and
+  process-global initialization assertions.
 - `SAFETY[AUDIT:init-thread-identity-boundary]`: `src/allocator/init.rs` owns
   current-thread identity checks used by main-thread lifecycle decisions.
 - `SAFETY[AUDIT:init-thread-done-entry-boundary]`: `src/allocator/init.rs`
@@ -456,12 +460,20 @@ Operation IDs:
 - `SAFETY[AUDIT:init-thread-heap-main-tls-boundary]`: `src/allocator/init.rs`
   owns process-main thread-heap TLS lookup and publication, including Linux
   initial-exec accessors and C TLS shim routing.
+- `SAFETY[AUDIT:init-thread-heap-main-safe-boundary]`:
+  `src/allocator/init.rs` owns safe process-main thread-heap accessors. Unsafe
+  operations are limited to validated main-heap witness lookup and static main
+  heap pointer fallback handling.
 - `SAFETY[AUDIT:init-thread-heap-main-static-boundary]`:
   `src/allocator/init.rs` owns one-time static main thread-heap metadata
   initialization.
 - `SAFETY[AUDIT:init-thread-default-heap-association-boundary]`:
   `src/allocator/init.rs` owns default thread-heap association, local ownership
   checks, TLD initialization, and cached/main TLS synchronization.
+- `SAFETY[AUDIT:init-thread-default-heap-publication-boundary]`:
+  `src/allocator/init.rs` owns default thread-heap TLS publication. Unsafe
+  operations are limited to platform TLS writes and cached/main TLS
+  synchronization after default heap association is validated.
 - `SAFETY[AUDIT:init-thread-cached-heap-association-boundary]`:
   `src/allocator/init.rs` owns cached thread-heap association and reset paths.
 - `SAFETY[AUDIT:init-thread-heap-safe-access-boundary]`:
@@ -471,6 +483,10 @@ Operation IDs:
   platform TLS slot/key setup and teardown. Unsafe operations are limited to
   one-time Windows TLS slot allocation/free, pthread key creation/deletion, and
   process-global TLS metadata mutation.
+- `SAFETY[AUDIT:init-platform-tls-windows-slot-boundary]`:
+  `src/allocator/init.rs` owns Windows TLS slot allocation, publication, and
+  cleanup. Unsafe operations are limited to one-time slot creation/free and raw
+  Win32 TLS value writes.
 - `SAFETY[AUDIT:init-tld-lifecycle-boundary]`: `src/allocator/init.rs` owns TLD
   allocation/free and per-thread TLD metadata. Unsafe operations are limited to
   typed TLD/subproc witnesses, main/non-main TLD setup, threadpool flag
@@ -708,6 +724,9 @@ Operation IDs:
   insertion. Unsafe operations are limited to reserved arena memory, typed
   slice counts, bitmap initialization, and arena header writes while preserving
   reserved-range bounds and arena alignment.
+- `SAFETY[AUDIT:arena-initialization-page-table-boundary]`:
+  `src/allocator/arena.rs` owns arena page-table bitmap and separated page
+  metadata initialization inside the reserved arena range.
 - `SAFETY[AUDIT:arena-reserve-growth-boundary]`:
   `src/allocator/arena.rs` and `src/allocator/arena/os_memory.rs` own arena
   reserve growth and retry sizing. Unsafe operations are limited to subproc
@@ -786,6 +805,9 @@ Operation IDs:
   publication. Unsafe operations are limited to page-for-abandon witnesses,
   arena/heap abandoned bitmaps, owner-id words, heap lists, and stat updates
   while preserving mapped-abandoned visibility and thread ownership release.
+- `SAFETY[AUDIT:arena-page-abandon-os-list-boundary]`:
+  `src/allocator/arena.rs` owns non-arena OS-abandoned page list linking under
+  the owning heap lock.
 - `SAFETY[AUDIT:arena-page-reabandon-boundary]`:
   `src/allocator/arena.rs` owns page reabandon. Unsafe operations are limited to
   owned-abandoned page witnesses, arena memid classification, associated
@@ -1006,6 +1028,10 @@ Operation IDs:
   `src/allocator/aligned.rs` owns global aligned allocation C ABI exports.
   Unsafe operations are limited to raw global malloc/zalloc/calloc entry points
   forwarding into checked aligned request helpers.
+- `SAFETY[AUDIT:aligned-global-calloc-export-boundary]`:
+  `src/allocator/aligned.rs` owns global aligned calloc C ABI exports. Unsafe
+  operations are limited to checked count/size/alignment forwarding into
+  thread-heap calloc-aligned dispatch.
 - `SAFETY[AUDIT:aligned-heap-allocation-export-boundary]`:
   `src/allocator/aligned.rs` owns heap aligned allocation C ABI exports.
   Unsafe operations are limited to borrowing raw heap handles, deriving
@@ -1532,6 +1558,9 @@ Operation IDs:
 - `SAFETY[AUDIT:macos-zone-allocation-boundary]`: `src/platform/macos.rs` owns
   malloc/calloc/valloc/free/realloc/memalign zone trampolines. Unsafe operations
   are limited to mimalloc ownership checks and direct mimalloc dispatch.
+- `SAFETY[AUDIT:macos-zone-size-query-boundary]`: `src/platform/macos.rs` owns
+  macOS zone size query trampolines. Unsafe operations are limited to
+  mimalloc-owned usable-size routing and foreign-zone size callback forwarding.
 - `SAFETY[AUDIT:macos-zone-foreign-forwarding-boundary]`:
   `src/platform/macos.rs` owns non-mimalloc zone callback forwarding with
   original zone pointers, allocation pointers, and requested sizes.
@@ -1601,6 +1630,11 @@ Operation IDs:
   scalar compare-exchange helpers. Unsafe operations are limited to
   caller-proven atomic storage, caller-provided expected slots, memory-order
   mapping, and writing the observed value back on failed CAS.
+- `SAFETY[AUDIT:internal-atomic-i64-cas-boundary]`:
+  `src/internal/atomic.rs` owns i64 compare-exchange helpers. Unsafe operations
+  are limited to caller-proven i64 atomic storage, caller-provided expected
+  slots, memory-order mapping, and writing the observed value back on failed
+  CAS.
 - `SAFETY[AUDIT:internal-atomic-exchange-boundary]`:
   `src/internal/atomic.rs` owns scalar exchange helpers. Unsafe operations are
   limited to caller-proven scalar atomic storage and central memory-order
@@ -1888,6 +1922,8 @@ Operation IDs:
 - `SAFETY[AUDIT:safe-heap]`: `src/safe/heap.rs` ties heap allocations to the
   owning heap lifetime, prevents main-heap deletion through owned heap handles,
   and keeps raw heap/block calls behind wrapper ownership checks.
+- `SAFETY[AUDIT:safe-heap-test-fixtures]`: `src/safe/tests.rs` owns safe heap
+  test fixtures that initialize raw allocation bytes before unsafe reads.
 - `SAFETY[AUDIT:safe-process-info]`: `src/safe/stats.rs` passes valid local
   out-pointers to process-info collection and copies returned counters into
   typed Rust values before exposing them.
@@ -2174,6 +2210,9 @@ Operation IDs:
   `src/types/ptr/tests.rs` builds stack-local arena, subproc, heap, page, and
   bitmap records to exercise arena/subproc pointer fields, counters, locks,
   memid, stats, and table accessors.
+- `SAFETY[AUDIT:typed-arena-subproc-nullable-pointer-test-fixtures]`:
+  `src/types/ptr/tests.rs` owns nullable arena/subproc pointer fixture clearing
+  and reads on stack-local metadata.
 - `SAFETY[AUDIT:typed-page-queue-pointer-test-fixtures]`:
   `src/types/ptr/tests.rs` builds stack-local page-queue and page records to
   exercise first/last page links, counts, optional block sizes, and clearing

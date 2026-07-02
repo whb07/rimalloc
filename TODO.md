@@ -1,7 +1,7 @@
 # TODO: Fresh-Eyes Source-Marker, Release Module, Strict-Type, and Arena Module Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`83d42e1`. The implemented source audit marker cap is 17, release-audit module
+`83d42e1`. The implemented source audit marker cap is 16, release-audit module
 cap is 200, strict-type file hotspots are capped at 45 active entries,
 kind/file hotspots at 30 entries, raw-pointer file/domain hotspots at 25
 entries, usize file/domain hotspots at 25 entries, and `src/allocator/page.rs`
@@ -13,18 +13,18 @@ remaining translated production module.
 Current review evidence:
 
 - `scripts/check-unsafe-audit.py` covers 95 source files, 5,898 unsafe
-  mentions, and 529 operation IDs. The migration allowlist remains empty.
-- `scripts/check-unsafe-audit-evidence.py` covers those 529 operation IDs with
-  1,129 automated evidence rows.
-- No source audit operation ID has more than 17 source markers. Eleven IDs sit
-  at the 17-marker cap: `aligned-global-allocation-export-boundary`,
-  `arena-initialization-boundary`, `arena-page-abandon-boundary`,
-  `init-platform-tls-boundary`, `init-process-boundary`,
-  `init-thread-default-heap-association-boundary`,
-  `init-thread-heap-main-tls-boundary`, `internal-atomic-cas-boundary`,
-  `macos-zone-allocation-boundary`, `safe-heap`, and
-  `typed-arena-subproc-pointer-test-fixtures`. The next useful source marker
-  cap is 16 entries.
+  mentions, and 540 operation IDs. The migration allowlist remains empty.
+- `scripts/check-unsafe-audit-evidence.py` covers those 540 operation IDs with
+  1,155 automated evidence rows.
+- No source audit operation ID has more than 16 source markers. Fourteen IDs
+  sit at the 16-marker cap: `typed-layout-domain`, `typed-heap-accessors`,
+  `typed-atomic-test-fixtures`, `stats-public-merge-boundary`,
+  `stats-print-export-boundary`, `stats-json-boundary`,
+  `stats-heap-visitor-boundary`, `options-storage-lock-boundary`,
+  `macos-zone-lookup-boundary`, `init-thread-done-cleanup-boundary`,
+  `init-subproc-identity-boundary`, `init-process-boundary`,
+  `arena-meta-allocator`, and `arena-abandoned-boundary`. The next useful
+  source marker cap would be 15 entries.
 - `strict-type-allowlist.txt` has 632 active entries: 330
   raw-pointer-parameter entries, 220 bare-domain-usize entries, 40
   metadata-reference entries, 23 pointer-usize-roundtrip entries, 14 atomic-cast
@@ -94,17 +94,17 @@ Current review evidence:
 
 ## Issue 1: Lower the source audit marker cap to 16
 
-The remaining 17-marker operation IDs still group responsibilities broadly
-enough to hide unrelated unsafe invariants. Split them by ownership, platform,
-or fixture family until every source audit ID has at most 16 source markers.
+The former 17-marker operation IDs grouped responsibilities broadly enough to
+hide unrelated unsafe invariants. They are now split by ownership, platform, or
+fixture family so every source audit ID has at most 16 source markers.
 
-- [ ] Split the 17-marker allocation, arena, init, internal atomic, macOS,
+- [x] Split the 17-marker allocation, arena, init, internal atomic, macOS,
       safe-heap, and typed fixture operation IDs into narrower invariant
       families without adding aggregate fallback markers.
-- [ ] Refresh `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`,
+- [x] Refresh `UNSAFE_AUDIT.md`, `docs/unsafe-audit.md`,
       `docs/unsafe-audit-evidence.tsv`, release-audit marker expectations, and
       TODO evidence after the source marker cap moves.
-- [ ] Lower the source marker release-audit cap from 17 to 16.
+- [x] Lower the source marker release-audit cap from 17 to 16.
 
 Verify: unsafe audit scripts, unsafe evidence scripts, release fast-path audit,
 full formatting, full clippy, and full tests.
@@ -167,14 +167,14 @@ strict-type checker, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Lower the source audit marker cap to 16.
+1. [x] Lower the source audit marker cap to 16.
 2. [ ] Split release-audit modules over 190 lines.
 3. [ ] Tighten strict-type and permanent-reason hotspot caps.
 4. [ ] Split the next largest production module under 3,000 lines.
 
 ## Definition of done for this backlog
 
-- [ ] No source audit operation ID has more than 16 source markers.
+- [x] No source audit operation ID has more than 16 source markers.
 - [ ] Release-audit modules are split enough to lower the recursive module cap
       to 190 lines without weakening discovery or measured TODO checks.
 - [ ] Strict-type file hotspots are capped at 40 active entries, kind/file

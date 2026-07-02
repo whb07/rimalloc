@@ -1345,26 +1345,26 @@ unsafe fn mi_arena_initialize(
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).slices_purge = mi_arena_bitmap_init(slice_count, &mut base)
     };
-    // SAFETY[AUDIT:arena-initialization-boundary]: arena initialization lays out metadata, bitmaps, page tables, guard pages, and registry state within the reserved slice range.
+    // SAFETY[AUDIT:arena-initialization-page-table-boundary]: arena initialization lays out page table bitmaps and optional separated page metadata within the reserved slice range.
     unsafe {
         (*arena.cast::<MiArenaPrefix>()).pages_main.pages =
             mi_arena_bitmap_init(slice_count, &mut base)
     };
     for i in 0..MI_ARENA_BIN_COUNT {
-        // SAFETY[AUDIT:arena-initialization-boundary]: arena initialization lays out metadata, bitmaps, page tables, guard pages, and registry state within the reserved slice range.
+        // SAFETY[AUDIT:arena-initialization-page-table-boundary]: arena initialization lays out page table bitmaps and optional separated page metadata within the reserved slice range.
         unsafe {
             (*arena.cast::<MiArenaPrefix>()).pages_main.pages_abandoned[i] =
                 mi_arena_bitmap_init(slice_count, &mut base)
         };
     }
     if crate::internal::MI_PAGE_META_IS_SEPARATED != 0 {
-        // SAFETY[AUDIT:arena-initialization-boundary]: arena initialization lays out metadata, bitmaps, page tables, guard pages, and registry state within the reserved slice range.
+        // SAFETY[AUDIT:arena-initialization-page-table-boundary]: arena initialization lays out page table bitmaps and optional separated page metadata within the reserved slice range.
         unsafe {
             (*arena.cast::<MiArenaPrefix>()).pages_meta = base.cast::<mi_page_t>();
             base = base.add(slice_count_usize * size_of::<mi_page_t>());
         }
     } else {
-        // SAFETY[AUDIT:arena-initialization-boundary]: arena initialization lays out metadata, bitmaps, page tables, guard pages, and registry state within the reserved slice range.
+        // SAFETY[AUDIT:arena-initialization-page-table-boundary]: arena initialization lays out page table bitmaps and optional separated page metadata within the reserved slice range.
         unsafe { (*arena.cast::<MiArenaPrefix>()).pages_meta = ptr::null_mut() };
     }
     crate::internal::mi_assert_internal!(
@@ -2907,7 +2907,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
                     (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock
                 ))
             };
-            // SAFETY[AUDIT:arena-page-abandon-boundary]: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+            // SAFETY[AUDIT:arena-page-abandon-os-list-boundary]: arena page abandon links non-arena pages into the owning heap OS-abandoned list under its lock.
             unsafe {
                 (*page).prev = ptr::null_mut();
                 (*page).next = (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages;
@@ -2916,7 +2916,7 @@ unsafe fn _mi_arenas_page_abandon_internal(
                 }
                 (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages = page;
             }
-            // SAFETY[AUDIT:arena-page-abandon-boundary]: arena page abandon paths publish abandoned state, update heap/arena bitmaps, stats, and owner words before releasing thread ownership.
+            // SAFETY[AUDIT:arena-page-abandon-os-list-boundary]: arena page abandon links non-arena pages into the owning heap OS-abandoned list under its lock.
             unsafe {
                 mi_lock_release(ptr::addr_of_mut!(
                     (*heap.cast::<MiHeapPrefix>()).os_abandoned_pages_lock

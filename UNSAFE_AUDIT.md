@@ -226,6 +226,11 @@ Operation IDs:
   arena-page prefix accessors. Callers supply allocator-owned metadata plus
   typed `BorrowedHeap`, `SubprocPtr`, `ArenaIndex`, or `Bin` witnesses before
   the helpers return typed atomic field wrappers or registered arena pointers.
+- `SAFETY[AUDIT:callback-wrappers]`: `src/types/callbacks.rs` keeps internal
+  callback function pointers and context pointers in `repr(transparent)`
+  wrappers. Unsafe operations are limited to restoring callback pointers from
+  allocator-owned storage and invoking caller-provided C ABI callbacks after
+  typed argument conversion, with no allocation or dynamic dispatch.
 - `SAFETY[AUDIT:deferred-free-callback-state]`:
   `src/allocator/page/deferred.rs` owns the C-compatible deferred-free callback
   globals, publishes callback and argument with release stores, reads them with

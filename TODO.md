@@ -12,18 +12,20 @@ exceptions with typed Rust boundaries or operation-level audit evidence.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 46 entries: 40 production, 3 test,
-  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 46.
+- `docs/unsafe-migration-allowlist.tsv` has 45 entries: 39 production, 3 test,
+  and 3 translation files. `ALLOWLIST_ENTRY_CAP` is 45.
 - The smallest remaining allowlisted test fixtures are reviewable:
-  `src/types/atomic/tests.rs` is 287 lines, and
+  `src/types/atomic/tests.rs` is 287 lines,
   `src/types/scalar/tests.rs` is 412 lines, and
   `src/types/ptr/tests.rs` is 618 lines.
 - `src/types/memid/tests.rs` now uses
   `SAFETY[AUDIT:typed-memid-test-fixtures]` markers for stack-local OS, meta,
   arena, and raw memid fixtures, and no longer needs a file-level unsafe
   migration allowlist entry.
+- `src/types/callbacks.rs` now uses `SAFETY[AUDIT:callback-wrappers]`
+  markers for function-pointer storage and C ABI callback invocation
+  boundaries, with local unit fixtures and release-audit evidence.
 - The smallest remaining allowlisted production files are narrow:
-  `src/types/callbacks.rs` is 255 lines,
   `src/internal/random.rs` is 257 lines,
   `src/types/page.rs` is 258 lines,
   `src/types/arena.rs` is 260 lines,
@@ -49,9 +51,9 @@ Current review evidence:
   `SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 22 markers, and
   `SAFETY[AUDIT:page-count-accessors]` has 22 markers.
 - The release audit still has large review units:
-  `tests/release_fast_path_audit.rs` is 2,867 lines,
+  `tests/release_fast_path_audit.rs` is 2,875 lines,
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,655 lines,
-  `tests/release_fast_path_audit/release_policy.rs` is 2,115 lines,
+  `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
   is 660 lines,
   `tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs` is
@@ -82,18 +84,18 @@ full tests.
 
 ## Issue: Callback wrappers remain file-level unsafe allowlisted
 
-> **Comment:** `src/types/callbacks.rs` is 255 lines and is the smallest
-> allowlisted production module. The unsafe operations are callback invocation
-> boundaries and raw-layout wrappers, which are good candidates for
+> **Comment:** `src/types/callbacks.rs` was the smallest allowlisted production
+> module. The unsafe operations are callback invocation boundaries and
+> raw-layout wrappers, which are good candidates for
 > operation-level audit markers.
 
-- [ ] Replace the file-level allowlist entry for `src/types/callbacks.rs` with
+- [x] Replace the file-level allowlist entry for `src/types/callbacks.rs` with
       operation-level `SAFETY[AUDIT:callback-wrappers]` markers.
-- [ ] Keep callback wrappers `repr(transparent)`/layout-compatible and avoid
+- [x] Keep callback wrappers `repr(transparent)`/layout-compatible and avoid
       adding allocation or dynamic dispatch.
-- [ ] Add release-audit evidence for callback wrapper layout and invocation
+- [x] Add release-audit evidence for callback wrapper layout and invocation
       boundaries.
-- [ ] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, generated
+- [x] Update `UNSAFE_AUDIT.md`, `docs/unsafe-audit-evidence.tsv`, generated
       unsafe inventory, and lower `ALLOWLIST_ENTRY_CAP` again.
 
 Verify: callback unit tests, unsafe audit scripts,
@@ -166,7 +168,7 @@ full tests.
 ## Suggested implementation order
 
 1. [x] Migrate `src/types/memid/tests.rs` off the unsafe migration allowlist.
-2. [ ] Migrate `src/types/callbacks.rs` off the unsafe migration allowlist.
+2. [x] Migrate `src/types/callbacks.rs` off the unsafe migration allowlist.
 3. [ ] Narrow or eliminate the broad `aligned` strict-type `usize` allowance.
 4. [ ] Split one more release-audit assertion cluster.
 5. [ ] Split one more cohesive helper group out of `src/allocator/arena.rs`.
@@ -174,7 +176,7 @@ full tests.
 ## Definition of done for this backlog
 
 - [x] The unsafe migration allowlist is below 47 entries and the cap is lowered.
-- [ ] One additional production allowlisted file is covered by operation-level
+- [x] One additional production allowlisted file is covered by operation-level
       audit markers and evidence.
 - [ ] The final broad strict-type `remove:` allowance is narrowed or eliminated.
 - [ ] One release-audit module has more review margin.

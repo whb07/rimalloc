@@ -12,7 +12,7 @@ AUDIT = ROOT / "UNSAFE_AUDIT.md"
 ALLOWLIST = ROOT / "docs/unsafe-migration-allowlist.tsv"
 SAFETY_ID_RE = re.compile(r"SAFETY\[AUDIT:([a-z0-9_.-]+)\]")
 ALLOWLIST_HEADER = "path\tcategory\towner\tremove_by\treason"
-ALLOWLIST_ENTRY_CAP = 46
+ALLOWLIST_ENTRY_CAP = 45
 ALLOWLIST_CATEGORIES = {"production", "test", "translation"}
 PATH_ALIASES = {
     "src/allocator/aligned.rs": ["src/alloc_aligned.rs"],

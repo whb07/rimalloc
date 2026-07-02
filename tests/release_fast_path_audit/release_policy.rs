@@ -906,6 +906,17 @@ fn callback_trampolines_remain_no_alloc_no_unwind_raw_abi() {
     }
 
     assert!(
+        callbacks_rs.contains("SAFETY[AUDIT:callback-wrappers]")
+            && callbacks_rs.contains("core::mem::transmute::<*mut c_void, mi_deferred_free_fun>")
+            && callbacks_rs.contains("core::mem::transmute::<*mut c_void, mi_output_fun>")
+            && callbacks_rs
+                .matches("SAFETY[AUDIT:callback-wrappers]")
+                .count()
+                >= 8,
+        "callback wrapper storage and invocation boundaries should have operation-level audit markers"
+    );
+
+    assert!(
         types_rs.contains("pub type mi_output_fun = unsafe extern \"C\" fn")
             && types_rs.contains("pub type mi_error_fun = unsafe extern \"C\" fn")
             && types_rs.contains("pub type mi_deferred_free_fun = unsafe extern \"C\" fn")

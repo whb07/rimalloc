@@ -2032,6 +2032,7 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && callbacks_rs.contains("callback_arg_wrapper!(HeapVisitCallbackArg);")
             && callbacks_rs.contains("callback_arg_wrapper!(BlockVisitCallbackArg);")
             && callbacks_rs.contains("callback_arg_wrapper!(ThreadLocalClaimCallbackArg);")
+            && callbacks_rs.contains("SAFETY[AUDIT:callback-wrappers]")
             && callbacks_rs.contains(
                 "optional_callback_wrapper!(DeferredFreeCallback, mi_deferred_free_fun);"
             )
@@ -2088,6 +2089,13 @@ fn datatype_acceptance_criteria_have_cross_cutting_guards() {
             && init_rs.contains("let arg = HeapVisitCallbackArg::from_raw(arg);")
             && threadlocal_rs.contains("ThreadLocalClaimCallback::new(mi_thread_local_claim_fun)"),
         "callback function and context pointers should be typed inside allocator internals while raw callback typedefs stay at C ABI boundaries"
+    );
+    assert!(
+        callbacks_rs
+            .matches("SAFETY[AUDIT:callback-wrappers]")
+            .count()
+            >= 8,
+        "callback wrapper unsafe operations should retain operation-level audit markers"
     );
     let padding_rs =
         fs::read_to_string(root.join("src/types/padding.rs")).expect("read padding.rs");

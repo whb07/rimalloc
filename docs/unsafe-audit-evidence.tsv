@@ -5,6 +5,9 @@ arena-debug-render	test	tests/release_fast_path_audit.rs	Checks arena diagnostic
 arena-debug-render	script	scripts/check-ffi-boundary.py	Checks moved arena diagnostic C exports remain in a classified ABI boundary file.
 arena-prefix-accessors	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks arena prefix accessors stay in src/allocator/arena/prefix.rs and preserve typed Bin, ArenaIndex, AtomicAbandonedCount, AtomicArenaPage, and AtomicPtrField routing.
 arena-prefix-accessors	script	scripts/check-unsafe-audit.py	Checks arena prefix accessor unsafe operations retain operation-level SAFETY markers and source audit coverage.
+callback-wrappers	test	src/types/callbacks/tests.rs	Exercises callback wrapper layout, storage round trips, and local C ABI invoke fixtures.
+callback-wrappers	test	tests/release_fast_path_audit.rs	Checks raw callback typedefs stay at ABI edges while internals use typed callback wrappers and audit markers.
+callback-wrappers	test	tests/release_fast_path_audit/release_policy.rs	Checks callback invocation wrappers remain no-allocation and no-unwind C ABI boundaries.
 deferred-free-callback-state	test	tests/release_fast_path_audit/release_policy.rs	Checks deferred-free callback registration and dispatch stay no-allocation/no-unwind C ABI boundaries.
 deferred-free-callback-state	test	tests/release_fast_path_audit/unsafe_performance.rs	Checks deferred-free callback dispatch preserves acquire/release publication, heartbeat, and reentry guard structure.
 deferred-free-callback-state	script	scripts/check-ffi-boundary.py	Checks deferred-free registration remains in a classified C ABI boundary file.

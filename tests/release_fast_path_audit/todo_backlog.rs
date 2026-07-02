@@ -20,11 +20,11 @@ fn rust_idiom_backlog_tracks_current_work() {
     let todo = fs::read_to_string(root.join("TODO.md")).expect("read TODO.md");
     let required_headings = [
         "# TODO: Fresh Rust Idiom Follow-up Backlog",
-        "## Issue: Memid test fixtures still hide unsafe migration debt",
-        "## Issue: Callback wrappers remain file-level unsafe allowlisted",
-        "## Issue: Aligned still has the last broad strict-type usize allowance",
-        "## Issue: Release audit unsafe_performance.rs remains oversized",
-        "## Issue: Arena remains the largest translated production review unit",
+        "## Issue: Atomic test fixtures still hide unsafe migration debt",
+        "## Issue: Random remains a small production unsafe allowlisted module",
+        "## Issue: Arena heap page visitors remain embedded in arena.rs",
+        "## Issue: Release audit unsafe_performance.rs still carries broad source assertions",
+        "## Issue: Arena strict-type entries are still broad after child splits",
         "## Definition of done for this backlog",
     ];
 
@@ -36,17 +36,15 @@ fn rust_idiom_backlog_tracks_current_work() {
     }
 
     let required_evidence = [
-        "`f17fc6b`",
-        "migrated heap test fixtures and tracking hooks",
-        "moved arena prefix\nlayouts/accessors into `src/allocator/arena/prefix.rs`",
+        "`eee7448`",
+        "migrated memid test fixtures and callback wrappers",
+        "moved\narena id/memid helpers into `src/allocator/arena/ids.rs`",
         "docs/unsafe-migration-allowlist.tsv",
         "45 entries: 39 production, 3 test,\n  and 3 translation files",
         "`ALLOWLIST_ENTRY_CAP` is 45",
         "`src/types/atomic/tests.rs` is 287 lines",
         "`src/types/scalar/tests.rs` is 412 lines",
         "`src/types/ptr/tests.rs` is 618 lines",
-        "`src/types/memid/tests.rs` now uses\n  `SAFETY[AUDIT:typed-memid-test-fixtures]`",
-        "`src/types/callbacks.rs` now uses `SAFETY[AUDIT:callback-wrappers]`",
         "`src/internal/random.rs` is 257 lines",
         "`src/types/page.rs` is 258 lines",
         "`src/types/arena.rs` is 260 lines",
@@ -56,8 +54,7 @@ fn rust_idiom_backlog_tracks_current_work() {
         "strict-type-allowlist.txt",
         "0 remaining `remove:` entries",
         "`REMOVE_ENTRY_CAP` is 0",
-        "The broad `bare-domain-usize` allowance for\n  `src/allocator/aligned.rs` is replaced by symbol-level parser/shim entries",
-        "`mi_malloc_is_naturally_aligned` now accepts typed `RequestedSize` and\n  `Alignment`",
+        "`src/allocator/arena.rs` still has broad\n  permanent raw-pointer and pointer/usize compatibility entries",
         "`src/allocator/arena.rs` is 4,337 lines",
         "`src/allocator/arena/ids.rs`, which is 244 lines",
         "`src/allocator/page.rs` is 2,801 lines",
@@ -74,18 +71,20 @@ fn rust_idiom_backlog_tracks_current_work() {
         "SAFETY[AUDIT:typed-page-queue-test-fixtures]` has 22 markers",
         "SAFETY[AUDIT:page-count-accessors]` has 22 markers",
         "`tests/release_fast_path_audit.rs` is 2,889 lines",
-        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,570 lines",
+        "`tests/release_fast_path_audit/unsafe_performance.rs` is 2,567 lines",
         "`tests/release_fast_path_audit/release_policy.rs` is 2,126 lines",
         "`tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`\n  is 660 lines",
         "`tests/release_fast_path_audit/unsafe_performance/bitmap_boundaries.rs` is\n  206 lines",
         "`tests/release_fast_path_audit/release_policy/security.rs` is 181 lines",
         "`tests/release_fast_path_audit/unsafe_performance/local_boundaries.rs` is\n  160 lines",
         "`tests/release_fast_path_audit/unsafe_performance/size_class_boundaries.rs`\n  is 132 lines",
-        "SAFETY[AUDIT:typed-memid-test-fixtures]",
-        "SAFETY[AUDIT:callback-wrappers]",
-        "Lower `REMOVE_ENTRY_CAP` to 0",
-        "heap visit/delete, arena id/memid, or purge helpers",
+        "heap visit/delete/move/destroy cluster\n  near the top of `src/allocator/arena.rs`",
+        "`mi_heap_visit_info_t`, `mi_heap_delete_visit_info_t`",
+        "SAFETY[AUDIT:typed-atomic-test-fixtures]",
+        "SAFETY[AUDIT:random-context-boundaries]",
+        "`src/internal/random.rs` off the unsafe migration allowlist",
         "`src/allocator/arena.rs` is smaller again without API, ABI, or hot-path\n      performance drift",
+        "Keep `REMOVE_ENTRY_CAP` at 0",
     ];
 
     for evidence in required_evidence {

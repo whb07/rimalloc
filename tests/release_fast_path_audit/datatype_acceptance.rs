@@ -755,6 +755,25 @@ pub(super) fn assert_datatype_acceptance_criteria_have_cross_cutting_guards(
                 .contains("pub(crate) unsafe fn heap_count_cell(self) -> AtomicUsizeField"),
         "aliasable allocator metadata should be accessed through pointer wrapper field helpers and guarded against broad Rust references"
     );
+    assert!(
+        strict_check_rs.contains("class ItemContext:")
+            && strict_check_rs
+                .contains("def item_contexts_by_line(text: str) -> dict[int, ItemContext]:")
+            && strict_check_rs.contains("def run_self_tests() -> None:")
+            && strict_check_rs.contains("symbol=context.symbols")
+            && strict_check_rs.contains("f\"{message} in {context.primary_symbol}\"")
+            && strict_check_rs.contains("assert contexts[3].symbols == (\"free_function\",)")
+            && strict_check_rs
+                .contains("assert contexts[8].symbols == (\"AtomicField::load\", \"load\")")
+            && strict_check_rs
+                .contains("assert contexts[13].symbols == (\"AtomicField::MASK\", \"MASK\")")
+            && strict_check_rs.contains("assert \"imported\" in contexts[18].symbols")
+            && strict_check_rs.contains("assert contexts[23].symbols == (\"TABLE\",)")
+            && strict_check_rs.contains("\"pointer-usize-roundtrip\"")
+            && strict_check_rs.contains("\"AtomicField::load\"")
+            && strict_check_rs.contains("strict-type self-test failed"),
+        "strict-type line-pattern checks should use item-aware symbols and self-test symbol-level line-pattern allowlist entries"
+    );
     let callbacks_rs = audit_sources.source("src/types/callbacks.rs");
     let types_rs = audit_sources.source("src/types/constants.rs");
     let abi_rs = audit_sources.source("src/ffi/abi.rs");

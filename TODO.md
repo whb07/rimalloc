@@ -19,11 +19,10 @@ Current review evidence:
   entries, 21 bare-domain `usize` entries, 13 pointer/usize round-trip entries,
   8 metadata-reference entries, 2 heap-allocating-type entries, and
   2 atomic-cast entries.
-- `scripts/check-strict-types.py` already checks raw-pointer and bare-domain
-  function signatures by symbol, but `require_no_pattern` currently calls
-  `is_allowed` with `symbol="*"`. That keeps metadata-reference,
-  pointer/usize-roundtrip, heap-allocating-type, atomic-cast, and
-  dynamic-dispatch findings broader than they need to be.
+- `scripts/check-strict-types.py` now checks line-pattern findings with an
+  item-aware context for free functions, impl methods, associated consts,
+  statics, and extern declarations. It still allows deliberate wildcard
+  fallback entries for module-level or true ABI boundaries.
 - The broadest path-wide strict-type clusters are `src/platform/windows.rs`,
   `src/platform/unix.rs`, `src/internal/mod.rs`,
   `src/allocator/thread_heap.rs`, `src/allocator/stats.rs`, and
@@ -46,7 +45,7 @@ Current review evidence:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,567 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,150 lines,
   `tests/release_fast_path_audit.rs` is 1,935 lines,
-  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,131 lines,
+  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,151 lines,
   `tests/release_fast_path_audit/unsafe_performance/platform_primitive_boundaries.rs`
   is 895 lines, and
   `tests/release_fast_path_audit/unsafe_performance/lifecycle_boundaries.rs`
@@ -56,20 +55,21 @@ Current review evidence:
 
 > **Comment:** The strict-type checker can only narrow some checks today.
 > Raw-pointer and bare-domain parameters are symbol-aware, but line-pattern
-> checks still use file-level `*` allowances. That makes the allowlist look more
-> permanent and less reviewable than the code warrants.
+> checks used file-level `*` allowances. This pass made those checks
+> item-aware while preserving deliberate wildcard fallback compatibility for
+> true ABI or module-level boundaries.
 
-- [ ] Teach `scripts/check-strict-types.py` to identify the containing Rust item
+- [x] Teach `scripts/check-strict-types.py` to identify the containing Rust item
       for line-based findings, including free functions, associated functions,
       extern blocks, statics, consts, and impl methods.
-- [ ] Use the detected item name when checking metadata-reference,
+- [x] Use the detected item name when checking metadata-reference,
       pointer-usize-roundtrip, heap-allocating-type, atomic-cast, and
       dynamic-dispatch entries; keep a deliberate fallback for module-level or
       extern-block findings.
-- [ ] Preserve the existing checker behavior for raw ABI boundaries and
+- [x] Preserve the existing checker behavior for raw ABI boundaries and
       translated C compatibility shims; do not create false positives for cfg
       branches, test modules, macro definitions, or source comments.
-- [ ] Add focused checker tests or release-audit assertions that prove new
+- [x] Add focused checker tests or release-audit assertions that prove new
       line-pattern allowlist entries can be symbol-level and that new broad
       `*` entries need explicit justification.
 
@@ -192,7 +192,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Make strict-type line-pattern checks item-aware.
+1. [x] Make strict-type line-pattern checks item-aware.
 2. [ ] Narrow platform strict-type wildcard allowances.
 3. [ ] Narrow allocator and internal strict-type wildcard allowances.
 4. [ ] Split the arena audit operation cluster.
@@ -201,7 +201,7 @@ Verify: release fast-path audit, full formatting, full clippy, and full tests.
 
 ## Definition of done for this backlog
 
-- [ ] The strict-type checker can enforce symbol-level entries for line-pattern
+- [x] The strict-type checker can enforce symbol-level entries for line-pattern
       findings and has release-audit coverage for that behavior.
 - [ ] The targeted platform, allocator, and internal strict-type wildcard
       entries are replaced by named symbol/domain allowances or are explicitly

@@ -6,6 +6,7 @@ from __future__ import annotations
 import fnmatch
 import pathlib
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 
@@ -52,6 +53,13 @@ BARE_DOMAIN_PARAM_RE = re.compile(
     re.DOTALL,
 )
 CORE_TYPES_DEAD_CODE_RE = re.compile(r"#\s*!\s*\[\s*allow\s*\(\s*dead_code\s*\)\s*\]")
+FN_ITEM_RE = re.compile(r"\bfn\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>{}]*)?\(")
+STATIC_OR_CONST_ITEM_RE = re.compile(
+    r"^\s*(?:(?:pub|pub\([^)]*\)|pub\s*\([^)]*\))\s+)?"
+    r"(?:static|const)\s+(?:mut\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b"
+)
+IMPL_START_RE = re.compile(r"^\s*impl\b")
+EXTERN_BLOCK_RE = re.compile(r"\bextern(?:\s+\"(?P<abi>[^\"]+)\")?\s*\{")
 
 SKIP_DIRS = {
     ".git",
@@ -111,6 +119,23 @@ class AllowEntry:
     disposition: str
 
 
+@dataclass(frozen=True)
+class ItemContext:
+    symbols: tuple[str, ...]
+    kind: str
+
+    @property
+    def primary_symbol(self) -> str:
+        return self.symbols[0]
+
+
+@dataclass(frozen=True)
+class ActiveBlock:
+    context: ItemContext
+    end_depth: int
+    impl_type: str | None = None
+
+
 def source_files() -> list[pathlib.Path]:
     files: list[pathlib.Path] = []
     for path in ROOT.rglob("*.rs"):
@@ -125,6 +150,10 @@ def source_files() -> list[pathlib.Path]:
 
 def strip_line_comment(line: str) -> str:
     return line.split("//", 1)[0]
+
+
+def brace_delta(line: str) -> int:
+    return line.count("{") - line.count("}")
 
 
 def is_test_cfg_attr(trimmed: str) -> bool:
@@ -177,6 +206,172 @@ def production_source_text(text: str) -> str:
     return "\n".join(lines)
 
 
+def strip_angle_groups(value: str) -> str:
+    result: list[str] = []
+    depth = 0
+    for ch in value:
+        if ch == "<":
+            depth += 1
+            continue
+        if ch == ">" and depth > 0:
+            depth -= 1
+            continue
+        if depth == 0:
+            result.append(ch)
+    return "".join(result)
+
+
+def impl_type_symbol(line: str) -> str:
+    stripped = strip_line_comment(line).strip()
+    if "{" in stripped:
+        stripped = stripped.split("{", 1)[0].strip()
+    body = stripped.removeprefix("impl").strip()
+    if body.startswith("<"):
+        depth = 0
+        for index, ch in enumerate(body):
+            if ch == "<":
+                depth += 1
+            elif ch == ">":
+                depth -= 1
+                if depth == 0:
+                    body = body[index + 1 :].strip()
+                    break
+    if " for " in body:
+        body = body.rsplit(" for ", 1)[1].strip()
+    if " where " in body:
+        body = body.split(" where ", 1)[0].strip()
+    body = strip_angle_groups(body).strip()
+    if "::" in body:
+        body = body.rsplit("::", 1)[1].strip()
+    return body or "impl"
+
+
+def item_context_for(
+    *,
+    name: str,
+    kind: str,
+    impl_type: str | None,
+) -> ItemContext:
+    if impl_type is None:
+        return ItemContext((name,), kind)
+    return ItemContext((f"{impl_type}::{name}", name), kind)
+
+
+def has_item_body_after(code: str, start: int) -> bool:
+    semicolon = code.find(";", start)
+    opening = code.find("{", start)
+    return opening != -1 and (semicolon == -1 or opening < semicolon)
+
+
+def static_or_const_initializer_tail(code: str, start: int) -> str:
+    initializer = code.find("=", start)
+    if initializer == -1:
+        return code[start:]
+    return code[initializer:]
+
+
+def item_contexts_by_line(text: str) -> dict[int, ItemContext]:
+    contexts: dict[int, ItemContext] = {}
+    active_blocks: list[ActiveBlock] = []
+    pending_item: ItemContext | None = None
+    pending_impl_type: str | None = None
+    brace_depth = 0
+
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        code = strip_line_comment(line)
+        while active_blocks and brace_depth < active_blocks[-1].end_depth:
+            active_blocks.pop()
+
+        current_impl = next(
+            (
+                block.impl_type
+                for block in reversed(active_blocks)
+                if block.impl_type is not None
+            ),
+            None,
+        )
+        context = next(
+            (
+                block.context
+                for block in reversed(active_blocks)
+                if block.context.kind != "impl"
+            ),
+            ItemContext(("*",), "module"),
+        )
+        opened_item: ItemContext | None = None
+        opened_impl_type: str | None = None
+
+        if pending_item is not None:
+            context = pending_item
+        elif pending_impl_type is not None:
+            context = ItemContext((f"impl {pending_impl_type}", "*"), "impl")
+
+        if pending_item is None and pending_impl_type is None:
+            fn_match = FN_ITEM_RE.search(code)
+            static_match = STATIC_OR_CONST_ITEM_RE.search(code)
+            extern_match = EXTERN_BLOCK_RE.search(code)
+            if fn_match is not None:
+                context = item_context_for(
+                    name=fn_match.group("name"),
+                    kind="fn",
+                    impl_type=current_impl,
+                )
+                if has_item_body_after(code, fn_match.start()):
+                    opened_item = context
+                elif ";" not in code[fn_match.start() :]:
+                    pending_item = context
+            elif static_match is not None:
+                context = item_context_for(
+                    name=static_match.group("name"),
+                    kind="static-const",
+                    impl_type=current_impl,
+                )
+                initializer_tail = static_or_const_initializer_tail(
+                    code, static_match.start()
+                )
+                if "{" in initializer_tail:
+                    opened_item = context
+                elif ";" not in initializer_tail:
+                    pending_item = context
+            elif extern_match is not None:
+                abi = extern_match.group("abi") or "default"
+                context = ItemContext((f"extern-{abi}-block", "extern-block", "*"), "extern")
+                opened_item = context
+            elif IMPL_START_RE.search(code) is not None and "{" in code:
+                opened_impl_type = impl_type_symbol(code)
+                context = ItemContext((f"impl {opened_impl_type}", "*"), "impl")
+            elif IMPL_START_RE.search(code) is not None:
+                pending_impl_type = impl_type_symbol(code)
+                context = ItemContext((f"impl {pending_impl_type}", "*"), "impl")
+
+        contexts[lineno] = context
+
+        opens_item = opened_item is not None
+        opens_impl = opened_impl_type is not None
+        if pending_item is not None and "{" in code and ";" not in code.split("{", 1)[0]:
+            opened_item = pending_item
+            opens_item = True
+            pending_item = None
+        if pending_item is not None and ";" in code:
+            pending_item = None
+        if pending_impl_type is not None and "{" in code:
+            opened_impl_type = pending_impl_type
+            opens_impl = True
+            pending_impl_type = None
+
+        previous_depth = brace_depth
+        brace_depth += brace_delta(code)
+        if opens_item and opened_item is not None and brace_depth > previous_depth:
+            active_blocks.append(ActiveBlock(opened_item, previous_depth + 1))
+        if opens_impl and opened_impl_type is not None and brace_depth > previous_depth:
+            impl_context = ItemContext((f"impl {opened_impl_type}", "*"), "impl")
+            active_blocks.append(
+                ActiveBlock(impl_context, previous_depth + 1, opened_impl_type)
+            )
+
+    return contexts
+
+
 def read_allowlist() -> list[AllowEntry]:
     entries: list[AllowEntry] = []
     if not ALLOWLIST.exists():
@@ -216,16 +411,17 @@ def is_allowed(
     *,
     kind: str,
     rel: str,
-    symbol: str,
+    symbol: str | Iterable[str],
     domain: str,
 ) -> bool:
     rel_candidates = {rel, *PATH_ALIASES.get(rel, set())}
+    symbols = {symbol} if isinstance(symbol, str) else set(symbol)
     for entry in entries:
         if entry.kind != kind:
             continue
         if not any(fnmatch.fnmatch(candidate, entry.path) for candidate in rel_candidates):
             continue
-        if entry.symbol not in {"*", symbol}:
+        if entry.symbol != "*" and entry.symbol not in symbols:
             continue
         if kind == "raw-pointer-parameter" and (
             entry.domain != "*"
@@ -265,16 +461,120 @@ def require_no_pattern(
 ) -> None:
     if rel in allowed_files:
         return
+    item_contexts = item_contexts_by_line(text)
     for lineno, line in enumerate(text.splitlines(), start=1):
         code = strip_line_comment(line)
         if not pattern.search(code):
             continue
-        if is_allowed(entries, kind=kind, rel=rel, symbol="*", domain=domain):
+        context = item_contexts.get(lineno, ItemContext(("*",), "module"))
+        if is_allowed(entries, kind=kind, rel=rel, symbol=context.symbols, domain=domain):
             continue
-        offenders.append(line_offender(rel, lineno, line, message))
+        offenders.append(
+            line_offender(
+                rel,
+                lineno,
+                line,
+                f"{message} in {context.primary_symbol}",
+            )
+        )
+
+
+def run_self_tests() -> None:
+    text = """
+fn free_function(ptr: *const usize) -> usize {
+    ptr as usize
+}
+
+impl AtomicField {
+    pub(crate) unsafe fn load(self) -> usize {
+        self.ptr as *const AtomicUsize
+    }
+
+    const MASK: usize = {
+        let ptr = 0 as *const usize;
+        ptr as usize
+    };
+}
+
+unsafe extern "C" {
+    fn imported(ptr: *const usize);
+}
+
+static TABLE: [usize; 1] = [{
+    let ptr = 0 as *const usize;
+    ptr as usize
+}];
+"""
+    contexts = item_contexts_by_line(text)
+    assert contexts[3].symbols == ("free_function",)
+    assert contexts[8].symbols == ("AtomicField::load", "load")
+    assert contexts[13].symbols == ("AtomicField::MASK", "MASK")
+    assert "imported" in contexts[18].symbols
+    assert contexts[23].symbols == ("TABLE",)
+
+    entries = [
+        AllowEntry(
+            "pointer-usize-roundtrip",
+            "src/example.rs",
+            "free_function",
+            "provenance",
+            "test",
+            "permanent: self-test",
+        ),
+        AllowEntry(
+            "pointer-usize-roundtrip",
+            "src/example.rs",
+            "AtomicField::MASK",
+            "provenance",
+            "test",
+            "permanent: self-test",
+        ),
+        AllowEntry(
+            "pointer-usize-roundtrip",
+            "src/example.rs",
+            "TABLE",
+            "provenance",
+            "test",
+            "permanent: self-test",
+        ),
+        AllowEntry(
+            "atomic-cast",
+            "src/example.rs",
+            "AtomicField::load",
+            "atomic-field",
+            "test",
+            "permanent: self-test",
+        ),
+    ]
+    offenders: list[str] = []
+    require_no_pattern(
+        offenders,
+        kind="pointer-usize-roundtrip",
+        rel="src/example.rs",
+        text=text,
+        allowed_files=set(),
+        pattern=PTR_USIZE_RE,
+        entries=entries,
+        domain="provenance",
+        message="pointer/integer round trip outside typed provenance helpers",
+    )
+    require_no_pattern(
+        offenders,
+        kind="atomic-cast",
+        rel="src/example.rs",
+        text=text,
+        allowed_files=set(),
+        pattern=ATOMIC_CAST_RE,
+        entries=entries,
+        domain="atomic-field",
+        message="pointer-to-atomic cast outside atomic field wrappers",
+    )
+    if offenders:
+        raise AssertionError("strict-type self-test failed:\n" + "\n".join(offenders))
 
 
 def main() -> int:
+    run_self_tests()
     entries = read_allowlist()
     offenders: list[str] = []
     checked_raw_params = 0

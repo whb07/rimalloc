@@ -16,7 +16,7 @@ Review evidence:
   `src/types/freelist_wrappers/tests.rs` is 119 lines,
   `src/types/callbacks/tests.rs` is 135 lines, and
   `src/types/layout/tests.rs` is 139 lines.
-- `strict-type-allowlist.txt` has 96 entries; 6 are still marked `remove:`.
+- `strict-type-allowlist.txt` has 95 entries; 6 are still marked `remove:`.
   The removable entries are broad `bare-domain-usize` allowances for
   `alloc`, `aligned`, `arena`, `bitmap`, `internal`, and `page`.
 - The largest source review units are still large:
@@ -31,8 +31,8 @@ Review evidence:
   still review-heavy: root is 2,862 lines,
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,983 lines, and
   `tests/release_fast_path_audit/release_policy.rs` is 2,291 lines.
-- `src/allocator/arena/debug.rs` is 600 lines and still has 35
-  `SAFETY[AUDIT:arena-debug-render]` markers. It also needed a narrow
+- `src/allocator/arena/debug.rs` is 625 lines and still has 34
+  `SAFETY[AUDIT:arena-debug-render]` markers. It no longer needs a
   `metadata-reference` strict-type allowance for `ArenaDebugView::prefix`.
 - `src/allocator/page/deferred.rs` is a clean 139-line module, but
   `src/allocator/page.rs` still mixes queue counts, queue movement,
@@ -103,16 +103,23 @@ Review evidence:
 > for `prefix()`. A small refinement should make the diagnostic view own that
 > proof without returning broad raw metadata references to callers.
 
-- [ ] Inventory `ArenaDebugView::prefix` callers and the remaining
+- [x] Inventory `ArenaDebugView::prefix` callers and the remaining
       `SAFETY[AUDIT:arena-debug-render]` marker clusters.
-- [ ] Replace broad prefix borrowing with narrower accessors or copy-out views
+- [x] Replace broad prefix borrowing with narrower accessors or copy-out views
       for the specific fields used by diagnostics.
-- [ ] Remove the `metadata-reference|src/allocator/arena/debug.rs` strict-type
+- [x] Remove the `metadata-reference|src/allocator/arena/debug.rs` strict-type
       allowance if the checker no longer needs it.
-- [ ] Reduce the `arena-debug-render` marker count while keeping operation-level
+- [x] Reduce the `arena-debug-render` marker count while keeping operation-level
       safety proof at the helper that performs the raw read.
-- [ ] Keep `mi_debug_show_arenas` and `mi_arenas_print` ABI-compatible and
+- [x] Keep `mi_debug_show_arenas` and `mi_arenas_print` ABI-compatible and
       allocation-free.
+  - Evidence: `ArenaDebugView` now builds an `ArenaDebugPrefixSnapshot` in its
+    audited constructor instead of returning `&MiArenaPrefix` from `prefix()`.
+    The field-specific accessors read that copy-out view, the
+    `metadata-reference` allowlist entry for `src/allocator/arena/debug.rs` was
+    removed, `scripts/check-strict-types.py` passes without a replacement
+    allowance, and the repeated `arena-debug-render` marker count is down to
+    34 while the exported debug C ABI functions remain unchanged.
 - Verify: `scripts/check-strict-types.py`, `scripts/check-ffi-boundary.py`,
   `scripts/check-no-allocation-audit.py`, release audit, full clippy, and full
   tests.
@@ -158,7 +165,7 @@ Review evidence:
 
 1. [x] Shrink the unsafe migration allowlist using small test fixtures.
 2. [x] Reduce one broad removable strict-type entry.
-3. [ ] Tighten arena diagnostic metadata access.
+3. [x] Tighten arena diagnostic metadata access.
 4. [ ] Split one more release-audit unsafe/performance cluster.
 5. [ ] Split one page queue/count helper cluster.
 
@@ -166,7 +173,7 @@ Review evidence:
 
 - [x] The unsafe migration allowlist is below 60 entries and the cap is lowered.
 - [x] The strict-type removable-entry count is below 7 and capped lower.
-- [ ] Arena diagnostics no longer need a broad metadata-reference allowance for
+- [x] Arena diagnostics no longer need a broad metadata-reference allowance for
       `ArenaDebugView::prefix`.
 - [ ] Release fast-path audit modules are smaller and guarded against growing
       back into large review units.

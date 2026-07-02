@@ -63,6 +63,21 @@ pub const MI_WHITE: mi_ansi_color_t = mi_ansi_color_e::MI_WHITE;
 #[derive(Clone, Copy)]
 struct ArenaDebugView {
     arena: ArenaPtr,
+    prefix: ArenaDebugPrefixSnapshot,
+}
+
+#[derive(Clone, Copy)]
+struct ArenaDebugPrefixSnapshot {
+    subproc: *mut mi_subproc_t,
+    has_parent: bool,
+    slice_count: usize,
+    memid_is_pinned: bool,
+    is_exclusive: bool,
+    numa_node: i32,
+    info_slices: usize,
+    slices_free: *mut mi_bbitmap_t,
+    slices_purge: *mut mi_bitmap_t,
+    slices_committed: *mut mi_bitmap_t,
 }
 
 impl ArenaDebugView {
@@ -71,10 +86,26 @@ impl ArenaDebugView {
     /// duration of the diagnostic render.
     #[inline]
     unsafe fn new_unchecked(arena: *mut mi_arena_t) -> Self {
-        Self {
-            // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-            arena: unsafe { ArenaPtr::new_unchecked(arena) },
-        }
+        let prefix = arena.cast::<MiArenaPrefix>();
+        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
+        let (arena, prefix) = unsafe {
+            (
+                ArenaPtr::new_unchecked(arena),
+                ArenaDebugPrefixSnapshot {
+                    subproc: (*prefix).subproc,
+                    has_parent: !(*prefix).parent.is_null(),
+                    slice_count: (*prefix).slice_count,
+                    memid_is_pinned: (*prefix).memid.is_pinned,
+                    is_exclusive: (*prefix).is_exclusive,
+                    numa_node: (*prefix).numa_node,
+                    info_slices: (*prefix).info_slices,
+                    slices_free: (*prefix).slices_free,
+                    slices_purge: (*prefix).slices_purge,
+                    slices_committed: (*prefix).slices_committed,
+                },
+            )
+        };
+        Self { arena, prefix }
     }
 
     #[inline]
@@ -83,29 +114,18 @@ impl ArenaDebugView {
     }
 
     #[inline]
-    fn raw(self) -> *mut mi_arena_t {
-        self.arena.as_ptr()
-    }
-
-    #[inline]
-    fn prefix(&self) -> &MiArenaPrefix {
-        // SAFETY[AUDIT:arena-debug-render]: Diagnostic-only rendering reads allocator-owned arena/page metadata and writes local output buffers.
-        unsafe { &*self.raw().cast::<MiArenaPrefix>() }
-    }
-
-    #[inline]
     fn subproc_raw(self) -> *mut mi_subproc_t {
-        self.prefix().subproc
+        self.prefix.subproc
     }
 
     #[inline]
     fn has_parent(self) -> bool {
-        !self.prefix().parent.is_null()
+        self.prefix.has_parent
     }
 
     #[inline]
     fn raw_slice_count(self) -> usize {
-        self.prefix().slice_count
+        self.prefix.slice_count
     }
 
     #[inline]
@@ -115,37 +135,37 @@ impl ArenaDebugView {
 
     #[inline]
     fn memid_is_pinned(self) -> bool {
-        self.prefix().memid.is_pinned
+        self.prefix.memid_is_pinned
     }
 
     #[inline]
     fn is_exclusive(self) -> bool {
-        self.prefix().is_exclusive
+        self.prefix.is_exclusive
     }
 
     #[inline]
     fn numa_node(self) -> i32 {
-        self.prefix().numa_node
+        self.prefix.numa_node
     }
 
     #[inline]
     fn info_slices(self) -> usize {
-        self.prefix().info_slices
+        self.prefix.info_slices
     }
 
     #[inline]
     fn slices_free(self) -> *mut mi_bbitmap_t {
-        self.prefix().slices_free
+        self.prefix.slices_free
     }
 
     #[inline]
     fn slices_purge(self) -> *mut mi_bitmap_t {
-        self.prefix().slices_purge
+        self.prefix.slices_purge
     }
 
     #[inline]
     fn slices_committed(self) -> *mut mi_bitmap_t {
-        self.prefix().slices_committed
+        self.prefix.slices_committed
     }
 
     #[inline]

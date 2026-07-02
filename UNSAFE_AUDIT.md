@@ -207,6 +207,11 @@ Operation IDs:
 - `SAFETY[AUDIT:c-header-macro-reentry]`: `src/ffi/abi.rs` exposes C header
   compatibility macros whose expansion may reenter allocator APIs. The macros
   preserve C surface behavior and keep unsafety at the raw ABI call boundary.
+- `SAFETY[AUDIT:ffi-abi-declarations]`: `src/ffi/abi.rs` owns the
+  declaration-only raw mimalloc C ABI block. The block does not call into C or
+  dereference pointers; it preserves upstream nullable raw pointer signatures so
+  each unsafe call site inherits the documented C ABI ownership and lifetime
+  obligations.
 - `SAFETY[AUDIT:global-alloc]`: `src/lib.rs` implements `GlobalAlloc` for the
   zero-sized `MiMalloc` facade. Rust's allocator contract supplies the layout,
   pointer, and ownership preconditions, and each operation forwards directly to

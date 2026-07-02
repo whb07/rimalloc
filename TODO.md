@@ -13,8 +13,8 @@ ABI behavior.
 
 Current review evidence:
 
-- `docs/unsafe-migration-allowlist.tsv` has 32 entries: 29 production and
-  3 translation files. `ALLOWLIST_ENTRY_CAP` is 32.
+- `docs/unsafe-migration-allowlist.tsv` has 31 entries: 28 production and
+  3 translation files. `ALLOWLIST_ENTRY_CAP` is 31.
 - The completed pass moved `src/types/memid.rs`, `src/types/layout.rs`,
   `src/types/page_states.rs`, and `src/allocator/bench_diagnostics.rs` to local
   `SAFETY[AUDIT:*]` operation markers with evidence rows and no migration
@@ -28,9 +28,10 @@ Current review evidence:
   `src/lib.rs` at 398 lines with 23 `unsafe` hits and 8 local markers, and
   `src/platform/emscripten.rs` at 424 lines with 35 `unsafe` hits and 0 local
   markers.
-- `src/ffi/abi.rs` remains allowlisted even though it has only 606 lines,
-  4 `unsafe` hits, and 2 local macro-boundary markers; the remaining unsafe is
-  the raw C declaration block.
+- `src/ffi/abi.rs` now uses 1
+  `SAFETY[AUDIT:ffi-abi-declarations]` marker for its raw C declaration block,
+  preserves the existing C-header macro markers, and is off the unsafe
+  migration allowlist.
 - `src/types/atomic.rs` remains the next typed-wrapper domain at 755 lines with
   101 `unsafe` hits and 0 local markers.
 - `strict-type-allowlist.txt` still has 75 path-wide entries with `symbol = *`,
@@ -69,12 +70,12 @@ Current review evidence:
 > `unsafe extern "C"` declaration block still keeps the whole file on the
 > migration allowlist.
 
-- [ ] Add a local `SAFETY[AUDIT:ffi-abi-declarations]` marker for the raw C
+- [x] Add a local `SAFETY[AUDIT:ffi-abi-declarations]` marker for the raw C
       declaration block and keep it scoped to declaration-only FFI, not
       allocator implementation behavior.
-- [ ] Preserve the public raw C signatures exactly, including nullable pointer
+- [x] Preserve the public raw C signatures exactly, including nullable pointer
       parameters, raw returns, and header macro expansion shape.
-- [ ] Add matching unsafe audit/evidence entries, remove `src/ffi/abi.rs` from
+- [x] Add matching unsafe audit/evidence entries, remove `src/ffi/abi.rs` from
       the unsafe migration allowlist, regenerate unsafe inventory, and lower
       `ALLOWLIST_ENTRY_CAP`.
 
@@ -175,7 +176,7 @@ regeneration/check, release audit, full clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [ ] Migrate `src/ffi/abi.rs` off the unsafe migration allowlist.
+1. [x] Migrate `src/ffi/abi.rs` off the unsafe migration allowlist.
 2. [ ] Migrate `src/allocator/arena_meta.rs` off the unsafe migration allowlist.
 3. [ ] Migrate `src/platform/wasi.rs` off the unsafe migration allowlist.
 4. [ ] Migrate `src/platform/emscripten.rs` off the unsafe migration allowlist.

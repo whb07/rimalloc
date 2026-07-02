@@ -129,6 +129,10 @@ macro_rules! mi_heap_recalloc_tp {
     }};
 }
 
+// SAFETY[AUDIT:ffi-abi-declarations]: this block declares the raw mimalloc C
+// ABI only. It performs no calls or pointer dereferences, and keeps upstream
+// nullable raw pointer signatures for callers to uphold at each unsafe call
+// site.
 unsafe extern "C" {
     pub fn mi_malloc(size: usize) -> *mut c_void;
     pub fn mi_calloc(count: usize, size: usize) -> *mut c_void;

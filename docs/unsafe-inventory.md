@@ -25,7 +25,7 @@ verify the source inventory after each supported advisory build mode checks.
 
 | Metric | Count |
 | --- | ---: |
-| `unsafe_mentions` | 5851 |
+| `unsafe_mentions` | 5852 |
 | `unsafe_blocks` | 3428 |
 | `unsafe_fns` | 1999 |
 | `unsafe_extern_blocks` | 44 |
@@ -61,7 +61,7 @@ verify the source inventory after each supported advisory build mode checks.
 | `src/allocator/thread_heap.rs` | 120 | 56 | 58 | 0 | 0 | 6 | 0 |
 | `src/allocator/threadlocal.rs` | 42 | 36 | 4 | 1 | 1 | 0 | 0 |
 | `src/allocator/tracking.rs` | 25 | 14 | 10 | 1 | 0 | 0 | 0 |
-| `src/ffi/abi.rs` | 3 | 0 | 0 | 1 | 0 | 0 | 0 |
+| `src/ffi/abi.rs` | 4 | 0 | 0 | 1 | 0 | 0 | 0 |
 | `src/ffi/callbacks.rs` | 19 | 7 | 4 | 0 | 0 | 0 | 0 |
 | `src/ffi/headers.rs` | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `src/ffi/libc.rs` | 46 | 26 | 19 | 1 | 0 | 0 | 0 |

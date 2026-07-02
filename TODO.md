@@ -1,57 +1,44 @@
 # TODO: Fresh Rust Idiom Follow-up Backlog
 
 Fresh-eyes review after completing the previous TODO backlog on `master` at
-`10995d2`. The last pass migrated MemId views, layout requests, page-state
-witnesses, and benchmark diagnostics off the unsafe migration allowlist while
-preserving C ABI shape, transparent typed wrappers, relaxed diagnostic
-counters, and allocator hot-path behavior.
+`7d64cc0`. The last pass migrated `src/ffi/abi.rs`,
+`src/allocator/arena_meta.rs`, `src/platform/wasi.rs`,
+`src/platform/emscripten.rs`, and `src/types/atomic.rs` off the unsafe
+migration allowlist while preserving ABI shape, platform fallback behavior,
+atomic ordering, and allocator hot-path constraints.
 
 The next pass should keep the same discipline: retire one measurable exception
 at a time, prefer local operation-level proof markers over file allowances, and
-avoid refactors that change allocator ownership, synchronization, platform, or
-ABI behavior.
+avoid refactors that change allocator ownership, synchronization, platform ABI,
+or allocation fast paths.
 
 Current review evidence:
 
 - `docs/unsafe-migration-allowlist.tsv` has 27 entries: 24 production and
   3 translation files. `ALLOWLIST_ENTRY_CAP` is 27.
-- The completed pass moved `src/types/memid.rs`, `src/types/layout.rs`,
-  `src/types/page_states.rs`, and `src/allocator/bench_diagnostics.rs` to local
-  `SAFETY[AUDIT:*]` operation markers with evidence rows and no migration
-  allowlist entries.
-- `src/allocator/arena_meta.rs` now uses 16
-  `SAFETY[AUDIT:arena-meta-allocator]` markers for meta memid construction,
-  page/block pointer arithmetic, meta-page stack traversal and publication,
-  bitmap allocation/free, arena fallback, and meta-page debug classification,
-  and is off the unsafe migration allowlist.
-- `src/platform/wasi.rs` now uses 42
-  `SAFETY[AUDIT:wasi-primitive-boundary]` markers for C imports, `sbrk` memory
-  growth, nullable primitive out-pointers, C-string stderr/env handling, no-op
-  primitive range shims, and thread/TLS compatibility shims, and is off the
-  unsafe migration allowlist.
-- `src/platform/emscripten.rs` now uses 48
-  `SAFETY[AUDIT:emscripten-primitive-boundary]` markers for Emscripten imports,
-  emmalloc allocation/free calls, nullable primitive out-pointers, clock/console
-  fallbacks, pthread key lifecycle, static key mutation, and fallback
-  thread-local association, and is off the unsafe migration allowlist.
+- The completed pass moved `src/ffi/abi.rs`, `src/allocator/arena_meta.rs`,
+  `src/platform/wasi.rs`, `src/platform/emscripten.rs`, and
+  `src/types/atomic.rs` to local `SAFETY[AUDIT:*]` operation markers with
+  evidence rows and no migration allowlist entries.
 - The smallest remaining allowlisted production files are
   `src/raw/posix.rs` at 329 lines with 81 `unsafe` hits and 0 local markers,
   `src/lib.rs` at 398 lines with 21 `unsafe` hits and 8 local markers,
   `src/ffi/libc.rs` at 518 lines with 46 `unsafe` hits and 0 local markers,
   `src/allocator/threadlocal.rs` at 579 lines with 42 `unsafe` hits and 0 local
   markers, and
-  `src/allocator/heap.rs` at 604 lines with 93 `unsafe` hits and 0 local markers.
-- `src/ffi/abi.rs` now uses 1
-  `SAFETY[AUDIT:ffi-abi-declarations]` marker for its raw C declaration block,
-  preserves the existing C-header macro markers, and is off the unsafe
-  migration allowlist.
-- `src/types/atomic.rs` now uses 51
-  `SAFETY[AUDIT:typed-atomic-domain]` markers for atomic field wrappers,
-  page thread-id/thread-free RMW/CAS, abandoned-count/refcount/arena page-table
-  atomics, once/guard/lock RAII, and the non-dereferenced lint fixture, and is
-  off the unsafe migration allowlist.
+  `src/allocator/heap.rs` at 604 lines with 93 `unsafe` hits and 0 local
+  markers.
+- The next smallest remaining allowlisted production files after this tranche
+  are `src/platform/macos.rs` at 630 lines with 97 `unsafe` hits,
+  `src/platform/mod.rs` at 855 lines with 75 `unsafe` hits,
+  `src/internal/atomic.rs` at 914 lines with 135 `unsafe` hits,
+  `src/allocator/page_map.rs` at 1,052 lines with 184 `unsafe` hits, and
+  `src/types/scalar.rs` at 1,097 lines with 33 `unsafe` hits.
 - `strict-type-allowlist.txt` still has 75 path-wide entries with `symbol = *`,
-  including 29 path-wide raw-pointer entries. `REMOVE_ENTRY_CAP` remains 0.
+  including 29 path-wide raw-pointer entries, 21 path-wide bare-domain `usize`
+  entries, 13 path-wide pointer/usize round-trip entries, 8 path-wide metadata
+  reference entries, 2 path-wide atomic-cast entries, and 2 path-wide
+  heap-allocating-type entries. `REMOVE_ENTRY_CAP` remains 0.
 - The largest strict-type path clusters remain broad enough to revisit later:
   `src/allocator/page.rs` has 54 entries,
   `src/internal/bitmap.rs` has 33 entries,
@@ -62,9 +49,9 @@ Current review evidence:
   `SAFETY[AUDIT:typed-pointer-test-fixtures]` has 87 markers,
   `SAFETY[AUDIT:arena-heap-page-visitors]` has 56 markers,
   `SAFETY[AUDIT:typed-heap-test-fixtures]` has 55 markers,
-  `SAFETY[AUDIT:typed-page-state-domain]` has 36 markers,
-  `SAFETY[AUDIT:arena-debug-render]` has 34 markers, and
-  `SAFETY[AUDIT:owned-allocation]` has 31 markers.
+  `SAFETY[AUDIT:typed-atomic-domain]` has 51 markers,
+  `SAFETY[AUDIT:emscripten-primitive-boundary]` has 48 markers, and
+  `SAFETY[AUDIT:wasi-primitive-boundary]` has 42 markers.
 - The largest production review units remain translated-style modules:
   `src/allocator/arena.rs` is 3,915 lines,
   `src/allocator/page.rs` is 2,801 lines,
@@ -77,135 +64,153 @@ Current review evidence:
   `tests/release_fast_path_audit/unsafe_performance.rs` is 2,386 lines,
   `tests/release_fast_path_audit/release_policy.rs` is 2,126 lines,
   `tests/release_fast_path_audit.rs` is 1,832 lines, and
-  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,103 lines.
+  `tests/release_fast_path_audit/datatype_acceptance.rs` is 1,108 lines.
 
-## Issue: FFI ABI declarations still use a file-level unsafe allowance
+## Issue: Raw POSIX compatibility facade still uses a file-level unsafe allowance
 
-> **Comment:** `src/ffi/abi.rs` is a raw C header declaration module. It already
-> documents nullable pointer shape and has macro-boundary markers, but the
-> `unsafe extern "C"` declaration block still keeps the whole file on the
-> migration allowlist.
+> **Comment:** `src/raw/posix.rs` is a C/POSIX compatibility facade. Its unsafe
+> operations are narrow but varied: errno writes, environment lookup,
+> allocation-family forwarding, POSIX out-pointer writes, `reallocarr` pointer
+> slot updates, wide-string scans/copies, and environment duplication.
 
-- [x] Add a local `SAFETY[AUDIT:ffi-abi-declarations]` marker for the raw C
-      declaration block and keep it scoped to declaration-only FFI, not
-      allocator implementation behavior.
-- [x] Preserve the public raw C signatures exactly, including nullable pointer
-      parameters, raw returns, and header macro expansion shape.
-- [x] Add matching unsafe audit/evidence entries, remove `src/ffi/abi.rs` from
-      the unsafe migration allowlist, regenerate unsafe inventory, and lower
-      `ALLOWLIST_ENTRY_CAP`.
+- [ ] Add local `SAFETY[AUDIT:raw-posix-compat]` markers for errno access,
+      allocation facade forwarding, POSIX out-pointer writes, `reallocarr`
+      pointer-slot updates, wide-string duplication, and environment string
+      duplication.
+- [ ] Preserve `EINVAL`/`ENOMEM`/`EOVERFLOW` behavior, null-pointer handling,
+      alignment checks, overflow checks, exported symbol shape, and existing
+      allocation/free ownership contracts.
+- [ ] Add or extend release-audit assertions and focused tests for invalid
+      `mi_posix_memalign`, overflowed `mi_reallocarray`, zero-product
+      `mi_reallocarr`, wide-string duplication, and `mi_dupenv_s` out-pointer
+      behavior.
+- [ ] Add matching unsafe audit/evidence entries, remove `src/raw/posix.rs`
+      from the unsafe migration allowlist, regenerate unsafe inventory, and
+      lower `ALLOWLIST_ENTRY_CAP`.
 
-Verify: unsafe audit scripts, unsafe inventory regeneration/check, release
-audit, full clippy, and full tests.
+Verify: `cargo test --test compat_exports --all-features`, header/release
+audit, unsafe audit scripts, unsafe inventory regeneration/check, full clippy,
+and full tests.
 
-## Issue: Arena metadata allocator still uses a file-level unsafe allowance
+## Issue: Crate root still uses a file-level unsafe allowance
 
-> **Comment:** `src/allocator/arena_meta.rs` is small and already routes meta
-> allocation identity through `MemId::<MetaMem>`. Its unsafe operations are
-> localized to meta-page pointer arithmetic, bitmap allocation/free, atomic
-> stack publication, arena fallback, and debug classification.
+> **Comment:** `src/lib.rs` already has local markers for `GlobalAlloc` and the
+> no-std panic boundary, but the file remains allowlisted. The remaining work
+> should close crate-root unsafe-attribute and extern coverage without widening
+> the public Rust API or adding new compatibility aliases.
 
-- [x] Add local `SAFETY[AUDIT:arena-meta-allocator]` markers for meta memid
-      construction, page/block pointer arithmetic, meta-page stack traversal and
-      publication, bitmap allocation/free, arena fallback, and meta-page debug
-      classification.
-- [x] Preserve `Acquire`/`AcqRel` ordering, `NonZeroU32` block-count domains,
-      typed `MemId::<MetaMem>` construction, and allocation-free metadata paths.
-- [x] Use existing release-audit coverage or add focused tests for meta memid
-      construction, free/reuse invariants, and meta-page classification.
-- [x] Add matching unsafe audit/evidence entries, remove the file from the
-      unsafe migration allowlist, regenerate unsafe inventory, and lower the
+- [ ] Cover every crate-root unsafe operation with the existing
+      `SAFETY[AUDIT:global-alloc]` or `SAFETY[AUDIT:panic-boundary]` operation
+      IDs, adding a new ID only if a distinct crate-root boundary is truly
+      needed.
+- [ ] Preserve the curated public facade, crate-private translated aliases,
+      `GlobalAlloc` null-on-failure behavior, over-alignment routing, and
+      no-std Linux abort behavior.
+- [ ] Keep release-audit checks that implementation modules stay private, raw
+      calls remain unsafe to downstream users, and the panic/no-unwind policy is
+      unchanged.
+- [ ] Add matching unsafe audit/evidence entries if needed, remove `src/lib.rs`
+      from the unsafe migration allowlist, regenerate unsafe inventory, and
+      lower the cap.
+
+Verify: rustdoc/compile-fail release audit coverage, unsafe audit scripts,
+unsafe inventory regeneration/check, release audit, full clippy, and full tests.
+
+## Issue: libc string and formatting helpers still use a file-level unsafe allowance
+
+> **Comment:** `src/ffi/libc.rs` owns libc-like helper routines. Unsafe is
+> limited to a Unix `vsnprintf` declaration/call, bounded C-string scanning,
+> `strlcpy`/`strlcat` copies, fixed-buffer formatting writes, and environment
+> primitive forwarding.
+
+- [ ] Add local `SAFETY[AUDIT:ffi-libc-helpers]` markers for C-string reads,
+      bounded destination writes, `vsnprintf` forwarding, fixed-buffer format
+      writes, pointer-distance reversal, and environment lookup forwarding.
+- [ ] Preserve no-heap-allocation helper behavior, nul-termination guarantees,
+      existing `#[inline]`/`#[inline(never)]` boundaries, used symbol keepers,
+      and platform fallback behavior.
+- [ ] Add or extend release-audit assertions or focused tests for null inputs,
+      truncating copy/cat behavior, guaranteed trailing nul writes, and
+      Unix/non-Unix `vsnprintf` behavior.
+- [ ] Add matching unsafe audit/evidence entries, remove `src/ffi/libc.rs` from
+      the unsafe migration allowlist, regenerate unsafe inventory, and lower the
       cap.
 
-Verify: relevant arena metadata or release-audit tests, unsafe audit scripts,
-unsafe inventory regeneration/check, release audit, full clippy, and full
+Verify: libc helper/release-audit tests, unsafe audit scripts, unsafe inventory
+regeneration/check, release audit, full clippy, and full tests.
+
+## Issue: Dynamic thread-local key manager still uses a file-level unsafe allowance
+
+> **Comment:** `src/allocator/threadlocal.rs` is a synchronization and platform
+> boundary. Its unsafe operations cover Linux TLS externs and x86_64 assembly,
+> sentinel `Sync`, static lock access, TLS slot allocation/reallocation/free,
+> bitmap publication, callback keep-set writes, and lock-protected key
+> lifecycle operations.
+
+- [ ] Add local `SAFETY[AUDIT:threadlocal-key-manager]` markers for TLS
+      extern/assembly access, sentinel `Sync`, static lock access, thread-local
+      pointer get/set, slot growth and writes, bitmap copy/free/publication,
+      callback keep-set writes, and key claim/free operations.
+- [ ] Preserve documented memory orderings from `docs/memory-ordering.md`, the
+      Linux TLS shim ABI, direct `mi_free` thread-done behavior, lock scope,
+      and no extra heap allocation on hot TLS get paths.
+- [ ] Add or extend release-audit assertions and focused tests for TLS shim
+      shape, initialization/done locking, slot expansion, key version checks,
+      bitmap claim/free behavior, and thread-done reset semantics.
+- [ ] Add matching unsafe audit/evidence entries, remove
+      `src/allocator/threadlocal.rs` from the unsafe migration allowlist,
+      regenerate unsafe inventory, and lower the cap.
+
+Verify: threadlocal boundary release audit, `cargo test
+thread_stats_regression --test thread_stats_regression --all-features`, unsafe
+audit scripts, unsafe inventory regeneration/check, full clippy, and full
 tests.
 
-## Issue: WASI primitive backend still uses a file-level unsafe allowance
+## Issue: Heap lifecycle helpers still use a file-level unsafe allowance
 
-> **Comment:** `src/platform/wasi.rs` is a bounded primitive backend, not a
-> general allocator hot path. Its unsafe operations are platform imports,
-> `sbrk`-style memory growth, nullable out-pointer writes, C-string environment
-> lookup, stderr output, and thread-heap association shims.
+> **Comment:** `src/allocator/heap.rs` is a heap ownership boundary. It already
+> uses `HeapPtr`, `BorrowedHeap`, `OwnedHeap`, `MainHeap`, `PagePtr`, and
+> `ThreadHeapPtr` witnesses in several paths, but raw heap creation,
+> registration, deletion, destruction, ownership inspection, stats merging, and
+> lazy thread-heap initialization remain covered by a blanket allowance.
 
-- [x] Add local `SAFETY[AUDIT:wasi-primitive-boundary]` markers for WASI import
-      declarations, memory growth/alignment, primitive allocation out-pointers,
-      C-string stderr/env handling, and thread/TLS compatibility shims.
-- [x] Preserve non-WASI fallback behavior, no-heap-allocation primitive paths,
-      current errno-style return values, and existing `#[inline]` boundaries.
-- [x] Add release-audit assertions or targeted tests for null out-pointers,
-      non-WASI fallbacks, stderr/env bounds, and thread association behavior.
-- [x] Add matching unsafe audit/evidence entries, remove the file from the
-      unsafe migration allowlist, regenerate unsafe inventory, and lower the
-      cap.
+- [ ] Add local `SAFETY[AUDIT:heap-lifecycle-boundary]` markers for raw heap
+      shims, heap creation and subproc list insertion, thread-heap lazy
+      initialization, heap deletion/destruction, stats merge, ownership lookup,
+      under-utilized page inspection, and lock-protected teardown.
+- [ ] Preserve typed heap witnesses, main-heap rejection, thread-local slot
+      lifecycle, heap/subproc list locking, stats updates, NUMA affinity
+      behavior, and no new dynamic dispatch or extra allocation on lookup paths.
+- [ ] Add or extend release-audit assertions and focused tests for
+      `mi_heap_new_in_arena`, `mi_heap_delete`, `mi_heap_destroy`,
+      `mi_heap_check_owned`, under-utilized page inspection, and lazy thread
+      heap initialization.
+- [ ] Add matching unsafe audit/evidence entries, remove
+      `src/allocator/heap.rs` from the unsafe migration allowlist, regenerate
+      unsafe inventory, and lower the cap.
 
-Verify: platform/runtime-gate release audit, unsafe audit scripts, unsafe
-inventory regeneration/check, release audit, full clippy, and full tests.
-
-## Issue: Emscripten primitive backend still uses a file-level unsafe allowance
-
-> **Comment:** `src/platform/emscripten.rs` mirrors the WASI primitive backend
-> but adds Emscripten allocation imports, clock/entropy calls, console output,
-> pthread key lifecycle, and a fallback thread-local cell for non-Emscripten
-> builds.
-
-- [x] Add local `SAFETY[AUDIT:emscripten-primitive-boundary]` markers for
-      Emscripten import declarations, emmalloc calls, clock/entropy calls,
-      console/C-string output, pthread key lifecycle, static key mutation, and
-      fallback thread-local association.
-- [x] Preserve Emscripten-target behavior, non-Emscripten fallback behavior,
-      errno-style returns, and no extra allocation or dynamic dispatch in
-      primitive paths.
-- [x] Add release-audit assertions or targeted tests for null out-pointers,
-      fallback allocation failure, clock fallback, and thread-key lifecycle.
-- [x] Add matching unsafe audit/evidence entries, remove the file from the
-      unsafe migration allowlist, regenerate unsafe inventory, and lower the
-      cap.
-
-Verify: platform/runtime-gate release audit, unsafe audit scripts, unsafe
-inventory regeneration/check, release audit, full clippy, and full tests.
-
-## Issue: Atomic typed wrappers still use a file-level unsafe allowance
-
-> **Comment:** `src/types/atomic.rs` is a typed wrapper boundary for atomic
-> pointer fields, thread-free words, abandoned counts, once guards, and lock
-> words. It is larger than the other targets, but it is a Rust domain boundary
-> and should not depend on a blanket migration exception indefinitely.
-
-- [x] Add local `SAFETY[AUDIT:typed-atomic-domain]` markers for atomic pointer
-      field projection, abandoned-count/page-thread-id wrappers, thread-free
-      head/owner transitions, once/lock guard construction, and release/acquire
-      ownership handoffs.
-- [x] Preserve documented atomic orderings from `ATOMIC_ORDERING_AUDIT.md`,
-      transparent wrapper layout, no allocation, and no broader synchronization
-      primitives on allocator hot paths.
-- [x] Keep or extend the existing `src/types/atomic/tests.rs` and concurrency
-      model coverage for racing remote pushes, ownership claims, and collect
-      behavior.
-- [x] Add matching unsafe audit/evidence entries, remove the file from the
-      unsafe migration allowlist, regenerate unsafe inventory, and lower the
-      cap.
-
-Verify: `cargo test types::atomic::tests --lib --all-features`, atomic
-concurrency model tests, unsafe audit scripts, unsafe inventory
-regeneration/check, release audit, full clippy, and full tests.
+Verify: heap lifecycle/stat export tests, no-allocation critical-path tests,
+release audit, unsafe audit scripts, unsafe inventory regeneration/check, full
+clippy, and full tests.
 
 ## Suggested implementation order
 
-1. [x] Migrate `src/ffi/abi.rs` off the unsafe migration allowlist.
-2. [x] Migrate `src/allocator/arena_meta.rs` off the unsafe migration allowlist.
-3. [x] Migrate `src/platform/wasi.rs` off the unsafe migration allowlist.
-4. [x] Migrate `src/platform/emscripten.rs` off the unsafe migration allowlist.
-5. [x] Migrate `src/types/atomic.rs` off the unsafe migration allowlist.
+1. [ ] Migrate `src/raw/posix.rs` off the unsafe migration allowlist.
+2. [ ] Migrate `src/lib.rs` off the unsafe migration allowlist.
+3. [ ] Migrate `src/ffi/libc.rs` off the unsafe migration allowlist.
+4. [ ] Migrate `src/allocator/threadlocal.rs` off the unsafe migration
+       allowlist.
+5. [ ] Migrate `src/allocator/heap.rs` off the unsafe migration allowlist.
 
 ## Definition of done for this backlog
 
-- [x] The unsafe migration allowlist cap is lowered after each migrated file.
-- [x] `src/ffi/abi.rs`, `src/allocator/arena_meta.rs`,
-      `src/platform/wasi.rs`, `src/platform/emscripten.rs`, and
-      `src/types/atomic.rs` are covered by operation-level audit markers and
-      evidence instead of file-level migration exceptions.
-- [x] C ABI declaration shape, platform fallback behavior, atomic ordering, and
-      allocator hot-path performance constraints remain unchanged.
-- [x] Release-audit TODO guards track the active backlog and measurable
+- [ ] The unsafe migration allowlist cap is lowered after each migrated file.
+- [ ] `src/raw/posix.rs`, `src/lib.rs`, `src/ffi/libc.rs`,
+      `src/allocator/threadlocal.rs`, and `src/allocator/heap.rs` are covered by
+      operation-level audit markers and evidence instead of file-level migration
+      exceptions.
+- [ ] POSIX/libc compatibility behavior, crate-root public API shape,
+      thread-local synchronization, heap lifecycle ownership, and allocator
+      hot-path performance constraints remain unchanged.
+- [ ] Release-audit TODO guards track the active backlog and measurable
       evidence.

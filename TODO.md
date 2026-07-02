@@ -16,9 +16,9 @@ Review evidence:
   lines, `src/internal/bitmap.rs` is 2,604 lines,
   `src/allocator/alloc.rs` is 2,545 lines, `src/allocator/init.rs` is 2,339
   lines, and `src/platform/windows.rs` is 2,191 lines.
-- `tests/release_fast_path_audit.rs` is 8,845 lines and mixes API inventory,
-  release policy, performance, unsafe, platform, and TODO-backlog assertions in
-  one integration-test crate.
+- `tests/release_fast_path_audit.rs` is now split into a 2,958-line root
+  harness plus focused modules for release policy (2,291 lines), TODO backlog
+  checks (76 lines), and unsafe/performance checks (3,636 lines).
 - `src/safe/mod.rs` is now 40 lines and only wires the facade modules,
   re-exports, failure-injection test helper, and `src/safe/tests.rs`; the moved
   safe facade test suite is 1,150 lines.
@@ -143,21 +143,29 @@ Review evidence:
 
 ## Issue: Release fast-path audit is too large and brittle
 
-> **Comment:** The release audit is valuable, but an 8,845-line integration
-> test makes review and future edits harder than necessary. It also hardcodes
-> the TODO backlog shape, which creates churn every time the backlog is
-> rewritten.
+> **Comment:** The release audit is valuable, but the formerly 8,845-line
+> integration test made review and future edits harder than necessary. It also
+> hardcoded the TODO backlog shape, which created churn every time the backlog
+> was rewritten.
 
-- [ ] Split `tests/release_fast_path_audit.rs` into domain-focused modules
+- [x] Split `tests/release_fast_path_audit.rs` into domain-focused modules
       such as API shape, docs/release policy, unsafe/performance, platform, and
       TODO backlog checks.
-- [ ] Keep shared helpers in one place and avoid duplicating file-read and
+- [x] Keep shared helpers in one place and avoid duplicating file-read and
       source-slicing utilities across modules.
-- [ ] Make the TODO backlog audit check the current title, issue headings, and
+- [x] Make the TODO backlog audit check the current title, issue headings, and
       measurable evidence without asserting stale completed backlog details.
-- [ ] Add a line-count or module-count guard so the monolithic test file does
+- [x] Add a line-count or module-count guard so the monolithic test file does
       not grow back.
-- [ ] Preserve existing assertion coverage while moving tests.
+- [x] Preserve existing assertion coverage while moving tests.
+  - Evidence: the integration-test root keeps the shared source-reading and
+    source-slicing helpers plus the API/platform harness checks, while
+    `tests/release_fast_path_audit/release_policy.rs`,
+    `tests/release_fast_path_audit/todo_backlog.rs`, and
+    `tests/release_fast_path_audit/unsafe_performance.rs` hold the moved
+    domains. The TODO audit now loops over required headings and measurable
+    evidence strings, and `release_audit_harness_stays_split` caps the root at
+    3,500 lines and each child module at 4,200 lines.
 - Verify: `cargo test --test release_fast_path_audit --all-features`, full
   clippy, and full tests.
 
@@ -188,7 +196,7 @@ Review evidence:
 2. [x] Cap and reduce removable strict-type allowlist entries.
 3. [x] Localize small production module-level allowances.
 4. [x] Move safe facade tests out of `src/safe/mod.rs`.
-5. [ ] Split the release fast-path audit into domain modules.
+5. [x] Split the release fast-path audit into domain modules.
 6. [ ] Split one additional low-risk translated module cluster.
 
 ## Definition of done for this backlog
@@ -200,7 +208,7 @@ Review evidence:
       permanent compatibility shims.
 - [x] `src/safe/mod.rs` contains the facade and test wiring only, not the full
       safe facade test suite.
-- [ ] The release fast-path audit is split into reviewable modules without
+- [x] The release fast-path audit is split into reviewable modules without
       losing coverage.
 - [ ] At least one more translated module boundary is improved without API,
       ABI, or hot-path performance drift.
